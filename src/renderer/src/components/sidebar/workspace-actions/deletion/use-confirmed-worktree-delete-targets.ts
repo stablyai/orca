@@ -6,7 +6,7 @@ import {
   resolveWorktreeBatchDeleteTargets,
   type WorktreeDeleteIdentity
 } from './worktree-delete-request'
-import { showWorkspaceListChangedToast } from '../../stale-workspace-list-toast'
+import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 
 export function useConfirmedWorktreeDeleteTargets({
   worktreeIdentityData,

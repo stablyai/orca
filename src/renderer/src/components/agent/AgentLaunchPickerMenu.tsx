@@ -1,56 +1,22 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { memo, useEffect, useId, useRef, useState, type ComponentProps } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenuItem,
-  DropdownMenuShortcut,
-  useDropdownMenuClose
-} from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import {
-  AgentLaunchSetupButton,
-  retireAgentPickerDrafts,
-  type AgentPickerSetupIdentity
-} from './AgentLaunchSetupButton'
-import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import { retireAgentPickerDrafts, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
-import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
-import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './use-agent-launch-picker-inventory'
 import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
-import {
-  agentPickerDraft,
-  type AgentPickerDraft,
-  type AgentPickerEntry,
-  type AgentPickerSurface
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-
-export function pickerLaunchRow(
-  entry: AgentPickerEntry,
-  surface: AgentPickerSurface
-): NewTabAgentMenuRow {
-  return {
-    agent: entry.agent,
-    kind: surface === 'chat' ? 'chat' : 'cli',
-    executionHostId: entry.rows[0]?.executionHostId
-  }
-}
-
-type Launch = (
-  row: NewTabAgentMenuRow,
-  draft?: AgentPickerDraft,
-  entry?: AgentPickerEntry,
-  /** Select mode: the surface explicitly accepted by a named launch action. */
-  surface?: AgentPickerSurface
-) => boolean | void | Promise<boolean>
 
 export function AgentLaunchPickerMenu({
   draftScope,
@@ -64,6 +30,7 @@ export function AgentLaunchPickerMenu({
   entries,
   hideSearch,
   initialQuery = '',
+  searchInputRef,
   onSelectAgent
 }: {
   model?: NewTabAgentMenuModel
@@ -74,14 +41,19 @@ export function AgentLaunchPickerMenu({
   mode?: 'launch' | 'select'
   value?: AgentPickerDraft
   draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
-  runLaunch: Launch
+  runLaunch: AgentPickerMenuLaunch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
   /** Seeds the search field; read once when the menu mounts. */
   initialQuery?: string
+  /** A supplied ref gives the owning popup control of initial focus. */
+  searchInputRef?: Ref<HTMLInputElement>
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useEffect(() => {
+    if (setupDisabled) {
+      return
+    }
     const state = useAppStore.getState()
     const workspaces = new Set([
       ...Object.values(selectWorktreesByRepo(state) ?? {})
@@ -105,8 +77,9 @@ export function AgentLaunchPickerMenu({
       },
       mode
     )
-  }, [entries, draftScope, mode])
+  }, [entries, draftScope, mode, setupDisabled])
   const [query, setQuery] = useState(initialQuery)
+  const [searchFocused, setSearchFocused] = useState(false)
   const [activeSetup, setActiveSetup] = useState<{
     id: string
     agent: AgentPickerEntry['agent']
@@ -115,7 +88,7 @@ export function AgentLaunchPickerMenu({
   } | null>(null)
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
-  const setups = searchAgentPickerSetups(entries, query)
+  const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
     words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
@@ -151,15 +124,23 @@ export function AgentLaunchPickerMenu({
       visible.push(entry)
     }
   }
+  // Why: Enter in the search picks the first enabled row, so show it highlighted like cmdk comboboxes.
+  const enabled = (entry: AgentPickerEntry) => !disabled && entry.surfaces.length > 0
+  const firstSetup = setups.find((setup) => enabled(setup.entry))
+  const firstEntry = firstSetup ? undefined : visible.find(enabled)
+  const showSearchDefault = searchFocused && query.trim().length > 0
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
         <div className="px-1 py-0.5">
           <Input
+            ref={searchInputRef}
             value={query}
             density="compact"
-            autoFocus
+            autoFocus={!searchInputRef}
+            onBlur={() => setSearchFocused(false)}
             onFocus={(event) => {
+              setSearchFocused(true)
               // Why: a seeded query must keep the caret after the typed key.
               const end = event.currentTarget.value.length
               event.currentTarget.setSelectionRange(end, end)
@@ -202,6 +183,7 @@ export function AgentLaunchPickerMenu({
               openSetup={openSetup}
               onSetupOpenChange={setActiveSetup}
               label={setup.label}
+              searchDefault={showSearchDefault && setup === firstSetup}
               source={source}
               selected={value?.agent === setup.entry.agent ? value : undefined}
               onSelectAgent={onSelectAgent}
@@ -218,6 +200,7 @@ export function AgentLaunchPickerMenu({
               draftScope={draftScope}
               entry={entry}
               mode={mode}
+              searchDefault={showSearchDefault && entry === firstEntry}
               source={source}
               selected={value?.agent === entry.agent ? value : undefined}
               setupDisabled={setupDisabled}
@@ -253,144 +236,3 @@ export function SubscribedAgentLaunchPickerMenu({
   const entries = useAgentPickerInventoryEntries(inventory)
   return <AgentLaunchPickerMenu {...props} entries={entries} />
 }
-
-// Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
-const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
-  entry,
-  draftScope,
-  draftId,
-  initialModel,
-  initialEffort,
-  openSetup,
-  onSetupOpenChange,
-  label = entry.label,
-  source,
-  selected,
-  mode,
-  setupDisabled,
-  disabled,
-  runLaunch,
-  shortcut,
-  onSelectAgent
-}: {
-  entry: AgentPickerEntry
-  draftScope?: object
-  draftId?: string
-  initialModel?: string
-  initialEffort?: string
-  openSetup: string | null
-  onSetupOpenChange: (
-    setup: {
-      id: string
-      agent: AgentPickerEntry['agent']
-      preset?: AgentPickerSetupIdentity
-      label: string
-    } | null
-  ) => void
-  label?: string
-  source?: AgentPickerDraft
-  selected?: AgentPickerDraft
-  mode?: 'launch' | 'select'
-  setupDisabled?: boolean
-  disabled?: boolean
-  runLaunch: Launch
-  shortcut?: string
-  onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
-}) {
-  useUiLanguageRevision()
-  const setupId = useId()
-  const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
-  const initial = preset
-    ? applyAgentPickerEdit(entry, selected ?? source ?? agentPickerDraft(entry), {
-        kind: 'choice',
-        patch: {
-          model: preset.model,
-          ...(preset.effort ? { options: { effort: preset.effort } } : {})
-        }
-      })
-    : undefined
-  const closeMenu = useDropdownMenuClose()
-  const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
-  return (
-    <AgentLaunchSetupButton
-      submenu
-      draftScope={draftScope}
-      draftId={draftId}
-      preset={preset}
-      entry={entry}
-      initial={source}
-      seed={initial ?? selected ?? source}
-      surface={selected?.surface}
-      mode={mode}
-      open={openSetup === setupId}
-      replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
-      disabled={disabled || setupDisabled || !entry.surfaces.length}
-      onOpenChange={(next) => {
-        if (next || openSetup === setupId) {
-          onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
-        }
-        if (next && openSetup !== setupId) {
-          onSelectAgent?.(entry.agent)
-        }
-      }}
-      onUse={(draft) => {
-        const chosen = mode === 'select' ? draft.surface : undefined
-        const result =
-          chosen === undefined
-            ? runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
-            : runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry, chosen)
-        if (result !== false) {
-          closeMenu()
-        }
-        return result
-      }}
-      renderAnchor={(trigger) => (
-        <div
-          data-agent-launch-row
-          onClick={(event) => {
-            event.preventDefault()
-            if (disabled || !entry.surfaces.length) {
-              return
-            }
-            const draft = initial ?? (mode === 'select' ? selected : undefined)
-            const surface = draft?.surface ?? entry.defaultSurface
-            const row = draft
-              ? pickerLaunchRow(entry, surface)
-              : (entry.rows.find((row) =>
-                  surface === 'chat'
-                    ? row.kind === 'chat'
-                    : row.kind === 'terminal' || row.kind === 'cli'
-                ) ?? pickerLaunchRow(entry, surface))
-            const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
-            if (result !== false) {
-              closeMenu()
-            }
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              (event.key === 'Enter' || event.key === ' ')
-            ) {
-              event.preventDefault()
-              event.currentTarget.click()
-            }
-          }}
-        >
-          <Button asChild variant="menu-launch" size="menu">
-            <span>
-              <AgentIcon agent={entry.agent} size={14} />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-              {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-                <span className="text-xs text-muted-foreground">
-                  {chatUnavailableLabel(unavailable.reason)}
-                </span>
-              ) : null}
-            </span>
-          </Button>
-          {trigger}
-        </div>
-      )}
-    />
-  )
-})

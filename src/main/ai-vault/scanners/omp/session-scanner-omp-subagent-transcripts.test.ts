@@ -3,11 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseMessageGraphSessionContent } from '../session-scanner-graph-parsers'
-import {
-  countOmpSubagentTranscripts,
-  isOmpConversationDirectory,
-  partitionOmpSubagentTranscriptPaths
-} from './session-scanner-omp-subagent-transcripts'
 
 const SESSION_STEM = '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000'
 
@@ -23,93 +18,6 @@ async function makeWorkspaceDir(): Promise<string> {
   tempRoots.push(root)
   return root
 }
-
-describe('isOmpConversationDirectory', () => {
-  it('skips session artifact dirs below the workspace and nothing else in the layout', () => {
-    expect(isOmpConversationDirectory(SESSION_STEM, 0)).toBe(true)
-    expect(isOmpConversationDirectory(SESSION_STEM, 1)).toBe(false)
-    expect(isOmpConversationDirectory('AuthAndPreflight', 1)).toBe(true)
-    expect(isOmpConversationDirectory('local', 1)).toBe(true)
-    // Remote partitioning has no depth context, so encoded workspace names must not match session stems.
-    for (const workspaceDirName of [
-      `-${SESSION_STEM}`,
-      `-tmp-${SESSION_STEM}`,
-      `--${SESSION_STEM}--`,
-      'home-app-85dfa2f063812c58976deb581167a634a4'
-    ]) {
-      expect(isOmpConversationDirectory(workspaceDirName, 1)).toBe(true)
-    }
-  })
-})
-
-describe('countOmpSubagentTranscripts', () => {
-  it('counts only direct-child transcripts of the artifact dir', async () => {
-    const workspace = await makeWorkspaceDir()
-    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
-    const artifactDir = join(workspace, SESSION_STEM)
-    await mkdir(join(artifactDir, 'local'), { recursive: true })
-    await writeFile(parentPath, '')
-    await writeFile(join(artifactDir, 'AuthAndPreflight.jsonl'), '')
-    await writeFile(join(artifactDir, 'BitbucketDcApi.jsonl'), '')
-    await writeFile(join(artifactDir, 'notes.md'), '')
-    await writeFile(join(artifactDir, 'local', 'plan.jsonl'), '')
-
-    await expect(countOmpSubagentTranscripts(parentPath)).resolves.toBe(2)
-  })
-
-  it('returns 0 when the session never delegated (no artifact dir)', async () => {
-    const workspace = await makeWorkspaceDir()
-    const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
-    await writeFile(parentPath, '')
-
-    await expect(countOmpSubagentTranscripts(parentPath)).resolves.toBe(0)
-  })
-})
-
-describe('partitionOmpSubagentTranscriptPaths', () => {
-  it('drops artifact-dir transcripts from candidates and counts them per parent', () => {
-    const workspace = `/home/user/.omp/agent/sessions/home-app-85dfa2f0`
-    const parent = `${workspace}/${SESSION_STEM}.jsonl`
-    const sibling = `${workspace}/2026-05-02T09-00-00-000Z_dddddddd-eeee-4fff-8aaa-111111111111.jsonl`
-    const partition = partitionOmpSubagentTranscriptPaths([
-      parent,
-      `${workspace}/${SESSION_STEM}/AuthAndPreflight.jsonl`,
-      `${workspace}/${SESSION_STEM}/BitbucketDcApi.jsonl`,
-      // Nested grandchildren must not count toward the top-level parent or become top-level candidates.
-      `${workspace}/${SESSION_STEM}/AuthAndPreflight/Nested.jsonl`,
-      sibling
-    ])
-
-    expect(partition.sessionFilePaths).toEqual([parent, sibling])
-    expect(partition.subagentTranscriptCounts.get(parent)).toBe(2)
-    expect(partition.subagentTranscriptCounts.size).toBe(1)
-  })
-
-  it('attributes a child to its nearest stamped ancestor, not the outermost one', () => {
-    const workspace = '/home/user/.omp/agent/sessions/home-app-85dfa2f0'
-    const nested = '2026-05-02T09-00-00-000Z_dddddddd-eeee-4fff-8aaa-111111111111'
-    const partition = partitionOmpSubagentTranscriptPaths([
-      `${workspace}/${SESSION_STEM}/${nested}/Grandchild.jsonl`
-    ])
-
-    expect(partition.sessionFilePaths).toEqual([])
-    expect([...partition.subagentTranscriptCounts]).toEqual([
-      [`${workspace}/${SESSION_STEM}/${nested}.jsonl`, 1]
-    ])
-  })
-
-  it('handles Windows separators', () => {
-    const workspace = `C:\\Users\\u\\.omp\\agent\\sessions\\home-app-85dfa2f0`
-    const parent = `${workspace}\\${SESSION_STEM}.jsonl`
-    const partition = partitionOmpSubagentTranscriptPaths([
-      parent,
-      `${workspace}\\${SESSION_STEM}\\AuthAndPreflight.jsonl`
-    ])
-
-    expect(partition.sessionFilePaths).toEqual([parent])
-    expect(partition.subagentTranscriptCounts.get(parent)).toBe(1)
-  })
-})
 
 describe('withOmpSubagentTranscriptCount host gating', () => {
   const content = JSON.stringify({

@@ -1,5 +1,5 @@
 import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { slowTaskRequiredIdleMs } from '@/components/right-sidebar/coalesced-poll-runner'
+import { slowTaskRequiredIdleMs } from '@/lib/repository-refresh/coalesced-poll-runner'
 
 const HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER = 5
 const HOSTED_REVIEW_REVALIDATION_MAX_INTERVAL_MS = 5 * 60_000

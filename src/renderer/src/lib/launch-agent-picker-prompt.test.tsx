@@ -7,7 +7,8 @@ import {
   mockCreateStructuredCodexSessionLaunchIntent,
   mockLaunchStructuredCodexSession,
   structuredLaunchIntent,
-  launchErrorMocks
+  launchErrorMocks,
+  mockToastError
 } from './launch-agent-structured-chat-test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
@@ -246,6 +247,7 @@ it.each([true, false])(
     mockLaunchStructuredCodexSession.mockImplementation(async (intent) => {
       await Promise.resolve()
       intent.createMessageSupport = createMessageSupport
+      intent.sendSkillsSupport = true
       try {
         intent.prepareCreate!(false)
       } catch (error) {
@@ -295,7 +297,7 @@ it.each([true, false])(
     await act(async () => button('Launch chat').click())
     const call = dispatch.mock.results[0]
     const result = call?.type === 'return' ? call.value : null
-    expect(result?.surface.kind).toBe('host-published')
+    expect(result?.surface.kind).toBe('local-chat')
     expect(await result?.structuredSettlement).toMatchObject({ kind: 'failed' })
     expect(preparationErrors).toEqual([])
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledOnce()
@@ -314,6 +316,7 @@ it.each([true, false])(
     const returned = readNativeChatComposerDraft(
       structuredAgentSessionDraftScopeKey('codex-session-1')
     ).text
+    expect(returned).toContain('$review and $review this change')
     expect(returned).toContain('/repo/.agents/skills/review/SKILL.md')
     expect(returned).toContain('/home/me/.agents/skills/review/SKILL.md')
     expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(selected)).text).toBe('')
@@ -400,13 +403,17 @@ it.each([
     const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab').mockImplementation((args) =>
       actualLaunch({
         ...args,
-        ...(failure === 'paste' ? { promptDelivery: 'submit-after-ready' } : {})
+        ...(failure === 'preferences'
+          ? { promptDelivery: 'draft' }
+          : failure === 'paste'
+            ? { promptDelivery: 'submit-after-ready' }
+            : {})
       })
     )
     const preferences = Promise.withResolvers<AgentLaunchPreferences>()
-    vi.spyOn(hostPreferences, 'ensureAgentLaunchPreferences').mockImplementation(
-      () => preferences.promise
-    )
+    const ensurePreferences = vi
+      .spyOn(hostPreferences, 'ensureAgentLaunchPreferences')
+      .mockImplementation(() => preferences.promise)
     const created =
       Promise.withResolvers<
         Awaited<ReturnType<typeof terminalCreate.createWebRuntimeSessionTerminalResult>>
@@ -421,7 +428,14 @@ it.each([
     )
     vi.spyOn(webEnvironment, 'captureRuntimeEnvironmentCall').mockReturnValue(call)
     vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability').mockResolvedValue(true)
-    if (failure === 'create' || failure === 'unknown') {
+    if (failure === 'preferences') {
+      vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapabilities').mockResolvedValue([
+        false,
+        false
+      ])
+      vi.mocked(runtimeRpc.runtimeEnvironmentSupportsCapability).mockResolvedValue(false)
+    }
+    if (failure === 'preferences' || failure === 'create' || failure === 'unknown') {
       create.mockImplementationOnce(actualCreate)
     }
     liveStore().setState({ setActiveWorktree: vi.fn() })
@@ -437,8 +451,10 @@ it.each([
     expect(readNativeChatComposerDraft(scope).text).toBe('')
     view.unmount()
     if (failure === 'preferences') {
+      await waitFor(() => expect(ensurePreferences).toHaveBeenCalledOnce())
+      expect(call).not.toHaveBeenCalled()
       await act(async () => preferences.reject(new DOMException('Pairing changed', 'AbortError')))
-      expect(create).not.toHaveBeenCalled()
+      expect(call).not.toHaveBeenCalled()
     } else {
       await act(async () =>
         preferences.resolve({ defaultTuiAgent: undefined, disabledTuiAgents: undefined })
@@ -472,6 +488,9 @@ it.each([
       }
     }
     await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe('review @/repo/file'))
+    if (failure === 'preferences') {
+      expect(mockToastError).not.toHaveBeenCalled()
+    }
     vi.mocked(hostPreferences.ensureAgentLaunchPreferences).mockResolvedValue({
       defaultTuiAgent: undefined,
       disabledTuiAgents: undefined
@@ -491,7 +510,7 @@ it.each([
       delivered: true
     })
     await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe(''))
-    expect(create).toHaveBeenCalledTimes(failure === 'preferences' ? 1 : 2)
+    expect(create).toHaveBeenCalledTimes(2)
   }
 )
 

@@ -1,4 +1,4 @@
-import { ProjectGroupNameDialog } from '../../ProjectGroupNameDialog'
+import { ProjectGroupNameDialog } from '../../worktree-list/rows/ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from '../parenting/WorktreeParentPickerPopover'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'

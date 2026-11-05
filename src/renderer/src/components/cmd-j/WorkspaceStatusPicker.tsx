@@ -9,7 +9,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { FooterKey } from '@/components/worktree-jump/worktree-jump-palette-primitives'
-import { getWorkspaceStatusVisualMeta } from '@/components/sidebar/workspace-status'
+import { getWorkspaceStatusVisualMeta } from '@/components/sidebar/workspace-status/presentation/workspace-status'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'

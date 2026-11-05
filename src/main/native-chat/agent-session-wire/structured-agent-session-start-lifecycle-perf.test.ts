@@ -158,7 +158,7 @@ async function runStarts(count: number) {
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${codex.connections.length}`,
     startupLimits: { ceilingMs: CEILING_MS },
-    idleSweep: { intervalMs: 60 * 60_000, idleMs: 60 * 60_000 },
+    idleSweep: { intervalMs: 60 * 60_000, idleMs: () => 60 * 60_000 },
     now: () => NOW
   })
   const { runtimeState } = host.collaboratorsForTests()

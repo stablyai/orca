@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as excerpt from '../../../../shared/source-control/checks/logs/check-job-log-excerpt'
 import * as extraction from '../../../../shared/source-control/checks/logs/check-job-log-tail-slice'
 import { TERMINAL_CONTROL_CHARACTER_PATTERN } from '../../../../shared/ansi-escape-sequences'
-import { createCheckLogFixture } from '../../../../../config/scripts/check-job-log-test-fixture.mjs'
+import { createCheckLogFixture } from '../../../../../config/scripts/performance/check-job-log/check-job-log-test-fixture.mjs'
 import {
   completeFakeSpawn,
   createFakeSpawnedChild

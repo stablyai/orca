@@ -18,7 +18,7 @@ import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/work
 import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
-} from '../../WorkspaceReviewChecksIndicator'
+} from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string

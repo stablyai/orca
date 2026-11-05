@@ -25,11 +25,12 @@ import {
   type WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
-import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
-import { resolveProjectGroupHeaderColor } from '../../project-header-color'
-import { ProjectHeaderActions } from '../../ProjectHeaderActions'
+import { resolveProjectGroupHeaderColor } from './project-header-color'
+import { ProjectHeaderActions } from './ProjectHeaderActions'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT

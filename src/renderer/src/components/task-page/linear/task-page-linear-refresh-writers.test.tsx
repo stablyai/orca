@@ -10,7 +10,7 @@ import {
   source
 } from './task-page-linear-refresh-test-fixtures'
 import { LinearIssueProjectSelector } from '../../linear-issue-project-selector'
-import { syncWorkspaceBoardTaskStatuses } from '../../sidebar/workspace-board-task-status-sync'
+import { syncWorkspaceBoardTaskStatuses } from '../../sidebar/workspace-board/projection/workspace-board-task-status-sync'
 import { readWorkspaceReferenceDetails } from '../../sidebar/workspace-card/review/workspace-reference-detail-read'
 import { getWorkspaceReferenceRequest } from '../../sidebar/workspace-card/review/workspace-reference-details'
 import { referenceWorkspace } from '../../sidebar/workspace-card/review/workspace-reference-fixtures.test-support'

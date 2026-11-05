@@ -130,7 +130,8 @@ export class PiRpcSession {
     this.dialogs = new PiRpcDialogCallbacks(
       this.lane,
       (frame) => this.connection.send(frame),
-      (error) => this.fail(error)
+      (error) => this.fail(error),
+      resolvedLaunch.backgroundWork?.directory ?? null
     )
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
@@ -266,7 +267,7 @@ export class PiRpcSession {
     const observedAt = Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
     const cause = (this.failure ??= error)
-    this.dialogs.cancelAll()
+    this.dialogs.close()
     this.turns.end()
     // The lane is sealed once finalized, so the end event travels with the final transfer.
     this.lane.finalize({

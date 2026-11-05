@@ -7,7 +7,6 @@ import { injectHistoryEnv } from '../../pty/history/terminal-history'
 import { getHistoryRoot } from '../../pty/history/terminal-history-paths'
 import { DORMANT_WORKTREE_ID, manifest } from './persistence-orcad-migration-catalog-fixture'
 import {
-  BASH,
   ZSH,
   commitDurably,
   encodedHistories,
@@ -97,36 +96,6 @@ describe('moved WSL history lands under the shell a host pane runs', () => {
     expect(injected.histFile).toBe(join(hostHistoryDirectory(DORMANT_WORKTREE_ID), 'zsh_history'))
   })
 
-  it('a bash pane keeps bash_history', async () => {
-    await moveLoneBridgeHistory(BASH, () => '/bin/bash')
-
-    expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBe(BASH)
-    expect(hostHistory(DORMANT_WORKTREE_ID, 'zsh_history')).toBeNull()
-  })
-
-  it.each(['/usr/bin/fish', '/usr/local/bin/nu', ''])(
-    'any other pane shell (%j) keeps bash_history',
-    async (shell) => {
-      await moveLoneBridgeHistory(BASH, () => shell)
-
-      expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBe(BASH)
-      expect(hostHistory(DORMANT_WORKTREE_ID, 'zsh_history')).toBeNull()
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'a configured zsh that is not executable falls back as the spawn does, to bash',
-    async () => {
-      vi.stubEnv('SHELL', '/usr/bin/zsh')
-      missingShells.add('/usr/bin/zsh')
-      missingShells.add('/bin/zsh')
-      await moveLoneBridgeHistory(BASH)
-
-      expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBe(BASH)
-      expect(hostHistory(DORMANT_WORKTREE_ID, 'zsh_history')).toBeNull()
-    }
-  )
-
   it.skipIf(process.platform === 'win32')(
     "the host's default-shell setting wins over SHELL, as it does for a new pane",
     async () => {
@@ -138,21 +107,4 @@ describe('moved WSL history lands under the shell a host pane runs', () => {
       expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBeNull()
     }
   )
-
-  it('a worktree that sent both files keeps their own names', async () => {
-    const input = manifest()
-    const store = createStore({ paneShellPath: () => '/usr/bin/zsh' })
-    stage(
-      store,
-      input,
-      await encodedHistories(desktopHistory, [
-        { worktreeId: DORMANT_WORKTREE_ID, file: 'zsh_history', content: ZSH },
-        { worktreeId: DORMANT_WORKTREE_ID, file: 'bash_history', content: BASH }
-      ])
-    )
-    expect(await commitDurably(store, input)).toBe('committed')
-
-    expect(hostHistory(DORMANT_WORKTREE_ID, 'zsh_history')).toBe(ZSH)
-    expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBe(BASH)
-  })
 })

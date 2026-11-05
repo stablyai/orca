@@ -3,11 +3,11 @@ import {
   auditResults,
   prepareBenchmark,
   runDescriptor
-} from '../../../../../config/scripts/check-job-log-byte-cap-benchmark.mjs'
+} from '../../../../../config/scripts/performance/check-job-log/check-job-log-byte-cap-benchmark.mjs'
 import {
   createManifest,
   selectRequiredDescriptors
-} from '../../../../../config/scripts/check-job-log-performance-cases.mjs'
+} from '../../../../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
 
 const root = process.cwd()
 const manifest = selectRequiredDescriptors(

@@ -5,7 +5,7 @@ import {
   createPendingRevealScroll,
   isRevealScrollSettling,
   type PendingRevealScroll
-} from '../../worktree-sidebar-reveal-scroll-settle'
+} from '../navigation/worktree-sidebar-reveal-scroll-settle'
 
 export const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 export const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300

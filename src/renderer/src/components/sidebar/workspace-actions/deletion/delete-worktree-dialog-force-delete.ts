@@ -7,7 +7,7 @@ import {
 } from '../../../../../../shared/worktree/removal'
 import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
 import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
-import { showWorkspaceListChangedToast } from '../../stale-workspace-list-toast'
+import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 
 export function runDialogForceDelete(args: {

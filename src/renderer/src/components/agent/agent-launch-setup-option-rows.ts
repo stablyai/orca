@@ -122,10 +122,14 @@ export function agentLaunchSetupOptionRows({
                           }
                         ]
                       : []),
-                    {
-                      value: TEXT_ACTION_DEFAULT_MODEL,
-                      label: textEffortDefaultLabel(option.kind)
-                    },
+                    ...(entry.textGeneration.defaultLabel !== undefined
+                      ? [
+                          {
+                            value: TEXT_ACTION_DEFAULT_MODEL,
+                            label: textEffortDefaultLabel(option.kind)
+                          }
+                        ]
+                      : []),
                     ...option.kind.choices
                   ]
                 : current && !option.kind.choices.some((choice) => choice.value === current)

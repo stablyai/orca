@@ -171,7 +171,7 @@ async function runNativeIbusScenario(
 test.describe('Native IBus Hangul terminal input @headful', () => {
   test.skip(
     process.env.ORCA_E2E_NATIVE_IBUS_HANGUL !== '1',
-    'Run through config/scripts/run-terminal-ibus-hangul-e2e.mjs'
+    'Run through config/scripts/runtime-verification/terminal-e2e/run-terminal-ibus-hangul-e2e.mjs'
   )
 
   test('forwards the issue exact-byte sequence without loss or duplication', async ({

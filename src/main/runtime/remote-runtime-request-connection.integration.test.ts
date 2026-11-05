@@ -562,6 +562,7 @@ describe('remote runtime request connection integration', () => {
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
         getAccountsStreamSnapshot: () => ({ claude: null, codex: null }),
+        getUsageRateLimits: () => null,
         refreshAccountsForMobile: async () => {
           for (const listener of accountsListeners) {
             listener({ claude: null, codex: null })

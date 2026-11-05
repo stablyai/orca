@@ -1,5 +1,3 @@
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { peekRuntimeEnvironmentCapability } from '@/runtime/runtime-compatibility-cache'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   isRuntimeHostContactRevoked,
@@ -13,8 +11,7 @@ import {
 } from '@/runtime/runtime-environment-revision'
 import {
   type AgentLaunchSettingsOwner,
-  readHostAgentLaunchSettings,
-  hostSupportsLaunchChoices,
+  readHostAgentLaunchDefaults,
   subscribeHostAgentLaunchSettings
 } from './agent-launch-settings-transport'
 
@@ -22,8 +19,11 @@ export type AgentLaunchPreferences = Readonly<{
   defaultTuiAgent: GlobalSettings['defaultTuiAgent'] | undefined
   disabledTuiAgents: GlobalSettings['disabledTuiAgents'] | undefined
   agentLaunchChoices?: GlobalSettings['agentLaunchChoices']
+  agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
+  agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
+  agentPermissionOverrides?: GlobalSettings['agentPermissionOverrides']
 }>
-export type Snapshot = AgentLaunchPreferences | 'desktop'
+export type Snapshot = AgentLaunchPreferences | 'inherited'
 type Resource = {
   key: string
   owner: AgentLaunchSettingsOwner
@@ -34,7 +34,14 @@ type Resource = {
   holders: Set<() => void>
 }
 
-const EMPTY_CHOICES: NonNullable<GlobalSettings['agentLaunchChoices']> = {}
+const INHERITED: AgentLaunchPreferences = {
+  defaultTuiAgent: null,
+  disabledTuiAgents: [],
+  agentLaunchChoices: {},
+  agentDefaultArgs: {},
+  agentPermissionDefault: 'own',
+  agentPermissionOverrides: {}
+}
 const FIRST_READ_DEADLINE_MS = 3_000
 const snapshotByEnvironment = new Map<string, Resource>()
 export const current = (entry: Resource): boolean =>
@@ -75,48 +82,31 @@ function refresh(entry: Resource): void {
   const controller = new AbortController()
   entry.controller = controller
   if (entry.snapshot === null && entry.deadline === undefined) {
-    entry.deadline = setTimeout(() => settle(entry, 'desktop'), FIRST_READ_DEADLINE_MS)
+    entry.deadline = setTimeout(() => settle(entry, 'inherited'), FIRST_READ_DEADLINE_MS)
   }
   const live = (): boolean => entry.controller === controller
-  void Promise.all([
-    readHostAgentLaunchSettings(entry.owner, controller.signal).catch((error: unknown) => {
-      if (entry.answer !== null) {
-        throw error
-      }
-      return null
-    }),
-    hostSupportsLaunchChoices(entry.owner).then((supported) => {
-      if (live() && current(entry)) {
-        publish(entry)
-      }
-      return supported
-    })
-  ]).then(
-    ([settings, choicesSupported]) => {
+  void readHostAgentLaunchDefaults(entry.owner, controller.signal).then(
+    (defaults) => {
       if (live()) {
+        const settings = defaults?.settings
         entry.controller = null
         entry.answer = settings
           ? {
               defaultTuiAgent: settings.defaultTuiAgent,
               disabledTuiAgents: settings.disabledTuiAgents,
-              ...(choicesSupported
-                ? { agentLaunchChoices: settings.agentChoices?.defaults ?? EMPTY_CHOICES }
-                : {})
+              agentLaunchChoices: settings.agentLaunchChoices,
+              agentDefaultArgs: settings.agentDefaultArgs,
+              agentPermissionDefault: settings.agentPermissionDefault,
+              agentPermissionOverrides: settings.agentPermissionOverrides
             }
-          : choicesSupported
-            ? {
-                defaultTuiAgent: useAppStore.getState().settings?.defaultTuiAgent,
-                disabledTuiAgents: useAppStore.getState().settings?.disabledTuiAgents,
-                agentLaunchChoices: EMPTY_CHOICES
-              }
-            : 'desktop'
+          : (entry.answer ?? 'inherited')
         settle(entry, entry.answer)
       }
     },
     () => {
       if (live()) {
         entry.controller = null
-        settle(entry, entry.answer ?? 'desktop')
+        settle(entry, entry.answer ?? 'inherited')
       }
     }
   )
@@ -197,20 +187,5 @@ export function effectiveAgentLaunchPreferences(
     getRuntimeEnvironmentRevision(owner.environmentId) === owner.pairingRevision &&
     (!entry?.snapshot || entry.snapshot.pairingRevision === owner.pairingRevision) &&
     (!owner.runtimeId || !status?.runtimeId || owner.runtimeId === status.runtimeId)
-  const preferences = currentOwner && snapshot && snapshot !== 'desktop' ? snapshot : desktop
-  if (preferences !== desktop && preferences.agentLaunchChoices !== undefined) {
-    return preferences
-  }
-  const capable =
-    currentOwner &&
-    (peekRuntimeEnvironmentCapability(
-      owner.environmentId,
-      AGENT_LAUNCH_CHOICES_CAPABILITY,
-      owner.runtimeId
-    ) ??
-      status?.capabilities?.includes(AGENT_LAUNCH_CHOICES_CAPABILITY))
-  return {
-    ...preferences,
-    agentLaunchChoices: capable ? EMPTY_CHOICES : desktop.agentLaunchChoices
-  }
+  return currentOwner && snapshot && snapshot !== 'inherited' ? snapshot : INHERITED
 }

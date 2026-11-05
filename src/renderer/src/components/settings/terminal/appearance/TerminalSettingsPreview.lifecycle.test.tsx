@@ -96,8 +96,8 @@ vi.mock('@xterm/xterm', () => ({
   }
 }))
 
-vi.mock('@xterm/addon-ligatures', () => ({
-  LigaturesAddon: class LigaturesAddon {
+vi.mock('@/lib/pane-manager/terminal-ligatures-addon', () => ({
+  TerminalLigaturesAddon: class TerminalLigaturesAddon {
     dispose: Mock
 
     constructor() {

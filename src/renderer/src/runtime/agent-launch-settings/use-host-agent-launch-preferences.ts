@@ -143,10 +143,21 @@ export function useHostAgentMenuSettings(
       preferences.defaultTuiAgent,
       preferences.disabledTuiAgents,
       preferences.agentLaunchChoices,
+      preferences.agentDefaultArgs,
+      preferences.agentPermissionDefault,
+      preferences.agentPermissionOverrides,
       snapshot === null
     ] as const
   })
-  const [defaultTuiAgent, disabledTuiAgents, agentLaunchChoices, pending] = useSyncExternalStore(
+  const [
+    defaultTuiAgent,
+    disabledTuiAgents,
+    agentLaunchChoices,
+    agentDefaultArgs,
+    agentPermissionDefault,
+    agentPermissionOverrides,
+    pending
+  ] = useSyncExternalStore(
     useCallback(
       (listener: () => void) => {
         if (!subscription.environmentId || !subscription.active) {
@@ -176,7 +187,14 @@ export function useHostAgentMenuSettings(
       ...desktopSettings,
       defaultTuiAgent,
       disabledTuiAgents,
-      agentLaunchChoices
+      agentLaunchChoices,
+      agentDefaultArgs,
+      agentPermissionDefault,
+      agentPermissionOverrides,
+      agentCmdOverrides: {},
+      agentDefaultEnv: {},
+      nativeChatSessionOptions: {},
+      nativeChatPermissionMode: undefined
     }
   }
 }

@@ -19,11 +19,11 @@ import {
 import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
-} from '../../WorkspaceReviewChecksIndicator'
+} from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
 import { ReviewChecksIndicator } from '../metadata/WorktreeCardMetadataStatusBadges'
 import { WorktreeCardStatusSlot } from '../surface/WorktreeCardStatusSlot'
-import { buildParentPrChecksProjection } from '../../../right-sidebar/parent-pr-checks-rows'
-import { FolderWorkspacePrChecksRow } from '../../../right-sidebar/FolderWorkspacePrChecksRow'
+import { buildParentPrChecksProjection } from '../../../right-sidebar/hosted-review/folder-checks/parent-pr-checks-rows'
+import { FolderWorkspacePrChecksRow } from '../../../right-sidebar/hosted-review/folder-checks/FolderWorkspacePrChecksRow'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 import {
   referenceAttachment,
