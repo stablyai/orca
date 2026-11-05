@@ -20,7 +20,8 @@ import { rebuildOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-man
 import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import {
   clearManagedOrcadUpdateDeferral,
-  recordManagedOrcadUpdateDeferral
+  managedOrcadUpdateDeferral,
+  recordManagedOrcadUpdateDeferralFromHost
 } from '../managed-server/lifecycle/orcad-managed-update-deferrals'
 import {
   isForceableOrcadDeferral,
@@ -145,24 +146,23 @@ export async function runManagedOrcadUpdate(
     ...(args.admitRecord ? { admitRecord: args.admitRecord } : {})
   })
   if (result.outcome === 'installed-not-activated') {
-    const deferral = {
-      outcome: 'deferred' as const,
-      candidateVersion: result.fullVersion,
-      code: result.code,
-      reason: result.reason,
-      // Force may override policy deferrals, including a newer host build.
-      forceable:
-        isForceableOrcadDeferral(result.code) ||
-        result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
-    }
-    // Policy refusal is final for this host, not a transient update to retry.
-    if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
-      recordManagedOrcadUpdateDeferral(
-        environment.id,
-        deferral,
-        context.activationRecord.active
-      )
-    }
+    // Force may override policy deferrals, including a newer host build.
+    const deferral = managedOrcadUpdateDeferral(
+      result,
+      isForceableOrcadDeferral(result.code) || result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+    )
+    await recordManagedOrcadUpdateDeferralFromHost(
+      environment.id,
+      deferral,
+      {
+        conn: context.connection,
+        host: context.host,
+        remoteHome: context.remoteHome,
+        signal: args.signal
+      },
+      context.activationRecord.active,
+      result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+    )
     await pruneSupersededOrcadCandidates(slot, context.serverTarget, result.fullVersion)
     return deferral
   }

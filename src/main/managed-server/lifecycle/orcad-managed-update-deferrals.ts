@@ -1,5 +1,6 @@
 import type { OrcadManagedDeferral } from '../../../shared/orcad-managed-runtime'
 import { compareAppVersions } from '../../../shared/app-version'
+import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 
 type RecordedDeferral = OrcadManagedDeferral & { deferredAt: string }
 
@@ -57,5 +58,38 @@ export function currentManagedOrcadUpdateDeferral(
     reason: stored.reason,
     ...(stored.forceable === undefined ? {} : { forceable: stored.forceable }),
     deferredAt: stored.deferredAt
+  }
+}
+
+/** Record a deferral against the host as it stands after deploy: another desktop may have moved it
+ *  during the deploy, and a stale baseline would make the next status read drop the note (#38400).
+ *  `enabled` is false for a policy refusal, which is final for this host rather than retryable. */
+export async function recordManagedOrcadUpdateDeferralFromHost(
+  environmentId: string,
+  deferral: OrcadManagedDeferral,
+  target: Parameters<typeof readOrcadActivationRecord>[0],
+  fallbackActive: string | null,
+  enabled: boolean
+): Promise<void> {
+  if (!enabled) {
+    return
+  }
+  const active = await readOrcadActivationRecord(target)
+    .then((record) => record.active)
+    .catch(() => fallbackActive)
+  recordManagedOrcadUpdateDeferral(environmentId, deferral, active)
+}
+
+/** The deferral a failed activation reports, with the force escape the caller decided. */
+export function managedOrcadUpdateDeferral(
+  result: { fullVersion: string; code: string; reason: string },
+  forceable: boolean
+): OrcadManagedDeferral {
+  return {
+    outcome: 'deferred',
+    candidateVersion: result.fullVersion,
+    code: result.code,
+    reason: result.reason,
+    forceable
   }
 }
