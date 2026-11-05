@@ -105,7 +105,6 @@ import {
 } from './native-chat-queued-edit-draft'
 import { NativeChatComposer } from './NativeChatComposer'
 import { useNativeChatOrcaCommands } from './use-native-chat-orca-commands'
-import type { NativeChatPickerState } from './use-native-chat-picker-state'
 
 const RESUME: CommandItem = {
   kind: 'command',
@@ -213,8 +212,16 @@ describe('/resume in the native chat composer', () => {
           // The caret sits right after `/usa`, so the row is a leading command.
           autocomplete: {
             mode: 'slash',
-            dispatchable: true
-          } as NativeChatPickerState['autocomplete'],
+            query: 'usa',
+            items: [USAGE],
+            triggerKey: 'slash:0',
+            prefix: '/',
+            dispatchable: true,
+            grouped: false,
+            commandsEnabled: true,
+            skillsEnabled: false,
+            skillStatus: 'ready'
+          },
           isPickedSkill: () => false,
           clearSkillOrigin: vi.fn()
         },
