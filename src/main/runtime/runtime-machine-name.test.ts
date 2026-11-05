@@ -1,7 +1,7 @@
 import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../shared/machine-name'
-import type { RuntimeMachineName } from './runtime-machine-name'
+import type { RuntimeMachineName } from './hosts/platform-probe/runtime-machine-name'
 
 // Mock shared scutil lookup: runner load can make one live probe time out while another succeeds, yielding a flaky comparison.
 const runProcessMock = vi.hoisted(() => vi.fn())
@@ -29,7 +29,7 @@ describe('RuntimeMachineName', () => {
   beforeEach(async () => {
     vi.resetModules()
     runProcessMock.mockReset()
-    module = await import('./runtime-machine-name')
+    module = await import('./hosts/platform-probe/runtime-machine-name')
   })
 
   afterEach(() => {
