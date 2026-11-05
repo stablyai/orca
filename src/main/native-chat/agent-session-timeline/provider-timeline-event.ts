@@ -73,7 +73,13 @@ export type ProviderTimelineEvent =
       Joined)
   /** Final text overrides accumulated deltas; join must match the same item. */
   | ({ type: 'text.close'; item: ProviderTimelineTextItem; text?: string } & Joined)
-  | ({ type: 'request.open'; request: string; body: ProviderTimelineRequestBody } & Produced &
+  /** A request that outlives its turn stays pending until answered or withdrawn. */
+  | ({
+      type: 'request.open'
+      request: string
+      body: ProviderTimelineRequestBody
+      outlivesTurn?: true
+    } & Produced &
       Joined)
   /** Withdraw only unanswered requests. */
   | { type: 'request.withdrawn'; request: string }

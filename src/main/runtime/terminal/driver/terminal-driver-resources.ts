@@ -18,15 +18,15 @@ import type {
   RuntimeTerminalRead
 } from '../../../../shared/runtime-terminal-contracts'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
-import type { RuntimeProviderSnapshotReadOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
+import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
 import type {
-  DriverState,
   ApplyLayoutResult,
   PtyLayoutTarget,
   LayoutQueueEntry,
   PtyLayoutState
-} from '../../orca-runtime-core'
+} from '../layout/terminal-layout-state'
 
 import { RuntimeTerminalDriverController } from './runtime-terminal-driver-controller'
 import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'

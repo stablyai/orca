@@ -1,5 +1,7 @@
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 
@@ -47,4 +49,27 @@ export function resetSenderStore(): void {
     },
     true
   )
+}
+
+export function setSenderSessionStatus(sessionId: OrcaSessionId): AgentStatusEntry {
+  const tab = makeUnifiedTab({
+    id: 'progress-chat',
+    entityId: sessionId,
+    worktreeId: 'workspace',
+    groupId: 'g',
+    contentType: 'agent-session',
+    executionHostId: 'local',
+    agentSessionAgent: 'claude'
+  })
+  const paneKey = structuredAgentSessionPaneKey(tab.id, sessionId)
+  const entry: AgentStatusEntry = {
+    ...status(0),
+    paneKey,
+    programStatus: { state: 'working', progress: 40, observedAt: 2_000_000 }
+  }
+  useAppStore.setState({
+    unifiedTabsByWorktree: { workspace: [tab] },
+    agentStatusByPaneKey: { [paneKey]: entry }
+  })
+  return entry
 }

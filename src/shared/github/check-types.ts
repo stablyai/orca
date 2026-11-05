@@ -13,6 +13,7 @@ export type PRCheckDetail = {
     | 'action_required'
     | null
   url: string | null
+  observedHeadSha?: string
   checkRunId?: number
   workflowRunId?: number
   // GitLab trace retrieval requires numeric job id, so carry it through the Checks row.

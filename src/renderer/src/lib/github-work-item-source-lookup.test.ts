@@ -4,12 +4,16 @@ import {
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
 } from '../../../shared/task-source-runtime-capabilities'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
+import {
+  GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY,
+  GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as complete
+} from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import {
   lookupGitHubWorkItemDetailsForSource,
+  lookupGitHubWorkItemForSource,
   lookupGitHubWorkItemByOwnerRepoForSource
 } from './github-work-item-source-lookup'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
@@ -19,6 +23,17 @@ import {
 } from '@/store/slices/runtime-status-connection-generation'
 import type { GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { useAppStore } from '@/store'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { capturePRCheckContract } from './pr-check-observation-contract'
+import { isCompletePRCheckOwner } from '../../../shared/github/complete-pr-check-owner'
+import { lookupCmdJGitHubUrlWorkItem } from './cmd-j-github-url-lookup'
+
+vi.mock('@/store', async () => {
+  const { create } = await import('zustand')
+  return { useAppStore: create(() => ({ repos: [], runtimeStatusByEnvironmentId: new Map() })) }
+})
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
   const actual = await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
@@ -42,10 +57,13 @@ describe('GitHub source lookup routing', () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 100, pairingRevision: 701 }])
     setRuntimeEnvironmentConnectionGenerationForTests('env-1', 4)
     vi.mocked(callRuntimeRpc).mockReset()
+    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
+    setLocalRuntimeCapabilitiesForTests(null)
     vi.stubGlobal('window', {
       api: {
         gh: {
           workItemDetails: vi.fn(),
+          workItem: vi.fn(),
           workItemByOwnerRepo: vi.fn().mockResolvedValue(null)
         }
       }
@@ -56,6 +74,7 @@ describe('GitHub source lookup routing', () => {
     replaceRuntimeEnvironmentRevisions([])
     clearRuntimeEnvironmentConnectionGenerations()
     vi.unstubAllGlobals()
+    setLocalRuntimeCapabilitiesForTests(null)
   })
 
   it.each(['local', 'ssh:build-box'] as const)(
@@ -397,5 +416,177 @@ describe('GitHub source lookup routing', () => {
         expectedGhAccount: { host: 'github.com', user: 'Alice' }
       }
     ])
+  })
+})
+
+const foundPR = {
+  id: 'pr:42',
+  number: 42,
+  type: 'pr' as const,
+  title: 'Found PR',
+  url: 'https://github.com/acme/orca/pull/42',
+  labels: [],
+  author: null,
+  state: 'open' as const,
+  updatedAt: '',
+  headSha: 'a'.repeat(40),
+  prRepo: { owner: 'acme', repo: 'orca', host: 'github.com' },
+  checksSummary: {
+    state: 'failure' as const,
+    total: 1,
+    passed: 0,
+    failed: 1,
+    pending: 0,
+    neutral: 0
+  }
+}
+function setLookupHost(runtimeId: string, capabilities: string[]) {
+  const response = createCompatibleRuntimeStatusResponse(runtimeId)
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map([
+      ['env-1', { status: { ...response.result, capabilities }, checkedAt: 1 }]
+    ])
+  })
+}
+
+describe('PR metadata and complete checks admission', () => {
+  beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 100, pairingRevision: 701 }])
+    setRuntimeEnvironmentConnectionGenerationForTests('env-1', 4)
+    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
+    vi.mocked(callRuntimeRpc).mockReset()
+    vi.stubGlobal('window', { api: { gh: { workItemByOwnerRepo: vi.fn() } } })
+  })
+  afterEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
+    clearRuntimeEnvironmentConnectionGenerations()
+    setLocalRuntimeCapabilitiesForTests(null)
+    vi.unstubAllGlobals()
+  })
+
+  it.each(['ordinary', 'exact-preview', 'details'] as const)(
+    'returns useful unproved %s metadata across discovery at beforeSend',
+    async (kind) => {
+      const dispatched: string[] = []
+      vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method, _params, options) => {
+        // The target probe and queued transport both invoke the composed caller admission.
+        setLookupHost('newly-discovered', [
+          complete,
+          GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY
+        ])
+        options?.beforeSend?.()
+        dispatched.push(method)
+        return method === 'status.get'
+          ? createCompatibleRuntimeStatusResponse('newly-discovered').result
+          : kind === 'details'
+            ? { item: foundPR, body: 'Provider body', comments: [] }
+            : foundPR
+      })
+      const args = {
+        repoPath: '/repo',
+        repoId: 'renderer-repo',
+        sourceContext: runtimeSourceContext,
+        number: 42,
+        type: 'pr' as const
+      }
+      const result =
+        kind === 'ordinary'
+          ? await lookupGitHubWorkItemForSource(args)
+          : kind === 'exact-preview'
+            ? await lookupGitHubWorkItemByOwnerRepoForSource({
+                ...args,
+                owner: 'acme',
+                repo: 'orca',
+                preview: true
+              })
+            : await lookupGitHubWorkItemDetailsForSource({ ...args, ownerRepo: foundPR.prRepo })
+      const item = result && 'item' in result ? result.item : result
+      expect(item).toMatchObject({ number: 42, title: 'Found PR' })
+      expect(item && isCompletePRCheckOwner(item)).toBe(false)
+      if (kind === 'details') {
+        expect(result).toMatchObject({ body: 'Provider body' })
+        expect(dispatched).toEqual(['status.get', 'github.workItemDetails'])
+      }
+    }
+  )
+
+  it('keeps a pasted Cmd-J PR link when local capability arrives while the lookup is pending', async () => {
+    const reply = Promise.withResolvers<typeof foundPR>()
+    const started = Promise.withResolvers<void>()
+    vi.mocked(window.api.gh.workItemByOwnerRepo).mockImplementation(async () => {
+      started.resolve()
+      return reply.promise
+    })
+    const pending = lookupCmdJGitHubUrlWorkItem({
+      link: { slug: foundPR.prRepo, number: 42, type: 'pr' },
+      repo: { id: 'local', path: '/repo' },
+      sourceContext: null
+    })
+    await started.promise
+    setLocalRuntimeCapabilitiesForTests([complete])
+    reply.resolve(foundPR)
+    const result = await pending
+    expect(result).toMatchObject({ title: 'Found PR', number: 42 })
+    expect(result && isCompletePRCheckOwner(result)).toBe(false)
+  })
+
+  it.each([
+    'stable',
+    'preview',
+    'explicit-retired',
+    'generation',
+    'runtime',
+    'caller',
+    'mismatch'
+  ] as const)('preserves source and owner boundaries: %s', async (mode) => {
+    setLookupHost('r1', [complete])
+    const contract =
+      mode === 'explicit-retired'
+        ? capturePRCheckContract(
+            useAppStore.getState,
+            { kind: 'environment', environmentId: 'env-1' },
+            runtimeSourceContext
+          )
+        : undefined
+    let accepts = true
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, _method, _params, options) => {
+      options?.beforeSend?.()
+      if (mode === 'explicit-retired') {
+        setLookupHost('r1', [])
+      }
+      if (mode === 'generation') {
+        setRuntimeEnvironmentConnectionGenerationForTests('env-1', 5)
+      }
+      if (mode === 'runtime') {
+        setLookupHost('r2', [complete])
+      }
+      if (mode === 'caller') {
+        accepts = false
+      }
+      return mode === 'mismatch' ? { ...foundPR, number: 99 } : foundPR
+    })
+    const pending = lookupGitHubWorkItemByOwnerRepoForSource({
+      repoPath: '/repo',
+      repoId: 'renderer',
+      sourceContext: runtimeSourceContext,
+      number: 42,
+      type: 'pr',
+      owner: 'acme',
+      repo: 'orca',
+      checkContract: contract,
+      preview: mode === 'preview',
+      accepts: () => accepts
+    })
+    if (mode === 'mismatch') {
+      await expect(pending).rejects.toThrow('acme/orca#42')
+    } else {
+      const result = await pending
+      if (mode === 'stable' || mode === 'preview') {
+        expect(result).toMatchObject({ number: 42 })
+        expect(result && isCompletePRCheckOwner(result)).toBe(mode === 'stable')
+      } else {
+        expect(result).toBeNull()
+      }
+    }
   })
 })

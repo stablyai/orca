@@ -57,7 +57,12 @@ export class OrchestrationMutationExecutor {
     }
     const callerFingerprint =
       callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
-    const stableParams = replayStableCallerParams(this.runtime, params, callerOrcaSessionId)
+    const stableParams = replayStableCallerParams(
+      this.runtime,
+      params,
+      callerOrcaSessionId,
+      request.method
+    )
     const basePayloadHash = hashCanonical({ method: request.method, params: stableParams })
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()

@@ -15,7 +15,7 @@ import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-s
 import { isSafePtySessionId } from '../../daemon/sessions/pty-session-id'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import { stampWslOrchestrationCompatibilityHost } from '../../pty/shell-startup/wsl-orca-env'
-import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
+import { getRuntimeSourceStamp } from '../../runtime/hosts/platform-probe/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

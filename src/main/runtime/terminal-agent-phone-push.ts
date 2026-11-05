@@ -13,7 +13,7 @@ import type {
   NotificationSettings
 } from '../../shared/notification-settings-types'
 import { buildNotificationOptions } from '../ipc/notification-options'
-import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
+import type { MobileNotificationDispatchEvent } from './push/notifications/runtime-mobile-notification-controller'
 import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
 
 export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }

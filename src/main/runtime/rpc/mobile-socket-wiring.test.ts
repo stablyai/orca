@@ -8,7 +8,7 @@ import {
   type MobileE2EEV2Ready
 } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
-import type { DeviceRegistry } from '../device-registry'
+import type { DeviceRegistry } from './server/pairing/device-registry'
 import {
   deriveSharedKey,
   encrypt,

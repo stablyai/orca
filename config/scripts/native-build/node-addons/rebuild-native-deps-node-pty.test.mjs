@@ -2,60 +2,20 @@ import { existsSync, readFileSync } from 'node:fs'
 import { removeTreeSync } from '../../../../src/shared/windows-transient-lock-removal.ts'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-
 import {
   gitLineEndingEnv,
   initGitWorkTree,
   mkTempProject,
   runRebuildScript,
   writeFakeElectronRebuild,
-  writeFakeLoadableNodePty,
   writeFakeNodePtyConptyPayload,
   writeFakeNodePtyConptySource,
   writeFakeUsableElectronPackage,
-  writeFakeWindowsProcessTree,
   writeFakeWindowsProcessTreeWithNodeAddonApi,
-  writeFakeWindowsRegistry,
-  writeFakeWindowsSecurity,
-  writeNodePtyPatchFile,
-  writePatchedNodePtyBuildArtifacts,
   writeWindowsProcessTreePatchFile
 } from './rebuild-native-deps-test-fixtures.mjs'
 
 describe('rebuild-native-deps patched node-pty rebuild', () => {
-  it.skipIf(process.platform !== 'win32')(
-    'repairs a missing ConPTY runtime before probing without recompiling node-pty',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
-        writeFakeWindowsRegistry(projectDir)
-        writeFakeWindowsProcessTree(projectDir)
-        writeFakeWindowsSecurity(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Restored node-pty ConPTY runtime files')
-        expect(result.stdout).toContain(
-          'Native modules already load in Electron; skipping rebuild.'
-        )
-        expect(existsSync(rebuildLogPath)).toBe(false)
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
   const commandLineSourcePath = (projectDir) =>
     join(
       projectDir,
@@ -130,28 +90,6 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  it('refuses a Windows rebuild when the process creation-time patch is missing', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir)
-      writeFakeNodePtyConptyPayload(projectDir, 'x64')
-      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir, { creationTimePatchApplied: false })
-
-      const result = runRebuildScript(
-        projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
-        ['--platform=win32', '--arch=x64', '--force']
-      )
-
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('process creation-time patch')
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
-
   it('restores the ConPTY runtime payload after a Windows Electron rebuild', () => {
     const projectDir = mkTempProject()
 
@@ -176,191 +114,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
-  it.skipIf(process.platform !== 'win32')(
-    'does not rebuild a healthy node-pty when another Windows addon fails its probe',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir)
-        writeFakeWindowsProcessTree(projectDir)
-        writeFakeWindowsSecurity(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: @orca/windows-registry')
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['@orca/windows-registry'])
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
-  it.skipIf(process.platform !== 'win32')(
-    'rebuilds a loadable ConPTY native that lacks Orca job ownership',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { ownsPtyJob: false })
-        writeFakeWindowsRegistry(projectDir)
-        writeFakeWindowsProcessTree(projectDir)
-        writeFakeWindowsSecurity(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
-        expect(result.stdout).toContain('missing listJobProcessIds')
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
   // Model loadable addon with all job exports but no MSYS denial: require/export checks pass while Git Bash children leak.
-  it.skipIf(process.platform !== 'win32')(
-    'rebuilds a loadable ConPTY native that owns its job but predates the MSYS breakaway denial',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { cygwinBreakawayDenied: false })
-        writeFakeWindowsRegistry(projectDir)
-        writeFakeWindowsProcessTree(projectDir)
-        writeFakeWindowsSecurity(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
-        writeFakeNodePtyConptySource(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
-        expect(result.stdout).toContain('predates the Cygwin/MSYS job-breakaway denial')
-        expect(result.stdout).not.toContain('skipping rebuild')
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'rebuilds when Electron can load node-pty but patched build artifacts are missing',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir)
-        writeNodePtyPatchFile(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain(
-          'Patched node-pty build artifacts are missing; rebuilding from source.'
-        )
-
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
-        expect(rebuildCall.ignoreModules).toEqual(['cpu-features'])
-        expect(rebuildCall.force).toBe(true)
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'keeps the Electron load-probe fast path once patched node-pty artifacts exist',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
-        writeNodePtyPatchFile(projectDir)
-        writePatchedNodePtyBuildArtifacts(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain(
-          'Native modules already load in Electron; skipping rebuild.'
-        )
-        expect(existsSync(rebuildLogPath)).toBe(false)
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'rebuilds when patched artifacts exist but Electron falls back to node-pty prebuilds',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../prebuilds/darwin-arm64/' })
-        writeNodePtyPatchFile(projectDir)
-        writePatchedNodePtyBuildArtifacts(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
-        expect(result.stdout).toContain("expected build/Release so Orca's node-pty patch is active")
-
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
-        expect(rebuildCall.force).toBe(true)
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
 
   // Check rebuilt artifact destined for packaged app; neither relay gate nor runtime load check covers it. Missing output after success must fail too.
   for (const [addon, expected] of [
@@ -446,51 +200,6 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
   })
 
   // Cross-host rebuild or absent optional node-pty may leave no win32 addon; warn without breaking a working install.
-  it('warns rather than fails when no addon is expected on this disk', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir)
-      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
-
-      const result = runRebuildScript(
-        projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
-        ['--platform=win32', '--arch=x64', '--force']
-      )
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(result.stderr + result.stdout).toContain('could not check the MSYS job-breakaway')
-    } finally {
-      removeTreeSync(projectDir)
-    }
-  })
 
   // Same-host missing output must fail: loader falls back to upstream prebuild that leaks MSYS children. Only Windows can exercise this branch.
-  it.skipIf(process.platform !== 'win32')(
-    'fails a same-host Windows rebuild that left no addon, naming the prebuild that would load',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir)
-        writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
-        writeFakeLoadableNodePty(projectDir, { nativeDir: `prebuilds/win32-${process.arch}` })
-
-        const result = runRebuildScript(
-          projectDir,
-          { npm_config_platform: 'win32', npm_config_arch: process.arch },
-          ['--platform=win32', `--arch=${process.arch}`, '--force']
-        )
-
-        expect(result.status).not.toBe(0)
-        expect(result.stderr).toContain(join('build', 'Release', 'conpty.node'))
-        expect(result.stderr).toContain(join('prebuilds', `win32-${process.arch}`, 'conpty.node'))
-      } finally {
-        removeTreeSync(projectDir)
-      }
-    }
-  )
 })

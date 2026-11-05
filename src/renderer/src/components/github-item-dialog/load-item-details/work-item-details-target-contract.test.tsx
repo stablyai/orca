@@ -1,3 +1,5 @@
+import type * as LocalRuntimeCapabilities from '@/runtime/local-runtime-capabilities'
+import { completePRCheckGraphQLResponse } from '../../../../../shared/github/complete-pr-check-test-fixture'
 import type * as GitRunner from '../../../../../main/git/command-runner/gh-exec-file'
 import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
@@ -143,7 +145,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: io.rpc,
   runtimeEnvironmentSupportsCapability: async () => io.capable
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+  ...(await importOriginal<typeof LocalRuntimeCapabilities>()),
   ensureLocalRuntimeCapabilities: async () => ['github.exact-work-item-target.v1']
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -311,34 +314,15 @@ beforeEach(() => {
       })
     }
     if (query.includes('statusCheckRollup')) {
-      return response({
-        data: {
-          repository: {
-            pullRequest: {
-              commits: {
-                nodes: [
-                  {
-                    commit: {
-                      statusCheckRollup: {
-                        contexts: {
-                          nodes: [
-                            {
-                              __typename: 'CheckRun',
-                              name: `${owner} check`,
-                              status: 'COMPLETED',
-                              conclusion: 'SUCCESS'
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
+      return completePRCheckGraphQLResponse(93, `${owner}-head`, [
+        {
+          __typename: 'CheckRun',
+          name: `${owner} check`,
+          status: 'COMPLETED',
+          conclusion: 'SUCCESS',
+          checkSuite: { databaseId: 7 }
         }
-      })
+      ])
     }
     if (args.some((a) => a.includes('/files?'))) {
       return response([

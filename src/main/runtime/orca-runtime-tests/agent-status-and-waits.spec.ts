@@ -3,7 +3,7 @@ import { committingSpawn } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,

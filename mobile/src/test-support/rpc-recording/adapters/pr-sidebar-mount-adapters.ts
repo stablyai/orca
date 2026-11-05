@@ -1,6 +1,7 @@
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { PrSidebarLoadDeps } from '../../../session/mobile-pr-sidebar-state'
+import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
 
 const WORKTREE = 'repo-9::/w'
 const BRANCH = 'feature'
@@ -10,7 +11,8 @@ export function prSidebarMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
-    'session.pr-sidebar': ({ client }) => {
+    'session.pr-sidebar': ({ client: suppliedClient }) => {
+      const client = legacyShellStatusFixture(suppliedClient)
       const reads = modules.load<typeof import('../../../session/github-pr-rpc')>(
         'mobile/src/session/github-pr-rpc.ts'
       )

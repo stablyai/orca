@@ -1,4 +1,3 @@
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -18,8 +17,7 @@ export function NativeChatAwaitingInputRow({
   subject,
   pending,
   disclosureKey,
-  listsQuestions = true,
-  onLinkClick
+  listsQuestions = true
 }: {
   /** Null when the payload named no question; the label carries the row alone. */
   subject: NativeChatAskRowSubject | null
@@ -29,7 +27,6 @@ export function NativeChatAwaitingInputRow({
   disclosureKey?: string
   /** False when the caller already shows each question of a grouped prompt in full. */
   listsQuestions?: boolean
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   // Separate group and question keys because a pending Codex group becomes individual rows when answered.
   const { open, setOpen } = useNativeChatDisclosure(
@@ -109,7 +106,6 @@ export function NativeChatAwaitingInputRow({
         // Indented to the label, past the icon slot and its gap.
         <NativeChatQuestionText
           content={question}
-          onLinkClick={onLinkClick}
           className="break-words pl-5.5 text-sm leading-relaxed text-chat-foreground"
         />
       ) : null}
@@ -118,7 +114,7 @@ export function NativeChatAwaitingInputRow({
         <ol className="list-decimal space-y-1 pl-5.5 text-sm leading-relaxed text-chat-foreground marker:text-chat-foreground-faint">
           {questions.map((entry) => (
             <li key={entry} className="break-words">
-              <NativeChatQuestionText content={entry} onLinkClick={onLinkClick} />
+              <NativeChatQuestionText content={entry} />
             </li>
           ))}
         </ol>

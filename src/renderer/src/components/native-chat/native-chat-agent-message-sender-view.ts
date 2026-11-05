@@ -4,6 +4,7 @@ import {
   useAgentMessageSenderSources,
   useLeasedSenderSelector
 } from './native-chat-agent-message-sender-source'
+import type { AgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 import type { AppState } from '@/store/types'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -12,7 +13,45 @@ import {
   agentMessageSenderOpens,
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
+import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { agentMessageSavedKind } from '../../../../shared/agent-session/agent-message-presentation'
+
+/** A terminal may outlive its sender; only a saved actor reference selects current activity. */
+function activitySender(
+  sender: AgentMessageSender | undefined,
+  dispatchId?: string
+): AgentMessageSender | undefined {
+  if (!sender) {
+    return
+  }
+  const session = sender.party.orcaSessionId ?? parseOrcaSessionAddress(sender.party.address)
+  const address = session
+    ? `orca_session_id:${session}`
+    : dispatchId
+      ? `dispatch:${dispatchId}`
+      : sender.party.address.startsWith('dispatch:')
+        ? sender.party.address
+        : undefined
+  return address
+    ? { ...sender, party: { address, orcaSessionId: session, terminalHandle: null } }
+    : undefined
+}
+
+function viewLocation(target: AgentMessageSenderTarget | undefined, activity = true) {
+  if (target?.kind === 'legacy') {
+    return (
+      target.location && { ...target.location, ...(!activity ? { activity: false as const } : {}) }
+    )
+  }
+  const located = target?.kind === 'located' ? target.location : undefined
+  return (
+    located && {
+      ...located,
+      agentType: located.tab?.agentSessionAgent,
+      ...(!activity ? { activity: false as const } : {})
+    }
+  )
+}
 
 /** The card's sender, rebuilt only from the fields resolution reads, and where it runs now. */
 function useSenderLocation(
@@ -54,17 +93,15 @@ function useSenderLocation(
         : undefined,
     [identity, chatWorktreeId, stableTarget, dispatchId]
   )
+  const activity = useMemo(() => activitySender(identity, dispatchId), [identity, dispatchId])
   const locate = useCallback(
     (state: AppState) => {
-      const resolved = resolve(state)
-      if (resolved?.kind === 'legacy') {
-        return resolved.location
-      }
-      const located = resolved?.kind === 'located' ? resolved.location : undefined
-      // A located chat's own tab names its agent for cards saved before the agent kind was.
-      return located && { ...located, agentType: located.tab?.agentSessionAgent }
+      const resolved = activity
+        ? resolveAgentMessageSenderTarget(state, activity, chatWorktreeId, stableTarget, undefined)
+        : undefined
+      return viewLocation(resolved) ?? viewLocation(resolve(state), false)
     },
-    [resolve]
+    [activity, chatWorktreeId, stableTarget, resolve]
   )
   // The kind check reads the candidate's row before it can veto it, so the card leases that row's
   // source in every answer: a replaced card reuses it as a located one does.
@@ -81,7 +118,20 @@ function useSenderLocation(
         : undefined,
     [identity, chatWorktreeId, stableTarget, dispatchId]
   )
-  return { identity, savedAgent, resolve, locate, leaseLocate }
+  const activityLeaseLocate = useCallback(
+    (state: AppState) =>
+      (activity
+        ? agentMessageSenderCandidateLocation(
+            state,
+            activity,
+            chatWorktreeId,
+            stableTarget,
+            undefined
+          )
+        : undefined) ?? leaseLocate(state),
+    [activity, chatWorktreeId, stableTarget, leaseLocate]
+  )
+  return { identity, savedAgent, resolve, locate, leaseLocate, activityLeaseLocate }
 }
 
 export function useAgentMessageSenderView(
@@ -90,13 +140,13 @@ export function useAgentMessageSenderView(
   target?: RuntimeClientTarget,
   dispatchId?: string
 ) {
-  const { savedAgent, locate, leaseLocate } = useSenderLocation(
+  const { savedAgent, locate, activityLeaseLocate } = useSenderLocation(
     sender,
     chatWorktreeId,
     target,
     dispatchId
   )
-  return useAgentMessageSenderSource(locate, savedAgent, leaseLocate)
+  return useAgentMessageSenderSource(locate, savedAgent, activityLeaseLocate)
 }
 
 /** Whether the card's sender name is a link. Its kind check reads the located row, so it holds

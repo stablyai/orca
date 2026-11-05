@@ -1,11 +1,19 @@
 import { z } from 'zod'
+import {
+  isEquivalentPaneKey,
+  parseWorkerTerminalPriorOwnerIds
+} from './orchestration/db/pane-key-match'
 import { getFollowUpDispatch } from './orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { parseWorkerTerminalPriorOwnerIds } from './orchestration/db/pane-key-match'
 import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
 import { potentiallyLiveRemoteAttachmentSql } from './orchestration/db/federation/remote-attachment-liveness'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import type { OrchestrationDb } from './orchestration/db'
-import { tolerant, type AgentSenderPane } from './runtime-agent-sender-history'
+import {
+  tolerant,
+  agentSenderExecutionKey as executionKey,
+  agentSenderPaneFacts as paneFacts,
+  type AgentSenderPane
+} from './runtime-agent-sender-history'
 import {
   clearAgentSenderDirtyKeys,
   readAgentSenderDirtyKeys,
@@ -15,7 +23,7 @@ import {
 import { AgentSenderLineageGraph } from './runtime-agent-sender-lineage'
 
 /** An identity (`dispatch:<id>`, or an earlier handle of that worker) located in a live pane. */
-export type AgentSenderWorker = { identity: string; paneKey: string }
+export type AgentSenderWorker = { identity: string; paneKey: string; dispatchActor?: true }
 type RemoteWorker = AgentSenderWorker & { homePeerFingerprint: string }
 export type AgentSenderWorkers = { workers: AgentSenderWorker[]; remote: RemoteWorker[] }
 
@@ -202,6 +210,13 @@ export class AgentSenderWorkerHistory {
       },
       visit
     )
+    const executions = new Map<string, AgentSenderPane | null>()
+    for (const pane of panes) {
+      const key = executionKey(pane.processIncarnation, pane.hostScope)
+      if (key) {
+        executions.set(key, executions.has(key) ? null : pane)
+      }
+    }
     const workers: AgentSenderWorker[] = []
     const seen = new Set<string>()
     for (const pane of panes) {
@@ -215,7 +230,7 @@ export class AgentSenderWorkerHistory {
           continue
         }
         seen.add(id)
-        const entry = this.entry(id, live)
+        const entry = this.entry(id, live, executions)
         workers.push(...entry.rows)
         if (entry.parent) {
           pending.push(entry.parent)
@@ -269,34 +284,37 @@ export class AgentSenderWorkerHistory {
     return { facts: paneFacts(pane), candidates: [...candidates], former, remote }
   }
 
-  /** A Dispatch's verdict: the live pane its lineage runs in now, if any. */
-  private entry(id: string, live: Map<string, AgentSenderPane>): DispatchEntry {
+  private entry(
+    id: string,
+    live: Map<string, AgentSenderPane>,
+    executions: Map<string, AgentSenderPane | null>
+  ): DispatchEntry {
     const row = this.graph.row(id)
-    const lineage = this.graph.resolve(id)
-    let rows: AgentSenderWorker[] = []
-    if (lineage && !lineage.latest.assignee_orca_session_id) {
-      const { latest, resource } = lineage
-      const paneKey = resource?.pane_key ?? latest.assignee_pane_key ?? ''
-      const pane = live.get(paneKey)
-      const runs = resource
-        ? pane && holdsWorker(resource, pane)
-        : pane &&
-          latest.assignee_handle === pane.handle &&
-          (latest.status === 'pending' || latest.status === 'dispatched') &&
-          (!latest.process_incarnation || latest.process_incarnation === pane.processIncarnation)
-      if (pane && runs) {
-        rows = [{ identity: `dispatch:${id}`, paneKey }]
-        // Cards from the worker's earlier terminal follow it; a live handle still names its own pane.
-        if (row?.assignee_handle && !isStructuredWorkerHandle(row.assignee_handle)) {
-          rows.push({ identity: row.assignee_handle, paneKey })
-        }
+    const resource = this.graph.resource(id)
+    const rows: AgentSenderWorker[] = []
+    const sourceKey = row && executionKey(row.process_incarnation, row.host_scope)
+    const exact = sourceKey ? executions.get(sourceKey) : undefined
+    const sourceResource =
+      resource && sourceKey === executionKey(resource.process_incarnation, resource.host_scope)
+    const pane = sourceResource ? live.get(resource.pane_key ?? '') : exact
+    const runs =
+      row &&
+      !row.assignee_orca_session_id &&
+      exact &&
+      pane === exact &&
+      row.launch_token_hash &&
+      row.launch_token_hash === pane.launchTokenHash &&
+      isEquivalentPaneKey(row.assignee_pane_key ?? '', pane.paneKey) &&
+      (sourceResource
+        ? holdsWorker(resource, pane)
+        : row.assignee_handle === pane.handle &&
+          (row.status === 'pending' || row.status === 'dispatched'))
+    if (pane && runs) {
+      rows.push({ identity: `dispatch:${id}`, paneKey: pane.paneKey, dispatchActor: true })
+      if (row.assignee_handle && !isStructuredWorkerHandle(row.assignee_handle)) {
+        rows.push({ identity: row.assignee_handle, paneKey: pane.paneKey, dispatchActor: true })
       }
     }
-    const entry = { parent: row?.follow_up_of_dispatch_id ?? null, rows }
-    return entry
+    return { parent: row?.follow_up_of_dispatch_id ?? null, rows }
   }
-}
-
-function paneFacts(pane: AgentSenderPane): string {
-  return `${pane.handle}\0${pane.processIncarnation ?? ''}`
 }

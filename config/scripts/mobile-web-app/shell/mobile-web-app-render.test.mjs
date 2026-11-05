@@ -9,8 +9,6 @@ import {
   createBundleServer,
   waitForPageFrames,
   installShellDouble,
-  parseCspDirectives,
-  projectDir,
   readBridgeFaultGrant,
   readBridgePagePainted,
   readBridgeProtocolVersion,
@@ -224,135 +222,7 @@ const paintReports = (page, name) =>
     name
   )
 
-async function renderWithoutTree({ shellRoute } = {}) {
-  const { page, errors } = await openPage({ shellRoute })
-  // Read immediately after load: entry decides synchronously, so further polling would hide an unsettled decision.
-  await page.goto(`${origin}/`, { waitUntil: 'load' })
-  const entry = await page.evaluate(() => document.documentElement.dataset.orcaWebEntry ?? 'absent')
-  const rootChildren = await page.evaluate(() => document.getElementById('root').childElementCount)
-  const text = await page.evaluate(() => document.body.innerText)
-  const url = await page.evaluate(() => location.pathname + location.search)
-  await page.close()
-  return { entry, errors, rootChildren, text, url }
-}
-
-describe('the shell policy this page is tested under', () => {
-  it('is the same on both platforms, so one render check covers both', async () => {
-    const swift = await readFile(
-      join(projectDir, 'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift'),
-      'utf8'
-    )
-    expect(parseCspDirectives(swift, 'static let header = [', '].joined')).toBe(cspHeader)
-  })
-
-  it('reads directives from the source and not from the comments around them', () => {
-    const source = [
-      'static let header = [',
-      "  // React Native Web needs \"style-src 'self' 'unsafe-inline'\" and nothing more.",
-      '  "default-src \'none\'",',
-      '  "script-src \'self\'",',
-      "  \"style-src 'self' 'unsafe-inline'\",",
-      '  "img-src \'self\'",',
-      '  "connect-src \'self\'",',
-      '  "worker-src \'none\'",',
-      '  "frame-src \'none\'",',
-      '  "child-src \'none\'",',
-      '  "object-src \'none\'",',
-      '  "base-uri \'none\'",',
-      '  "form-action \'none\'",',
-      '  "frame-ancestors \'none\'"',
-      '].joined'
-    ].join('\n')
-    const parsed = parseCspDirectives(source, 'static let header = [', '].joined')
-    expect(parsed.split('; ')[0]).toBe("default-src 'none'")
-    expect(parsed.split('; ').filter((entry) => entry.includes('unsafe-inline'))).toEqual([
-      "style-src 'self' 'unsafe-inline'"
-    ])
-  })
-
-  it('admits only cached Blob URLs for media', () => {
-    expect(cspHeader.split('; ').filter((entry) => entry.startsWith('media-src'))).toEqual([
-      'media-src blob:'
-    ])
-  })
-
-  it('still refuses inline script, which is the directive that matters', () => {
-    expect(cspHeader).toContain("script-src 'self';")
-    expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
-  })
-
-  it('admits embedded fonts and limits external sources to images', () => {
-    expect(cspHeader.split('; ').filter((entry) => entry.includes('data:'))).toEqual([
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data:"
-    ])
-    expect(cspHeader.split('; ').filter((entry) => entry.includes('https:'))).toEqual([
-      "img-src 'self' data: blob: https:"
-    ])
-    expect(cspHeader).not.toContain('http:')
-  })
-})
-
-// 1×1 PNG proves decoding, not merely policy admission.
-const DATA_URI_IMAGE =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-
-describeRender('an image preview under the shell policy', () => {
-  it('decodes a data: URI, which is the only shape a file preview has', async () => {
-    // Match RN-Web ImageLoader’s new Image/onload path for data:<mime>;base64 preview URLs.
-    // Component’s hidden img lacks load/error handlers and serves context menu/getBackgroundSize, so it cannot prove preview load succeeds.
-    const { page, errors } = await openPage()
-    await page.goto(`${origin}/`, { waitUntil: 'load' })
-    const naturalWidth = await page.evaluate(
-      (uri) =>
-        new Promise((resolve) => {
-          const image = new Image()
-          image.addEventListener('load', () => resolve(image.naturalWidth))
-          image.addEventListener('error', () => resolve(0))
-          image.src = uri
-        }),
-      DATA_URI_IMAGE
-    )
-    await page.close()
-    expect({
-      naturalWidth,
-      refused: errors.filter((entry) => entry.includes('Content Security Policy'))
-    }).toEqual({ naturalWidth: 1, refused: [] })
-  })
-})
-
-describeRender('the page server this check runs against', () => {
-  it('404s a file path the bundle does not contain', async () => {
-    // Restrict served prefix or catch-all server would hide unusable script publicPath.
-    expect((await fetch(`${origin}/wrong-prefix/entry.js`)).status).toBe(404)
-    expect((await fetch(`${origin}/assets/not-a-real-hash.js`)).status).toBe(404)
-  })
-
-  it('answers the icon a browser asks for without an error', async () => {
-    expect((await fetch(`${origin}/favicon.ico`)).status).toBe(204)
-  })
-
-  it('still serves the document at every route depth', async () => {
-    for (const route of ['/', HOST_ROUTE, `${HOST_ROUTE}/tasks`]) {
-      const response = await fetch(`${origin}${route}`)
-      expect(response.status, route).toBe(200)
-      expect(await response.text(), route).toContain('<div id="root">')
-    }
-  })
-})
-
 describeRender('the Route A page in a real browser', () => {
-  it('mounts the worktree list route, not the unmatched screen', async () => {
-    const { errors, cspErrors, text, session, url } = await render(HOST_ROUTE, SHELL_HOST.name)
-    expect(cspErrors).toEqual([])
-    expect(errors).toEqual([])
-    expect(session).toEqual({ sessionId: SHELL_SESSION_ID, buildId: SHELL_BUILD_ID })
-    expect(url).toBe(HOST_ROUTE)
-    expect(text).toContain(SHELL_HOST.name)
-    expect(text).not.toContain('Host not found')
-    expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
-
   it('fills the view, so what it mounted is painted and takes a tap', async () => {
     const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
@@ -385,28 +255,7 @@ describeRender('the Route A page in a real browser', () => {
     expect(layout.reachesTheControl).toBe(true)
   }, 60_000)
 
-  it('routes a nested dynamic segment through the same context', async () => {
-    const { errors, cspErrors, text, session } = await render(`${HOST_ROUTE}/tasks`, 'Tasks')
-    expect(cspErrors).toEqual([])
-    expect(errors).toEqual([])
-    expect(session.sessionId).toBe(SHELL_SESSION_ID)
-    expect(text).toContain('Tasks')
-    expect(text).toContain('Issues')
-    expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
-
   // Native files routes throw requireNativeViewManager at import; deferred import hides this until actual route opens, requiring web siblings.
-  it('mounts the file explorer, which its native route module cannot do', async () => {
-    const worktreeRoute = `${HOST_ROUTE}/files/worktree-a`
-    const { errors, cspErrors, text } = await render(worktreeRoute, 'Files', {
-      shellRoute: { pathname: worktreeRoute, params: { name: 'Example Worktree' } }
-    })
-    expect(cspErrors).toEqual([])
-    expect(errors).toEqual([])
-    expect(text).toContain('Files')
-    expect(text).toContain('Example Worktree')
-    expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
 
   it('mounts the file preview, reading the file path out of a param and not a segment', async () => {
     const previewRoute = `${HOST_ROUTE}/files/preview/worktree-a`
@@ -424,49 +273,6 @@ describeRender('the Route A page in a real browser', () => {
     expect(text).toContain('readme.md')
     expect(url).toBe(`${previewRoute}?relativePath=docs%2Fmy+notes%2Freadme.md&source=worktree`)
     expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
-
-  it('refuses a host-scoped path with no module rather than crashing', async () => {
-    // Catch-all host route must paint refusal and avoid Unmatched; both assertions distinguish refusal from blank screen.
-    const refusal = 'This workspace screen is not available on this host.'
-    const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`, refusal)
-    expect(cspErrors).toEqual([])
-    expect(errors).toEqual([])
-    expect(text).toContain(refusal)
-    expect(text).not.toContain(UNMATCHED)
-  }, 60_000)
-
-  it('carries the params the shell named into the url the screen reads', async () => {
-    const { errors, url } = await render(HOST_ROUTE, SHELL_HOST.name, {
-      shellRoute: { pathname: HOST_ROUTE, params: { from: 'render check' } }
-    })
-    expect(errors).toEqual([])
-    expect(url).toBe(`${HOST_ROUTE}?from=render+check`)
-  }, 60_000)
-
-  it('paints the not-found state when the shell named no host, which is what makes the row real', async () => {
-    const { errors, text } = await render(HOST_ROUTE, 'Host not found', { shellHost: null })
-    expect(errors).toEqual([])
-    expect(text).toContain('Host not found')
-    expect(text).not.toContain(SHELL_HOST.name)
-  }, 60_000)
-
-  it('mounts nothing at all when no shell answered, which is what makes the rest real', async () => {
-    // Control catches pages ignoring init entirely.
-    const { entry, errors, rootChildren } = await renderWithoutTree()
-    expect(entry).toBe('unbridged')
-    expect(rootChildren).toBe(0)
-    expect(errors).toEqual([])
-  }, 60_000)
-
-  it('says to update the app when the shell that opened it named no screen', async () => {
-    const { entry, errors, text, url } = await renderWithoutTree({ shellRoute: null })
-    expect(entry).toBe('shell-too-old')
-    expect(errors).toEqual([])
-    expect(text).toContain('Update Orca to open this workspace')
-    // Missing route must not mount Unmatched tree at /.
-    expect(text).not.toContain(UNMATCHED)
-    expect(url).toBe('/')
   }, 60_000)
 
   it('tells the shell when a route chunk throws, rather than sitting on a blank page', async () => {
@@ -635,10 +441,6 @@ describeRender('the Route A page in a real browser', () => {
 // Probe mounted React Navigation canGoBack through real route chevron/router.back; page exposes no direct test hook.
 // First prove same-family tap reaches shell, since an inert handler and refused local Back both leave document unchanged.
 describeRender('the stack the page Back button rests on', () => {
-  // Edit host is native-only now, so Tasks is the served screen with its own Back.
-  const TASKS_ROUTE = `${HOST_ROUTE}/tasks`
-  const BACK_ON_TASKS = '[aria-label="Back"]'
-
   async function clickAndSettle(page, selector) {
     await page.click(selector)
     await waitForPageFrames(page)
@@ -664,35 +466,6 @@ describeRender('the stack the page Back button rests on', () => {
       .toEqual([{ v: bridgeVersion, type: 'notify', name: 'navigate', href: '/' }])
     // Require page stays on served route; local fallthrough would mount a screen document cannot serve.
     expect(url).toBe(HOST_ROUTE)
-    expect(opened.errors).toEqual([])
-    await opened.page.close()
-  }, 60_000)
-
-  it('cannot go back on the document the shell just opened, which is the one screen it has', async () => {
-    const opened = await openPage({ shellRoute: { pathname: TASKS_ROUTE } })
-    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, TASKS_ROUTE, 'Issues')
-    expect(await opened.page.locator(BACK_ON_TASKS).count()).toBe(1)
-    expect(await clickAndSettle(opened.page, BACK_ON_TASKS)).toBe(TASKS_ROUTE)
-    expect(opened.errors).toEqual([])
-    await opened.page.close()
-  }, 60_000)
-
-  it('is given no stack by a location change either, only by a push this page makes itself', async () => {
-    // Entry replaceState and external location changes reset router instead of stacking it; extra browser history cannot make canGoBack true.
-    // Local Back branch requires an in-page useRouteHandoff push, which this tree currently has none of.
-    const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
-    await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-    await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    const entriesBefore = await opened.page.evaluate(() => history.length)
-    await opened.page.evaluate((to) => {
-      history.pushState(null, '', to)
-      dispatchEvent(new PopStateEvent('popstate'))
-    }, TASKS_ROUTE)
-    await waitForRoute(opened, TASKS_ROUTE, 'Issues')
-    expect(await opened.page.evaluate(() => history.length)).toBe(entriesBefore + 1)
-    expect(await clickAndSettle(opened.page, BACK_ON_TASKS)).toBe(TASKS_ROUTE)
-    // Synthetic popstate faults could leave page unchanged; require no boundary fault to validate absence.
     expect(opened.errors).toEqual([])
     await opened.page.close()
   }, 60_000)

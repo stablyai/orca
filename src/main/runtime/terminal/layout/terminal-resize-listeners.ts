@@ -1,18 +1,17 @@
 import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { observeStructuredWorker } from '../../rpc/methods/orchestration-structured-worker-lifecycle'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
-import { addListenerToMap } from '../../orca-runtime-core'
-import { notifyRuntimeListeners, withTimeoutResult } from '../../runtime-async-boundaries'
+import { addListenerToMap } from './terminal-listener-map'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
 
 import {
   type TerminalExitCause,
   describeTerminalExitCause,
   isDeliberateTerminalExit
 } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import {
-  DEFAULT_TERMINAL_LIST_LIMIT,
-  PTY_CONTROLLER_LIST_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
+import { DEFAULT_TERMINAL_LIST_LIMIT } from '../query/terminal-list-limit'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionRequest,

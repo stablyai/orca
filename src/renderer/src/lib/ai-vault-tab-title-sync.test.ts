@@ -146,6 +146,22 @@ function makeState(args: {
         listener(state, previous)
       }
     },
+    nameFromHost: (title: string) => {
+      const previous = state
+      state = {
+        ...state,
+        tabsByWorktree: {
+          [args.worktreeId]: state.tabsByWorktree[args.worktreeId].map((entry: TerminalTab) => ({
+            ...entry,
+            aiVaultTitle: { agent, sessionId: providerSession.id, title },
+            sessionTitleFromHost: true as const
+          }))
+        }
+      }
+      for (const listener of listeners) {
+        listener(state, previous)
+      }
+    },
     removeSleepingRecord: () => {
       const previous = state
       state = { ...state, sleepingAgentSessionsByPaneKey: {} }
@@ -179,6 +195,31 @@ describe('AI Vault tab title sync', () => {
     store.removeSleepingRecord()
     const restored = store.getState().tabsByWorktree['worktree-1'][0] as TerminalTab
     expect(resolveTerminalTabTitle(restored, false)).toBe('Stable conversation')
+    stop()
+  })
+
+  it('drops a client result that returns after the paired host started naming the tab', async () => {
+    const store = makeState({
+      executionHostId: 'runtime:server-1',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore'
+    })
+    let respond: ((result: AiVaultSessionTitlesResult) => void) | undefined
+    const resolveSessionTitles = vi.fn(
+      () =>
+        new Promise<AiVaultSessionTitlesResult>((resolve) => {
+          respond = resolve
+        })
+    )
+    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
+
+    await vi.waitFor(() => expect(respond).toBeTypeOf('function'))
+    store.nameFromHost('Host name')
+    respond?.(titleResult('codex', 'Client name'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().tabsByWorktree['worktree-1'][0].aiVaultTitle?.title).toBe('Host name')
+    expect(resolveSessionTitles).toHaveBeenCalledTimes(1)
     stop()
   })
 

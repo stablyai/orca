@@ -6,6 +6,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
       commits(last: 1) {
         nodes {
           commit {
+            oid
             statusCheckRollup {
               contexts(first: 100) {
                 nodes {
@@ -53,6 +54,8 @@ query($owner: String!, $repo: String!, $pr: Int!) {
 `
 
 export type GraphQLPRChecksResponse = {
+  errors?: unknown[]
+
   data?: {
     repository?: {
       pullRequest?: {
@@ -66,6 +69,8 @@ export type GraphQLPRChecksResponse = {
 }
 
 export type GraphQLPRChecksCommit = {
+  oid?: string | null
+
   statusCheckRollup?: {
     contexts?: {
       nodes?: GraphQLStatusCheckContext[] | null

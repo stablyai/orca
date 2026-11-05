@@ -114,7 +114,6 @@ describe('the envelope bound against a real posted frame', () => {
 })
 
 // These synthetic bytes prove base64 arithmetic/drop rules, not JPEG bytes-per-pixel assumption.
-// config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts validates constant against real Chromium JPEGs across viewports.
 describe('a frame at exactly the budgeted area', () => {
   /** The image the budget says the mobile view's worst case produces, to the byte. */
   const BUDGETED_IMAGE_BYTES = Math.floor(
