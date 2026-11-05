@@ -1,12 +1,12 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** The coordinator's latest mail the worker consumed; helpers' reports and mail it has not taken yet do not count. */
-export function latestReadCoordinatorMailSequence(db: OrchestrationDb, dispatchId: string): number {
-  const sequence = db.db
+/** How much of the coordinator's mail the worker consumed, in any order; helpers' reports and mail it has not taken yet do not count. */
+export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string): number {
+  const count = db.db
     .prepare(
-      `SELECT MAX(sequence) AS sequence FROM messages
+      `SELECT COUNT(*) AS count FROM messages
         WHERE to_handle = ? AND read = 1 AND type NOT IN ('worker_done', 'escalation', 'question')`
     )
-    .get(`dispatch:${dispatchId}`)?.sequence
-  return typeof sequence === 'number' ? sequence : 0
+    .get(`dispatch:${dispatchId}`)?.count
+  return typeof count === 'number' ? count : 0
 }
