@@ -146,9 +146,14 @@ function isWslExecutable(value: string | undefined): boolean {
   return basename === 'wsl.exe' || basename === 'wsl'
 }
 
-const SETUP_SUCCESS_EXIT_SUFFIX = ' && exit'
+/**
+ * Exit code the success clause exits with. Only that clause produces it, so a shell that quits on
+ * its own before setup is delivered (rc file runs `exit`) cannot pass for a successful setup.
+ */
+export const SETUP_SUCCESS_EXIT_CODE = 79
+const SETUP_SUCCESS_EXIT_SUFFIX = ` && exit ${SETUP_SUCCESS_EXIT_CODE}`
 // Why: Windows PowerShell 5.1 cannot parse `&&`; this form also runs in pwsh.
-const POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX = '; if ($LASTEXITCODE -eq 0) { exit }'
+const POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX = `; if ($LASTEXITCODE -eq 0) { exit ${SETUP_SUCCESS_EXIT_CODE} }`
 
 /**
  * Appends a clause that exits the pane's shell when the setup command succeeds, so the pane
@@ -192,9 +197,10 @@ export function applySetupAutoCloseSetting(
     : command
 }
 
-/** True when the command ends with a clause from {@link appendShellExitOnSetupSuccess}. */
-export function exitsShellOnSetupSuccess(command: string | undefined): boolean {
+/** True when a shell launched with `command` exited through the setup success clause. */
+export function exitedOnSetupSuccess(command: string | undefined, exitCode: number): boolean {
   return (
+    exitCode === SETUP_SUCCESS_EXIT_CODE &&
     command !== undefined &&
     (command.endsWith(SETUP_SUCCESS_EXIT_SUFFIX) ||
       command.endsWith(POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX))
