@@ -58,13 +58,19 @@ describe('incremental Codex session names', () => {
     const { path } = await indexHome()
     const initial = entry('session', 'First')
     await writeFile(path, initial)
-    const first = await readCodexIndexUpdate(path, await stat(path))
+    const beforeAppend = await stat(path)
+    const appended = entry('session', 'After stat')
+    await appendFile(path, appended)
+    const first = await readCodexIndexUpdate(path, beforeAppend)
+    expect(first.titles.get('session')).toBe('After stat')
     const stream = vi.spyOn(transcriptFs, 'openTranscriptReadStream')
     await appendFile(path, `${entry('session', 'Renamed')}{"id":"session","thread_name":"Fin`)
     const next = await readCodexIndexUpdate(path, await stat(path), first)
     expect(next.titles.get('session')).toBe('Renamed')
     expect(
-      stream.mock.calls.some(([, options]) => options.start === Buffer.byteLength(initial))
+      stream.mock.calls.some(
+        ([, options]) => options.start === Buffer.byteLength(initial + appended)
+      )
     ).toBe(true)
     await appendFile(path, 'al"}\n')
     expect((await readCodexIndexUpdate(path, await stat(path), next)).titles.get('session')).toBe(
@@ -72,10 +78,12 @@ describe('incremental Codex session names', () => {
     )
   })
 
-  it('reads valid EOF JSON and rereads that tail after growth instead of retaining it', async () => {
+  it('rereads an EOF title observed after stat when growth invalidates its record', async () => {
     const { path } = await indexHome()
-    await writeFile(path, entry('head', 'Head') + entry('tail', 'EOF name').trimEnd())
-    const first = await readCodexIndexUpdate(path, await stat(path))
+    await writeFile(path, entry('head', 'Head') + entry('tail', 'Original'))
+    const beforeAppend = await stat(path)
+    await appendFile(path, entry('tail', 'EOF name').trimEnd())
+    const first = await readCodexIndexUpdate(path, beforeAppend)
     expect([...first.titles]).toEqual([
       ['head', 'Head'],
       ['tail', 'EOF name']
@@ -84,6 +92,7 @@ describe('incremental Codex session names', () => {
     const next = await readCodexIndexUpdate(path, await stat(path), first)
     expect([...next.titles]).toEqual([
       ['head', 'Head'],
+      ['tail', 'Original'],
       ['new', 'New name']
     ])
   })

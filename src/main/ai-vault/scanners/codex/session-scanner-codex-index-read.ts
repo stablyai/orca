@@ -11,7 +11,7 @@ import { normalizeTitleText } from '../../session-scanner-text-normalization'
 export type CodexIndexRead = {
   titles: Map<string, string>
   offset: number
-  size: number
+  readThrough: number
   dev: number
   ino: number
   firstRecord: { length: number; hash: string } | null
@@ -41,8 +41,8 @@ export async function readCodexIndexUpdate(
   let append = false
   if (
     previous?.firstRecord &&
-    previous.offset === previous.size &&
-    stat.size > previous.size &&
+    previous.offset === previous.readThrough &&
+    stat.size > previous.readThrough &&
     stat.dev !== 0 &&
     stat.ino !== 0 &&
     previous.dev !== 0 &&
@@ -68,9 +68,10 @@ export async function readCodexIndexUpdate(
       titles.set(sessionId, title)
     }
   }
-  const { consumedThrough, trailingPartialLine } = await consumeCompleteJsonlLines({
+  const start = append ? previous!.offset : 0
+  const { consumedThrough, trailingPartialLine, bytesRead } = await consumeCompleteJsonlLines({
     path,
-    start: append ? previous!.offset : 0,
+    start,
     onLine: applyLine
   })
   // EOF JSON remains readable; a tail forces the next growth to reread rather than retain it.
@@ -80,7 +81,7 @@ export async function readCodexIndexUpdate(
   return {
     titles,
     offset: consumedThrough,
-    size: stat.size,
+    readThrough: start + bytesRead,
     dev: stat.dev,
     ino: stat.ino,
     firstRecord: append
