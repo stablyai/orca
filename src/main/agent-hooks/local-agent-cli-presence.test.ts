@@ -182,13 +182,14 @@ describe('detectLocalManagedAgentCliPresence', () => {
   it('warns and uses the inherited PATH when shell hydration throws', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
+      const probe = vi.fn(async (filePath: string) => filePath === '/inherited/bin/codex')
       const result = await detectLocalManagedAgentCliPresence(
         [codexTarget],
         { agentCmdOverrides: {} },
         {
-          pathEnv: '',
+          pathEnv: '/inherited/bin',
           pathDelimiter: ':',
-          fileProbe: { isExecutableFile: vi.fn(async () => false) },
+          fileProbe: { isExecutableFile: probe },
           platform: 'linux',
           shouldHydrateShellPath: true,
           hydratePath: vi.fn(async () => {
@@ -197,7 +198,8 @@ describe('detectLocalManagedAgentCliPresence', () => {
         }
       )
 
-      expect(result.codex?.state).toBe('missing')
+      expect(result.codex).toEqual({ state: 'found', executablePath: '/inherited/bin/codex' })
+      expect(probe).toHaveBeenCalledWith('/inherited/bin/codex')
       expect(warning).toHaveBeenCalledWith(
         '[agent-hooks] Shell PATH hydration failed; using inherited PATH:',
         expect.objectContaining({ message: 'shell unavailable' })

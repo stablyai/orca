@@ -1,3 +1,4 @@
+import { inheritLaunchReadoptions } from '@/components/native-chat/native-chat-launch-draft-continuity'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -15,11 +16,7 @@ function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
   )
 }
 
-/**
- * Drops old-host rows only when main reports the exact repo re-adoption and the
- * renderer has received the corresponding new-host row. Evidence stays pending
- * across the add-response/repos:changed race until that row arrives.
- */
+/** Prune old-host rows only with exact main re-adoption evidence and corresponding new-host row; keep evidence across add-response/repos:changed races. */
 export function reconcileReadoptedSshRepoRows(
   repos: readonly Repo[],
   readoptions: readonly SshRepoReadoption[]
@@ -51,12 +48,13 @@ export function reconcileReadoptedSshRepoRows(
       )
     }
     if (pendingRepoIds.length > 0) {
-      pendingReadoptions.push({ ...readoption, repoIds: pendingRepoIds })
+      const pending = { ...readoption, repoIds: pendingRepoIds }
+      inheritLaunchReadoptions([readoption], [pending])
+      pendingReadoptions.push(pending)
     }
   }
 
-  // Why: pruning nothing must hand back the input array, or the copy alone would defeat the
-  // referential stability reconcileFetchedRepos just established upstream.
+  // No-op pruning preserves upstream reconciliation’s array identity.
   if (prunedOwners.size === 0) {
     return { repos, pendingReadoptions }
   }
@@ -80,8 +78,11 @@ export function mergeSshRepoReadoptions(
     readoption.repoIds.forEach((repoId) => repoIds.add(repoId))
     repoIdsByMigration.set(key, repoIds)
   }
-  return [...repoIdsByMigration].map(([key, repoIds]) => {
+  const result = [...repoIdsByMigration].map(([key, repoIds]) => {
     const [oldTargetId, newTargetId] = key.split('\0')
-    return { oldTargetId, newTargetId, repoIds: [...repoIds] }
+    const next = { oldTargetId, newTargetId, repoIds: [...repoIds] }
+    return next
   })
+  inheritLaunchReadoptions([...pending, ...incoming], result)
+  return result
 }

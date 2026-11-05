@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import { getSpawnArgsForWindows } from '../../win32-utils'
+import { getSpawnArgsForWindows } from '../../../shared/windows-batch-spawn'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 

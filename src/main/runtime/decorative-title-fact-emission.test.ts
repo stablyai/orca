@@ -36,7 +36,6 @@ describe('shouldEmitTitleFactForFrame', () => {
   })
 
   it('never throttles a timer-synthesized stale-working clear', () => {
-    // Why: it carries a staleWorkingTitleClear flag no earlier repeat can stand in for.
     expect(shouldEmitTitleFactForFrame({ ...base, staleWorkingTitleClear: true })).toBe(true)
   })
 
@@ -45,8 +44,7 @@ describe('shouldEmitTitleFactForFrame', () => {
   })
 
   it('keeps at least three frames inside the renderer hook-done quiet window', () => {
-    // Why: observeTitle's arriving working title is what cancels a Pi/OMP milestone `done`
-    // scheduled with HOOK_DONE_QUIET_MS = 1500. Losing that would mint a false completion.
+    // Three heartbeats must fit inside the 1500ms hook-done cancellation window.
     expect(DECORATIVE_TITLE_FACT_HEARTBEAT_MS * 3).toBeLessThanOrEqual(1_500)
   })
 })

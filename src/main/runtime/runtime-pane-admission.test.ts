@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneAdmissionOutcome } from '../persistence/terminal-topology/terminal-pane-admission'
-import { startInAdmittedPane } from './runtime-pane-admission'
+import { startInAdmittedPane } from './terminal/launch/runtime-pane-admission'
 import type { RuntimeStore } from './runtime-store-contract'
 
 const SPLIT = {

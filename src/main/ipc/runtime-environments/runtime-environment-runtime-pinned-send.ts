@@ -1,10 +1,10 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime-client'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { sendRemoteRuntimeSharedControlRequestOnRuntime } from './runtime-environment-request-connections'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
@@ -48,10 +48,7 @@ async function sendOneShotRequestOnRuntime(
   }
 }
 
-/**
- * Sends a call shaped for one runtime only over a socket that runtime answered on. Why: the cached
- * identity a support route accepts can outlive a server restart behind the same endpoint.
- */
+/** Cached support identity can survive server restart; verify identity on the sending socket. */
 export async function sendSupportRoutedCallOnRuntime(
   route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
   call: PinnedCall,

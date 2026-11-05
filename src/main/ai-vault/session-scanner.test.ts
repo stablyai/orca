@@ -2,41 +2,42 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
-import { KIRO_FIXTURE_SESSION_ID } from './session-scanner-kiro-fixtures'
+import { KIRO_FIXTURE_SESSION_ID } from './scanners/kiro/session-scanner-kiro-fixtures'
 import { writeEveryAgentVault } from './session-scanner-every-agent-fixture'
 
-// Why: the SQLite worker bundle does not exist in the test runtime; route the
-// v1/v2 worker calls to their synchronous implementations so scanning stays
-// end-to-end without spawning a real worker thread.
-vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
-  const v1List = await import('./session-scanner-opencode-sqlite-list')
-  const v1Parse = await import('./session-scanner-opencode-sqlite')
-  const v2List = await import('./session-scanner-opencode2-sqlite-list')
-  const v2Parse = await import('./session-scanner-opencode2-sqlite')
-  return {
-    listOpenCodeSqliteSessionsViaWorker: (
-      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
-    ) => v1List.listOpenCodeSqliteSessions(args),
-    listZcodeSqliteSessionsViaWorker: (
-      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
-    ) => v1List.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
-    parseOpenCodeSqliteSessionViaWorker: (
-      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
-    ) => v1Parse.parseOpenCodeSqliteSession(args),
-    parseZcodeSqliteSessionViaWorker: (
-      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
-    ) => v1Parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
-    listOpenCode2SqliteSessionsViaWorker: (
-      args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
-    ) => v2List.listOpenCode2SqliteSessions(args),
-    parseOpenCode2SqliteSessionViaWorker: (
-      args: Parameters<typeof v2Parse.parseOpenCode2SqliteSession>[0]
-    ) => v2Parse.parseOpenCode2SqliteSession(args)
+// Use synchronous SQLite implementations because worker bundles are absent in the test runtime.
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async () => {
+    const v1List = await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const v1Parse = await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite')
+    const v2List = await import('./scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    const v2Parse = await import('./scanners/opencode2/session-scanner-opencode2-sqlite')
+    return {
+      listOpenCodeSqliteSessionsViaWorker: (
+        args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+      ) => v1List.listOpenCodeSqliteSessions(args),
+      listZcodeSqliteSessionsViaWorker: (
+        args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+      ) => v1List.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+      parseOpenCodeSqliteSessionViaWorker: (
+        args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+      ) => v1Parse.parseOpenCodeSqliteSession(args),
+      parseZcodeSqliteSessionViaWorker: (
+        args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+      ) => v1Parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
+      listOpenCode2SqliteSessionsViaWorker: (
+        args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
+      ) => v2List.listOpenCode2SqliteSessions(args),
+      parseOpenCode2SqliteSessionViaWorker: (
+        args: Parameters<typeof v2Parse.parseOpenCode2SqliteSession>[0]
+      ) => v2Parse.parseOpenCode2SqliteSession(args)
+    }
   }
-})
+)
 
 let tempRoots: string[] = []
 
@@ -203,7 +204,6 @@ describe('scanAiVaultSessions', () => {
       totalTokens: 155,
       resumeCommand: "cd '/repo/app' && claude --resume 'claude-session'"
     })
-    // Why: list scans omit firstUserPrompt so the vault payload stays bounded.
     expect(claude?.firstUserPrompt).toBeUndefined()
 
     const codex = result.sessions.find((session) => session.agent === 'codex')
@@ -402,9 +402,7 @@ describe('scanAiVaultSessions', () => {
     const { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile } =
       await writeEveryAgentVault(root)
 
-    // Why the headroom: the limit is a newest-first cap, so a limit equal to the
-    // agent count silently drops one agent as soon as any fixture writes a second
-    // session — which is how adding jcode's fixture knocked Claude out of this set.
+    // Allow multiple fixtures per agent without evicting another agent under the recency cap.
     const result = await scanAiVaultSessions({
       ...roots,
       platform: 'darwin',
@@ -448,9 +446,7 @@ describe('scanAiVaultSessions', () => {
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
-    // OMP resumes by absolute transcript path, not by internal session id.
     expect(commandByAgent.get('omp')).toBe(`cd '/tmp/omp' && omp --resume '${ompSessionFile}'`)
-    // Prime Agent's `--resume <path|id>` takes the same absolute-path form as OMP.
     expect(commandByAgent.get('prime-agent')).toBe(
       `cd '/tmp/prime-agent' && prime-agent --resume '${primeAgentSessionFile}'`
     )
@@ -468,21 +464,22 @@ describe('scanAiVaultSessions', () => {
       `cd '/tmp/kiro' && kiro-cli chat --tui --resume-id '${KIRO_FIXTURE_SESSION_ID}'`
     )
 
+    expect(result.sessions.find((session) => session.agent === 'rovo')).toMatchObject({
+      filePath: join(roots.rovoSessionsDir, 'rovo-session', 'metadata.json'),
+      messageCount: 1,
+      previewMessages: [expect.objectContaining({ text: 'Rovo title' })]
+    })
+
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')
     expect(ompSession?.totalTokens).toBe(160)
 
-    // Prime Agent keeps Pi's `model_change.modelId` key, so the pre-reply model
-    // must come through even though no assistant message was written yet.
     const primeAgentSession = result.sessions.find((session) => session.agent === 'prime-agent')
     expect(primeAgentSession?.model).toBe('inference/big-model')
     expect(primeAgentSession?.title).toBe('Prime Agent title')
   })
 
   it('captures an in-progress OMP model from model_change before any assistant reply', async () => {
-    // OMP writes the model on `model_change.model` (not Pi's `modelId`). With no
-    // assistant message yet, the model must still come through — proving the
-    // model_change fallback rather than assistant-message capture.
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-omp-mc-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)

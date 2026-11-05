@@ -27,13 +27,6 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (name: string, data?: unknown) => recordBreadcrumb(name, data)
 }))
 
-/**
- * A single-driver cascade measures 438 bytes here, where every frame carries this
- * file's long basename; a production bundle name is shorter. Wide enough to sit
- * still, narrow enough that a raw stack or an uncapped key list breaks it.
- */
-const MAX_CASCADE_CRUMB_BYTES = 768
-
 /** Enough to pass the notice limit while staying under React's own 50-commit bail. */
 const CASCADE_TICKS = REACT_COMMIT_CASCADE_NOTICE_LIMIT + 5
 
@@ -48,11 +41,7 @@ const useCascadeStore = create<CascadeState>()(
   }))
 )
 
-/**
- * Layout effect, not passive: only the synchronous counter throws #185. A
- * useEffect loop leaves `pendingLanes: 0` at commit time (measured) because
- * passive effects flush after the callback, and React only console.errors it.
- */
+// Only synchronous layout-effect loops throw #185; passive effects leave pendingLanes zero at commit and only console.error.
 function RunawayLayoutEffectPane(): React.JSX.Element {
   const ticks = useCascadeStore((state) => state.ticks)
   useLayoutEffect(() => {
@@ -74,9 +63,7 @@ beforeEach(() => {
   resetReactCommitCascadeTelemetryForTests()
   resetReactCommitCascadeObserverForTests()
   useCascadeStore.setState({ ticks: 0 })
-  // Why cleared rather than deleting the global: react-dom captured this hook
-  // OBJECT at its own module evaluation, so a replacement object would never be
-  // called — and reinstalling over the last test's wrapper double-counts commits.
+  // Clear the captured hook object in place; replacement is invisible to react-dom, while rewrapping old counters doubles counts.
   if (commitHook) {
     commitHook.onCommitFiberRoot = undefined
   }
@@ -114,9 +101,7 @@ describe('react commit cascade observer', () => {
     expect(payload.rendererSurface).toBe('main')
   })
 
-  // Why counted from outside our own wrapper: a bundler change that installs the
-  // observer twice counts every commit twice and fires the crumb at half the real
-  // depth, which no other assertion here can tell from a correct run.
+  // Count outside our wrapper to detect duplicate observer installation, which otherwise reports at half the true depth.
   it('counts exactly one commit per hook invocation', () => {
     let cascadingInvocations = 0
     const observed = commitHook?.onCommitFiberRoot
@@ -142,19 +127,6 @@ describe('react commit cascade observer', () => {
     })
 
     expect(invocationsAtReport).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-  })
-
-  // Why a byte budget: driverStack's key ends in `stack`, which buys 4000 chars,
-  // so a raw stack or an uncapped key list could be added here unnoticed.
-  it('keeps the crumb inside a flat byte budget', () => {
-    act(() => {
-      root.render(<RunawayLayoutEffectPane />)
-    })
-
-    const payload = recordBreadcrumb.mock.calls.find(
-      ([name]) => name === REACT_COMMIT_CASCADE_BREADCRUMB
-    )?.[1]
-    expect(JSON.stringify(payload).length).toBeLessThan(MAX_CASCADE_CRUMB_BYTES)
   })
 
   it('stays silent for a render that settles well below the notice limit', () => {

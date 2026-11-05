@@ -1,6 +1,4 @@
-// createSupport, create and the model catalog's account read ask the runtime's one registration
-// list where an agent runs and which account it pins, before any host exists. An agent the list does
-// not hold is answered no without installing the host.
+// Support/create/account reads share registration authority before host install; unknown agents must not install one.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -50,7 +48,6 @@ describe('the structured agent registration list', () => {
 
   it('refuses an agent it does not hold without installing the host', async () => {
     const { runtime, installHost } = runtimeAt()
-    // No structured registration exists for Cursor.
     expect(
       await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'cursor')
     ).toEqual({

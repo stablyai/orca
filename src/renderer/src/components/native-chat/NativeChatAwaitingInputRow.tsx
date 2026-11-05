@@ -1,35 +1,25 @@
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
-} from '../../../../shared/native-chat-ask-row'
+} from '../../../../shared/native-chat/input/native-chat-ask-row'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
-import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
 
 const ROW_CLASS_NAME =
   'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-chat-foreground-faint'
 
-/**
- * The row a question tool call draws in place of its raw input. The agent is
- * blocked on the reader, so the row says that in plain words and names what was
- * asked, rather than printing the tool's name and a clipped JSON payload.
- *
- * Only the label breathes: the question is the part worth reading, and animating
- * it would make the one line the reader has to act on the hardest one to read.
- *
- * A question too long for the line becomes a disclosure, and so does a grouped
- * prompt, whose line names only a count. Once answered, this row may be the only
- * place the questions are still shown, so the full text opens below the toggle,
- * outside it, where it can be selected and copied like any other prose.
- */
+/** Animate only the waiting label; disclose full questions outside the toggle so settled prompt text remains selectable and copyable. */
 export function NativeChatAwaitingInputRow({
   subject,
   pending,
   disclosureKey,
-  listsQuestions = true
+  listsQuestions = true,
+  onLinkClick
 }: {
   /** Null when the payload named no question; the label carries the row alone. */
   subject: NativeChatAskRowSubject | null
@@ -39,23 +29,18 @@ export function NativeChatAwaitingInputRow({
   disclosureKey?: string
   /** False when the caller already shows each question of a grouped prompt in full. */
   listsQuestions?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
-  // The list and a lone question are separate disclosures: a pending Codex group is
-  // keyed by its first question, which becomes its own row once answered.
+  // Separate group and question keys because a pending Codex group becomes individual rows when answered.
   const { open, setOpen } = useNativeChatDisclosure(
     disclosureKey !== undefined && subject?.kind === 'questions'
       ? `${disclosureKey}:questions`
       : disclosureKey,
     false
   )
-  // Seeded from `open`: a row remounted open was clipped when the reader opened
-  // it, and dropping the toggle as it folds would drop keyboard focus with it.
-  const [clipped, measureLine] = useNativeChatClippedLine(open)
-
   const question = subject?.kind === 'question' ? subject.text : null
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
-  // A count always hides its questions, so the list needs no clipping measurement.
-  const toggles = questions !== null || (question !== null && (open || clipped))
+  const toggles = questions !== null || question !== null
   // With nothing to name, the label must read as a whole phrase, not end on a colon.
   const label = !pending
     ? translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
@@ -70,11 +55,10 @@ export function NativeChatAwaitingInputRow({
       ? null
       : subject.kind === 'question'
         ? subject.text
-        : translate(
-            'components.native-chat.ask.questionCount',
-            NATIVE_CHAT_ASK_ROW_COPY.questionCount,
-            { value0: subject.questions.length }
-          )
+        : translate('components.native-chat.ask.questionCount', '{{count}} questions', {
+            count: subject.questions.length,
+            defaultValue_one: '{{count}} question'
+          })
   const header = (
     <>
       <NativeChatToolRunIcon
@@ -85,12 +69,7 @@ export function NativeChatAwaitingInputRow({
         {label}
       </span>
       {question !== null && toggles && open ? null : (
-        <span
-          ref={question === null ? undefined : measureLine}
-          className="min-w-0 truncate text-chat-foreground"
-        >
-          {text}
-        </span>
+        <span className="min-w-0 truncate text-chat-foreground">{text}</span>
       )}
       {toggles ? (
         <ChevronRight
@@ -128,16 +107,18 @@ export function NativeChatAwaitingInputRow({
       )}
       {toggles && open && question !== null ? (
         // Indented to the label, past the icon slot and its gap.
-        <p className="whitespace-pre-wrap break-words pl-5.5 text-sm leading-relaxed text-chat-foreground">
-          {question}
-        </p>
+        <NativeChatQuestionText
+          content={question}
+          onLinkClick={onLinkClick}
+          className="break-words pl-5.5 text-sm leading-relaxed text-chat-foreground"
+        />
       ) : null}
       {open && questions !== null ? (
         // Numbers hang in the icon slot so each question starts under the label.
         <ol className="list-decimal space-y-1 pl-5.5 text-sm leading-relaxed text-chat-foreground marker:text-chat-foreground-faint">
           {questions.map((entry) => (
-            <li key={entry} className="whitespace-pre-wrap break-words">
-              {entry}
+            <li key={entry} className="break-words">
+              <NativeChatQuestionText content={entry} onLinkClick={onLinkClick} />
             </li>
           ))}
         </ol>

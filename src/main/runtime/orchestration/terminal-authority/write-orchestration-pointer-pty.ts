@@ -1,28 +1,31 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox-pointer-pty-write'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { RuntimeLeafRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from '../../runtime-mobile-agent-status-projection'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { getLatestLeafTitle } from '../../runtime-worktree-status-projection'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { getLatestLeafTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type { OrchestrationMailboxLeaf } from '../mailbox-owner'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../mailbox-pointer-submit'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
-  protected abstract issueHandle(leaf: RuntimeLeafRecord): string
+  protected abstract issueHandle(
+    leaf: RuntimeLeafRecord,
+    context?: TerminalIdentityReadContext
+  ): string
 
   protected writeOrchestrationPointerPty(
     ptyId: string,
@@ -35,43 +38,13 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     })
   }
 
-  // A parked leaf has left the renderer graph but its PTY is still addressable, so the pointer
-  // target is rebuilt from the PTY record rather than refused.
+  /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */
   protected resolveOrchestrationPointerSubmitTarget(
-    stagedLeaf: OrchestrationMailboxLeaf,
     ptyId: string
   ): OrchestrationMailboxPointerSubmitTarget | null {
-    const leafKey = this.getLeafKey(stagedLeaf.tabId, stagedLeaf.leafId)
-    const currentLeaf = this.leaves.get(leafKey)
-    const parked = currentLeaf === undefined
-    const terminalHandle = parked
-      ? this.handleByPtyId.get(ptyId)
-      : this.handleByLeafKey.get(leafKey)
-    if (!terminalHandle) {
-      return null
-    }
-    const pty = this.ptysById.get(ptyId)
-    const leaf = parked
-      ? pty?.connected &&
-        pty.tabId === stagedLeaf.tabId &&
-        isTerminalLeafId(stagedLeaf.leafId) &&
-        pty.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId)
-        ? {
-            ...stagedLeaf,
-            writable: true,
-            lastAgentStatus: pty.lastAgentStatus,
-            lastAgentStatusObservedLive: pty.lastAgentStatusObservedLive,
-            lastOscTitle: pty.lastOscTitle
-          }
-        : null
-      : currentLeaf.ptyId === ptyId
-        ? currentLeaf
-        : null
-    if (!leaf) {
-      return null
-    }
-    const processIncarnation = this.getTerminalProcessIncarnation(terminalHandle)
-    return processIncarnation ? { leaf, terminalHandle, processIncarnation } : null
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    const processIncarnation = terminal && this.getTerminalProcessIncarnation(terminal.handle)
+    return processIncarnation ? { terminal, processIncarnation } : null
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {
@@ -127,14 +100,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
     const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
-    // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
-    // restored surface whose PTY died with a prior run still reads connected.
-    // Demote only on a controller-proven absence, and only for locally-scoped
-    // ids the aggregate inventory authoritatively covers — SSH/remote scopes may
-    // be legitimately missing from it, and unknown liveness never demotes.
-    // The sync hasPty rescue closes the spawn/list race: a just-spawned PTY can
-    // register after the inventory snapshot, and federation reads one
-    // connected:false as exited.
+    // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
     const provenAbsent =
       provenLivePtyIds !== null &&
       leaf.ptyId !== null &&
@@ -168,7 +134,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(
-        pty?.launchAgent,
+        pty?.launchAgent ?? pty?.launchCommandAgent,
         pty?.foregroundAgent,
         title,
         isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null

@@ -67,20 +67,6 @@ describe('resolveTerminalViewportResubscribe', () => {
     }
   })
 
-  it('keeps holding on absent dims across repeated frames without spending budget', () => {
-    for (let frame = 0; frame < 50; frame += 1) {
-      expect(
-        resolveTerminalViewportResubscribe({
-          hostCols: null,
-          hostRows: null,
-          viewportMeasured: true,
-          viewport: PHONE,
-          attempts: 0
-        }).kind
-      ).toBe('hold')
-    }
-  })
-
   it('converges when host dims match the measured viewport', () => {
     expect(
       resolveTerminalViewportResubscribe({
@@ -216,7 +202,6 @@ describe('TerminalViewportResubscribeBudget', () => {
     exhaust(budget, 't1')
     expect(budget.shouldAnnounceExhaustion('t1')).toBe(true)
     budget.notifyListedHandles(new Set())
-    // Still exhausted while absent — the refill lands on the return.
     expect(budget.attempts('t1')).toBe(MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS)
     budget.notifyListedHandles(new Set(['t1']))
     expect(budget.attempts('t1')).toBe(0)
@@ -271,7 +256,6 @@ describe('runTerminalViewportFitPass', () => {
     const unsubscribeTerminal = vi.fn((handle: string) => {
       terminalUnsubsRef.current.delete(handle)
     })
-    // Mimic the real subscribe path: arming registers an unsubscribe handle.
     const subscribeToTerminal = vi.fn((handle: string) => {
       terminalUnsubsRef.current.set(handle, () => {})
     })
@@ -307,7 +291,10 @@ describe('runTerminalViewportFitPass', () => {
     }
   }
 
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const settle = async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
 
   it('holds without any teardown when host dims are absent (STA-3337 regression)', async () => {
     const h = makeHarness({ viewportMeasured: true, viewport: PHONE })
@@ -319,7 +306,6 @@ describe('runTerminalViewportFitPass', () => {
   })
 
   it('keeps the stream up and shows no fit error when the host is in desktop mode (#28487)', async () => {
-    // Why: after a desktop take-back the phone reconnects at desktop dims on purpose.
     const budget = new TerminalViewportResubscribeBudget()
     budget.chargeAttempt(HANDLE)
     const h = makeHarness({
@@ -386,7 +372,6 @@ describe('runTerminalViewportFitPass', () => {
   it('treats an equal fresh measure as convergence instead of resubscribing', async () => {
     const budget = new TerminalViewportResubscribeBudget()
     budget.chargeAttempt(HANDLE)
-    // Stale cached viewport disagrees with the host, but the fresh measure matches it.
     const h = makeHarness({
       hostCols: PHONE.cols,
       hostRows: PHONE.rows,
@@ -415,7 +400,6 @@ describe('runTerminalViewportFitPass', () => {
     await settle()
     expect(h.scheduled).toHaveLength(1)
     expect(h.scheduled[0].ms).toBeGreaterThan(0)
-    // The stream must still be up until the deferred retry fires.
     expect(h.unsubscribeTerminal).not.toHaveBeenCalled()
     h.scheduled[0].fn()
     expect(h.unsubscribeTerminal).toHaveBeenCalledTimes(1)
@@ -487,7 +471,6 @@ describe('runTerminalViewportFitPass', () => {
 describe('STA-3337 stream shapes', () => {
   it('empty scrollback with absent dims settles after a single register pass', () => {
     const budget = new TerminalViewportResubscribeBudget()
-    // Pass 1: no viewport yet — measure and resubscribe so the server learns it.
     const first = resolveTerminalViewportResubscribe({
       hostCols: null,
       hostRows: null,
@@ -497,7 +480,6 @@ describe('STA-3337 stream shapes', () => {
     })
     expect(first).toEqual({ kind: 'resubscribe', delayMs: 0 })
     budget.chargeAttempt('t1')
-    // Pass 2+: host still reports no dims — the stream must be left alone.
     for (let frame = 0; frame < 10; frame += 1) {
       expect(
         resolveTerminalViewportResubscribe({

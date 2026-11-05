@@ -1,8 +1,40 @@
+import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
+import type { ClaudeAgentViewSettings } from './claude-agent-view'
+import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
+import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
-import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
+import type { ExternalConversationSettings } from './external-conversation-settings'
+import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
+import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
+import type { EditorTypographySettings } from './editor-typography-settings-types'
+import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
+import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
+import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
+import type { PluginSystemSettings } from './plugins/plugin-system-settings'
+import type { TerminalScrollSettings } from './terminal/appearance/terminal-scroll-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
+import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/tui-agent-permission-choice'
+import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
+import type { WindowMaterialSettings } from './window-material'
+import type { EditorSaveSettings } from './editor-save-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = NativeChatGlobalSettings &
+export type GlobalSettingsBase = ClaudeAgentViewSettings &
+  NativeChatGlobalSettings &
+  NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
-  ClaudeAccountSwitchSettings
+  ClaudeAccountSwitchSettings &
+  AgentPermissionGlobalSettings &
+  ExternalConversationSettings &
+  BrowserLinkOpeningSettings &
+  BrowserExtensionGlobalSettings &
+  PluginAppearanceSettings &
+  EditorTypographySettings &
+  PluginFileTypeSuggestionSettings &
+  PluginUpdatePolicySettings &
+  PluginSystemSettings &
+  TerminalScrollSettings &
+  TerminalColorOverrideGlobalSettings &
+  WindowMaterialSettings &
+  EditorSaveSettings &
+  BrowserPasswordsGlobalSettings

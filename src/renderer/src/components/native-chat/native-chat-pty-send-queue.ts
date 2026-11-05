@@ -1,3 +1,4 @@
+export type NativeChatPtySubmissionOutcome = 'not-submitted' | 'uncertain' | 'submitted'
 // Per-PTY serialization for native-chat clear+body+Enter sequences.
 // Why: Enter is delayed (busy-agent safety). Without a queue, a second send's
 // clear/body can interleave with the first Enter window and still glue or race
@@ -11,15 +12,13 @@ export type NativeChatPtySendQueueHandle = {
   cancel: (keepInput?: boolean) => void
   settleAfterMs: number
   settled: Promise<void>
+  outcome: Promise<NativeChatPtySubmissionOutcome>
   bodyStarted: () => boolean
   finished: () => boolean
 }
 
 export type EnqueueNativeChatPtySendOptions = {
-  /**
-   * Called when cancel aborts after `start` began but before Enter was marked
-   * submitted. Used to clear leftover body text from the agent TUI.
-   */
+  /** Clear leftover TUI input only if cancellation follows start but precedes submission. */
   onCancelUnsubmitted?: () => void
 }
 
@@ -50,7 +49,6 @@ export function resetNativeChatPtySendQueuesForTests(): void {
   ptyQueues.clear()
 }
 
-/** Abort every in-flight/queued chat send on this PTY (clears delayed Enter). */
 export function cancelNativeChatPtySends(ptyId: string): void {
   const state = ptyQueues.get(ptyId)
   if (!state) {
@@ -61,7 +59,6 @@ export function cancelNativeChatPtySends(ptyId: string): void {
   }
 }
 
-/** Wait until every chat sequence on this PTY has finished or been cancelled. */
 export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
   const state = ptyQueues.get(ptyId)
   if (!state) {
@@ -70,10 +67,7 @@ export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
   await state.tail
 }
 
-/**
- * Run `start` only after prior sequences for `ptyId` finish. When the queue is
- * idle, `start` runs synchronously so the body write is not deferred a tick.
- */
+/** Wait for earlier sends; start synchronously when idle to avoid deferring the body write. */
 export function enqueueNativeChatPtySend(
   ptyId: string,
   durationMs: number,
@@ -81,7 +75,8 @@ export function enqueueNativeChatPtySend(
     isCancelled: () => boolean
     delay: (ms: number, fn: () => void) => void
     /** Call when Enter (or the terminal write that completes the send) fires. */
-    markSubmitted: () => void
+    markWriteStarted: () => void
+    markSubmitted: (outcome?: NativeChatPtySubmissionOutcome) => void
   }) => void,
   options?: EnqueueNativeChatPtySendOptions
 ): NativeChatPtySendQueueHandle {
@@ -96,6 +91,12 @@ export function enqueueNativeChatPtySend(
   let bodyStarted = false
   let finished = false
   let submitted = false
+  let writeStarted = false
+  let result: NativeChatPtySubmissionOutcome | undefined
+  let resolveOutcome!: (result: NativeChatPtySubmissionOutcome) => void
+  const outcome = new Promise<NativeChatPtySubmissionOutcome>((resolve) => {
+    resolveOutcome = resolve
+  })
   const timers: ReturnType<typeof setTimeout>[] = []
   let release: (() => void) | null = null
 
@@ -118,7 +119,8 @@ export function enqueueNativeChatPtySend(
     timers.push(timer)
   }
 
-  const markSubmitted = (): void => {
+  const markSubmitted = (value: NativeChatPtySubmissionOutcome = 'submitted'): void => {
+    result = value
     submitted = true
     finishEntry()
   }
@@ -133,7 +135,14 @@ export function enqueueNativeChatPtySend(
         return
       }
       bodyStarted = true
-      start({ isCancelled: () => cancelled, delay, markSubmitted })
+      start({
+        isCancelled: () => cancelled,
+        delay,
+        markSubmitted,
+        markWriteStarted: () => {
+          writeStarted = true
+        }
+      })
       if (durationMs <= 0) {
         markSubmitted()
       }
@@ -149,9 +158,9 @@ export function enqueueNativeChatPtySend(
   const settleQueueEntry = (): void => {
     state.depth = Math.max(0, state.depth - 1)
     finished = true
+    resolveOutcome(result ?? (writeStarted ? 'uncertain' : 'not-submitted'))
     dropHandle()
-    // Why: drop the per-pty record once nothing is in flight so the map does not
-    // accumulate one permanent entry per pty over a long, multi-pane session.
+    // Release idle PTY keys so closed panes cannot accumulate permanent queue entries.
     if (state.depth === 0 && state.handles.size === 0 && ptyQueues.get(ptyId) === state) {
       ptyQueues.delete(ptyId)
     }
@@ -170,10 +179,7 @@ export function enqueueNativeChatPtySend(
         clearTimeout(timer)
       }
       const shouldClear = bodyStarted && !submitted
-      // Why: refund only THIS sequence's charged window rather than collapsing
-      // freeAt to now — later queued sends still hold the line, so a blanket
-      // reset would understate the next enqueue's settle time and let a send
-      // card drop while a queued Enter is still pending.
+      // Refund only this sequence’s window; later queued Enters still hold the line and their cards.
       state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
       finishEntry()
       dropHandle()
@@ -183,6 +189,7 @@ export function enqueueNativeChatPtySend(
     },
     settleAfterMs,
     settled,
+    outcome,
     bodyStarted: () => bodyStarted,
     finished: () => finished
   }

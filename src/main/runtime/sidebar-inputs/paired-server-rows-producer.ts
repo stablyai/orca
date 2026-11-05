@@ -1,7 +1,7 @@
 import { ProducerRevision } from './producer-revision'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { describePairedServerHosts } from '../../../shared/paired-server-hosts'
-import type { MobileRelayServerWorktreeRow } from '../../../shared/mobile-relay-hosts-contract'
+import { describePairedServerHosts } from '../../../shared/remote-runtime/host-catalog/paired-server-hosts'
+import type { MobileRelayServerWorktreeRow } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   normalizePairedServerRow,
   type PairedServerRowsSnapshot
@@ -17,7 +17,6 @@ import {
 } from '../mobile-desktop-relay/mobile-relay-host-descriptions'
 import type { ServerWorktreeRows } from '../mobile-desktop-relay/mobile-relay-host-catalog'
 import {
-  SERVER_FETCH_TIMEOUT_MS,
   SERVER_WORKTREE_LIMIT,
   WorktreePsReplySchema,
   stampServerWorktreeRows
@@ -48,13 +47,7 @@ type ServerEntry = {
   refreshAgain: boolean
 }
 
-/**
- * The desktop's one live set of paired-server workspace rows, needing no window. A server is
- * refetched when it comes into contact, on each of its change events, when a reader asks, and
- * every 30 s while the list is showing. A server's last rows read unverifiable once it loses
- * contact, until a fetch started since it came back answers. Only removing or re-pairing a server drops them; a fetch
- * that answers replaces them, deletions included.
- */
+/** Cache paired-server rows without a window; refresh on contact/events/reads and every 30s while visible. Contact gaps make rows unverifiable until a post-gap fetch; only removal/re-pair drops them. */
 export class PairedServerRowsProducer implements ServerWorktreeRows {
   private readonly servers = new Map<string, ServerEntry>()
   private hosts: MobileDesktopRelayHosts | null = null
@@ -244,8 +237,7 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     const { contactGeneration } = entry
     const call = async (method: string, params?: unknown) =>
       hosts.call({ environmentId: entry.environmentId }, method, params, {
-        // Why the transport bound too: it ends the hung call, so the next request fetches afresh.
-        timeoutMs: SERVER_FETCH_TIMEOUT_MS,
+        // Readers consume cached rows, so use the normal transport deadline to accept slow answers while bounding hung calls.
         expected: entry.identity
       })
     // Only on contact, ready, a replay or reposChanged, which every catalog write announces.
@@ -260,7 +252,7 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
         ? fetchPairedServerCatalog(entry.environmentId, call, entry.catalog).catch(() => null)
         : null
     ])
-    // Why: an answer that lands after a re-pair or removal belongs to the old pairing.
+    // Discard replies from pairings replaced or removed while fetching.
     if (this.servers.get(entry.environmentId) !== entry) {
       return
     }

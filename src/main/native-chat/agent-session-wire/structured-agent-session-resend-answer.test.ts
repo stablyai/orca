@@ -1,8 +1,8 @@
-// What a resend of a send id gets: the answer its record holds, never a refusal made before the
-// host looked the id up, and never a made-up record.
-
+import { commandReceiptFixture } from '../agent-session-journal/command-receipt-test-support'
+import { insertCommandReceiptIfAbsent } from '../agent-session-journal/command-receipt-table'
+import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
@@ -91,7 +91,6 @@ describe('a resent send id', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
     })
-    // A new id meets the same chat as a first run, and is refused for what it is.
     await expect(host.send(CALLER, sendParams('a new message'))).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_journal_unreadable' }
@@ -168,7 +167,7 @@ describe('a resent send id', () => {
     await host.send(CALLER, params)
     await deliveredOnce()
     await host.close(SESSION, 'evict')
-    // Only the provider can settle this rewind, so a send's first run would start it.
+    // Fresh execution would need provider startup to resolve this rewind.
     await persistRewindRecord(store, SESSION, store.getRecord(SESSION)!.lease.runtimeFence, {
       operationId: 'rewind-op',
       callerKey: CALLER.callerKey,
@@ -201,7 +200,7 @@ describe('a resent send id', () => {
     expect(store.readOnly).toBe(true)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // This build never reads a newer Orca's chat, so the answer its journal holds stays unknown.
+    // Unreadable newer journals cannot supply replay answers.
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
@@ -370,22 +369,75 @@ describe('send receipt acceptance', () => {
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
-  it('answers an in-transaction duplicate from the receipt after rolling back the second append', async () => {
+  it('reuses the retained original when a receipt read misses after an epoch change', async () => {
     await attach()
     const params = sendParams('accepted once')
     await host.send(CALLER, params)
     await deliveredOnce()
     const journal = hostJournal()
     await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)!.lease.runtimeFence)
+    const original = journal.submissions()[0]
+    const receipt = store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
     const before = journal.cursor()
     vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
-      replayed: true,
+      replayed: false,
       value: { submission: { clientMessageId: params.envelope.clientOperationId } }
     })
     expect(journal.cursor()).toEqual(before)
-    expect(journal.submissions()).toHaveLength(0)
+    expect(journal.submissions()).toEqual([original])
+    expect(journal.submissionBody(params.envelope.clientOperationId)).toEqual(params.body)
+    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
+      receipt
+    )
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('rolls back a fresh append when an already-spent receipt wins the transaction race', async () => {
+    await attach()
+    const original = sendParams('accepted once')
+    await host.send(CALLER, original)
+    await deliveredOnce()
+    const journal = hostJournal()
+    const before = journal.cursor()
+    const sources = journal.submissions()
+    const racing = sendParams('must not dispatch from a missed receipt read')
+    const receipt = commandReceiptFixture({
+      operationId: racing.envelope.clientOperationId,
+      sessionId: SESSION,
+      callerKey: CALLER.callerKey,
+      fingerprint: racing.envelope.payloadFingerprint,
+      acceptedAt: NOW,
+      result: { kind: 'journal-row', epoch: 'legacy-spent-epoch', sequence: 1 }
+    })
+    expect(
+      openTestJournalHostDatabase(root).transaction((db) =>
+        insertCommandReceiptIfAbsent(db, { kind: 'global' }, receipt)
+      )
+    ).toEqual({ inserted: true })
+    vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
+    const append = vi.spyOn(journal, 'appendSubmission')
+    await expect(host.send(CALLER, racing)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: {
+        submission: {
+          clientMessageId: racing.envelope.clientOperationId,
+          dispatchState: 'unknown',
+          reason: DISPATCH_DOUBT_SUBMISSION_MISSING
+        }
+      }
+    })
+    expect(append).toHaveBeenCalledTimes(1)
+    await expect(append.mock.results[0].value).rejects.toBeInstanceOf(CommandReceiptExistsError)
+    expect(journal.cursor()).toEqual(before)
+    expect(journal.submissions()).toEqual(sources)
+    expect(journal.submissionBody(racing.envelope.clientOperationId)).toBeNull()
+    expect(journal.submissionBody(original.envelope.clientOperationId)).toEqual(original.body)
+    expect(store.readCommandReceipt({ kind: 'global' }, racing.envelope.clientOperationId)).toEqual(
+      { verdict: 'readable', receipt }
+    )
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 

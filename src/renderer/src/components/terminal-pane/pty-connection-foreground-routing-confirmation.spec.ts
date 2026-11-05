@@ -1,7 +1,7 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   VISIBLE_PTY_SETTLE_MS,
@@ -19,7 +19,11 @@ import {
   resolveMockPaneWindowsShiftEnterEncoding,
   type StoreState
 } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
@@ -61,7 +65,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
     })
 
     describe('foreground routing confirmation authority', () => {
-      // Why: bindings share the tab-1/LEAF_1 pane key; give each case its own tabId so no other test's publish pollutes it.
+      // Use unique tab IDs to isolate published identity from sibling tests sharing LEAF_1.
       async function connectRestoredPaneForForegroundSampling(
         args: {
           ptyId?: string
@@ -85,6 +89,8 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         cacheKey: string
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const ptyId = args.ptyId ?? 'tab-pty'
         const tabId = args.tabId ?? `tab-${ptyId}`
         const hasReattachMetadata =
@@ -112,12 +118,8 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         const binding = connectPanePty(
           createPane(1) as never,
           createManager(1) as never,
-          deps as never
-        ) as unknown as {
-          noteVisibilityResume: () => void
-          sampleForegroundAgentOnFocus: () => void
-          requestWindowsShiftEnterReconfirmation: () => void
-        }
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
         return { binding, deps, transport, cacheKey: makePaneKey(tabId, LEAF_1) }
@@ -144,8 +146,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           shellForeground: false
         }
 
-        // Hidden pane: sampleVisiblePaneForegroundAgent bails, so nothing would ever
-        // clear a pending flag. It must fail closed to the legacy encoding instead.
+        // Hidden panes skip visible sampling, so fail closed to legacy encoding without leaving an uncleared pending flag.
         binding.requestWindowsShiftEnterReconfirmation()
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()

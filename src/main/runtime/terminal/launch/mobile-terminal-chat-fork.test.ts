@@ -4,7 +4,10 @@ import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-cli-fork'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 vi.mock('../../../ai-vault/structured-chat-cli-fork', () => ({
   prepareStructuredChatCliFork: vi.fn(),
   isStructuredChatCliForkSourceCurrent: vi.fn(() => true)
@@ -74,13 +77,15 @@ describe('native chat fork launch recipe', () => {
 it.each([true, false])(
   'forks a source-selected chat with saved placement available: %s',
   async (saved) => {
-    const { OrcaRuntimeService, electronMocks } = await import('../../orca-runtime-test-mocks.spec')
+    await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+    const { OrcaRuntimeService } = await import('../../orca-runtime')
+    const { electronMocks } = await import('../../orca-runtime-test-mocks/setup.spec')
     const {
       TEST_WORKTREE_ID: wt,
       makeRuntimeStoreWithWorkspaceSession,
       makeWorkspaceSessionWithHeadlessTerminal
-    } = await import('../../orca-runtime-test-fixtures.spec')
-    const { withChatTabChanges } = await import('../../agent-session-tab-layout')
+    } = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+    const { withChatTabChanges } = await import('../../agent-session/agent-session-tab-layout')
     const source = 'source-chat',
       row = `agent-session:${source}`,
       canonical = 'custom-chat-tab'
@@ -97,12 +102,14 @@ it.each([true, false])(
     const fixture = makeRuntimeStoreWithWorkspaceSession(saved ? session : initial)
     const admit = vi.spyOn(fixture.runtimeStore, 'admitTerminalPane')
     const service = new OrcaRuntimeService(fixture.runtimeStore)
-    const spawn = vi.fn(async (_options: unknown) => ({
-      id: 'pty-fork',
-      incarnationId: '45454545-4545-4545-8545-454545454545'
-    }))
+    const spawn = vi.fn(
+      async (_options: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+        id: 'pty-fork',
+        incarnationId: '45454545-4545-4545-8545-454545454545'
+      })
+    )
     service.setPtyController({
-      spawn,
+      spawn: committingSpawn(service, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
@@ -119,7 +126,7 @@ it.each([true, false])(
     service.attachWindow(1)
     service.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { createMobileCreateTestNotifier } =
-      await import('../../orca-runtime-test-scenario-builders.spec')
+      await import('../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec')
     const reveal = vi.fn<NonNullable<RuntimeNotifier['revealTerminalSession']>>(
       (_worktree, opts) => {
         if (!opts.tabId || !opts.leafId) {
@@ -200,6 +207,10 @@ it.each([true, false])(
       expect(fixture.getSession().unifiedTabs?.[wt]).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: canonical, entityId: source })])
       )
+    } else if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(admit.mock.calls[0]?.[0]).toMatchObject({
+        afterTabId: structuredAgentSessionTabId(source)
+      })
     } else {
       expect(admit.mock.calls[0]?.[0]).not.toHaveProperty('afterTabId')
       expect(reveal.mock.calls[0]?.[1]).not.toHaveProperty('afterTabId')
@@ -214,8 +225,10 @@ it.each([true, false])(
 )
 
 it('keeps preparation and runtime failures from starting a terminal', async () => {
-  const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
-  const { store, TEST_WORKTREE_ID } = await import('../../orca-runtime-test-fixtures.spec')
+  await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+  const { OrcaRuntimeService } = await import('../../orca-runtime')
+  const { store, TEST_WORKTREE_ID } =
+    await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
   const runtime = new OrcaRuntimeService(store)
   const spawn = vi.fn()
   runtime.setPtyController({
@@ -226,6 +239,12 @@ it('keeps preparation and runtime failures from starting a terminal', async () =
   })
   const ensure = vi.spyOn(runtime, 'ensureStructuredAgentSessionHost')
   for (const [failure, expected] of [
+    [
+      new Error(
+        'Could not confirm this conversation was saved. Try again after the agent responds.'
+      ),
+      { message: 'chat_fork_source_unavailable' }
+    ],
     [
       new Error('This chat has no saved conversation to copy.'),
       { message: 'chat_fork_source_unavailable' }

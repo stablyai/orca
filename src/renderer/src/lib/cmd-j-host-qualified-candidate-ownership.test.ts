@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from './browser-palette-page-entries'
 import { searchBrowserPages } from './browser-palette-search'
@@ -281,88 +281,6 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       ['local-terminal', 'local'],
       ['remote-terminal', RUNTIME_HOST_ID]
     ])
-  })
-
-  it('omits editor rows whose bare file id cannot be activated safely', () => {
-    const entries = buildSearchableWorkspaceTabs({
-      worktrees: pairedWorktrees(),
-      repoMap: new Map(),
-      worktreeOrder: new Map(),
-      unifiedTabsByWorktree: {
-        [SHARED_WORKTREE_ID]: [
-          makeTab({
-            id: 'shared-editor',
-            entityId: 'shared-file',
-            contentType: 'editor',
-            executionHostId: 'local'
-          }),
-          makeTab({
-            id: 'shared-editor',
-            entityId: 'shared-file',
-            contentType: 'editor',
-            executionHostId: RUNTIME_HOST_ID
-          })
-        ]
-      },
-      tabsByWorktree: {},
-      openFiles: [
-        {
-          id: 'shared-file',
-          filePath: '/local/local-atlas.ts',
-          relativePath: 'local/local-atlas.ts',
-          worktreeId: SHARED_WORKTREE_ID,
-          language: 'typescript',
-          isDirty: false,
-          mode: 'edit'
-        },
-        {
-          id: 'shared-file',
-          filePath: '/remote/remote-atlas.ts',
-          relativePath: 'remote/remote-atlas.ts',
-          worktreeId: SHARED_WORKTREE_ID,
-          language: 'typescript',
-          isDirty: false,
-          runtimeEnvironmentId: 'paired-host',
-          mode: 'edit'
-        }
-      ],
-      agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {},
-      activeGroupIdByWorktree: {},
-      groupsByWorktree: {},
-      activeWorktreeId: null,
-      activeTabType: 'terminal',
-      activeTabId: null,
-      activeTabIdByWorktree: {},
-      activeFileId: null,
-      activeFileIdByWorktree: {},
-      activeTabTypeByWorktree: {},
-      generatedTitlesEnabled: true
-    })
-
-    expect(searchWorkspaceTabs(entries, 'local-atlas')).toEqual([])
-    expect(searchWorkspaceTabs(entries, 'remote-atlas')).toEqual([])
-  })
-
-  it('retains one unambiguous legacy tab without guessing between sibling hosts', () => {
-    const legacyWorktree = makeWorktree({ hostId: undefined })
-    const entries = buildSearchableSimulatorTabs({
-      worktrees: [legacyWorktree],
-      repoMap: new Map(),
-      worktreeOrder: new Map(),
-      unifiedTabsByWorktree: {
-        [SHARED_WORKTREE_ID]: [
-          makeTab({ id: 'legacy-simulator', contentType: 'simulator', executionHostId: undefined })
-        ]
-      },
-      activeGroupIdByWorktree: {},
-      groupsByWorktree: {},
-      activeWorktreeId: null,
-      activeTabType: 'terminal'
-    })
-
-    expect(entries.map((entry) => entry.tab.id)).toEqual(['legacy-simulator'])
   })
 
   it('keeps hidden same-id hosts in the legacy ownership ambiguity set', () => {

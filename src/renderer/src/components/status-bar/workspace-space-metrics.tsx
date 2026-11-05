@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: the relative time clock advances from a wall-clock interval, which is an external timer rather than render-derived state. */
 import { useEffect, useState } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { translate } from '@/i18n/i18n'
@@ -60,9 +59,7 @@ export function UpdatedMetric({
     if (scannedAt === null) {
       return
     }
-    // Refresh once immediately (unconditional, as before) so a rescan that lands
-    // while hidden isn't shown stale, then pause the ongoing 60s tick while the
-    // window is hidden — same visibility-gated pattern as useNow.
+    // Refresh new scans immediately, then pause minute ticks while the window is hidden.
     setNow(Date.now())
     return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 60_000 })
   }, [scannedAt])
@@ -78,7 +75,10 @@ export function UpdatedMetric({
       value={
         scannedAt === null
           ? isScanning
-            ? 'Scanning'
+            ? translate(
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.scanning',
+                'Scanning'
+              )
             : '—'
           : getWorkspaceSpaceScanTimeLabel(scannedAt, now)
       }

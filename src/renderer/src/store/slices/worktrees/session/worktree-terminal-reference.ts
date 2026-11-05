@@ -8,14 +8,16 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-rev
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import { branchName } from '@/lib/git-utils'
-import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
-import { getWorkspaceAttachmentTerminalOrigin } from '@/lib/workspace-attachment-terminal-origin'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments'
-import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachment-normalization'
+import {
+  getWorkspaceAttachmentObservedOrigin,
+  resolveWorkspaceReferenceObservationOwner
+} from '@/lib/workspace-attachment-observed-origin'
+import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachmentOriginKey,
   mergeWorkspaceAttachmentOrigins
-} from '../../../../../../shared/workspace-attachment-origins'
+} from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
@@ -46,9 +48,12 @@ export function createObserveTerminalGitHubPullRequestLink(
   const confirmations = new PrioritySemaphore(3)
   return (worktreeId, link, context) => {
     const state = get()
-    const owner = context ? resolveTerminalNotificationOwner(state, worktreeId, context) : null
+    const owner = context
+      ? resolveWorkspaceReferenceObservationOwner(state, worktreeId, context)
+      : null
     const hostId = owner?.executionHostId ?? undefined
-    if (context && (!hostId || (context.executionHostId && context.executionHostId !== hostId))) {
+    const contextHostId = context?.kind === 'agent-session' ? undefined : context?.executionHostId
+    if (context && (!hostId || (contextHostId && contextHostId !== hostId))) {
       return
     }
     const worktree = findKnownWorktreeById(state, worktreeId, hostId)
@@ -75,7 +80,7 @@ export function createObserveTerminalGitHubPullRequestLink(
     const pushBranch = worktree.pushTarget?.branchName
     let confirmedPushBranch: string | undefined
     const origin = context
-      ? getWorkspaceAttachmentTerminalOrigin(state, worktreeId, context, hostId)
+      ? getWorkspaceAttachmentObservedOrigin(state, worktreeId, context, hostId)
       : undefined
     if (context && !origin) {
       return
@@ -85,8 +90,8 @@ export function createObserveTerminalGitHubPullRequestLink(
         return true
       }
       const latest = get()
-      const latestOwner = resolveTerminalNotificationOwner(latest, worktreeId, context)
-      const latestOrigin = getWorkspaceAttachmentTerminalOrigin(latest, worktreeId, context, hostId)
+      const latestOwner = resolveWorkspaceReferenceObservationOwner(latest, worktreeId, context)
+      const latestOrigin = getWorkspaceAttachmentObservedOrigin(latest, worktreeId, context, hostId)
       return (
         latestOwner?.executionHostId === hostId &&
         Boolean(

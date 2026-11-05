@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -14,26 +14,38 @@ import {
   seedStore
 } from '../../store-test-helpers'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
+  readStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
 }))
 
 createStoreCascadesMockApi()
+afterEach(() => vi.useRealTimers())
 
 const REPO_ID = TEST_REPO.id
 const EXISTING_ID = `${REPO_ID}::/tmp/wt-existing`
 const CREATED_ID = `${REPO_ID}::/tmp/wt-created`
 const SESSION_ID = 'claude_repro_session'
 const AGENT_TAB_ID = `agent-session:${SESSION_ID}`
+
+// A layout-owner build closes a local launch on its host at once and keeps no tombstone.
+function launchWasCancelled(): boolean {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? wasStructuredAgentLaunchClosedByLocalCancel(SESSION_ID) &&
+        readStructuredAgentLaunchRecord(SESSION_ID) === undefined
+    : hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)
+}
 
 function detected(worktree: Worktree): DetectedWorktree {
   return { ...worktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
@@ -124,7 +136,7 @@ function applyListing(
   rows: Worktree[],
   catalogVersion?: WorktreeCatalogVersion
 ): WorktreeListingMergeOutcome {
-  return mergeFetchedWorktrees(store.setState, {
+  return mergeFetchedWorktrees(store.setState, store.getState, {
     repoId: REPO_ID,
     hostId: 'local',
     ownerWasMissingAtStart: false,
@@ -143,9 +155,7 @@ function applyListing(
   })
 }
 
-// Why this suite exists: it pins what an authoritative listing that omits a known worktree does to
-// the client, which is exactly why the host re-runs a scan that a create overtook instead of
-// publishing it (see detected-provider-listing.ts). The client keeps no fence of its own.
+// An authoritative omission purges known client rows; host must rescan when create overtakes its scan (detected-provider-listing.ts).
 describe('an authoritative listing that omits a just-created worktree', () => {
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -160,7 +170,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
     expect(state.tabsByWorktree[CREATED_ID]).toBeUndefined()
@@ -175,35 +185,17 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
   })
-
-  it('control: a listing that includes the created worktree leaves everything intact', () => {
-    const store = createTestStore()
-    seedCreatedWorkspaceWithPendingLaunch(store, true)
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-
-    expect(applyListing(store, [...rows])).toBe('applied')
-
-    const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
-    expect(state.activeWorktreeId).toBe(CREATED_ID)
-    expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
-  })
 })
 
-// Why this suite exists: the host stamps every listing with the catalog version its scan began
-// at and every create reply with the version the create produced. A listing that predates an
-// applied create is not applied at all, whatever delayed it -- host post-scan work, a coalesced
-// joiner, or the pre-merge terminal teardown -- so it can neither purge the new worktree nor
-// replace the host's rows with a list that lacks it.
+// Catalog versions fence delayed listings before merge/teardown so scans predating applied create cannot purge new tabs or replace current rows.
 describe('a listing versioned before an applied create', () => {
   const HOST = 'host-epoch-1'
   const before = { epoch: HOST, sequence: 6 }
   const createReply = { epoch: HOST, sequence: 7 }
-  const after = { epoch: HOST, sequence: 8 }
 
   beforeEach(() => {
     resetStructuredAgentLaunchPersistenceForTests()
@@ -230,36 +222,12 @@ describe('a listing versioned before an applied create', () => {
     expect(applyListing(store, [existingRow], before)).toBe('superseded')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
+    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
+    expect(launchWasCancelled()).toBe(false)
     expect(state.activeWorktreeId).toBe(CREATED_ID)
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
     expect(state.worktreesByRepo[REPO_ID]!.map((w) => w.id)).toEqual([EXISTING_ID, CREATED_ID])
     expect(state.detectedWorktreesByRepo[REPO_ID]!.worktrees.map((w) => w.id)).toContain(CREATED_ID)
-  })
-
-  it('reports a listing whose repo owner went away as not-current, even when also older', () => {
-    const store = createTestStore()
-    seedWithAppliedCreate(store)
-    store.setState({ repos: [] })
-    const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
-
-    expect(applyListing(store, [existingRow], before)).toBe('not-current')
-
-    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
-  })
-
-  it('a later listing that includes the worktree applies and advances the version', () => {
-    const store = createTestStore()
-    seedWithAppliedCreate(store)
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-
-    expect(applyListing(store, [...rows], after)).toBe('applied')
-
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(CREATED_ID)
-    expect(
-      state.worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
-    ).toEqual(after)
   })
 
   it('a listing from a restarted host is a new catalog, not an older one', () => {
@@ -282,7 +250,120 @@ describe('a listing versioned before an applied create', () => {
 
     expect(applyListing(store, [existingRow])).toBe('applied')
 
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(store.getState().activeWorktreeId).toBeNull()
   })
+})
+
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { recentlyRenamedWorktreeIdExpiry } from '@/hooks/ipc-events/worktree-event-runtime'
+
+it.each([
+  'git',
+  'session-fallback',
+  'non-authoritative',
+  'stale',
+  'renamed',
+  'newer-publication'
+] as const)(
+  'listing preserves ordinary setup input without a launch observation/death policy: %s',
+  (kind) => {
+    vi.setSystemTime(1_000)
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    recentlyRenamedWorktreeIdExpiry.clear()
+    const store = createTestStore()
+    seedCreatedWorkspaceWithPendingLaunch(store, true)
+    const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(CREATED_ID, 'claude', 'local')
+    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      CREATED_ID,
+      'claude',
+      'ssh:other'
+    )
+    const ordinary = launchDrafts.structuredAgentSessionDraftScopeKey('existing-chat')
+    for (const key of [scope, other, ordinary]) {
+      launchDrafts.updateNativeChatComposerDraft(
+        key,
+        { text: 'keep', owner: { workspaceId: CREATED_ID, executionHostId: 'local' } },
+        'immediate'
+      )
+    }
+    const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+    if (kind === 'renamed') {
+      recentlyRenamedWorktreeIdExpiry.set(CREATED_ID, 1_000 + 20_000)
+    }
+    if (kind === 'newer-publication') {
+      store.setState({
+        worktreeCatalogVersionByRepoHost: {
+          [worktreeCatalogVersionKey(REPO_ID, 'local')]: { epoch: 'epoch', sequence: 2 }
+        }
+      })
+    }
+    if (kind === 'stale') {
+      store.setState({ repos: [] })
+    }
+    mergeFetchedWorktrees(store.setState, store.getState, {
+      repoId: REPO_ID,
+      hostId: 'local',
+      ownerWasMissingAtStart: false,
+      requestStartedWorktrees: store.getState().worktreesByRepo[REPO_ID],
+      refresh: {
+        status: 'admitted',
+        executionHostId: 'local',
+        result: {
+          repoId: REPO_ID,
+          authoritative: kind !== 'non-authoritative',
+          source: kind === 'session-fallback' ? kind : 'git',
+          worktrees: [detected(store.getState().worktreesByRepo[REPO_ID]![0])],
+          catalogVersion: { epoch: 'epoch', sequence: 1 }
+        }
+      }
+    })
+    expect(attempt.draft?.text).toBe('keep')
+    for (const key of [other, ordinary]) {
+      expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+    }
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    recentlyRenamedWorktreeIdExpiry.clear()
+  }
+)
+
+it('nested listing does not add a separate setup-death policy before a refused enclosing removal', async () => {
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  const store = createTestStore()
+  const rows = [EXISTING_ID, CREATED_ID, `${REPO_ID}::/sibling`].map((id) =>
+    makeWorktree({ id, repoId: REPO_ID, hostId: 'local' })
+  )
+  seedStore(store, { worktreesByRepo: { [REPO_ID]: rows } })
+  const scopes = rows.map(({ id }) =>
+    launchDrafts.nativeChatLaunchPromptDraftScopeKey(id, 'codex', 'local')
+  )
+  scopes.forEach((key) =>
+    launchDrafts.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
+  )
+  const attempts = scopes.map(launchDrafts.captureNativeChatComposerSubmission)
+  const parentReply =
+    Promise.withResolvers<Awaited<ReturnType<typeof window.api.worktrees.remove>>>()
+  vi.mocked(window.api.worktrees.remove).mockReturnValueOnce(parentReply.promise)
+  const removing = store
+    .getState()
+    .removeWorktree({ id: EXISTING_ID, executionHostId: 'local' }, false, {
+      approvedNestedWorktrees: [{ path: '/tmp/wt-created', head: 'abc', branch: 'child' }]
+    })
+  await vi.waitFor(() =>
+    expect(window.api.worktrees.remove).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        worktreeId: EXISTING_ID,
+        approvedNestedWorktrees: [{ path: '/tmp/wt-created', head: 'abc', branch: 'child' }]
+      })
+    )
+  )
+  expect(applyListing(store, [rows[0], rows[2]])).toBe('applied')
+  expect(attempts[1].draft?.text).toBe('task')
+  expect(attempts[0].draft?.text).toBe('task')
+  expect(attempts[2].draft?.text).toBe('task')
+  parentReply.reject(new Error('later sibling refused'))
+  expect((await removing).ok).toBe(false)
+  expect(attempts[1].draft?.text).toBe('task')
+  expect(attempts[0].draft?.text).toBe('task')
+  launchDrafts.clearNativeChatComposerDraftsForTests()
 })

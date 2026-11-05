@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TooltipProvider } from '../../../src/renderer/src/components/ui/tooltip'
-import { AiVaultSessionVirtualList } from '../../../src/renderer/src/components/right-sidebar/AiVaultSessionVirtualList'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { AiVaultSessionVirtualList } from '../../../src/renderer/src/components/right-sidebar/ai-vault/session-list/AiVaultSessionVirtualList'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import './fixture.css'
 
 const parent: AiVaultSession = {
@@ -122,6 +122,7 @@ function App() {
             buildResumeStartup={(session) => ({ command: session.resumeCommand })}
             getOriginalPaneTarget={() => null}
             getSessionLiveState={() => null}
+            isStructuredSessionOpen={() => false}
             getWorktreeInfo={() => null}
             getSessionResumeState={() => ({
               blocked: false,
@@ -139,6 +140,7 @@ function App() {
             onResume={(session, target) => setResult(`Resume ${session.sessionId} in ${target}`)}
             onContinueInNewSession={ignore}
             onResumeInNewChat={ignore}
+            onResumeInNewCli={ignore}
             onCopyResume={ignore}
             onCopyId={ignore}
             onCopyPath={ignore}

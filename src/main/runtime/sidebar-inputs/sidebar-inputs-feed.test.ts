@@ -389,22 +389,76 @@ describe('sidebar inputs feed', () => {
     expect(host.events).toEqual([])
   })
 
-  it('re-reads a quiet source on every read, and joins concurrent reads into one flush', async () => {
-    const quiet = testDomain('quiet', { a: 1 }, { rereadOnRead: true })
+  it('publishes an urgent change with no coalesce delay, even inside a burst', async () => {
+    const host = makeHost()
+    const phone = new TestPhone(host.feed, 'conn-1')
+    phone.refresh()
+    await phone.settle()
+    host.rows.set('a', 2)
+    await vi.advanceTimersByTimeAsync(1)
+    const before = host.events.length
+    // Within the coalesce window: an ordinary change would wait ~50 ms.
+    host.rows.set('a', 3, { urgent: true })
+    await Promise.resolve()
+    expect(host.events).toHaveLength(before + 1)
+    phone.notice(host.lastEvent())
+    await phone.settle()
+    expect(phone.view()).toEqual(host.truth())
+  })
+
+  it('joins urgent changes made in one turn into one revision', async () => {
+    const host = makeHost()
+    const phone = new TestPhone(host.feed, 'conn-1')
+    phone.refresh()
+    await phone.settle()
+    const before = host.events.length
+    host.rows.set('a', 2, { urgent: true })
+    host.view.set('sort', 'recent', { urgent: true })
+    await Promise.resolve()
+    expect(host.events).toHaveLength(before + 1)
+  })
+
+  it('serves a phone read from the cache and waits only on a domain not yet ready', async () => {
+    const host = makeHost()
+    host.feed.acquire('conn-1')
+    const release = host.rows.hold()
+    let answered = false
+    const read = host.feed.read({ maxBytes: 1 }).then((reply) => {
+      answered = true
+      return reply
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(answered).toBe(false)
+    release()
+    expect((await read).kind).toBe('snapshot')
+  })
+
+  it('keeps a not-yet-ready domain unpublished until its producer announces', async () => {
+    let snapshot: Record<string, unknown> | null = null
+    const watchers = new Set<() => void>()
+    const events: SidebarInputsChangedEvent[] = []
     const feed = new SidebarInputsFeed(
-      () => [quiet.domain],
-      () => {}
+      () => [
+        {
+          name: 'late',
+          read: () => snapshot,
+          watch: (changed) => {
+            watchers.add(changed)
+            return () => watchers.delete(changed)
+          }
+        }
+      ],
+      (event) => events.push(event)
     )
     feed.acquire('conn-1')
-    await feed.read({ maxBytes: 1 })
-    quiet.setQuietly('a', 2)
-    const release = quiet.hold()
-    const reads = [feed.read({ maxBytes: 1 }), feed.read({ maxBytes: 1 })]
-    release()
-    const [first, second] = await Promise.all(reads)
-    expect(quiet.reads()).toBe(3)
-    expect(first).toMatchObject({ kind: 'snapshot', domains: { quiet: { upserts: { a: 2 } } } })
-    expect(second.revision).toBe(first.revision)
+    expect((await feed.read({ maxBytes: 1 })).domains).toEqual({})
+    snapshot = { a: 1 }
+    watchers.forEach((changed) => changed())
+    await flush()
+    expect(events).toHaveLength(1)
+    expect((await feed.read({ maxBytes: 1 })).domains).toMatchObject({
+      late: { upserts: { a: 1 } }
+    })
   })
 
   it('answers reset to a read whose session ended while it waited', async () => {

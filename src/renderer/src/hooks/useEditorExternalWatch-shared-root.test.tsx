@@ -30,8 +30,7 @@ vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
     getState: () => ({
       openFiles: harness.openFiles,
-      setExternalMutation: harness.setExternalMutation,
-      setPendingDiskBaselineVerification: vi.fn()
+      setExternalMutation: harness.setExternalMutation
     })
   })
 }))
@@ -59,7 +58,7 @@ vi.mock('./editor-runtime-file-watch', () => ({
 }))
 
 import { useEditorExternalWatch } from './useEditorExternalWatch'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from '@/components/editor/editor-autosave'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from '@/components/editor/autosave/editor-autosave'
 
 function WatchProbe(): null {
   useEditorExternalWatch()

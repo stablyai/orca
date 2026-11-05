@@ -4,14 +4,26 @@ import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { createDeferred } from './pty-connection-test-async'
-import type { splitPaneInMain } from './terminal-pane-split-in-main'
+import type { splitPaneInMain, splitServerPane } from './terminal-pane-split-in-main'
 
-const mocks = vi.hoisted(() => ({
-  layoutOwnerIsMain: false,
-  recordCreatedTerminalPaneSplit: vi.fn(),
-  resolveSplitCwd: vi.fn(),
-  splitPaneInMain: vi.fn<typeof splitPaneInMain>(),
-  splitWebRuntimeTerminal: vi.fn()
+const mocks = vi.hoisted(() => {
+  return {
+    layoutOwnerIsMain: false,
+    recordCreatedTerminalPaneSplit: vi.fn(),
+    resolveSplitCwd: vi.fn(),
+    splitPaneInMain: vi.fn<typeof splitPaneInMain>(),
+    splitServerPane: vi.fn<typeof splitServerPane>(),
+    splitWebRuntimeTerminal: vi.fn(),
+    readHostPublishedSplitSourcePtyId: vi.fn<() => string | null>(),
+    isHostTabPane: vi.fn<() => boolean>(),
+    notifyHostTabSplitRefused: vi.fn()
+  }
+})
+
+vi.mock('@/runtime/web-runtime-split-source-pty', () => ({
+  readHostPublishedSplitSourcePtyId: mocks.readHostPublishedSplitSourcePtyId,
+  isHostTabPane: mocks.isHostTabPane,
+  notifyHostTabSplitRefused: mocks.notifyHostTabSplitRefused
 }))
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -22,7 +34,8 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
 
 vi.mock('./terminal-pane-split-in-main', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  splitPaneInMain: mocks.splitPaneInMain
+  splitPaneInMain: mocks.splitPaneInMain,
+  splitServerPane: mocks.splitServerPane
 }))
 
 vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
@@ -60,10 +73,69 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
   beforeEach(() => {
     mocks.layoutOwnerIsMain = false
     mocks.splitPaneInMain.mockReset()
+    mocks.splitServerPane.mockReset().mockReturnValue(false)
     mocks.recordCreatedTerminalPaneSplit.mockReset()
     mocks.resolveSplitCwd.mockReset()
     mocks.splitWebRuntimeTerminal.mockReset()
     mocks.splitWebRuntimeTerminal.mockReturnValue(false)
+    mocks.readHostPublishedSplitSourcePtyId.mockReset().mockReturnValue(null)
+    mocks.isHostTabPane.mockReset().mockReturnValue(false)
+    mocks.notifyHostTabSplitRefused.mockReset()
+  })
+
+  describe('a pane of a paired server tab whose own attach has not landed', () => {
+    const HOST_TAB = 'web-terminal-host-tab-1'
+    const HOST_PTY = 'remote:env-1@@terminal-1'
+    const SOURCE = { worktreeId: 'worktree-1', tabId: HOST_TAB, leafId: 'leaf-1' }
+
+    function splitHostTabPane(splitPane: ReturnType<typeof vi.fn>, serverTakesSplit = true): void {
+      mocks.isHostTabPane.mockReturnValue(true)
+      mocks.splitWebRuntimeTerminal.mockImplementation(
+        (ptyId: string | null) => serverTakesSplit && Boolean(ptyId)
+      )
+      splitTerminalPaneWithInheritedCwd({
+        worktreeId: 'worktree-1',
+        tabId: HOST_TAB,
+        manager: makeManager(splitPane),
+        // No transport yet: the pane's attach has not landed.
+        paneTransports: new Map(),
+        paneCwdMap: new Map(),
+        fallbackCwd: '/fallback',
+        pane: LAYOUT_OWNER_SOURCE_PANE,
+        direction: 'vertical',
+        source: 'keyboard'
+      })
+    }
+
+    it('splits on the server from the terminal the server published for it', () => {
+      mocks.readHostPublishedSplitSourcePtyId.mockReturnValue(HOST_PTY)
+      const splitPane = vi.fn()
+
+      splitHostTabPane(splitPane)
+
+      expect(mocks.splitWebRuntimeTerminal).toHaveBeenCalledWith(
+        HOST_PTY,
+        'vertical',
+        'keyboard',
+        SOURCE
+      )
+      expect(splitPane).not.toHaveBeenCalled()
+    })
+
+    // A pane split here has no server terminal, and nothing would ever start one.
+    it.each([
+      ['no terminal yet', null],
+      // e.g. the session to that server is not active.
+      ['a terminal the server cannot take a split for', HOST_PTY]
+    ])('refuses rather than splitting here with %s', (_case, published) => {
+      mocks.readHostPublishedSplitSourcePtyId.mockReturnValue(published)
+      const splitPane = vi.fn(() => ({ id: 2 }))
+
+      splitHostTabPane(splitPane, false)
+
+      expect(splitPane).not.toHaveBeenCalled()
+      expect(mocks.notifyHostTabSplitRefused).toHaveBeenCalledOnce()
+    })
   })
 
   it.each(['keyboard', 'context_menu'] as const)(
@@ -257,6 +329,7 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     })
 
     expect(mocks.splitPaneInMain).not.toHaveBeenCalled()
+    expect(mocks.splitServerPane).not.toHaveBeenCalled()
     expect(splitPane).toHaveBeenCalledWith(1, 'vertical', { cwd: '/cached' })
   })
 
@@ -308,6 +381,38 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     })
 
     expect(splitPane).toHaveBeenCalledWith(1, 'horizontal', { cwd: '/cached' })
+  })
+
+  // Split here, a server's frames would drop the pane on their next draw.
+  it('in a layout-owner build, leaves a handle-less pane’s split to the server whose frames draw it', () => {
+    mocks.layoutOwnerIsMain = true
+    mocks.splitPaneInMain.mockReturnValue(false)
+    mocks.splitServerPane.mockReturnValue(true)
+    const splitPane = vi.fn(() => ({ id: 2 }))
+
+    splitTerminalPaneWithInheritedCwd({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      manager: makeManager(splitPane),
+      paneTransports: new Map(),
+      paneCwdMap: new Map([[1, { cwd: '/cached', confirmed: true }]]),
+      fallbackCwd: '/fallback',
+      pane: LAYOUT_OWNER_SOURCE_PANE,
+      direction: 'horizontal',
+      source: 'keyboard'
+    })
+
+    expect(mocks.splitServerPane).toHaveBeenCalledWith({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      sourceLeafId: 'leaf-1',
+      direction: 'horizontal',
+      cwd: '/cached',
+      initialSize: { cols: 80, rows: 12 },
+      telemetry: { source: 'keyboard' }
+    })
+    expect(splitPane).not.toHaveBeenCalled()
+    expect(mocks.recordCreatedTerminalPaneSplit).not.toHaveBeenCalled()
   })
 
   function splitInLayoutOwnerBuild(manager: PaneManager): void {

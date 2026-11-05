@@ -2,15 +2,15 @@ import { useAppStore } from '@/store'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -35,7 +35,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
-      : runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     return
   }
@@ -72,8 +72,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       return
     }
     if (hostTerminalTabCount === null && !opts?.startup) {
-      // Why: the host has not listed this workspace yet; its first real answer seeds the terminal if
-      // empty. Delete this capability check once every supported host advertises it.
+      // Unlisted hosts cannot answer yet; their first real list seeds emptiness. Keep the capability gate until all supported hosts advertise it.
       void runtimeEnvironmentSupportsCapability(
         runtimeEnvironmentId,
         SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY

@@ -4,7 +4,6 @@ import {
 } from '../../../shared/client-environment-info'
 import { getRendererAppPlatform } from './renderer-app-platform'
 
-/** Resolve trusted desktop env details (or browser best-effort) for bug reports. */
 export async function resolveClientEnvironmentInfo(): Promise<ClientEnvironmentInfo> {
   const platformInfo = resolvePlatformInfo()
   const appVersion = await resolveAppVersion()
@@ -33,8 +32,10 @@ function resolveFallbackPlatform(): NodeJS.Platform | 'unknown' {
   }
 }
 
-export async function resolveClientEnvironmentFooter(): Promise<string> {
-  return formatClientEnvironmentFooter(await resolveClientEnvironmentInfo())
+export async function resolveClientEnvironmentFooter(
+  overrides: { shell?: string } = {}
+): Promise<string> {
+  return formatClientEnvironmentFooter({ ...(await resolveClientEnvironmentInfo()), ...overrides })
 }
 
 async function resolveAppVersion(): Promise<string> {

@@ -74,7 +74,7 @@ const noSubscription = (): (() => void) => () => {}
 const notEngaged = (): boolean => false
 
 function useListEngaged(): boolean {
-  // Switch point: the stamp-sorted list moves on events, so it holds; today's list settles itself.
+  // Only the main-input path needs event-driven hover holds; the legacy list settles independently.
   return useSyncExternalStore(
     ORCA_SIDEBAR_INPUTS_IS_MAIN ? subscribe : noSubscription,
     ORCA_SIDEBAR_INPUTS_IS_MAIN ? isEngaged : notEngaged,
@@ -82,10 +82,7 @@ function useListEngaged(): boolean {
   )
 }
 
-/**
- * Desktop only, display only: in Recent and Smart, rows stay put under the pointer and during a
- * drag, so a click never lands on a row that just moved; the new order applies on leave or drag end.
- */
+/** Hold Recent/Smart order during hover or drag so clicks cannot target moving rows; release on leave/end. */
 export function useOrderHeldWhileEngaged(ids: string[], sortBy: SortBy): string[] {
   const engaged = useListEngaged()
   const [shown, setShown] = useState({ ids, sortBy })

@@ -1,3 +1,4 @@
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -17,9 +18,9 @@ import {
   ownsInflightRequest,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
-import { findRepoForGitHubOwner } from './repository-routing'
 import {
   getGitHubWorkItemRequestContext,
+  findGitHubWorkItemRepo,
   getGitHubWorkItemSourceCacheScope,
   getGitHubWorkItemRowHostId,
   getGitHubWorkItemSourceHostId,
@@ -45,7 +46,16 @@ export const createWorkItemFetchActions = (
     const state = get()
     const key =
       sourceContext?.provider === 'github'
-        ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(sourceContext))
+        ? workItemsCacheKey(
+            repoId,
+            limit,
+            query,
+            getTaskSourceCacheScope(sourceContext),
+            (() => {
+              const repo = findGitHubWorkItemRepo(state, repoId, repoPath ?? '', sourceContext)
+              return repo && githubTaskBinding(repo)
+            })()
+          )
         : getWorkItemsCacheKeyForOwner(state, repoId, limit, query, repoPath)
     return get().workItemsCache[key]?.data ?? null
   },
@@ -84,21 +94,25 @@ export const createWorkItemFetchActions = (
     limit,
     query,
     options
-  ): Promise<readonly GitHubWorkItem[]> => {
+  ): Promise<readonly GitHubWorkItem[] | undefined> => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return []
     }
     const requestState = get()
-    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const repo = findGitHubWorkItemRepo(requestState, repoId, repoPath, options?.sourceContext)
     const ownerHostId = getGitHubWorkItemSourceHostId(repo, options?.sourceContext)
     const cacheScope = getGitHubWorkItemSourceCacheScope(repo, options?.sourceContext)
-    const key = workItemsCacheKey(repoId, limit, query, cacheScope)
+    const key = workItemsCacheKey(repoId, limit, query, cacheScope, repo && githubTaskBinding(repo))
+    const attempt = requestState.githubSourceCollections.capture(repo, options?.sourceContext)
+    const binding = attempt.binding
+    if (!requestState.githubSourceCollections.current(attempt)) {
+      return undefined
+    }
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
       return cached.data ?? []
     }
 
-    const requestInvalidationNonce = requestState.workItemsInvalidationNonce
     const requestContext = getGitHubWorkItemRequestContext(
       requestState,
       getGitHubSourceTarget(requestState, repo, options?.sourceContext),
@@ -106,7 +120,7 @@ export const createWorkItemFetchActions = (
       repoPath,
       options?.sourceContext
     )
-    const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
+    const inflightKey = `${workItemsInflightRequestKey(key, requestContext.target)}::${binding ? requestState.githubTaskCache.bindingIdentity(binding) : ''}`
     let waitedForUpgrade = false
     for (;;) {
       const existing = inflightWorkItemsRequests.get(inflightKey)
@@ -117,11 +131,12 @@ export const createWorkItemFetchActions = (
       const weakerThanRequested =
         (options?.force && !existing.force) ||
         (options?.noCache && !existing.noCache) ||
-        (options?.requireComplete && !existing.requireComplete)
+        (options?.requireComplete && !existing.requireComplete) ||
+        (options?.wakeWslDistro && !existing.wakeWslDistro)
       if (!weakerThanRequested) {
         return existing.promise
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait once for weaker requests to coalesce upgrades without starvation.
       if (waitedForUpgrade) {
         break
       }
@@ -133,11 +148,28 @@ export const createWorkItemFetchActions = (
     const request = (async () => {
       await acquireWorkItemSlot()
       try {
+        if (!get().githubSourceCollections.current(attempt)) {
+          return undefined
+        }
         const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
-          ...(options?.noCache ? { noCache: true } : {})
+          ...(options?.noCache ? { noCache: true } : {}),
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
         })
+        const currentRepo = findGitHubWorkItemRepo(get(), repoId, repoPath, options?.sourceContext)
+        const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
+        // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
+        if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
+          return undefined
+        }
+        // Only current key owner writes: force-only still permits gh cache, so late weaker results would bury fresher rows under new fetchedAt for a full TTL.
+        if (!ownsInflightRequest(inflightWorkItemsRequests, inflightKey, requestId)) {
+          return undefined
+        }
+        if (!get().githubSourceCollections.accept(attempt, envelope, query, true)) {
+          return undefined
+        }
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
         const repoHostId = getGitHubWorkItemRowHostId(
           requestState,
@@ -145,11 +177,17 @@ export const createWorkItemFetchActions = (
           repoPath,
           options?.sourceContext
         )
-        const items: GitHubWorkItem[] = envelope.items.map((item) => ({
-          ...item,
-          repoId,
-          ...(repoHostId ? { repoHostId } : {})
-        }))
+        // Older search rows can't undo an accepted task record; newer ones still show.
+        const items: GitHubWorkItem[] = [
+          ...get().githubTaskCache.acceptSearch(
+            envelope.items.map((item) => ({
+              ...item,
+              repoId,
+              ...(repoHostId ? { repoHostId } : {})
+            })),
+            binding
+          )
+        ]
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
           throw new Error('GitHub work-item fetch returned a partial result.')
         }
@@ -166,26 +204,7 @@ export const createWorkItemFetchActions = (
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
-        const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
-        const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
-        // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
-        if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
-          return items
-        }
-        // Why: the old promise can still settle after the in-flight clear; don't let pre-flip source data repopulate the cache once the invalidation nonce changed.
-        if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
-          return items
-        }
-        // Why: a stronger request may have replaced us on this key while we were awaiting (a
-        // force-only caller still lets gh's own cache answer), so writing here would bury its
-        // fresher rows under a new fetchedAt and keep isFresh serving them for the whole TTL.
-        if (!ownsInflightRequest(inflightWorkItemsRequests, inflightKey, requestId)) {
-          return items
-        }
-        // Why: TaskPage useShallow-selects cache entry refs. A new { ...entry, fetchedAt }
-        // still remaps every visible row. IPC structuredClone rebuilds nested records, so
-        // data === previous.data never holds — reconcile structurally, then either mutate
-        // fetchedAt in place or write one entry that keeps unchanged row/meta refs.
+        // TaskPage shallow-selects entries; fresh wrappers remap rows even on no-op. IPC clones nested records, so reconcile structurally and preserve unchanged refs, mutating only fetchedAt for equal data.
         set((s) => {
           const previousEntry = s.workItemsCache[key]
           const previousData = previousEntry?.data ?? []
@@ -212,9 +231,10 @@ export const createWorkItemFetchActions = (
           const previousError = previousEntry?.error
           return {
             workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
-              // Why: `reconciled` already is `previousEntry.data` when nothing changed —
-              // reconcileCatalogRows returns the previous array on a structural match.
+              // reconcileCatalogRows returns previous array on structural match.
               data: reconciled,
+              sourceBinding: repo && githubTaskBinding(repo),
+              collection: { owner: attempt.owner?.id ?? 0, limit, query, cacheScope },
               fetchedAt: Date.now(),
               sources:
                 sourcesUnchanged && previousSources !== undefined
@@ -232,6 +252,9 @@ export const createWorkItemFetchActions = (
         })
         return items
       } catch (err) {
+        if (!get().githubSourceCollections.current(attempt)) {
+          return undefined
+        }
         // Why: rethrow but keep the stale cache entry so the UI still renders while the user retries.
         if (!isGitHubWorkItemsSshRemoteRequiredError(err)) {
           console.error('Failed to fetch GitHub work items:', err)
@@ -251,7 +274,8 @@ export const createWorkItemFetchActions = (
       requestId,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache),
-      requireComplete: Boolean(options?.requireComplete)
+      requireComplete: Boolean(options?.requireComplete),
+      wakeWslDistro: Boolean(options?.wakeWslDistro)
     })
     return request
   }

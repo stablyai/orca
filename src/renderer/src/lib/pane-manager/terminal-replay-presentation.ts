@@ -1,7 +1,8 @@
 import {
   forceFullViewportPresent,
   forceRepaintThroughRenderPause,
-  isSynchronizedOutputHeld
+  isSynchronizedOutputHeld,
+  requestFullViewportPresent
 } from './terminal-render-pause-release'
 import { retainTerminalReplayFrame } from './terminal-replay-frame'
 
@@ -23,16 +24,12 @@ type ReplayPresentation = {
   generation: number
   present: boolean
   timeout: ReturnType<typeof setTimeout>
+  frameWait: number | null
 }
 
 const presentations = new WeakMap<HTMLElement, ReplayPresentation>()
 
-/**
- * Hides the xterm screen behind a copy of its last frame for one structural
- * replay, so the clear and the source-grid paint ahead of the destination fit
- * are never presented. Returns the release; the last release (or the hold cap)
- * repaints and shows the screen again.
- */
+/** Hold one structural replay behind a copy of the last frame, hiding clear/source-grid paints until destination fit. The last release or hold cap shows and repaints the screen. */
 export function beginTerminalReplayPresentation(
   terminal: TerminalReplayPresentationTarget
 ): (present: boolean) => void {
@@ -54,15 +51,23 @@ export function beginTerminalReplayPresentation(
       terminal.refresh?.(0, terminal.rows - 1)
     }
   }
-  const unhide = (held: ReplayPresentation): void => {
+  const unhide = (held: ReplayPresentation, atHoldCap = false): void => {
     clearTimeout(held.timeout)
+    if (held.frameWait !== null) {
+      cancelAnimationFrame(held.frameWait)
+      held.frameWait = null
+    }
     if (presentations.get(screen) === held) {
       presentations.delete(screen)
     }
     try {
       const bounds = element.getBoundingClientRect()
       if (held.present && bounds.width > 0 && bounds.height > 0 && terminal.rows) {
-        if (!forceFullViewportPresent(terminal)) {
+        // Only the hold cap may publish an unfinished DEC 2026 frame.
+        const presented = atHoldCap
+          ? forceFullViewportPresent(terminal)
+          : requestFullViewportPresent(terminal)
+        if (!presented) {
           refresh()
         }
       }
@@ -76,6 +81,27 @@ export function beginTerminalReplayPresentation(
       }
       held.frame?.remove()
     }
+  }
+  // Unhiding mid-DEC 2026 replaces the retained copy with unfinished TUI pixels; only the cap forces a never-closing frame visible.
+  const unhideWhenFrameComplete = (held: ReplayPresentation): void => {
+    if (held.frameWait !== null) {
+      return
+    }
+    if (
+      held.present &&
+      held.frame &&
+      isSynchronizedOutputHeld(terminal) &&
+      typeof requestAnimationFrame === 'function'
+    ) {
+      held.frameWait = requestAnimationFrame(() => {
+        held.frameWait = null
+        if (held.pending === 0 && presentations.get(screen) === held) {
+          unhideWhenFrameComplete(held)
+        }
+      })
+      return
+    }
+    unhide(held)
   }
   let presentation = presentations.get(screen)
   if (!presentation) {
@@ -100,9 +126,10 @@ export function beginTerminalReplayPresentation(
       pending: 0,
       generation: 0,
       present: false,
+      frameWait: null,
       timeout: setTimeout(() => {
         created.present = true
-        unhide(created)
+        unhide(created, true)
       }, TERMINAL_REPLAY_PRESENTATION_MAX_HOLD_MS)
     }
     presentation = created
@@ -127,6 +154,6 @@ export function beginTerminalReplayPresentation(
     if (--held.pending > 0 || presentations.get(screen) !== held) {
       return
     }
-    unhide(held)
+    unhideWhenFrameComplete(held)
   }
 }

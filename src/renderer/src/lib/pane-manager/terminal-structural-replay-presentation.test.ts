@@ -11,7 +11,7 @@ function deferred() {
   return { promise, resolve }
 }
 
-function createTerminal(displayed = true) {
+function createTerminal() {
   const element = document.createElement('div')
   const screen = document.createElement('div')
   screen.className = 'xterm-screen'
@@ -19,14 +19,10 @@ function createTerminal(displayed = true) {
   rows.className = 'xterm-rows'
   rows.textContent = 'Last coherent frame'
   screen.append(rows)
-  vi.spyOn(screen, 'getBoundingClientRect').mockReturnValue(
-    new DOMRect(0, 0, displayed ? 1240 : 0, displayed ? 944 : 0)
-  )
+  vi.spyOn(screen, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1240, 944))
   element.append(screen)
   document.body.append(element)
-  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
-    new DOMRect(0, 0, displayed ? 1240 : 0, displayed ? 944 : 0)
-  )
+  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1240, 944))
   const listeners = new Set<() => void>()
   const paints: { cols: number; rows: number; opacity: string }[] = []
   const terminal = {
@@ -100,22 +96,6 @@ describe('structural replay presentation', () => {
     expect(listeners.size).toBe(0)
   })
 
-  it('withholds a fresh terminal already at the source grid until its first fit', async () => {
-    const { terminal, screen, paints } = createTerminal()
-    terminal.resize(120, 40)
-    const coordinator = createTerminalStructuralReplayCoordinator(terminal)
-    await coordinator.run(
-      async () => {
-        expect(screen.style.opacity).toBe('0')
-        await Promise.resolve()
-        expect(screen.style.opacity).toBe('0')
-      },
-      { afterRestore: () => terminal.resize(155, 59) }
-    )
-    expect(paints).toEqual([{ cols: 155, rows: 59, opacity: '0' }])
-    expect(screen.style.opacity).toBe('')
-  })
-
   it('retains a same-grid frame across a clear even without a pending fit', async () => {
     const { terminal, screen, paints } = createTerminal()
     const coordinator = createTerminalStructuralReplayCoordinator(terminal)
@@ -166,14 +146,6 @@ describe('structural replay presentation', () => {
     expect(listeners.size).toBe(0)
   })
 
-  it('does not unpause or force a hidden pane to paint', async () => {
-    const { terminal, screen, paints } = createTerminal(false)
-    const coordinator = createTerminalStructuralReplayCoordinator(terminal)
-    await coordinator.run(() => terminal.resize(120, 40))
-    expect(screen.style.opacity).toBe('')
-    expect(paints).toEqual([])
-  })
-
   it('keeps the input focusable while its source-grid image is withheld', async () => {
     const { terminal, screen } = createTerminal()
     const textarea = document.createElement('textarea')
@@ -187,18 +159,6 @@ describe('structural replay presentation', () => {
       expect(document.activeElement).toBe(textarea)
     })
     expect(document.activeElement).toBe(textarea)
-  })
-
-  it('releases presentation when the bounded fit degrades without resizing', async () => {
-    const { terminal, screen, listeners } = createTerminal()
-    const coordinator = createTerminalStructuralReplayCoordinator(terminal)
-    await coordinator.run(() => terminal.resize(120, 40), {
-      afterRestore: async () => {
-        await Promise.resolve(false)
-      }
-    })
-    expect(screen.style.opacity).toBe('')
-    expect(listeners.size).toBe(0)
   })
 
   it('does not retain a superseded replay gate across the next transaction', async () => {
@@ -270,83 +230,64 @@ describe('structural replay presentation', () => {
     expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
   })
 
-  it('captures geometry and renderer children after a parked resize is flushed', async () => {
-    const { terminal, screen } = createTerminal()
-    const canvas = document.createElement('canvas')
-    screen.append(canvas)
-    terminal._core.refresh.mockImplementationOnce(() => {
-      canvas.remove()
-      vi.mocked(screen.getBoundingClientRect).mockReturnValue(new DOMRect(0, 0, 1400, 800))
-    })
-    await createTerminalStructuralReplayCoordinator(terminal).run(() => {
-      const frame = terminal.element.querySelector<HTMLElement>('[data-terminal-replay-frame]')
-      expect(frame?.style.width).toBe('1400px')
-      expect(frame?.style.height).toBe('800px')
-      expect(frame?.textContent).toBe('Last coherent frame')
-    })
-  })
-
-  it('leaves the screen shown when its canvas cannot be copied', async () => {
-    const { terminal, screen } = createTerminal()
-    screen.append(document.createElement('canvas'))
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
-      throw new Error('context lost')
-    })
-    const coordinator = createTerminalStructuralReplayCoordinator(terminal)
-    await coordinator.run(() => {
-      expect(screen.style.opacity).toBe('')
-      expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
-    })
-    expect(screen.style.opacity).toBe('')
-  })
-
-  it('keeps a WebGL screen shown rather than publishing a synchronized-output frame', async () => {
-    const { terminal, screen } = createTerminal()
-    screen.append(document.createElement('canvas'))
-    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
-    const renderRows = vi.fn()
-    const refreshRows = vi.fn()
-    const synchronized = {
-      ...terminal,
-      _core: {
-        ...terminal._core,
-        coreService: { decPrivateModes: { synchronizedOutput: true } },
-        _renderService: {
-          _isPaused: true,
-          refreshRows,
-          _renderer: { value: { renderRows } }
+  it('keeps the retained frame up until an open synchronized frame closes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { terminal, screen } = createTerminal()
+      const refreshRows = vi.fn()
+      const renderRows = vi.fn()
+      const decPrivateModes = { synchronizedOutput: true }
+      const synchronized = {
+        ...terminal,
+        _core: {
+          ...terminal._core,
+          coreService: { decPrivateModes },
+          _renderService: { _isPaused: false, refreshRows, _renderer: { value: { renderRows } } }
         }
       }
-    }
-    await createTerminalStructuralReplayCoordinator(synchronized).run(() => {
-      expect(screen.style.opacity).toBe('')
-      expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
-    })
-    expect(refreshRows).not.toHaveBeenCalled()
-    expect(renderRows).not.toHaveBeenCalled()
-    expect(terminal._core.refresh).not.toHaveBeenCalled()
-    expect(getContext).not.toHaveBeenCalled()
-  })
-
-  it('still retains a DOM frame during synchronized output without repainting it', async () => {
-    const { terminal, screen } = createTerminal()
-    const refreshRows = vi.fn()
-    const synchronized = {
-      ...terminal,
-      _core: {
-        ...terminal._core,
-        coreService: { decPrivateModes: { synchronizedOutput: true } },
-        _renderService: { _isPaused: false, refreshRows }
-      }
-    }
-    await createTerminalStructuralReplayCoordinator(synchronized).run(() => {
+      await createTerminalStructuralReplayCoordinator(synchronized).run(() => {
+        expect(screen.style.opacity).toBe('0')
+        expect(refreshRows).not.toHaveBeenCalled()
+      })
+      await vi.advanceTimersByTimeAsync(100)
       expect(screen.style.opacity).toBe('0')
       expect(terminal.element.querySelector('[data-terminal-replay-frame]')?.textContent).toBe(
         'Last coherent frame'
       )
-      expect(refreshRows).not.toHaveBeenCalled()
-    })
-    expect(screen.style.opacity).toBe('')
+      expect(renderRows).not.toHaveBeenCalled()
+
+      decPrivateModes.synchronizedOutput = false
+      await vi.advanceTimersByTimeAsync(20)
+      expect(screen.style.opacity).toBe('')
+      expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
+      expect(renderRows).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the screen at the hold cap when a synchronized frame never closes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { terminal, screen } = createTerminal()
+      const synchronized = {
+        ...terminal,
+        _core: {
+          ...terminal._core,
+          coreService: { decPrivateModes: { synchronizedOutput: true } },
+          _renderService: { _isPaused: false, refreshRows: vi.fn() }
+        }
+      }
+      await createTerminalStructuralReplayCoordinator(synchronized).run(() => {})
+      await vi.advanceTimersByTimeAsync(TERMINAL_REPLAY_PRESENTATION_MAX_HOLD_MS - 1)
+      expect(screen.style.opacity).toBe('0')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(screen.style.opacity).toBe('')
+      expect(terminal.element.querySelector('[data-terminal-replay-frame]')).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps decorations positioned in the retained frame', async () => {

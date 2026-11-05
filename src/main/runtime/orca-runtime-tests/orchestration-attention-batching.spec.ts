@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  OrchestrationDb,
-  createRootDispatch,
-  makePaneKey
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('batches attention queries across unchanged graph publishes', () => {
@@ -63,7 +62,6 @@ describe('OrcaRuntimeService', () => {
       getWorkerAttentionFacts.mockClear()
       const unchanged = runtime.syncWindowGraph(1, graph)
 
-      // Two statements for twelve panes: the facts join and the observation read, each once.
       const attentionSql = prepare.mock.calls
         .map(([sql]) => sql)
         .filter(

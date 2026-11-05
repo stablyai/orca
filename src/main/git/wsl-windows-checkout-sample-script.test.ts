@@ -10,8 +10,7 @@ const TAB = '\t'
 const TEXT_AUTO_LINE = `i/lf    w/lf    attr/text=auto        ${TAB}file.txt`
 const ELIGIBLE_LINE = `i/lf    w/crlf  attr/                 ${TAB}file.txt`
 
-// Runs the probe's real shell pipeline against a stand-in git whose `ls-files --eol` never ends,
-// like a huge drvfs tree: only a bounded scan lets the pipeline finish.
+// An endless stand-in ls-files stream verifies that the real sample pipeline bounds its input.
 describe.skipIf(process.platform === 'win32')('line-ending sample pipeline', () => {
   let binDir: string
 

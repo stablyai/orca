@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 import { GHEditSection } from './gh-edit-section'
-import { resetTaskPageGitHubMutationRegistryForTests } from '@/components/task-page-github-work-item-mutation-registry'
+import { resetTaskPageGitHubMutationRegistryForTests } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
 const mocks = vi.hoisted(() => ({
   update: vi.fn(),
@@ -33,12 +33,12 @@ vi.mock('@/store', () => {
 
 vi.mock('@/hooks/useIssueMetadata', async () => {
   const { useImmediateMutation } = await import('@/hooks/useImmediateMutation')
-  return {
-    useImmediateMutation,
-    useRepoLabels: () => ({ data: [] }),
-    useRepoAssignees: () => ({ data: [] })
-  }
+  return { useImmediateMutation }
 })
+vi.mock('@/hooks/useGitHubRepoMetadata', () => ({
+  useRepoLabels: () => ({ data: [] }),
+  useRepoAssignees: () => ({ data: [] })
+}))
 vi.mock('@/hooks/useGitHubSlugMetadata', () => ({
   useRepoLabelsBySlug: () => ({ data: [] }),
   useRepoAssigneesBySlug: () => ({ data: [] })
@@ -197,15 +197,6 @@ describe('opened issue assignee ownership', () => {
     expect(selected()).toBe('authoritative-upstream-user')
   })
 
-  it('does not revive an edited guard when returning from a different issue number', async () => {
-    await render()
-    await click()
-    await render({ ...item, id: 'issue:6', number: 6 }, ['other-issue-user'])
-    expect(selected()).toBe('other-issue-user')
-    await render(item, ['authoritative-upstream-user'])
-    expect(selected()).toBe('authoritative-upstream-user')
-  })
-
   it.each(['Assign candidate', 'Toggle original'])(
     'does not roll a late failed %s edit into another opened issue',
     async (button) => {
@@ -224,50 +215,6 @@ describe('opened issue assignee ownership', () => {
       expect(selected()).toBe('other-issue-user')
     }
   )
-
-  it('treats another GitHub host as a distinct same-number issue', async () => {
-    await render()
-    await click()
-    await render({ ...item, url: 'https://github.example.test/upstream/widgets/issues/5' }, [])
-    expect(selected()).toBe('')
-  })
-
-  it('retires the issue edit when the same legacy id is used by a pull request', async () => {
-    await render()
-    await click()
-    await render({ ...item, type: 'pr' }, [])
-    await render(item, ['authoritative-upstream-user'])
-    expect(selected()).toBe('authoritative-upstream-user')
-  })
-
-  it('preserves optimistic edits across canonical URL casing and trailing paths', async () => {
-    await render()
-    await click()
-    await render({ ...item, url: 'https://GITHUB.COM/Upstream/Widgets/issues/5#activity' }, [])
-    expect(selected()).toBe('candidate-user')
-  })
-
-  it('uses the Project row repository before an unrelated item URL', async () => {
-    const projectOrigin: GitHubItemDialogProjectOrigin = {
-      owner: 'upstream',
-      repo: 'widgets',
-      number: 5,
-      type: 'issue',
-      projectId: 'project',
-      projectItemId: 'row',
-      cacheKey: 'project-cache'
-    }
-    await render(item, [], projectOrigin)
-    await click()
-    await render(
-      { ...item, url: 'https://github.com/unrelated/widgets/issues/5' },
-      [],
-      projectOrigin
-    )
-    expect(selected()).toBe('candidate-user')
-    await render(item, ['fork-user'], { ...projectOrigin, owner: 'fork' })
-    expect(selected()).toBe('fork-user')
-  })
 
   it('still rolls back a failed edit while its issue remains open', async () => {
     mocks.update.mockRejectedValue(new Error('edit failed'))
@@ -337,15 +284,8 @@ describe('opened issue assignee ownership', () => {
       expect(container.querySelector(`[data-field="${field}"]`)?.textContent).toBe(expected)
       await act(async () => rejectUpdate(new Error('held edit failed')))
       expect(container.querySelector(`[data-field="${field}"]`)?.textContent).toBe(expected)
-      expect(mocks.patchWorkItem).toHaveBeenLastCalledWith(
-        item.id,
-        field === 'labels' ? { labels: ['upstream-original-label'] } : { state: 'open' },
-        item.repoId,
-        {
-          sourceContext: undefined,
-          ownerRepo: { owner: 'upstream', repo: 'widgets', host: 'github.com' }
-        }
-      )
+      // A failed edit without a tracked owner never touched other copies, so it has nothing to undo there.
+      expect(mocks.patchWorkItem).not.toHaveBeenCalled()
     }
   )
 

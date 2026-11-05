@@ -1,20 +1,20 @@
 import { randomUUID } from 'node:crypto'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces'
+import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces/folder-workspaces'
 import { getNextProjectGroupOrder } from '../../../shared/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
-import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
+import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-attachments/workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export type FolderWorkspaceMutationOperations = {
@@ -73,7 +73,7 @@ export class FolderWorkspacePersistenceOperations {
     const group = (this.state.projectGroups ?? []).find(
       (entry) => entry.id === input.projectGroupId
     )
-    // Why trim: the guard below accepts a padded path, so persist the same value it validated.
+    // Use the group path only when the supplied path is absent or blank.
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
         ? input.folderPath
@@ -115,7 +115,7 @@ export class FolderWorkspacePersistenceOperations {
       ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
-      // Switch point: creation is the workspace's first Recent stamp.
+      // Workspace creation establishes its first Recent stamp.
       lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
       updatedAt: now
@@ -150,6 +150,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'smartAt'
         | 'lastTerminalUseAt'
         | 'diffComments'
+        | 'externalConversations'
       >
     > &
       WorkspaceAttachmentMutation
@@ -250,7 +251,7 @@ export class FolderWorkspacePersistenceOperations {
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
     }
-    // Written as a pair; an absent tier is Rest, so its presence as a key is what clears it.
+    // Presence clears an absent tier to Rest; update its timestamp as a pair.
     if ('smartTier' in updates) {
       workspace.smartTier = updates.smartTier
       workspace.smartAt = updates.smartAt
@@ -260,6 +261,9 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.diffComments !== undefined) {
       workspace.diffComments = updates.diffComments
+    }
+    if (updates.externalConversations !== undefined) {
+      workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
     this.scheduleSave()

@@ -9,17 +9,17 @@ import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatSubagentSectionHead } from './NativeChatSubagentSectionHead'
 import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
 import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sections'
-import type { NativeChatTaskListPredecessors } from '../../../../shared/native-chat-task-list-history'
+import type { NativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
-import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
+import type {
+  NativeChatDiffReveal,
+  NativeChatDiffTarget
+} from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
-import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
-import { NativeChatNewRowsMarker } from './NativeChatNewRowsMarker'
-import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 
-/** Everything a row needs that is the same for every row. Held as one memoized
- *  object so a row's props change only when that row's own slot does. */
+/** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
   agentName?: string
   /** The prompts the host says still wait on the person; absent from an older host. */
@@ -31,6 +31,7 @@ export type NativeChatTranscriptRowContext = {
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   allowFileUriLinks: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   onToggleExpandedTurn: (turnKey: string) => void
@@ -39,25 +40,16 @@ export type NativeChatTranscriptRowContext = {
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
-/** One transcript row: the message (or the receipt standing in for it), the turn
- *  status under it, and the turn's diff rollup.
- *
- *  These three were siblings in the transcript column and took their spacing from
- *  it. Windowing needs one element per row to position and measure, so the
- *  wrapper carries that spacing itself — the gap BETWEEN rows is the window's. */
+/** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
-  context,
-  newRowsMarker
+  context
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
-  /** The "New" marker, when it draws in this row. */
-  newRowsMarker?: NativeChatNewRowsMarkerState
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
-  // A subagent's section is set off from the conversation it sits in.
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
     slot.depth > 1 && 'ml-4'
@@ -89,9 +81,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
-  const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker marker={newRowsMarker} onReveal={context.onScrollMessageToTop} />
-  ) : null
   const statusRow = status ? (
     <NativeChatWorkingStatus
       startedAt={status.startedAt}
@@ -106,12 +95,12 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   return (
     // The negative margin shortens the measured row, which is what moves the next one up.
     <div className={cn('flex flex-col gap-5', slot.continuesTurn && '-mb-3', sectionClassName)}>
-      {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
+          onLinkClick={context.onLinkClick}
           disclosureId={message.id}
           awaiting={isActionableStructuredAgentSessionPrompt(
             message.id,
@@ -141,6 +130,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           subagentDisclosure={context.subagentDisclosure}
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
+          structuredAttachments={context.structuredAttachments}
           rewind={
             nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
             (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
@@ -150,10 +140,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           workRun={workRun}
         />
       )}
-      {newRowsMarker?.place === 'above-turn-bar' ? marker : null}
       {slot.statusAbove ? null : statusRow}
       {turnDiff ? (
-        <NativeChatTurnDiffRollup diff={turnDiff} onReveal={context.onRevealDiff} />
+        <NativeChatTurnDiffRollup diff={turnDiff} onLinkClick={context.onLinkClick} />
       ) : null}
     </div>
   )

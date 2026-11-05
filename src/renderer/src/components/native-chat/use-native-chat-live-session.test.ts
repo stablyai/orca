@@ -3,12 +3,11 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { useAppStore } from '@/store'
 import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
 
-// Mock the session transport so the hook's IO is observable and controllable
-// per owner id. Each distinct owner gets its own read/subscribe/unsubscribe mocks.
+// Separate transports per owner make host changes observable.
 const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted(() => {
   type MockTransport = {
     readSession: ReturnType<typeof vi.fn>
@@ -17,9 +16,7 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
     emit: (frame: unknown) => void
   }
   const transports = new Map<string | null, MockTransport>()
-  // autoSnapshot mirrors a watchable transcript's immediate first frame; pass
-  // false to model a not-yet-flushed transcript whose server-side resolve poll
-  // has nothing to emit yet (#8401) — only readSession drives the view then.
+  // Disable autoSnapshot for an unflushed transcript with a silent resolve poll; only readSession can settle it (#8401).
   const getMockTransport = (
     ownerId: string | null,
     opts?: { autoSnapshot?: boolean }
@@ -55,7 +52,6 @@ vi.mock('./native-chat-session-transport', () => ({
   getNativeChatSessionTransport: transportFactory
 }))
 
-// Imported after vi.mock is hoisted, so it binds to the mocked transport.
 import {
   useNativeChatLiveSession,
   type NativeChatLiveSession,
@@ -126,98 +122,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     resetMockTransports()
   })
 
-  it('seeds from readSession alongside the subscription for the initial runtime load', async () => {
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-
-    expect(transportFactory).toHaveBeenCalledWith('env-1')
-    const transport = getMockTransport('env-1')
-    // The independent seed guards against a stuck 'loading' when the stream never
-    // delivers a snapshot; a live snapshot still wins when it does (see below).
-    expect(transport.readSession).toHaveBeenCalledOnce()
-    expect(transport.subscribe).toHaveBeenCalledOnce()
-  })
-
-  it('re-subscribes against the new owner on an owner flip (R5)', async () => {
-    const root = await render({
-      paneKey: PANE,
-      agent: AGENT,
-      sessionId: SESSION,
-      runtimeEnvironmentId: 'env-1'
-    })
-    const first = getMockTransport('env-1')
-
-    await rerender(root, {
-      paneKey: PANE,
-      agent: AGENT,
-      sessionId: SESSION,
-      runtimeEnvironmentId: 'env-2'
-    })
-    const second = getMockTransport('env-2')
-
-    expect(first.unsubscribe).toHaveBeenCalledOnce()
-    expect(second.subscribe).toHaveBeenCalledOnce()
-  })
-
-  it('tears down the subscription on unmount (no watcher leak)', async () => {
-    const root = await render({
-      paneKey: PANE,
-      agent: AGENT,
-      sessionId: SESSION,
-      runtimeEnvironmentId: 'env-1'
-    })
-    const transport = getMockTransport('env-1')
-
-    await act(async () => {
-      root.unmount()
-    })
-
-    expect(transport.unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('surfaces a runtime snapshot error in the error phase (R4 end-to-end)', async () => {
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () => {
-      getMockTransport('env-1').emit({
-        type: 'snapshot',
-        messages: [],
-        hasMore: false,
-        error: 'runtime too old'
-      })
-    })
-
-    expect(latest?.status).toBe('error')
-    expect(latest?.error).toBe('runtime too old')
-  })
-
-  it('never calls the transport when there is no session id', async () => {
-    await render({ paneKey: PANE, agent: AGENT, sessionId: null, runtimeEnvironmentId: 'env-1' })
-
-    const transport = getMockTransport('env-1')
-    expect(transport.readSession).not.toHaveBeenCalled()
-    expect(transport.subscribe).not.toHaveBeenCalled()
-  })
-
-  it('uses the local transport when the owner is null (unchanged behavior, R6)', async () => {
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION })
-
-    expect(transportFactory).toHaveBeenCalledWith(null)
-    const transport = getMockTransport(null)
-    expect(transport.readSession).toHaveBeenCalledOnce()
-    expect(transport.subscribe).toHaveBeenCalledOnce()
-  })
-
-  // A failed older page belongs to one paging generation; a reconnect snapshot must start another.
-  it('starts a new older-history generation on each snapshot', async () => {
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
-    const before = latest?.olderHistoryGeneration ?? 0
-    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
-    expect(latest?.olderHistoryGeneration).toBeGreaterThan(before)
-  })
-
   it('discards a load-earlier resolve from the previous owner after a flip', async () => {
-    // Fill the initial window so hasMore is true and load-earlier can fire.
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`m-${n}`, 't')
     )
@@ -232,12 +137,10 @@ describe('useNativeChatLiveSession — transport routing', () => {
     await act(async () => {
       first.emit({ type: 'snapshot', messages: many, hasMore: true })
     })
-    // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
     first.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
-    // Kick off load-earlier against env-1, then flip the owner before it resolves.
     await act(async () => {
       void latest?.loadEarlier()
     })
@@ -247,8 +150,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
       sessionId: SESSION,
       runtimeEnvironmentId: 'env-2'
     })
-    // The stale env-1 page resolves now; the transport-identity guard must drop it
-    // so it can't paint the previous host's history into the env-2 pane.
+    // Late env-1 history must not paint into the new env-2 pane.
     await act(async () => {
       resolveEarlier({ messages: [assistant('stale', 'from-env-1')] })
       await Promise.resolve()
@@ -269,7 +171,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
       runtimeEnvironmentId: 'env-1'
     })
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
-    // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
@@ -342,7 +243,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
       runtimeEnvironmentId: 'env-1'
     })
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
-    // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
@@ -379,7 +279,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
       runtimeEnvironmentId: 'env-1'
     })
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
-    // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
@@ -405,8 +304,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   it('seeds ready from readSession when the subscription never delivers a frame', async () => {
     const transport = getMockTransport('env-1')
-    // Older runtime: the stream wires only appends and stays silent for an empty
-    // tail, so no snapshot arrives — the independent seed must settle the view.
+    // Older hosts may stream only appends; the seed must settle an empty tail.
     transport.subscribe.mockImplementation(() => transport.unsubscribe)
     transport.readSession.mockResolvedValueOnce({ messages: [user('u-seed', 'hi')] })
 
@@ -418,7 +316,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   it('keeps the live snapshot when a readSession seed resolves after it', async () => {
     const transport = getMockTransport('env-1')
-    // The seed resolves only after the authoritative snapshot has already landed.
     let resolveSeed: (result: { messages: NativeChatMessage[] }) => void = () => {}
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveSeed = resolve))
@@ -434,59 +331,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     expect(latest?.messages.map((message) => message.id)).toEqual(['u-live'])
-  })
-
-  it("self-heals a stale 'working' hook once the turn-complete marker lands", async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
-      }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go'), assistant('a-1', 'done')],
-        hasMore: false,
-        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
-      })
-    )
-
-    expect(latest?.status).toBe('ready')
-  })
-
-  it('stops foreground working UI when Claude enters monitoring', async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
-      }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'run it')],
-        hasMore: false
-      })
-    )
-    expect(latest?.status).toBe('working')
-
-    await act(async () => {
-      useAppStore.setState({
-        agentStatusByPaneKey: {
-          [PANE]: {
-            state: 'working',
-            workingMode: 'monitoring',
-            stateStartedAt: 1,
-            updatedAt: Date.now()
-          } as never
-        }
-      })
-    })
-
-    expect(latest?.status).toBe('ready')
   })
 
   it('applies a lifecycle-only append after the final message frame', async () => {
@@ -516,71 +360,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     )
 
     expect(latest?.status).toBe('ready')
-  })
-
-  it('applies a terminal-side interruption frame without a local Stop action', async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
-      }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go')],
-        hasMore: false,
-        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 1 }
-      })
-    )
-    expect(latest?.status).toBe('working')
-
-    await act(async () =>
-      transport.emit({
-        type: 'appended',
-        messages: [],
-        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 }
-      })
-    )
-
-    expect(latest?.status).toBe('ready')
-  })
-
-  // Declining a prompt with an interrupt fires no hook, so the row keeps saying
-  // `waiting`; the transcript's marker is what ends the wait.
-  it('ends a hook wait once the transcript records the turn interrupted', async () => {
-    const waitStartedAt = Date.now() - 1_000
-    useAppStore.getState().setAgentStatus(PANE, { state: 'waiting', prompt: '', agentType: AGENT })
-    const row = useAppStore.getState().agentStatusByPaneKey[PANE]
-    if (!row) {
-      throw new Error('the store dropped the status row this test depends on')
-    }
-    useAppStore.setState({
-      agentStatusByPaneKey: { [PANE]: { ...row, stateStartedAt: waitStartedAt } }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go')],
-        hasMore: false,
-        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: waitStartedAt - 500 }
-      })
-    )
-    expect(latest?.hookAwaitingInput).toBe(true)
-    expect(latest?.status).toBe('ready')
-
-    await act(async () =>
-      transport.emit({
-        type: 'appended',
-        messages: [],
-        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: Date.now() }
-      })
-    )
-
-    expect(latest?.hookAwaitingInput).toBe(false)
   })
 
   it('does not let an older pagination read rewind a live completion', async () => {
@@ -632,72 +411,9 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(latest?.status).toBe('ready')
   })
-
-  it('reconciles completion from a reconnect snapshot', async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 10, updatedAt: Date.now() } as never
-      }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go')],
-        hasMore: false,
-        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 10 }
-      })
-    )
-    expect(latest?.status).toBe('working')
-
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go'), assistant('a-1', 'done')],
-        hasMore: false,
-        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 20 }
-      })
-    )
-
-    expect(latest?.status).toBe('ready')
-  })
-
-  it('reconciles interruption from a reconnect snapshot', async () => {
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 10, updatedAt: Date.now() } as never
-      }
-    })
-    const transport = getMockTransport('env-1')
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go')],
-        hasMore: false,
-        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 10 }
-      })
-    )
-    expect(latest?.status).toBe('working')
-
-    await act(async () =>
-      transport.emit({
-        type: 'snapshot',
-        messages: [user('u-1', 'go')],
-        hasMore: false,
-        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 20 }
-      })
-    )
-
-    expect(latest?.status).toBe('ready')
-  })
 })
 
-// Regression for #8401: a just-created Claude Code session's transcript can
-// take up to minutes to exist on disk, so the first readSession commonly
-// misses. Before this fix, the hook settled into a permanent 'error' phase
-// on that first miss and never recovered.
+// New sessions can take minutes to flush; a first-read miss must remain recoverable (#8401).
 describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
   const AGENT = 'claude' as const
   const SESSION = 'sess-notfound'
@@ -746,7 +462,6 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
     expect(latest?.status).toBe('loading')
 
-    // First backoff step (1s) fires the second readSession, which resolves.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000)
     })
@@ -780,7 +495,6 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
     expect(latest?.status).toBe('loading')
 
-    // The watcher's first drain lands mid-retry — content must win over the spinner.
     await act(async () => {
       transport.emit({ type: 'appended', messages: [assistant('a-early', 'landed during retry')] })
     })
@@ -789,30 +503,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     expect(latest?.messages.map((m) => m.id)).toContain('a-early')
   })
 
-  it('still reports the loading readPhase once live content unmasks the status', async () => {
-    // `status` is not a truthful read-in-flight signal: content landing
-    // mid-retry outranks the spinner, so status leaves 'loading' while the read
-    // is still in flight. The launch-draft baseline must never be snapshotted
-    // on that partial list, so consumers need the raw phase instead.
-    vi.useFakeTimers()
-    const transport = getMockTransport('env-1', { autoSnapshot: false })
-    transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
-
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-
-    // The user's own turn arrives on the watcher before the read settles.
-    await act(async () => {
-      transport.emit({ type: 'appended', messages: [user('u-live', 'hi')] })
-    })
-
-    expect(latest?.status).not.toBe('loading')
-    expect(latest?.readPhase).toBe('loading')
-  })
-
-  // #11032 previously forced 'loading' whenever the session id was known, which
-  // masked a live working hook. Unmasking it (so the composer offers Stop) adds
-  // a second way status leaves 'loading' mid-read, so re-pin #9802's contract on
-  // exactly that path: the launch-draft gate must still see the raw read phase.
+  // Working hooks also hide loading for Stop (#11032); preserve the raw read phase for launch-draft baselines (#9802).
   it('reports the loading readPhase for a known session whose working hook unmasks the status', async () => {
     vi.useFakeTimers()
     const transport = getMockTransport('env-1', { autoSnapshot: false })

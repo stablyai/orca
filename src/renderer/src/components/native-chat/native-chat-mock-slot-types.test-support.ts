@@ -1,5 +1,3 @@
-// Typed starting values for mutable mock slots, so a test can later assign the wider type.
-
 export function nullable<T>(): T | null {
   return null
 }

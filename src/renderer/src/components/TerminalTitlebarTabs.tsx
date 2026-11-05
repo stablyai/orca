@@ -1,13 +1,12 @@
 import { createPortal } from 'react-dom'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
 import TabBar from './tab-bar/TabBar'
 import type { TerminalController } from './use-terminal-controller'
 
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 
-// Why: keeps title-only tab updates a leaf subscription so the Terminal root,
-// which reads the topology projection, does not re-render on every rename.
+// Isolate title subscriptions so renames do not rerender the topology-owning Terminal root.
 function LiveTerminalTabBar(
   props: Omit<React.ComponentProps<typeof TabBar>, 'tabs'>
 ): React.JSX.Element {
@@ -66,7 +65,7 @@ export function TerminalTitlebarTabs({
       activeTabId={activeTabId}
       worktreeId={renderedActiveWorktreeId}
       onActivate={handleActivateTab}
-      onClose={handleCloseTab}
+      onClose={(tabId) => handleCloseTab(tabId, 'user')}
       onCloseOthers={handleCloseOthers}
       onCloseToRight={handleCloseTabsToRight}
       onCloseToLeft={handleCloseTabsToLeft}

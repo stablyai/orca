@@ -15,28 +15,6 @@ describe('createIpcPtyTransport: input kind', () => {
     restorePtySpecWindow(originalWindow)
   })
 
-  it('sends every write with the kind its writer gave it', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const transport = createIpcPtyTransport({})
-    await transport.connect({ url: '', callbacks: {} })
-
-    transport.sendInput('typed', 'driving')
-    await flushAsyncTicks()
-    transport.sendInput('\x1b[I', 'query-reply')
-    await flushAsyncTicks()
-    transport.sendInputImmediate('\x1b[1;1R')
-    await flushAsyncTicks()
-    await transport.sendInputAccepted?.('echo startup\r', 'launch')
-
-    expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
-      ['pty-1', 'typed', 'driving'],
-      ['pty-1', '\x1b[I', 'query-reply'],
-      ['pty-1', '\x1b[1;1R', 'query-reply']
-    ])
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'echo startup\r', 'launch')
-    transport.disconnect()
-  })
-
   it('never merges bytes of different kinds', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({})

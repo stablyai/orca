@@ -1,5 +1,9 @@
 import { yieldToEventLoop as yieldToEventLoopTask } from '../../../../shared/event-loop-yield'
-import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
+import './terminal-bracketed-paste'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import {
@@ -158,8 +162,7 @@ type ChunkedPasteOutcome = {
 }
 
 export function getTerminalPasteOperationTimeoutMs(plan: TerminalPastePlan): number {
-  // Why: remote-runtime acknowledged PTY writes can include network
-  // backpressure; keep local paste hangs tight without aborting slow remotes.
+  // Allow remote acknowledged-write backpressure without loosening local paste timeout budgets.
   return plan.target.runtime.kind === 'remote-runtime'
     ? TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
     : TERMINAL_PASTE_OPERATION_TIMEOUT_MS

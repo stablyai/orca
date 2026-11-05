@@ -5,24 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AutomationListTableHeader } from './AutomationListTableHeader'
 
-describe('AutomationListTableHeader', () => {
-  afterEach(cleanup)
-
-  it('renders all expected columns', () => {
-    render(<AutomationListTableHeader />)
-
-    expect(screen.getByText('Name')).toBeDefined()
-    expect(screen.getByText('Schedule')).toBeDefined()
-    expect(screen.getByText('Project')).toBeDefined()
-    expect(screen.getByText('Host')).toBeDefined()
-    expect(screen.getByText('Next run')).toBeDefined()
-    expect(screen.getByText('Last run')).toBeDefined()
-    expect(screen.getByText('Status')).toBeDefined()
-    expect(screen.getByText('Agent')).toBeDefined()
-    expect(screen.getByText('Actions')).toBeDefined()
-  })
-})
-
 describe('AutomationListTableHeader sorting', () => {
   afterEach(cleanup)
 

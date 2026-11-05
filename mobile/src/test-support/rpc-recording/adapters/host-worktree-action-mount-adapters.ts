@@ -18,12 +18,7 @@ const ROW = {
   linkedPR: null
 }
 
-/**
- * The host screen's three worktree mutations: pin, delete and open.
- *
- * Mounted with no hostId, which is the only thing that keeps the hook off native storage: the
- * pinned-id write is the sole native call and it sits behind `if (hostId)`.
- */
+// Omit hostId to keep the hook off native pinned-id storage while recording worktree writes.
 export function hostWorktreeActionMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -33,15 +28,14 @@ export function hostWorktreeActionMountAdapters(
         typeof import('../../../host-screen/use-host-worktree-actions')
       >('mobile/src/host-screen/use-host-worktree-actions.ts').useHostWorktreeActions
       const state = observableModel(context, {
-        newWorktreeModalRef: { current: null },
-        newWorktreeModalVisibleRef: { current: false },
         pinnedIds: new Set<string>(),
         worktrees: [ROW],
         lastKnownWorktrees: [ROW],
         confirmRemoveHost: false,
         optimisticActiveWorktreeIdentity: null,
-        routeActionState: {},
-        serverWorkspaces: { hosts: [], worktrees: [] }
+        serverWorkspaces: { hosts: [], worktrees: [] },
+        desktopRepos: [{ id: 'repo-1' }],
+        actionError: ''
       })
       let actions: ReturnType<typeof useActions>
       const hook = hookMount(() => {
@@ -76,15 +70,23 @@ export function hostWorktreeActionMountAdapters(
           if (name === 'delete') {
             return performHookAction(() => actions.handleDeleteWorktree(ROW))
           }
+          if (name === 'approve-archive-trust') {
+            return performHookAction(() => actions.approveArchiveTrust(false))
+          }
+          if (name === 'delete-anyway') {
+            return performHookAction(() => actions.deleteDespiteArchiveHookFailure())
+          }
           if (name === 'open-session') {
             return performHookAction(() => actions.openWorktreeSession(ROW))
           }
           throw new Error(`Unknown worktree action: ${name}`)
         },
         state: () =>
-          projectObservable(
-            Object.fromEntries(Object.entries(state).filter(([key]) => !key.endsWith('Ref')))
-          ),
+          projectObservable({
+            ...Object.fromEntries(Object.entries(state).filter(([key]) => !key.endsWith('Ref'))),
+            archiveTrustPrompt: actions?.archiveTrustRequest?.prompt ?? null,
+            archiveHookFailure: actions?.archiveHookFailure?.message ?? null
+          }),
         dispose: hook.unmount
       }
     }

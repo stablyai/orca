@@ -5,53 +5,42 @@ import { describe, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
 import { OrchestrationDb } from './orchestration/db'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
     }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
-describe('OrcaRuntimeRpcServer', () => {
-  // Why: §6 test for the idempotent + hard-fail schema migration. A broken
-  // migration must crash startup loudly rather than serve traffic against a
-  // schema missing the delivered_at column.
-  describe('orchestration DB migration (§3.2)', () => {
-    it('is idempotent when delivered_at already exists', () => {
-      // First open creates the column; second open should be a no-op.
-      const db1 = new OrchestrationDb(':memory:')
-      db1.close()
-      // File path reuse is meaningless with :memory:, so use a tmp file.
-      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
-      const a = new OrchestrationDb(tmpPath)
-      a.close()
-      // Second construction must not throw "duplicate column name".
-      expect(() => {
-        const b = new OrchestrationDb(tmpPath)
-        b.close()
-      }).not.toThrow()
-    })
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktrees: getWorktreeListingMocks().listWorktrees
+}))
 
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: getWorktreeListingMocks().listWorktreesStrict
+}))
+
+describe('OrcaRuntimeRpcServer', () => {
+  // Migration must be idempotent and fail startup loudly rather than serve a schema missing delivered_at (design §6).
+  describe('orchestration DB migration (§3.2)', () => {
     it('hard-fails startup when the migration cannot be applied', () => {
-      // Simulate a migration error by monkey-patching the SQLite wrapper's exec.
-      // If ALTER TABLE throws for any reason (e.g. disk full, permissions),
-      // the constructor must propagate — not swallow and serve half-broken.
-      //
-      // Why the pre-seeded v2 DB: after the schema bundle, fresh DBs are
-      // initialized directly at v3 via createTables() (which already includes
-      // `delivered_at`), so the v2 → v3 ALTER is a no-op for new installs.
-      // To exercise the hard-fail path we need a DB that actually has work
-      // to migrate — a v2-shape file without the delivered_at column — so
-      // the guarded ALTER runs and the stub can fire.
+      // Seed v2 without delivered_at so ALTER actually runs; fresh databases start at v3 and would bypass the injected exec failure.
+      // Propagate migration failure (disk/permission/etc.) rather than serving incomplete schema.
       const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
       const seed = new Database(tmpPath)
       seed.exec(`

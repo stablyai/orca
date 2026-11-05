@@ -1,7 +1,11 @@
 import type { RefObject } from 'react'
-import type { AgentJournalQuestion } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
-import { NativeChatQuestionCard } from './NativeChatQuestionCard'
+import type { AgentJournalQuestion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
+import {
+  structuredQuestionAnswers,
+  structuredQuestionCard
+} from '../../../../shared/structured-agent-question-card'
+import { NativeChatQuestionCard, type NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 
 export function NativeChatStructuredQuestionCard({
   questions,
@@ -9,53 +13,33 @@ export function NativeChatStructuredQuestionCard({
   onCancel,
   isSubmitting,
   shouldFocus,
-  answerInputRef
+  answerInputRef,
+  onLinkClick
 }: {
   questions: readonly AgentJournalQuestion[]
   onAnswer: (response: AgentSessionPromptResponse) => void
   onCancel: () => void
   isSubmitting?: boolean
   shouldFocus?: boolean
-  answerInputRef?: RefObject<HTMLInputElement | null>
-}): React.JSX.Element {
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
+} & Pick<NativeChatQuestionCardProps, 'onLinkClick'>): React.JSX.Element {
+  const card = structuredQuestionCard(questions)
   return (
     <NativeChatQuestionCard
-      prompt={{
-        questions: questions.map((question) => ({
-          question: question.question,
-          ...(question.header ? { header: question.header } : {}),
-          multiSelect: question.multiSelect,
-          options: question.options.map((option) => ({
-            label: option.label,
-            ...(option.description ? { description: option.description } : {})
-          }))
-        }))
-      }}
-      allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
-      freeTextInputs={questions.map((question) => question.freeTextInput)}
-      onAnswer={(answers) => {
-        const chosen = questions.map((question, index) => {
-          const answer = answers[index]
-          const other = question.freeTextInput?.allowEmpty ? answer?.other : answer?.other?.trim()
-          return {
-            questionId: question.id,
-            optionIds: (answer?.indices ?? []).flatMap((optionIndex) => {
-              const id = question.options[optionIndex]?.id
-              return id ? [id] : []
-            }),
-            ...(other !== undefined && (other.length > 0 || question.freeTextInput?.allowEmpty)
-              ? { other }
-              : {})
-          }
-        })
-        if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other !== undefined)) {
-          onAnswer({ kind: 'answers', answers: chosen })
+      prompt={card.prompt}
+      allowOther={card.allowOther}
+      freeTextInputs={card.freeTextInputs}
+      onAnswer={(selections) => {
+        const answers = structuredQuestionAnswers(questions, selections)
+        if (answers) {
+          onAnswer({ kind: 'answers', answers })
         }
       }}
       onCancel={onCancel}
       isSubmitting={isSubmitting}
       shouldFocus={shouldFocus}
       answerInputRef={answerInputRef}
+      onLinkClick={onLinkClick}
     />
   )
 }

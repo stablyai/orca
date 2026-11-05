@@ -40,7 +40,6 @@ type PaneInputContext = {
   imeNativeTextForwarderDisposablesRef: React.RefObject<Map<number, IDisposable>>
 }
 
-/** Installs platform keyboard, IME, and scroll-intent handling for one pane. */
 export function installTerminalPaneInputHandling(context: PaneInputContext): void {
   const {
     pane,

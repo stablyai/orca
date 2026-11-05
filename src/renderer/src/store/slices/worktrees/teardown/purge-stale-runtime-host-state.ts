@@ -19,6 +19,7 @@ import {
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
+import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -29,13 +30,15 @@ export function createPurgeStaleRuntimeHostState(
     if (removed.size === 0) {
       return
     }
+    // Why before the purge: delayed views must commit text it may offer back.
+    flushRetiredHostEdits(get(), removed)
     // Why no flag settle: the purged host's rows are dropped here, and a surviving same-id row on
     // another host must keep its own flag (a marker-less Mark as unread included).
     settleAttentionRemovedBy(
       set,
       get,
       () =>
-        set((s) => {
+        get().updateAgentStatusState((s, changedPaneKeys) => {
           const repoIdsWithRemovedOwners = new Set<string>()
           const survivingRepoIds = new Set<string>()
           const repoIdsWithSurvivingOwners = new Set<string>()
@@ -140,9 +143,7 @@ export function createPurgeStaleRuntimeHostState(
             repoIdsWithoutSurvivingOwners.delete(repoId)
           }
 
-          // Preserve host ownership for recency teardown. The other bulk maps are
-          // keyed by raw worktree id, but a host-qualified visit must not be
-          // removed when an id twin survives on another host.
+          // Preserve host-qualified visit recency for surviving twins even though other bulk maps use bare IDs.
           const addRemovedWorktreeTarget = (
             worktreeId: string,
             hostId: ExecutionHostId | undefined
@@ -214,7 +215,9 @@ export function createPurgeStaleRuntimeHostState(
           })
           // Why full: survivor ids were dropped above unless the session partition proves the bare-id state is the removed host's.
           const purgeState =
-            purgeTargets.length > 0 ? buildFullWorktreePurgeState(s, purgeTargets) : {}
+            purgeTargets.length > 0
+              ? buildFullWorktreePurgeState(s, purgeTargets, changedPaneKeys)
+              : {}
           const visitPurgeTargets = [
             ...removedWorktreeTargets,
             ...purgeTargets.filter(

@@ -6,25 +6,27 @@ import type {
   SshTarget
 } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
-import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
-import type { NativeChatUpgradeTipAudience } from './native-chat-upgrade-tip-audience'
+import type { ChatUiLaunchTipAudience } from './native-chat/chat-ui-launch-tip-audience'
 import type { DiffComment } from './diff-comment-types'
-import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
+import type { FolderWorkspace } from './folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from './workspace-scope'
 import type { GlobalSettings } from './global-settings-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
 import type { RemoteLayoutSnapshot } from './remote-layout-snapshot'
+import type { HostRepoCatalogSnapshot } from './host-repo-catalog-snapshot'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
 import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
+import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
 import type {
   OrcadMigrationImportReceipt,
@@ -45,6 +47,8 @@ export type PersistedMobileClientTabSelection = {
   activeTabId: string | null
   activeGroupId: string | null
   activeTabIdByGroupId: Readonly<Record<string, string>>
+  /** Top-level tabs the client showed, most recent last. */
+  recentTabIds?: string[]
 }
 
 /** deviceId → worktreeId → selection. */
@@ -53,7 +57,6 @@ export type PersistedMobileClientTabSelections = Record<
   Record<string, PersistedMobileClientTabSelection>
 >
 
-// ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
@@ -61,23 +64,14 @@ export type PersistedState = {
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
-  /** Folder-workspace review notes, keyed by FolderWorkspace.id. Top-level, NOT nested in
-   *  folderWorkspaces[]: normalizeFolderWorkspaces rebuilds each record field-by-field, so an
-   *  older build drops nested fields, while unknown top-level keys round-trip untouched.
-   *
-   *  WRITE-ONLY PROJECTION. FolderWorkspace.diffComments is the single in-memory home; load()
-   *  hydrates from this key and then deletes it from Store state, and buildStateToSave() is the
-   *  only producer of it. Never read Store.state.folderWorkspaceDiffComments outside load(). */
+  /** Keep folder review notes top-level: older normalizers strip nested fields but round-trip unknown top-level keys.
+   * Write-only projection: load hydrates FolderWorkspace.diffComments and deletes this key from Store state;
+   * only buildStateToSave produces it. Never read Store.state.folderWorkspaceDiffComments outside load. */
   folderWorkspaceDiffComments?: Record<string, DiffComment[]>
   /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
-  /** Generated workspace names already issued, keyed by repoId. Suppresses reissuing a name so a
-   *  recreated workspace never lands on a prior occupant's path and inherits agent state keyed to
-   *  that cwd. Grows monotonically within a repo — entries are never removed on workspace deletion
-   *  — and the repo-keyed copy is dropped when the repo is removed. Readers union across repos
-   *  that create into the same cwd namespace; remote namespaces also retain a compact tombstone.
-   *
-   *  Stored compacted, not as a flat list: a fully spent tier collapses into the row's watermark. */
+  /** Never reuse issued workspace names: cwd-keyed agent state could leak from prior occupants. Keep compact watermark tiers
+   * for each repo; deletion does not free names. Union repos sharing a cwd namespace and retain remote namespace tombstones. */
   retiredWorktreeNamesByRepo?: Record<string, RetiredNameRegistry>
   /** Compacted remote cwd tombstones outlive repo ids, so remove/re-add cannot reissue a path. */
   retiredWorktreeNamesByNamespace?: Record<string, RetiredNameRegistry>
@@ -100,10 +94,11 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
-  /** Display-only snapshot of each paired server's last layout, keyed by environment id. Written
-   *  only by the remote layout snapshot recorder; a separate domain because older builds write
-   *  the `runtime:<env>` partitions. */
+  /** Paired server’s last display layout, keyed by environment and written only by the snapshot recorder;
+   * separate from runtime:<env> partitions that older builds overwrite. */
   remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>
+  /** WSL host's last project list, keyed by environment; display-only until the host answers again. */
+  hostRepoCatalogSnapshots?: Record<string, HostRepoCatalogSnapshot>
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number
@@ -130,5 +125,5 @@ export type PersistedState = {
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
   /** Main-owned, decided once on the first load of the upgrade; never derived from live settings. */
-  nativeChatUpgradeTipAudience?: NativeChatUpgradeTipAudience
+  chatUiLaunchTipAudience?: ChatUiLaunchTipAudience
 }

@@ -44,8 +44,7 @@ export function refreshTerminalImeInputContext(
   }
 
   const ownerDocument = helper.ownerDocument
-  // Why: Electron/Chromium can keep a stale NSTextInputContext on the xterm
-  // helper after focus handoffs; blur/refocus rebuilds it so CJK IMEs work.
+  // Blur/refocus rebuilds stale macOS NSTextInputContext after xterm focus handoffs so CJK input resumes.
   refreshingHelpers.add(helper)
   try {
     helper.blur()

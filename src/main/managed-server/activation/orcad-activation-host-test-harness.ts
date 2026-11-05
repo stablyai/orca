@@ -1,8 +1,4 @@
-/**
- * A stateful fake orcad host for crash-recovery tests: slot processes, PID files, the shared
- * profile state, snapshots, the activation record, the journal and its fence. It can drop the
- * connection at any numbered mutation, before or after the host applied it.
- */
+/** Fake host with mutation-boundary crashes before or after applying each step. */
 import {
   emptyOrcadActivationRecord,
   parseOrcadActivationRecord,
@@ -15,12 +11,11 @@ import { sshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 export const OLD = '0.1.0+aa01'
 export const NEW = '0.2.0+bb01'
 export const BUILD_HASH = 'abc123def4567890'
-/** State the incoming build migrates on load; the outgoing build cannot read it. */
+/** Incoming migration marker unreadable by the outgoing build. */
 const MIGRATION = '|migrated-by-new'
 
 export type CrashMode = 'before' | 'after'
 
-/** The one-shot readiness read, or the launch loop's host-side wait. */
 export function isReadinessRead(command: string): boolean {
   return command.startsWith('head -c ') || command.includes('orcad_readiness_wait')
 }
@@ -33,7 +28,7 @@ export class FakeOrcadHost {
   record: string | null = null
   journal: string | null = null
   fence = false
-  /** Set by a recovery takeover, which recreates the lock fresh; the ownerless mark clears it. */
+  /** Recovery takeover refreshes the fence until it is marked ownerless. */
   fenceFresh = false
   wakeOwner: string | null = null
   readonly alive = new Set<string>()
@@ -44,9 +39,8 @@ export class FakeOrcadHost {
   mutations = 0
   crashAt: number | null = null
   crashMode: CrashMode = 'before'
-  /** How the slot's managed-stop command behaves: orcad exits, or keeps serving. */
   managedStop: 'exits' | 'stays' | 'stays-dispatched' = 'exits'
-  /** What the daemon reports at a managed stop's terminal fence. */
+  /** Daemon retirement verdict used by managed stop. */
   retirement: 'retired' | 'live' | 'unverifiable' = 'retired'
   readonly dispatched = new Set<string>()
 
@@ -94,7 +88,6 @@ export class FakeOrcadHost {
     return parsed.state === 'ok' ? parsed.record.active : null
   }
 
-  /** Every state the old build can read: the pre-migration profile. */
   isReadableBy(version: string | null): boolean {
     return version !== OLD || !this.data.includes(MIGRATION)
   }
@@ -122,14 +115,12 @@ export class FakeOrcadHost {
     })
   }
 
-  /** Returns false where a stale-only takeover would answer busy. */
   acquireFence(options?: { allowStaleTakeover?: boolean; owner?: { token: string } }): boolean {
     if (options?.allowStaleTakeover && this.fence && this.fenceFresh) {
       return false
     }
     this.fenceFresh = options?.allowStaleTakeover === true && this.fence
     this.fence = true
-    // The real lock writes the holder's generation token in the command that creates it.
     this.wakeOwner = options?.owner?.token ?? this.wakeOwner
     return true
   }
@@ -162,8 +153,7 @@ export class FakeOrcadHost {
       this.fenceFresh = false
       return ''
     }
-    // The holder's token lives inside the fence's lock dir, so the fence's release drops it.
-    // A state mutation's fence heartbeat names the token only to check it is still its own.
+    // Fence release removes its owner token; mutation heartbeats only inspect it.
     if (command.includes(WAKE_OWNER) && !command.includes('orcad-state-mutation.lock')) {
       return this.wakeOwner === null || !this.fence
         ? '__ORCAD_RECORD_ABSENT__\n'
@@ -215,7 +205,7 @@ export class FakeOrcadHost {
     if (command.includes('nohup') && version) {
       return this.mutate(() => {
         this.pidFiles.add(version)
-        // The instance lock and port admit one owner; a second launch never becomes ready.
+        // Instance lock and port permit only one serving process.
         if (this.alive.size === 0) {
           this.alive.add(version)
           if (version === NEW && !this.data.includes(MIGRATION)) {
@@ -265,7 +255,6 @@ export class FakeOrcadHost {
     return ''
   }
 
-  /** The slot's `--complete-managed-stop` / `--cancel-managed-stop`, as orcad answers them. */
   private runManagedStopCommand(command: string, version: string): string {
     const request = JSON.parse(command.slice(command.lastIndexOf(" '{") + 2, -1))
     if (command.includes('--cancel-managed-stop')) {

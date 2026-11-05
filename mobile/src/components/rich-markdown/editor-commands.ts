@@ -1,4 +1,4 @@
-import { emitChange, syncTaskCheckboxesDisabled } from './editor-content'
+import { emitChange } from './editor-content'
 import {
   rememberSelection,
   restoreRememberedSelection,
@@ -17,17 +17,53 @@ const TASK_LIST_HTML =
 
 const CODE_BLOCK_HTML = '<pre data-language=""><code>code</code></pre><p><br></p>'
 
+function drawsContent(node: Node): boolean {
+  return (
+    /[^ \t\r\n]/.test(node.textContent ?? '') ||
+    ((node instanceof Element || node instanceof DocumentFragment) &&
+      node.querySelector('img') !== null) ||
+    (node instanceof Element && node.tagName.toLowerCase() === 'img')
+  )
+}
+
+// Native insertHTML merges the fragment's first block into a block with content before the caret, so the PRE becomes prose.
+function caretFollowsContent(scope: RichMarkdownEditorScope): boolean {
+  const selection = scope.getSelection()
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return false
+  }
+  const caret = selection.getRangeAt(0)
+  const editor = editorElement(scope)
+  if (caret.startContainer === editor) {
+    const previous = editor.childNodes.item(caret.startOffset - 1)
+    return (
+      previous !== null &&
+      !(previous instanceof Element && previous.closest('table')) &&
+      drawsContent(previous)
+    )
+  }
+  const anchor =
+    caret.startContainer instanceof Element
+      ? caret.startContainer
+      : caret.startContainer.parentElement
+  if (!anchor || !editor.contains(anchor) || anchor.closest('table, pre')) {
+    return false
+  }
+  const block = anchor.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote')
+  if (!block || block === editor || !editor.contains(block)) {
+    return false
+  }
+  const before = scope.getDocument().createRange()
+  before.setStart(block, 0)
+  before.setEnd(caret.startContainer, caret.startOffset)
+  return drawsContent(before.cloneContents())
+}
+
 function exec(scope: RichMarkdownEditorScope, command: string, value?: string) {
   scope.getDocument().execCommand(command, false, value)
 }
 
-/**
- * Whether the document a command started against is still the one in front of the user.
- *
- * The generation is the host's own: it bumps it on every content replacement, so a command that
- * waited while the host replaced the markdown would otherwise act on text nobody chose, under a
- * caret that belongs to the replaced content.
- */
+// Reject command if host replaced content while URL prompt waited; generation/caret must still match user’s original target.
 function acceptsCommands(scope: RichMarkdownEditorScope, generation: number): boolean {
   return (
     !scope.stopped &&
@@ -37,22 +73,21 @@ function acceptsCommands(scope: RichMarkdownEditorScope, generation: number): bo
   )
 }
 
-/**
- * The two commands that need a URL the document does not have.
- *
- * A promise because the answer is a modal the page renders, which cannot answer before it has been
- * shown. The
- * difference matters — a modal is a task boundary, so while it is open the host can stop the
- * document, make it read-only or replace its content, and the answer comes back to a document
- * that is no longer the one the user was pointing at.
- *
- * The generation is read before the wait rather than passed in, which is the same instant:
- * nothing between `runCommand`'s own read and this one yields.
- *
- * The caret is saved before the wait and put back after it, because the dialog is what takes it:
- * the page's modal focuses its own field, and `execCommand` on a document that does not hold the
- * selection inserts nothing.
- */
+function canFormatCodeBlock(scope: RichMarkdownEditorScope): boolean {
+  const selection = scope.getSelection()
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return true
+  }
+  const range = selection.getRangeAt(0)
+  return !Array.from(
+    editorElement(scope).querySelectorAll(
+      'blockquote,ul,ol,table,img,input,hr,[contenteditable="false"]'
+    )
+  ).some((node) => range.intersectsNode(node.closest('p,h1,h2,h3,h4,h5,h6,pre') ?? node))
+}
+
+// Link/Image await page URL modal; while waiting host may replace/lock/stop document, so capture generation and revalidate after answer.
+// Save caret before modal takes focus and restore after; execCommand without selection inserts nothing. Reading generation here equals runCommand’s read because no yield intervenes.
 async function insertUrl(
   scope: RichMarkdownEditorScope,
   kind: RichMarkdownUrlPromptKind,
@@ -67,12 +102,7 @@ async function insertUrl(
   }
 }
 
-/**
- * Every toolbar command, by name.
- *
- * A record over the contract's union rather than a chain of comparisons, so a command added to the
- * contract fails to compile until the document answers it.
- */
+// Use record over command union so contract additions fail compile until handled.
 const COMMANDS: Record<
   MobileRichMarkdownCommand,
   (scope: RichMarkdownEditorScope) => void | Promise<void>
@@ -89,21 +119,23 @@ const COMMANDS: Record<
   taskList: (scope) => exec(scope, 'insertHTML', TASK_LIST_HTML),
   quote: (scope) => exec(scope, 'formatBlock', 'blockquote'),
   inlineCode: (scope) => wrapSelection(scope, 'code'),
-  codeBlock: (scope) => exec(scope, 'insertHTML', CODE_BLOCK_HTML),
+  codeBlock: (scope) => {
+    if (scope.getSelection()?.isCollapsed === false) {
+      exec(scope, 'formatBlock', 'pre')
+    } else {
+      // A leading break ends the caret's line first; the stray root <br> it leaves saves as nothing.
+      exec(
+        scope,
+        'insertHTML',
+        caretFollowsContent(scope) ? `<br>${CODE_BLOCK_HTML}` : CODE_BLOCK_HTML
+      )
+    }
+  },
   link: (scope) => insertUrl(scope, 'link', 'createLink'),
   image: (scope) => insertUrl(scope, 'image', 'insertImage')
 }
 
-/**
- * One toolbar command against the current selection.
- *
- * The caret is restored first because the toolbar is outside the document and pressing it took the
- * focus; the change is emitted afterwards because `execCommand` rewrites the markup without
- * raising an input event the listeners would see.
- *
- * Awaited only where a command actually waits, so the thirteen that do not stay one synchronous
- * act from the host's call to the change it produces.
- */
+// Restore caret taken by toolbar; emit change after execCommand because it raises no input event. Await only URL commands so other thirteen remain synchronous.
 export async function runCommand(
   scope: RichMarkdownEditorScope,
   command: MobileRichMarkdownCommand
@@ -113,15 +145,16 @@ export async function runCommand(
     return
   }
   restoreSelectionOrEnd(scope)
+  if (command === 'codeBlock' && !canFormatCodeBlock(scope)) {
+    return
+  }
   const pending = COMMANDS[command]?.(scope)
   if (pending) {
     await pending
-    // The same question again, because the wait was the host's chance to move: a change emitted
-    // now would carry the new generation over an edit made against the old one.
+    // Recheck after wait so stale edit cannot emit under newly replaced generation.
     if (!acceptsCommands(scope, generation)) {
       return
     }
   }
-  syncTaskCheckboxesDisabled(scope)
   emitChange(scope)
 }

@@ -2,12 +2,16 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/ke
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
-} from '../../shared/terminal-custom-themes'
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+} from '../../shared/terminal-themes/terminal-custom-themes'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type {
+  TerminalConfigImportPreview,
+  TerminalConfigImportSource
+} from '../../shared/terminal/appearance/terminal-config-import-preview'
 
 export type SettingsApi = {
   get: () => Promise<GlobalSettings>
-  /** Synchronous persisted-settings read for startup decisions that can't wait for async hydration. Blocking IPC — call sparingly. */
+  /** Blocking IPC for startup decisions that cannot wait for hydration; call sparingly. */
   getSync: () => GlobalSettings | null
   set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
   setActiveRuntimeEnvironmentPreference: (args: {
@@ -15,9 +19,11 @@ export type SettingsApi = {
   }) => Promise<GlobalSettings>
   updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
-  previewGhosttyImport: () => Promise<GhosttyImportPreview>
+  previewGhosttyImport: (
+    source?: TerminalConfigImportSource
+  ) => Promise<TerminalConfigImportPreview>
+  previewKittyImport: (source?: TerminalConfigImportSource) => Promise<TerminalConfigImportPreview>
   previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
-  /** Subscribe to out-of-band settings updates (e.g. View > Appearance toggles) to stay in sync with main. */
   onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
 }
 

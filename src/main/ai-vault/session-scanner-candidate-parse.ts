@@ -1,31 +1,35 @@
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import { isConversationNameRequestSession } from './conversation-name-request-sessions'
-import { candidateFileTime } from './antigravity-transcript-candidates'
-import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import { candidateFileTime } from './scanners/antigravity/antigravity-transcript-candidates'
+import {
+  aiVaultAgentLabel,
+  isAiVaultSessionResumableContent,
+  isAiVaultSessionRecoverableEmpty,
+  type AiVaultScanIssue,
+  type AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { ScannedSessionCollection } from './session-root-dedup'
-import type { AntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import type { AntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
 import {
   parseAgentSessionFileCached,
   parseListedSessionFile,
   type SessionParseStats
-} from './session-scanner-parse-cache'
-import { recordSessionScanIssue } from './session-scan-issues'
-import { noteSessionParseCacheListed, getSessionParseCacheEntry } from './session-parse-cache-store'
-import { describeSkippedTranscriptRecords } from './session-transcript-record-budget'
+} from './parse-cache/session-scanner-parse-cache'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
+import {
+  getSessionParseCacheEntry,
+  noteSessionParseCacheListed,
+  sessionParseCacheKey
+} from './parse-cache/session-parse-cache-store'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import type { SessionFileCandidate, SessionParseResult } from './session-scanner-types'
-import { errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import {
-  noteAiVaultScanFilesRead,
-  noteAiVaultScanReading,
-  noteAiVaultScanUnread
-} from './ai-vault-scan-progress'
+import { noteAiVaultScanWorkChanged } from './ai-vault-scan-progress'
 
 const SESSION_PARSE_CONCURRENCY = 8
 
-/** Parses newest-first candidates until `limit` sessions, stopping once older files cannot rank. */
 export async function parseSessionCandidates(args: {
   candidates: SessionFileCandidate[]
   limit: number
@@ -38,16 +42,11 @@ export async function parseSessionCandidates(args: {
   selectCandidate?: (candidate: SessionFileCandidate) => Promise<boolean>
   admitSession?: (session: AiVaultSession) => boolean
   listed?: boolean
+  settled?: (candidate: SessionFileCandidate, parsed: boolean) => void
 }): Promise<AiVaultSession[]> {
   const sessions = new ScannedSessionCollection()
   let nextYieldIndex = 256
   let nextCutoffIndex = 0
-  // Why: the loop alone knows what it will read, so it owns its share of the read total;
-  // a filtered walk announces each selected batch, an unfiltered pass its whole list.
-  if (!args.selectCandidate) {
-    noteAiVaultScanReading(args.signal, args.candidates.length)
-  }
-
   let index = 0
   while (index < args.candidates.length) {
     if (index >= nextYieldIndex) {
@@ -85,9 +84,6 @@ export async function parseSessionCandidates(args: {
       : batch.map(() => true)
     throwIfAiVaultScanCancelled(args.signal)
     const selected = batch.filter((_, batchIndex) => verdicts[batchIndex])
-    if (args.selectCandidate) {
-      noteAiVaultScanReading(args.signal, selected.length)
-    }
     const results = await Promise.all(
       selected.map((candidate) =>
         parseSessionCandidate(candidate, {
@@ -100,10 +96,10 @@ export async function parseSessionCandidates(args: {
         })
       )
     )
-    // An abort can land while a batch settles: a read it cut short is not that
-    // file's issue, and a partial parse must never be cached or returned.
+    // Cancellation during a batch must propagate before partial results become issues or listed sessions.
     throwIfAiVaultScanCancelled(args.signal)
-    noteAiVaultScanFilesRead(args.signal, selected.length)
+    batch.forEach((candidate, index) => args.settled?.(candidate, verdicts[index]))
+    noteAiVaultScanWorkChanged(args.signal)
 
     results.forEach((result, resultIndex) => {
       if (result.issue) {
@@ -115,16 +111,22 @@ export async function parseSessionCandidates(args: {
         (!args.admitSession || args.admitSession(result.session))
       ) {
         if (args.listed === false) {
-          noteSessionParseCacheListed(selected[resultIndex].file.path)
+          const { agent, file } = selected[resultIndex]
+          noteSessionParseCacheListed(sessionParseCacheKey(agent, file.path))
         }
         sessions.add(result.session)
       }
     })
   }
 
-  if (!args.selectCandidate) {
-    noteAiVaultScanUnread(args.signal, args.candidates.length - index)
+  for (; index < args.candidates.length; index++) {
+    if (index % 256 === 0) {
+      await yieldToEventLoop()
+    }
+    throwIfAiVaultScanCancelled(args.signal)
+    args.settled?.(args.candidates[index], false)
   }
+  noteAiVaultScanWorkChanged(args.signal)
   return [...sessions.values()]
 }
 
@@ -135,7 +137,7 @@ export async function parseSessionCandidate(
     executionHostId: ExecutionHostId
     parseStats: SessionParseStats
     antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
-    // Unlisted parses keep the parse cache's count bound (see session-parse-cache-store.ts).
+    // Unlisted parses remain count-bounded in the hot cache.
     listed: boolean
     signal?: AbortSignal
   }
@@ -150,7 +152,7 @@ export async function parseSessionCandidate(
     }
     return {
       session: session ? withSessionExecutionHost(session, executionHostId) : null,
-      issue: skippedRecordIssue(candidate, executionHostId)
+      issue: unreadableTranscriptIssue(candidate, session, executionHostId)
     }
   } catch (err) {
     return {
@@ -159,30 +161,40 @@ export async function parseSessionCandidate(
         executionHostId,
         agent: candidate.agent,
         path: candidate.file.path,
-        message: errorMessage(err)
+        ...scanIssueTextFromError(err)
       }
     }
   }
 }
 
-// The session still listed, but part of it did not: report the loss as a notice
-// so the panel does not count it as a skipped transcript file.
-function skippedRecordIssue(
+// A filename-derived row does not prove that any conversation was read.
+function unreadableTranscriptIssue(
   candidate: SessionFileCandidate,
+  session: AiVaultSession | null,
   executionHostId: ExecutionHostId
 ): AiVaultScanIssue | null {
-  const entry = getSessionParseCacheEntry(candidate.file.path)
+  if (
+    !session ||
+    isAiVaultSessionResumableContent(session) ||
+    isAiVaultSessionRecoverableEmpty(session)
+  ) {
+    return null
+  }
+  const entry = getSessionParseCacheEntry(
+    sessionParseCacheKey(candidate.agent, candidate.file.path)
+  )
   const skipped = entry?.resume?.skippedRecords ?? entry?.skippedRecords
-  const message = skipped ? describeSkippedTranscriptRecords(skipped) : null
-  if (message === null) {
+  if (!skipped?.length) {
     return null
   }
   return {
     executionHostId,
     agent: candidate.agent,
-    kind: 'notice',
     path: candidate.file.path,
-    message
+    // Name the parsed writer: a shared discovery root (OMP files under Pi's) can differ from it.
+    ...aiVaultScanIssueText('transcriptTooLarge', {
+      params: { label: aiVaultAgentLabel(session.agent) }
+    })
   }
 }
 

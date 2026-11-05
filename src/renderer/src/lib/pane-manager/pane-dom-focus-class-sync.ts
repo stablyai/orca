@@ -15,8 +15,7 @@ export function attachDomRendererFocusClassSync(
     if (!rows) {
       return
     }
-    // Why: xterm 6 can leave the root focused while the DOM renderer rows miss
-    // xterm-focus; its cursor blink CSS keys off the rows class.
+    // xterm 6 can focus the root without marking DOM rows; cursor-blink CSS needs their xterm-focus class too.
     rows.classList.toggle('xterm-focus', terminalElement.classList.contains('focus'))
   }
 

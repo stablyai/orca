@@ -1,3 +1,4 @@
+import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { expect, it, vi } from 'vitest'
 import type {
   StructuredAgentSessionProviderOpen,
@@ -6,15 +7,13 @@ import type {
 import {
   CALLER,
   attach,
-  attachParams,
   envelope,
   hostTestState
 } from './structured-agent-session-host-test-harness'
-import { hostTestMessage } from './structured-agent-session-host-test-data'
-
-const OPENED: StructuredAgentSessionProviderOpenResult = {
-  reportedOptions: { model: 'gpt-test' }
-}
+import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
+import { acpStartFailure } from '../../acp/acp-startup-outcome'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 
 function awaitOpen() {
   const state = hostTestState()
@@ -38,21 +37,40 @@ function awaitOpen() {
   return { ...state, open, close, pending, send }
 }
 
-it('cancels the open on quit after a second client attach is refused', async () => {
-  const { host, open, close, dispatch, pending, send } = awaitOpen()
+it("keeps the exit's words for a direct attach whose exit settled before its final answer", async () => {
+  const { host, open, dispatch, pending } = awaitOpen()
   await attach()
-  await send('held')
-  expect(await host.attach({ callerKey: 'second-client' }, attachParams())).toMatchObject({
-    ok: false
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+  const child = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.child!
+  await host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: HOST_TEST_SESSION,
+    fence: child.fence,
+    acquisitionGeneration: child.generation!,
+    cause: 'unexpected-exit',
+    reason: 'opencode exited',
+    failure: { kind: 'providerExited' }
   })
-  const ended = host.flushAllStreamedEvents({ trigger: 'quit' })
-  try {
-    await vi.waitFor(() => expect(open.mock.calls[0]?.[0].signal.aborted).toBe(true))
-    await ended
-    expect(close).toHaveBeenCalledTimes(1)
-    expect(dispatch).not.toHaveBeenCalled()
-  } finally {
-    pending.resolve(OPENED)
-    await ended
-  }
+  // The agent's sign-in answer drained after its exit; it stays final but words nothing new.
+  pending.reject(
+    acpStartFailure(
+      new AgentSessionAcquisitionRefusal('OpenCode requires sign-in', 'notSignedIn'),
+      true
+    )
+  )
+  await vi.waitFor(async () => {
+    const rows = (await host.journalSnapshot(HOST_TEST_SESSION)).items.filter(
+      (item) => item.body.kind === 'status'
+    )
+    expect(rows).toEqual([
+      expect.objectContaining({
+        itemId: agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity('awaited-open')),
+        body: expect.objectContaining({
+          failure: expect.objectContaining({ kind: 'providerStartFailed' })
+        })
+      })
+    ])
+  })
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+  expect(dispatch).not.toHaveBeenCalled()
 })

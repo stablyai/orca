@@ -1,4 +1,4 @@
-/** Words and the one recovery for a managed-server setup that couldn't download Node.js. */
+// @protected-copy: Node download mirror trust copy.
 import type {
   SshManagedServerNodeDownloadBlocked,
   SshManagedServerStatus
@@ -9,10 +9,7 @@ import { translate } from '@/i18n/i18n'
 /** `offer`: set a mirror now. `settings`: a mirror was tried, so only its setting is left. */
 export type NodeMirrorRecovery = 'offer' | 'settings'
 
-/**
- * Read from main's structured flag only. `configuredMirror` is this computer's setting now: once it
- * holds a mirror, offering another would only overwrite it.
- */
+/** Use main’s structured flag; an already configured local mirror must not be overwritten by another offer. */
 export function nodeMirrorRecovery(
   status: SshManagedServerStatus | undefined,
   configuredMirror: string | undefined
@@ -66,7 +63,6 @@ export function nodeMirrorRecoveryLabel(recovery: NodeMirrorRecovery): string {
     : translate('auto.components.settings.nodeDistMirrorDialog.openSetting', 'Open mirror setting')
 }
 
-/** The shared validator's refusal, in the user's language. */
 export function nodeDistMirrorRefusalText(reason: NodeDistMirrorRefusal): string {
   switch (reason) {
     case 'too-long':

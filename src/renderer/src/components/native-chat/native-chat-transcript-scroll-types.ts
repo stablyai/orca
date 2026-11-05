@@ -10,7 +10,6 @@ export type NativeChatTranscriptScrollOptions = {
   showsTailRow: boolean
   isVisible: boolean
   alignToViewportTop: (element: HTMLElement) => void
-  /** Whether a jump to a row is still travelling there. */
   isAlignPending: () => boolean
   scrollToEnd: () => void
   restoreScrollOffset: (offset: number) => void
@@ -22,7 +21,8 @@ export type NativeChatTranscriptScroll = {
   showJump: boolean
   onScroll: UIEventHandler<HTMLDivElement>
   scrollToBottom: () => void
-  /** Align an element inside the transcript with the top of the viewport. */
+  /** Following, or close enough to the end that Jump to latest stays hidden. */
+  readerAtEnd: () => boolean
   scrollMessageToTop: (element: HTMLElement) => void
   /** A reader gesture left the end: the only thing besides a row jump that stops following. */
   readerLeavesEnd: () => void

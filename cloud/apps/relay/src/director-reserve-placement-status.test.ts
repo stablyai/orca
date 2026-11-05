@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
 
-vi.mock('./admin-token-verifier.js', () => ({
+vi.mock('./authentication/admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string) => token === 'deploy-token',
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async () => false,
@@ -10,7 +10,7 @@ vi.mock('./admin-token-verifier.js', () => ({
   createRuntimeTokenVerifier: () => async () => false
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => async () => null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
@@ -40,7 +40,9 @@ describe('a director reports its reserve placement as built', () => {
   })
 
   it('says what the built placement does', async () => {
-    expect(await status({ reservePlacement: { placementMode: 'on' } }, { reservePlacement: 'on' })).toMatchObject({
+    expect(
+      await status({ reservePlacement: { placementMode: 'on' } }, { reservePlacement: 'off' })
+    ).toMatchObject({
       reservePlacement: 'on'
     })
   })

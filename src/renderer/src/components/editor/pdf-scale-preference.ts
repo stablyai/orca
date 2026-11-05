@@ -6,7 +6,6 @@ export function clampPdfScale(scale: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, scale))
 }
 
-/** Apply a stored zoom preference after pdf.js loads a (re)document. */
 export function applyPdfScalePreference(
   viewer: { currentScale: number; currentScaleValue: string },
   preference: PdfScalePreference,
@@ -19,7 +18,6 @@ export function applyPdfScalePreference(
   viewer.currentScaleValue = 'page-width'
 }
 
-/** Zoom in/out while recording the resulting absolute scale preference. */
 export function stepPdfScalePreference(
   currentScale: number,
   direction: 'in' | 'out',

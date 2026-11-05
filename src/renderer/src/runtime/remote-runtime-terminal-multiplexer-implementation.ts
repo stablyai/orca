@@ -1,7 +1,7 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { e2eDisableRemoteTerminalStallRecovery } from '@/lib/e2e-config'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalBinaryController } from './remote-runtime-terminal-binary-controller'
@@ -108,9 +108,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           TerminalStreamOpcode.ClaimViewport,
           encodeTerminalStreamJson({ cols, rows })
         )
-        // Why: older runtimes ignore the claim opcode but still understand
-        // Resize. Claim first keeps new-runtime ownership precise and leaves a
-        // backwards-compatible resize immediately behind it.
+        // Claim then Resize: new hosts get precise ownership; older hosts ignore Claim but retain compatible resize.
         const resized = this.sendFrame(
           streamId,
           TerminalStreamOpcode.Resize,

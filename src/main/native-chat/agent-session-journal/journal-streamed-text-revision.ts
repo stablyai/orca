@@ -1,14 +1,9 @@
 import { isDeepStrictEqual } from 'node:util'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 
-/**
- * A later revision of an assistant message that changes only its content. An OS crash that loses
- * it loses streamed text and nothing else: no send, approval, stop, ownership or turn fact rides
- * it, and a turn's settlement is written FULL after it, which makes it durable. Everything else
- * keeps the per-commit fsync.
- */
+/** Only streamed assistant text may skip per-commit fsync; FULL turn settlement makes it durable. */
 export function isJournalStreamedTextRevision(
   state: JournalReducerState,
   row: JournalRow
@@ -34,6 +29,49 @@ export function isJournalStreamedTextRevision(
   ) {
     return false
   }
+  return sameRevisionPlacement(state, row, previous)
+}
+
+/** Output revisions cannot change queue eligibility; lifecycle and unknown changes still wake it. */
+export function isJournalOutputRevision(state: JournalReducerState, row: JournalRow): boolean {
+  if (row.kind !== 'item' || row.recovered) {
+    return false
+  }
+  const previous = state.items.get(row.itemId)
+  if (!previous || !sameRevisionPlacement(state, row, previous)) {
+    return false
+  }
+  const before = previous.body
+  const after = row.body
+  if (before.kind === 'message' && after.kind === 'message') {
+    return (
+      (after.role === 'assistant' || after.role === 'reasoning') &&
+      before.role === after.role &&
+      before.sentAs === undefined &&
+      after.sentAs === undefined &&
+      before.command === undefined &&
+      after.command === undefined &&
+      before.from === undefined &&
+      after.from === undefined &&
+      before.state === after.state &&
+      before.completedAt === after.completedAt &&
+      before.blocks.every((block) => block.type === 'text') &&
+      after.blocks.every((block) => block.type === 'text')
+    )
+  }
+  if (before.kind === 'tool-call' && after.kind === 'tool-call') {
+    const { output: _beforeOutput, ...beforeFields } = before
+    const { output: _afterOutput, ...afterFields } = after
+    return isDeepStrictEqual(beforeFields, afterFields)
+  }
+  return false
+}
+
+function sameRevisionPlacement(
+  state: JournalReducerState,
+  row: Extract<JournalRow, { kind: 'item' }>,
+  previous: NonNullable<ReturnType<JournalReducerState['items']['get']>>
+): boolean {
   const ownerFence = state.itemFences.get(row.itemId)
   return (
     (row.ownerFence ?? ownerFence) === ownerFence &&

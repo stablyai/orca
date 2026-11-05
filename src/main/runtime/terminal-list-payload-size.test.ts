@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 
-// Measures the real `terminal.list` wire payload for a large listing, so the
-// visualLayouts opt-out keeps paying for itself. Sized against a live
-// 134-terminal remote runtime (137,412 B on the wire, visualLayouts 44,208 B).
+// Bound the real visualLayouts opt-out payload against a live 134-terminal sample (137,412 bytes, including 44,208 layout bytes).
 const TERMINAL_COUNT = 134
 const PANES_PER_TAB = 2
 const TAB_COUNT = TERMINAL_COUNT / PANES_PER_TAB

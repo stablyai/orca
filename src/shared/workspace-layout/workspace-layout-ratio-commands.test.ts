@@ -1,5 +1,4 @@
-// Divider ratios through main: a window's ratio intents apply to main's own tree, and an older
-// window's whole tree is taken only where its panes or groups match main's.
+// Apply ratio intents to main’s tree; accept legacy whole-tree ratios only when pane/group identities still match.
 
 import { describe, expect, it } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
@@ -9,7 +8,6 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 const context = testContext()
 
-/** Two terminal tabs, the first split in two, in one group. */
 function setup() {
   const ctx = testContext()
   const { model, results } = build(ctx, [
@@ -182,7 +180,7 @@ describe('divider ratios through main', () => {
   it('applies a group intent only to the split it means', () => {
     const { ctx, model, tabB } = setup()
     const groupId = model.workspaces[WS]!.groups[0]!.id
-    // The model's own id minter, so the new group's id is not one the model already holds.
+    // Use main’s ID minter to avoid creating a colliding group.
     const split = applyLayoutCommand(
       model,
       {

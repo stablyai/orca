@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_REATTACH_RESET,
   PROCESS_BOUNDARY_GROUND
-} from '../../../../shared/terminal-mode-reset-profiles'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
@@ -14,13 +14,18 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
   let mockStoreState: StoreState
@@ -59,6 +64,8 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
 
     async function reattachWithSnapshotFlags(kittyKeyboard: boolean) {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -77,8 +84,9 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane-connection mocks cover the members connectPanePty reads.
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
       await flushAsyncTicks(20)
       return { pane, mirror: deps.paneKittyKeyboardModesRef.current.get(pane.id) }
     }
@@ -106,17 +114,20 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
 
     it('grounds xterm and the mirror with one scanned write before a restart-in-place spawns', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       transportFactoryQueue.push(createMockTransport())
       const pane = createPane(91)
-      // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.
+      // Use a unique tab ID to avoid other tests’ pending-spawn entries and force fresh spawn.
       const deps = createDeps({ tabId: 'tab-kitty-fresh-spawn' })
       // The pane's previous occupant left the alternate screen and kitty flags on.
       const mirror = new TerminalKittyKeyboardModeTracker()
       mirror.scan('\x1b[?1049h\x1b[>5u')
       deps.paneKittyKeyboardModesRef.current.set(pane.id, mirror)
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane-connection mocks cover the members connectPanePty reads.
-      connectPanePty(pane as never, createManager(91) as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(91), bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+      )
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(

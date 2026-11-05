@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { takeSleepingAgentWakeRequest } from '@/lib/sleeping-agent-wake-requests'
 import { holdPaneResumeUntilShown, releasePaneResumeHold } from '@/lib/pane-spawn-deferral-registry'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
@@ -6,11 +6,7 @@ import { pendingSpawnByPaneKey } from './pty-connect-limits'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/**
- * Holds a hidden pane's sleeping-agent resume until the pane is shown, by arming the same wake a
- * hibernated pane uses (#7145), so opening a workspace never resumes all its agents at once.
- * Returns false when the resume should start now: the pane is visible, or a background wake asked.
- */
+/** Defer hidden restores through the hibernation wake until reveal; visible panes and explicit background wakes run immediately (#7145). */
 export function deferHiddenAgentResume(
   session: ConnectPanePtySession,
   startup: ColdRestoreAgentResumeStartup | null,
@@ -36,6 +32,9 @@ export function deferHiddenAgentResume(
     ptyId: session.transport.getPtyId(),
     record: recordEntry.record,
     wake: (): Promise<string | null> => {
+      if (startup?.resumeSource?.cancelled) {
+        return Promise.resolve(null)
+      }
       session.hiddenAgentResumeReleased = true
       return start().then((ptyId) => {
         // Why the transport: a held reattach resolves before it binds, and the hold must cover its fallback.
@@ -51,8 +50,7 @@ export function deferHiddenAgentResume(
   }
   session.hibernatedWakeTarget = target
   session.hiddenAgentResumeHeldTarget = target
-  // Why: the cleared layout binding no longer proves ownership, so an activation sweep would relaunch the record.
-  // Why each clause: armed, woken, or its reattach or fallback still connecting — until a PTY binds.
+  // Retain record ownership while armed, woken or connecting; cleared layout bindings alone would let activation launch a duplicate.
   session.hiddenAgentResumeHold ??= (): boolean =>
     !session.disposed &&
     session.hiddenAgentResumeHeldTarget !== null &&
@@ -89,10 +87,7 @@ export function noteHiddenAgentResumePtyEnded(session: ConnectPanePtySession): v
   }
 }
 
-/**
- * Reattaches a restored session, unless the pane is hidden and its host reports the session gone:
- * then the reattach would cold-restore the agent, so it waits for the pane to be shown instead.
- */
+/** Wait for reveal only when the host proves a hidden session gone; live and unverifiable sessions still reattach. */
 export function startDeferredSessionReattachUnlessHiddenAgentResume(
   session: ConnectPanePtySession,
   sessionId: string

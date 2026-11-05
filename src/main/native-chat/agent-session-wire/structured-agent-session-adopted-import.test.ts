@@ -1,13 +1,11 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Source validation must finish before a new session claims the provider conversation.
-
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   attachFingerprintFields,
@@ -17,29 +15,35 @@ import { openTestAttachConversation } from './structured-agent-session-attach-te
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
+import { writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
 } from './structured-agent-session-adapter-router-test-support'
 import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
-import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
+import { writeOpenCodeSqliteDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 
-// The OpenCode reader's worker, run in process.
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await importOriginal<object>()),
-    readOpenCodeTranscriptPageViaWorker: async (
-      args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
-    ) => query.readOpenCodeTranscriptPage(args),
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (importOriginal) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await importOriginal<object>()),
+      readOpenCodeTranscriptPageViaWorker: async (
+        args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
+      ) => query.readOpenCodeTranscriptPage(args),
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 
 const NOW = 1_800_000_000_000
 const SESSION = 'codex_adopting_session'
@@ -50,6 +54,7 @@ let store: AgentSessionRecordStore | null = null
 
 afterEach(async () => {
   if (root) {
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
   root = null
@@ -57,7 +62,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-/** A minimal Codex rollout the legacy transcript decoder can read back. */
 async function writeCodexRollout(path: string, text: string): Promise<void> {
   const lines = [
     JSON.stringify({
@@ -100,6 +104,11 @@ function attachParams(
     runtimeKind: 'native',
     adopt: {
       providerHandle: codexProviderHandle(THREAD),
+      source: {
+        providerSessionId: THREAD,
+        workspaceCwd: '/workspace',
+        conversationStore: root ?? undefined
+      },
       ...(transcriptPath ? { transcriptPath } : {})
     },
     ...overrides
@@ -135,7 +144,7 @@ function adapter(): StructuredAgentSessionAdapter {
           observedAt: NOW
         }
       })),
-    // Proven released, so the failure rethrows its own cause rather than an unproven-exit wrapper.
+    // Proven release preserves the original failure instead of wrapping unproven exit.
     releaseAcquisition: vi.fn(async () => true),
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
@@ -181,8 +190,7 @@ describe('adopting a provider conversation on create', () => {
     const result = await attach(transcriptPath, sessionAdapter)
 
     expect(result).toMatchObject({ ok: true })
-    // The adapter was asked to resume, not to start: the seeded chain is what tells it which
-    // conversation this session owns.
+    // The seeded chain must resume the adopted conversation.
     const page = (result as { value: { page: { items: unknown[] } } }).value.page
     expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
   })
@@ -233,7 +241,7 @@ describe('adopting a provider conversation on create', () => {
       if (!definition) {
         throw new Error(`this build registers no ${agent} chats`)
       }
-      // A Pi chat's handle names its session file; the others name the conversation id.
+      // Pi handles name session files; other providers use conversation IDs.
       const handle = {
         transport: definition.handleTransport,
         agent,
@@ -300,7 +308,7 @@ describe('adopting a provider conversation on create', () => {
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['missing', 'oversized', 'empty', 'invalid', 'source-less'] as const)(
+  it.each(['missing', 'oversized', 'empty', 'metadata-only', 'invalid', 'source-less'] as const)(
     'refuses %s source before claiming a conversation',
     async (kind) => {
       root = await mkdtemp(join(tmpdir(), 'orca-adopt-preflight-'))
@@ -308,6 +316,11 @@ describe('adopting a provider conversation on create', () => {
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
         await appendFile(transcriptPath, 'x'.repeat(16 * 1024 * 1024 + 1))
+      } else if (kind === 'metadata-only') {
+        await writeFile(
+          transcriptPath,
+          `${JSON.stringify({ type: 'session_meta', payload: { id: THREAD, cwd: '/workspace' } })}\n`
+        )
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
@@ -386,21 +399,29 @@ describe('adopting a provider conversation on create', () => {
         body
       }
     )
-    // The failed attach kept the conversation's own journal open, so the send is recorded.
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     await host.flushAllStreamedEvents()
   })
 
   it('prepares a valid source once before acquisition and imports those exact items', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-once-'))
-    const transcriptPath = join(root, 'rollout.jsonl')
-    await writeCodexRollout(transcriptPath, 'prepared before acquiring')
+    const parent = await writeCodexHistoryFixture(root, '01a17c7f-6f58-7a73-b87a-a8702ff2da17', [
+      'sky'
+    ])
+    const { filePath: transcriptPath } = await writeCodexHistoryFixture(
+      root,
+      THREAD,
+      ['prepared before acquiring'],
+      parent.position
+    )
+    await appendFile(transcriptPath, '{"ordinal":')
     const prepare = vi.spyOn(legacyImport, 'prepareLegacyTranscriptImport')
     const sessionAdapter = adapter()
     const acquire = sessionAdapter.acquire
     sessionAdapter.acquire = vi.fn(async (input) => {
       expect(prepare).toHaveBeenCalledTimes(1)
       await rm(transcriptPath)
+      await rm(parent.filePath)
       return acquire(input)
     })
     const result = await attach(transcriptPath, sessionAdapter, async ({ journal }) =>
@@ -411,6 +432,9 @@ describe('adopting a provider conversation on create', () => {
       throw new Error('attach failed')
     }
     expect(JSON.stringify(result.value.page.items)).toContain('prepared before acquiring')
+    expect(JSON.stringify(result.value.page.items)).toContain('sky answer')
+    expect(result.value.page.items).toHaveLength(4)
+    expect(sessionAdapter.dispatch).not.toHaveBeenCalled()
     expect(prepare).toHaveBeenCalledTimes(1)
   })
 })

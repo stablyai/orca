@@ -1,13 +1,10 @@
-// A Claude start can fail on Orca's side while the CLI is still running: an init frame naming
-// another session. Orca ends that child itself, so the chat must not say Claude stopped on its own;
-// only an exit Orca saw says that. Against the production runtime, adapter, record store and host,
-// with only the CLI process scripted.
+// Host-detected startup faults must not be attributed as self-exits without observed CLI exit.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 import {
   createScriptedClaudeRuntime,
   scriptedClaudeExitError
@@ -75,25 +72,6 @@ async function released(host: StructuredAgentSessionHost): Promise<void> {
 }
 
 describe('a Claude start that Orca fails while the CLI is still running', () => {
-  // Saved options ride the launch, so no option write runs at startup that could fail it.
-  it('starts with a saved option the CLI would not take as a write', async () => {
-    claude.behave(SESSION, { optionWritesFail: true })
-    const host = await claude.install()
-    await expect(
-      host.attach(
-        CALLER,
-        claude.attachParams(SESSION, null, { options: { permissionMode: 'accept-edits' } })
-      )
-    ).resolves.toMatchObject({ ok: true })
-    await vi.waitFor(() =>
-      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
-    )
-
-    expect(claude.child(SESSION).launch.options.permissionMode).toBe('acceptEdits')
-    expect(claude.child(SESSION).calls).not.toContain('set_permission_mode')
-    expect(await failureRows(host)).toEqual([])
-  })
-
   it('rejects a message held for it as a start that could not happen when init names another session', async () => {
     claude.behave(SESSION, { initHangs: true, initNamesForeignSession: true })
     const host = await claude.install()

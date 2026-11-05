@@ -105,8 +105,7 @@ export function useFloatingTerminalPanelGeometry({
     let cancelled = false
     void window.api.app.getFloatingTerminalCwd({ path: floatingTerminalCwd }).then((nextCwd) => {
       if (!cancelled) {
-        // Why the store: every renderer consumer that must answer "where does the floating
-        // workspace live" (workspace row minting included) reads this one resolved copy.
+        // Publish the resolved directory once for every floating-workspace consumer, including row creation.
         setFloatingWorkspacePath(nextCwd)
       }
     })

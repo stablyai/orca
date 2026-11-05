@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { createBrowserHostLeaseState } from './browser-host-lease-attachment'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'
 import { BrowserHostPageReconciliationOrchestrator } from './browser-host-page-reconciliation-orchestration'
 import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconciliation-plan'
 
-// Why here and not through the lease registry: adoption is the orchestrator's only caller and it
-// never rethrows, so a refusal and a run that merely did nothing look identical from outside. These
-// two preconditions decide whether a command is issued at all, so they are pinned where they answer.
+// Test refusals here: adoption swallows them, making refusal indistinguishable from no-op externally.
 const authority = { authorityRuntimeId: 'runtime-new', authorityEpoch: 'epoch-new' }
 
 describe('browser host page reconciliation preconditions', () => {

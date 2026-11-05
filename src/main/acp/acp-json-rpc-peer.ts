@@ -1,5 +1,4 @@
 import type { Readable, Writable } from 'node:stream'
-import { z } from 'zod'
 import { readAcpResponse } from './acp-response-settlement'
 import type { AcpResponse, AcpRequestOptions, AcpPendingResponse } from './acp-response-settlement'
 import {
@@ -13,22 +12,21 @@ export type { AcpPeerOptions } from './acp-peer-limits'
 import { settleOversizedAcpLine } from './acp-oversized-lines'
 import { AcpWriteQueue } from './acp-write-queue'
 import { detachAcpStreamErrorHandler } from './acp-stdio-error-boundary'
-import {
-  acpRpcEnvelopeSchema,
-  invalidAcpResponseEnvelope,
-  settleAcpResponse,
-  type AcpJsonRpcMessage
-} from './acp-rpc-envelope'
+import { ProviderOutputEnd } from '../provider-process/provider-output-end'
+import { acpRpcEnvelopeSchema, type AcpJsonRpcMessage } from './acp-rpc-envelope'
+import { rejectUnreadableAcpReply, settleAcpReply } from './acp-peer-reply'
 export type { AcpJsonRpcMessage } from './acp-rpc-envelope'
 export type AcpRequestContext = { id: string | number | null; signal: AbortSignal }
 export type AcpPeerHandlers = {
-  // Void means handled; unsupported methods must throw AcpRpcError(-32601). The handler owns its
-  // request: once the signal aborts it still answers, or throws (-32800); unanswered ends at close().
+  // Void is handled; unsupported methods throw -32601. Aborted handlers still reply or throw -32800.
   onRequest?: (method: string, params: unknown, context: AcpRequestContext) => unknown
   onNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
-  /** A line on the input that is not a protocol message, including an unterminated last one. */
+  /** Bounds how long calls outstanding when the agent stopped reading wait for answers it wrote;
+   *  `finish` settles them. Defaults to the drain of the agent's output. */
+  onOutputEnd?: (error: Error, finish: () => void) => void
+  /** Includes non-protocol output and unterminated final lines. */
   onOtherLine?: (line: string, cut?: boolean) => void
 }
 export class AcpJsonRpcPeer {
@@ -38,19 +36,20 @@ export class AcpJsonRpcPeer {
   private readonly framer: ReturnType<typeof createIncrementalNdjsonFramer>
   private nextId = 1
   private terminalError?: Error
+  private readonly outputEnd: ProviderOutputEnd
   private drainingNotifications = false
   private readonly limits: Required<AcpPeerOptions>
 
   constructor(
     private readonly input: Readable,
-    private readonly output: Writable,
+    output: Writable,
     private readonly handlers: AcpPeerHandlers = {},
     options: AcpPeerOptions = {}
   ) {
     const limits = resolveAcpPeerOptions(options)
     this.limits = limits
     this.writer = new AcpWriteQueue(output, limits.maxQueuedWriteBytes, (error) =>
-      this.close(error)
+      this.endOutput(error)
     )
     this.incoming = new AcpIncomingRequests(
       handlers.onRequest,
@@ -81,15 +80,15 @@ export class AcpJsonRpcPeer {
     input.on('end', this.onInputEnd)
     input.on('close', this.onInputEnd)
     input.on('error', this.onError)
-    output.on('close', this.onEnd)
-    output.on('finish', this.onEnd)
-    output.on('error', this.onError)
-    if (
-      (this.limits.closeOnInputEnd && (input.destroyed || input.readableEnded)) ||
-      output.destroyed ||
-      !output.writable
-    ) {
+    this.outputEnd = new ProviderOutputEnd(
+      output,
+      (error) => this.endOutput(error),
+      () => new AcpConnectionClosedError()
+    )
+    if (this.limits.closeOnInputEnd && (input.destroyed || input.readableEnded)) {
       this.onEnd()
+    } else if (output.destroyed || !output.writable) {
+      this.endOutput(new AcpConnectionClosedError())
     }
   }
 
@@ -108,8 +107,8 @@ export class AcpJsonRpcPeer {
     params: unknown,
     options: Partial<AcpRequestOptions> = {}
   ): Promise<unknown> {
-    if (this.terminalError) {
-      return Promise.reject(this.terminalError)
+    if (this.terminalError ?? this.outputEnd.error) {
+      return Promise.reject(this.terminalError ?? this.outputEnd.error)
     }
     if (this.pending.size >= this.limits.maxPendingRequests) {
       return Promise.reject(new Error('ACP pending request capacity exceeded'))
@@ -149,7 +148,8 @@ export class AcpJsonRpcPeer {
       })
       void this.send({ jsonrpc: '2.0', id, method, params }, controller.signal).catch((error) => {
         const pending = this.pending.get(id)
-        if (!pending) {
+        // A write lost to the agent no longer reading leaves the call to the output drain.
+        if (!pending || this.outputEnd.error) {
           return
         }
         this.pending.delete(id)
@@ -163,7 +163,7 @@ export class AcpJsonRpcPeer {
     return this.send({ jsonrpc: '2.0', method, params })
   }
 
-  /** Aborts every open agent request's signal; each handler still sends its own answer. */
+  /** Aborts signals; handlers still own replies. */
   cancelIncomingRequests(): void {
     this.incoming.cancel()
   }
@@ -192,9 +192,7 @@ export class AcpJsonRpcPeer {
     if (this.terminalError) {
       return
     }
-    this.output.removeListener('close', this.onEnd)
-    this.output.removeListener('finish', this.onEnd)
-    detachAcpStreamErrorHandler(this.output, this.onError)
+    this.outputEnd.detach()
     this.terminalError = error
     this.writer.close(error)
     for (const pending of this.pending.values()) {
@@ -218,13 +216,26 @@ export class AcpJsonRpcPeer {
     }
   }
   private readonly onEnd = (): void => this.close()
+
+  private endOutput(error: Error): void {
+    if (this.terminalError || !this.outputEnd.begin(error)) {
+      return
+    }
+    this.writer.close(error)
+    this.outputEnd.settle(
+      this.pending.size > 0,
+      this.input,
+      () => this.close(error),
+      this.handlers.onOutputEnd && ((finish) => this.handlers.onOutputEnd?.(error, finish))
+    )
+  }
   private readonly onInputEnd = (): void => {
     const tail = this.framer.takeTail()
     if (tail.trim()) {
       this.otherLine(tail)
     }
     if (this.limits.closeOnInputEnd) {
-      this.close()
+      this.close(this.outputEnd.error)
     }
   }
   private readonly onError = (error: Error): void => this.close(error)
@@ -267,12 +278,7 @@ export class AcpJsonRpcPeer {
     const parsed = acpRpcEnvelopeSchema.safeParse(record)
     if (!parsed.success) {
       this.diagnose('Ignored invalid ACP JSON-RPC envelope')
-      const response = z
-        .object({ id: z.number(), method: z.undefined().optional() })
-        .safeParse(record)
-      if (response.success) {
-        this.rejectPending(response.data.id, invalidAcpResponseEnvelope(record))
-      }
+      rejectUnreadableAcpReply(record, (id, error) => this.rejectPending(id, error))
       return
     }
     const frame = parsed.data
@@ -295,22 +301,15 @@ export class AcpJsonRpcPeer {
       }
       return
     }
-    if ('result' in frame === 'error' in frame) {
-      this.diagnose('Ignored invalid ACP response')
-      if (typeof frame.id === 'number') {
-        this.rejectPending(frame.id, invalidAcpResponseEnvelope(record))
-      }
-      return
+    settleAcpReply({
+      record,
+      frame,
+      pending: this.pending,
+      rejectPending: (id, error) => this.rejectPending(id, error),
+      diagnose: (message) => this.diagnose(message)
+    })
+    if (this.outputEnd.error && this.pending.size === 0) {
+      this.close(this.outputEnd.error)
     }
-    if (typeof frame.id !== 'number') {
-      return
-    }
-    const pending = this.pending.get(frame.id)
-    if (!pending) {
-      return
-    }
-    this.pending.delete(frame.id)
-    clearTimeout(pending.timer)
-    settleAcpResponse(frame, pending, (message) => this.diagnose(message))
   }
 }

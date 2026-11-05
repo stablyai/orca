@@ -6,7 +6,7 @@ import {
   getExtraAgentArgsPlaceholder,
   hasExtraAgentArgs,
   supportsExtraAgentArgs
-} from '../../../../shared/automation-extra-agent-args'
+} from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from './automation-page-parts'
 import {
   draftExtraAgentArgsNeedFreshSession,
@@ -16,11 +16,13 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationExtraAgentArgsFieldProps = {
   draft: AutomationDraft
+  disabled?: boolean
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }
 
 export function AutomationExtraAgentArgsField({
   draft,
+  disabled,
   onDraftChange
 }: AutomationExtraAgentArgsFieldProps): React.JSX.Element {
   const supported = supportsExtraAgentArgs(draft.agentId)
@@ -42,16 +44,14 @@ export function AutomationExtraAgentArgsField({
           variant="code"
           value={draft.extraAgentArgs}
           spellCheck={false}
-          disabled={!supported}
+          disabled={disabled || !supported}
           aria-invalid={Boolean(error) || needsFreshSession}
           aria-describedby={messageId}
           placeholder={getExtraAgentArgsPlaceholder(draft.agentId)}
-          onChange={(event) =>
-            onDraftChange((current) => ({
-              ...current,
-              extraAgentArgs: event.target.value
-            }))
-          }
+          onChange={(event) => {
+            const value = event.target.value
+            onDraftChange((current) => ({ ...current, extraAgentArgs: value }))
+          }}
           className="min-h-14 resize-none"
         />
         <div id={messageId} className="space-y-1.5">

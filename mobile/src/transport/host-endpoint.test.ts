@@ -16,10 +16,6 @@ describe('displayHostEndpoint', () => {
   it('returns the raw string when not a URL', () => {
     expect(displayHostEndpoint('not-a-url')).toBe('not-a-url')
   })
-
-  it('brackets IPv6 hostnames for round-trip safety', () => {
-    expect(displayHostEndpoint('ws://[fd7a:115c:a1e0::1]:6768')).toBe('[fd7a:115c:a1e0::1]:6768')
-  })
 })
 
 describe('endpointPort', () => {

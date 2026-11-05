@@ -41,7 +41,6 @@ describe('shouldDismissKeyboardAfterTerminalSend', () => {
   })
 
   it('treats a blank agent label as no agent', () => {
-    // A truthy-empty agentType would otherwise dismiss on every shell Enter.
     expect(
       shouldDismissKeyboardAfterTerminalSend(terminalTab({ agentStatus: { agentType: '' } }), true)
     ).toBe(false)

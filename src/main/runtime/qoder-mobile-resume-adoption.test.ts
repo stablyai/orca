@@ -1,13 +1,19 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-const { store, TEST_WORKTREE_PATH } = await import('./orca-runtime-test-fixtures.spec')
-const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+const { store, TEST_WORKTREE_PATH } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { detectAgentCommandsOnHost } = await import('../preflight/agent-command-detection')
+const { bindPaneFirst, committingSpawn, registerBoundPty } =
+  await import('./orca-runtime-tests/bind-first-pane.test-fixture')
+
+type SpawnPane = { worktreeId?: string; tabId?: string; leafId?: string }
 
 class QoderAdoptionRuntime extends OrcaRuntimeService {
   retainedRecipe(ptyId: string, worktreeId: string) {
@@ -25,14 +31,17 @@ it.each([
   'surviving-recipe'
 ])('reconciles a paired Qoder resume after ambiguous creation: %s', async (scenario) => {
   const failure = scenario === 'Terminal creation timed out' ? scenario : 'client_disconnected'
-  const { withPlatform } = await import('./orca-runtime-test-fixtures.spec')
+  const { withPlatform } = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
   await withPlatform(scenario === 'wsl-inventory' ? 'win32' : 'darwin', async () => {
     vi.useFakeTimers()
     try {
-      const { electronMocks } = await import('./orca-runtime-test-mocks.spec')
-      const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+      await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+      const { electronMocks } = await import('./orca-runtime-test-mocks/setup.spec')
+      const { TEST_WORKTREE_ID } =
+        await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
       vi.mocked(detectAgentCommandsOnHost).mockResolvedValue(new Set(['qoder']))
-      const runtime = new QoderAdoptionRuntime(store)
+      // Copy the fixture store so main-owned bindings cannot leak into shared tests.
+      const runtime = new QoderAdoptionRuntime({ ...store })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       let revealedRecipe: SleepingAgentLaunchConfig | undefined
       const revealTerminalSession = vi.fn(
@@ -51,7 +60,6 @@ it.each([
         renameTerminal: vi.fn(),
         closeTerminal: vi.fn(),
         closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -73,32 +81,43 @@ it.each([
         }
         return true
       })
-      const spawn = vi.fn(async (args: { command?: string; preAllocatedHandle?: string }) => {
-        if (args.command) {
-          acceptedCommands.push(args.command)
-        }
-        live.push({
-          id: 'qoder-live-resume',
-          cwd: TEST_WORKTREE_PATH,
-          title: 'Qoder',
-          worktreeId: TEST_WORKTREE_ID,
-          terminalHandle: args.preAllocatedHandle ?? '',
-          ...(scenario === 'wsl-inventory' ? { wslDistro: 'Ubuntu-Orca' } : {})
-        })
-        if (scenario === 'surviving-recipe') {
-          const retained = runtime.retainedRecipe('qoder-live-resume', TEST_WORKTREE_ID)
-          retained.launchAgent = 'qoder'
-          retained.launchConfig = {
-            agentCommand: 'trusted-qoder',
-            agentArgs: 'trusted args',
-            agentEnv: { TRUSTED: 'retained' }
+      const spawn = vi.fn(
+        async (args: SpawnPane & { command?: string; preAllocatedHandle?: string }) => {
+          if (args.command) {
+            acceptedCommands.push(args.command)
           }
+          live.push({
+            id: 'qoder-live-resume',
+            cwd: TEST_WORKTREE_PATH,
+            title: 'Qoder',
+            worktreeId: TEST_WORKTREE_ID,
+            terminalHandle: args.preAllocatedHandle ?? '',
+            ...(scenario === 'wsl-inventory' ? { wslDistro: 'Ubuntu-Orca' } : {})
+          })
+          if (scenario === 'surviving-recipe') {
+            const retained = runtime.retainedRecipe('qoder-live-resume', TEST_WORKTREE_ID)
+            retained.launchAgent = 'qoder'
+            retained.launchConfig = {
+              agentCommand: 'trusted-qoder',
+              agentArgs: 'trusted args',
+              agentEnv: { TRUSTED: 'retained' }
+            }
+          }
+          // Commit the spawn binding before losing only its response.
+          if (args.worktreeId && args.tabId && args.leafId) {
+            bindPaneFirst(runtime, {
+              worktreeId: args.worktreeId,
+              tabId: args.tabId,
+              leafId: args.leafId,
+              ptyId: 'qoder-live-resume'
+            })
+          }
+          if (failure === 'client_disconnected') {
+            connection.abort()
+          }
+          throw new Error(failure)
         }
-        if (failure === 'client_disconnected') {
-          connection.abort()
-        }
-        throw new Error(failure)
-      })
+      )
       runtime.setPtyController({
         spawn,
         listProcesses: async () => {
@@ -240,7 +259,7 @@ it.each([
       }
       const restoredSpawn = vi.fn().mockResolvedValue({ id: 'intentional-restored-qoder' })
       runtime.setPtyController({
-        spawn: restoredSpawn,
+        spawn: committingSpawn(runtime, restoredSpawn),
         write: () => true,
         kill,
         getForegroundProcess: async () => null
@@ -280,26 +299,28 @@ it.each([
 it.each(['missing-original', 'different-agent'])(
   'refuses unproven adopted launch recipe: %s',
   async (state) => {
-    const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+    const { TEST_WORKTREE_ID } =
+      await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
     const { deriveRemoteRuntimeTerminalCreateHandle } =
-      await import('./remote-runtime-terminal-create-identity')
+      await import('./terminal/identity/remote-runtime-terminal-create-identity')
     const handle = deriveRemoteRuntimeTerminalCreateHandle(
       'owned-phone',
       TEST_WORKTREE_ID,
       'unknown-operation'
     )
-    const runtime = new QoderAdoptionRuntime(store)
+    const runtime = new QoderAdoptionRuntime({ ...store })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const tabId = 'original-owned-tab'
     const leafId = '55555555-5555-4555-8555-555555555555'
-    runtime.registerPty('unknown-owned-pty', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'unknown-owned-pty', TEST_WORKTREE_ID, null, {
       tabId,
       leafId,
       terminalHandle: handle,
       incarnationId: 'owned-prior-incarnation'
     })
     const retained = runtime.retainedRecipe('unknown-owned-pty', TEST_WORKTREE_ID)
-    const originalPaneKey = retained.paneKey
+    const originalPaneKey = runtime['paneOfPty'](retained).paneKey
+    expect(originalPaneKey).toBe(`${tabId}:${leafId}`)
     const originalOwnership = retained.runtimeSessionOwned
     if (state === 'different-agent') {
       retained.launchAgent = 'codex'
@@ -343,8 +364,7 @@ it.each(['missing-original', 'different-agent'])(
     expect(retained.launchAgent).toBe(state === 'different-agent' ? 'codex' : null)
     expect(retained.launchToken).toBeNull()
     expect(retained.launchIncarnationId).toBeNull()
-    expect(retained.tabId).toBe(tabId)
-    expect(retained.paneKey).toBe(originalPaneKey)
+    expect(runtime['paneOfPty'](retained)).toMatchObject({ tabId, paneKey: originalPaneKey })
     expect(retained.runtimeSessionOwned).toBe(originalOwnership)
     expect(runtime.resolveTerminalPane(`${tabId}:${leafId}`).handle).toBe(handle)
   }
@@ -353,13 +373,14 @@ it.each(['missing-original', 'different-agent'])(
 it('releases abandoned dispatch capacity without guessing an expired live recipe', async () => {
   vi.useFakeTimers()
   try {
-    const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+    const { TEST_WORKTREE_ID } =
+      await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
     const { deriveRemoteRuntimeTerminalCreateHandle } =
-      await import('./remote-runtime-terminal-create-identity')
+      await import('./terminal/identity/remote-runtime-terminal-create-identity')
     vi.mocked(detectAgentCommandsOnHost)
       .mockReset()
       .mockResolvedValue(new Set(['qoder']))
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = new OrcaRuntimeService({ ...store })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     let accept = false
     const inventory: {
@@ -369,7 +390,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
       cwd: string
       title: string
     }[] = []
-    const spawn = vi.fn(async () => {
+    const spawn = vi.fn(async (_args: SpawnPane) => {
       if (accept) {
         return { id: 'fresh-after-expiry' }
       }
@@ -377,7 +398,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
     })
     const kill = vi.fn()
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       kill,
       write: () => true,
       getForegroundProcess: async () => null,

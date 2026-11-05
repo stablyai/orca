@@ -32,20 +32,13 @@ async function prepareSidebarForScrollTest(page: Page): Promise<void> {
 
 test.describe('Reveal active workspace button', () => {
   test.beforeEach(async ({ orcaPage }) => {
-    // Why: headless Electron under xvfb never ticks a smooth-scroll animation,
-    // so the reveal's `scrollTo({ behavior: 'smooth' })` would never reach its
-    // target. Reduced-motion makes the reveal jump instantly (see
-    // worktree-sidebar-reveal.ts) so the geometry assertions are deterministic.
+    // Reduced motion jumps reveal deterministically because hidden xvfb Electron never advances smooth-scroll animations.
     await orcaPage.emulateMedia({ reducedMotion: 'reduce' })
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
   })
 
-  // Note: the "clipped in the production sidebar" pixel-containment test was
-  // removed — it forced a ~44px synthetic viewport and asserted ±1px scroll
-  // precision, which the row virtualizer can't guarantee under CI saturation
-  // (not a scenario real users hit). Reveal-into-view is covered robustly by
-  // the "outside the virtualized window" test below.
+  // Use outside-virtual-window reveal coverage; a removed ~44px synthetic viewport/±1px containment test was unstable under saturated CI.
 
   test('adjusts sidebar filters before revealing a hidden current workspace', async ({
     orcaPage,

@@ -220,8 +220,7 @@ describe('mobile endpoint supervisor', () => {
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
-    // Start the probe, then drop the active relay while the probe owns the
-    // operation mutex. The failed probe must hand recovery back to the relay.
+    // Drop relay while the direct probe holds the mutex; failed probes must replay deferred relay recovery.
     await vi.advanceTimersByTimeAsync(15_000)
     expect(deps.openDirect).toHaveBeenCalledOnce()
     logical.publishState('disconnected')
@@ -716,8 +715,7 @@ describe('mobile endpoint supervisor', () => {
   })
 
   it('skips forced rotation for a session resumed without renewal', async () => {
-    // Why: renewed=false means a re-resume provably returns the same unchanged
-    // deadline; rotating anyway churned one session replacement per clamp floor.
+    // An unrenewed lease keeps its deadline; rotating again would churn replacements at every clamp floor.
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(
       () => new FakeRelaySession('connected', null, Date.now() + 31_000, false)
@@ -782,13 +780,15 @@ describe('mobile endpoint supervisor', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(openRelay).toHaveBeenCalledTimes(2)
 
-    // A network nudge inside the cooldown must not dial early and must not tear
-    // down the healthy session; the queued intent runs at the 250 ms boundary.
+    // Ambiguous network hints leave the healthy session and the lease retry cadence intact.
     supervisor.nudge('network-change')
     expect(logical.suspendActiveSession).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(249)
     expect(openRelay).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(4_750)
     expect(openRelay).toHaveBeenCalledTimes(3)
     supervisor.stop()
   })
@@ -831,7 +831,6 @@ describe('mobile endpoint supervisor', () => {
     await supervisor.start()
     const afterStart = openRelay.mock.calls.length
 
-    // Background → foreground is a fresh signal: dial now, not after the cooldown.
     supervisor.setForeground(false)
     supervisor.setForeground(true)
     await vi.advanceTimersByTimeAsync(0)
@@ -849,7 +848,6 @@ describe('mobile endpoint supervisor', () => {
     expect(deps.openRelay).not.toHaveBeenCalled()
     expect(logical.getState()).toBe('connecting')
 
-    // The direct dial never authenticates; the relay wins the race through migrateTo.
     await vi.advanceTimersByTimeAsync(1)
     await vi.waitFor(() => expect(logical.getActivePath()).toBe('relay'))
     expect(logical.migrateTo).toHaveBeenCalledWith(
@@ -900,12 +898,10 @@ describe('mobile endpoint supervisor', () => {
     await vi.advanceTimersByTimeAsync(2_500)
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // The armed retry runs unforced, so it yields to the still-progressing direct
-    // dial: the race gets one attempt, never a socket-per-cooldown loop.
+    // Yield unforced retries to direct progress so the race cannot create one relay socket per cooldown.
     await vi.advanceTimersByTimeAsync(60_000)
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // Direct finally gives up: ordinary recovery still owns the failure.
     logical.publishState('reconnecting')
     await vi.waitFor(() => expect(openRelay).toHaveBeenCalledTimes(2))
     supervisor.stop()

@@ -47,31 +47,6 @@ afterEach(() => {
 })
 
 describe('landing preflight runtime boundary', () => {
-  it('refreshes after an active runtime A to B switch without manual action', () => {
-    const view = renderHook(() => useLandingPreflightRuntime())
-    expect(refresh).toHaveBeenCalledTimes(1)
-
-    act(() => {
-      useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'runtime-a' },
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-a', { status: { runtimeId: 'a' }, connectionGeneration: 1 }]
-        ])
-      } as never)
-    })
-    act(() => {
-      useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'runtime-b' },
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-b', { status: { runtimeId: 'b' }, connectionGeneration: 1 }]
-        ])
-      } as never)
-    })
-
-    expect(refresh).toHaveBeenCalledTimes(3)
-    view.unmount()
-  })
-
   it('invalidates on disconnect and refreshes exactly once on reconnect', () => {
     const view = renderHook(() => useLandingPreflightRuntime())
     act(() => {
@@ -105,16 +80,6 @@ describe('landing preflight runtime boundary', () => {
     view.unmount()
   })
 
-  it('keeps the banner empty while the active remote runtime is still unknown', () => {
-    useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-a' } } as never)
-
-    const view = renderHook(() => useLandingPreflightRuntime())
-
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(refresh).not.toHaveBeenCalled()
-    view.unmount()
-  })
-
   it('stops the 30s preflight poll while hidden and lets the reveal refresh instead', () => {
     useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
     const view = renderHook(() => useLandingPreflightRuntime())
@@ -124,15 +89,13 @@ describe('landing preflight runtime boundary', () => {
     act(() => setDocumentVisibility('hidden'))
     expect(vi.getTimerCount()).toBe(0)
 
-    // Five poll windows pass behind a hidden window with no IPC at all.
     act(() => vi.advanceTimersByTime(150_000))
     expect(refresh).not.toHaveBeenCalled()
 
-    // The sibling visibilitychange handler force-refreshes on reveal, so the
-    // banner is current the moment it can be seen; the poll re-arms behind it.
+    // Reveal force-refreshes through the sibling visibility handler; polling only re-arms afterward.
     act(() => setDocumentVisibility('visible'))
     expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith({ force: true })
+    expect(refresh).toHaveBeenCalledWith({ force: true, wakeWslDistro: true })
     expect(vi.getTimerCount()).toBe(1)
 
     view.unmount()

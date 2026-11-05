@@ -1,10 +1,14 @@
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { disposeWatcherProcess } from '../ipc/parcel-watcher-process'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { disposeWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import {
+  pluginManifestSchema,
+  type PluginManifest
+} from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
   validateDeclaredPluginArtifacts,
@@ -31,7 +35,7 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Demo',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -44,8 +48,7 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  // Why: PluginService may still be releasing in-process Parcel watches; drop
-  // the shared vitest watcher state before deleting roots those watches own.
+  // Release shared Parcel watches before deleting roots they may still own.
   disposeWatcherProcess()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -53,11 +56,7 @@ afterEach(async () => {
 describe('declared plugin artifacts', () => {
   it('validates every content-pack file and directory before enablement', async () => {
     const root = await tempRoot()
-    await Promise.all([
-      mkdir(join(root, 'locales')),
-      mkdir(join(root, 'recipes')),
-      writeFile(join(root, 'agent.json'), '{}')
-    ])
+    await Promise.all([mkdir(join(root, 'locales')), mkdir(join(root, 'recipes'))])
     await Promise.all([
       writeFile(join(root, 'locales', 'pt-BR.json'), '{}'),
       writeFile(join(root, 'recipes', 'vm.json'), '{}')
@@ -65,14 +64,32 @@ describe('declared plugin artifacts', () => {
     const pluginManifest = manifest({
       contributes: {
         languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
-        vmRecipes: [{ path: 'recipes/vm.json' }],
-        agents: [{ path: 'agent.json' }]
+        vmRecipes: [{ path: 'recipes/vm.json' }]
       }
     })
 
     await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toEqual({
       ok: true
     })
+  })
+
+  it('refuses a declared path that differs from the file only by case', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, 'locales'))
+    await writeFile(join(root, 'locales', 'pt-BR.json'), '{}')
+    const pluginManifest = manifest({
+      contributes: { languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-br.json' }] }
+    })
+
+    const result = await validateDeclaredPluginArtifacts(root, pluginManifest)
+    expect(result).toMatchObject({ ok: false })
+    // Why conditional: only case-insensitive filesystems (APFS, NTFS) resolve the wrong spelling.
+    if (existsSync(join(root, 'locales', 'pt-br.json'))) {
+      expect(result).toMatchObject({ error: expect.stringContaining('is spelled "pt-BR.json"') })
+      await expect(
+        validateDeclaredPluginArtifacts(root, pluginManifest, { allowCaseMismatch: true })
+      ).resolves.toEqual({ ok: true })
+    }
   })
 
   it('requires declared files to exist and be regular files', async () => {

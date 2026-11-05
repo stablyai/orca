@@ -9,7 +9,7 @@ export type ProfileStateBackupJob = {
   temporaryPath?: string
 }
 
-/** Own every connection until the copy and its strict validation finish. */
+/** Retain connections through snapshot copy and strict validation. */
 export async function writeProfileStateBackup(job: ProfileStateBackupJob): Promise<void> {
   const opened = openProfileStateDatabaseReadOnly(job.databasePath, job.profileId)
   try {

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
-/** Return the immutable JSON artifact created when a profile first enters SQLite authority. */
+/** Immutable artifact from the initial transition to SQLite authority. */
 export function profileStateJsonExportPath(dataFile: string, revision: number): string {
   if (!Number.isSafeInteger(revision) || revision < 1) {
     throw new Error('Profile state export revision must be a positive safe integer')
@@ -9,7 +9,7 @@ export function profileStateJsonExportPath(dataFile: string, revision: number): 
   return `${dataFile}.sqlite-export.${revision}.json`
 }
 
-/** List retained rollback exports newest-first without opening SQLite. */
+/** Newest-first rollback artifacts, available even if SQLite cannot open. */
 export function profileStateJsonExportPaths(dataFile: string): readonly string[] {
   const directory = dirname(dataFile)
   const prefix = `${basename(dataFile)}.sqlite-export.`

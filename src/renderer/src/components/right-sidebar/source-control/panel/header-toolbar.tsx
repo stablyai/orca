@@ -1,14 +1,14 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
-import type { PrimaryAction } from '../../source-control-primary-action'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
+import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
@@ -235,7 +235,7 @@ export function SourceControlHeaderToolbar({
               <span className="min-w-0 flex-1" aria-hidden="true" />
             )}
             {(visibleCreatePrHeaderAction || suppressedGitHubPRNumber !== null) && !hostedReview ? (
-              // Why: keep filter/overflow pinned right without stretching Create PR.
+              // Pin filter/overflow right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
             <button
@@ -259,8 +259,7 @@ export function SourceControlHeaderToolbar({
           </>
         ) : (
           <>
-            {/* Why: expanded filter owns the toolbar row so typing isn't squeezed
-                beside PR links or overflow actions — collapse to reach those. */}
+            {/* Give expanded search the row so PR links and overflow controls do not squeeze typing. */}
             <div className="flex min-w-0 w-full flex-1 items-center gap-1.5">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
               <ImeInput
@@ -279,7 +278,7 @@ export function SourceControlHeaderToolbar({
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'
                 )}
-                className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
+                className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
                 aria-label={translate(
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'

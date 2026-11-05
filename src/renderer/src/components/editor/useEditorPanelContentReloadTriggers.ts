@@ -51,6 +51,7 @@ export function useEditorPanelContentReloadTriggers({
       activeFileGitStatusEntries.map((entry) => ({
         area: entry.area,
         status: entry.status,
+        oldPath: entry.oldPath,
         conflictStatus: entry.conflictStatus
       }))
     )
@@ -77,8 +78,7 @@ export function useEditorPanelContentReloadTriggers({
       invalidateDiffContent([current.id])
       return
     }
-    // Why: the lazy-load effect already fetches on first open and on a retained
-    // stale entry; forcing here races a duplicate git-diff RPC for the same tab.
+    // Lazy loading already covers first-open/stale diffs; forcing here would duplicate the same RPC.
     const cachedDiff = diffContentsRef.current[current.id]
     if (!cachedDiff || cachedDiff.isStale === true) {
       return

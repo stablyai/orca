@@ -1,12 +1,21 @@
-import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
-import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
-import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
-import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
+import { previewHookPresence } from '../shared/agent-hook-listener/presence/agent-hook-presence-transition'
+import {
+  hasOtherAgentProcessOwner,
+  isSameAgentProcess
+} from '../shared/agent-status/process/agent-process-presence'
+import {
+  readHookProcessEvidence,
+  restateHookRoot
+} from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootAcquisition } from '../shared/agent-hook-listener/presence/hook-root-attempts'
+import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status/identity/agent-status-terminal-owner'
+import { cacheRelayLegacyAgentStatus } from '../shared/agent-status/transport/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
-import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
+import { reduceHostTurnEnd } from '../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -26,23 +35,60 @@ type RelayHookAdmissionHost = {
   checkAgentPresence: (paneKey: string) => Promise<void>
 }
 
+export type RelayHookAdmissionOptions = {
+  isReplay?: boolean
+  checkPresence?: boolean
+  onAccepted?: (event: AgentHookEventPayload) => void
+}
+
+/** The relay's acquisition: a late answer restates the pane's cached row, which forwards like any
+ *  change, so the desktop heals too. */
+export function relayHookRootAcquisition(
+  read: HookRootEvidenceReader | undefined,
+  state: HookListenerState,
+  apply: (event: AgentHookEventPayload) => unknown,
+  answerBy?: number
+): HookRootAcquisition | undefined {
+  return (
+    read && {
+      read,
+      answerBy,
+      reconcile: (completion) => {
+        const event = restateHookRoot(state, completion, 'AgentProcessExit')
+        if (event) {
+          apply(event)
+        }
+      }
+    }
+  )
+}
+
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  options: RelayHookAdmissionOptions = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  const evidence = readHookProcessEvidence(host.state, previous, {
+    paneKey: incoming.paneKey,
+    process: incoming.agentPresence?.process
+  })
   if (
     previous &&
     !previous.providerSessionOnly &&
     sameAgentStatusTerminalOwner(previous, incoming) &&
-    hasOtherAgentProcessOwner(previous.agentPresence, incoming.payload.agentType ?? 'unknown')
+    // A proved root replaces a fallback owner instead of yielding to it.
+    evidence?.verdict !== 'root' &&
+    hasOtherAgentProcessOwner(previous.agentPresence, {
+      agent: incoming.payload.agentType ?? 'unknown',
+      process: incoming.agentPresence?.process
+    })
   ) {
     return undefined
   }
@@ -50,15 +96,24 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const transitioned = transitionHookPresence(cancellation.event, previous)
+  const preview = previewHookPresence(
+    cancellation.event,
+    previous,
+    true,
+    false,
+    evidence?.verdict,
+    evidence?.binding
+  )
+  const transitioned = preview.transitioned && {
+    ...preview.transitioned,
+    statusAdmissionSession: incoming.statusAdmissionSession
+  }
   if (!transitioned) {
     return undefined
   }
   const revised = withRelayClaudeTurnRevision(
     previous,
-    transitioned.agentPresence?.ended
-      ? { ...transitioned, providerSessionOnly: true }
-      : transitioned,
+    preview.exited ? { ...transitioned, providerSessionOnly: true } : transitioned,
     source
   )
   // Why: the relay is this pane's execution host, the only side that sees the event name.
@@ -74,10 +129,7 @@ export function applyRelayHookEvent(
     ...unflagged,
     ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
   }
-  // Why: this post came from a process still running inside a pane whose tab the user closed.
-  // Caching or forwarding it makes every connected client advertise a live, resumable agent pane
-  // that no tab owns — the advertisement that ends up auto-typing a second `--resume` onto a
-  // transcript the orphan is still writing (#12447). Drop the stale cache with it.
+  // Drop retired-pane posts and cached status so clients cannot auto-resume a ghost pane onto an orphan’s live transcript (#12447).
   if (host.isPaneSurfaceRetired(event.paneKey)) {
     host.clearPaneState(event.paneKey)
     return undefined
@@ -85,9 +137,7 @@ export function applyRelayHookEvent(
   if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
     host.clearAssistantMessageRetry(event.paneKey)
   }
-  // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when
-  // it reconnects. Stripping it would let a cold relay replay a completion as an ordinary `done`
-  // row and resurrect a pane that the client had already retired.
+  // Retain PostCompact replay identity so reconnect can recheck ownership instead of resurrecting a retired pane.
   if (
     !cacheRelayLegacyAgentStatus(host.state, event, MAX_CACHED_PANES, (paneKey) =>
       host.clearPaneState(paneKey)
@@ -107,6 +157,7 @@ export function applyRelayHookEvent(
     version,
     ...(claudeSettledRequests ? { claudeSettledRequests } : {})
   })
+  options.onAccepted?.(event)
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

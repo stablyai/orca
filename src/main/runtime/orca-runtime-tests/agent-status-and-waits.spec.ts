@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   expectStablePaneKeyEnv,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('preserves OSC 9999 parser state for rendererless background PTYs', async () => {
@@ -17,7 +20,7 @@ describe('OrcaRuntimeService', () => {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -41,7 +44,6 @@ describe('OrcaRuntimeService', () => {
         tabId: spawnedEnv.ORCA_TAB_ID,
         worktreeId: TEST_WORKTREE_ID,
         connectionId: null,
-        // The pane's handle rides the event so the store's row can rejoin its terminal.
         terminalHandle: expect.stringMatching(/^term_/),
         payload: {
           state: 'done',

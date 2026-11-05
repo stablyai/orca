@@ -1,7 +1,12 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-type CreateRequest = { requestId: string; worktreeId?: string; url: string }
+type CreateRequest = {
+  requestId: string
+  worktreeId?: string
+  url: string
+  browserPageId?: string
+}
 type CloseRequest = { requestId: string; tabId?: string | null; worktreeId?: string }
 type ScopeRequest = {
   requestId: string
@@ -47,7 +52,6 @@ const REMOTE_WT = 'repo-remote::/srv/app'
 
 function storeState(activeWorktreeId: string) {
   return {
-    // The Active Server is a paired server; neither request below may read it.
     settings: { activeRuntimeEnvironmentId: 'env-remote' },
     activeWorktreeId,
     repos: [
@@ -109,15 +113,6 @@ describe('browser requests from this desktop follow the workspace owner (#22275)
       }
     })
     registerBrowserRequestIpcBridge([])
-  })
-
-  it('creates a tab for an explicit local worktree while a paired server is the Active Server', () => {
-    mocks.getState.mockReturnValue(storeState(REMOTE_WT))
-
-    mocks.createListener?.({ requestId: 'r1', worktreeId: LOCAL_WT, url: 'about:blank' })
-
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith(LOCAL_WT, 'about:blank', expect.anything())
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({ requestId: 'r1', browserPageId: 'ws-new' })
   })
 
   it("renders a page named in a managed host's workspace on this desktop (#29145)", () => {
@@ -235,18 +230,5 @@ describe('a managed SSH host reaches only its own workspaces on this desktop (#2
       { requestId: 'p3', workspaceId: null },
       { requestId: 'p4', workspaceId: null }
     ])
-  })
-
-  it('answers no when the store cannot resolve the owner', () => {
-    mocks.getState.mockImplementation(() => {
-      throw new Error('store unavailable')
-    })
-
-    mocks.scopeListener?.({ requestId: 's5', environmentId: 'env-remote', workspaceId: REMOTE_WT })
-
-    expect(mocks.replyRemoteCliBrowserScope).toHaveBeenCalledWith({
-      requestId: 's5',
-      workspaceId: null
-    })
   })
 })

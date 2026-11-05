@@ -1,14 +1,10 @@
-import type { PrimaryAction } from '../../source-control-primary-action-types'
-import { resolveCreateReviewIntentEligibility } from '../../../../../../shared/source-control-create-review-intent'
-
-export const resolveCreatePrIntentEligibility = resolveCreateReviewIntentEligibility
+import type { PrimaryAction } from './source-control-primary-action-types'
 
 export function resolveVisibleCreatePrHeaderAction({
   createPrHeaderAction
 }: {
   createPrHeaderAction: PrimaryAction | null
 }): PrimaryAction | null {
-  // Why: keep a stable header anchor; disable Create PR when the branch is not
-  // ready instead of hiding it and shifting the toolbar layout.
+  // Disable rather than hide Create PR to keep the toolbar stable.
   return createPrHeaderAction
 }

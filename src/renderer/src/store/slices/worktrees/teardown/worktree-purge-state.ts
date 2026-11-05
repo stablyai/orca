@@ -18,6 +18,8 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
+import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
@@ -28,20 +30,35 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
  */
 export function buildWorktreePurgeState(
   s: AppState,
-  worktreeTargets: WorktreePurgeTargets
+  worktreeTargets: WorktreePurgeTargets,
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
   const twinScopes = collectHostTwinPurgeScopes(s, targets)
   if (twinScopes.size === 0) {
-    return buildFullWorktreePurgeState(s, targets)
+    return buildFullWorktreePurgeState(s, targets, changedPaneKeys)
   }
   const twinIds = new Set([...twinScopes.values()].flatMap((twins) => [...twins.keys()]))
   const fullTargets = targets.filter((target) => !target.hostId || !twinIds.has(target.id))
-  let patch = fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets) : {}
+  let patch =
+    fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets, changedPaneKeys) : {}
   for (const [hostId, twinHostIds] of twinScopes) {
-    patch = { ...patch, ...buildHostTwinPurgeState({ ...s, ...patch }, hostId, twinHostIds) }
+    const twinPatch = buildHostTwinPurgeState(
+      { ...s, ...patch },
+      hostId,
+      twinHostIds,
+      changedPaneKeys
+    )
+    patch = {
+      ...patch,
+      ...twinPatch,
+      editorBufferKeepRequest: mergeEditorBufferKeepRequests(
+        patch.editorBufferKeepRequest,
+        twinPatch.editorBufferKeepRequest
+      )
+    }
   }
   // Why both hosts: a paired runtime's copy writes recency and delete state under either identity.
   const hostKeys = [
@@ -67,7 +84,8 @@ export function buildWorktreePurgeState(
 /** Drops every bucket under the targets' ids; visit recency alone stays host-scoped. */
 export function buildFullWorktreePurgeState(
   s: AppState,
-  normalizedTargets: readonly WorktreePurgeTarget[]
+  normalizedTargets: readonly WorktreePurgeTarget[],
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
@@ -92,6 +110,7 @@ export function buildFullWorktreePurgeState(
   forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, worktreeIdSet, doomed)
   const {
     omitByWorktree,
@@ -131,32 +150,33 @@ export function buildFullWorktreePurgeState(
   }
 
   return {
+    editorBufferKeepRequest,
     ...removeWorktreeLayout(s, {
       worktreeIds: worktreeIdSet,
       tabIds: doomed.doomedTabIds,
       activeFileCleared
     }),
-    ...buildWorktreePurgeSurfacePatch(s, omitters, doomed.doomedTabIds, nextSleeping),
-    // Worktree-scoped terminal/tab state
+    ...buildWorktreePurgeSurfacePatch(
+      s,
+      omitters,
+      doomed.doomedTabIds,
+      nextSleeping,
+      changedPaneKeys
+    ),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
-    // Delete state
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
       s.deleteStateByWorktreeId,
       worktreeIdSet
     ),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
     remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
-    // File search
     fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
     recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
-    // Editor state
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
     rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
     rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),
-    // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
-    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (upstream-status entry).
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
     gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
@@ -169,22 +189,19 @@ export function buildFullWorktreePurgeState(
     gitBranchCompareRequestStatusHeadByWorktree: omitByWorktree(
       s.gitBranchCompareRequestStatusHeadByWorktree
     ),
-    // Why: keyed by worktreeId; without this it leaks a huge-status marker per removed worktree.
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+    gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
-    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (editor-undo / Cmd+Shift+T snapshots).
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
     recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
-    // Top-level actives
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
     lastVisitedAtByWorktreeId: removeWorktreeVisitEntriesForTargets(
       s.lastVisitedAtByWorktreeId,
       normalizedTargets
     ),
-    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (write-once default-terminal guard).
     defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
       s.defaultTerminalTabsAppliedByWorktreeId
     ),

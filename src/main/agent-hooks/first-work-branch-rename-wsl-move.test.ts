@@ -17,7 +17,10 @@ const { gitExecFileAsyncMock, generateBranchNameMock, resolveTextGenerationParam
     resolveTextGenerationParamsMock: vi.fn()
   }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: vi.fn(async () => 'you') }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
@@ -73,6 +76,7 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   resetWslMoveFenceForTests()
   rmSync(userDataPath, { recursive: true, force: true })
 })
@@ -89,7 +93,6 @@ describe('first-work rename while a WSL move takes the project', () => {
     expect(setDisplayName).not.toHaveBeenCalled()
     expect(setRenameError).not.toHaveBeenCalled()
 
-    // A transient bail, not a settled verdict: once the move settles the next event renames.
     resetWslMoveFenceForTests()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['branch', '-m', 'you/fix-auth'], {
@@ -148,7 +151,6 @@ describe('first-work rename while a WSL move takes the project', () => {
     expect(setDisplayName).not.toHaveBeenCalled()
     expect(setRenameError).not.toHaveBeenCalled()
 
-    // Still pending: once the move settles the next event renames.
     resetWslMoveFenceForTests()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['branch', '-m', 'you/fix-auth'], {
@@ -180,7 +182,6 @@ describe('first-work rename while a WSL move takes the project', () => {
     })
     expect(renameWorktreeFolder).not.toHaveBeenCalled()
 
-    // The branch already has its new name, so the rename is settled: a later event never renames again.
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     const branchRenames = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'branch' && args[1] === '-m'
@@ -200,7 +201,7 @@ describe('first-work rename while a WSL move takes the project', () => {
 
   it('leaves the same repo id on another host to its own host', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-    const { deps } = makeDeps({
+    const { deps, setDisplayName } = makeDeps({
       getRepo: () => ({ ...LOCAL_REPO, executionHostId: 'runtime:env-1' })
     })
 
@@ -208,15 +209,19 @@ describe('first-work rename while a WSL move takes the project', () => {
 
     expect(info).toHaveBeenCalledWith(expect.stringContaining('branch is owned by runtime:env-1'))
     expect(info).not.toHaveBeenCalledWith(expect.stringContaining('WSL move'))
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(setDisplayName).not.toHaveBeenCalled()
     info.mockRestore()
   })
 
   it('keeps a moving folder workspace title pending', async () => {
+    let moving = true
     const { deps, setDisplayName, setRenameError } = makeDeps({
       resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
       getFolderWorkspacePath: () => '/workspace/platform',
       isPendingFirstAgentMessageRename: () => true,
-      isFolderWorkspaceWslMoveBlocked: () => true
+      isFolderWorkspaceWslMoveBlocked: () => moving
     })
 
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -224,5 +229,9 @@ describe('first-work rename while a WSL move takes the project', () => {
     expect(generateBranchNameMock).not.toHaveBeenCalled()
     expect(setDisplayName).not.toHaveBeenCalled()
     expect(setRenameError).not.toHaveBeenCalled()
+    moving = false
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
+    expect(setDisplayName).toHaveBeenCalled()
   })
 })

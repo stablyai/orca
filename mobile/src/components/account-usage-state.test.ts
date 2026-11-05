@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getInactiveProviderUsage,
+  decodeAccountsSnapshot,
+  getOtherUsageProviders,
   getUsageBarState,
-  getWindowResetLabel,
   hasActiveProviderUsage,
   hasRenderableUsage,
+  type AccountProviderRateLimits,
   type AccountsSnapshot,
   type InactiveAccountUsage,
   type ProviderRateLimits
 } from './account-usage-state'
 
-function makeLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
+function makeLimits(overrides: Partial<AccountProviderRateLimits> = {}): AccountProviderRateLimits {
   return {
     provider: 'claude',
     session: null,
@@ -26,8 +28,8 @@ function makeLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLi
 
 function makeSnapshot(
   overrides: {
-    claudeLimits?: ProviderRateLimits | null
-    codexLimits?: ProviderRateLimits | null
+    claudeLimits?: AccountProviderRateLimits | null
+    codexLimits?: AccountProviderRateLimits | null
     claudeAccounts?: AccountsSnapshot['claude']['accounts']
     codexAccounts?: AccountsSnapshot['codex']['accounts']
     inactiveClaudeAccounts?: InactiveAccountUsage[]
@@ -90,8 +92,7 @@ describe('hasRenderableUsage', () => {
     expect(hasRenderableUsage(snapshot, 'claude')).toBe(true)
   })
 
-  // The bug: system-default auth has zero managed accounts but real usage data,
-  // and the home screen used to hide it entirely.
+  // System-default auth has no managed accounts but real usage; home must not hide it.
   it('is true with zero managed accounts when active rate-limit data exists (system default)', () => {
     const snapshot = makeSnapshot({
       codexLimits: makeLimits({
@@ -128,84 +129,77 @@ describe('getInactiveProviderUsage', () => {
   })
 })
 
-describe('getWindowResetLabel', () => {
-  const now = 1_700_000_000_000
-  const min = 60_000
-  const hour = 60 * min
-  const day = 24 * hour
-
-  function makeWindow(resetsAt: number | null): ProviderRateLimits['session'] {
-    return { usedPercent: 13, windowMinutes: 300, resetsAt, resetDescription: null }
-  }
-
-  it('is null when there are no limits or the window has no reset timestamp', () => {
-    expect(getWindowResetLabel(null, 'session', now)).toBe(null)
-    expect(getWindowResetLabel(makeLimits({ status: 'ok' }), 'session', now)).toBe(null)
-    expect(
-      getWindowResetLabel(makeLimits({ status: 'ok', session: makeWindow(null) }), 'session', now)
-    ).toBe(null)
-  })
-
-  it('formats minutes, hours+minutes, and days+hours like the desktop tooltip', () => {
-    expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(now + 47 * min) }), 'session', now)
-    ).toBe('Resets in 47m')
-    expect(
-      getWindowResetLabel(
-        makeLimits({ session: makeWindow(now + 3 * hour + 54 * min) }),
-        'session',
-        now
-      )
-    ).toBe('Resets in 3h 54m')
-    expect(
-      getWindowResetLabel(
-        makeLimits({ weekly: makeWindow(now + 6 * day + 7 * hour) }),
-        'weekly',
-        now
-      )
-    ).toBe('Resets in 6d 7h')
-  })
-
-  it('formats exact hours and exact days without a zero remainder', () => {
-    expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(now + 2 * hour) }), 'session', now)
-    ).toBe('Resets in 2h')
-    expect(
-      getWindowResetLabel(makeLimits({ weekly: makeWindow(now + 7 * day) }), 'weekly', now)
-    ).toBe('Resets in 7d')
-  })
-
-  it('reports "Resets now" for a reset timestamp in the past', () => {
-    expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(now - min) }), 'session', now)
-    ).toBe('Resets now')
-  })
-
-  it('reads the requested window only', () => {
-    const limits = makeLimits({ session: makeWindow(now + hour) })
-    expect(getWindowResetLabel(limits, 'weekly', now)).toBe(null)
-  })
-})
-
 describe('getUsageBarState', () => {
   it('keeps stale window data visible during a transient error', () => {
+    const session = { usedPercent: 72, windowMinutes: 300, resetsAt: null, resetDescription: null }
     const bar = getUsageBarState(
-      makeLimits({
-        status: 'error',
-        error: 'temporarily unavailable',
-        session: { usedPercent: 72, windowMinutes: 300, resetsAt: null, resetDescription: null }
-      }),
-      'session'
+      makeLimits({ status: 'error', error: 'temporarily unavailable', session }),
+      session
     )
 
     expect(bar).toEqual({ usedPercent: 72, unavailable: false, loading: false })
   })
 
   it('shows loading for a fetching provider without a window', () => {
-    expect(getUsageBarState(makeLimits({ status: 'fetching' }), 'weekly')).toEqual({
+    expect(getUsageBarState(makeLimits({ status: 'fetching' }), null)).toEqual({
       usedPercent: null,
       unavailable: false,
       loading: true
     })
+  })
+})
+
+function providerLimits(
+  provider: string,
+  overrides: Partial<ProviderRateLimits>
+): ProviderRateLimits {
+  return { ...makeLimits(), ...overrides, provider }
+}
+
+describe('getOtherUsageProviders', () => {
+  it('lists every set-up provider the host sends, in host order, beside Claude and Codex', () => {
+    const week = { usedPercent: 12, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
+    const host = makeSnapshot({ claudeLimits: makeLimits({ status: 'ok', weekly: week }) })
+    const snapshot = decodeAccountsSnapshot({
+      ...host,
+      rateLimits: {
+        ...host.rateLimits,
+        gemini: providerLimits('gemini', {
+          status: 'unavailable',
+          error: 'OAuth disabled'
+        }),
+        antigravity: providerLimits('antigravity', {
+          status: 'ok',
+          buckets: [
+            { name: 'Gemini Models', group: 'Gemini Models', ...week },
+            { name: 'Claude and GPT models', ...week, windowMinutes: 0 }
+          ]
+        }),
+        kimi: providerLimits('kimi', {
+          status: 'idle'
+        }),
+        grok: providerLimits('grok', {
+          status: 'ok',
+          weekly: week
+        }),
+        cursor: providerLimits('cursor', {
+          status: 'error',
+          error: 'Cursor is down'
+        }),
+        'future-agent': providerLimits('future-agent', {
+          status: 'ok',
+          monthly: week
+        }),
+        broken: { provider: 'broken', status: 'ok', weekly: { usedPercent: 'lots' } },
+        grokAuthConfigured: true
+      }
+    })
+
+    expect(getOtherUsageProviders(snapshot).map((limits) => limits.provider)).toEqual([
+      'antigravity',
+      'grok',
+      'cursor',
+      'future-agent'
+    ])
   })
 })

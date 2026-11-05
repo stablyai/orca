@@ -1,8 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
+import type { MobileRelayMintFailure } from '../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import type { PreloadApi } from '../api-types'
 
 export const mobileApi = {
@@ -24,11 +24,9 @@ export const mobileApi = {
     | {
         available: true
         qrDataUrl: string | null
-        /** Natural bitmap width and height in pixels. */
         qrSize: number | null
         qrError?: 'encoding_failed'
         pairingUrl: string
-        /** Null when no direct address was advertised — the QR pairs over Relay alone. */
         endpoint: string | null
         deviceId: string
         connectionMode: MobilePairingConnectionMode
@@ -45,8 +43,7 @@ export const mobileApi = {
   getRuntimePairingUrl: (args?: {
     address?: string
     rotate?: boolean
-    // Why: the widen is one-way and host-wide, so main must gate it on the reach the user picked, not
-    // on how the typed address happens to look (a Custom loopback may front an SSH tunnel).
+    // Gate host-wide exposure on the chosen reach: a loopback address may front an SSH tunnel.
     reach?: RuntimePairingReach
   }): Promise<
     | { available: false; reason?: 'network_exposure_failed'; guidance?: string }
@@ -71,9 +68,6 @@ export const mobileApi = {
   revokeRuntimeAccess: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
     ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
 
-  isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
-    ipcRenderer.invoke('mobile:isWebSocketReady'),
-
   getRelayStatus: (): Promise<MobileRelayStatusDetail> =>
     ipcRenderer.invoke('mobile:getRelayStatus'),
 
@@ -87,7 +81,6 @@ export const mobileApi = {
   consumePendingUnpairedDeviceAuthFailure: (): Promise<boolean> =>
     ipcRenderer.invoke('mobile:consumePendingUnpairedDeviceAuthFailure'),
 
-  /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
   onUnpairedDeviceAuthFailure: (callback: () => void): (() => void) => {
     const listener = () => callback()
     ipcRenderer.on('mobile:unpairedDeviceAuthFailure', listener)

@@ -5,12 +5,12 @@ import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
-import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session/workspace-session-terminal-tab-close'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { DelayedAuthority } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { Store } from '../persistence/loading-store/store'
 import { OrcaRuntimeService } from './orca-runtime'
-import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
+import { buildHeadlessMobileSessionTerminalTabs } from './terminal/surface/mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
@@ -88,8 +88,11 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
   setRuntimeDesktopSurface({
     showNotification: () => false,
     findWindowById: () => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks window and WebContents destruction.
-      return { isDestroyed: () => false, webContents: { isDestroyed: () => false } } as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exercised close path only checks destruction and, for a paired client's close, throttling.
+      return {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => false, setBackgroundThrottling: () => {} }
+      } as never
     },
     onIpc: () => {},
     removeIpcListener: () => {}
@@ -175,7 +178,6 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     splitTerminal: () => {},
     renameTerminal: () => {},
     focusTerminal: () => {},
-    sleepWorktree: () => {},
     terminalFitOverrideChanged: () => {},
     terminalDriverChanged: () => {}
   })

@@ -2,15 +2,15 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
   type TerminalReplyQueryScanState,
   type TerminalReplyQuerySequence
-} from '../../../../../shared/terminal-reply-query-scan'
-import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
 import { createTerminalOutputBatcher, type TerminalOutputBatcher } from './terminal-output-batcher'
 import { trimPendingOutputToBudget } from './terminal-stream-replay'
@@ -66,7 +66,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     unsubscribeFit()
     unregisterBinaryHandler()
     abortRendererMountWait()
-    // Why: phone presence belongs to the registration; only a desktop viewer owns a width floor here.
+    // Registration owns phone presence; only desktop viewers take width floors here.
     if (!isMobile && registeredRemoteDesktopDriver && clientId) {
       runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
     }
@@ -83,7 +83,9 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     if (closed || !sendBinary) {
       return
     }
-    sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }))
+    sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }), {
+      compressible: true
+    })
   }
   outputBatcher = createTerminalOutputBatcher((data, meta) => {
     if (meta?.cwd !== undefined) {
@@ -93,7 +95,8 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
         meta.seq
       )
     }
-    for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+    // Why text: phones before this release can't decode OutputSpan, so a span here is output they drop.
+    for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'text')) {
       sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
     }
   })
@@ -158,8 +161,12 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     }
     outputBatcher?.push(data, meta)
   })
-  // Why: capture live bytes before mobile-fit awaits; registering presence first would suppress main while no view held the query.
-  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
+  // Capture live bytes before fit awaits; early presence would suppress main before any view could answer queries.
+  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
+    ptyId,
+    undefined,
+    isMobile ? clientId : undefined
+  )
   unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()

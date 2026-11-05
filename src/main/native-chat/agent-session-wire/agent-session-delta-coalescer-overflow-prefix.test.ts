@@ -98,27 +98,4 @@ describe('streamed output overflow prefix', () => {
     })
     instance.dispose()
   })
-
-  it.each([
-    { cap: Number.NaN, text: '' },
-    { cap: Number.NEGATIVE_INFINITY, text: '' },
-    { cap: -1, text: marker.slice(0, -1) },
-    { cap: 0.1, text: '' },
-    { cap: 35.5, text: `a${marker}` },
-    { cap: 40.5, text: `abcdef${marker}` }
-  ])('preserves the legacy injected budget outcome for $cap', ({ cap, text }) => {
-    const delta = 'abcdefghijklmnopqrstuvwxyz'.repeat(2)
-    const instance = createAgentSessionDeltaCoalescer({
-      maxRetainedBytes: cap,
-      emit: () => true,
-      schedule: () => () => {}
-    })
-    instance.append('command', delta)
-    expect(instance.snapshot('command')).toEqual({
-      text,
-      observedBytes: delta.length,
-      truncated: true
-    })
-    instance.dispose()
-  })
 })

@@ -42,6 +42,9 @@ describe('classifyWorktreeShowResponse', () => {
       'unknown'
     )
     expect(classifyWorktreeShowResponse(failure('runtime_busy', 'Runtime busy'))).toBe('unknown')
+    expect(classifyWorktreeShowResponse(failure('permission_denied', 'selector_not_found'))).toBe(
+      'unknown'
+    )
   })
 
   it('does not read prose that merely mentions the token as missing', () => {

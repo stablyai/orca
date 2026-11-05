@@ -1,9 +1,17 @@
+import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { AgentPickerSetupIdentity } from '../agent/agent-launch-picker-drafts'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import {
+  orderAgentLaunchPickerAgents,
+  type NewTabAgentMenuRow
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -12,6 +20,9 @@ export type TabAgentLaunchOption = {
   disabled?: boolean
   id?: string
   row?: NewTabAgentMenuRow
+  setup?: AgentPickerDraft
+  preset?: AgentPickerSetupIdentity
+  pickerEntry?: AgentPickerEntry
   reason?: string
 }
 
@@ -32,14 +43,7 @@ export function orderTabLaunchAgents(
   detected: readonly TuiAgent[],
   disabled?: Iterable<unknown> | null
 ): TuiAgent[] {
-  const enabledDetected = filterEnabledTuiAgents(detected, disabled)
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => enabledDetected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
+  return orderAgentLaunchPickerAgents(defaultAgent, detected, disabled)
 }
 
 export function buildTabAgentLaunchOptions(
@@ -91,10 +95,27 @@ export function buildTabAgentLaunchOptionsFromRows(
   })
 }
 
-// Scores how well a query matches an agent. Exact alias equality is the
-// strongest signal; otherwise every query token must prefix some alias token.
-// Why prefix-only (not substring): agent rows rank above file matches, so a
-// mid-string match like "ode" → "opencode" would noisily hijack the list.
+export function buildAgentPickerLaunchOptions(
+  entries: readonly AgentPickerEntry[],
+  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+): TabAgentLaunchOption[] {
+  return entries.flatMap((entry) => {
+    const row = entry.rows.find((row) =>
+      entry.defaultSurface === 'chat'
+        ? row.kind === 'chat'
+        : row.kind === 'cli' || row.kind === 'terminal'
+    )
+    return row
+      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides).map((option) => ({
+          ...option,
+          label: entry.label,
+          pickerEntry: entry
+        }))
+      : []
+  })
+}
+
+// Require exact aliases or token prefixes; substring hits would outrank files and hijack the omnibox.
 function scoreAgentLaunchOption(
   normalizedQuery: string,
   compactQuery: string,
@@ -115,9 +136,7 @@ function scoreAgentLaunchOption(
       if (candidateToken === queryToken) {
         best = Math.max(best, 3)
       } else if (queryToken.length >= 2 && candidateToken.startsWith(queryToken)) {
-        // Why: a single-character prefix matches almost every agent, flooding the
-        // list and letting one keystroke auto-launch the wrong agent; require an
-        // exact token match below 2 chars.
+        // Require exact tokens below two characters to avoid accidental one-keystroke agent launches.
         best = Math.max(best, 2)
       }
     }
@@ -155,4 +174,42 @@ export function findMatchingTabAgentLaunchOptions(
       )
       .map((entry) => entry.option)
   )
+}
+
+export function matchingAgentPickerLaunchOptions(
+  entries: readonly AgentPickerEntry[],
+  query: string
+): TabAgentLaunchOption[] {
+  return searchAgentPickerSetups(entries, query).map((setup) => {
+    const surface = setup.entry.defaultSurface
+    return {
+      agent: setup.entry.agent,
+      label: setup.label,
+      aliases: [],
+      id: `setup:${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}:${surface}`,
+      row: {
+        agent: setup.entry.agent,
+        kind: surface === 'chat' ? 'chat' : 'cli',
+        executionHostId: setup.entry.rows[0]?.executionHostId
+      },
+      preset: { model: setup.model.id, effort: setup.choices.options?.effort },
+      setup: { agent: setup.entry.agent, surface, choices: setup.choices },
+      pickerEntry: setup.entry
+    }
+  })
+}
+
+export function configuredAgentPickerLaunchOption(
+  option: TabAgentLaunchOption,
+  draft: AgentPickerDraft
+): TabAgentLaunchOption {
+  return {
+    ...option,
+    row: {
+      agent: draft.agent,
+      kind: draft.surface === 'chat' ? 'chat' : 'cli',
+      executionHostId: option.row?.executionHostId
+    },
+    setup: draft
+  }
 }

@@ -1,9 +1,10 @@
-import { planCommitMessageGeneration } from '../../../shared/commit-message-plan'
+import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { planCommitMessageGeneration } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlTextActionId
-} from '../../../shared/source-control-ai-actions'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
+} from '../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { translate } from '@/i18n/i18n'
 
 export type SourceControlGenerationPlanResult =
@@ -50,12 +51,7 @@ const SYNTHETIC_BASE_PROMPTS: Record<SourceControlTextActionId, string> = {
   branchName: 'Generate a git branch name for a synthetic task.'
 }
 
-/**
- * Validates a recipe, so it always renders against the synthetic context above.
- * Workspace values must not leak in here: the recipe is saved repo- or globally
- * scoped, and gating it on the active workspace's `{linkedIssue}` would disable
- * Save/Generate for a template that is not actually empty.
- */
+/** Validate saved repo/global recipes against synthetic context; active linkedIssue must not disable Save/Generate for otherwise valid templates. */
 export function planSourceControlTextGeneration(
   actionId: SourceControlTextActionId,
   params: ResolvedSourceControlAiGenerationParams
@@ -78,10 +74,11 @@ export function planSourceControlTextGeneration(
   }
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
-    return { ok: false, error: planned.error }
+    return { ok: false, error: textGenerationErrorText(planned) }
   }
-  const delivery =
-    planned.plan.stdinPayload === null
+  const delivery = planned.plan.promptFile
+    ? 'Prompt is delivered as a temporary file attachment.'
+    : planned.plan.stdinPayload === null
       ? 'Prompt is delivered as command arguments.'
       : 'Prompt is piped to the agent over stdin.'
   return {

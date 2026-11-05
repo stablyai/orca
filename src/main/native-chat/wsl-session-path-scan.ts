@@ -168,10 +168,7 @@ function findSessionPath(
   return paths.find((path) => fileMatchesId(path, sessionId)) ?? null
 }
 
-/**
- * Find one session's transcript under a `\\wsl.localhost` root. Concurrent lookups
- * share one tree walk per root; a shared miss is refreshed for post-start file creation.
- */
+/** Share one walk per WSL root; refresh misses to discover transcripts created after startup. */
 export async function findWslSessionPath(
   agent: SessionIdLookupAgent,
   root: string,

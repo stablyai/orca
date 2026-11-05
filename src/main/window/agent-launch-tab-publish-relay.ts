@@ -6,7 +6,7 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishReply,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 
 const AGENT_LAUNCH_TAB_PUBLISH_TIMEOUT_MS = 10_000
 
@@ -35,7 +35,7 @@ export function requestAgentLaunchTabPublishFromRenderer(
       AGENT_LAUNCH_TAB_PUBLISH_TIMEOUT_MS
     )
     const onReply = (event: Electron.IpcMainEvent, reply: AgentLaunchTabPublishReply): void => {
-      // Why: request ids are visible to renderer code; only the targeted window may answer.
+      // Renderer-visible request IDs grant no authority; accept only the targeted window's reply.
       if (event.sender !== webContents || reply.requestId !== requestId) {
         return
       }

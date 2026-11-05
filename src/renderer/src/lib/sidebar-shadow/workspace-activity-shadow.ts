@@ -2,7 +2,7 @@ import type { AppState } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
-import { getWorktreeIdsWithStructuredChat } from '@/components/sidebar/visible-worktree-activity-inputs'
+import { getWorktreeIdsWithStructuredChat } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -62,9 +62,7 @@ export function readWindowWorkspaceActivityFacts(
   return facts
 }
 
-// The local runtime answers for the rows it owns; a paired server publishes its own rows' facts.
-// The window keys activity by bare id, so an id a paired server also lists cannot be attributed
-// to one host and is left out; an id with no owner in the catalog is no row.
+// Attribute local activity only to unique catalog IDs; bare IDs shared with paired servers are ambiguous, while unknown IDs name no row.
 export function toLocallyOwnedRows<Value>(
   state: AppState,
   values: ReadonlyMap<string, Value>

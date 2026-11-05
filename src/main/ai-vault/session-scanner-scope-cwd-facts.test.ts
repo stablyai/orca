@@ -8,12 +8,12 @@ import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
-} from './session-parse-cache-persistence'
-import { resetSessionParseCacheForTests } from './session-parse-cache-store'
+} from './parse-cache/session-parse-cache-persistence'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import { scanAiVaultSessions } from './session-scanner'
 import SyncDatabase from '../sqlite/sync-database'
-import { SessionParseCacheDatabase } from './session-parse-cache-database'
-import { parseAgentSessionFileCached } from './session-scanner-parse-cache'
+import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
+import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 const reads = vi.hoisted((): string[] => [])
@@ -63,10 +63,9 @@ it.each([false, true])('keeps cold authority with read failure=%s', async (failR
     )
     if (index === 0) {
       const context = jsonLines([{ type: 'turn_context', payload: { cwd: '/repo' } }])
+      const { atime, mtime } = await stat(path)
       await appendFile(path, `\n${context}\n`)
-      // Why: the append stamps wall-clock mtime, which overtakes the busy files once real time passes their date.
-      const day1 = new Date(Date.UTC(2026, 9, 1, 10))
-      await utimes(path, day1, day1)
+      await utimes(path, atime, mtime)
     }
     const { mtimeMs, size: sizeBytes, mtime } = await stat(path)
     const parsed = await parseAgentSessionFileCached(
@@ -187,7 +186,6 @@ it('settles out-of-scope transcripts once and reads none of them after a restart
 
   const listed = (await scan()).sessions.map((session) => session.cwd)
   expect(listed.filter((cwd) => cwd === '/repo')).toHaveLength(1)
-  // The walked Grok session was ruled out from summary.json, never its history.
   expect(reads).not.toContain(join(others[2], 'chat_history.jsonl'))
 
   await flushSessionParseCachePersist()

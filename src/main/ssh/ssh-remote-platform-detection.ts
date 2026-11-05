@@ -14,6 +14,8 @@ import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-pla
 import { powerShellCommand } from './ssh-remote-powershell'
 
 const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
+/** The probe's marker-backed line starts with this. */
+export const UNAME_PLATFORM_PROBE_MARKER = `${PLATFORM_PROBE_MARKER} `
 const MAX_UNAME_FIELD_CHARS = 64
 const MAX_THROWN_OUTPUT_CHARS = 200
 const MAX_LOGGED_OUTPUT_CHARS = 1000
@@ -23,6 +25,15 @@ type PlatformProbeOutcome =
   | { kind: 'unsupported'; uname: string }
   | { kind: 'unparsed'; output: string }
   | { kind: 'failed'; error: unknown }
+
+/** The POSIX platform probe, for callers that fold it into a command of their own. */
+export const UNAME_PLATFORM_PROBE_COMMAND = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
+
+/** The platform a probe's output proves; null for unsupported, unparsed or startup-noise output. */
+export function remoteHostPlatformFromUnameProbe(output: string): RemoteHostPlatform | null {
+  const outcome = parseRemotePlatformOutput(output)
+  return outcome.kind === 'detected' ? getRemoteHostPlatform(outcome.platform) : null
+}
 
 export async function detectRemoteHostPlatform(
   conn: RemoteInstallTransport,
@@ -39,8 +50,7 @@ export async function detectRemoteHostPlatform(
   if (windows.kind === 'detected') {
     return getRemoteHostPlatform(windows.platform)
   }
-  // Why: only the PowerShell probe can settle a uname the parser cannot map
-  // (Cygwin, say), so a refused or timed-out channel leaves it unsettled.
+  // Only PowerShell can resolve unmapped uname such as Cygwin; unanswered probe keeps platform unknown.
   const windowsProbeNeverRan = windows.kind === 'failed' && isTransportFailure(windows.error)
   if ((uname.kind === 'unsupported' && !windowsProbeNeverRan) || windows.kind === 'unsupported') {
     const reported = uname.kind === 'unsupported' ? uname.uname : probeUname(windows)
@@ -54,8 +64,7 @@ export async function detectRemoteHostPlatform(
   throw undetectedPlatformError(uname, windows)
 }
 
-// Why: an unconfirmed close still holds the sshd session slot, so a second
-// probe only burns another exec timeout before being refused too.
+// Unconfirmed close can retain MaxSessions; a second probe would consume another timeout on the same held slot.
 function shouldAbandonAfterUnameProbe(error: unknown): boolean {
   return (
     (error instanceof Error && error.name === 'AbortError') ||
@@ -85,8 +94,7 @@ function undetectedPlatformError(
   return unrecognizedOutputError(probeOutput(windows))
 }
 
-// Why: a refused or timed-out channel explains the failure better than the
-// other probe's mundane non-zero exit (e.g. "sh: not found" on Windows).
+// Transport failure explains more than the other probe's ordinary command-not-found exit.
 function isTransportFailure(error: unknown): boolean {
   return (
     isSshSessionLimitError(error) ||
@@ -118,8 +126,7 @@ function probeEvidence(outcome: PlatformProbeOutcome): string {
   return probeOutput(outcome) || probeUname(outcome)
 }
 
-// Why: the marker is printed last, so the tail holds the evidence; collapsing
-// CR/LF keeps a Windows banner from becoming a multi-line renderer message.
+// Marker is last, so retain bounded tail and collapse banner whitespace for status display.
 function summarizeProbeOutput(output: string, maxChars: number): string {
   const collapsed = output.replace(/\s+/gu, ' ').trim()
   return collapsed.length > maxChars ? `…${collapsed.slice(-maxChars)}` : collapsed
@@ -130,11 +137,10 @@ async function detectUnamePlatform(
   signal?: AbortSignal
 ): Promise<PlatformProbeOutcome> {
   try {
-    // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
-    const command = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
+    // Separate marker from startup output that may omit its trailing newline.
     const output = signal
-      ? await execCommand(conn, command, { signal })
-      : await execCommand(conn, command)
+      ? await execCommand(conn, UNAME_PLATFORM_PROBE_COMMAND, { signal })
+      : await execCommand(conn, UNAME_PLATFORM_PROBE_COMMAND)
     return parseRemotePlatformOutput(output)
   } catch (error) {
     signal?.throwIfAborted()
@@ -151,7 +157,7 @@ async function detectWindowsPlatform(
       '$arch = $env:PROCESSOR_ARCHITECTURE',
       'try { $runtimeArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(); if ($runtimeArch) { $arch = $runtimeArch } } catch {}',
       'if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }',
-      // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
+      // Separate marker from startup output that may omit its trailing newline.
       `Write-Output ("\`n${PLATFORM_PROBE_MARKER} Windows " + $arch)`
     ].join('; ')
     const output = await execCommand(conn, powerShellCommand(script), {
@@ -167,7 +173,7 @@ async function detectWindowsPlatform(
 
 function parseRemotePlatformOutput(output: string): PlatformProbeOutcome {
   let unsupportedUname = ''
-  // Why: SSH startup noise can resemble valid probe output and select the wrong relay.
+  // Require marker-backed evidence; startup noise may resemble valid platform output.
   for (const line of iterateProcessOutputLines(output)) {
     const parts = getProcessOutputFields(line, 3)
     if (parts.length < 3 || parts[0] !== PLATFORM_PROBE_MARKER) {
@@ -184,7 +190,7 @@ function parseRemotePlatformOutput(output: string): PlatformProbeOutcome {
     : { kind: 'unparsed', output }
 }
 
-// Why: a single field can be kilobytes — the scanner reads up to 4096 chars.
+// Bound individual fields too; the scanner can return 4 KiB tokens.
 function clampUnameField(field: string): string {
   return field.length > MAX_UNAME_FIELD_CHARS ? `${field.slice(0, MAX_UNAME_FIELD_CHARS)}…` : field
 }

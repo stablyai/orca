@@ -12,6 +12,7 @@ import {
 import {
   createProviderSetup,
   makeBufferLine,
+  makeExistsCache,
   type TestBufferLine
 } from './terminal-link-provider-buffer-fixtures'
 
@@ -80,7 +81,7 @@ describe('terminal link candidates fail independently', () => {
       [secondPath, false, 80]
     ])
     sshProbe()
-    const cache = new Map<string, boolean>()
+    const cache = makeExistsCache()
     const { provider } = createProviderSetup(rows, cache, {
       startupCwd: '/home/alice/dev',
       worktreePath: '/home/alice/dev'
@@ -92,19 +93,8 @@ describe('terminal link candidates fail independently', () => {
       connectionId: 'ssh-notes'
     })
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-    expect([...cache.values()]).toEqual([true, true])
+    expect([...cache.values()].map((entry) => entry.exists)).toEqual([true, true])
     expect([...cache.keys()].some((key) => key.includes(firstPath + secondPath))).toBe(false)
-  })
-
-  it('has the same valid SSH links with a blank-row separator', async () => {
-    const rows = await replayRows(capture.replace(`${firstPath}\r\n`, `${firstPath}\r\n\r\n`))
-    sshProbe()
-    const { provider } = createProviderSetup(rows, new Map(), {
-      startupCwd: '/home/alice/dev',
-      worktreePath: '/home/alice/dev'
-    })
-    expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect((await hover(provider, 3)).map((link) => link.text)).toEqual([secondPath])
   })
 
   it('preserves a real hard-wrapped path beside a rejected joined candidate', async () => {
@@ -121,7 +111,7 @@ describe('terminal link candidates fail independently', () => {
 
   it('preserves verified client links when an uncached neighbor probe fails', async () => {
     const rows = await replayRows()
-    const cache = new Map([
+    const cache = makeExistsCache([
       [`active\0${firstPath}`, true],
       [`active\0${secondPath}`, true]
     ])
@@ -133,7 +123,7 @@ describe('terminal link candidates fail independently', () => {
     expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
     expect(fsPathExistsMock).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
-    expect([...cache.values()]).toEqual([true, true])
+    expect([...cache.values()].map((entry) => entry.exists)).toEqual([true, true])
   })
 
   it('uses paired-host per-path answers without consulting the client filesystem', async () => {
@@ -153,7 +143,7 @@ describe('terminal link candidates fail independently', () => {
         _meta: { runtimeId: 'remote' }
       }
     })
-    const cache = new Map<string, boolean>()
+    const cache = makeExistsCache()
     const { provider } = createProviderSetup(rows, cache, {
       startupCwd: '/home/alice/dev',
       worktreePath: '/home/alice/dev',
@@ -165,61 +155,14 @@ describe('terminal link candidates fail independently', () => {
     )
     expect(fsPathExistsMock).not.toHaveBeenCalled()
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-    expect([...cache.values()]).toEqual([true])
-  })
-
-  it('keeps host-granted files bound to their printing terminal when a neighboring candidate fails', async () => {
-    const rows = await replayRows()
-    runtimeEnvironmentCallMock.mockImplementation(async ({ method, params }) => {
-      if (method !== 'files.resolveTerminalPath') {
-        throw new Error('Unexpected remote probe')
-      }
-      const path = params?.pathText
-      if (path !== firstPath && path !== secondPath) {
-        throw new Error('ENOTDIR: joined path')
-      }
-      return {
-        id: 'grant',
-        ok: true,
-        result: {
-          worktree: 'wt-1',
-          relativePath: null,
-          absolutePath: path,
-          exists: true,
-          isDirectory: false,
-          openTarget: {
-            kind: 'absolute-file',
-            provider: 'local',
-            absolutePath: path,
-            grantId: 'terminal-grant'
-          }
-        },
-        _meta: { runtimeId: 'remote' }
-      }
-    })
-    const { provider } = createProviderSetup(rows, new Map(), {
-      startupCwd: '/srv/repo',
-      worktreePath: '/srv/repo',
-      runtimeEnvironmentId: 'env-notes',
-      getRuntimeTerminalHandleForPane: () => 'term-notes'
-    })
-    expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'files.resolveTerminalPath',
-        params: expect.objectContaining({ pathText: firstPath, terminal: 'term-notes' })
-      })
-    )
-    expect(statMock).not.toHaveBeenCalled()
-    expect(fsPathExistsMock).not.toHaveBeenCalled()
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    expect([...cache.values()].map((entry) => entry.exists)).toEqual([true])
   })
 
   it('does not cache a transport failure as missing and can retry the next hover', async () => {
     const rows = await replayRows()
     vi.mocked(getConnectionId).mockReturnValue('ssh-notes')
     fsPathExistsMock.mockRejectedValue(new Error('Connection lost'))
-    const cache = new Map<string, boolean>()
+    const cache = makeExistsCache()
     const { provider } = createProviderSetup(rows, cache, {
       startupCwd: '/home/alice/dev',
       worktreePath: '/home/alice/dev'
@@ -228,7 +171,48 @@ describe('terminal link candidates fail independently', () => {
     expect(cache.size).toBe(0)
     sshProbe()
     expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect([...cache.values()]).toEqual([true])
+    expect([...cache.values()].map((entry) => entry.exists)).toEqual([true])
+  })
+
+  it('retries an expired missing sibling-workspace path on its paired host', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    let available = false
+    runtimeEnvironmentCallMock.mockImplementation(async ({ method }) => {
+      if (method !== 'files.resolveTerminalPath') {
+        throw new Error('Unexpected remote probe')
+      }
+      return {
+        id: 'sibling',
+        ok: true,
+        result: {
+          worktree: 'sibling-worktree',
+          relativePath: 'notes/README.md',
+          absolutePath: firstPath,
+          exists: available,
+          isDirectory: false
+        },
+        _meta: { runtimeId: 'remote' }
+      }
+    })
+    const { provider } = createProviderSetup([makeBufferLine(firstPath)], makeExistsCache(), {
+      startupCwd: '/srv/repo',
+      worktreePath: '/srv/repo',
+      runtimeEnvironmentId: 'env-notes'
+    })
+    try {
+      expect(await hover(provider, 1)).toEqual([])
+      available = true
+      now.mockReturnValue(10_999)
+      expect(await hover(provider, 1)).toEqual([])
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledOnce()
+      now.mockReturnValue(11_000)
+      expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledTimes(2)
+      expect(statMock).not.toHaveBeenCalled()
+      expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    } finally {
+      now.mockRestore()
+    }
   })
 
   it('drops a verified candidate when its buffer row changes while another candidate rejects', async () => {

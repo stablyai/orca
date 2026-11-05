@@ -84,7 +84,7 @@ function mainProjection(
   return rest
 }
 
-describe('session.tabs rows from main (layout-owner build, before D3b)', () => {
+describe('session.tabs rows from main (layout-owner build)', () => {
   it("takes main's terminal rows and name, with the window's theme, status and draft", () => {
     const theme = { mode: 'dark' as const, theme: {} }
     const agentStatus = null
@@ -123,6 +123,18 @@ describe('session.tabs rows from main (layout-owner build, before D3b)', () => {
       }),
       terminal('t::b')
     ])
+  })
+
+  // Main's diff row is never dirty (its drafts are keyed by path); the window's edit is.
+  it("shows a diff the window lists with the window's dirty state, over main's row", () => {
+    const edited = { ...file('d1', 'diff'), isDirty: true }
+    const merged = withMainSessionTabRows(
+      windowSnapshot([edited], ['d1'], 'd1'),
+      mainProjection([file('d1', 'diff')], ['d1'], 'd1'),
+      NONE_EXITED
+    )
+
+    expect(merged.tabs).toEqual([{ ...edited, isActive: true }])
   })
 
   it('keeps the rows main does not hold (browser, diff) in the window’s place', () => {
@@ -290,8 +302,8 @@ describe('session.tabs rows from main (layout-owner build, before D3b)', () => {
     expect(merged).toMatchObject({ activeGroupId: 'g2', activeTabId: 'b1' })
   })
 
-  it("takes a markdown edit view's dirty state from the window", () => {
-    const markdown = (isDirty: boolean) => ({
+  it("takes a markdown edit view's dirty state and untitled flag from the window", () => {
+    const markdown = (isDirty: boolean, isUntitled?: true) => ({
       type: 'markdown' as const,
       id: 'm1',
       title: 'README.md',
@@ -304,14 +316,16 @@ describe('session.tabs rows from main (layout-owner build, before D3b)', () => {
       sourceRelativePath: 'README.md',
       documentVersion: 'file:/wt/README.md',
       isDirty,
-      isActive: false
+      isActive: false,
+      ...(isUntitled ? { isUntitled } : {})
     })
     const merged = withMainSessionTabRows(
-      windowSnapshot([markdown(true)], ['m1'], 'm1'),
+      windowSnapshot([markdown(true, true)], ['m1'], 'm1'),
       mainProjection([markdown(false)], ['m1'], 'm1'),
       NONE_EXITED
     )
 
-    expect(merged.tabs[0]).toMatchObject({ id: 'm1', isDirty: true })
+    // Why: the saved session never records untitled, and the phone keeps such a tab read-only.
+    expect(merged.tabs[0]).toMatchObject({ id: 'm1', isDirty: true, isUntitled: true })
   })
 })

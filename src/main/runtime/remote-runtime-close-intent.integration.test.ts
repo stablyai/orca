@@ -1,10 +1,10 @@
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
@@ -49,7 +49,6 @@ it(
       getRuntimeId: () => 'close-intent-runtime-test',
       getStartedAt: () => 1,
       cleanupSubscriptionsForConnection: () => {},
-      cancelMobileDictationForConnection: () => {},
       onClientDisconnected: () => {},
       listMobileSessionTabs,
       refuseUnattributedMobileSessionTabClose,
@@ -90,7 +89,9 @@ it(
             snapshotRepublished: true
           }
         })
-        expect(listMobileSessionTabs).toHaveBeenCalledWith('id:wt-1', pairing.pairedDeviceId)
+        expect(listMobileSessionTabs).toHaveBeenCalledWith('id:wt-1', pairing.pairedDeviceId, {
+          includeAgentSenders: false
+        })
         expect(refuseUnattributedMobileSessionTabClose).toHaveBeenCalledWith('id:wt-1', 'tab-1')
         expect(closeMobileSessionTab).not.toHaveBeenCalled()
       } finally {

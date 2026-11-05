@@ -4,10 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { addEnvironmentFromPairingCode } from '../../../shared/runtime-environment-store'
+import { addEnvironmentFromPairingCode } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const { sendRemoteRuntimeRequestMock, sendRemoteRuntimeSharedControlRequestMock } = vi.hoisted(
   () => ({
@@ -16,7 +16,7 @@ const { sendRemoteRuntimeRequestMock, sendRemoteRuntimeSharedControlRequestMock 
   })
 )
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock
 }))
 
@@ -26,7 +26,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
     sendRemoteRuntimeConnectionRequest: vi.fn(),
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
     reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn()
   })

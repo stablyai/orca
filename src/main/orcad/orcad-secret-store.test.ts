@@ -17,7 +17,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 import { classifyUnenvelopedCredential } from '../../shared/secret-at-rest-protection'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
-import { readStoredCredentialToken, writeEncryptedCredential } from '../integration-credential-file'
+import {
+  readStoredCredentialToken,
+  writeEncryptedCredential
+} from '../credentials/integration-credential-file'
 import type { OrcadLegacyKeyLookup, OrcadLegacyKeyringReader } from './orcad-legacy-keyring-key'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'
 import {
@@ -31,7 +34,6 @@ const MACHINE_A = '0123456789abcdef0123456789abcdef'
 const MACHINE_B = 'fedcba9876543210fedcba9876543210'
 const STATE_A = orcadSecretStateFileName(MACHINE_A)
 
-/** A keyring an older build wrote; read-only, like the real migration reader. */
 function fakeLegacyKeyring(answer: OrcadLegacyKeyLookup) {
   const reads: string[] = []
   const read: OrcadLegacyKeyringReader = async (account) => {
@@ -74,7 +76,6 @@ describe('createOrcadSecretStore', () => {
     return { store, ready }
   }
 
-  /** A host an hourly build set up: its record points at a key in the OS keyring. */
   const legacyKeyringHost = () => {
     const master = randomBytes(32)
     const key = deriveOrcadSealingKey(master, '')
@@ -124,7 +125,6 @@ describe('createOrcadSecretStore', () => {
 
   it('refuses to seal or unseal when its record was bound to a different machine ID', async () => {
     const sealed = (await prepare()).store.encryptString('lin_api_secret')
-    // A record copied in under this machine's name from another host.
     renameSync(join(keyDir, STATE_A), join(keyDir, orcadSecretStateFileName(MACHINE_B)))
     const moved = await prepare({ machine: MACHINE_B })
     expect(moved.ready).toBe(false)
@@ -186,7 +186,6 @@ describe('createOrcadSecretStore', () => {
       expect(ready).toBe(true)
       expect(log).toHaveBeenCalledTimes(1)
       expect(log.mock.calls[0][0]).toContain('Reconnect any integration')
-      // Old credentials report the plain decrypt error, so the user reconnects.
       setSecretStore(store)
       expect(() => readStoredCredentialToken('Linear', sealed)).toThrow(
         credentialDecryptionMessage('Linear')
@@ -194,7 +193,6 @@ describe('createOrcadSecretStore', () => {
       const saved = join(keyDir, 'saved.enc')
       writeEncryptedCredential('Linear', saved, 'lin_api_new')
       expect(readStoredCredentialToken('Linear', readFileSync(saved))).toBe('lin_api_new')
-      // Later starts load the file and never ask the keyring again.
       const later = fakeLegacyKeyring({ failure: 'exited 36' })
       expect(
         (await prepare({ legacyKeyring: later.read })).store.decryptString(readFileSync(saved))
@@ -252,7 +250,7 @@ describe('createOrcadSecretStore', () => {
     }
     const fastFailure = fakeLegacyKeyring({ failure: 'exited 36' })
     const firstStart = prepare({ legacyKeyring: slowSuccess })
-    // Why: start the second only once the first holds the lock; otherwise lock order is a race.
+    // Wait for lock acquisition before racing the second migration.
     await migrating
     const second = await prepare({ legacyKeyring: fastFailure.read })
     const first = await firstStart
@@ -265,7 +263,6 @@ describe('createOrcadSecretStore', () => {
 
   it('takes over a migration lock its crashed holder left behind', async () => {
     const { encodedKey, sealed } = legacyKeyringHost()
-    // A lock a crashed start left behind, older than the lock's staleness window.
     const lock = join(keyDir, `${STATE_A}.lock`)
     mkdirSync(lock)
     utimesSync(lock, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000))

@@ -1,15 +1,15 @@
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
   resolveEnvironment
-} from '../../shared/runtime-environment-store'
-import { readPersistedEnvironmentStore } from '../../shared/runtime-environment-store-file'
-import { writeRuntimeEnvironmentSidecarEntry } from '../../shared/runtime-environment-sidecar'
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { readPersistedEnvironmentStore } from '../../shared/remote-runtime/host-store/runtime-environment-store-file'
+import { writeRuntimeEnvironmentSidecarEntry } from '../../shared/remote-runtime/host-store/runtime-environment-sidecar'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => ({
@@ -34,11 +34,8 @@ vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
 vi.mock('./runtime-ssh-access-verification', () => ({
   verifyRuntimeEnvironmentSshTunnel: mocks.verify
 }))
-import {
-  fingerprintRuntimeSshTarget,
-  linkRuntimeSshAccess,
-  unlinkRuntimeSshAccess
-} from './runtime-ssh-access'
+import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from './runtime-ssh-access'
+import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
 
 const pairing = {
   v: 2 as const,
@@ -178,6 +175,24 @@ describe('independent runtime SSH access coordinator', () => {
     expect(JSON.stringify(result)).not.toContain('secret')
     expect(current().pendingSshAccessOperation).toBeUndefined()
     expect(mocks.preflight).toHaveBeenCalledWith('target')
+  })
+
+  it('names the saved dependency when dependent state blocks an SSH access link', async () => {
+    mocks.preflight.mockReturnValue({
+      blockers: [
+        {
+          code: 'orcad_migration_dependent_state',
+          category: 'client-owned-state',
+          dependencies: [{ kind: 'worktree-metadata', count: 1, names: ['repo-1::/srv/app'] }]
+        }
+      ]
+    })
+    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow(
+      /orcad_migration_dependent_state\. [\s\S]*worktree-metadata ×1 \(repo-1::\/srv\/app\)/
+    )
+    expect(mocks.connect).not.toHaveBeenCalled()
+    expect(mocks.flush).not.toHaveBeenCalled()
+    expect(events).not.toContain('claim')
   })
 
   it('cancels a pending connect and starts no tunnel when the link is aborted', async () => {

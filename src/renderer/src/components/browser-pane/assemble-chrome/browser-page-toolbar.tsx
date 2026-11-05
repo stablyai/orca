@@ -7,8 +7,11 @@ import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
 import { BrowserImportHintButton } from './BrowserImportHintButton'
+import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
 import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
+import { BrowserExtensionToolbar } from './browser-extension-toolbar'
+import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
 import { SshEgressIndicator } from './browser-egress-indicator'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
@@ -44,6 +47,7 @@ export function BrowserPageToolbar({
   convertedFrom,
   convertedTo,
   loading,
+  loadFailed,
   webviewRef,
   reloadMenuOpen,
   setReloadMenuOpen,
@@ -84,6 +88,7 @@ export function BrowserPageToolbar({
   /** Set on a page Back returned to; Forward re-crosses it once guest history runs out. */
   convertedTo?: BrowserPageConversionOrigin | null
   loading: boolean
+  loadFailed: boolean
   webviewRef: RefObject<Electron.WebviewTag | null>
   reloadMenuOpen: boolean
   setReloadMenuOpen: Dispatch<SetStateAction<boolean>>
@@ -130,18 +135,21 @@ export function BrowserPageToolbar({
     canOpenSourceFile && localHtmlFilePath !== null
       ? () => openBrowserFileSource(worktreeId, localHtmlFilePath)
       : null
+  const extensionToolbar = useBrowserExtensionToolbar(
+    browserPageId,
+    isActive,
+    `${currentBrowserUrl}\n${loading}`
+  )
 
   return (
     <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
       pinnedStage={pinnedStage}
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
-        loading,
-        // Why the fallbacks: guest history cannot survive a conversion (the guest was replaced),
-        // so once it runs out Back returns across the conversion — and Forward re-crosses it —
-        // instead of going dead.
+        // Guest replacement loses history; Back/Forward cross the conversion once guest history runs out.
         goBack: () => {
           if (canGoBack) {
             webviewRef.current?.goBack()
@@ -165,6 +173,7 @@ export function BrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          pageId={browserPageId}
           value={addressBarValue}
           onChange={setAddressBarValue}
           onSubmit={submitAddressBar}
@@ -175,6 +184,8 @@ export function BrowserPageToolbar({
           inputRef={addressBarInputRef}
           dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
           leadingIcon={<SshEgressIndicator worktreeId={worktreeId} />}
+          loading={loading}
+          loadFailed={loadFailed}
         />
       }
       reloadControl={
@@ -182,7 +193,7 @@ export function BrowserPageToolbar({
           menuOpen={reloadMenuOpen}
           onMenuOpenChange={setReloadMenuOpen}
           label={reloadButtonLabel}
-          loading={loading}
+          showStop={reloadButtonLabelKind === 'stop'}
           showShortcutHint={reloadButtonLabelKind === 'reload'}
           reloadShortcut={reloadShortcut}
           hardReloadShortcut={hardReloadShortcut}
@@ -191,9 +202,22 @@ export function BrowserPageToolbar({
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
       }
+      passwordControl={
+        <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
+      }
       importControl={(compact) => (
         <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />
       )}
+      extensionActions={
+        extensionToolbar &&
+        ((compact) => (
+          <BrowserExtensionToolbar
+            browserPageId={browserPageId}
+            state={extensionToolbar}
+            compact={compact}
+          />
+        ))
+      }
       elementTools={{
         activeIntent: grab.state !== 'idle' ? grabIntent : null,
         onStartIntent: startGrabIntent,
@@ -240,7 +264,6 @@ export function BrowserPageToolbar({
         ),
         disabled: !externalUrl
       }}
-      // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserToolbarMenu stays one stable component.
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}

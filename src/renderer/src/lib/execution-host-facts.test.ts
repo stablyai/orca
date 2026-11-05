@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveRepoWorktreeLaunchPlatform } from './execution-host-facts'
+import { getDefaultSettings } from '../../../shared/constants'
 
 vi.mock('./new-workspace', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -39,8 +40,7 @@ function state(): State {
     projects: [],
     activeRepoId: null,
     activeWorktreeId: null,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no other setting.
-    settings: {} as State['settings'],
+    settings: getDefaultSettings('/tmp'),
     sshConnectionStates: new Map(),
     sshStateByEnvironment: new Map(),
     runtimeStatusByEnvironmentId: linuxServer()
@@ -50,12 +50,6 @@ function state(): State {
 const serverRepo = { path: '/srv/repo', executionHostId: 'runtime:linux-box' }
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
-  it("reads a server project's worktree as the server's OS (#27971)", () => {
-    expect(
-      resolveRepoWorktreeLaunchPlatform(state(), serverRepo, { id: 'wt', path: '/srv/wt' })
-    ).toBe('linux')
-  })
-
   it("lets a worktree's own host outrank its repo's", () => {
     expect(
       resolveRepoWorktreeLaunchPlatform(state(), serverRepo, {

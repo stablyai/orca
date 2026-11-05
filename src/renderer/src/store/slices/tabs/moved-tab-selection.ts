@@ -1,5 +1,5 @@
-// The user's move selects the moved tab in the store update whose frame shows the move (L120),
-// not on main's later reply, which a newer drag may have overtaken.
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+// Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'
 import {
@@ -8,6 +8,7 @@ import {
   type MovedTabSelection
 } from '@/runtime/layout-owner-pane-intents'
 import { tabActivationPatch } from './tabs-focus-actions'
+import { endsPreviewHere } from './preview-tab-promotion'
 import { buildActiveSurfacePatch } from './tabs-surface'
 
 type SelectionState = Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree'>
@@ -29,10 +30,13 @@ function movedTabSelectionPatch(state: AppState, intent: MovedTabSelection): Par
     return {}
   }
   // The preview kept, no focus time recorded.
-  const selected = tabActivationPatch(state, tab, worktreeId, {
-    preservePreview: true,
-    recordFocus: false
-  })
+  const selected = tabActivationPatch(
+    state,
+    tab,
+    worktreeId,
+    { preservePreview: true, recordFocus: false },
+    endsPreviewHere(state, worktreeId)
+  )
   return {
     ...selected,
     // As focusing a group does: only the active workspace's surface follows.
@@ -82,12 +86,20 @@ export function withMovedTabsSelected(
 /** Writes a frame's patch, with the selection of each moved tab it shows; returns those moves. */
 export function showFramePatch(
   store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
-  patch: Partial<AppState>
+  patch: Partial<AppState>,
+  rebuiltWorkspaces: readonly string[] = []
 ): MovedTabSelection[] {
   if (Object.keys(patch).length === 0) {
     return []
   }
-  const shown = withMovedTabSelections(store.getState(), patch)
+  const before = store.getState()
+  const shown = withMovedTabSelections(before, patch)
+  for (const key of rebuiltWorkspaces) {
+    retireRemovedNativeChatDraftPositions(
+      before.unifiedTabsByWorktree[key] ?? [],
+      (shown.patch.unifiedTabsByWorktree ?? before.unifiedTabsByWorktree)[key] ?? []
+    )
+  }
   store.setState(shown.patch)
   return shown.taken
 }

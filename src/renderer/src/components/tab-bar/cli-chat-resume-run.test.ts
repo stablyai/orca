@@ -1,22 +1,35 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
-import type { AgentSessionWireRefusal } from '../../../../shared/agent-session-wire'
-import type { StructuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
+import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
+import type * as CloseTerminalModule from './cli-chat-resume-close-terminal'
 
 const mocks = vi.hoisted(() => {
   const state: { source: CliChatResumeSource | null } = { source: null }
   return {
     ...state,
     sourceCapability: vi.fn(),
+    closeCapability: vi.fn(),
+    closeTerminal: vi.fn(),
+    probe: vi.fn(),
     createCapability: vi.fn(),
     call: vi.fn(),
     toast: vi.fn(),
-    activate: vi.fn(async () => true)
+    activate: vi.fn(async () => true),
+    frameDrawn: false
   }
 })
+vi.mock('./cli-chat-resume-close-terminal', async (importOriginal) => ({
+  ...(await importOriginal<typeof CloseTerminalModule>()),
+  closeCliChatResumeTerminal: mocks.closeTerminal
+}))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
+vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  structuredAgentSessionHostSupports: mocks.closeCapability,
+  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+    (await mocks.closeCapability(...args)) ? 'supported' : 'unsupported',
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
@@ -29,106 +42,107 @@ vi.mock('@/runtime/structured-session-tab-inventory', () => ({
     throw new Error('Reply unavailable')
   }
 }))
-vi.mock('@/lib/structured-agent-session-create-hydration', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-create-hydration', () => ({
   publishStructuredAgentSessionCreateHydration: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
+// A frame-drawn server workspace's create carries the tab's place, read as it is sent.
+vi.mock('@/lib/frame-drawn-chat-tab-placement', async (importOriginal) => {
+  const actual = await importOriginal<typeof FrameDrawnChatTabPlacementModule>()
+  return {
+    ...actual,
+    withFrameDrawnChatTabPlacement: (
+      intent: Parameters<typeof actual.withFrameDrawnChatTabPlacement>[0]
+    ) =>
+      mocks.frameDrawn
+        ? { ...intent.params, tabPlacement: { groupId: 'g-1' } }
+        : actual.withFrameDrawnChatTabPlacement(intent)
+  }
+})
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: mocks.activate
 }))
+// Switch-on, main opens the chat's tab and its frame draws it.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal()),
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import {
   getStructuredAgentSessionLaunchLifecycle,
-  retryStructuredAgentSessionLaunch
-} from '@/lib/structured-agent-session-launch'
+  resetStructuredAgentLaunchRegistryForTests,
+  structuredLaunchStates
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { retryStructuredAgentSessionLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import {
   readStructuredAgentLaunchRecord,
   writeStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests
-} from '@/lib/structured-agent-session-launch-persistence'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import {
   reserveStructuredLaunchSlot,
   restoreStructuredLaunchSurfaces,
   stopStructuredLaunchSlotTracking
-} from '@/lib/structured-agent-session-launch-surface'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '@/store'
+
 import { runCliChatResume } from './cli-chat-resume-run'
-import {
-  resetStructuredAgentLaunchRegistryForTests,
-  structuredLaunchStates
-} from '@/lib/structured-agent-session-launch-registry'
+
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,
-  peekWebSessionFocusIntent,
-  resetWebSessionFocusIntentForTests
+  peekWebSessionFocusIntent
 } from '@/runtime/web-session-focus-intent'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-bridge'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-const SOURCE: CliChatResumeSource = {
-  tabId: 'tab-1',
-  workspaceId: 'wt-1',
-  paneKey: 'tab-1:leaf',
-  agent: 'claude',
-  providerSessionId: 'provider-1',
-  executionHostId: 'local'
-}
-const tabs = () => useAppStore.getState().unifiedTabsByWorktree['wt-1'] ?? []
-afterEach(() => vi.unstubAllGlobals())
-function deferred<T>() {
-  let resolve: (value: T) => void = () => {}
-  const promise = new Promise<T>((done) => {
-    resolve = done
-  })
-  return { promise, resolve }
-}
-function refuse(reason: 'transcriptNotFound' | 'transcriptUnreadable'): AgentSessionWireRefusal {
-  return {
-    code: 'agent_session_identity_required',
-    message: 'private host error',
-    details: { reason },
-    createAttemptRefusedBeforeCommit: true
-  }
-}
+import {
+  SOURCE,
+  deferred,
+  refuse,
+  resetCliChatResumeRun,
+  tabs
+} from './cli-chat-resume-run.test-fixture'
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  resetLocalStructuredSessionVersionForTests()
-  resetWebSessionTabsSnapshotFreshnessForTests()
-  stopStructuredLaunchSlotTracking()
-  localStorage.clear()
-  resetStructuredAgentLaunchPersistenceForTests()
-  resetStructuredAgentLaunchRegistryForTests()
-  resetWebSessionFocusIntentForTests()
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({ activeWorktreeId: 'wt-1' })
-  mocks.source = SOURCE
-  mocks.sourceCapability.mockResolvedValue(true)
-  mocks.createCapability.mockResolvedValue(true)
-  mocks.call.mockImplementation(
-    async (_target, method, params: StructuredAgentSessionCreateParams) => {
-      expect(method).toBe('agentSession.create')
-      return { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
-    }
-  )
+let main: TabsDrawnFromMain | undefined
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  main?.close()
+  main = undefined
 })
+beforeEach(async () => {
+  resetCliChatResumeRun(mocks)
+  main = await drawTabsFromMain(useAppStore)
+})
+
+// A fixed version: later snapshots in a test count up from it.
+const SNAPSHOT_VERSION = 1_700_000_000_000
 
 function snapshot(sessionId?: string): RuntimeMobileSessionTabsResult {
   return {
     worktree: 'wt-1',
     publicationEpoch: 'publication-test',
-    snapshotVersion: Date.now(),
+    snapshotVersion: SNAPSHOT_VERSION,
     activeGroupId: null,
     activeTabId: null,
     activeTabType: null,
@@ -147,10 +161,18 @@ function snapshot(sessionId?: string): RuntimeMobileSessionTabsResult {
   }
 }
 
-function seedTabs() {
-  return ['E', 'S', 'B'].map((id) =>
+/** Main takes the store's current layout, as after a restart; seeding after it is invisible to main. */
+async function redrawFromMain(): Promise<void> {
+  main?.close()
+  main = await drawTabsFromMain(useAppStore)
+}
+
+async function seedTabs() {
+  const seeded = ['E', 'S', 'B'].map((id) =>
     useAppStore.getState().createUnifiedTab('wt-1', 'editor', { id, entityId: id })
   )
+  await redrawFromMain()
+  return seeded
 }
 
 describe('CLI identity resume through the existing launch owner', () => {
@@ -192,72 +214,6 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 
-  it('uses ID-only create for an older host and retains uncertainty without pre-commit proof', async () => {
-    mocks.sourceCapability.mockResolvedValue(false)
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: { code: 'agent_session_conflict', message: 'old host' }
-    })
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
-    expect(tabs()).toHaveLength(1)
-    expect(mocks.activate).not.toHaveBeenCalled()
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('keeps ordinary refusals hidden and distinguishes unsaved from unreadable content', async () => {
-    for (const reason of ['transcriptNotFound', 'transcriptUnreadable'] as const) {
-      mocks.call.mockResolvedValue({ ok: false, refusal: refuse(reason) })
-      await runCliChatResume(SOURCE)
-      expect(tabs()).toEqual([])
-      expect([...structuredLaunchStates()]).toEqual([])
-      expect(mocks.toast.mock.calls.at(-1)?.[0]).toMatch(
-        reason === 'transcriptUnreadable' ? /couldn't open.*history/i : /hasn't saved/
-      )
-    }
-  })
-
-  it('keeps the terminal and directs a refused terminal writer to Session History', async () => {
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: {
-        code: 'agent_session_conflict',
-        message: 'private host evidence',
-        details: { reason: 'conversationHeldElsewhere' },
-        createAttemptRefusedBeforeCommit: true
-      }
-    })
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.toast).toHaveBeenCalledTimes(1)
-    expect(mocks.toast.mock.calls[0]?.[0]).toMatch(
-      /^Orca can't confirm Claude.* has exited in its terminal\. Stop what's running there or close the terminal, then open this conversation from Session History\.$/
-    )
-    expect(mocks.activate).not.toHaveBeenCalled()
-    expect(tabs()).toEqual([])
-    expect([...structuredLaunchStates()]).toEqual([])
-  })
-
-  it('opens a proved owner only for the header, on the initiating host, without importing', async () => {
-    const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: {
-        code: 'agent_session_conflict',
-        message: 'owner',
-        details: { reason: 'conversationHeldElsewhere', owner },
-        createAttemptRefusedBeforeCommit: true
-      }
-    })
-    await runCliChatResume(SOURCE)
-    expect(mocks.toast).toHaveBeenCalledWith('Another chat is already holding this conversation.')
-    expect(mocks.activate).not.toHaveBeenCalled()
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.activate).toHaveBeenCalledWith({ structuredSession: owner }, undefined, {
-      kind: 'local'
-    })
-    expect(tabs()).toEqual([])
-  })
-
   it('keeps the eager History joiner failed and retryable after the hidden starter is refused', async () => {
     const reply = deferred<unknown>()
     mocks.call.mockReturnValue(reply.promise)
@@ -291,31 +247,43 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(tabs()).toHaveLength(1)
   })
 
-  it('still opens an eager History joiner after the terminal closes before create', async () => {
-    const capability = deferred<boolean>()
-    mocks.createCapability.mockReturnValue(capability.promise)
-    const running = runCliChatResume(SOURCE)
-    await vi.waitFor(() => expect(mocks.createCapability).toHaveBeenCalledOnce())
-    const eager = beginStructuredAgentSessionProvisionalLaunch({
-      hooks: {},
-      plan: adoptAgentSessionLaunchVerdict({
-        route: 'structured-native-chat',
-        requestId: newAgentLaunchRequestId(),
-        agent: 'claude',
-        worktreeId: 'wt-1',
-        executionHostId: 'local',
-        resumeFrom: { providerSessionId: 'provider-1' }
+  it.each([false, true])(
+    'still opens an eager History joiner after the terminal closes before create (frame-drawn: %s)',
+    async (frameDrawn) => {
+      mocks.frameDrawn = frameDrawn
+      const capability = deferred<boolean>()
+      mocks.createCapability.mockReturnValue(capability.promise)
+      const running = runCliChatResume(SOURCE)
+      await vi.waitFor(() => expect(mocks.createCapability).toHaveBeenCalledOnce())
+      const eager = beginStructuredAgentSessionProvisionalLaunch({
+        hooks: {},
+        plan: adoptAgentSessionLaunchVerdict({
+          route: 'structured-native-chat',
+          requestId: newAgentLaunchRequestId(),
+          agent: 'claude',
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          resumeFrom: { providerSessionId: 'provider-1' }
+        })
       })
-    })
-    mocks.source = null
-    useAppStore.setState({})
-    capability.resolve(true)
-    await Promise.all([running, eager?.settlement])
-    expect(mocks.call).toHaveBeenCalledOnce()
-    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
-    expect(tabs()).toHaveLength(1)
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
+      await vi.waitFor(() =>
+        expect(
+          [...structuredLaunchStates()][0]?.intent.params.resumeFrom?.cliSource
+        ).toBeUndefined()
+      )
+      mocks.source = null
+      useAppStore.setState({})
+      capability.resolve(true)
+      await Promise.all([running, eager?.settlement])
+      expect(mocks.call).toHaveBeenCalledOnce()
+      expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({ providerSessionId: 'provider-1' })
+      expect(mocks.call.mock.calls[0][2].tabPlacement).toEqual(
+        frameDrawn ? { groupId: 'g-1' } : undefined
+      )
+      expect(tabs()).toHaveLength(1)
+      expect(mocks.toast).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     ['reply', 'B', 'B E S R', 'B E S D R'],
@@ -325,7 +293,7 @@ describe('CLI identity resume through the existing launch owner', () => {
   ])(
     'keeps canonical membership through registered IPC (%s first, move %s to %s)',
     async (first, mover, requested, expected) => {
-      const [e, source, browser] = seedTabs()
+      const [e, source, browser] = await seedTabs()
       let move: Parameters<typeof window.api.ui.onMoveSessionTab>[0] = () => {}
       vi.stubGlobal('api', {
         ...window.api,
@@ -352,6 +320,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       const later = useAppStore
         .getState()
         .createUnifiedTab('wt-1', 'editor', { id: 'R', entityId: 'R' })
+      await redrawFromMain()
       const beforeNoop = useAppStore.getState()
       move({
         kind: 'reorder',
@@ -379,6 +348,7 @@ describe('CLI identity resume through the existing launch owner', () => {
         entityId: 'other',
         split: { splitDirection: 'right', sourceGroupId: e.groupId }
       })
+      await redrawFromMain()
       clearWebSessionFocusIntent(structuredAgentSessionFocusOwner({ kind: 'local' }), 'wt-1')
       if (first === 'inventory') {
         applyStructuredSessionTabSnapshots([snapshot(sessionId)])
@@ -392,7 +362,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(other.groupId)
       useAppStore.getState().moveUnifiedTabToGroup(slotId, other.groupId)
       applyStructuredSessionTabSnapshots([
-        { ...snapshot(sessionId), snapshotVersion: Date.now() + 1 }
+        { ...snapshot(sessionId), snapshotVersion: SNAPSHOT_VERSION + 1 }
       ])
       expect(tabs().find((tab) => tab.entityId === sessionId)?.groupId).toBe(other.groupId)
     }
@@ -401,7 +371,7 @@ describe('CLI identity resume through the existing launch owner', () => {
   it.each([false, true])(
     'keeps overlapping requests in their canonical order (second finishes first: %s)',
     async (reverse) => {
-      const initial = seedTabs()
+      const initial = await seedTabs()
       const replies = [deferred<unknown>(), deferred<unknown>()]
       mocks.call
         .mockImplementationOnce(() => replies[0].promise)
@@ -424,7 +394,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   )
 
-  it('restores a pending-only group as unknown without sending create or restoring focus', () => {
+  it('restores a pending-only group as unknown without sending create or restoring focus', async () => {
     const record = {
       sessionId: 'reload-pending',
       executionHostId: 'local' as const,
@@ -461,9 +431,11 @@ describe('CLI identity resume through the existing launch owner', () => {
       ...buildHydratedTabState(session, new Set(['wt-1'])),
       worktreesByRepo: { repo: [makeWorktree({ id: 'wt-1', repoId: 'repo', hostId: 'local' })] }
     })
+    await redrawFromMain()
     restoreStructuredLaunchSurfaces()
     restoreStructuredLaunchSurfaces()
     applyStructuredSessionTabSnapshots([snapshot()])
+    await main?.settle()
     expect(mocks.call).not.toHaveBeenCalled()
     expect(
       peekWebSessionFocusIntent(structuredAgentSessionFocusOwner({ kind: 'local' }), 'wt-1')

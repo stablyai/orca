@@ -1,7 +1,8 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
+import type { RpcRequest, RpcResponse } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { WORKTREE_METHODS } from './worktree'
 import {
@@ -55,11 +56,7 @@ describe('worktree.create launch source', () => {
   })
 })
 
-/**
- * Recorded `worktree.create` requests from clients that update separately from the host: the CLI's
- * `worktree create --agent --prompt` and the phone's create-from-issue draft. The host now starts
- * their agent through the launch executor; what they send and read must not change.
- */
+/** Preserve independently updated CLI/phone worktree.create wire contracts while routing agent startup through the launch executor. */
 describe('worktree.create with a startup agent', () => {
   const repo = {
     id: 'repo-1',
@@ -85,7 +82,6 @@ describe('worktree.create with a startup agent', () => {
     launchSource: 'cli'
   }
 
-  // The phone's "create workspace from issue" with an agent picked.
   const PHONE_ISSUE_DRAFT_CREATE = {
     repo: 'id:repo-1',
     name: 'issue-88',
@@ -109,7 +105,7 @@ describe('worktree.create with a startup agent', () => {
         run(),
       showRepo: vi.fn().mockResolvedValue(repo),
       // The chat default is on: `worktree.create` still answers with a terminal agent.
-      getClientSettings: () => ({ experimentalNativeChat: true }),
+      getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
       getStructuredAgentSessionCreateSupport: vi.fn(async () => ({
         supported: true
       })),
@@ -207,6 +203,98 @@ describe('worktree.create with a startup agent', () => {
   })
 })
 
+describe('worktree explicit acknowledgement RPC', () => {
+  it.each([false, true])(
+    'publishes a captured read only after metadata succeeds: %s',
+    async (fails) => {
+      const acknowledgement = {
+        reads: [{ sessionId: 'session-1', observedCursor: { epoch: 'journal-1', sequence: 5 } }]
+      }
+      const publish = vi.fn()
+      let captured = false
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every runtime method this request reaches.
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        prepareWorkspaceAttentionAcknowledgement: async () => {
+          captured = true
+          return acknowledgement
+        },
+        updateManagedWorktreeMeta: async () => {
+          expect(captured).toBe(true)
+          expect(publish).not.toHaveBeenCalled()
+          if (fails) {
+            throw new Error('metadata write failed')
+          }
+          return { id: 'wt-1' }
+        },
+        acknowledgeNotificationAttention: publish
+      } as unknown as OrcaRuntimeService
+
+      const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+        id: 'req-read',
+        authToken: 'tok',
+        method: 'worktree.set',
+        params: { worktree: 'id:wt-1', isUnread: false, acknowledgeAttention: true }
+      })
+
+      expect(response).toMatchObject({ ok: !fails })
+      if (fails) {
+        expect(publish).not.toHaveBeenCalled()
+      } else {
+        expect(publish).toHaveBeenCalledExactlyOnceWith(acknowledgement)
+      }
+    }
+  )
+
+  it('persists the explicit read when notification cursor collection fails', async () => {
+    const updateManagedWorktreeMeta = vi.fn(async () => ({ id: 'wt-1' }))
+    const publish = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request reaches only the supplied runtime methods.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prepareWorkspaceAttentionAcknowledgement: async () => {
+        throw new Error('journal_read_only')
+      },
+      updateManagedWorktreeMeta,
+      acknowledgeNotificationAttention: publish
+    } as unknown as OrcaRuntimeService
+    const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+      id: 'req-read',
+      authToken: 'tok',
+      method: 'worktree.set',
+      params: { worktree: 'id:wt-1', isUnread: false, acknowledgeAttention: true }
+    })
+    expect(response).toMatchObject({ ok: true })
+    expect(updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ isUnread: false })
+    )
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('keeps ordinary unread metadata writes independent of notification acknowledgement', async () => {
+    const prepare = vi.fn()
+    const publish = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every runtime method this request reaches.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      prepareWorkspaceAttentionAcknowledgement: prepare,
+      updateManagedWorktreeMeta: async () => ({ id: 'wt-1' }),
+      acknowledgeNotificationAttention: publish
+    } as unknown as OrcaRuntimeService
+    const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch({
+      id: 'req-metadata',
+      authToken: 'tok',
+      method: 'worktree.set',
+      params: { worktree: 'id:wt-1', isUnread: false }
+    })
+
+    expect(response).toMatchObject({ ok: true })
+    expect(prepare).not.toHaveBeenCalled()
+    expect(publish).not.toHaveBeenCalled()
+  })
+})
+
 describe('worktree GitHub PR suppression RPC', () => {
   it('forwards suppression writes to host-owned metadata persistence', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every runtime member reached by the requests in this suite.
@@ -270,8 +358,7 @@ describe('worktree missing-terminal teardown RPC', () => {
 })
 
 describe('worktree.listRetiredNames', () => {
-  // The watermark rides alongside the names rather than being expanded into them; a client
-  // predating the field reads the names only and under-retires the compacted tiers.
+  // Keep the watermark beside names; older readers ignore it and under-retire compacted tiers.
   const RETIRED = {
     retiredNamesByRepo: { 'repo-1': ['nautilus-2'] },
     retiredNameTiersByRepo: { 'repo-1': 1 }
@@ -311,22 +398,22 @@ describe('worktree.rm waits for the delete only for clients that can show it', (
 
   async function dispatchRm(
     runtime: OrcaRuntimeService,
-    clientCapabilities: readonly RuntimeCapability[] | undefined
-  ): Promise<void> {
+    clientCapabilities: readonly RuntimeCapability[] | undefined,
+    params: Record<string, unknown> = {}
+  ): Promise<RpcResponse> {
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    await dispatcher.dispatch(
+    return dispatcher.dispatch(
       {
         id: 'req-1',
         authToken: 'tok',
         method: 'worktree.rm',
-        params: { worktree: 'id:wt-1', hostId: 'local' }
+        params: { worktree: 'id:wt-1', hostId: 'local', ...params }
       },
       { clientCapabilities }
     )
   }
 
-  // Why: the reply may wait out Git's delete only for a client that shows the `removing` marker; an
-  // older client is answered on acceptance, as its timeouts and listings expect.
+  // Only clients showing removing can wait out Git deletion; older clients need acceptance before timeout.
 
   it('asks the runtime to wait for a client that advertises background removal', async () => {
     expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
@@ -350,6 +437,33 @@ describe('worktree.rm waits for the delete only for clients that can show it', (
       'id:wt-1',
       expect.not.objectContaining({ waitForBackgroundRemoval: true })
     )
+  })
+
+  it('waits for a caller that asks for the outcome, such as the CLI (#35135)', async () => {
+    const runtime = makeRuntime()
+    vi.mocked(runtime.removeManagedWorktree).mockRejectedValue(
+      new Error('working trees containing submodules cannot be moved or removed')
+    )
+
+    const response = await dispatchRm(runtime, undefined, { waitForBackgroundRemoval: true })
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ waitForBackgroundRemoval: true })
+    )
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('containing submodules') }
+    })
+  })
+
+  it('does not call an accepted, still-running delete removed', async () => {
+    const runtime = makeRuntime()
+    vi.mocked(runtime.removeManagedWorktree).mockResolvedValue({ removing: true })
+
+    const response = await dispatchRm(runtime, [])
+
+    expect(response).toMatchObject({ ok: true, result: { removed: false, removing: true } })
   })
 })
 
@@ -375,12 +489,12 @@ describe('worktree.rm host qualification', () => {
     return { id: 'req-1', authToken: 'tok', method: 'worktree.rm', params }
   }
 
-  /** The removal options every case forwards; only the resolved host differs. */
   const forwarded = (hostId?: string): Record<string, unknown> => ({
     force: true,
     runHooks: false,
     allowUnverifiedPtyStop: false,
     allowFailedArchiveHook: false,
+    waitForBackgroundRemoval: false,
     ...(hostId ? { hostId } : {})
   })
 
@@ -532,10 +646,7 @@ describe('worktree.rm host qualification', () => {
     })
     expect(runtime.removeManagedWorktree).not.toHaveBeenCalled()
   })
-  // Why: a delete legitimately arrives after Git stops listing the path (the
-  // caller is clearing a stale row). Pre-resolving the host must not turn that
-  // into a hard failure for a client that sends no hostId — mobile could delete
-  // such a row before host qualification and must still be able to.
+  // Git may already have dropped a stale row; unqualified deletion must still reach removeManagedWorktree.
   it('still deletes a stale workspace for an old client once Git no longer lists it', async () => {
     const runtime = makeRuntime()
     vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
@@ -546,8 +657,7 @@ describe('worktree.rm host qualification', () => {
     )
 
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
-    // Unqualified on purpose: removeManagedWorktree owns the stale-row path and
-    // still refuses on its own if the id turns out to have two owners.
+    // Let removeManagedWorktree handle the stale row; it still refuses ids owned by two hosts.
     expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-gone', forwarded())
   })
 })
@@ -564,7 +674,7 @@ describe('worktree.rm waivers travel on their own fields', () => {
     } as unknown as OrcaRuntimeService
   }
 
-  /** The dispatcher validates against the Zod schema, so the test spells the wire shape. */
+  /** Use wire params because dispatcher validation uses the Zod schema. */
   type RmParams = {
     hostId?: string
     force?: boolean
@@ -584,7 +694,7 @@ describe('worktree.rm waivers travel on their own fields', () => {
     await dispatcher.dispatch(request)
   }
 
-  /** Every waiver off unless a case turns it on — the defaults are the assertion. */
+  /** Default every waiver off; each case opts in explicitly. */
   const forwarded = (
     overrides: Partial<Record<string, unknown>> = {}
   ): Record<string, unknown> => ({
@@ -592,13 +702,12 @@ describe('worktree.rm waivers travel on their own fields', () => {
     runHooks: false,
     allowUnverifiedPtyStop: false,
     allowFailedArchiveHook: false,
+    waitForBackgroundRemoval: false,
     hostId: 'local',
     ...overrides
   })
 
-  // Why (#11960 and #19334): each waiver rides its own field. The desktop sets `force` for an
-  // ordinary confirmed delete, so keying either waiver off `force` would silently disable that gate
-  // on the primary delete path. These cases exist to keep `force` from acquiring a second meaning.
+  // Waivers need independent fields (#11960, #19334): desktop force means confirmed deletion, not bypassing either gate.
 
   it.each([
     [

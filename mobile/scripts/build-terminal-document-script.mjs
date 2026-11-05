@@ -2,18 +2,8 @@ import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import esbuild from 'esbuild'
 
-/**
- * The in-WebView terminal document, bundled from its modules.
- *
- * The document is a string the native WebView loads inside its HTML, so it cannot be an ES module
- * there — and it is ordinary TypeScript everywhere else, which the page imports directly. So this
- * is one esbuild bundle of the entry that calls `createTerminalDocument()` with no host, written
- * out as a string exactly as the xterm engine beside it is.
- *
- * `iife`, so the bundle's module scope is its own and nothing it declares reaches the page it is
- * pasted into. Not minified: the document is read in crash reports and in the WebView's own
- * console, and the size it saves is small beside the engine it sits next to.
- */
+// Bundle createTerminalDocument() without host into an IIFE string for native WebView; page imports ordinary TS instead.
+// IIFE isolates declarations. Keep source readable for crash reports/console; size is small relative to xterm engine.
 const mobileRoot = path.join(import.meta.dirname, '..')
 
 /** The oldest WebView Orca supports, matching the engine bundle's own floor (#7030). */
@@ -33,17 +23,8 @@ const GENERATED_HEADER =
   `// The source is mobile/src/terminal/document/, bundled from native-document-entry.ts.\n` +
   `// Target: ${TARGET}. Regenerate via pnpm postinstall.`
 
-/**
- * One options object, so a census of what the bundle contains measures the bundle that ships.
- *
- * `minify: false` is load-bearing beyond readability: the engine-error overlay reports the line and
- * column `window.onerror` hands it, and a minified document makes both useless.
- *
- * So is `absWorkingDir`: esbuild writes each module's path into the bundle as a comment, relative
- * to the working directory, so without it the artifact's bytes depend on where the generator was
- * run from — and from outside the repo the comments carry an absolute path with the builder's home
- * directory in it.
- */
+// Share build options with census so it measures shipped output. Keep minify:false for useful window.onerror line/column.
+// Pin absWorkingDir: esbuild’s module-path comments must be reproducible and must not expose builder home paths.
 export function terminalDocumentBuildOptions(extra = {}) {
   return {
     absWorkingDir: mobileRoot,
@@ -60,13 +41,7 @@ export function terminalDocumentBuildOptions(extra = {}) {
   }
 }
 
-/**
- * One bundle, and everything a reader asks about it.
- *
- * The text and the module list come from the same build because they are two readings of one
- * thing: a census that built its own would answer about a bundle nobody ships, and the pair is
- * what lets a test compare the committed artifact with what the sources say it should be.
- */
+// Return text and module census from one build so tests compare committed artifact against the sources that produced it.
 export async function terminalDocumentBundle() {
   const result = await esbuild.build(terminalDocumentBuildOptions({ metafile: true }))
   const [output] = result.outputFiles

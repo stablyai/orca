@@ -3,7 +3,7 @@ import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
@@ -46,7 +46,7 @@ function row(worktreeId: string, extra: Record<string, unknown> = {}) {
   }
 }
 
-function fakeHosts(servers: { id: string; live: boolean }[]) {
+function fakeHosts(servers: { id: string; live: boolean; wsl?: true }[]) {
   const state = { servers, pairingRevision: 1 }
   const statusListeners = new Set<() => void>()
   const retiredListeners = new Set<(environmentId: string) => void>()
@@ -69,11 +69,12 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
   }))
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
-      environments: state.servers.map(({ id }) => ({
+      environments: state.servers.map(({ id, wsl }) => ({
         id,
         name: id,
         pairingRevision: state.pairingRevision,
-        runtimeId: 'runtime-a'
+        runtimeId: 'runtime-a',
+        ...(wsl ? { orcadDeployment: { kind: 'wsl' as const } } : {})
       })),
       statusByEnvironmentId: new Map(
         state.servers.map(({ id, live }) => [
@@ -124,6 +125,9 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
   }
 }
 
+// callRuntimeEnvironment's bound for a call that names none.
+const DEFAULT_TRANSPORT_TIMEOUT_MS = 15_000
+
 const GROUP = {
   name: 'school',
   parentPath: null,
@@ -146,6 +150,36 @@ describe('PairedServerRowsProducer', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it("feeds the desktop's own WSL host's rows like any server's, and only while it runs", async () => {
+    const { hosts, call, state, watches, publishStatus } = fakeHosts([
+      { id: 'wsl:ubuntu', live: true, wsl: true }
+    ])
+    call.mockResolvedValue(psReply([row('repo::/home/me/a')]))
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('wsl:ubuntu')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rowsOf(producer, 'runtime:wsl%3Aubuntu')).toMatchObject({
+      freshness: 'live',
+      rows: [{ key: 'runtime:wsl%3Aubuntu|repo::/home/me/a' }]
+    })
+
+    // Stopped: its rows stay, unverifiable, and nothing more is asked of it.
+    state.servers = [{ id: 'wsl:ubuntu', live: false, wsl: true }]
+    publishStatus()
+    expect(watches.get('wsl:ubuntu')?.closed).toBe(true)
+    expect(rowsOf(producer, 'runtime:wsl%3Aubuntu')).toMatchObject({
+      freshness: 'unverifiable',
+      rows: [{ key: 'runtime:wsl%3Aubuntu|repo::/home/me/a' }]
+    })
+    call.mockClear()
+    await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    expect(call).not.toHaveBeenCalled()
   })
 
   it('populates from a server in contact once its change stream is ready', async () => {
@@ -172,7 +206,7 @@ describe('PairedServerRowsProducer', () => {
       { environmentId: 'box' },
       'worktree.ps',
       { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
-      { timeoutMs: 5_000, expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
+      { expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
     )
     expect(rowsOf(producer, 'runtime:box')).toEqual({
       hostId: 'runtime:box',
@@ -237,6 +271,90 @@ describe('PairedServerRowsProducer', () => {
 
     expect(call).toHaveBeenCalledTimes(2)
     expect(rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)).toEqual(['new'])
+  })
+
+  // A server answering after `delayMs`, or failing as the transport would once its bound passes.
+  function slowServer(call: ReturnType<typeof fakeHosts>['call'], delayMs: number, rows: string[]) {
+    call.mockImplementationOnce(
+      (_host, _method, _params, options) =>
+        new Promise((resolve, reject) => {
+          const boundMs = options?.timeoutMs ?? DEFAULT_TRANSPORT_TIMEOUT_MS
+          if (delayMs > boundMs) {
+            setTimeout(() => reject(new Error('timed out')), boundMs)
+          } else {
+            setTimeout(() => resolve(psReply(rows.map((id) => row(id)))), delayMs)
+          }
+        })
+    )
+  }
+
+  it('lists a server that takes 8 s to answer', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    slowServer(call, 8_000, ['a'])
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(7_999)
+    expect(rowsOf(producer, 'runtime:box')?.rows).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({
+      freshness: 'live',
+      rows: [{ worktreeId: 'a' }]
+    })
+  })
+
+  it('holds one fetch per server, and notices during it coalesce into one follow-up', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    slowServer(call, 8_000, ['old'])
+    slowServer(call, 8_000, ['new'])
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Change notices and a reader's refresh arrive while it runs.
+    watches.get('box')?.onChange()
+    watches.get('box')?.onChange()
+    void producer.refresh('box')
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(call).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(call).toHaveBeenCalledTimes(2)
+    // The fallback poll answers too, so the rows stay live.
+    call.mockResolvedValueOnce(psReply([row('new')]))
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(call).toHaveBeenCalledTimes(3)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({ freshness: 'live' })
+    expect(rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)).toEqual(['new'])
+  })
+
+  it('keeps the last rows when a fetch times out', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    call.mockResolvedValueOnce(psReply([row('a')]))
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+
+    slowServer(call, 60_000, ['never'])
+    watches.get('box')?.onChange()
+    // The transport's normal bound, not the phone's 5 s, ends the wait.
+    await vi.advanceTimersByTimeAsync(DEFAULT_TRANSPORT_TIMEOUT_MS - 1)
+    expect(rowsOf(producer, 'runtime:box')?.freshness).toBe('live')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(rowsOf(producer, 'runtime:box')).toMatchObject({
+      freshness: 'unverifiable',
+      rows: [{ worktreeId: 'a' }]
+    })
   })
 
   it('keeps the last rows as unverifiable when the server loses contact or stops answering', async () => {

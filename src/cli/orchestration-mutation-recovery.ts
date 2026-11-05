@@ -1,4 +1,4 @@
-import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell/launch/shell-argument-quoting'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   recoverableOrchestrationArgs,
@@ -7,9 +7,12 @@ import {
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { quotePowerShellNativeArgument } from '../shared/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
-import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../shared/agent-launch/startup/tui-agent-startup-shell'
 
-export function orchestrationMutationRecoveryError(error: unknown): unknown {
+export function orchestrationMutationRecoveryError(
+  error: unknown,
+  { unsent = false }: { unsent?: boolean } = {}
+): unknown {
   if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
     return error
   }
@@ -29,8 +32,7 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     ? [...originalCommand, '--retry-request', requestId]
     : undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
-  // Why: a lost response usually carries no dispatch id, and the old code then emitted
-  // no read-only step at all — leaving retry as the only way to learn what happened.
+  // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
   const queryCommand = dispatchId
     ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, '--json']
     : [executable, 'orchestration', 'request-show', '--request', requestId, '--json']
@@ -40,7 +42,7 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     queryCommand,
     ...(retryCommand ? { retryCommand } : {}),
     recoveryBlocked: !retryCommand,
-    disposition: 'outcome_unknown',
+    disposition: unsent ? 'not_sent' : 'outcome_unknown',
     workerDeathInferred: false
   }
   const retryStep = retryCommand
@@ -48,10 +50,22 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
       ? `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
       : `If request-show reports completed or pending, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If request-show reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
     : 'Recovery is blocked until the exact original command is available; no retry command was emitted.'
-  const nextSteps = [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]
+  const readsStdin = retryCommand?.some(
+    (arg, i) => arg === '-' && /^--[\w-]+-file$/.test(retryCommand[i - 1] ?? '')
+  )
+  const nextSteps = [
+    ...(unsent
+      ? [
+          `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command with --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
+        ]
+      : [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]),
+    ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])
+  ]
   const message = [
     stripUnsafeRetryAdvice(error.message, requestId),
-    'The orchestration mutation may already have taken effect; do not assume it failed.',
+    unsent
+      ? 'Nothing was sent: Orca did not answer the check that runs before the orchestration mutation, so the mutation did not run.'
+      : 'The orchestration mutation may already have taken effect; do not assume it failed.',
     ...nextSteps,
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
     Array.isArray(data?.residualResources)
@@ -65,8 +79,7 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     recovery,
     nextSteps
   }
-  // Preserve the RPC failure envelope so --json callers retain the request id and
-  // runtime metadata while receiving the structured recovery guidance.
+  // Preserve request id and runtime metadata for --json recovery.
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,
@@ -195,8 +208,7 @@ function resolveRecoveryShell(
 
 function quoteRecoveryArgument(value: string, shell: AgentStartupShell): string {
   if (shell === 'cmd') {
-    // cmd has no single-quote syntax and expands %VAR% inside double quotes;
-    // use the argv encoder that keeps quote parity and escapes percent pairs.
+    // cmd expands %VAR% inside double quotes; its argv encoder must escape percent pairs too.
     return quoteWindowsCmdArgument(value)
   }
   if (shell === 'powershell') {
@@ -217,4 +229,16 @@ function stripUnsafeRetryAdvice(message: string, requestId: string): string {
     .replace(' Restart Orca and try again.', '')
     .replace(' Retry the command.', '')
     .replace(` Orchestration mutation request ID: ${requestId}.`, '')
+}
+
+/** Receipts name recovery commands as `orca …`; resolve them for this install before any output, JSON included. */
+export function withResolvedNextCommands<T extends { nextCommands?: string[] }>(receipt: T): T {
+  return receipt.nextCommands
+    ? {
+        ...receipt,
+        nextCommands: receipt.nextCommands.map((command) =>
+          renderResolvedOrchestrationCommand(command)
+        )
+      }
+    : receipt
 }

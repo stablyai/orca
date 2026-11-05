@@ -93,7 +93,6 @@ it.each(['read', 'replacement', 'legacy-replacement'] as const)(
     gate.finish.resolve()
     await exiting
     expect(readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-    // Why every action: the exit retired the leaf in memory before any of them could run.
     expect(runtime.snapshot()?.tabs).toHaveLength(0)
   }
 )

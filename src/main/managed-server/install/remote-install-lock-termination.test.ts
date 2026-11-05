@@ -6,13 +6,12 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { acquireInstallLock, isRelayInstallLockStale } from './remote-install-lock'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never reads the connection.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const mockExec = vi.mocked(execCommand)
 const nextAcquisition = ['OPEN', '', 'OK', 'OPEN']
 

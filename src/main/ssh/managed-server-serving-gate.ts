@@ -1,4 +1,3 @@
-/** Whether a connect's serving check ends it, or lets the update check run (and redeploy). */
 import type { HostServerUpdateOnConnect } from './managed-server-update-check'
 import {
   MANAGED_ORCAD_FENCED_DETAIL,
@@ -9,11 +8,7 @@ import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
 
 type ManagedRoute = Extract<HostServerOnConnectResult, { route: 'managed' }>
 
-/**
- * The managed result for a server that is not serving, or null when the update check runs next.
- * A host with no active version (another desktop stopped it) goes on to the update, which
- * redeploys this desktop's still-linked server instead of leaving it stranded.
- */
+/** No active version continues to update/redeploy the still-linked server; return a managed result for other non-serving states. */
 export function unservedManagedResult(
   environmentId: string,
   serving: OrcadManagedServing
@@ -30,7 +25,7 @@ export function unservedManagedResult(
   }
 }
 
-/** Keeps the "not activated" note when the update did not bring a server back. */
+/** Preserve the not-activated note when update did not restore service. */
 export function managedResultAfterUpdate(
   environmentId: string,
   serving: OrcadManagedServing,

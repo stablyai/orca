@@ -2,7 +2,6 @@ import { translate } from '@/i18n/i18n'
 import type { DashboardCard, DashboardFilterOption } from '../../../../shared/dashboard-snapshot'
 import type { DashboardReviewFilter } from './agent-board-filtering'
 
-/** Option rows and labels for the shared dashboard filter menu. */
 export type FilterOption = { id: string; label: string; count: number; color?: string }
 
 function countBy(

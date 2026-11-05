@@ -1,10 +1,11 @@
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
@@ -13,16 +14,17 @@ import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
-import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
-import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
-import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
+import {
+  NativeChatDetailsDisclosure,
+  NativeChatImageAttachments
+} from './NativeChatTranscriptChrome'
+import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
-/** Under a user message: copy + timestamp, revealed together like the agent controls row. Until
- *  confirmed, a quiet "Sending…" stays visible in the time's place and copy keeps its own reveal,
- *  so the row keeps its height when it clears. Image-only prompts have no text to copy. */
+/** Sending replaces the timestamp without changing row height; image-only prompts offer no text copy. */
 function UserMessageMeta({
   markdown,
   timestamp,
@@ -69,6 +71,7 @@ export function NativeChatUserMessageRow({
   onLinkClick,
   allowFileUriLinks,
   runtimeContext,
+  structuredAttachments = false,
   rewind,
   deliveryNotice
 }: {
@@ -79,12 +82,12 @@ export function NativeChatUserMessageRow({
   onRefolded: () => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   rewind?: NativeChatRewindSurface
   deliveryNotice?: NativeChatDeliveryNotice
 }): React.JSX.Element {
-  // Another agent's message is the agent's turn input too, but is not the person's: it reads
-  // left-aligned under its sender rather than as their bubble.
+  // Agent-authored input belongs to the turn but uses a left-aligned sender row instead of the person’s bubble.
   const from = message.from
   const sending = deliveryNotice?.sending === true
   return (
@@ -96,71 +99,99 @@ export function NativeChatUserMessageRow({
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
       {from ? (
-        <NativeChatAgentMessageSenders
+        <NativeChatAgentMessageCard
+          message={message}
           from={from}
-          chatWorktreeId={runtimeContext?.worktreeId ?? null}
+          textAttachmentContent={structuredAttachments ? markdown : undefined}
+          runtimeContext={runtimeContext}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+          onRefolded={onRefolded}
         />
-      ) : null}
-      {/* A distinct surface separates the user's prompt from the assistant's prose. */}
-      <div
-        className={cn(
-          'max-w-[80%] text-sm',
-          from
-            ? 'select-text border-l-2 border-border/60 pl-3 text-chat-foreground'
-            : 'rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-chat-foreground-strong'
-        )}
-      >
-        {markdown ? (
-          <>
+      ) : (
+        <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm text-chat-foreground-strong">
+          {markdown ? (
+            <>
+              <NativeChatImageAttachments
+                blocks={prose}
+                runtimeContext={runtimeContext}
+                enablePreview={runtimeContext !== undefined}
+              />
+              <NativeChatUserMessageFold
+                messageId={message.id}
+                markdown={markdown}
+                onRefolded={onRefolded}
+                // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
+                className="-mx-3.5 px-3.5"
+              >
+                <NativeChatTextAttachments
+                  content={markdown}
+                  structured={structuredAttachments}
+                  runtimeContext={runtimeContext}
+                  renderText={(text) => (
+                    <NativeChatMarkdown
+                      rowKey={message.id}
+                      content={text}
+                      variant="document"
+                      className="text-sm"
+                      renderCodeBlock={NativeChatCodeBlock}
+                      onLinkClick={onLinkClick}
+                      allowFileUriLinks={allowFileUriLinks}
+                    />
+                  )}
+                />
+              </NativeChatUserMessageFold>
+            </>
+          ) : (
             <NativeChatImageAttachments
               blocks={prose}
               runtimeContext={runtimeContext}
               enablePreview={runtimeContext !== undefined}
             />
-            <NativeChatUserMessageFold
-              messageId={message.id}
-              markdown={markdown}
-              onRefolded={onRefolded}
-            >
-              <NativeChatMarkdown
-                rowKey={message.id}
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                renderCodeBlock={NativeChatCodeBlock}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
-            </NativeChatUserMessageFold>
-          </>
-        ) : (
-          <NativeChatImageAttachments
-            blocks={prose}
-            runtimeContext={runtimeContext}
-            enablePreview={runtimeContext !== undefined}
-          />
-        )}
-      </div>
+          )}
+        </div>
+      )}
       {message.sentAs === 'goal' ? (
         <div className="flex items-center gap-1 text-xs text-chat-foreground-faint">
           <Goal className="size-3" aria-hidden />
           <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
         </div>
       ) : null}
-      <UserMessageMeta
-        markdown={markdown}
-        timestamp={message.timestamp}
-        sending={sending}
-        {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
-      />
+      {!from ? (
+        <UserMessageMeta
+          markdown={markdown}
+          timestamp={message.timestamp}
+          sending={sending}
+          {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
+        />
+      ) : null}
       {deliveryNotice?.text !== undefined ? (
         <div className="flex max-w-[85%] items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+          {deliveryNotice.onSend ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
+              {translate('components.native-chat.queuedMessages.send', 'Send')}
+            </Button>
+          ) : null}
+          {deliveryNotice.onEdit ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
+              {translate('components.native-chat.editDeliveryNotice', 'Edit')}
+            </Button>
+          ) : null}
           {deliveryNotice.onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
               {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
             </Button>
           ) : null}
+        </div>
+      ) : null}
+      {deliveryNotice?.detail ? (
+        <div className="max-w-[85%]">
+          <NativeChatDetailsDisclosure
+            summary={translate('components.native-chat.notices.details', 'Details')}
+          >
+            {deliveryNotice.detail}
+          </NativeChatDetailsDisclosure>
         </div>
       ) : null}
     </div>

@@ -1,6 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import type { ChatUnavailableReason, NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type {
+  ChatUnavailableReason,
+  NewTabAgentMenuRow
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
   switch (reason) {
@@ -21,6 +24,11 @@ export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
       )
     case 'wsl':
       return translate('auto.components.tab.bar.QuickLaunchButton.chatNotInWsl', 'No chat in WSL')
+    case 'subfolder':
+      return translate(
+        'auto.components.tab.bar.QuickLaunchButton.chatNotInSubfolder',
+        'No chat in a subfolder'
+      )
     case 'not-on-host':
       return translate(
         'auto.components.tab.bar.QuickLaunchButton.chatNotOnHost',

@@ -1,13 +1,7 @@
-/**
- * A phone paired with a desktop that has a workspace on a managed SSH host lists that workspace
- * from the host's sidebar feed, row for row as the desktop sidebar draws it: the SSH host's section,
- * its workspace, and the single highlight while it is the open workspace.
- *
- * The phone side is the page's own feed reader and list builder (helpers/phone-feed-list.ts) over a
- * real paired socket; the desktop side is the sidebar's rendered rows.
- */
+// Compare real phone feed/list modules over a paired socket to rendered desktop SSH rows, including host section and active highlight.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import {
   launchManagedWorkspace,
   skipUnlessManagedDockerHost,
@@ -17,6 +11,7 @@ import { createDesktopMobilePairingOffer } from './helpers/paired-electron-clien
 import { pairMobileClient } from './helpers/paired-mobile-client'
 import {
   desktopSidebarOutline,
+  outlineRows,
   openPhoneFeedList,
   type ListOutline
 } from './helpers/phone-feed-list'
@@ -39,12 +34,12 @@ async function expectPhoneMatchesDesktop(page: Page, phone: PhoneList): Promise<
       async () => {
         desktop = await desktopSidebarOutline(page)
         shown = await phone.outline()
-        return shown.join('\n') === desktop.join('\n')
+        return outlineRows(shown).join('\n') === outlineRows(desktop).join('\n')
       },
       { timeout: 60_000 }
     )
     .toBe(true)
-    .catch(() => expect(shown).toEqual(desktop))
+    .catch(() => expect(outlineRows(shown)).toEqual(outlineRows(desktop)))
   return shown
 }
 
@@ -52,7 +47,7 @@ test("the phone lists the desktop's managed SSH workspace as the desktop sidebar
 {}, testInfo) => {
   test.setTimeout(12 * 60_000)
   await withManagedHost(testInfo, async (fixture) => {
-    const { page, seeded } = await launchManagedWorkspace(fixture)
+    const { page, seeded, environmentId } = await launchManagedWorkspace(fixture)
     const sshRow = (outline: ListOutline): string[] =>
       outline.filter((line) => line.startsWith('ITEM ') && line.includes(seeded.repoPath))
     // The desktop draws the SSH workspace before the phone is asked to match it.
@@ -61,7 +56,11 @@ test("the phone lists the desktop's managed SSH workspace as the desktop sidebar
       .toHaveLength(1)
 
     const phone = pairMobileClient(await createDesktopMobilePairingOffer(page))
-    const list = await openPhoneFeedList(phone)
+    // The phone last opened the seeded workspace, on its managed server, so it highlights that row.
+    const list = await openPhoneFeedList(phone, {
+      worktreeId: seeded.worktreeId,
+      executionHost: toRuntimeExecutionHostId(environmentId)
+    })
     try {
       const shown = await expectPhoneMatchesDesktop(page, list)
       expect(sshRow(shown)).toEqual([expect.stringMatching(/ ACTIVE$/)])

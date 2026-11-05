@@ -10,7 +10,10 @@ vi.mock('../ipc/wsl-guest-windows-drive-path', async (original) => {
   return {
     ...actual,
     guestNativePathEnv: (pathEnv: string | null | undefined) =>
-      actual.guestNativePathEnv(pathEnv, guest.mounts)
+      actual.guestNativePathEnv(pathEnv, guest.mounts),
+    // The stock lookup reads mounts inside this helper, not through the export above.
+    resolveGuestNativeProgram: (...args: Parameters<typeof actual.resolveGuestNativeProgram>) =>
+      actual.resolveGuestNativeProgram(args[0], args[1], args[2], guest.mounts)
   }
 })
 
@@ -36,7 +39,7 @@ function binDir(name: string): string {
   return directory
 }
 
-// Why posix-only: the guest is Linux; Windows resolution never consults drive mounts.
+// Drive-mount filtering applies to Linux guests; Windows resolves its own shims.
 describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a WSL guest', () => {
   it('skips a Windows shim on a drive mount for the Linux CLI behind it', () => {
     const windowsDrive = binDir('drive')
@@ -44,7 +47,7 @@ describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a W
     guest.mounts = [windowsDrive]
     expect(
       resolveStructuredAgentCommand('codex', {}, { pathEnv: `${windowsDrive}:${linuxBin}` })
-    ).toBe(join(linuxBin, 'codex'))
+    ).toEqual({ command: join(linuxBin, 'codex'), prefixArgs: [] })
   })
 
   it("filters this process's PATH when the caller gives none", () => {
@@ -52,7 +55,10 @@ describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a W
     const linuxBin = binDir('linux')
     guest.mounts = [windowsDrive]
     vi.stubEnv('PATH', `${windowsDrive}:${linuxBin}`)
-    expect(resolveStructuredAgentCommand('codex', {})).toBe(join(linuxBin, 'codex'))
+    expect(resolveStructuredAgentCommand('codex', {})).toEqual({
+      command: join(linuxBin, 'codex'),
+      prefixArgs: []
+    })
   })
 
   it('filters the PATH a Command setting resolves through', () => {
@@ -63,15 +69,19 @@ describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a W
       agentCmdOverrides: { codex: 'codex-custom' },
       agentDefaultEnv: { codex: { PATH: `${windowsDrive}:${linuxBin}` } }
     }
-    expect(resolveStructuredAgentCommand('codex', settings)).toBe(join(linuxBin, 'codex-custom'))
+    expect(resolveStructuredAgentCommand('codex', settings)).toEqual({
+      command: join(linuxBin, 'codex-custom'),
+      prefixArgs: []
+    })
   })
 
   it('keeps the first PATH match off a guest', () => {
     const first = binDir('first')
     const second = binDir('second')
-    expect(resolveStructuredAgentCommand('codex', {}, { pathEnv: `${first}:${second}` })).toBe(
-      join(first, 'codex')
-    )
+    expect(resolveStructuredAgentCommand('codex', {}, { pathEnv: `${first}:${second}` })).toEqual({
+      command: join(first, 'codex'),
+      prefixArgs: []
+    })
   })
 })
 

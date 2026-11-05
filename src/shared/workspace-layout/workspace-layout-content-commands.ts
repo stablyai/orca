@@ -1,12 +1,10 @@
-// Opening editor, browser and agent-session tabs: the tab and its content record in one apply.
-
-import type { EditorTabView } from '../editor-tab-view-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
 import { editorOpenFileId } from './workspace-layout-editor-open-file-id'
 import { sameEditorFile } from './workspace-layout-editor-tab-file'
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
+import type { LayoutEditorView } from './layout-editor-view'
 import type {
   LayoutContentTab,
   LayoutEditorFile,
@@ -29,12 +27,7 @@ function contentTab(
   }
 }
 
-/**
- * An open tab for the same file in the target group is returned instead of a second one; a
- * non-preview open pins it, and the open's file record replaces the held one. Another group's tab
- * for the file does not count: a file opened in a second split gets its own tab there, as the
- * window does.
- */
+/** Reuse the same file in the target group, updating its record and pinning nonpreview opens. Other split groups may keep their own tab for that file. */
 export function openEditorTab(
   model: WorkspaceLayoutModel,
   command: CommandOf<'openEditorTab'>,
@@ -54,7 +47,12 @@ export function openEditorTab(
     tab.entityId === fileId && tab.kind === command.contentType
   const drawn = drawnTabOpen(model, key, command.tabId, sameFile, true)
   if (drawn) {
-    return drawn.ok ? applied(withEditorFile(drawn.model, key, command.file), drawn.result) : drawn
+    // The same tab sent again: an open that rewrote its record or view (a conflict open) updates both.
+    if (!drawn.ok || !command.tabId) {
+      return drawn
+    }
+    const next = withEditorFile(drawn.model, key, command.file)
+    return applied(withEditorView(next, key, command.tabId, command.view), drawn.result)
   }
   if (
     command.groupId &&
@@ -98,7 +96,6 @@ export function openEditorTab(
   })
 }
 
-/** The file's record, replacing any held for its path and owner. */
 function withEditorFile(
   model: WorkspaceLayoutModel,
   key: string,
@@ -116,7 +113,7 @@ function withEditorView(
   model: WorkspaceLayoutModel,
   key: string,
   tabId: string,
-  view: EditorTabView | undefined
+  view: LayoutEditorView | undefined
 ): WorkspaceLayoutModel {
   if (!view) {
     return model
@@ -169,10 +166,7 @@ export function openBrowserTab(
   )
 }
 
-/**
- * The same open again (a window's create resent) changes nothing; an id another tab or page holds
- * refuses it. Null when every id is free.
- */
+/** Resent drawn opens are idempotent; reject IDs held by another tab/page, and return null when free. */
 function takenBrowserTabIds(
   model: WorkspaceLayoutModel,
   key: string,
@@ -237,11 +231,7 @@ export function openAgentSessionTab(
   })
 }
 
-/**
- * An open naming a tab id: the same open again (a tab a window drew, then sent twice or saved
- * first) changes nothing; with `refuseTaken`, an id another tab holds refuses it. Null when the
- * open goes ahead.
- */
+/** Drawn tab IDs make resent or already-saved opens idempotent; refuseTaken rejects IDs held by another tab. Null proceeds with creation. */
 export function drawnTabOpen(
   model: WorkspaceLayoutModel,
   key: string,

@@ -1,10 +1,7 @@
-// The runtime's terminal tab and leaf records, projected from the layout holder's model joined
-// with the PTY registry, in the shape today's graph mirror (`tabs`, `leaves`, `leavesByPtyId`)
-// gives its readers (census U15). Read-only: a fact a reader changes is written to its owner —
-// connection, output and tail state to the PTY record, titles and agent status to the title
-// tracker's PTY fact — and the next projection carries it.
+// Join holder layout with PTY registry into mirror-shaped tab/leaf records (census U15).
+// Write mutations to fact owners—PTY connection/output/tail or title/status tracker—then reproject.
 
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { collectLayoutLeafIdsInOrder } from '../../shared/workspace-layout/terminal-pane-tree'
@@ -17,8 +14,11 @@ import {
 import type { PaneTerminalFact } from '../../shared/workspace-layout/workspace-layout-pane-status'
 import { resolveWorkspaceSelection } from '../../shared/workspace-layout/workspace-layout-views'
 import { pickStoredFields } from '../../shared/workspace-layout/stored-record-fields'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { getPtyTerminalState } from './terminal-wait-results'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
+import { getPtyTerminalState } from './terminal/wait/terminal-wait-results'
 
 export type RuntimeLeafProjection = {
   tabs: ReadonlyMap<string, Readonly<RuntimeSyncedTab>>
@@ -79,13 +79,7 @@ export type RuntimePtyRegistryView = {
   livenessOf: (ptyId: string) => PtyLivenessVerdict | null
 }
 
-/**
- * A neutral title that replaced the pane's stuck agent title (terminal-pane-title-reset.ts), dated
- * on the PTY title observation sequence so it compares with `lastOscTitleAt`. Today the renderer
- * decides these: a confirmed return to a shell (pane-agent-identity.ts) and an inferred interrupt
- * (shell-command-inference.ts). Main sees two of the triggers (`agentStatus:inferInterrupt`,
- * `agentStatus:reconcileEndedProcess`); the title-only interrupt has none yet.
- */
+/** Date neutral agent-title resets on the PTY clock for OSC comparison. Renderer owns shell/interrupt resets; main sees inferInterrupt/reconcileEndedProcess, but no title-only interrupt yet. */
 export type PaneTitleReset = { title: string; at: number }
 
 export type RuntimeLeafProjectionInput = RuntimePtyRegistryView & {
@@ -139,8 +133,7 @@ function projectLeaf(
 ): RuntimeLeafRecord {
   const { ptyId, leafId } = base
   const pty = ptyId === null ? undefined : input.ptysById.get(ptyId)
-  // As the mirror: connected unless the host proved an exit. A binding with no PTY record is not:
-  // the mirror would have created one from the window's live transport, the holder has none.
+  // Only proven exits disconnect; missing PTY records remain disconnected because the holder cannot reconstruct window transport facts.
   const connected =
     ptyId !== null && pty !== undefined && input.livenessOf(ptyId)?.status !== 'exited'
   const previous = input.previous?.leaves.get(runtimeLeafKey(tab.entityId, leafId))
@@ -150,10 +143,10 @@ function projectLeaf(
     tabId: tab.entityId,
     worktreeId: base.worktreeId,
     leafId,
-    // No renderer pane backs a holder leaf; -1 as other runtime-made leaves use.
+    // Holder leaves have no renderer pane; use the runtime-created sentinel -1.
     paneRuntimeId: -1,
     ptyId,
-    // Dated by the title itself, not by a graph sync that relayed it.
+    // Date title evidence itself, not the sync that relayed it.
     paneTitle: paneTitle.title,
     paneTitleUpdatedAt: paneTitle.at,
     title: resolveTerminalTabTitle(
@@ -168,7 +161,7 @@ function projectLeaf(
     ...NO_PTY_FACTS,
     ...(pty ? pickStoredFields(pty, RUNTIME_LEAF_PTY_FACT_FIELDS) : {}),
     connected,
-    // The holder's graph is always ready, so a connected leaf is writable.
+    // Holder graph is always ready; connected leaves are writable.
     writable: connected
   }
 }

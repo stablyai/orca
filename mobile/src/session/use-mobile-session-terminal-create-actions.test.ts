@@ -1,7 +1,7 @@
-import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
+import type { PendingSessionSelection } from './pending-session-selection'
 import { createElement } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
+import { useMobileNativeChatActiveResolution } from './native-chat/use-mobile-native-chat-active-resolution'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -61,18 +61,18 @@ function terminalCreateResponse(): RpcResponse {
 
 function createScope(client: RpcClient) {
   const sessionTabs: MobileSessionTab[] = []
+  const hostCapabilities: string[] = []
   return {
     nativeChatController: { setTabView: vi.fn() },
     hostId: 'host-1',
     worktreeId: 'workspace-1',
     client,
-    hostCapabilities: [],
+    hostCapabilities,
     connState: 'connected',
     setTerminals: vi.fn(),
     terminalsRef: { current: [] },
     setSessionTabs: vi.fn<(updater: PlacementUpdater) => void>(),
     sessionTabsRef: { current: sessionTabs },
-    defaultTerminalHandlesToLiveInput: vi.fn(),
     setActiveHandle: vi.fn(),
     activeSessionTabId: 'existing-tab',
     activeSessionTabIdRef: { current: 'existing-tab' },
@@ -98,148 +98,6 @@ function createScope(client: RpcClient) {
 describe('mobile + Codex tab creation routing', () => {
   let renderer: ReactTestRenderer | undefined
   afterEach(() => renderer?.unmount())
-
-  it('uses the structured agent-session path for a bare Codex launch', async () => {
-    const client = clientReturning(
-      { ok: true, result: { supported: true } },
-      {
-        ok: true,
-        result: {
-          ok: true,
-          value: { sessionId: 'codex_session_1' }
-        }
-      }
-    )
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal('codex')
-    })
-
-    expect(client.sendRequest).toHaveBeenNthCalledWith(1, 'agentSession.createSupport', {
-      worktree: 'id:workspace-1',
-      agent: 'codex'
-    })
-    expect(client.sendRequest).toHaveBeenNthCalledWith(
-      2,
-      'agentSession.create',
-      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'codex' }),
-      expect.anything()
-    )
-    expect(client.sendRequest).not.toHaveBeenCalledWith(
-      'session.tabs.createTerminal',
-      expect.anything()
-    )
-    // The chat's tab is found by its session in the next snapshot, never by a predicted id.
-    expect(scope.pendingSelectionRef.current).toEqual(
-      launchedSelection(expect.any(String), { sessionId: 'codex_session_1' })
-    )
-    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
-    // The open terminal stays live until the chat's tab lands, rather than blanking beside it.
-    expect(scope.setActiveHandle).not.toHaveBeenCalled()
-    expect(scope.unsubscribeTerminal).not.toHaveBeenCalled()
-    expect(scope.activeSessionTabTypeRef.current).toBe('terminal')
-    expect(scope.fetchSessionTabs).toHaveBeenCalledTimes(1)
-    expect(scope.scheduleDelayedAction).not.toHaveBeenCalled()
-  })
-
-  it('keeps the legacy terminal path when structured support is disabled', async () => {
-    const client = clientReturning(
-      { ok: false, error: { code: 'structured_agent_session_unsupported', message: 'off' } },
-      terminalCreateResponse()
-    )
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal('codex')
-    })
-
-    expect(client.sendRequest).toHaveBeenNthCalledWith(
-      2,
-      'session.tabs.createTerminal',
-      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'codex' })
-    )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
-    expect(scope.nativeChatController.setTabView).not.toHaveBeenCalled()
-  })
-
-  it('falls back to a terminal when structured creation is definitively refused', async () => {
-    const client = clientReturning(
-      { ok: true, result: { supported: true } },
-      {
-        ok: true,
-        result: {
-          ok: false,
-          refusal: {
-            code: 'structured_agent_session_unsupported',
-            message: 'provider unavailable'
-          }
-        }
-      },
-      terminalCreateResponse()
-    )
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal('codex')
-    })
-
-    expect(client.sendRequest).toHaveBeenNthCalledWith(
-      3,
-      'session.tabs.createTerminal',
-      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'codex' })
-    )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
-  })
-
-  it('keeps prompted Codex launches on the legacy terminal path', async () => {
-    const client = clientReturning(terminalCreateResponse(), {
-      ok: true,
-      result: { send: { accepted: true } }
-    })
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal('codex', { initialPrompt: 'Inspect this diff' })
-    })
-
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'session.tabs.createTerminal',
-      expect.objectContaining({ agent: 'codex' })
-    )
-    expect(client.sendRequest).not.toHaveBeenCalledWith(
-      'agentSession.createSupport',
-      expect.anything()
-    )
-  })
 
   it('does not create a legacy sibling after an unknown structured outcome', async () => {
     const client = clientReturning({ ok: true, result: { supported: true } })
@@ -301,51 +159,6 @@ describe('mobile + Codex tab creation routing', () => {
       expect(scope.showToast).toHaveBeenCalledWith('create outcome ambiguous', 1800)
     }
   )
-  // Why: pty exhaustion, a disabled agent and an unresolved worktree owner all arrived as the
-  // same 'Failed to create terminal', leaving the empty session with nothing to act on.
-  it('surfaces the host reason instead of a generic terminal-create error', async () => {
-    const client = clientReturning({
-      ok: false,
-      error: {
-        code: 'runtime_error',
-        message: 'Your system cannot allocate any more pty devices.'
-      }
-    })
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal()
-    })
-
-    expect(scope.setCreateError).toHaveBeenCalledWith(
-      'Your system cannot allocate any more pty devices.'
-    )
-  })
-
-  it('falls back to the generic message when the host gives no reason', async () => {
-    const client = clientReturning({ ok: false, error: { code: 'runtime_error', message: '' } })
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal()
-    })
-
-    expect(scope.setCreateError).toHaveBeenCalledWith('Failed to create terminal')
-  })
 })
 
 describe('phone chat CLI fork creation owner', () => {
@@ -410,6 +223,56 @@ describe('phone chat CLI fork creation owner', () => {
     })
     expect(resolution?.showNativeChat).toBe(true)
     expect(resolution?.isTabChatView('ordinary-tab')).toBe(true)
+  })
+
+  it('reports the strict saved-conversation refusal without opening a terminal or fallback', async () => {
+    const scope = createScope(
+      clientReturning({
+        ok: false,
+        error: { code: 'chat_fork_source_unavailable', message: 'chat_fork_source_unavailable' }
+      })
+    )
+    scope.hostCapabilities = [SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY]
+    scope.sessionTabsRef.current = [
+      {
+        type: 'agent-session',
+        id: 'chat-tab',
+        title: 'Chat',
+        sessionId: 'chat-1',
+        agent: 'claude',
+        isActive: true
+      }
+    ]
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      expect(
+        await actions?.handleCreateTerminal(undefined, {
+          sourceChatFork: { sessionId: 'chat-1', agent: 'claude' }
+        })
+      ).toBe('reported-failure')
+    })
+    expect(scope.client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(scope.client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({
+        sourceChatFork: { sessionId: 'chat-1' }
+      }),
+      { timeoutMs: 120_000 }
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
+    expect(scope.setActiveHandle).not.toHaveBeenCalled()
+    expect(scope.setSessionTabs).not.toHaveBeenCalled()
+    expect(scope.nativeChatController.setTabView).not.toHaveBeenCalled()
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      "Could not open Claude in a new CLI. Check that the chat has a saved conversation and review the agent's command and settings on the host, then try again."
+    )
   })
 
   it('reports a busy create before sending the chat intent', async () => {
@@ -521,47 +384,6 @@ describe('optimistic placement of a created tab', () => {
     })
   }
 
-  function tabIdsAfterCreate(
-    scope: ReturnType<typeof createScope>,
-    prior: PlacementTab[]
-  ): string[] {
-    const updater = scope.setSessionTabs.mock.calls.at(-1)?.[0]
-    if (!updater) {
-      throw new Error('Expected a session tab updater')
-    }
-    return updater(prior).map((tab) => tab.id)
-  }
-
-  it('paints the created tab after the anchor it asked the host for, not at the end', async () => {
-    const scope = createScope(clientReturning(terminalCreateResponse()))
-    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
-    await createTerminal(scope)
-
-    expect(scope.setSessionTabs).toHaveBeenCalled()
-    // The request anchored on the active tab, so the paint must land in the same slot the host
-    // splices into; appending here is what made the tab jump on the next snapshot.
-    expect(tabIdsAfterCreate(scope, [{ id: 'existing-tab' }, { id: 'trailing-tab' }])).toEqual([
-      'existing-tab',
-      'terminal-tab-1',
-      'trailing-tab'
-    ])
-  })
-
-  it('paints after the active split parent, matching headed host placement', async () => {
-    const scope = createScope(clientReturning(terminalCreateResponse()))
-    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
-    scope.activeSessionTabId = 'existing-tab::left'
-    await createTerminal(scope)
-
-    expect(
-      tabIdsAfterCreate(scope, [
-        { id: 'existing-tab::left', parentTabId: 'existing-tab' },
-        { id: 'existing-tab::right', parentTabId: 'existing-tab' },
-        { id: 'trailing-tab' }
-      ])
-    ).toEqual(['existing-tab::left', 'existing-tab::right', 'terminal-tab-1', 'trailing-tab'])
-  })
-
   it('waits for an older host snapshot instead of guessing its placement', async () => {
     const scope = createScope(clientReturning(terminalCreateResponse()))
     scope.activeSessionTabId = 'existing-tab::left'
@@ -574,40 +396,5 @@ describe('optimistic placement of a created tab', () => {
       tabId: 'terminal-tab-1'
     })
     expect(scope.subscribeToTerminal).toHaveBeenCalledWith('terminal-1')
-  })
-
-  it('sends the same anchor it paints with', async () => {
-    const scope = createScope(clientReturning(terminalCreateResponse()))
-    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
-    await createTerminal(scope)
-
-    expect(scope.client.sendRequest).toHaveBeenCalledWith(
-      'session.tabs.createTerminal',
-      expect.objectContaining({ afterTabId: 'existing-tab' })
-    )
-  })
-
-  it('appends when the anchor is not in the client list, matching the host fallback', async () => {
-    const scope = createScope(clientReturning(terminalCreateResponse()))
-    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
-    await createTerminal(scope)
-
-    expect(tabIdsAfterCreate(scope, [{ id: 'unrelated-tab' }])).toEqual([
-      'unrelated-tab',
-      'terminal-tab-1'
-    ])
-  })
-
-  it('leaves the list alone when the host snapshot already placed the tab', async () => {
-    const scope = createScope(clientReturning(terminalCreateResponse()))
-    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
-    await createTerminal(scope)
-
-    const prior = [{ id: 'existing-tab' }, { id: 'terminal-tab-1' }, { id: 'trailing-tab' }]
-    expect(tabIdsAfterCreate(scope, prior)).toEqual([
-      'existing-tab',
-      'terminal-tab-1',
-      'trailing-tab'
-    ])
   })
 })

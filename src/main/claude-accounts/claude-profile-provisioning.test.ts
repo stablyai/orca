@@ -20,7 +20,6 @@ const ORCA_HOOK = {
   matcher: '',
   hooks: [{ type: 'command', command: '"$HOME/.orca/agent-hooks/claude-hook.sh"' }]
 }
-// What Claude writes on a finished sign-in.
 const LOGIN = { emailAddress: 'p@example.com' }
 const roots: string[] = []
 function fixture() {
@@ -44,7 +43,7 @@ afterEach(() => {
   }
 })
 
-// Why: these create real symlinks, which Windows needs privilege for.
+// Real symlinks require additional privileges on Windows.
 const itLinks = it.skipIf(process.platform === 'win32')
 
 describe('Claude profile refresh from the default home', () => {
@@ -119,13 +118,12 @@ describe('Claude profile refresh from the default home', () => {
     fs.writeFileSync(source, '{"bindings":[2]}')
     expect((await provision(f)).surfaces['keybindings.json']).toBe('synced')
     expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":[2]}')
-    // A file Claude does not know yet is shared the same way, with its mode.
     fs.writeFileSync(join(f.source, 'statusline.sh'), 'echo hi')
     fs.chmodSync(join(f.source, 'statusline.sh'), 0o755)
     await provision(f)
     expect(fs.statSync(join(f.profileHome, 'statusline.sh')).mode & 0o777).toBe(0o755)
   })
-  it('copies settings whole, proxy key and auth included, over profile edits', async () => {
+  it('copies settings, proxy key and auth included, and default-home changes win over profile edits', async () => {
     const f = fixture()
     const settings = {
       futureFeature: true,
@@ -143,7 +141,6 @@ describe('Claude profile refresh from the default home', () => {
     f.json(join(f.source, 'settings.json'), settings)
     await provision(f)
     expect(f.read(join(f.profileHome, 'settings.json'))).toEqual(settings)
-    // A `/model` change made on the account lasts only until the next refresh.
     f.json(join(f.profileHome, 'settings.json'), { ...settings, model: 'private' })
     f.json(join(f.source, 'settings.json'), { model: 'b' })
     expect((await provision(f)).surfaces['settings.json']).toBe('synced')
@@ -151,25 +148,60 @@ describe('Claude profile refresh from the default home', () => {
     expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
     fs.rmSync(join(f.source, 'settings.json'))
     await provision(f)
-    expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({})
   })
-  itLinks(
-    'restores settings the profile changed and leaves a linked settings file alone',
-    async () => {
-      const f = fixture()
-      f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
-      await provision(f)
-      f.json(join(f.profileHome, 'settings.json'), { theme: 'x' })
-      await provision(f)
-      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a', theme: 'x' })
-      const elsewhere = join(f.root, 'elsewhere.json')
-      f.json(elsewhere, { mine: true })
-      fs.rmSync(join(f.profileHome, 'settings.json'))
-      fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
-      expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
-      expect(f.read(elsewhere)).toEqual({ mine: true })
+  it('keeps settings Claude saved in the account while later default-home edits still arrive', async () => {
+    const f = fixture()
+    const settings = { effortLevel: 'medium', env: { ANTHROPIC_BASE_URL: 'https://a.test' } }
+    f.json(join(f.source, 'settings.json'), settings)
+    await provision(f)
+    // What Claude 2.1.318 saves for `/model opus` then `/effort high`.
+    const saved = {
+      ...settings,
+      model: 'opus',
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     }
-  )
+    f.json(join(f.profileHome, 'settings.json'), saved)
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual(saved)
+    f.json(join(f.source, 'settings.json'), {
+      ...settings,
+      env: { ANTHROPIC_BASE_URL: 'https://b.test' },
+      apiKeyHelper: 'helper'
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      effortLevel: 'high',
+      env: { ANTHROPIC_BASE_URL: 'https://b.test' },
+      model: 'opus',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } },
+      apiKeyHelper: 'helper'
+    })
+  })
+  it('passes Orca hooks added to the default home later on to the account', async () => {
+    // WSL accounts get Orca's hooks only through this copy.
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), { theme: 'x' })
+    await provision(f)
+    f.json(join(f.source, 'settings.json'), { theme: 'x', hooks: { Stop: [ORCA_HOOK] } })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      theme: 'x',
+      hooks: { Stop: [ORCA_HOOK] }
+    })
+  })
+  itLinks('leaves a linked settings file alone', async () => {
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
+    await provision(f)
+    const elsewhere = join(f.root, 'elsewhere.json')
+    f.json(elsewhere, { mine: true })
+    fs.rmSync(join(f.profileHome, 'settings.json'))
+    fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
+    expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
+    expect(f.read(elsewhere)).toEqual({ mine: true })
+  })
   it('copies state except the login, caches and install ids, and never copies credentials', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')
@@ -201,10 +233,8 @@ describe('Claude profile refresh from the default home', () => {
       hasAvailableSubscription: true,
       subscriptionNoticeCount: 2
     })
-    // A folder with no state file yet gets one without a login, so Claude asks for its own.
     expect((await provision(f)).surfaces['.claude.json']).toBe('synced')
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(shared)
-    // Published whole through a staged file, which is gone afterwards.
     expect(fs.readdirSync(f.profileHome).filter((name) => name.endsWith('.tmp'))).toEqual([])
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
 
@@ -276,7 +306,6 @@ describe('Claude profile refresh from the default home', () => {
       for (const name of unsharedFiles) {
         fs.writeFileSync(join(f.source, name), 'x')
       }
-      // The account's own runtime file is never overwritten from the default home.
       fs.writeFileSync(join(f.profileHome, 'server-sessions.json'), 'mine')
       await provision(f)
       for (const name of ['skills', 'plugins', 'my-own-dir']) {

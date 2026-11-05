@@ -7,11 +7,13 @@ import { CORE_COMMAND_SPECS } from './core'
 import { FILE_COMMAND_SPECS } from './file'
 import { PROJECT_COMMAND_SPECS } from './project'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
+import { withFullRecordFlag } from './orchestration-full-record-flag'
 import { COMPUTER_COMMAND_SPECS } from './computer'
 import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { MANAGED_SERVER_COMMAND_SPECS } from './managed-server'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
 import { AGENT_LAUNCH_COMMAND_SPECS } from './agent-launch'
+import { CONNECTOR_COMMAND_SPECS } from './connector'
 import { DIAGNOSTICS_COMMAND_SPECS } from './diagnostics'
 import { SPEECH_COMMAND_SPECS } from './speech'
 import { TERMINAL_DAEMON_COMMAND_SPECS } from './terminal-daemon'
@@ -25,6 +27,9 @@ import { ARTIFACT_COMMAND_SPECS } from './artifacts'
 import { SEARCH_COMMAND_SPECS } from './search'
 import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
+import { PORTS_COMMAND_SPECS } from './ports'
+import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './plugin'
+import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -36,10 +41,11 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...AUTOMATION_COMMAND_SPECS,
   ...BROWSER_BASIC_COMMAND_SPECS,
   ...BROWSER_ADVANCED_COMMAND_SPECS,
-  ...ORCHESTRATION_COMMAND_SPECS,
+  ...ORCHESTRATION_COMMAND_SPECS.map(withFullRecordFlag),
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
+  ...CONNECTOR_COMMAND_SPECS,
   ...DIAGNOSTICS_COMMAND_SPECS,
   ...SPEECH_COMMAND_SPECS,
   ...TERMINAL_DAEMON_COMMAND_SPECS,
@@ -52,5 +58,9 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...EMULATOR_COMMAND_SPECS,
   ...SKILL_COMMAND_SPECS,
   ...SEARCH_COMMAND_SPECS,
-  ...PROFILE_STATE_COMMAND_SPECS
+  ...PROFILE_STATE_COMMAND_SPECS,
+  ...PORTS_COMMAND_SPECS,
+  ...PLUGIN_AUTHORING_COMMAND_SPECS,
+  ...PLUGIN_RUNTIME_COMMAND_SPECS,
+  ...PLUGIN_VIEW_COMMAND_SPECS
 ]

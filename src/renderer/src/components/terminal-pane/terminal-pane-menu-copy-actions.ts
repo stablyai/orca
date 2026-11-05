@@ -1,10 +1,14 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
+import { useAppStore } from '@/store'
+import { fencedCode } from '../editor/selection-copy'
+import { formatNativeChatQuote } from '../native-chat/native-chat-quote-selection'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
@@ -13,12 +17,34 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
   await runTerminalCopy({
     selection: readTerminalClipboardSelection(pane.terminal),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
-    // Why: Radix returns focus to the menu trigger (the pane container) on
-    // close, but xterm.js only accepts input when its own helper textarea is
-    // focused. Without this, the user has to click the pane again before
-    // typing works (see #592).
+    // Radix restores the container, but xterm needs its textarea focused for typing (#592).
     focus: () => pane.terminal.focus()
   })
+}
+
+/** The selection quoted under the terminal tab's title, for the Add to chat target list. */
+export const terminalPaneMenuAddToChat = (
+  pane: ManagedPane | null,
+  tabId: string,
+  worktreeId: string
+): { worktreeId: string; quote: string } | null => {
+  const text = pane ? readTerminalClipboardSelection(pane.terminal).replace(/\s+$/, '') : ''
+  if (!text.trim()) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
+    (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId
+  )
+  const title = tab?.customLabel || tab?.label || 'Terminal'
+  return {
+    // The floating terminal belongs to no workspace; it floats over the one on screen.
+    worktreeId:
+      worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? (state.activeWorktreeId ?? worktreeId)
+        : worktreeId,
+    quote: formatNativeChatQuote(`${title}\n${fencedCode(text)}`)
+  }
 }
 
 export const copyTerminalPaneMenuPaneId = async (
@@ -29,8 +55,7 @@ export const copyTerminalPaneMenuPaneId = async (
     return
   }
   await runTerminalIdentityCopy({
-    // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
-    // remounts; the numeric PaneManager id is only a local runtime handle.
+    // ORCA_PANE_KEY survives remounts; numeric PaneManager IDs are local handles.
     text: makePaneKey(tabId, pane.leafId),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
     onSuccess: () =>
@@ -40,8 +65,7 @@ export const copyTerminalPaneMenuPaneId = async (
           'Pane ID copied'
         )
       ),
-    // Why: claiming success after a failed write is the exact silent lie this
-    // fallback exists to remove, so report it the way Copy Terminal ID does.
+    // Report clipboard rejection rather than falsely toasting success, matching Copy Terminal ID.
     onError: () =>
       toast.error(
         translate(

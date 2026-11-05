@@ -1,4 +1,4 @@
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   getRuntimeEnvironmentStatusSnapshots,
   resetRuntimeEnvironmentStatusOwners
@@ -10,8 +10,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import * as environmentStore from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import * as environmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 
 const {
   handleMock,
@@ -27,7 +27,6 @@ const {
   getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnectionMock,
   retryRemoteRuntimeSharedControlConnectionsNowMock,
-  retryRemoteRuntimeSharedControlConnectionNowMock,
   closeRemoteRuntimeRequestConnectionMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -43,7 +42,6 @@ const {
   getRemoteRuntimeSharedControlDiagnosticsMock: vi.fn(),
   reconnectRemoteRuntimeSharedControlConnectionMock: vi.fn(),
   retryRemoteRuntimeSharedControlConnectionsNowMock: vi.fn(),
-  retryRemoteRuntimeSharedControlConnectionNowMock: vi.fn(),
   closeRemoteRuntimeRequestConnectionMock: vi.fn()
 }))
 
@@ -58,7 +56,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
@@ -74,7 +72,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
       reconnectRemoteRuntimeSharedControlConnectionMock,
     retryRemoteRuntimeSharedControlConnectionsNow:
       retryRemoteRuntimeSharedControlConnectionsNowMock,
-    retryRemoteRuntimeSharedControlConnectionNow: retryRemoteRuntimeSharedControlConnectionNowMock,
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
@@ -106,6 +103,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     updateSettings: ReturnType<typeof vi.fn>
     removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
     setRemoteLayoutSnapshot: ReturnType<typeof vi.fn>
+    setHostRepoCatalogSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -115,6 +113,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
       removeWorkspaceSessionHost: vi.fn(),
       setRemoteLayoutSnapshot: vi.fn(),
+      setHostRepoCatalogSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -134,7 +133,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
     reconnectRemoteRuntimeSharedControlConnectionMock.mockReset()
     retryRemoteRuntimeSharedControlConnectionsNowMock.mockReset()
-    retryRemoteRuntimeSharedControlConnectionNowMock.mockReset()
     closeRemoteRuntimeRequestConnectionMock.mockReset()
   })
 
@@ -189,29 +187,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(retryRemoteRuntimeSharedControlConnectionsNowMock).toHaveBeenCalledTimes(1)
   })
 
-  it('retries one control connection without reversing manual disconnect intent', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    const add = handler<{ name: string; pairingCode: string }, { environment: { id: string } }>(
-      'runtimeEnvironments:addFromPairingCode'
-    )
-    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
-    const retry = handler<{ selector: string }, void>('runtimeEnvironments:retryControlConnection')
-
-    await retry(null, { selector: 'desk' })
-    expect(retryRemoteRuntimeSharedControlConnectionNowMock).toHaveBeenCalledWith(
-      added.environment.id
-    )
-    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
-
-    const disconnect = handler<{ selector: string }, unknown>('runtimeEnvironments:disconnect')
-    await disconnect(null, { selector: 'desk' })
-    retryRemoteRuntimeSharedControlConnectionNowMock.mockClear()
-    await retry(null, { selector: 'desk' })
-
-    expect(retryRemoteRuntimeSharedControlConnectionNowMock).not.toHaveBeenCalled()
-    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
-  })
-
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
@@ -244,11 +219,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
-    // A removed server's session partition and layout snapshot go too.
     expect(store.removeWorkspaceSessionHost).toHaveBeenCalledWith(
       `runtime:${encodeURIComponent(added.environment.id)}`
     )
     expect(store.setRemoteLayoutSnapshot).toHaveBeenCalledWith(added.environment.id, null, 'now')
+    expect(store.setHostRepoCatalogSnapshot).toHaveBeenCalledWith(added.environment.id, null)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
   })
@@ -610,9 +585,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
-    // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
-    // on the environment record (ephemeral-vm.ts), so the public list reads it
-    // straight from the record rather than cross-referencing the VM runtime store.
+    // Provisioning records ephemeral-vm source directly; listing must not depend on the VM runtime store.
     const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
       name: 'orca VM abc12345',
       pairingCode: pairingCode(),

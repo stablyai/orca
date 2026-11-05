@@ -8,14 +8,18 @@ import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisit
 import { RevisionedState } from '../runtime/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
 import { AcpLaunchGate } from '../acp/acp-launch-gate'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
 const retained = new ProviderAcquisitionStarts<SignInOwner>()
-const folder = hostFolderAccountBinding('GEMINI_HOME', 'antigravity-chat', ['antigravity-acp'])
+const folder = hostFolderAccountBinding('GEMINI_HOME', ANTIGRAVITY_CHAT_HOME_FOLDER, [
+  ANTIGRAVITY_ACP_HOME
+])
 
 export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity')
 
-/** A failure whose message is already the sentence a person reads. */
+/** The message is suitable for display without further translation. */
 export class AntigravitySignInSentence extends Error {}
 
 export class AntigravitySignInCloseUnprovenError extends AntigravitySignInSentence {
@@ -24,19 +28,16 @@ export class AntigravitySignInCloseUnprovenError extends AntigravitySignInSenten
   }
 }
 
-/** A flow as the host holds it: `owner` is the caller that started it. */
 type AntigravityOwnedSignIn = Omit<AntigravityChatSignInState, 'flowId'> & {
   flowId: string
   owner: string
 }
 
-/** What every client follows by revision; in memory only, as the server's answers are. */
 export const antigravityChatSignIn = new RevisionedState<{
   auth: AntigravityChatAuth
   flow: AntigravityOwnedSignIn | null
 }>({ auth: 'unknown', flow: null })
 
-/** The server's answer for this host's chats: a session started, or it asked to sign in. */
 export function answerAntigravityChatAuth(signedIn: boolean): void {
   const shown = antigravityChatSignIn.get().value
   const auth = signedIn ? 'signedIn' : 'signedOut'

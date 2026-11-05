@@ -4,21 +4,15 @@ import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
 import { WS_BIND_HOST_ALL_INTERFACES, WS_BIND_HOST_LOOPBACK } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
-  // Why: pairing offers must advertise addresses this host answers once widened, not the loopback it may sit on now.
+  // Advertise addresses the widened listener will answer, not its current loopback bind.
   getNetworkExposureBindHost(): string {
     return this.pinnedBindHost ?? WS_BIND_HOST_ALL_INTERFACES
   }
 
-  // Why: STA-2370 — widen the loopback listener to all interfaces so a freshly generated pairing
-  // offer's advertised LAN endpoint is reachable. Idempotent, but it is no longer confined to the first
-  // pairing action: a "This computer only" link never widens, so live loopback clients can already be
-  // connected when a later LAN/QR offer opts in. Rebinding terminates them (ws cannot move a listener),
-  // so the resolved port is reused — already-issued endpoints stay valid and clients reconnect in place.
+  // LAN opt-in rebinds loopback and disconnects local clients; reuse their already-issued port so all endpoints can reconnect (STA-2370).
   async ensureNetworkExposure(): Promise<void> {
     if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
-      // Why throw and not return: callers widen so they can ADVERTISE a LAN endpoint. Returning
-      // quietly would let them publish one that nothing can reach; the throw lands in their
-      // existing network_exposure_failed branch, which reports the offer unavailable instead.
+      // Throw on failed widening so callers return network_exposure_failed rather than advertise unreachable LAN.
       throw new Error(
         `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`
       )
@@ -30,8 +24,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     ) {
       return
     }
-    // Why: concurrent pairing requests must share one rebind — two simultaneous stop/start races would
-    // fight for the port and strand the listener on a random one.
+    // Coalesce pairing rebinds or competing stop/start races can strand the listener on another port.
     if (!this.networkExposurePromise) {
       this.networkExposurePromise = this.widenWebSocketBind().finally(() => {
         this.networkExposurePromise = null
@@ -51,8 +44,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     const previousPort = current.resolvedPort
     let widened: { transport: WebSocketTransport; endpoint: string }
     try {
-      // Why: detach the loopback listener from the session wiring before stopping it so terminateDevice-
-      // Connections never iterates a dead transport; the new listener re-attaches to the SAME wiring.
+      // Detach old listener, then reattach new transport to the same wiring so relay state/revocation survive.
       this.detachWebSocketWiring?.()
       await current.stop()
       widened = await this.startWebSocketTransport({
@@ -61,30 +53,25 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
         preferPinnedPort: true
       })
     } catch (error) {
-      // Why: the wide bind failed after the loopback listener was already stopped. Restore a serving
-      // loopback listener on the same port (wsBoundHost stays loopback so a later offer retries), then
-      // propagate — the caller must not advertise a LAN endpoint with no LAN listener behind it (STA-2370).
+      // Failed wide bind must restore loopback on the same port, retain retry state, then propagate failure; never advertise unserved LAN.
       console.error('[runtime] Failed to widen WebSocket transport for pairing:', error)
       await this.recoverWebSocketBindAfterFailedWiden(index, previousPort)
       throw error
     }
-    // Why: register the live wide transport BEFORE persisting metadata so a metadata-write failure can
-    // never orphan a running 0.0.0.0 listener outside activeTransports (and thus outside stop()).
+    // Track live wide transport before metadata write so persistence failure cannot orphan it outside shutdown.
     this.activeTransports[index] = widened.transport
     const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
     if (metaIndex !== -1) {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: widened.endpoint }
     }
     try {
-      // Why: a rebind that lands on a different port (same-port bind refused) must be persisted so a
-      // later reconnect from a device paired to this port matches on the next launch (STA-1511).
+      // Persist any fallback port so paired endpoints match it on restart (STA-1511).
       if (this.wsPort !== 0 && widened.transport.resolvedPort !== this.wsPort) {
         writeWsFallbackPort(this.userDataPath, widened.transport.resolvedPort)
       }
       this.writeMetadata()
     } catch (persistError) {
-      // Why: the wide listener is live and tracked; a persistence failure must not tear it down. Keep
-      // serving — the in-memory endpoint is already correct.
+      // Persistence failure cannot undo an already-live tracked listener; in-memory endpoint is valid.
       console.error(
         '[runtime] Widened WebSocket listener but failed to persist pairing metadata:',
         persistError
@@ -92,8 +79,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     }
   }
 
-  // Why: a failed widen already tore down the loopback listener; bring one back on the same host/port so the
-  // runtime keeps serving locally (wsBoundHost stays loopback, so the next pairing offer retries the widen).
+  // Restore a failed widen's loopback listener; retain loopback bound-host state for later exposure retry.
   protected async recoverWebSocketBindAfterFailedWiden(
     index: number,
     previousPort: number
@@ -106,8 +92,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
         preferPinnedPort: true
       })
     } catch (recoveryError) {
-      // Why: even the loopback restore failed — drop the dead WebSocket transport so we never advertise an
-      // endpoint with no listener. The Unix socket keeps serving and a restart re-establishes the listener.
+      // If loopback recovery also fails, drop dead WS metadata; Unix still serves until restart.
       console.error(
         '[runtime] Failed to restore WebSocket transport after widen failure:',
         recoveryError
@@ -121,12 +106,11 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       try {
         this.writeMetadata()
       } catch {
-        // Why: metadata already reflects the torn-down listener; nothing else to recover here.
+        // Metadata already describes the removed listener; no further recovery needed.
       }
       return
     }
-    // Why: register the restored loopback listener BEFORE persisting metadata so a write failure can never
-    // orphan a live transport outside activeTransports (and thus outside stop()).
+    // Track restored loopback before persistence so write failure cannot orphan a live listener.
     this.activeTransports[index] = restored.transport
     const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
     if (metaIndex !== -1) {
@@ -135,7 +119,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     try {
       this.writeMetadata()
     } catch (persistError) {
-      // Why: the loopback listener is live and tracked; a persistence failure must not tear it down.
+      // Keep serving through persistence failure; loopback is already live and tracked.
       console.error(
         '[runtime] Restored loopback WebSocket listener but failed to persist metadata:',
         persistError

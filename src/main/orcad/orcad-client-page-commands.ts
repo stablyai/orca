@@ -1,8 +1,4 @@
-/**
- * The browser commands orcad answers itself. Pages a paired desktop hosts for it live in this
- * runtime's lease and page registries, so opening one never needs a browser engine here. Tab
- * commands see one logical list: the engine's tabs (if any), then the desktop-hosted pages.
- */
+// Paired desktops can host pages without a local engine; present engine and desktop pages as one tab list.
 import { BrowserError } from '../browser/browser-error'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
@@ -31,7 +27,6 @@ import {
   type BrowserEngineTabs
 } from '../runtime/browser/browser-client-page-queries'
 
-/** Sends a call to the engine; `name` defaults to the member the proxy was asked for. */
 type Forward = (args: unknown[], name?: string) => unknown
 
 const LOGICAL_TAB_QUERIES = [
@@ -41,7 +36,6 @@ const LOGICAL_TAB_QUERIES = [
   'browserTabSwitch'
 ] as const
 
-/** The member orcad answers for `name`, or undefined to send it to the engine. */
 export function orcadClientPageCommand(
   host: RuntimeBrowserCommandHost,
   name: string,
@@ -65,7 +59,7 @@ export function orcadClientPageCommand(
   if (name === 'browserTabClose') {
     return async (...args: Parameters<RuntimeBrowserCommands['browserTabClose']>) => {
       const params = args[0] ?? {}
-      // Why the logical list: an index or the current tab may name a desktop-hosted page.
+      // Logical indices/current selection may refer to desktop-hosted pages.
       const page = await resolveClientPageToClose(host, logicalTabs(), params)
       if (page) {
         return retireRuntimeBrowserClientPage(host, page)
@@ -79,7 +73,6 @@ export function orcadClientPageCommand(
   if (query) {
     return (...args: unknown[]) => {
       const hasClientPages = host.getRuntimeBrowserPageRegistry().listPages().length > 0
-      // Why: with nothing desktop-hosted, the engine's answer (or its refusal) is the whole answer.
       if (!hasClientPages && (engineAvailable() || !hasPairedPageHost(host))) {
         return forward(args)
       }
@@ -108,7 +101,7 @@ function createTab(
       )
     })()
   }
-  // Why only for this host's own CLI: a paired client that left placement out asked for the server.
+  // Only this host’s CLI defaults to client pages; omitted paired-client placement means server.
   if (
     !params?.placement &&
     !caller?.pairedDeviceId &&
@@ -135,7 +128,6 @@ function createTab(
   })()
 }
 
-/** The engine's own tabs, read back through the proxy's forward. */
 function engineTabs(forward: Forward): BrowserEngineTabs {
   return {
     list: async (params) =>
@@ -201,7 +193,7 @@ function callTabQuery(
   }
 }
 
-// Why only the default: orcad has no profile registry to describe any other to a desktop.
+// orcad lacks a registry to describe non-default profiles to the desktop.
 function orcadBrowserProfileId(profileId: string | undefined): string {
   if (profileId !== undefined && profileId !== DEFAULT_BROWSER_PROFILE_ID) {
     throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)

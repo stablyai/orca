@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE_KEY = makePaneKey('tab-question', '11111111-1111-4111-8111-111111111111')
@@ -60,8 +60,7 @@ describe('Claude interactive-question status transitions', () => {
   })
 
   it('clears a PermissionRequest-shaped AskUserQuestion wait when later tool work starts', () => {
-    // Why: newer Claude reports the AskUserQuestion wait as PermissionRequest;
-    // the question must not inherit real-permission stickiness from that shape.
+    // AskUserQuestion may arrive as PermissionRequest without inheriting permission stickiness.
     const server = new AgentHookServer()
 
     ingestClaudeStatus(server, {
@@ -206,8 +205,6 @@ describe('inferQuestionAnswered', () => {
     })
 
     expect(server.inferQuestionAnswered(answeredRequestFromSnapshot(server))).toBe(true)
-    // Why: the answered question must also drop the tool identity so the
-    // question card cannot linger on the working row.
     const [entry] = server.getStatusSnapshot()
     expect(entry).toMatchObject({ paneKey: PANE_KEY, state: 'working', agentType: 'claude' })
     expect(entry.toolName).toBeUndefined()

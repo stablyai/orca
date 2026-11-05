@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../../../shared/client-hosted-browser-page-record'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/client-hosted-browser-page-record'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { collectOrcadMigrationSourceClientState } from './orcad-source-client-state'
 import { ORCAD_MIGRATION_UI_ROUTING_MERGE } from './orcad-destination-client-state'
+import { parseMobileSelections } from '../../../shared/orcad-migration/orcad-migration-client-state-parsing'
 
 const source = {
   sshTargetId: 'target-1',
@@ -138,6 +139,47 @@ describe('source client-state migration', () => {
       lastActiveWorktreeId: 'repo-1::/srv/worktree',
       showDotfilesByWorktree: { 'repo-1::/srv/worktree': false }
     })
+  })
+
+  it("moves a device's tab history with the tabs that move", () => {
+    const current = state()
+    current.mobileClientTabSelectionsByDeviceId = {
+      phone: {
+        'ssh:target-1|repo-1::/srv/worktree': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {},
+          recentTabIds: ['tab-1', 'tab-unmoved', 'tab-2']
+        }
+      }
+    }
+    const scoped = session({
+      tabsByWorktree: {
+        'ssh:target-1|repo-1::/srv/worktree': [
+          terminalTab('tab-1', 'ssh:target-1|repo-1::/srv/worktree'),
+          terminalTab('tab-2', 'ssh:target-1|repo-1::/srv/worktree')
+        ]
+      }
+    })
+
+    const result = collectOrcadMigrationSourceClientState(
+      current,
+      source,
+      catalog,
+      'environment-1',
+      scoped
+    )
+
+    const moved = result.payload?.mobileClientTabSelectionsByDeviceId
+    expect(moved?.phone?.['repo-1::/srv/worktree']?.recentTabIds).toEqual(['tab-1', 'tab-2'])
+    expect(parseMobileSelections(moved)).toEqual(moved)
+    expect(() =>
+      parseMobileSelections({
+        phone: {
+          wt: { activeTabId: 'a', activeGroupId: null, activeTabIdByGroupId: {}, recentTabIds: [7] }
+        }
+      })
+    ).toThrow('orcad_migration_dormant_mobile_selection_tabs_invalid')
   })
 
   it("never sends the desktop's sidebar filters, which an older server refuses when they differ", () => {
@@ -289,7 +331,6 @@ describe('source client-state migration', () => {
       current.workspaceSession
     )
 
-    // The unrelated close stays with this client; it does not block.
     expect(result.blockedCount).toBe(0)
     expect(result.payload?.clientHostedBrowserCloseIntents).toEqual([
       {

@@ -55,7 +55,7 @@ export function clearProxySessionCredentials(proxySession: ProxySession): void {
   clearElectronProxyCredentialsForSession(proxySession)
 }
 
-/** Wait for the newest queued policy; false keeps requests fail-closed after an apply error. */
+/** Wait for the newest policy; apply errors keep requests fail-closed. */
 export async function awaitProxySessionApplication(proxySession: ProxySession): Promise<boolean> {
   while (true) {
     const state = sessionProxyApplications.get(proxySession)
@@ -108,7 +108,6 @@ export async function releaseProxySessionApplication(
   )
 }
 
-/** Permanently close request readiness before releasing a deleted partition. */
 export async function retireProxySessionApplication(proxySession: ProxySession): Promise<void> {
   const state = getSessionProxyApplicationState(proxySession)
   state.retired = true
@@ -165,7 +164,6 @@ async function enqueueSessionProxyApplication(
   return operation
 }
 
-/** Apply the app-wide proxy to one session, serializing writes in call order. */
 export function applyProxySettingsToSession(
   proxySession: ProxySession,
   settings: NetworkProxySettings,
@@ -212,7 +210,7 @@ async function resolveAndApplySessionProxy(
     }
   }
 
-  // Why: a pinned session resolves to its own pin, so release it before probing the system proxy.
+  // Release our pin before probing or it would answer instead of system policy.
   await releaseSessionProxyPin(proxySession, state)
   if ((await proxySession.resolveProxy(options.probeUrl ?? PROXY_PROBE_URL)) !== 'DIRECT') {
     return { source: 'system' }
@@ -246,7 +244,7 @@ async function releaseSessionProxyPin(
     return
   }
   await proxySession.setProxy({ mode: 'system' })
-  // Why: keep the pin marker until stale pooled connections are closed so a retry cannot skip them.
+  // Retain the pin marker until stale pooled connections close so retries cannot skip cleanup.
   state.settledKey = null
   state.credentials = null
   setElectronProxyCredentialsForSession(proxySession, null)

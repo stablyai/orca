@@ -1,16 +1,14 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  createClaudeCatalogOptions,
-  getAgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { createClaudeCatalogOptions } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import { catalogModelsFromModelDiscovery } from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
 import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
-} from '../../../../shared/commit-message-host-key'
+} from '../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getLocalProjectExecutionRuntimeContext,
@@ -22,8 +20,8 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
-} from '../../../../shared/agent-session-wire'
-import { useAppStore } from '@/store'
+} from '../../../../shared/agent-session/agent-session-wire'
+import { useAppStore } from '@/store/index'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 
 export type NativeChatModelDiscoveryContext = {
@@ -56,6 +54,23 @@ export function resolveNativeChatModelDiscoveryContext(
     Object.entries(state.tabsByWorktree ?? {}).find(([, tabs]) =>
       tabs.some((tab) => tab.id === terminalTabId)
     )?.[0] ?? null
+  const runtime = resolveWorktreeModelDiscoveryRuntime(state, worktreeId)
+  if (!runtime) {
+    return null
+  }
+  // The context omits a null connection id; the host key still needs it to mean "this machine".
+  const scope = getRuntimeGitScope(runtime.target, getConnectionIdFromState(state, worktreeId))
+  return {
+    hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, runtime.worktreePath, scope),
+    runtime
+  }
+}
+
+/** How to ask a worktree's owner for models; null when the owner cannot be named. */
+export function resolveWorktreeModelDiscoveryRuntime(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string | null
+): RuntimeGitContext | null {
   const connectionId = getConnectionIdFromState(state, worktreeId)
   if (worktreeId && connectionId === undefined) {
     return null
@@ -67,17 +82,12 @@ export function resolveNativeChatModelDiscoveryContext(
   if (!target) {
     return null
   }
-  const worktreePath = worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : ''
-  const scope = getRuntimeGitScope(target, connectionId)
   return {
-    hostKey: resolveNativeChatModelDiscoveryHostKey(state, worktreeId, worktreePath, scope),
-    runtime: {
-      target,
-      prefs: state.settings,
-      worktreeId,
-      worktreePath,
-      ...(connectionId ? { connectionId } : {})
-    }
+    target,
+    prefs: state.settings,
+    worktreeId,
+    worktreePath: worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : '',
+    ...(connectionId ? { connectionId } : {})
   }
 }
 
@@ -102,8 +112,7 @@ function catalogModelsFromHostCatalog(
   }))
 }
 
-/** Null when the host has no listing yet or predates the surface (`forbidden`
- *  or `method_not_found`) — the caller then falls back to the CLI listing. */
+/** Missing or unsupported host catalogs fall back to CLI listing for mixed-version hosts. */
 async function readLocalHostCatalogModels(
   agent: 'claude' | 'codex'
 ): Promise<CatalogModel[] | null> {
@@ -127,12 +136,10 @@ export async function discoverNativeChatCatalogModels(
   context: RuntimeGitContext,
   hostKey?: string
 ): Promise<CatalogModel[] | null> {
-  // Claude/Codex on this machine read its host model catalog; the CLI listing
-  // below remains for every other host and while this one has never listed.
+  // Use this machine’s host catalog when available; other owners and unlisted hosts use CLI discovery.
   const hostCatalogAgent =
     agent === 'claude' ? ('claude' as const) : agent === 'codex' ? ('codex' as const) : null
-  // Only `local` proves a native pane: a paired runtime's key also covers its SSH/WSL worktrees.
-  // Terminal-backed chat runs the full custom command line, which only the CLI listing models.
+  // Only local proves native ownership; paired keys may cover SSH/WSL, and custom commands need CLI discovery.
   if (
     hostCatalogAgent &&
     hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY &&
@@ -143,30 +150,8 @@ export async function discoverNativeChatCatalogModels(
       return fromHost
     }
   }
-  const result = await discoverRuntimeCommitMessageModels(context, agent)
-  const catalog = getAgentSessionOptionCatalog(agent)
-  if (
-    !result.success ||
-    result.models.length === 0 ||
-    // Why: a spec's static fallback list must never pass as a probe result for an
-    // agent whose published list replaces rather than extends the seed.
-    ((agent === 'claude' || catalog?.discoveredModelsAreAuthoritative) &&
-      result.catalogOrigin !== 'probe')
-  ) {
-    return null
-  }
-  return result.models.map((model) => ({
-    id: model.id,
-    label: model.label,
-    ...(model.description ? { description: model.description } : {}),
-    ...(model.isDefault ? { isDefault: true as const } : {}),
-    ...(model.contextWindowTokens ? { contextWindowTokens: model.contextWindowTokens } : {}),
-    options:
-      agent === 'claude'
-        ? createClaudeCatalogOptions({
-            effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
-            supportsFastMode: model.supportsFastMode
-          })
-        : []
-  }))
+  return catalogModelsFromModelDiscovery(
+    agent,
+    await discoverRuntimeCommitMessageModels(context, agent)
+  )
 }

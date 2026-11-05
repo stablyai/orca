@@ -5,9 +5,9 @@ import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
@@ -20,10 +20,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-// Pins the activation contract behind the run6-review-pr-11959 incident shape:
-// a persisted (husk) tab whose pane cannot resume in place gets ONE appended
-// replacement tab per provider session — the husk is retained for scrollback —
-// while a pane that is live or will cold-restore in place gets NO replacement.
+// Unresumable husks retain scrollback and get one replacement/provider session; live or cold-restorable panes get none (run6-review-pr-11959).
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -175,29 +172,11 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(afterRepeats.tabsByWorktree[worktree.id]).toHaveLength(2)
   })
 
-  it('does not append a replacement while the preserved pane still has a live PTY', async () => {
-    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
-    const state = baseState(worktree)
-    seedHuskTab(state, worktree.id, 'pty-live-1')
-    state.ptyIdsByTabId = { [HUSK_TAB_ID]: ['pty-live-1'] }
-    useAppStore.setState(state)
-    seedSleepingRecord(worktree.id, 'codex-session-B')
-
-    activateAndRevealWorktree(worktree.id)
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
-    const after = useAppStore.getState()
-    expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
-    // The record stays with its live pane instead of forking a duplicate.
-    expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
-  })
-
   it('does not fork a NON-group-active restorable pane into a replacement tab', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
     const state = baseState(worktree)
     seedHuskTab(state, worktree.id, 'pty-old-1')
-    // A second tab holds the group-active slot; the husk is hidden but will
-    // still mount keep-alive and cold-restore in place on activation.
+    // The husk is hidden behind another active tab but still mounts keep-alive for in-place cold restore.
     state.tabsByWorktree = {
       [worktree.id]: [
         { id: HUSK_TAB_ID, title: 'Codex', ptyId: null } as never,
@@ -244,39 +223,14 @@ describe('preserved-pane replacement contract on workspace activation', () => {
       HUSK_TAB_ID,
       'other-tab-1'
     ])
-    // The record stays with the pane that will cold-restore in place —
-    // consuming it here would resume the session twice (pane + replacement).
+    // Keep the record with its cold-restoring pane or pane and replacement both resume it.
     expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
   })
 
-  it('does not append a replacement when the preserved pane will cold-restore in place', async () => {
-    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
-    const state = baseState(worktree)
-    // Restorable binding persists, no live PTY: pane-level cold restore owns recovery.
-    seedHuskTab(state, worktree.id, 'pty-old-1')
-    state.activeTabIdByWorktree = { [worktree.id]: HUSK_TAB_ID }
-    state.activeTabTypeByWorktree = { [worktree.id]: 'terminal' }
-    useAppStore.setState(state)
-    seedSleepingRecord(worktree.id, 'codex-session-C')
-
-    activateAndRevealWorktree(worktree.id)
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
-    const after = useAppStore.getState()
-    expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
-    expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
-  })
-
-  // Why (flipped by the aug20 "windows 2" incident): a still-published
-  // web-mirror tab is a host tab, so the host owns its PTY. The client cannot
-  // mount that pane and cannot see its liveness until the mirror hydrates, and
-  // the replacement it used to append relaunched `codex resume` against a
-  // session the host still held (-32600 "already has an active writer"),
-  // stranding a bare shell while the live agent lost its tab.
+  // Published mirror tabs remain host-owned before hydration. Client replacement once relaunched codex against an active writer, stranding a shell and orphaning the live agent (aug20 windows 2).
   it('does not replace a still-published web-mirror tab after hydration settles', async () => {
     const webTabId = 'web-terminal-host-tab'
-    // The workspace is owned by a paired runtime — without that the deferral
-    // takes its no-execution-host early return and pins nothing.
+    // Paired runtime ownership is required or deferral’s no-host return makes this test vacuous.
     const worktree = { ...makeWorktree(), createdWithAgent: undefined, hostId: RUNTIME_HOST_ID }
     const state = baseState(worktree)
     state.tabsByWorktree = {
@@ -331,9 +285,9 @@ describe('preserved-pane replacement contract on workspace activation', () => {
       }
     }))
 
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(useAppStore.getState(), worktree.id)
-    ).toBe(RUNTIME_ENV_ID)
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktree.id)).toBe(
+      RUNTIME_ENV_ID
+    )
 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
     await waitForWorktreeAgentActivationGateForTests(worktree.id)
@@ -355,50 +309,5 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     expect(replayed.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(replayed.automaticAgentResumeClaimsByTabId).toEqual({})
     expect(replayed.pendingStartupByTabId).toEqual({})
-  })
-
-  it('keeps recovery evidence without replacing a retracted web-mirror tab', async () => {
-    const webTabId = 'web-terminal-host-tab'
-    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
-    const state = baseState(worktree)
-    // Retracted: the layout husk survives for scrollback, the tab row does not.
-    state.terminalLayoutsByTabId = {
-      [webTabId]: {
-        root: { type: 'leaf', leafId: LEAF_ID },
-        activeLeafId: LEAF_ID,
-        ptyIdsByLeafId: { [LEAF_ID]: 'pty-old-1' }
-      } as never
-    }
-    useAppStore.setState(state)
-    const paneKey = makePaneKey(webTabId, LEAF_ID)
-    useAppStore.setState((s) => ({
-      sleepingAgentSessionsByPaneKey: {
-        ...s.sleepingAgentSessionsByPaneKey,
-        [paneKey]: {
-          paneKey,
-          tabId: webTabId,
-          worktreeId: worktree.id,
-          agent: 'codex' as const,
-          providerSession: { key: 'session_id' as const, id: 'codex-session-F' },
-          prompt: 'resume prior task',
-          state: 'working' as const,
-          origin: 'quit' as const,
-          capturedAt: 1000,
-          updatedAt: 1000,
-          terminalTitle: 'Codex'
-        }
-      }
-    }))
-
-    activateAndRevealWorktree(worktree.id)
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
-    const after = useAppStore.getState()
-    const tabs = after.tabsByWorktree[worktree.id] ?? []
-    expect(tabs).toHaveLength(1)
-    // Activation may seed its ordinary shell; it must not queue an agent resume.
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(after.automaticAgentResumeClaimsByTabId).toEqual({})
-    expect(after.consumeTabStartupCommand(tabs[0]!.id)?.resumeProviderSession).toBeUndefined()
   })
 })

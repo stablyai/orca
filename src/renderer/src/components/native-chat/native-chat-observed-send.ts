@@ -7,13 +7,12 @@ import {
   type NativeChatSendOptions
 } from './native-chat-input-clear'
 
-/** Observe write refusals without mistaking transport success for provider acceptance. */
 export function sendNativeChatObservedWrites(
   ptyId: string,
   writes: readonly { data: string; delayBeforeMs: number }[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
 ) {
-  // Why: only an answer that dismisses its card needs the provider's acknowledgment.
+  // Dismiss answer cards only after provider acknowledgment.
   const writeOptions = options.onDeliverySettled
     ? ({ requireWriteSettlement: true } as const)
     : undefined
@@ -22,7 +21,7 @@ export function sendNativeChatObservedWrites(
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
       clearConfirmDurationMs(options) +
       (options.settleDelayMs ?? 0),
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       let reportedUnconfirmed = false
       let acknowledged = true
       const writeAt = (index: number): void => {
@@ -33,7 +32,7 @@ export function sendNativeChatObservedWrites(
         if (!write) {
           const finish = (): void => {
             options.onDeliverySettled?.(acknowledged)
-            markSubmitted()
+            markSubmitted(acknowledged ? 'submitted' : 'uncertain')
           }
           if (options.settleDelayMs) {
             delay(options.settleDelayMs, finish)
@@ -46,6 +45,7 @@ export function sendNativeChatObservedWrites(
           if (isCancelled()) {
             return
           }
+          markWriteStarted()
           void sendRuntimePtyInputVerified(ptyId, write.data, 'driving', writeOptions)
             .then((accepted) => {
               if (isCancelled()) {
@@ -54,13 +54,12 @@ export function sendNativeChatObservedWrites(
               if (!accepted) {
                 options.onWriteRejected?.()
                 options.onDeliverySettled?.(false)
-                markSubmitted()
+                markSubmitted(index === 0 ? 'not-submitted' : 'uncertain')
                 return
               }
               writeAt(index + 1)
             })
-            // A lost acknowledgment is not a refusal: never re-send these bytes, but still submit
-            // a body that may have landed, as the unobserved path does.
+            // Lost acknowledgments must not replay bytes; submit the possibly delivered body as on the unobserved path.
             .catch(() => {
               if (isCancelled()) {
                 return
@@ -72,7 +71,7 @@ export function sendNativeChatObservedWrites(
               }
               if (options.stopOnUnconfirmed) {
                 options.onDeliverySettled?.(false)
-                markSubmitted()
+                markSubmitted('uncertain')
                 return
               }
               writeAt(index + 1)
@@ -84,7 +83,7 @@ export function sendNativeChatObservedWrites(
           send()
         }
       }
-      clearThenWrite(ptyId, options, delay, () => writeAt(0))
+      clearThenWrite(ptyId, options, delay, () => writeAt(0), markSubmitted)
     },
     { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
   )

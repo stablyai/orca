@@ -1,20 +1,15 @@
 import { z } from 'zod'
 import { requiredString } from './rpc-param-primitives'
 
-// Why these two sit together: both carry the move of browser identity from a per-profile setting
-// to one app-wide choice -- one refuses the retired field, the other sets its replacement.
-
 export const ProfileCreate = z
   .object({
     label: requiredString('Missing required --label'),
-    // Strict enum so unknown scope values surface validation errors instead of being
-    // silently coerced to 'isolated' (pr-bug-scan finding from #1397).
+    // Reject unknown scopes rather than silently coercing to isolated (#1397).
     scope: z.enum(['isolated', 'imported']),
     userAgentMode: z.unknown().optional()
   })
   .superRefine((value, context) => {
-    // Why reject rather than drop: accepting it would report success for a request whose meaning
-    // changed, leaving an older client believing it had set a per-profile identity.
+    // Reject the retired field so older clients cannot mistake success for per-profile identity support.
     if (value.userAgentMode !== undefined) {
       context.addIssue({
         code: 'custom',

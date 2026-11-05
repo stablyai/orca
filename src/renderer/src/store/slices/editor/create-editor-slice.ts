@@ -7,6 +7,7 @@ import { createExplorerDirState } from './actions/explorer-dir-state'
 import { createOpenFileState } from './actions/open-file-state'
 import { createOpenFileAction } from './actions/open-file-action'
 import { createMarkdownPreviewActions } from './actions/markdown-preview-actions'
+import { createPluginNewFileActions } from './actions/untitled-file-creation'
 import { createCloseFileAction } from './actions/close-file-action'
 import { createRecentlyClosedEditorTabs } from './actions/recently-closed-editor-tabs'
 import { createOpenFileMutations } from './actions/open-file-mutations'
@@ -28,6 +29,7 @@ import { createFileSearchActions } from './actions/file-search-actions'
 import { createEditorRevealFocusState } from './actions/editor-reveal-focus-state'
 import { createMarkdownLinkAction } from './actions/markdown-link-action'
 import { createHydrateEditorSession } from './actions/hydrate-editor-session'
+import { createEditorBufferIdentityActions } from './actions/editor-buffer-identity-actions'
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   ...createEditorDraftState(set, get),
@@ -36,6 +38,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   ...createOpenFileState(set, get),
   ...createOpenFileAction(set, get),
   ...createMarkdownPreviewActions(set, get),
+  ...createPluginNewFileActions(set, get),
   ...createCloseFileAction(set, get),
   ...createRecentlyClosedEditorTabs(set, get),
   ...createOpenFileMutations(set, get),
@@ -56,5 +59,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   ...createFileSearchActions(set, get),
   ...createEditorRevealFocusState(set, get),
   ...createMarkdownLinkAction(set, get),
-  ...createHydrateEditorSession(set, get)
+  ...createHydrateEditorSession(set, get),
+  ...createEditorBufferIdentityActions(set, get)
 })

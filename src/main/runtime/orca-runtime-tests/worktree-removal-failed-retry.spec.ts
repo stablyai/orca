@@ -1,33 +1,30 @@
-// A runtime Delete (paired desktop, web, mobile, CLI) on the leftover of a delete that failed after
-// Git dropped the registration: the leftover is listed with its error instead of vanishing from
-// every listing; Delete refuses while the folder is there and finishes the rest once it is gone.
+// List failed-delete leftovers with their error; refuse retry until the leftover is gone.
 import { existsSync } from 'node:fs'
-import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { readFile, realpath, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  join,
-  listWorktreesStrict,
-  mkdir,
-  mkdtemp,
-  removeWorktree,
-  rm,
-  scanLocalRepoWorktreesForResolutionMock,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH } from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import './runtime-test-module-registration.spec'
+import { join } from 'node:path'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
+
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import { scanLocalRepoWorktreesForResolutionMock } from '../orca-runtime-test-mocks/setup.spec'
+import { tmpdir } from 'node:os'
+import { TEST_REPO_ID, TEST_REPO_PATH } from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
   loadWorktreeRemovalRecords,
   retryFailedWorktreeRemoval
-} from '../../worktree-background-removal'
+} from '../../workspaces/removal/worktree-background-removal'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords
-} from '../../worktree-removal-records'
+} from '../../workspaces/removal/worktree-removal-records'
 
 const FAILURE = "error: failed to delete 'node_modules/a/LICENSE': Operation not permitted"
+const FOLLOW_UP_DELETE_FAILURE = "EPERM: operation not permitted, unlink 'node_modules/a/LICENSE'"
 
 describe('runtime Delete on a failed delete’s leftover', () => {
   let directory = ''
@@ -117,7 +114,7 @@ describe('runtime Delete on a failed delete’s leftover', () => {
 
   it('takes the normal delete once Git registers a checkout at the path again', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A new checkout at the same path: the recorded choices were for the leftover, not for it.
+    // A new checkout at the same path must not inherit stale removal choices.
     vi.mocked(listWorktreesStrict).mockResolvedValue([
       {
         path: leftover,
@@ -154,7 +151,6 @@ describe('runtime Delete on a failed delete’s leftover', () => {
     ).resolves.toEqual({})
 
     expect(otherClientsRetry).toHaveBeenCalledTimes(1)
-    // Only the joined retry ran: the leftover is still there because its stub deleted nothing.
     expect(existsSync(join(leftover, 'node_modules'))).toBe(true)
     expect(removeWorktree).not.toHaveBeenCalled()
   })
@@ -200,25 +196,28 @@ describe('runtime listing straight after a delete fails partway', () => {
       (await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).worktrees.find(
         (row) => row.id === leftoverId
       )
-    // Caches Git's registration for the 30 s scan TTL.
     expect(await listLeftover()).not.toHaveProperty('removalError')
     vi.mocked(removeWorktree).mockImplementation(async () => {
       // Git drops the registration, then fails on a file it cannot delete.
       gitLists([])
       throw new Error(FAILURE)
     })
+    // Orca's follow-up delete of the folder Git left also fails, so the row stays listed.
+    vi.spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath').mockRejectedValueOnce(
+      new Error(FOLLOW_UP_DELETE_FAILURE)
+    )
 
     await expect(
       runtime.removeManagedWorktree(`id:${leftoverId}`, {
         force: true,
         waitForBackgroundRemoval: true
       })
-    ).rejects.toThrow(/Operation not permitted/)
+    ).rejects.toThrow(FOLLOW_UP_DELETE_FAILURE)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(await listLeftover()).toMatchObject({
       path: leftover,
-      removalError: expect.stringMatching(/Operation not permitted/)
+      removalError: expect.stringContaining(FOLLOW_UP_DELETE_FAILURE)
     })
   })
 })

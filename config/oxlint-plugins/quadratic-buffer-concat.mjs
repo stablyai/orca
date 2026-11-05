@@ -207,6 +207,11 @@ function quadraticAccumulator(context, call, loop, declarations, assignedRoots) 
 }
 
 function createRule(context) {
+  const text = context.sourceCode.text
+  // Empty visitors avoid JS AST deserialization when Buffer.concat cannot appear.
+  if ((!text.includes('Buffer') || !text.includes('concat')) && !text.includes('\\')) {
+    return {}
+  }
   const declarations = new Map()
   const assignedRootsByLoop = new WeakMap()
   const recordBindings = (pattern, owner) => {

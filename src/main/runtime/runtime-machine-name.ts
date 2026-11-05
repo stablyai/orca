@@ -4,14 +4,12 @@ import { normalizeMachineName } from '../../shared/machine-name'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const MACOS_COMPUTER_NAME = '/usr/sbin/scutil'
-// Why: scutil answers in milliseconds when idle but can take seconds while the Mac boots the app
-// under load; a slow right answer beats a fast wrong one, and publishers cap their own wait below.
+// Boot load can delay scutil by seconds; prefer a late correct name while publishers bound their own wait.
 const MACOS_COMPUTER_NAME_TIMEOUT_MS = 5_000
 const MACOS_COMPUTER_NAME_MAX_OUTPUT_BYTES = 4 * 1024
-// Why: `orca status` probes status publishers with a 1 s budget; past this a publisher answers with
-// the hostname while the lookup keeps running, and the next status read carries the friendly name.
+// Status probes allow 1s: answer hostname at deadline while lookup continues; later reads get the friendly name.
 export const MACHINE_NAME_PUBLISH_WAIT_MS = 750
-// Why: a failed lookup is retried, but every status read reaches for it, so bound the spawn rate.
+// Retry failed lookup without spawning on every status read.
 export const MACHINE_NAME_RETRY_INTERVAL_MS = 30_000
 
 type MachineNameReader = () => string | undefined
@@ -29,7 +27,7 @@ export async function detectRuntimeMachineName(
   const platform = args.platform ?? process.platform
   const fallback = normalizeMachineName(args.fallback ?? os.hostname())
   if (platform !== 'darwin') {
-    // Why: no friendly-name source off macOS, so the hostname is the correct final answer.
+    // Off macOS, hostname is the final name source.
     return { name: fallback, final: true }
   }
   try {
@@ -52,8 +50,7 @@ export async function detectRuntimeMachineName(
   return { name: fallback, final: false }
 }
 
-// Why: the friendly name is a property of the process's host, so every runtime in a process
-// (the app, plus each one a test builds) shares one lookup instead of spawning scutil apiece.
+// All runtimes share one host; memoize scutil once per process.
 let sharedLookup: Promise<void> | null = null
 /** The final answer once a lookup lands; every runtime reads it, so a retry corrects them all. */
 let sharedDetectedName: string | null = null
@@ -86,8 +83,7 @@ function lookupSharedMachineName(): Promise<void> {
   return lookup
 }
 
-// Why: a timeout under load is not a fact about the host; dropping the memo lets a later
-// `ready()` re-derive the name instead of latching the hostname for the rest of the process.
+// Timeout is not host identity; retry later instead of caching hostname permanently.
 function recordFailedLookup(lookup: Promise<void>): void {
   lastFailedLookupAt = Date.now()
   if (sharedLookup === lookup) {

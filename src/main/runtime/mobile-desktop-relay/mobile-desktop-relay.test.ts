@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime-passthrough-socket'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay, type RelayedPhone } from './mobile-desktop-relay'
-import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
 type FakeSocket = {
   sent: string[]
@@ -18,9 +18,9 @@ const sockets = vi.hoisted(() => {
   const opened: FakeSocket[] = []
   return opened
 })
-// Holds every socket open until released, so a test can act while one is still connecting.
+// Hold sockets open so tests can act during connection.
 const openGate = vi.hoisted(() => ({ wait: Promise.resolve() }))
-vi.mock('../../../shared/remote-runtime-passthrough-socket', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-passthrough-socket', () => ({
   openRemoteRuntimePassthroughSocket: async (
     _pairing: unknown,
     capabilities: readonly string[],
@@ -52,7 +52,8 @@ const SYNCED = ok({
 
 function relayWithPhone(
   syncResponse: () => RuntimeRpcResponse<unknown> | Promise<RuntimeRpcResponse<unknown>> = () =>
-    SYNCED
+    SYNCED,
+  prepareBrowserHost?: (host: MobileDesktopRelayHost) => Promise<string | null>
 ) {
   const syncCalls: unknown[] = []
   const server = { capable: true }
@@ -67,6 +68,7 @@ function relayWithPhone(
     resolve: async (environmentId) => ({
       environmentId,
       fence: 'f',
+      pairingRevision: 7,
       pairing: { v: 2, endpoint: 'ws://127.0.0.1:1', deviceToken: 'desktop', publicKeyB64: 'k' }
     }),
     call: async (_host, method, params) => {
@@ -90,7 +92,8 @@ function relayWithPhone(
       { phoneKey: 'phone-2', name: 'iPad via Mac' }
     ],
     allocateStreamId: () => 1,
-    nativeChatDefault: () => desktop.nativeChatDefault
+    nativeChatDefault: () => desktop.nativeChatDefault,
+    prepareBrowserHost
   })
   const replies: string[] = []
   let capabilities: readonly string[] = ['cap.a']
@@ -103,6 +106,7 @@ function relayWithPhone(
     sendBinary: () => true
   }
   return {
+    hosts,
     relay,
     phone,
     replies,
@@ -114,13 +118,113 @@ function relayWithPhone(
 }
 
 describe('MobileDesktopRelay', () => {
+  it('refuses transient preparation failures so the phone can retry its capability probe', async () => {
+    sockets.length = 0
+    const prepare = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('browser_client_host_runtime_not_ready'))
+      .mockResolvedValue('desktop-host')
+    const { relay, hosts, phone, replies } = relayWithPhone(undefined, prepare)
+    hosts.browserHostClientId = () => (prepare.mock.calls.length > 1 ? 'desktop-host' : null)
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'first', method: 'status.get' },
+      '{"id":"first","method":"status.get"}'
+    )
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      ok: false,
+      error: { code: 'remote_runtime_unavailable' }
+    })
+    expect(sockets[0]!.sent).toEqual([])
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'retry', method: 'status.get' },
+      '{"id":"retry","method":"status.get"}'
+    )
+    await vi.waitFor(() => expect(sockets[0]!.sent).toHaveLength(1))
+    sockets[0]!.callbacks.onText(JSON.stringify({ ...ok({ capabilities: [] }), id: 'retry' }))
+    expect(JSON.parse(replies[1]!)).toMatchObject({
+      ok: true,
+      result: { capabilities: ['browser.screencast.v1'] }
+    })
+    relay.dispose()
+  })
+
+  it.each([true, false])(
+    'creates on the desktop browser lease only after delegated admission=%s',
+    async (admitted) => {
+      sockets.length = 0
+      const { relay, hosts, phone, replies } = relayWithPhone()
+      hosts.browserHostClientId = () => 'desktop-browser-host'
+      const call = hosts.call
+      const owner = vi
+        .spyOn(hosts, 'call')
+        .mockImplementation((host, method, params, options) =>
+          method === 'browser.tabCreate'
+            ? Promise.resolve(ok({ browserPageId: 'phone-page' }))
+            : call(host, method, params, options)
+        )
+      const params = { worktree: 'id:remote-workspace', activate: true }
+      const request = { id: 'create', method: 'browser.tabCreate', params }
+      relay.forward(phone, 'env-1', request, JSON.stringify(request))
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      const admission = JSON.parse(sockets[0]!.sent[0]!)
+      expect(admission).toMatchObject({
+        method: 'session.tabs.list',
+        params: { worktree: params.worktree }
+      })
+      const response = admitted
+        ? ok({ tabs: [] })
+        : {
+            id: 'x',
+            ok: false,
+            error: { code: 'not_found', message: 'Workspace not found' },
+            _meta: { runtimeId: 'h' }
+          }
+      sockets[0]!.callbacks.onText(JSON.stringify({ ...response, id: admission.id }))
+      await vi.waitFor(() => expect(replies).toHaveLength(1))
+      expect(JSON.parse(replies[0]!)).toMatchObject(
+        admitted
+          ? { id: 'create', ok: true, result: { browserPageId: 'phone-page' } }
+          : { id: 'create', ok: false, error: { code: 'not_found' } }
+      )
+      const creations = owner.mock.calls.filter(([, method]) => method === 'browser.tabCreate')
+      expect(creations).toEqual(
+        admitted
+          ? [
+              [
+                expect.objectContaining({ environmentId: 'env-1', pairingRevision: 7 }),
+                'browser.tabCreate',
+                {
+                  ...params,
+                  activate: false,
+                  placement: { kind: 'client', browserHostClientId: 'desktop-browser-host' }
+                },
+                {
+                  expected: { pairingRevision: 7, runtimeId: 'h' },
+                  signal: expect.any(AbortSignal)
+                }
+              ]
+            ]
+          : []
+      )
+      relay.dispose()
+      if (admitted) {
+        expect(creations[0]?.[3]?.signal?.aborted).toBe(true)
+      }
+    }
+  )
+
   it("stamps the desktop's chat default onto relayed launches only", async () => {
     sockets.length = 0
     const { relay, phone, desktop } = relayWithPhone()
     const frame = (id: string, method: string, params: Record<string, unknown>) =>
       JSON.stringify({ id, deviceToken: 'desktop-token', method, params })
     const target = { kind: 'existing', worktree: 'id:wt-1' }
-    // A phone-supplied value never wins over the desktop's own setting.
+    // Phone-supplied settings must never override the desktop default.
     relay.forward(
       phone,
       'env-1',
@@ -192,7 +296,6 @@ describe('MobileDesktopRelay', () => {
       })
       expect(mirrored.id).not.toBe('caps')
       expect(mirrored.deviceToken).toBeUndefined()
-      // The host's answer to the mirror is the relay's, not the phone's.
       socket.callbacks.onText(JSON.stringify({ id: mirrored.id, ok: true, result: {}, _meta: {} }))
     }
     expect(replies).toEqual([])
@@ -204,7 +307,6 @@ describe('MobileDesktopRelay', () => {
     relay.forward(phone, 'env-1', { id: 'a', method: 'terminal.list' }, '{"id":"a"}')
     relay.forward(phone, 'env-1', { id: 'b', method: 'terminal.list' }, '{"id":"b"}')
     await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(2))
-    // One socket per (phone connection, server) carries both requests.
     expect(sockets).toHaveLength(1)
     sockets[0]!.callbacks.onText('{"id":"a","ok":true,"result":{},"_meta":{"runtimeId":"h"}}')
     sockets[0]!.callbacks.onClose(

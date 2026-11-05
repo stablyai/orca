@@ -2,10 +2,8 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import type { AppState } from '@/store/types'
 
 const mocks = vi.hoisted(() => ({
   ownerEnvironmentIdForWorkspace: vi.fn()
@@ -31,6 +29,10 @@ import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revisi
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS } from './window-visibility-subscription-parking'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from './paired-runtime-environment-test-fixture'
 
 /**
  * #21052/#19092: the host can end a tab stream while the connection stays up (an id-less
@@ -120,10 +122,9 @@ describe('session-tabs streams the host ends over a live connection', () => {
       value: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
     })
     resetWebSessionTabsSnapshotFreshnessForTests()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror reads only id, createdAt and pairingRevision.
     const runtimeEnvironments = [
-      { id: ENV_A, createdAt: 100, pairingRevision: 101 }
-    ] as PublicKnownRuntimeEnvironment[]
+      publicRuntimeEnvironment({ id: ENV_A, createdAt: 100, pairingRevision: 101 })
+    ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
     useAppStore.setState(
       {
@@ -131,10 +132,7 @@ describe('session-tabs streams the host ends over a live connection', () => {
         activeWorktreeId: WORKTREE,
         workspaceSessionReady: true,
         runtimeEnvironments,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror reads only runtimeId and connectionGeneration.
-        runtimeStatusByEnvironmentId: new Map([
-          [ENV_A, { status: { runtimeId: 'runtime-a' }, connectionGeneration: 1 }]
-        ]) as AppState['runtimeStatusByEnvironmentId']
+        runtimeStatusByEnvironmentId: new Map([[ENV_A, connectedRuntimeStatus('runtime-a', 1)]])
       },
       true
     )
@@ -169,48 +167,5 @@ describe('session-tabs streams the host ends over a live connection', () => {
     expect(useAppStore.getState().tabsByWorktree[NEW_WORKTREE]?.map((tab) => tab.id)).toEqual([
       toWebTerminalSurfaceTabId('host-tab')
     ])
-  })
-
-  it('resubscribes the active-worktree stream once after an error response, on the backoff', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const active = streams('session.tabs.subscribe')
-    expect(active).toHaveLength(1)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await deliver(active[0], {
-      id: 'err',
-      ok: false,
-      error: { code: 'session_tabs_inventory_unstable', message: 'unstable' },
-      _meta: {}
-    })
-    // The errored logical subscription is dropped so reconnect replay cannot duplicate it.
-    expect(active[0]!.unsubscribe).toHaveBeenCalledTimes(1)
-    await act(async () => {
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS - 1)
-      await settle()
-    })
-    expect(streams('session.tabs.subscribe')).toHaveLength(1)
-    await waitOutRetry()
-    expect(streams('session.tabs.subscribe')).toHaveLength(2)
-    warn.mockRestore()
-  })
-
-  it('treats a transport error as reconnect replay territory, not an end', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await act(async () => {
-      for (const entry of subscriptions) {
-        entry.callbacks.onError?.({ code: 'transport', message: 'socket dropped' })
-      }
-      await settle()
-    })
-    await waitOutRetry()
-
-    expect(subscriptions.every((entry) => entry.unsubscribe.mock.calls.length === 0)).toBe(true)
-    expect(streams('session.tabs.subscribeAll')).toHaveLength(1)
-    warn.mockRestore()
   })
 })

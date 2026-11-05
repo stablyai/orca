@@ -26,7 +26,12 @@ import { createWorkspaceTerminalHydrationActions } from '../terminals/workspace-
 import { createWorkspaceTerminalReconnectActions } from '../terminals/workspace-terminal-reconnect'
 import { createPairedTerminalTabCloseIntentSlice } from '../terminals/paired-terminal-tab-close-intent-actions'
 
-export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
+export const createTerminalSlice: (
+  ...args: [
+    ...Parameters<StateCreator<AppState, [], [], TerminalSlice>>,
+    isClaudeAgent?: Parameters<typeof createTerminalEphemeralActions>[2]
+  ]
+) => TerminalSlice = (set, get, api, isClaudeAgent = undefined) => ({
   tabsByWorktree: {},
   activeTabId: null,
   activeTabIdByWorktree: {},
@@ -40,6 +45,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
   terminalPaneStartsByPaneKey: {},
+  terminalPaneResumeOutcomesByPaneKey: {},
   localOnlyScrollbackByTabId: {},
   pendingStartupByTabId: {},
   pendingInitialCwdByTabId: {},
@@ -56,6 +62,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
   contestedHostWorkspaceSessions: {},
   contestedPrimaryHostBySessionKey: {},
+  hydratedRuntimeSessionHostIds: [],
   defaultTerminalTabsAppliedByWorktreeId: {},
   closedTerminalTabTombstonesByTabId: {},
   hydrationSucceeded: false,
@@ -72,8 +79,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   cacheTimerByKey: {},
   lastTerminalInputAtByPaneKey: {},
   recentQuickCommandIdByGroup: {},
-  ...createTerminalEphemeralActions(set, get),
-  ...createTerminalTabCreationActions(set, get),
+  ...createTerminalEphemeralActions(set, get, isClaudeAgent),
+  ...createTerminalTabCreationActions(set, get, api.subscribe),
   ...createTerminalTabAgentLaunchPaneActions(set),
   ...createActiveWorkspaceTerminalActions(set, get),
   ...createTerminalTabCloseActions(set, get),

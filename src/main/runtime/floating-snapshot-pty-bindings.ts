@@ -1,4 +1,4 @@
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
@@ -6,7 +6,6 @@ import type {
 
 export type FloatingPtyBinding = { tabId: string; paneKey: string }
 
-/** PTY ids the host's own floating snapshot binds, with the pane each one fills. */
 export function indexFloatingSnapshotPtyBindings(
   snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
   paneKeyForTab: (tab: RuntimeMobileSessionTerminalTab) => string

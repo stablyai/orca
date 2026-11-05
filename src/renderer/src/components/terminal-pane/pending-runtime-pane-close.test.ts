@@ -8,7 +8,7 @@ it('closes the captured scoped handle while actual remote attach is still unboun
     expect.objectContaining({ method: 'terminal.resolvePane' })
   )
   expect(p.remote.getPtyId()).toBeNull()
-  p.actions.executeClosePane(1)
+  p.actions.executeClosePane(1, 'user')
   expect(p.runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'status.get' }))
   p.acceptCompatibility()
   await p.settle()
@@ -39,7 +39,7 @@ it.each(['same-leaf', 'other-tab', 'bound-transport', 'worktree-owner', 'pairing
   'rechecks %s ownership after compatibility settles',
   async (owner) => {
     const p = await preparePendingRuntimeClose()
-    p.actions.executeClosePane(1)
+    p.actions.executeClosePane(1, 'user')
     expect(p.runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'status.get' }))
     const id = 'remote:env-1@@term_original'
     const { createIpcPtyTransport } = await import('./pty-transport')
@@ -74,7 +74,7 @@ it('protects a sibling legacy alias before issuing a compatibility request', asy
     [p.leafId]: 'remote:env-1@@term_original',
     [p.siblingLeafId]: 'remote:term_original'
   }
-  p.actions.executeClosePane(1)
+  p.actions.executeClosePane(1, 'user')
   p.acceptCompatibility()
   await p.settle()
   expect(p.runtimeCall.mock.calls.map(([request]) => request.method)).toEqual([
@@ -86,7 +86,7 @@ it.each(['ssh:host@@native-hint', 'remote:term_original', 'remote:env-2@@term_or
   'refuses to infer close authority from %s',
   async (id) => {
     const p = await preparePendingRuntimeClose(id)
-    p.actions.executeClosePane(1)
+    p.actions.executeClosePane(1, 'user')
     p.acceptCompatibility()
     await p.settle()
     expect(p.runtimeCall.mock.calls.map(([request]) => request.method)).not.toContain(
@@ -99,7 +99,7 @@ it.each(['ssh:host@@native-hint', 'remote:term_original', 'remote:env-2@@term_or
 it('does not bypass a failed compatibility check', async () => {
   const p = await preparePendingRuntimeClose()
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  p.actions.executeClosePane(1)
+  p.actions.executeClosePane(1, 'user')
   p.compatibility.reject(new Error('incompatible runtime'))
   await p.settle()
   expect(p.runtimeCall.mock.calls.map(([request]) => request.method)).not.toContain(
@@ -113,7 +113,7 @@ it('does not bypass a failed compatibility check', async () => {
 
 it('never turns a late different resolved handle into close authority', async () => {
   const p = await preparePendingRuntimeClose()
-  p.actions.executeClosePane(1)
+  p.actions.executeClosePane(1, 'user')
   p.acceptCompatibility()
   await p.settle('term_replacement')
   expect(

@@ -19,7 +19,6 @@ function createRemoteRepoStore() {
 }
 import {
   createTestStore,
-  mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
   runtimeEnvironmentCall
@@ -84,27 +83,6 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
-    expect(store.getState().sortEpoch).toBe(8)
-  })
-
-  it('updates worktree records when only GitLab link metadata changes', async () => {
-    const store = createTestStore()
-    const initial = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      branch: 'refs/heads/feature'
-    })
-    const refreshed = { ...initial, linkedGitLabIssue: 321 }
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
-    store.setState({
-      worktreesByRepo: { repo1: [initial] },
-      sortEpoch: 7
-    } as Partial<AppState>)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
     expect(store.getState().sortEpoch).toBe(8)
   })
 

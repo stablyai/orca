@@ -20,8 +20,7 @@ async function readElectronHomeState(electronApp: ElectronApplication) {
   })
 }
 
-// Codex always routes to the real home now, so this single case covers both the
-// HOME boundary and that real-home routing lands inside the disposable profile.
+// Codex’s real-home route must still resolve inside the disposable test profile.
 test('isolates Electron and Codex from the developer home by default', async ({ electronApp }) => {
   const state = await readElectronHomeState(electronApp)
   const expectedHome = realpathSync.native(path.join(state.userDataDir!, 'home'))

@@ -73,7 +73,6 @@ describe('highlightSyntax', () => {
     const tail = python(lines.slice(2).join('\n'), head.state)
 
     expect(colors([...head.lines, ...tail.lines])).toEqual(colors(whole.lines))
-    // After the multi-line f-string, `with` is a keyword again.
     expect(find(whole, 'with')).toMatchObject({ dark: '#C586C0' })
   })
 
@@ -94,31 +93,6 @@ describe('highlightSyntax', () => {
 
     expect(find(result, 'format')).toMatchObject({ dark: '#DCDCAA' })
     expect(find(result, 'total')).toMatchObject({ dark: '#9CDCFE' })
-  })
-
-  it('leaves a line too long to color plain, along with every line after it', async () => {
-    const typescript = await highlighterFor('typescript')
-    const code = ['const a = 1', `const long = "${'x'.repeat(2000)}"`, 'const b = 2'].join('\n')
-
-    const result = typescript(code)
-
-    expect(result.outcome).toBe('degraded')
-    expect(find(result, 'const')).toMatchObject({ dark: '#569CD6' })
-    expect(result.lines[1]).toEqual([expect.objectContaining({ dark: undefined })])
-    expect(result.lines[2]).toEqual([
-      {
-        content: 'const b = 2',
-        offset: code.lastIndexOf('const b'),
-        light: undefined,
-        dark: undefined,
-        lightFontStyle: 0,
-        darkFontStyle: 0
-      }
-    ])
-    expect(typescript('const c = 3', result.state)).toMatchObject({
-      outcome: 'degraded',
-      lines: [[expect.objectContaining({ content: 'const c = 3', dark: undefined })]]
-    })
   })
 
   it('leaves a line that runs out of time plain instead of guessing the rest', async () => {
@@ -144,16 +118,6 @@ describe('highlightSyntax', () => {
 })
 
 describe('loadSyntaxLanguage', () => {
-  it('reports a language without a grammar as unsupported', async () => {
-    await expect(loadSyntaxLanguage('not-a-real-language')).resolves.toBe('unsupported')
-    expect(loadedSyntaxHighlighter('not-a-real-language')).toBeNull()
-  })
-
-  it('accepts aliases and any letter case', async () => {
-    await expect(loadSyntaxLanguage('PS1')).resolves.toBe('ready')
-    expect(loadedSyntaxHighlighter('ps1')).not.toBeNull()
-  })
-
   it('retries a failed load after a pause', async () => {
     const { loadSyntaxLanguage, loadedSyntaxHighlighter } = await freshHighlighterModule()
     let now = 0

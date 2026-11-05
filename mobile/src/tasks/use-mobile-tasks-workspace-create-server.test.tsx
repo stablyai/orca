@@ -25,10 +25,9 @@ const { useMobileTasksWorkspaceSshState } = await import('./use-mobile-tasks-wor
 const { useMobileTasksWorkspaceCreateActions } =
   await import('./use-mobile-tasks-workspace-create-actions')
 
-type Sent = { method: string; executionHost?: string }
+type Sent = { method: string; params?: unknown; executionHost?: string }
 const sentBy = new WeakMap<FakeSession, Sent[]>()
 
-/** Records where each call ran, then answers it with `answer`. */
 function recording(
   client: FakeSession,
   answer: (method: string, executionHost: string | undefined) => Promise<RpcResponse>
@@ -38,10 +37,10 @@ function recording(
   client.sendRequest.mockImplementation(
     async (
       method: string,
-      _params?: unknown,
+      params?: unknown,
       options?: { envelope?: { executionHost?: string } }
     ) => {
-      sent.push({ method, executionHost: options?.envelope?.executionHost })
+      sent.push({ method, params, executionHost: options?.envelope?.executionHost })
       return answer(method, options?.envelope?.executionHost)
     }
   )
@@ -165,6 +164,9 @@ describe('creating a workspace from a task on a server repo', () => {
     const { client, pushed } = await createFrom(SERVER_REPO)
     expect(ranOn(client, 'worktree.create')).toEqual(['runtime:vm'])
     expect(ranOn(client, 'preflight.detectAgents')).toEqual(['runtime:vm'])
+    expect(
+      sentBy.get(client)?.find((sent) => sent.method === 'preflight.detectAgents')?.params
+    ).toEqual({ repoId: SERVER_REPO.id })
     expect(pushed).toHaveLength(1)
     expect(new URL(pushed[0]!, 'orca://x').searchParams.get('executionHost')).toBe('runtime:vm')
   })
@@ -173,6 +175,9 @@ describe('creating a workspace from a task on a server repo', () => {
     const { client, pushed } = await createFrom(DESKTOP_REPO)
     expect(ranOn(client, 'worktree.create')).toEqual(['desktop'])
     expect(ranOn(client, 'preflight.detectAgents')).toEqual(['desktop'])
+    expect(
+      sentBy.get(client)?.find((sent) => sent.method === 'preflight.detectAgents')?.params
+    ).toEqual({ repoId: DESKTOP_REPO.id })
     expect(new URL(pushed[0]!, 'orca://x').searchParams.get('executionHost')).toBeNull()
   })
 })

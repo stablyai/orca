@@ -2,19 +2,18 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandAction,
   TerminalQuickCommandScope
-} from '../../../src/shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import '../terminal/quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
-  getTerminalQuickCommandBodySize,
-  isAgentQuickCommand,
+  isTerminalAgentQuickCommand as isAgentQuickCommand,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   supportsTerminalAgentQuickCommand
-} from '../terminal/quick-commands'
+} from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 
-// A single mutable draft covering both quick-command actions. Both the command
-// text and the agent/prompt are kept while editing so toggling Action back and
-// forth doesn't discard what the user already typed (mirrors desktop's draft).
+// Retain command and agent/prompt edits across Action switches so toggling cannot discard typing.
 export type QuickCommandDraft = {
   id: string | null
   label: string
@@ -98,9 +97,7 @@ export function isQuickCommandDraftValid(
   return draft.command.trim().length > 0
 }
 
-// Build the persisted command from a draft. Returns null when incomplete so the
-// caller can keep the editor open. The server re-normalizes, but we trim/cap
-// here so optimistic local state matches what will be saved.
+// Normalize before saving so optimistic commands match host-canonical values.
 export function draftToQuickCommand(
   draft: QuickCommandDraft,
   agentPromptMaxLength: number | null = null
@@ -108,8 +105,7 @@ export function draftToQuickCommand(
   if (!isQuickCommandDraftValid(draft, agentPromptMaxLength)) {
     return null
   }
-  // Why: timestamps alone collide when desktop and mobile add commands in the
-  // same millisecond, which would turn an atomic upsert into an overwrite.
+  // Timestamps can collide across desktop/mobile; add randomness so atomic upserts cannot overwrite another command.
   const id =
     draft.id ??
     `quick-command-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`

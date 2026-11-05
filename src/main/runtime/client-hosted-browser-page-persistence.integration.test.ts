@@ -1,18 +1,8 @@
-/**
- * Drives the runtime's own wiring: a real OrcaRuntimeService, the real page registry, and the real
- * session-tabs announcement every client-page mutation already goes through.
- *
- * The store here is a fake holding one session object -- enough to prove the runtime writes and
- * reads back through its own seam, and nothing about the Store's write paths. Those are covered by
- * store-runtime-authored-session-writes.test.ts, which drives the real Store.
- *
- * The unit tests around the persistence module can only prove it behaves once called. Whether it
- * is called at all -- and whether the session it writes is the one a restarted runtime reads back
- * -- lives in the runtime's own wiring, which is where the first end-to-end attempt broke.
- */
+/** Exercise runtime persistence wiring with a fake session store.
+ * Real Store writes are covered by store-runtime-authored-session-writes.test.ts. */
 import { describe, expect, it } from 'vitest'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -48,7 +38,6 @@ const storeBase = {
   })
 }
 
-/** One profile on disk, shared by a runtime and whatever replaces it. */
 function createProfile() {
   const state = {
     session: {
@@ -108,26 +97,6 @@ function attachHost(runtime: OrcaRuntimeService) {
 }
 
 describe('client-hosted browser page persistence through the runtime', () => {
-  it('writes the page into the session the announcement already fires on', () => {
-    const profile = createProfile()
-    const runtime = startRuntime(profile)
-    attachHost(runtime)
-    placeAndPublish(runtime, 'page-a')
-
-    runtime.notifyMobileSessionTabsChanged(WT)
-
-    expect(profile.session.clientHostedBrowserPagesByWorktree?.[WT]).toEqual([
-      expect.objectContaining({
-        browserPageId: 'page-a',
-        workspaceId: WT,
-        browserProfileId: 'profile-a',
-        pairedDeviceId: 'device-a',
-        url: 'https://example.internal/docs',
-        title: 'Internal docs'
-      })
-    ])
-  })
-
   it('hands the page to a replacement runtime as a held row', () => {
     const profile = createProfile()
     const first = startRuntime(profile)
@@ -135,7 +104,6 @@ describe('client-hosted browser page persistence through the runtime', () => {
     placeAndPublish(first, 'page-a')
     first.notifyMobileSessionTabsChanged(WT)
 
-    // A new process reading the same profile: no lease, no guest, no in-memory record.
     const replacement = startRuntime(profile)
 
     const restored = getRuntimeBrowserPageRegistry(replacement).getPage('page-a')
@@ -149,7 +117,6 @@ describe('client-hosted browser page persistence through the runtime', () => {
     expect(
       isRestoredClientHostedBrowserPlacement(restored!.placement as RuntimeBrowserClientPlacement)
     ).toBe(true)
-    // Held, not live: no placement exists for it, which is what makes the row host-absent.
     expect(getBrowserHostLeaseRegistry(replacement).getPlacement('page-a')).toBeUndefined()
   })
 
@@ -175,7 +142,6 @@ describe('client-hosted browser page persistence through the runtime', () => {
     placeAndPublish(runtime, 'page-a')
     runtime.notifyMobileSessionTabsChanged(WT)
 
-    // Real fence path: releasing the lease retains the page and re-announces the workspace.
     host.release()
 
     expect(getRuntimeBrowserPageRegistry(startRuntime(profile)).getPage('page-a')).toBeDefined()

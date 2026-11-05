@@ -11,7 +11,7 @@ const openHostLogicalClientMock = vi.fn()
 const loadHostsMock = vi.fn()
 const revival = vi.hoisted(() => ({ callback: null as null | ((reason: 'focus') => void) }))
 
-// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+// Descriptor probes need RPC methods these clients do not provide.
 const descriptorProbe = vi.hoisted(() => ({ start: vi.fn((..._args: unknown[]) => vi.fn()) }))
 vi.mock('./runtime-status-probe', () => ({
   startRuntimeStatusProbe: (...args: unknown[]) => descriptorProbe.start(...args)

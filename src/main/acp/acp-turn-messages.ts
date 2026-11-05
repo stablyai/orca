@@ -1,4 +1,3 @@
-import { BoundedMap } from '../../shared/bounded-map'
 import type { SessionUpdate } from './generated/acp-protocol.generated'
 import type { ProviderTimelineTextChannel } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { providerTimelineKeyPart } from '../native-chat/agent-session-timeline/provider-timeline-identity'
@@ -20,12 +19,13 @@ export type AcpTextDrop = {
   producerAgentId?: string
 }
 
-/** Stable turn-relative message positions. */
 export class AcpTurnMessages {
-  private readonly turns = new BoundedMap<string, MessagePosition>({ maxEntries: 128 })
-  private readonly owners = new BoundedMap<string, MessageOwner>({ maxEntries: 128 })
+  private readonly turns = new Map<string, MessagePosition>()
+  private readonly owners = new Map<string, MessageOwner>()
+  // Whitespace-only messages have no journal row to recover their settled ownership.
+  private readonly settled = new Map<string, MessageOwner>()
 
-  /** Channel items inherit the provider message's first turn, including trailing chunks. */
+  /** Keep trailing chunks on the provider message's original turn. */
   owner(turn: string | undefined, update: SessionUpdate): { turn?: string; settled?: boolean } {
     if (
       (update.sessionUpdate !== 'agent_message_chunk' &&
@@ -35,7 +35,7 @@ export class AcpTurnMessages {
       return { turn }
     }
     const key = providerTimelineKeyPart(update.messageId)
-    const owner = this.owners.get(key)
+    const owner = this.owners.get(key) ?? this.settled.get(key)
     if (owner) {
       return owner
     }
@@ -52,7 +52,11 @@ export class AcpTurnMessages {
       update.sessionUpdate !== 'agent_message_chunk' &&
       update.sessionUpdate !== 'agent_thought_chunk'
     ) {
-      if (['tool_call', 'tool_call_update', 'plan'].includes(update.sessionUpdate)) {
+      if (
+        ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(
+          update.sessionUpdate
+        )
+      ) {
         state.channel = undefined
       }
       return undefined
@@ -70,11 +74,18 @@ export class AcpTurnMessages {
     return `turn-message:${JSON.stringify([turn, state.ordinal])}`
   }
 
+  dispose(): void {
+    this.turns.clear()
+    this.owners.clear()
+    this.settled.clear()
+  }
+
   end(turn: string): void {
     this.turns.delete(turn)
-    for (const owner of this.owners.values()) {
+    for (const [key, owner] of this.owners) {
       if (owner.turn === turn) {
-        owner.settled = true
+        this.owners.delete(key)
+        this.settled.set(key, { ...owner, settled: true })
       }
     }
   }

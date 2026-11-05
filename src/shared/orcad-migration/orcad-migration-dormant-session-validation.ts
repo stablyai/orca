@@ -1,6 +1,9 @@
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import { parseWorkspaceSession } from '../workspace-session-schema'
-import { ownedEditorFileId, paneBelongsToTerminalLayout } from '../workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
+import { parseWorkspaceSession } from '../workspace-session/workspace-session-schema'
+import {
+  ownedEditorFileId,
+  paneBelongsToTerminalLayout
+} from '../workspace-session/workspace-session-pane-ownership'
 
 export function parseOrcadMigrationDormantWorkspaceSession(value: unknown): WorkspaceSessionState {
   const parsed = parseWorkspaceSession(value)
@@ -121,8 +124,7 @@ export function assertOrcadMigrationDormantWorkspaceSessionReferences(args: {
     for (const tab of tabs) {
       assertOwner(args.owns, tab.worktreeId)
       if (tab.contentType === 'terminal') {
-        // Unified terminal tabs normally mirror tabsByWorktree, but a session written during
-        // model rollout can contain only this representation. Layouts still belong to it.
+        // Rollout-era sessions may hold terminal tabs only here; their layouts still need validation.
         terminalTabIds.add(tab.id)
         terminalTabIds.add(tab.entityId)
       }

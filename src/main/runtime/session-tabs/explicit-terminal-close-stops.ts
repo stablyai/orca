@@ -1,11 +1,11 @@
-import type { WorktreePtyHostFence } from '../worktree-pty-host-fence'
+import type { WorktreePtyHostFence } from '../workspaces/removal/worktree-pty-host-fence'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
-import type { RuntimePtyTabCloseAuthority } from '../runtime-terminal-state-records'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { RuntimePtyTabCloseAuthority } from '../terminal/records/runtime-terminal-state-records'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
   NO_STOP,
@@ -84,13 +84,14 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
-    // Switch point: a pane main owns closes in main's layout, whatever the window lists.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       const mainClose = await closeMainOwnedPaneByHandle(
         {
           runtime: this,
           livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
           liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+          remoteSessionIdOf: (worktreeId, tabId) =>
+            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
           applyLayoutCommand: (command) => this.applyLayoutCommand(command),
           stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
           describe: (...args) => this.describeTerminalClose(...args)
@@ -113,19 +114,20 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         worktreeId: pty.pty.worktreeId
       }
       const ptyCloseAuthority = this.resolvePtyTabCloseSurfaceAuthority(closeAuthority)
-      const spawnSurface = pty.pty.tabId
-        ? this.findMobileTerminalSurface(pty.pty.worktreeId, pty.pty.tabId)
+      const recorded = this.paneOfPty(pty.pty)
+      const spawnSurface = recorded.tabId
+        ? this.findMobileTerminalSurface(pty.pty.worktreeId, recorded.tabId)
         : null
-      // Why: PTY exit can immediately replace a ready SSH publication with a pending one, so capture its durable HUB surface before killing it.
+      // Capture durable HUB identity before kill: PTY exit may immediately turn a ready SSH publication pending.
       const surface =
         ptyCloseAuthority?.surface ??
         (spawnSurface && this.getMobileTerminalLeafPtyIds(spawnSurface.tab).length === 0
           ? spawnSurface
           : null)
-      const tabId = surface?.tab.parentTabId ?? pty.pty.tabId ?? pty.record.tabId
-      const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
+      const tabId = surface?.tab.parentTabId ?? recorded.tabId ?? pty.record.tabId
+      const leafId = surface?.tab.leafId ?? parsePaneKey(recorded.paneKey ?? '')?.leafId
       const paneTarget = leafId ? { kind: 'pane' as const, tabId, leafId } : null
-      // Why: a PTY with no pane identity cannot be placed in any tab's layout, so it closes nothing.
+      // Without pane identity, a PTY cannot authorize closing any tab layout.
       const closesTab =
         paneTarget !== null &&
         this.resolveTerminalCloseTarget(pty.pty.worktreeId, paneTarget) === 'last-pane'
@@ -162,11 +164,11 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
-      // Why the tabs guard: a headless host has no renderer tab to close through the notifier.
+      // Headless hosts have no renderer tab to close through the notifier.
       if (
         closesTab &&
         !surface &&
-        pty.pty.tabId &&
+        recorded.tabId &&
         this.tabs.has(tabId) &&
         this.notifier?.closeTerminalTab
       ) {
@@ -188,13 +190,12 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       }
       const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
       if (!closesTab) {
-        // Why: the pane's removal is this close's own commit, not a side effect of its exit. An
-        // unconfirmed stop is unverifiable, never a reason to close the live siblings with it.
+        // Commit this pane's removal explicitly; unconfirmed stop never authorizes closing live siblings.
         if (paneTarget) {
           await this.closeTerminalPane(pty.pty.worktreeId, paneTarget)
         }
       } else if (surface) {
-        // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
+        // Paired viewers retain ended streams until HUB removal; use durable host close instead of viewer-local exit handling.
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             localPtyTeardownOwnedExternally: true
@@ -251,13 +252,14 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
-    // Switch point: a pane main owns closes in main's layout, whatever the window lists.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       const mainClose = await closeMainOwnedPaneByHandle(
         {
           runtime: this,
           livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
           liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+          remoteSessionIdOf: (worktreeId, tabId) =>
+            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
           applyLayoutCommand: (command) => this.applyLayoutCommand(command),
           stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
           describe: (...args) => this.describeTerminalClose(...args)
@@ -280,12 +282,11 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       }
       const tabId =
         this.resolvePtyTabCloseSurfaceAuthority(closeAuthority)?.surface.tab.parentTabId ??
-        pty.pty.tabId
+        this.paneOfPty(pty.pty).tabId
       if (!tabId) {
         return this.closeTerminal(handle)
       }
-      // Why: a handle-addressed CLI/automation close is an explicit intent, so
-      // it must stay destructive under the non-user close adjudication gate.
+      // Handle-addressed CLI/automation close is user intent under lifecycle-echo adjudication.
       await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
         reason: 'user',
         expectedPtyCloseAuthority: closeAuthority

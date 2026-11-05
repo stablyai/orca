@@ -1,20 +1,20 @@
-import { selectFreshExplicitAgentStatus } from '../../runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './terminal-input-dispatch'
+import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
-import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { hasCompatibleAgentTitleIdentity } from '../../../../shared/agent-title-owner'
+import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { hasCompatibleAgentTitleIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
 import type { PtyForegroundProcessRead } from '../../runtime-terminal-contracts'
-import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
-import { readAgentPromptWaitText } from '../../agent-prompt-submission-verification'
-import type { AgentStatus } from '../../../../shared/agent-detection'
+} from './agent-prompt-submission-verification'
+import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
-export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
+export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
   protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
 
   protected async serializeAgentPromptSubmission<T>(
@@ -103,8 +103,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
         return
       }
-      // Why: without an identified owner (null) the foreground read keeps today's rules; with one
-      // whose process cannot be checked right now, silence from that read is never an exit.
+      // No identified owner keeps legacy rules; an unverifiable owned process cannot be declared exited from silence.
       if (verdict === null || verdict === 'unverifiable') {
         this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
       } else if (verdict === 'exited' && !recoverCompletedHook) {
@@ -128,21 +127,13 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     current.lastAgentStatus = restoredStatus
     if (restoredStatus === 'idle') {
       this.resolvePtyTuiIdleWaiters(current, ptyId)
+      // Restored idle from a name-only title still needs settlement evidence before delivery.
+      this.deliverPendingMessagesForPty(ptyId)
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
-      // Why the clear too: a stale-working clear leaves the native status, not the neutral one.
-      if (leaf.lastAgentStatus !== null && !current.titleDisplayClear) {
-        continue
-      }
-      // Why: the live agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
-      leaf.lastAgentStatus = restoredStatus
-      if (restoredStatus === 'idle') {
-        this.resolveTuiIdleWaiters(leaf)
-        // Why gated like every other delivery edge: a neutral-title restoration can
-        // reinstate `idle` from a name-only title, which is not evidence a turn ended.
-        if (this.checkDeliverySettledAndArmRecheck(leaf)) {
-          this.deliverPendingMessagesForLeaf(leaf)
-        }
+      // A stale-working clear retains native status rather than neutral status.
+      if (leaf.lastAgentStatus === null || current.titleDisplayClear) {
+        leaf.lastAgentStatus = restoredStatus
       }
     }
   }
@@ -224,10 +215,6 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     })
   }
 
-  /**
-   * Schedules an asynchronous query to check which agent process is currently
-   * running in the foreground of a PTY.
-   */
   protected refreshPtyForegroundAgent(ptyId: string): void {
     void this.ptyForegroundAgent.refresh(ptyId)
   }
@@ -272,7 +259,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     const explicit = this.getFreshExplicitAgentStatusForPty(handle, ptyId)
     const explicitFloor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
     const nativeLifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
-    // Why projected: verification compares against main's baseline, which held a stale-working clear.
+    // Compare against main's projected baseline, which held a stale-working clear.
     const lifecycle = getDisplayPromptLifecycle(
       nativeLifecycle,
       this.getPtyTitleDisplayClear(ptyId)

@@ -1,7 +1,4 @@
-// The way back to the latest message once the reader has scrolled up.
-//
-// It stays mounted so it can fade rather than pop, and while hidden it is inert
-// and hidden from assistive tech, so it can be neither clicked, tabbed to nor read.
+// Keep mounted for fading; hidden state is inert and excluded from assistive technology.
 
 import { ArrowDown } from 'lucide-react'
 import { translate } from '@/i18n/i18n'

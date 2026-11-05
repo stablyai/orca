@@ -51,7 +51,7 @@ function readCommandReceiptCandidates(
     operationId
   }
   try {
-    // A newer read-only database may not expose this table; that cannot authorize a retry.
+    // Missing tables in newer read-only databases cannot authorize a command retry.
     if (
       !db
         .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -119,7 +119,7 @@ export function readCommandReceipt(
   return receipt ? { verdict: 'readable', receipt } : { verdict: 'absent' }
 }
 
-/** The caller owns the effect's transaction; this function never reserves or commits on its own. */
+/** Insert inside the effect's transaction; never reserve or commit independently. */
 export function insertCommandReceiptIfAbsent(
   db: Database.Database,
   scope: CommandReceiptScope,

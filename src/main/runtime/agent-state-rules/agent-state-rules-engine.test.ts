@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateTuiIdle, type TuiIdleEvaluationInput } from '../tui-idle-evidence'
-import { isKnownReadyPromptBody, isQuietReadyScreenBody } from '../terminal-wait-detection'
+import { evaluateTuiIdle, type TuiIdleEvaluationInput } from '../terminal/wait/tui-idle-evidence'
+import {
+  isKnownReadyPromptBody,
+  isQuietReadyScreenBody
+} from '../terminal/wait/terminal-wait-detection'
 import {
   compileAgentRules,
   evaluateAgentStateRules,
@@ -194,7 +197,7 @@ describe('screen rows', () => {
     expect(evaluate(block(match), ['done', '>'])).toBe('m')
   })
 
-  it('combines all, any and none on one row', () => {
+  it('combines all and any on one row', () => {
     const rows = [{ all: [{ regex: '\\)$' }], any: [{ contains: 'yes' }, { contains: 'no' }] }]
     expect(evaluate(block({ rows }), ['yes (y)'])).toBe('m')
     expect(evaluate(block({ rows }), ['maybe (m)'])).toBeNull()
@@ -241,7 +244,6 @@ describe('strength and quiet through the tui-idle ranking', () => {
 })
 
 describe('a bundled strong, quiet idle rule', () => {
-  // Antigravity's idle composer (agent-state-rules/antigravity.json).
   const readyScreen = ['─'.repeat(20), '>', '─'.repeat(20), '? for shortcuts']
 
   it('is believed at once on a pane with no output clock', () => {

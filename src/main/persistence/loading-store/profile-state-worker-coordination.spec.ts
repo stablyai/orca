@@ -5,6 +5,36 @@ import { StateSerializationSecretHandlingOperations } from './state-serializatio
 
 export function registerProfileStateWorkerCoordinationTests(): void {
   describe('worker-owned Store writes', () => {
+    it.each(['selective', 'complete'] as const)(
+      'retains original Chat metadata through failed %s worker write and retry',
+      async (mode) => {
+        const original = { experimentalNativeChat: { saved: [false, null] } }
+        const { store, authority, readState } = await fixture(undefined, original)
+        const selective = vi.spyOn(authority, 'writeSerializedDomains')
+        const complete = vi.spyOn(authority, 'writeCompleteSerializedDomains')
+        const input = {
+          agentDefaultSurface: 'chat' as const,
+          nativeChatProviders: { codex: false },
+          experimentalNativeChat: false
+        }
+        store.updateSettings(input)
+        if (mode === 'complete') {
+          store.updateOnboarding({ outcome: 'completed' })
+        }
+        authority.failNextWrite()
+        await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('profile_state_write_failed')
+        await store.flushPendingOrThrowAsync()
+        expect(mode === 'selective' ? selective : complete).toHaveBeenCalledTimes(2)
+        expect(readState().settings).toMatchObject({
+          ...original,
+          agentDefaultSurface: 'chat',
+          nativeChatProviders: { codex: false }
+        })
+        expect(store.getSettings()).not.toHaveProperty('experimentalNativeChat')
+        expect(JSON.parse(store.prepareProfileStateExport().json).settings).toMatchObject(original)
+      }
+    )
+
     it('consumes the debounce timer and avoids full checkpoints after a selective durable write', async () => {
       const { store, authority, readState } = await fixture()
       const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
@@ -35,7 +65,7 @@ export function registerProfileStateWorkerCoordinationTests(): void {
     })
 
     it('skips a debounce callback already queued behind the write that consumed its changes', async () => {
-      const { store, authority } = await fixture()
+      const { store, authority, readState } = await fixture()
       const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
       const gate = authority.pause()
       vi.useFakeTimers()
@@ -50,6 +80,7 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         await durable
         await store.waitForPendingWrite()
         expect(full).not.toHaveBeenCalled()
+        expect(readState().settings.theme).toBe('dark')
       } finally {
         gate.finish.resolve()
         vi.useRealTimers()
@@ -290,10 +321,11 @@ export function registerProfileStateWorkerCoordinationTests(): void {
     it.each(['known-failure', 'indeterminate'] as const)(
       'only rolls back a mutation with a known failure (%s)',
       async (outcome) => {
-        const { store, authority } = await fixture()
+        const { store, authority, readState } = await fixture()
         vi.spyOn(console, 'error').mockImplementation(() => {})
+        const previous = store.getSettings().theme
         const gate = authority.pause()
-        const rollback = vi.fn()
+        const rollback = vi.fn(() => store.updateSettings({ theme: previous }))
         const exact = store.runDurableMutation(() => {
           store.updateSettings({ theme: 'dark' })
           return { value: undefined, rollback }
@@ -303,6 +335,8 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         gate.finish.reject(new ProfileStateWriterError('test', 'write failed', outcome))
         await rejected
         expect(rollback).toHaveBeenCalledTimes(outcome === 'known-failure' ? 1 : 0)
+        expect(store.getSettings().theme).toBe(outcome === 'known-failure' ? previous : 'dark')
+        expect(readState().settings.theme).toBe(previous)
       }
     )
 

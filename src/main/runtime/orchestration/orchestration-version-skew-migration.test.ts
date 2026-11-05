@@ -232,8 +232,7 @@ describe('OrchestrationDb version-skew migration', () => {
     ).toBeDefined()
   })
 
-  // The two v32 recovery columns were listed as unversioned, so every shipped database below v32
-  // read as v6 and replayed the whole chain, re-running the v23 resource backfill over live rows.
+  // Unversioned v32 probes replayed from v6, applying resource backfill over live rows.
   it('starts a genuine pre-v32 database at its own version, not the v6 floor', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-v31-'))
     const dbPath = join(tempDir, 'orchestration.db')
@@ -470,12 +469,10 @@ describe('OrchestrationDb version-skew migration', () => {
     }
 
     expect(() => insertLegacyDelivery('delivery_old_binary')).not.toThrow()
-    // A second outstanding legacy row must not collide on the empty mailbox handle either.
     expect(() => insertLegacyDelivery('delivery_old_binary_2')).not.toThrow()
   })
 
-  // Why: v34 early-returns at >= 34 and every index probe uses IF NOT EXISTS, so a DB the pre-fix
-  // build already stamped v34 kept the old shape until v35 repaired it against the stored SQL.
+  // A stamped v34 can retain old delivery shape; v35 must repair stored SQL rather than trust the stamp.
   it('repairs deliveries a pre-fix build already stamped v34', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v34-already-stamped-'))
     const dbPath = join(tempDir, 'orchestration.db')

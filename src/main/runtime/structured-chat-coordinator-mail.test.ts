@@ -1,19 +1,15 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// A worker's result reaching the structured chat that coordinates it, end to end in one process,
-// on the coordinator-mail rig.
 
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { dispatch as dispatchCommand } from '../../cli/dispatch'
+import { orchestrationTestContext } from '../../cli/handlers/orchestration-handler-test-context'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session-host-authority'
-import { refuse } from '../../shared/agent-session-wire-refusals'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
-import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { operationId, providerFaults } from './structured-chat-coordinator-fake-codex-fixture'
@@ -40,49 +36,44 @@ import {
   clearChat,
   startClearedContext,
   WAIT,
-  POINTER,
-  ptyPointer,
+  isWholeMail,
   turnText,
   queuedCardTexts,
   restartRuntime
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
+/** Mail the chat has not been handed yet: `check` still returns it. */
+const unread = (mailbox: string) => db.getUnreadMessages(mailbox)
+
 describe('a worker result reaches the structured chat that coordinates it', () => {
-  it('lands as a turn in the coordinator journal, and a flagless check returns the worker_done', async () => {
+  it('hands an idle coordinator the whole worker report as its own turn, leaving check nothing', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
 
     await finishWorker(taskId)
 
-    // No user action: the result itself sends the chat a turn through the host's send.
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    expect(turnText(chat.turns[0]!)).toBe(ptyPointer(`run:${runId}`))
+    const text = turnText(chat.turns[0]!)
+    expect(isWholeMail(text)).toBe(true)
+    expect(text).toContain('(worker_done)')
     await settleTurn(COORDINATOR, 0)
-    expect(await userTexts(COORDINATOR)).toEqual([expect.stringMatching(POINTER)])
+    expect(await userTexts(COORDINATOR)).toEqual([text])
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
 
     const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
-    expect(checked).toMatchObject({
-      runId,
-      count: 1,
-      messages: [{ type: 'worker_done', from_handle: 'term_worker' }]
-    })
+    expect(checked).toMatchObject({ runId, count: 0 })
   })
 
-  it('does not send a second pointer when the delivery is retried', async () => {
+  it('does not send a report twice when the delivery is retried', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
 
-    // A pending send is not an acknowledgement, so the mail is retained and retried on every edge
-    // until the host confirms it: before the echo, and again at the turn's idle edge.
     runtime.deliverPendingMessagesForHandle(`run:${runId}`)
     await settleTurn(COORDINATOR, 0)
     runtime.deliverPendingMessagesForHandle(`run:${runId}`)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
     expect(chat.turns).toHaveLength(1)
     expect(await userTexts(COORDINATOR)).toHaveLength(1)
   })
@@ -90,8 +81,8 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   /** Fires both edges and waits until every gate read they started has answered. */
   const edgesAnswered = (): Promise<void> => observationClock.edgesAnswered(runtime, WAIT)
 
-  /** The operation ids the coordinator's journal recorded for its pointer turns. */
-  async function pointerSends(): Promise<string[]> {
+  /** The operation ids the coordinator's journal recorded for whole-mail turns. */
+  async function mailSends(): Promise<string[]> {
     const snapshot = await host.journalSnapshot(COORDINATOR)
     return snapshot.submissions
       .filter((submission) =>
@@ -99,15 +90,14 @@ describe('a worker result reaches the structured chat that coordinates it', () =
           (item) =>
             item.itemId === agentJournalSubmissionKey(submission.clientMessageId) &&
             item.body?.kind === 'message' &&
-            item.body.blocks.some((block) => block.type === 'text' && POINTER.test(block.text))
+            item.body.blocks.some((block) => block.type === 'text' && isWholeMail(block.text))
         )
       )
       .map((submission) => submission.clientMessageId)
   }
 
-  it('keeps a pointer whose provider died before the echo, and points it after the next turn that runs', async () => {
-    // A provider that dies before echoing never ran the pointer: the mail stays unpointed, and
-    // neither the death's own edge nor an idle one starts the provider again for it.
+  it('never hands a report the provider may have taken over again, even after a later turn; check keeps it', async () => {
+    // Death before the echo leaves the report in doubt: it may have reached the agent, so only check returns it.
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
@@ -118,28 +108,23 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await edgesAnswered()
     await edgesAnswered()
     expect(codex.connections.length).toBe(before)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
 
-    // The user's next message starts the agent; once its turn runs, the pointer follows it.
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
     const revived = connectionFor(COORDINATOR)
     await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
     expect(revived.turns[0]!.text).toContain('again')
     await settleTurn(COORDINATOR, 0)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(revived.turns[1]!.text).toMatch(POINTER)
-    await settleTurn(COORDINATOR, 1)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
+    await edgesAnswered()
+    expect(revived.turns).toHaveLength(1)
+    expect(await mailSends()).toHaveLength(1)
+    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
+    expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
   })
 
   it('does not restart a provider that dies before every echo, however many edges follow', async () => {
     observationClock.start()
-    // What this pins: each death's own status edge used to re-point the mail, and that send started
-    // the provider again, about once a second for as long as the mail was unread.
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     providerFaults.dieBeforeEveryEcho = true
@@ -151,15 +136,13 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await edgesAnswered()
     expect(codex.connections.length - before).toBe(0)
     expect(providerFaults.turnStarts).toBe(1)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
   it.each(['exit-then-throw', 'throw-then-exit'] as const)(
-    'does not restart a provider that crashed while taking the pointer turn (%s)',
+    'does not restart a provider that crashed while taking the report turn (%s)',
     async (crash) => {
       observationClock.start()
-      // The crash settles the send `unknown` with the connection's own error, not as a provider
-      // exit; every status edge after it re-pointed the mail and started the provider again.
       await openChat(COORDINATOR)
       const { runId, taskId } = await coordinatorRunAndTask()
       providerFaults.crashOnTurnStart = crash
@@ -170,12 +153,12 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       await edgesAnswered()
       expect(providerFaults.starts - before).toBe(0)
       expect(providerFaults.turnStarts).toBe(1)
-      expect(await pointerSends()).toHaveLength(1)
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+      expect(await mailSends()).toHaveLength(1)
+      expect(unread(`run:${runId}`)).toHaveLength(1)
     }
   )
 
-  it('points the next result once after a transient death, then holds nothing', async () => {
+  it('hands the next report over after a transient death, leaving the one in doubt to check', async () => {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const second = await call(
@@ -187,25 +170,21 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
     await edgesAnswered()
-    // The death was transient. A new result is new mail: one pointer for both, one start.
     providerFaults.dieBeforeEveryEcho = false
     const before = providerFaults.starts
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
     const revived = connectionFor(COORDINATOR)
-    expect(turnText(revived.turns.at(-1)!)).toBe(
-      formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
-    )
+    expect(isWholeMail(turnText(revived.turns.at(-1)!))).toBe(true)
     await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
-    expect(providerFaults.starts - before).toBe(1)
+    await edgesAnswered()
+    // The report the death left in doubt is not sent again: check is where it waits.
     expect(providerFaults.turnStarts).toBe(2)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
+    expect(providerFaults.starts - before).toBe(1)
   })
 
-  it('leaves a pointer the person stopped while its agent was starting stopped', async () => {
+  it('leaves a report the person stopped while its agent was starting stopped', async () => {
     observationClock.start()
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
@@ -214,7 +193,6 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const before = providerFaults.starts
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
-    // The person presses Stop while the agent is still starting.
     const cancelling = host.cancel(
       { callerKey: 'test-surface' },
       {
@@ -235,17 +213,17 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const cancelled = await cancelling
     expect(cancelled).toMatchObject({ ok: true })
     providerFaults.startDelayMs = 0
-    // A fixed window, not a poll: a re-point would start the agent again in it.
+    // A fixed window, not a poll: a repeat would start the agent again in it.
     await observationClock.observe(1_500)
     expect(providerFaults.starts - before).toBe(1)
-    expect(await pointerSends()).toHaveLength(1)
+    expect(await mailSends()).toHaveLength(1)
     await edgesAnswered()
     expect(providerFaults.starts - before).toBe(1)
     expect(providerFaults.turnStarts).toBe(0)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
-  it('points a held pointer once more after Orca restarts, under a new id', async () => {
+  it('keeps a report in doubt across an Orca restart without restarting its agent', async () => {
     observationClock.start()
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
@@ -253,22 +231,17 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
     await edgesAnswered()
-    const [held] = await pointerSends()
+    const sends = await mailSends()
 
-    // The next process: a fresh runtime over the same database redrives restored mail. The
-    // provider still dies, so exactly one start proves it is pointed once, not in a loop.
+    // A fresh runtime reads the restored record; the still-failing provider must not enter a restart loop.
     restartRuntime()
     const before = providerFaults.starts
     await observationClock.observe(2_000)
-    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
-    await observationClock.observe(1_500)
     await edgesAnswered()
-    expect(providerFaults.starts - before).toBe(1)
-    expect(providerFaults.turnStarts).toBe(2)
-    const sends = await pointerSends()
-    expect(sends).toHaveLength(2)
-    expect(sends[0]).toBe(held)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(providerFaults.starts - before).toBe(0)
+    expect(providerFaults.turnStarts).toBe(1)
+    expect(await mailSends()).toEqual(sends)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
   /** Mail for a chat whose agent is stopped and whose every start is refused; resolves after it. */
@@ -283,10 +256,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const before = providerFaults.starts
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1),
-      WAIT
-    )
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toHaveLength(1), WAIT)
     // A fixed window, not a poll: a retry loop would start it several times in it.
     await observationClock.observe(1_500)
     return { runId, starts: providerFaults.starts - before }
@@ -305,11 +275,10 @@ describe('a worker result reaches the structured chat that coordinates it', () =
         })
     ]
   ])(
-    'holds mail after a start refused as %s until a turn runs, adding nothing on later edges',
+    'holds a report after a start refused as %s until a turn runs, adding nothing on later edges',
     async (_label, refusal) => {
       const { runId, starts } = await refusedStartsFor(refusal)
       expect(starts).toBe(1)
-      // Later edges replay the refusal: no start, and no new pointer and failure rows in the chat.
       const before = providerFaults.starts
       for (let edge = 0; edge < 5; edge += 1) {
         runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
@@ -317,10 +286,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       }
       await edgesAnswered()
       expect(providerFaults.starts).toBe(before)
-      expect(await pointerSends()).toHaveLength(1)
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+      expect(await mailSends()).toHaveLength(1)
+      expect(unread(`run:${runId}`)).toHaveLength(1)
 
-      // Fixed, the person's next message starts the agent, and the pointer follows its turn.
       providerFaults.refuseStart = null
       expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
@@ -329,12 +297,12 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       expect(revived.turns[0]!.text).toContain('again')
       await settleTurn(COORDINATOR, 0)
       await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-      expect(revived.turns[1]!.text).toMatch(POINTER)
+      expect(isWholeMail(turnText(revived.turns[1]!))).toBe(true)
     }
   )
 
-  it('points held mail after the next turn that runs, even once a rewind dropped its send', async () => {
-    const chat = await openChat(COORDINATOR)
+  it('does not send a report again once a rewind dropped its in-doubt send', async () => {
+    await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     providerFaults.crashOnTurnStart = 'exit-then-throw'
     await finishWorker(taskId)
@@ -346,155 +314,206 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       .sessions
     const fence = host.deps.store.getRecord(COORDINATOR)!.lease.runtimeFence
     await open.get(COORDINATOR)!.journal.replaceEpochItems('handle_forked', fence, [])
-    expect(await pointerSends()).toEqual([])
+    expect(await mailSends()).toEqual([])
 
     providerFaults.crashOnTurnStart = 'off'
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
-    const revived = connectionFor(COORDINATOR)
-    expect(revived).not.toBe(chat)
+    const revived = await vi.waitFor(() => {
+      const connection = connectionFor(COORDINATOR)
+      expect(connection.turns.length).toBeGreaterThan(0)
+      return connection
+    }, WAIT)
     await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(() => expect(turnText(revived.turns.at(-1)!)).toMatch(POINTER), WAIT)
-    await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
-  })
-
-  it('points again under a new id once a send the host never recorded is too old to admit', async () => {
-    const chat = await openChat(COORDINATOR)
-    const { runId, taskId } = await coordinatorRunAndTask()
-    // The first pointer is refused before the host records it, so the journal holds no verdict.
-    const realSend = host.send
-    const refused = vi.spyOn(host, 'send').mockImplementationOnce(async () => ({
-      ok: false as const,
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'conversationCommandInFlight' },
-        'busy'
-      )
-    }))
-    refused.mockImplementation((caller, params) => realSend(caller, params))
-    await finishWorker(taskId)
-    await vi.waitFor(() => expect(refused).toHaveBeenCalledTimes(1), WAIT)
-    const held = db.getStructuredPointerOperation(`run:${runId}`)
-    expect(held).toMatchObject({ session_id: COORDINATOR, operation_id: expect.any(String) })
-    const heldId = held!.operation_id
-    expect(heldId).not.toBe('')
-    expect(refused.mock.calls[0]?.[1].envelope.clientOperationId).toBe(heldId)
-    expect(await pointerSends()).toEqual([])
-
-    // No edge for a day: the host would now refuse that id as expired, on every retry.
-    vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      vi.setSystemTime(Date.now() + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + 60_000)
-      await edgesAnswered()
-      await vi.waitFor(
-        () => expect(chat.turns.map(turnText)).toEqual([ptyPointer(`run:${runId}`)]),
-        WAIT
-      )
-      await vi.waitFor(async () => {
-        const sends = await pointerSends()
-        expect(sends).toHaveLength(1)
-        expect(sends[0]).toBeTruthy()
-        expect(sends[0]).not.toBe(heldId)
-        expect(db.getStructuredPointerOperation(`run:${runId}`)).toMatchObject({
-          session_id: COORDINATOR,
-          operation_id: sends[0]
-        })
-      }, WAIT)
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('points mail a refused turn left in doubt again with the next result, counting both', async () => {
-    // A failed turn/start cannot prove the turn never started, so the host records it `unknown`
-    // and a resend under its id replays that. The next result's pointer does not wait behind
-    // that doubt: it names both messages, and the chat's own `check` reads them.
-    const chat = await openChat(COORDINATOR)
-    const { runId, taskId } = await coordinatorRunAndTask()
-    const second = await call(
-      'orchestration.taskCreate',
-      { spec: 'more' },
-      { sessionId: COORDINATOR }
-    )
-    providerFaults.refuseTurnStarts = 1
-    const before = codex.connections.length
-    await finishWorker(taskId)
-    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
     await edgesAnswered()
-    expect(chat.turns).toHaveLength(0)
-
-    await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    expect(turnText(chat.turns[0]!)).toBe(
-      formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
-    )
-    expect(await queuedCardTexts()).toEqual([])
-    expect(codex.connections.length).toBe(before)
+    // Its admission is on record even though the rewind dropped the send: it may have been taken.
+    expect(revived.turns.map(turnText).filter(isWholeMail)).toEqual([])
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
-  it('points a coordinator whose agent is not running through the send alone, which starts it', async () => {
+  it('counts only a /clear made after a refused start: one before it starts nothing, one after it one attempt', async () => {
+    observationClock.start()
+    await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await clearChat(COORDINATOR)
+    providerFaults.refuseStart = () => new AgentSessionAcquisitionRefusal('no login', 'notSignedIn')
+    const before = providerFaults.starts
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
+    for (let edge = 0; edge < 4; edge += 1) {
+      await edgesAnswered()
+      await observationClock.observe(100)
+    }
+    expect(providerFaults.starts - before).toBe(1)
+
+    await clearChat(COORDINATOR)
+    await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 2), WAIT)
+    for (let edge = 0; edge < 4; edge += 1) {
+      await edgesAnswered()
+      await observationClock.observe(100)
+    }
+    expect(providerFaults.starts - before).toBe(2)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
+  })
+
+  it('starts a coordinator whose agent is not running through the send alone', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
-    // What the idle sweep leaves of a chat nobody is looking at: agent stopped, no map entry.
     await host.close(COORDINATOR, 'evict')
     expect(host.hasSession(COORDINATOR)).toBe(false)
     const before = codex.connections.length
 
     await finishWorker(taskId)
 
-    // Nothing holds or wakes the session first: the pointer's accepted send starts its agent.
+    // Nothing holds or wakes the session first: the report's accepted send starts its agent.
     await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
     const revived = connectionFor(COORDINATOR)
     await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
-    expect(revived.turns[0]!.text).toMatch(POINTER)
+    expect(isWholeMail(turnText(revived.turns[0]!))).toBe(true)
     await settleTurn(COORDINATOR, 0)
-    expect(await userTexts(COORDINATOR)).toEqual([expect.stringMatching(POINTER)])
+    expect((await userTexts(COORDINATOR)).filter(isWholeMail)).toHaveLength(1)
   })
 
-  it('steers mail that arrives mid-turn into the running turn, with who it is from', async () => {
+  it('steers a report into the running turn once, with who it is from', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     expect(await sendUserMessage(COORDINATOR, 'go')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     const notify = (method: string, params: unknown) =>
       chat.handlers.onNotification?.(method, params)
-    const echo = (id: string, clientId: string, text: string) =>
-      notify('item/completed', {
-        item: { type: 'userMessage', id, clientId, content: [{ type: 'text', text }] }
-      })
     notify('turn/started', { turn: { id: 'turn-1' } })
-    echo('echo-go', chat.turns[0]!.clientUserMessageId, 'go')
+    notify('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-go',
+        clientId: chat.turns[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: 'go' }]
+      }
+    })
     await host.flushStreamedEvents(COORDINATOR)
 
     await finishWorker(taskId)
 
-    // Into the turn that is running, as a terminal agent takes its typed nudge: no card, no
-    // second turn.
     await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
-    const [steer] = chat.steers
-    expect(steer!.expectedTurnId).toBe('turn-1')
-    expect(steer!.text).toContain(ptyPointer(`run:${runId}`))
+    expect(isWholeMail(turnText(chat.steers[0]!))).toBe(true)
     expect(await queuedCardTexts()).toEqual([])
+    expect(chat.turns).toHaveLength(1)
+    runtime.deliverPendingMessagesForHandle(`run:${runId}`)
+    await observationClock.edgesAnswered(runtime, WAIT)
+    expect(chat.steers).toHaveLength(1)
     const sent = (await host.journalSnapshot(COORDINATOR)).items.find(
       (item) => item.body.kind === 'message' && item.body.from
     )
     expect(sent?.body).toMatchObject({
       from: { kind: 'agent', orchestration: { message: 'mail-notice', mailbox: `run:${runId}` } }
     })
-
-    echo('echo-pointer', steer!.clientUserMessageId, ptyPointer(`run:${runId}`))
-    notify('turn/completed', { turn: { id: 'turn-1' } })
+    notify('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-mail',
+        clientId: chat.steers[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: chat.steers[0]!.text }]
+      }
+    })
     await host.flushStreamedEvents(COORDINATOR)
-    // The idle edge finds the mail delivered: nothing is resent.
-    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    expect(chat.turns).toHaveLength(1)
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
     expect(chat.steers).toHaveLength(1)
+  })
+
+  it('delivers the real send command into a busy peer once across a CLI retry', async () => {
+    const chat = await openChat(COORDINATOR)
+    await openChat(PEER_CHAT)
+    await sendUserMessage(COORDINATOR, 'working')
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    chat.handlers.onNotification?.('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-working',
+        clientId: chat.turns[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: 'working' }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
+    const transport = vi.fn(
+      async (
+        method: string,
+        params: Record<string, unknown>,
+        options?: { orchestrationRequestId?: string }
+      ) => {
+        const response = await dispatcher.dispatch({
+          ...request(method, params, { sessionId: PEER_CHAT }),
+          ...(options?.orchestrationRequestId
+            ? { orchestrationRequestId: options.orchestrationRequestId }
+            : {})
+        })
+        if (!response.ok) {
+          throw new Error(JSON.stringify(response))
+        }
+        return response
+      }
+    )
+    const ctx = orchestrationTestContext(
+      transport,
+      new Map([
+        ['from', `orca_session_id:${PEER_CHAT}`],
+        ['to', `orca_session_id:${COORDINATOR}`],
+        ['subject', 'Need your decision'],
+        ['body', 'Worker question'],
+        ['retry-request', '25d73135-2415-489b-96fa-a232854333d0']
+      ]),
+      true
+    )
+    await dispatchCommand(['orchestration', 'send'], ctx)
+    await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
+    expect(turnText(chat.steers[0]!)).toContain('Worker question')
+    await dispatchCommand(['orchestration', 'send'], ctx)
+    await observationClock.edgesAnswered(runtime, WAIT)
+    expect(chat.steers).toHaveLength(1)
+    expect(chat.turns).toHaveLength(1)
+    expect(await queuedCardTexts()).toEqual([])
+  })
+
+  it('deletes the waiting card when a check takes its report first', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    expect(await sendUserMessage(COORDINATOR, 'go')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(COORDINATOR)
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+
+    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
+    expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toEqual([]), WAIT)
+  })
+
+  it('hands a report whose send threw over before a later one, under its first id', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId } = await coordinatorRunAndTask()
+    expect(await sendUserMessage(COORDINATOR, 'go')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    chat.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+    await host.flushStreamedEvents(COORDINATOR)
+    const mailbox = `run:${runId}`
+    const sends = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
+    db.insertMessage({ runId, from: 'term_worker', to: mailbox, subject: 'FIRST report' })
+    runtime.deliverPendingMessagesForHandle(mailbox)
+    await vi.waitFor(() => expect(sends).toHaveBeenCalledTimes(1), WAIT)
+    await observationClock.observe(2_500)
+    // The send in doubt keeps its reservation and lands nothing.
+    expect(await queuedCardTexts()).toEqual([])
+    const first = db.getStructuredMailSends(mailbox)[0]!.operation_id
+
+    db.insertMessage({ runId, from: 'term_worker', to: mailbox, subject: 'SECOND report' })
+    runtime.deliverPendingMessagesForHandle(mailbox)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(2), WAIT)
+    const cards = await queuedCardTexts()
+    expect(cards[0]).toContain('FIRST report')
+    expect(cards[1]).toContain('SECOND report')
+    // Asked again under the id it was reserved with, never a fresh one.
+    const ids = sends.mock.calls.map(([, mutation]) => mutation.envelope.clientOperationId)
+    expect(ids.filter((id) => id === first)).toHaveLength(2)
   })
 })
 
@@ -507,51 +526,43 @@ describe('a /clear keeps the chat its orchestration address', () => {
     expect(cleared).toBe(COORDINATOR)
     const opened = codex.connections.length
 
-    // The worker's result starts the fresh context on a new thread.
     await finishWorker(taskId)
     await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(1), WAIT)
     const next = connectionFor(cleared)
     expect(codex.connections.slice(opened)).toEqual([next])
     expect(next.methods.filter((method) => method.startsWith('thread/'))).toEqual(['thread/start'])
-    expect(next.turns[0]!.text).toMatch(POINTER)
+    expect(isWholeMail(turnText(next.turns[0]!))).toBe(true)
     await settleTurn(cleared, 0)
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
-    await expect(call('orchestration.check', {}, { sessionId: cleared })).resolves.toMatchObject({
-      runId,
-      count: 1,
-      messages: [{ type: 'worker_done' }]
-    })
-    // Clear preserves the original Run binding and consumer generation.
+    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
     expect(db.getRunRaw(runId)).toMatchObject({
       coordinator_orca_session_id: COORDINATOR,
       consumer_generation: generation
     })
   })
 
-  it('points mail the earlier context never took at the fresh context, without a user message', async () => {
+  it('does not send the fresh context a report the earlier one may have taken', async () => {
     observationClock.start()
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    // The provider dies before it runs the pointer, so the mail is still unpointed at the /clear.
+    // The provider dies before the echo: the earlier context may or may not have taken it.
     chat.handlers.onExit?.(new Error('provider died before the echo'))
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(COORDINATOR)?.lease.claimStatus).toBe('released')
     )
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
 
     const cleared = await clearChat(COORDINATOR)
     expect(cleared).toBe(COORDINATOR)
     await observationClock.observe(2_000)
-    await vi.waitFor(() => expect(connectionFor(cleared).turns[0]?.text).toMatch(POINTER), WAIT)
-    await settleTurn(cleared, 0)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
+    await observationClock.edgesAnswered(runtime, WAIT)
+    // Nothing starts the fresh context for it; check still returns it.
+    expect(codex.connections.filter((connection) => connection !== chat)).toEqual([])
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
   it('keeps a Run under the same conversation address through repeated clears', async () => {
@@ -572,7 +583,6 @@ describe('a /clear keeps the chat its orchestration address', () => {
       call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
     expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
-    // What it sends carries the same address.
     await openChat(PEER_CHAT)
     await expect(
       call(
@@ -602,7 +612,8 @@ describe('a /clear keeps the chat its orchestration address', () => {
       (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: firstClear }))
         .run
     )
-    expect(boundOrcaSessionId(first)).toBeNull()
+    // A later run-create keeps the earlier Run; the run-use below keeps only the one it names.
+    expect(boundOrcaSessionId(first)).toBe(root)
 
     const cleared = await clearChat(firstClear)
     await startClearedContext(cleared)
@@ -631,17 +642,15 @@ describe('a /clear keeps the chat its orchestration address', () => {
       })
       expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
       await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(index + 1), WAIT)
+      expect(turnText(connectionFor(cleared).turns[index]!)).toContain(`Subject: ping ${index}`)
       await settleTurn(cleared, index)
-      // Read each ping before the next is sent, so each check holds exactly one.
-      const checked = await call('orchestration.check', {}, { sessionId: cleared })
-      expect(checked).toMatchObject({ count: 1, messages: [{ subject: `ping ${index}` }] })
-      await call('orchestration.check', { ack: checked.deliveryId }, { sessionId: cleared })
+      await vi.waitFor(() => expect(unread(`orca_session_id:${PEER_CHAT}`)).toEqual([]), WAIT)
     }
   })
 })
 
 describe('any live session is addressable by its id', () => {
-  it('lands mail sent to `orca_session_id:<id>` as a turn in that chat, which a flagless check reads', async () => {
+  it('lands mail sent to `orca_session_id:<id>` whole as a turn in that chat', async () => {
     const peer = await openChat(PEER_CHAT)
 
     const sent = await call('orchestration.send', {
@@ -652,11 +661,12 @@ describe('any live session is addressable by its id', () => {
     expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
 
     await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
-    // Direct mail is not in a Run, so the pointer names no `--run`.
-    expect(turnText(peer.turns[0]!)).toBe(ptyPointer(`orca_session_id:${PEER_CHAT}`))
+    const text = turnText(peer.turns[0]!)
+    expect(text).toContain('Subject: ping')
+    // Direct mail names who to reply as.
+    expect(text).toContain(`--from orca_session_id:${PEER_CHAT}`)
     await settleTurn(PEER_CHAT, 0)
-    const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
-    expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })
+    await vi.waitFor(() => expect(unread(`orca_session_id:${PEER_CHAT}`)).toEqual([]), WAIT)
   })
 
   it('refuses mail to a chat that was closed, before storing it', async () => {

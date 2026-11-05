@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type { NativeChatTranscriptRowContext } from './NativeChatTranscriptRow'
 import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
@@ -12,7 +12,6 @@ type NativeChatTranscriptRowContextInput = Omit<
   hostWork: StructuredAgentSessionHostWork | undefined
 }
 
-/** The context every transcript row reads, stable until one of its inputs changes. */
 export function useNativeChatTranscriptRowContext({
   agent,
   hostWork,
@@ -23,6 +22,7 @@ export function useNativeChatTranscriptRowContext({
   deliveryNotices,
   allowFileUriLinks,
   runtimeContext,
+  structuredAttachments,
   onLinkClick,
   onToggleExpandedTurn,
   subagentDisclosure,
@@ -40,6 +40,7 @@ export function useNativeChatTranscriptRowContext({
       deliveryNotices,
       allowFileUriLinks,
       runtimeContext,
+      structuredAttachments,
       onLinkClick,
       onToggleExpandedTurn,
       subagentDisclosure,
@@ -57,6 +58,7 @@ export function useNativeChatTranscriptRowContext({
       onRevealDiff,
       revealedDiff,
       runtimeContext,
+      structuredAttachments,
       onScrollMessageToTop,
       taskListPredecessors,
       subagentDisclosure,

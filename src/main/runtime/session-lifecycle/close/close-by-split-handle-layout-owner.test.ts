@@ -2,18 +2,19 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   withDurableRuntimeStore,
   withRuntimePaneAdmission
-} from '../../runtime-durable-store-fixture'
+} from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -116,10 +117,18 @@ function windowGraph(
 /** What the window's list holds for main's new pane when it lands, after main's own. */
 type WindowListing = 'pane-without-terminal' | 'no-new-pane'
 
-function setup(listing: WindowListing) {
+function setup(listing: WindowListing, pinned = false) {
   let session = persistedSession()
+  if (pinned) {
+    session = {
+      ...session,
+      tabsByWorktree: {
+        [WORKTREE_ID]: [{ ...session.tabsByWorktree[WORKTREE_ID]![0]!, isPinned: true }]
+      }
+    }
+  }
   // The Store tells its write listeners after each write, as main's terminal list relies on.
-  const written = new Set<(hostId: string | null) => void>()
+  const written = new Set<(hostId: ExecutionHostId | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
     session = next
     for (const listener of written) {
@@ -138,8 +147,8 @@ function setup(listing: WindowListing) {
       getRepos: () => [repo],
       getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
       getWorkspaceSession: () => session,
-      getWorkspaceSessionHostIds: () => ['local'],
-      onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+      getWorkspaceSessionHostIds: (): ExecutionHostId[] => ['local'],
+      onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
         written.add(listener)
         return () => written.delete(listener)
       },
@@ -154,12 +163,11 @@ function setup(listing: WindowListing) {
         }
         return change.value
       },
-      persistPtyBinding: () => true,
+      persistPtyBinding: async () => true,
       flushOrThrow: () => undefined
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries every store method a split and a tab close reach.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: WORKTREE_ID,
@@ -275,5 +283,24 @@ describe("a tab close by a main-side split's handle while the window's list lags
     dropPane(split.leafId!)
 
     await expect(runtime.closeTerminalTab(split.handle)).rejects.toThrow('terminal_handle_stale')
+  })
+})
+
+describe('a CLI close of a pinned tab main owns, in a layout-owner build', () => {
+  it('refuses the tab close and keeps the tab, as the window-era close did', async () => {
+    const { runtime, handle } = setup('no-new-pane', true)
+
+    await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
+    await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
+    expect(
+      runtime.getWorkspaceSessionForWorktree(WORKTREE_ID)?.tabsByWorktree[WORKTREE_ID]
+    ).toHaveLength(1)
+  })
+
+  it('still closes one pane of a pinned split tab', async () => {
+    const { runtime, handle } = setup('no-new-pane', true)
+    const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
+
+    await expect(runtime.closeTerminal(split.handle)).resolves.toMatchObject({ tabId: TAB_ID })
   })
 })

@@ -23,6 +23,7 @@ import { getBrowserCookieImportSourceLabels } from '../../../../../shared/browse
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
@@ -75,8 +76,7 @@ export function BrowserImportHintButton({
         setImportMenuOpen(false)
       }
       if (nextOpen) {
-        // Why: macOS treats other browsers' profile folders as app data. Only
-        // probe them when the user opens the import hint.
+        // Defer macOS app-data profile probes until the user opens Import.
         void fetchDetectedBrowsers()
       }
     },
@@ -109,7 +109,7 @@ export function BrowserImportHintButton({
         )
         return
       }
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     },
     [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser]
   )
@@ -131,7 +131,7 @@ export function BrowserImportHintButton({
       return
     }
     if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }, [effectiveProfileId, importCookiesToProfile])
 
@@ -146,10 +146,7 @@ export function BrowserImportHintButton({
     setOpen(false)
   }, [setBrowserImportHintHidden])
 
-  // Why: Electron <webview> elements run in a separate process, so clicking
-  // inside one never dispatches pointerdown on the renderer document. Radix
-  // popovers rely on that event for outside-click detection, so window blur
-  // catches the moment focus leaves the renderer (including into a webview).
+  // Guest clicks bypass renderer pointerdown; window blur supplies outside-dismiss when focus enters the guest.
   useEffect(() => {
     if (!open) {
       return

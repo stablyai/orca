@@ -1,13 +1,13 @@
-import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import { agentPromptObservationSignal } from './agent-prompt-signals'
+import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
-import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal-bracketed-paste-text'
+import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from '../../orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from '../../proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type {
   RuntimeAgentPromptWriteOptions,
   TerminalHandleRecord
@@ -19,7 +19,7 @@ import {
 import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
@@ -46,6 +46,14 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     pastePayload: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }>
+  /** The opt-in path (`onPermission: 'wait'`, `expectedBinding`), pinned to `ptyId`. */
+  protected abstract submitTerminalAgentPrompt(
+    handle: string,
+    ptyId: string,
+    prompt: string,
+    payload: string,
+    options: RuntimeAgentPromptWriteOptions
+  ): Promise<RuntimeTerminalSend>
 
   private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
 
@@ -79,11 +87,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
   /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
   protected isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
     this.pruneExpiredLeafPtyVerdicts(Date.now())
-    // Why hasPty and not ptysById: graph sync mirrors a connected record for
-    // every leaf ptyId — including a prior process's — so runtime records can't
-    // distinguish live from stale. The controller's exact-id hasPty is the
-    // provider's own synchronous inventory: a known id is alive, skip probing
-    // and supersede any cached verdict (the id came back).
+    // Controller hasPty supersedes cached absence; graph-mirrored records can describe a prior process under the same id.
     if (this.controllerKnowsPtyIsLive(ptyId)) {
       this.provenAbsentLeafPtyVerdicts.delete(ptyId)
       return Promise.resolve(false)
@@ -123,22 +127,11 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     return probe
   }
 
-  async sendTerminal(
+  /** sendTerminal once plugin hooks decided (terminal-plugin-hooked-input.ts). */
+  protected async sendTerminalAfterPluginHooks(
     handle: string,
-    action: {
-      text?: string
-      enter?: boolean
-      interrupt?: boolean
-    },
-    options: {
-      signal?: AbortSignal
-      beforeWrite?: (ptyId: string) => void | Promise<void>
-      reserveWrite?: (ptyId: string) => void
-      afterWrite?: (ptyId: string) => void | Promise<void>
-      suffixFailureError?: string
-      inputKind: TerminalInputKind
-      requireWriteSettlement?: true
-    }
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
@@ -146,7 +139,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminal(target, action, options)), handle }
+      return { ...(await this.sendTerminalAfterPluginHooks(target, action, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -158,6 +151,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
+      if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
+        return { handle, accepted: false, bytesWritten: 0 }
+      }
       const writeSettlement = await this.writeTerminalAction(
         pty.pty.ptyId,
         action,
@@ -184,12 +180,12 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       throw new Error('invalid_terminal_send')
     }
     await assertTerminalInputWithinLimitWithYield(action.text)
-    // Why: leaf.writable mirrors the renderer graph, which can still answer for
-    // a prior process's ptyId — and provider writes to unknown ids are accepted
-    // no-ops. Only controller-proven absence rejects; unknown proceeds (a
-    // restored daemon session takes writes before its pane remounts).
+    // Graph writability can be stale and unknown-id writes no-op; refuse only controller-proven absence, permitting unknown restored-daemon liveness.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
+    }
+    if (!(await this.launchComposerAdmitsSubmit(leaf.ptyId, action, options))) {
+      return { handle, accepted: false, bytesWritten: 0 }
     }
 
     const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
@@ -205,7 +201,26 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
   }
 
-  async sendTerminalAgentPrompt(
+  private async launchComposerAdmitsSubmit(
+    ptyId: string,
+    action: { enter?: boolean },
+    options: RuntimeTerminalWriteOptions
+  ): Promise<boolean> {
+    if (!(options.waitForLaunchComposer && action.enter)) {
+      return true
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    return (
+      // No pending watch: not a fresh launch, or its watch already settled.
+      ((await this.launchComposerReadyByPtyId.get(ptyId)) ?? true) &&
+      // A held send must not land in a replacement process or outlive its cancelled request.
+      this.getPtyLifecycleGeneration(ptyId) === generation &&
+      options.signal?.aborted !== true
+    )
+  }
+
+  /** sendTerminalAgentPrompt once plugin hooks decided. */
+  protected async sendAgentPromptAfterPluginHooks(
     handle: string,
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
@@ -225,11 +240,11 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? this.startRestoredHandlePane(handle, { signal: options.signal })
+      ? this.startRestoredHandlePane(handle, { signal: agentPromptObservationSignal(options) })
       : null
     if (starting) {
       const target = await starting
-      return { ...(await this.sendTerminalAgentPrompt(target, prompt, options)), handle }
+      return { ...(await this.sendAgentPromptAfterPluginHooks(target, prompt, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -238,6 +253,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       }
       const payload = payloadFor(pty.pty.ptyId)
       await assertTerminalInputWithinLimitWithYield(payload)
+      // Only opted-in calls take the extra layer, so every default caller's timing is untouched.
+      if (agentPromptWriteOptsIn(options)) {
+        return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
+      }
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
       const delivery = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
@@ -266,10 +285,12 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     const payload = payloadFor(leaf.ptyId)
     await assertTerminalInputWithinLimitWithYield(payload)
-    // Why: same absence gate as sendTerminal — a stale graph mirror must not
-    // accept a prompt into a void; unknown liveness still proceeds.
+    // Use the same absence gate as sendTerminal; unknown liveness still permits the prompt.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
+    }
+    if (agentPromptWriteOptsIn(options)) {
+      return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
     const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
@@ -288,4 +309,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       ...(delivery.prompt ? { prompt: delivery.prompt } : {})
     }
   }
+}
+
+function agentPromptWriteOptsIn(options: RuntimeAgentPromptWriteOptions): boolean {
+  return options.onPermission === 'wait' || options.expectedBinding !== undefined
 }

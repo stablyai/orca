@@ -6,10 +6,10 @@ const launchConfig = z
 
 export function resolveOpenCodeLaunchModelConfig(options: {
   configContent: string | undefined
-  primaryAgent: string
+  primaryAgent?: string
   model: string
 }): string | null {
-  if (!options.primaryAgent || !options.model || (options.configContent?.length ?? 0) > 1_048_576) {
+  if (!options.model || (options.configContent?.length ?? 0) > 1_048_576) {
     return null
   }
   try {
@@ -19,13 +19,18 @@ export function resolveOpenCodeLaunchModelConfig(options: {
       return null
     }
     const config = parsed.data
+    const primaryAgent = options.primaryAgent
     return JSON.stringify({
       ...config,
       model: options.model,
-      agents: {
-        ...config.agents,
-        [options.primaryAgent]: { ...config.agents?.[options.primaryAgent], model: options.model }
-      }
+      ...(primaryAgent
+        ? {
+            agents: {
+              ...config.agents,
+              [primaryAgent]: { ...config.agents?.[primaryAgent], model: options.model }
+            }
+          }
+        : {})
     })
   } catch {
     return null

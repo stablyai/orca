@@ -1,3 +1,5 @@
+import type { PreloadApi } from '../../../../preload/api-types'
+import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -6,6 +8,7 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getClientForEnvironment,
+  observeWebRuntimeStatus,
   manuallyDisconnectedEnvironmentIds,
   manuallyDisconnectedResponse,
   requireActiveEnvironment,
@@ -90,11 +93,7 @@ async function probeRuntimeStatus(
   return response
 }
 
-/**
- * Why: a request shaped for one runtime's capabilities must reach that runtime. The same client
- * reconnects internally, so pin it to the connection a matching status probe ran on. Probes that
- * bypass this wrapper (the status owner's) leave no proof, so a missing or stale one is re-probed.
- */
+/** Pin capability-shaped requests to the probed connection; clients reconnect internally, and probes outside this wrapper provide no proof, so re-probe stale/missing evidence. */
 async function callPinnedToRuntime(
   client: RuntimeClient,
   method: string,
@@ -148,7 +147,6 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  assertPairing()
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -160,8 +158,7 @@ export async function callRuntimeResult<TResult>(
 ): Promise<TResult> {
   const response = await callRuntimeEnvelope(method, params, timeoutMs)
   if (!response.ok) {
-    // Why keep the code: callers classify recoverable host failures by token, and the message alone
-    // (e.g. "Parent selector was not found.") carries none.
+    // Preserve error codes for recoverable-failure classification; human messages need not contain the token.
     throw Object.assign(new Error(response.error.message), { code: response.error.code })
   }
   return response.result as TResult
@@ -202,3 +199,47 @@ export function withRuntimeWorktreeOwner<T extends Worktree>(
 export async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
   return callRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
 }
+
+export function pinnedWebSubscriptionOptions(
+  selector: string,
+  expectedRevision?: number,
+  expectedRuntimeId?: string
+): Pick<WebRuntimeSubscribeOptions, 'expectedEnvironmentRuntimeId' | 'beforeSend'> {
+  return expectedRuntimeId === undefined
+    ? {}
+    : {
+        expectedEnvironmentRuntimeId: expectedRuntimeId,
+        beforeSend: () => {
+          assertEnvironmentPairing(selector, expectedRevision)
+          if (manuallyDisconnectedEnvironmentIds.has(resolveEnvironment(selector).id)) {
+            throw new Error('runtime_manually_disconnected')
+          }
+        }
+      }
+}
+
+export const callWebRuntimeEnvironment: PreloadApi['runtimeEnvironments']['call'] = ({
+  selector,
+  method,
+  params,
+  timeoutMs,
+  expectedEnvironmentPairingRevision,
+  expectedEnvironmentRuntimeId
+}) =>
+  callEnvironmentEnvelope(
+    selector,
+    method,
+    params,
+    timeoutMs,
+    expectedEnvironmentPairingRevision,
+    expectedEnvironmentRuntimeId
+  )
+
+export const getWebRuntimeStatus: PreloadApi['runtimeEnvironments']['getStatus'] = ({
+  selector,
+  timeoutMs,
+  observeOnly
+}) =>
+  observeOnly
+    ? observeWebRuntimeStatus(selector, timeoutMs)
+    : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs)

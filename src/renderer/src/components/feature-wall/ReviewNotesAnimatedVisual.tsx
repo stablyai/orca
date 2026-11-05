@@ -15,10 +15,7 @@ import { ReviewDiffRows } from './review-notes-diff-rows'
 import { resetTerminal, runTerminalPhase } from './review-notes-terminal-phase'
 import { translate } from '@/i18n/i18n'
 
-// Why: this visual mirrors the imperative-DOM pattern used by
-// EditorAnimatedVisual / WorkbenchAnimatedVisual so the loop reads like the
-// reference HTML mock (docs/feature-wall-review-tile-mock.html) instead of
-// fighting React reconciliation across timed beats.
+// The animation owns timed DOM mutations to avoid React overwriting intermediate beats.
 export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -60,9 +57,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     ) {
       return
     }
-    // Re-bind to non-null locals so closures across `await` keep their
-    // narrowed types — TS flow analysis drops narrowing through async
-    // boundaries.
+    // Capture narrowed DOM nodes in locals so async closures retain non-null types.
     const rootEl: HTMLDivElement = root
     const cursor: HTMLDivElement = cursorMaybe
     const popover: HTMLDivElement = popoverMaybe
@@ -122,9 +117,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     }
 
     async function fillPopoverInput(text: string): Promise<void> {
-      // Why: clear the popover input to a bare typed-span before the cursor
-      // lands so the placeholder doesn't flash between the click and the
-      // generated note text. Mock: docs/feature-wall-review-tile-mock.html.
+      // Clear the placeholder before cursor arrival so it cannot flash before typing starts.
       popInput.innerHTML = '<span data-pop-typed></span><span class="ravs-caret"></span>'
       const typed = popInput.querySelector<HTMLSpanElement>('[data-pop-typed]')
       if (!typed) {
@@ -160,7 +153,6 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     function resetState(): void {
       rootEl.querySelectorAll('[data-hunk-slot]').forEach((el) => el.classList.remove('is-visible'))
       popover.classList.remove('is-visible')
-      // Empty the input so no placeholder flashes between resets.
       popInput.innerHTML = ''
       addBtn.classList.remove('is-visible')
       sendChip.classList.remove('is-visible')
@@ -221,8 +213,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           addBtn.classList.remove('is-visible')
           const lns = row.querySelectorAll('.ravs-ln')
           popLine.textContent = lns[1]?.textContent ?? ''
-          // Empty the input before showing the popover so no placeholder
-          // flashes between the click and the typed text.
+          // Clear before showing the popover to prevent a placeholder flash.
           popInput.innerHTML = ''
           anchorPopoverTo(row)
           popover.classList.add('is-visible')

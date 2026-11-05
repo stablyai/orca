@@ -1,6 +1,4 @@
-// Each workspace's published layout, projected from the Store's session partitions: a partition
-// is re-run through the Loader only when a write may have changed it, and each workspace is
-// published from the partition that owns it.
+// Reproject dirty Store partitions and publish each workspace only from its owning partition.
 
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -21,28 +19,35 @@ export type ProjectedLayout = { layout: PublishedWorkspaceLayout; json: string }
 
 export type ProjectionStore = Pick<
   RuntimeStore,
-  'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'getPtyBindingGeneration'
+  | 'getWorkspaceSession'
+  | 'getWorkspaceSessionHostIds'
+  | 'getPtyBindingGeneration'
+  | 'getLayoutEditorViews'
 >
 
-/** Partitions to re-project; 'all' when a write did not name its partition. */
 export type DirtyPartitions = Set<ExecutionHostId> | 'all'
 
-/** The context main loads a partition with: its panes' binding generations ride the leaves. */
+/** Carry binding generations on leaves and in-memory editor views on workspaces. */
 export function runtimeLayoutLoadContext(
-  store: Pick<RuntimeStore, 'getPtyBindingGeneration'> | null,
+  store: Pick<RuntimeStore, 'getPtyBindingGeneration' | 'getLayoutEditorViews'> | null,
   hostId: ExecutionHostId
 ): WorkspaceLayoutLoadContext {
-  const generationOf = store?.getPtyBindingGeneration
-  // Switch point: a window-owned build publishes no generation.
-  return ORCA_LAYOUT_OWNER_IS_MAIN && generationOf
-    ? {
-        ...nameBasedLoadContext(),
-        ptyGenerationOf: (leafId) => generationOf.call(store, hostId, leafId)
-      }
-    : nameBasedLoadContext()
+  // Window-owned builds retain name-based loading without views or generations.
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN || !store) {
+    return nameBasedLoadContext()
+  }
+  const generationOf = store.getPtyBindingGeneration
+  const views = store.getLayoutEditorViews?.(hostId)
+  return {
+    ...nameBasedLoadContext(),
+    ...(generationOf
+      ? { ptyGenerationOf: (leafId: string) => generationOf.call(store, hostId, leafId) }
+      : {}),
+    // No saved views still means known-empty views.
+    ...(store.getLayoutEditorViews ? { editorViewsOf: (key: string) => views?.[key] } : {})
+  }
 }
 
-/** One partition as loaded once: its model, and each workspace published from it on first ask. */
 class ProjectedPartition {
   private published: Map<string, ProjectedLayout> | null = null
 
@@ -51,7 +56,7 @@ class ProjectedPartition {
     readonly loaded: LoadedWorkspaceLayout | null
   ) {}
 
-  /** Every workspace it holds, its own copy of a workspace it does not own included. */
+  /** Includes stray copies of workspaces owned by other partitions. */
   workspaces(): Map<string, ProjectedLayout> {
     if (!this.published) {
       this.published = new Map()
@@ -65,35 +70,29 @@ class ProjectedPartition {
 }
 
 export class WorkspaceLayoutProjection {
-  /** Workspace key → its published layout, with its JSON for the by-value comparison. */
   published = new Map<string, ProjectedLayout>()
   private partitions = new Map<ExecutionHostId, ProjectedPartition>()
-  /** Partitions a write may have changed since they were loaded. */
   private stale: DirtyPartitions = 'all'
-  /** Its own flag, so a routing warning never hides a later projection or listener failure. */
+  /** Keep routing failures separate so they cannot suppress later projection/listener errors. */
   private routingFailureLogged = false
 
   constructor(
     private readonly deps: {
       store: () => ProjectionStore | null
-      /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
     }
   ) {}
 
-  /** Forgets every projection: the next read re-loads every partition. */
   clear(): void {
     this.published.clear()
     this.forgetPartitions()
   }
 
-  /** After a failed projection too: the next read re-loads every partition. */
   forgetPartitions(): void {
     this.partitions.clear()
     this.stale = 'all'
   }
 
-  /** A write may have changed `hostId`'s partition; null: any partition. */
   invalidate(hostId: ExecutionHostId | null): void {
     if (hostId === null || this.stale === 'all') {
       this.stale = 'all'
@@ -102,15 +101,11 @@ export class WorkspaceLayoutProjection {
     }
   }
 
-  /**
-   * One partition's loaded model, re-loaded only if a write may have changed it; null with no
-   * Store. Only a reader that hears every write (`invalidate`) may `keep` it for the next read.
-   */
+  /** Cache only for readers that invalidate on every write; null without a Store. */
   loaded(hostId: ExecutionHostId, keep: boolean): LoadedWorkspaceLayout | null {
     return keep ? this.cachedPartition(hostId).loaded : this.loadPartition(hostId).loaded
   }
 
-  /** Every workspace as published, each stale partition re-loaded; becomes `published`. */
   project(): Map<string, ProjectedLayout> {
     const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
     const partitions = new Map(hostIds.map((hostId) => [hostId, this.cachedPartition(hostId)]))
@@ -119,7 +114,6 @@ export class WorkspaceLayoutProjection {
     return this.published
   }
 
-  /** What a projection of every partition from scratch publishes now; changes no cache. */
   projectFresh(): Map<string, ProjectedLayout> {
     const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
     return this.route(new Map(hostIds.map((hostId) => [hostId, this.loadPartition(hostId)])))
@@ -158,7 +152,7 @@ export class WorkspaceLayoutProjection {
     const unroutable = new Set<string>()
     for (const [hostId, partition] of partitions) {
       for (const [key, workspace] of partition.workspaces()) {
-        // Only the owning partition's copy is published; a stray copy elsewhere is not shown.
+        // Publish only the owning partition's copy.
         if (this.homeOf(key, unroutable) === hostId) {
           projected.set(key, workspace)
         }
@@ -166,7 +160,7 @@ export class WorkspaceLayoutProjection {
     }
     for (const key of unroutable) {
       const kept = this.published.get(key)
-      // Kept as last published: a 'removed' frame would make the window drop its tabs.
+      // Retain the last publication: a removed frame would drop the window's tabs.
       if (kept && !projected.has(key)) {
         projected.set(key, kept)
       }
@@ -174,15 +168,12 @@ export class WorkspaceLayoutProjection {
     return projected
   }
 
-  /**
-   * A workspace the router throws on is not guessed (`repoId::path` repeats across hosts, so a
-   * default could publish another host's copy); it is noted in `unroutable`. It never stops the rest.
-   */
+  /** Record unroutable keys without stopping peers; guessing a repeated repo/path could publish another host's copy. */
   private homeOf(key: string, unroutable: Set<string>): ExecutionHostId | null {
     try {
       return this.deps.homeHostId(key)
     } catch (error) {
-      // Switch point: a window-owned build keeps failing the whole projection, as today.
+      // Window-owned builds retain whole-projection failure.
       if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw error
       }

@@ -6,7 +6,7 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 
@@ -21,8 +21,7 @@ export function getVisibleSidebarHostIdSet(
   return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
 }
 
-// Why shared: the sidebar render path and the Cmd+1–9 order must apply the same
-// host filtering, or the numbering drifts from the cards whenever a filter is on.
+// Use identical host filtering for visible cards and Cmd+1–9 numbering.
 export function filterProjectGroupsForVisibleHosts(
   projectGroups: readonly ProjectGroup[],
   visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,

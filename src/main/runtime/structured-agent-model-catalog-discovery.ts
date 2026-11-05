@@ -1,6 +1,4 @@
-// Each registered agent's catalog probe, built from the SAME resolvers its session launches use,
-// rereading the environment on a missing program as a launch does: a probe under another binary
-// or env could list models the user's sessions cannot see.
+// Use session launch resolvers, including missing-program env refresh, for probes so catalogs match the binary/account sessions actually use.
 
 import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
 import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../acp/acp-launch-specs'
@@ -8,10 +6,10 @@ import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
 } from '../claude/claude-model-catalog-probe'
-import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
+import { createCodexModelCatalogProbe } from '../codex/structured/catalog/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 /** Claude's overlay, laid over its base env minus an inherited config dir; absent when none. */
 export function claudeLaunchEnvOverlay(
@@ -31,10 +29,14 @@ export function codexModelCatalogDiscovery({
     listingNamesConfiguredModel: true,
     probe: createCodexModelCatalogProbe({
       resolveAccountKind: deps.resolveCodexAccountKind,
+      ...(deps.runCodexCatalogSession ? { runSession: deps.runCodexCatalogSession } : {}),
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {}),
-      resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
+      resolveEnvironment: environment.resolveBaseEnvironment,
+      resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
+      resolveEnv: () => deps.resolveAgentLaunchEnv?.('codex') ?? {},
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
       ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
     })
@@ -48,6 +50,7 @@ export function claudeListingDeps({
 }: StructuredAgentModelCatalogContext): ClaudeModelCatalogProbeDeps {
   return {
     resolveInheritedEnv: environment.resolveBaseEnvironment,
+    resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
     refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
     resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
     ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
@@ -62,7 +65,10 @@ export function claudeModelCatalogDiscovery(
     kind: 'probe',
     // Claude's settings or env can pick a model other than the one its listing recommends.
     listingNamesConfiguredModel: false,
-    probe: createClaudeModelCatalogProbe(claudeListingDeps(context))
+    probe: createClaudeModelCatalogProbe({
+      ...claudeListingDeps(context),
+      resolveLaunchArgs: () => context.deps.resolveLaunchArgs('claude')
+    })
   }
 }
 

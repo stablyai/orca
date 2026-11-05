@@ -32,7 +32,7 @@ export function hasRunBindingKey(caller: OrchestrationCoordinatorKey): boolean {
 export function mailboxAddressOf(
   party: Pick<OrchestrationCoordinatorKey, 'terminalHandle' | 'orcaSessionId'>
 ): string | null {
-  // Handle first because a worker's mail and Dispatch rows are keyed by it today; flips when sessions become canonical.
+  // Workers read mail at their handles, so prefer that address when both identities exist.
   if (party.terminalHandle !== null) {
     return party.terminalHandle
   }
@@ -48,7 +48,16 @@ export function runCoordinatorKey(run: RunRow): OrchestrationCoordinatorKey {
   }
 }
 
-export function runBoundToCoordinator(run: RunRow, caller: OrchestrationCoordinatorKey): boolean {
+export function runBoundToCoordinator(
+  run: Pick<
+    RunRow,
+    | 'coordinator_pane_key'
+    | 'coordinator_orca_session_id'
+    | 'coordinator_orca_session_id_generation'
+    | 'consumer_generation'
+  >,
+  caller: OrchestrationCoordinatorKey
+): boolean {
   if (
     caller.paneKey !== null &&
     run.coordinator_pane_key !== null &&

@@ -1,275 +1,254 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
+import { describe, expect, it, vi } from 'vitest'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentProcessVerdict } from '../../shared/agent-status/process/agent-process-presence'
+import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { assertCliConversationWritersExited } from './structured-agent-cli-writers'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
-import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
-import {
-  assertCliConversationWritersExited,
-  type CliWriterHost
-} from './structured-agent-cli-writers'
-import { OrcaRuntimeService } from './orca-runtime'
-import {
-  OPEN_CODE_WRITER_TOPOLOGY,
-  tmuxCliWriterEvent
-} from '../agent-hooks/server/cli-writer-observation'
-
-const snapshot = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  getFreshShellForegroundSnapshot: snapshot
-}))
-const probe = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+import { identityFixture } from './terminal/query/terminal-identity.test-fixture'
 
 const row: AgentStatusIpcPayload = {
   paneKey: 'source',
   worktreeId: 'workspace',
   connectionId: null,
-  agentType: 'codex',
+  agentType: 'claude',
   receivedAt: 1,
   stateStartedAt: 1,
   state: 'done',
   prompt: '',
   providerSession: { key: 'session_id', id: 'conversation' }
 }
-function inspection(verdict: AgentProcessVerdict | null = null) {
-  let current = true
-  let identity = 'original-pty'
-  const observation: CliWriterObservation = {
-    current: () => current,
-    topology: 'pane-owned',
-    presence: vi.fn(async () => verdict)
-  }
-  const host: CliWriterHost = {
-    rows: () => [row],
-    saved: () => [],
-    observation: () => observation,
-    sleeping: () => false,
-    terminal: () => ({ pane: { ptyId: 'pty', incarnationId: identity, identity } }),
-    links: () => [],
-    shellAlone: vi.fn(async () => true)
-  }
-  return {
-    host,
-    observation,
-    replaceRow: () => {
-      current = false
-    },
-    replacePty: () => {
-      identity = 'replacement-pty'
-    },
-    run: () => assertCliConversationWritersExited(host, 'codex', 'conversation')
-  }
-}
-const refusal = {
+const conflict = {
   refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
 }
+function check(
+  rows: AgentStatusIpcPayload[],
+  verdict: AgentProcessVerdict | null,
+  current = true,
+  agent: StructuredAgentId = 'claude'
+) {
+  return assertCliConversationWritersExited(
+    {
+      rows: () => rows,
+      observation: () => ({
+        current: () => current,
+        presence: async () => verdict,
+        topology: 'shared'
+      })
+    },
+    agent,
+    'conversation'
+  )
+}
 
-beforeEach(() => vi.clearAllMocks())
-describe('execution-host conversation writer inspection', () => {
-  it('accepts exact exited or unchanged shell-only proof, never loss of evidence', async () => {
-    await expect(inspection('unverifiable').run()).rejects.toMatchObject(refusal)
-    for (const cause of ['missing-row', 'sleeping', 'failed-scan', 'unknown-topology'] as const) {
-      const check = inspection()
-      if (cause === 'missing-row') {
-        check.host.observation = () => null
+describe('canonical status store conversation admission', () => {
+  it.each(Object.keys(CLI_CONVERSATION_ADOPTING_AGENTS))(
+    'refuses a verified live %s holder, including shared topology',
+    async (agent) => {
+      const chats = CLI_CONVERSATION_ADOPTING_AGENTS
+      const entry = Object.entries(chats).find(([name]) => name === agent)
+      if (!entry) {
+        throw new Error('missing agent')
       }
-      if (cause === 'sleeping') {
-        check.host.sleeping = () => true
+      for (const chat of entry[1]) {
+        await expect(
+          assertCliConversationWritersExited(
+            {
+              rows: () => [{ ...row, agentType: agent }],
+              observation: () => ({
+                current: () => true,
+                presence: async () => 'live',
+                topology: 'shared'
+              })
+            },
+            chat,
+            'conversation'
+          )
+        ).rejects.toMatchObject(conflict)
       }
-      if (cause === 'failed-scan') {
-        check.host.rows = () => {
-          throw new Error('unavailable')
-        }
-      }
-      if (cause === 'unknown-topology') {
-        check.observation.topology = 'unverifiable'
-      }
-      await expect(check.run()).rejects.toMatchObject(refusal)
     }
+  )
+
+  it.each(['exited', 'unverifiable', null] as const)(
+    'admits a %s verdict, including a current Codex hook with no recorded process',
+    async (verdict) => {
+      await expect(check([row], verdict)).resolves.toBeUndefined()
+      await expect(
+        check(
+          [{ ...row, paneKey: 'other:leaf', agentType: 'codex', state: 'working' }],
+          verdict,
+          true,
+          'codex'
+        )
+      ).resolves.toBeUndefined()
+    }
+  )
+
+  it('admits absent, structured, foreign-host and other-conversation rows', async () => {
+    await expect(check([], 'live')).resolves.toBeUndefined()
+    await expect(
+      check(
+        [
+          { ...row, structuredHost: 'owned' },
+          { ...row, connectionId: 'ssh' },
+          { ...row, providerSession: { key: 'session_id', id: 'another' } }
+        ],
+        'live'
+      )
+    ).resolves.toBeUndefined()
   })
 
-  it('refuses replaced conversation observations or terminal incarnations across awaits', async () => {
-    for (const replace of ['row', 'pty'] as const) {
-      const check = inspection('exited')
-      check.observation.presence = async () => {
-        if (replace === 'row') {
-          check.replaceRow()
-        } else {
-          check.replacePty()
-        }
-        return 'exited'
-      }
-      await expect(check.run()).rejects.toMatchObject(refusal)
-    }
-  })
-
-  it('requires current owned shell proof for saved resumes, including done checkpoints', async () => {
-    const record: SleepingAgentSessionRecord = {
-      paneKey: 'source',
-      worktreeId: 'workspace',
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 'conversation' },
-      prompt: '',
-      state: 'done',
-      origin: 'live',
-      capturedAt: 1,
-      updatedAt: 1
-    }
-    const check = inspection('exited')
-    let saved = [record]
-    check.host.saved = () => saved
-    check.host.rows = () => []
-    check.host.sleeping = () => true
-    await expect(check.run()).rejects.toMatchObject(refusal)
-    check.host.sleeping = () => false
-    const terminal = check.host.terminal
-    check.host.terminal = () => ({ pane: null })
-    await expect(check.run()).rejects.toMatchObject(refusal)
-    check.host.terminal = terminal
-    await expect(check.run()).resolves.toBeUndefined()
+  it('drops a replaced observation while a probe is pending, and admits missing observations', async () => {
+    await expect(check([row], 'live', false)).resolves.toBeUndefined()
+    const observation = vi.fn(() => null)
     await expect(
       assertCliConversationWritersExited(
-        { ...check.host, saved: () => [{ ...record, agent: 'opencode2' }] },
-        'opencode',
+        { rows: () => [row], observation },
+        'claude',
         'conversation'
       )
-    ).rejects.toMatchObject(refusal)
-    saved = [{ ...record, connectionId: 'ssh-A' }]
-    await expect(check.run()).resolves.toBeUndefined()
-    saved = [record]
-    check.host.rows = () => [{ ...row, providerSession: { key: 'session_id', id: 'other' } }]
-    await expect(check.run()).rejects.toMatchObject(refusal)
-    check.host.rows = () => [row]
-    await expect(check.run()).resolves.toBeUndefined()
-    expect(check.host.shellAlone).toHaveBeenCalledTimes(2)
-    check.host.shellAlone = async () => {
-      saved = []
-      return true
-    }
-    await expect(check.run()).rejects.toMatchObject(refusal)
-    saved = [record]
-    check.host.shellAlone = async () => {
-      check.replacePty()
-      return true
-    }
-    await expect(check.run()).rejects.toMatchObject(refusal)
-    const newlySaved = inspection()
-    newlySaved.host.saved = () => saved
-    saved = []
-    newlySaved.host.shellAlone = async () => {
-      saved = [record]
-      return true
-    }
-    await expect(newlySaved.run()).rejects.toMatchObject(refusal)
-    const noRows = inspection()
-    noRows.host.saved = () => saved
-    noRows.host.rows = () => []
-    noRows.host.shellAlone = async () => {
-      noRows.host.rows = () => [
-        { ...row, connectionId: 'ssh-A', providerSession: undefined, structuredHost: 'owned' }
-      ]
-      return true
-    }
-    await expect(noRows.run()).rejects.toMatchObject(refusal)
-    noRows.host.rows = () => []
-    noRows.host.shellAlone = async () => {
-      record.providerSession.transcriptPath = 'changed'
-      return true
-    }
-    await expect(noRows.run()).rejects.toMatchObject(refusal)
-    noRows.host.shellAlone = async () => {
-      noRows.replacePty()
-      return true
-    }
-    await expect(noRows.run()).rejects.toMatchObject(refusal)
+    ).resolves.toBeUndefined()
   })
 
-  it('inspects the terminal a conversation leaves, whatever its rows now say', async () => {
-    const leaf = '11111111-1111-4111-8111-111111111111'
-    const pane = `tab-a:${leaf}`
-    let rows: AgentStatusIpcPayload[] = []
-    const runtime = new OrcaRuntimeService(null, undefined, {
-      getAgentProviderSessionSnapshot: () => rows,
-      readHookCliWriterObservation: () => ({
-        current: () => true,
-        topology: 'pane-owned',
-        presence: async () => null
-      })
-    })
-    const register = (tabId: string, incarnationId?: string, isWsl?: boolean) =>
-      runtime.registerPty('pty', 'workspace', null, { tabId, leafId: leaf, incarnationId }, isWsl)
-    register('tab-a', 'i1')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the census reads only listProcesses.
-    runtime.setPtyController({
-      listProcesses: async () => [{ id: 'pty', rootProcessId: 10, incarnationId: 'i1' }]
-    } as never)
-    const event = (agentType: string, extra?: Partial<EnrichedAgentHookEventPayload>) => ({
-      paneKey: pane,
-      connectionId: null,
-      receivedAt: 1,
-      stateStartedAt: 1,
-      providerSession: { key: 'session_id' as const, id: 'conversation' },
-      payload: { state: 'done' as const, prompt: '', agentType },
-      ...extra
-    })
-    const report = (agentType: string, extra?: Partial<EnrichedAgentHookEventPayload>) =>
-      runtime.recordCliWriterConversation(event(agentType, extra))
-    const check = (
-      agent: 'claude' | 'opencode',
-      source?: { workspaceId: string; paneKey: string }
-    ) => runtime.assertStructuredAdoptionTerminalWritersExited(agent, 'conversation', source)
-    const shell = { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
-    const census = async (run: () => Promise<void>) => {
-      // A prompt's zpty worker left the session; any suspended or background job counts, whatever its name.
-      const worker = [
-        shell,
-        { pid: 20, ppid: 10, stat: 'Ss+', command: '-zsh -i' },
-        { pid: 21, ppid: 20, stat: 'S+', command: 'git status' }
-      ]
-      for (const stat of ['T', 'SN']) {
-        snapshot.mockResolvedValue([...worker, { pid: 22, ppid: 10, stat, command: 'agent-alias' }])
-        await expect(run()).rejects.toMatchObject(refusal)
+  // The source terminal's own agent stops with the close that follows, so it is no other writer.
+  it('leaves out the panes the caller closes, by key or by their PTY, unless a shared server holds it', async () => {
+    const ptys: Record<string, string> = { 'tab-1:leaf': 'pty-1', 'legacy-1': 'pty-1' }
+    const admit = (
+      rows: AgentStatusIpcPayload[],
+      topology: 'pane-owned' | 'shared' = 'pane-owned'
+    ) =>
+      assertCliConversationWritersExited(
+        {
+          rows: () => rows,
+          observation: () => ({ current: () => true, presence: async () => 'live', topology }),
+          ptyResolver: () => (paneKey) => ptys[paneKey] ?? null
+        },
+        'claude',
+        'conversation',
+        ['tab-1:leaf']
+      )
+    await expect(admit([{ ...row, paneKey: 'tab-1:leaf' }])).resolves.toBeUndefined()
+    await expect(admit([{ ...row, paneKey: 'legacy-1' }])).resolves.toBeUndefined()
+    await expect(admit([{ ...row, paneKey: 'tab-2:leaf' }])).rejects.toMatchObject(conflict)
+    await expect(admit([{ ...row, paneKey: 'tab-1:leaf' }], 'shared')).rejects.toMatchObject(
+      conflict
+    )
+  })
+
+  // Many terminals can name one conversation: a check starts only a few probes at once, and none
+  // once a holder refused.
+  it.each([20, 200])('probes %i matching rows a few at a time, stopping at a holder', async (m) => {
+    let started = 0
+    let inFlight = 0
+    let peak = 0
+    const pending: ((verdict: AgentProcessVerdict) => void)[] = []
+    const observation = (): CliWriterObservation => ({
+      current: () => true,
+      topology: 'pane-owned',
+      presence: () => {
+        started += 1
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        return new Promise((resolve) => {
+          pending.push((verdict) => {
+            inFlight -= 1
+            resolve(verdict)
+          })
+        })
       }
-      snapshot.mockResolvedValue(worker)
-      await expect(run()).resolves.toBeUndefined()
-    }
-    // The header switch inspects the pane it leaves even when nothing recorded the conversation.
-    await census(() => check('claude', { workspaceId: 'workspace', paneKey: pane }))
-    // A row restored after restart has no observed identity; the pane's current PTY decides.
-    rows = [{ ...row, paneKey: pane, agentType: 'claude' }]
-    await census(() => check('claude'))
-    rows = []
-    // Paused, then a second run overwrote the row and the pane moved: the link is the execution's.
-    report('claude')
-    report('claude', { providerSession: { key: 'session_id', id: 'later-run' } })
-    register('tab-b', 'i1')
-    await census(() => check('claude'))
-    // The agent's own process can outlive the terminal's tree, as in detached tmux or nohup.
-    report('claude', {
-      agentPresence: { agent: 'claude', process: { pid: 12, platform: 'darwin', startTime: 's' } }
     })
-    for (const verdict of ['live', 'unverifiable', 'exited'] as const) {
-      probe.mockResolvedValueOnce(verdict)
-      const result = expect(check('claude'))
-      await (verdict === 'exited'
-        ? result.resolves.toBeUndefined()
-        : result.rejects.toMatchObject(refusal))
+    const flush = async () => {
+      for (let tick = 0; tick < 10; tick += 1) {
+        await Promise.resolve()
+      }
     }
-    // An unmarked binding copy keeps a proven pane-owned link; an uninspectable PTY or tmux refuses.
-    const proven = { key: 'session_id' as const, id: 'conversation' }
-    Object.defineProperty(proven, OPEN_CODE_WRITER_TOPOLOGY, { value: 'pane-owned' })
-    report('opencode2', { providerSession: proven })
-    report('opencode2')
-    await census(() => check('opencode'))
-    register('tab-b', undefined, true)
-    await expect(check('opencode')).rejects.toMatchObject(refusal)
-    register('tab-b', undefined, false)
-    runtime.recordCliWriterConversation(tmuxCliWriterEvent(event('opencode2')))
-    await expect(check('opencode')).rejects.toMatchObject(refusal)
-    // A new incarnation is a new execution: the old one's links died with it.
-    register('tab-b', 'i2')
-    await expect(check('opencode')).resolves.toBeUndefined()
+    const answer = async (verdict: AgentProcessVerdict) => {
+      for (const reply of pending.splice(0)) {
+        reply(verdict)
+      }
+      await flush()
+    }
+    const rows = [
+      ...Array.from({ length: m }, (_, i) => ({ ...row, paneKey: `pane-${i}` })),
+      ...Array.from({ length: m }, (_, i) => ({
+        ...row,
+        paneKey: `other-${i}`,
+        providerSession: { key: 'session_id' as const, id: 'another' }
+      })),
+      ...Array.from({ length: m }, (_, i) => ({
+        ...row,
+        paneKey: `chat-${i}`,
+        structuredHost: 'owned' as const
+      }))
+    ]
+    const check = () =>
+      assertCliConversationWritersExited(
+        { rows: () => rows, observation },
+        'claude',
+        'conversation'
+      )
+
+    // Every row admits: each matching row is probed once, never more than 8 at a time.
+    const admitted = check()
+    while (pending.length > 0) {
+      await answer('exited')
+    }
+    await expect(admitted).resolves.toBeUndefined()
+    expect({ started, peak }).toEqual({ started: m, peak: 8 })
+
+    started = 0
+    peak = 0
+    const refused = check()
+    void refused.catch(() => undefined)
+    const first = pending.shift()
+    first?.('live')
+    await flush()
+    await expect(refused).rejects.toMatchObject(conflict)
+    const startedAtRefusal = started
+    await answer('exited')
+    expect(started).toBe(startedAtRefusal)
+    expect(startedAtRefusal).toBeLessThanOrEqual(8)
+  })
+
+  // Every create, resume and acquire runs this check: resolving panes for nothing to leave out, or
+  // scanning every terminal for each row, would grow with rows times terminals.
+  it('resolves panes only to leave some out, through one look at the terminals', async () => {
+    const leafId = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+    for (const count of [20, 200]) {
+      const { runtime, owner } = identityFixture({
+        readHookCliWriterObservation: () => ({
+          current: () => true,
+          topology: 'pane-owned',
+          presence: async () => 'exited'
+        })
+      })
+      for (let i = 0; i < count; i += 1) {
+        owner.recordPtyWorktree(`pty-${i}`, 'workspace', {
+          paneKey: `tab-${i}:${leafId(i)}`,
+          connected: true
+        })
+      }
+      // Rows under keys no terminal is bound to now, which only a look at the terminals resolves.
+      vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue(
+        Array.from({ length: count }, (_, i) => ({ ...row, paneKey: `legacy-${i}` }))
+      )
+      const contexts = vi.spyOn(runtime, 'createTerminalIdentityReadContext')
+      // A lookup with no shared look walks every terminal and leaf by key, per pane.
+      const scans = [vi.spyOn(owner.ptysById, 'keys'), vi.spyOn(owner.leaves, 'keys')]
+      const scanned = () => scans.reduce((sum, scan) => sum + scan.mock.calls.length, 0)
+
+      await runtime.assertStructuredAdoptionTerminalWritersExited('claude', 'conversation')
+      expect({ contexts: contexts.mock.calls.length, scans: scanned() }).toEqual({
+        contexts: 0,
+        scans: 0
+      })
+      await runtime.assertStructuredAdoptionTerminalWritersExited('claude', 'conversation', [
+        `tab-0:${leafId(0)}`
+      ])
+      expect({ contexts: contexts.mock.calls.length, scans: scanned() }).toEqual({
+        contexts: 1,
+        scans: 0
+      })
+    }
   })
 })

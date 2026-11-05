@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import type React from 'react'
 import { ArrowUpRight, RefreshCw } from 'lucide-react'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
   toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
@@ -11,11 +12,9 @@ import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitFileStatus } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 
-// State for a single commit's lazily-loaded file list. Owned by GitHistoryPanel,
-// populated through the onLoadCommitFiles loader supplied by SourceControl.
 export type GitHistoryCommitFilesState =
   | { status: 'loading' }
   | { status: 'error'; error: string }
@@ -140,7 +139,6 @@ export function GitHistoryCommitFiles({
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
-  // Author and date move off the dense commit row and surface here on expand.
   const meta = [author, formatGitHistoryTimestamp(timestamp)].filter(Boolean).join(' · ')
   return (
     <div className="border-l border-border/60 bg-muted/20">

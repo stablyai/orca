@@ -1,11 +1,11 @@
-import { BrowserNetworkTunnelSession } from '../../../browser/browser-network-tunnel-session'
-import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
+import { BrowserNetworkTunnelSession } from '../../../browser/network/tunnels/browser-network-tunnel-session'
+import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
   browserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRouteResolver
-} from '../../../browser/browser-network-execution-route'
-import { resolveBrowserNetworkExecutionRoute } from '../../../browser/browser-network-execution-route-dispatch'
-import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
+} from '../../../browser/network/execution-routes/browser-network-execution-route'
+import { resolveBrowserNetworkExecutionRoute } from '../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
+import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
@@ -237,5 +237,5 @@ function publicExecutionRouteError(error: unknown): Error {
   return new Error('browser_tunnel_execution_host_unavailable', { cause: error })
 }
 
-// Why: tests inject this until a live lease and server-owned route generation authorize TCP opens.
+// Tests inject this until a live lease and server-owned route generation authorize TCP opens.
 export const BROWSER_NETWORK_TUNNEL_METHODS = createBrowserNetworkTunnelMethods()

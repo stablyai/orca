@@ -1,19 +1,20 @@
-import type { BranchNameWorkContext } from '../../shared/branch-name-from-work'
-import type { ConversationNameContext } from '../../shared/conversation-name-generation'
-import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
+import type { BranchNameWorkContext } from '../../shared/source-control/ai/naming/branch-name-from-work'
+import type { ConversationNameContext } from '../../shared/source-control/ai/generation/conversation-name-generation'
+import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
-} from '../../shared/pull-request-generation'
+} from '../../shared/source-control/ai/generation/pull-request-generation'
 import type { Repo } from '../../shared/repo-types'
 import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams
-} from '../../shared/source-control-ai'
-import type { AiTextOperation } from '../../shared/source-control-ai-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/source-control/ai/source-control-ai-operation-resolution'
+import type { AiTextOperation } from '../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   discoverModelsLocal,
   type CommitMessageModelDiscoveryLocalOptions
@@ -55,7 +56,7 @@ export type GeneratePullRequestFieldsResult =
 
 type ResolveCommitMessageSettingsResult =
   | { ok: true; params: GenerateCommitMessageParams }
-  | { ok: false; error: string }
+  | ({ ok: false } & TextGenerationFailureFields)
 
 export function trimGeneratedCommitMessage(message: string): string {
   return trimCommitMessage(message)
@@ -147,7 +148,14 @@ export function generateBranchNameFromContext(
 export function generateConversationNameFromContext(
   context: ConversationNameContext,
   params: GenerateCommitMessageParams,
-  target: CommitMessageGenerationTarget
+  target: CommitMessageGenerationTarget,
+  shouldExecute?: () => boolean
 ): Promise<GenerateConversationNameResult> {
-  return generateConversationName({ context, params, target, spawnAgent: spawnSourceControlAgent })
+  return generateConversationName({
+    context,
+    params,
+    target,
+    spawnAgent: spawnSourceControlAgent,
+    shouldExecute
+  })
 }

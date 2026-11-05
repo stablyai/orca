@@ -1,36 +1,52 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, type ReactElement } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Platform,
   Pressable,
   RefreshControl,
-  SectionList,
   Text,
   View
 } from 'react-native'
-import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
+import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
+import { Presence } from '../components/AutoHeight'
+import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
-import { MobileSearchField } from '../components/MobileSearchField'
-import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
+import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../components/WorktreeListRow'
+import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
-import { getWorktreeStatus } from '../worktree/workspace-list-sections'
-import { repoColor } from '../worktree/repo-color'
+import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
+import { useSlowPendingKeys } from './use-slow-pending-keys'
+import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
-export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+export function HostWorkspaceList({
+  controller,
+  bottomBarHeight,
+  pageTitle
+}: {
+  controller: HostScreenController
+  /** The bottom bar floats over the list's end; rows pad by it so the last one stays reachable. */
+  bottomBarHeight: number
+  /** The host name at the top of the list, folding into the bar as it scrolls. */
+  pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
+}) {
+  const colorScheme = useMobileColorScheme()
   const {
     actions,
     activeWorktreeScroll,
@@ -57,11 +73,20 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
   } = controller
   const { rawSections, sections, repoById } = sectionsResult
   const { pending } = settings.pendingViewChanges
-  // A collapse the desktop has not answered spins on its header.
-  const pendingCollapseKeys = useMemo(
-    () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
-    [pending]
+  // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
+  const pendingCollapseKeys = useSlowPendingKeys(
+    useMemo(
+      () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
+      [pending]
+    )
   )
+  const hasRows = sections.length > 0
+  const resetTitle = pageTitle?.collapsing.reset
+  useEffect(() => {
+    if (!hasRows) {
+      resetTitle?.()
+    }
+  }, [hasRows, resetTitle])
   const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
   const cardDetails = useMemo(
@@ -69,17 +94,39 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     [worktreeCardProperties, compactWorktreeCards, newCardStyle]
   )
 
+  // Group headers can exist before any row loads; the state then sits under them, not above the title.
+  const listState =
+    controller.feed?.kind === 'reopen' ? null : (
+      <HostWorkspaceListStates
+        connState={connState}
+        connectionVerdict={controller.connectionVerdict}
+        // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
+        worktreesLoaded={controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded}
+        // A feed-built list counts its sections, so collapsed ones and a failing worktree.ps never blank it.
+        displayCount={controller.feed ? sections.length : displayWorktrees.length}
+        sectionCount={sections.length}
+        catalogError={state.catalogError}
+        search={state.search}
+        activeFilterCount={controller.activeFilterCount}
+        bottomInset={hasRows ? 0 : Math.max(bottomBarHeight, insets.bottom)}
+        onClearSearch={() => state.setSearch('')}
+        onReconnect={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
+      />
+    )
+
   return (
     <>
-      {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
-      {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
-        <AuthFailedBanner
-          canRetry={!!hostId && forceReconnectHost !== null}
-          onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
-          onRepair={() => router.push('/pair-scan')}
-          onRemove={() => state.setConfirmRemoveHost(true)}
-        />
-      )}
+      {/* Banners ease in and out; a dismissed one keeps its message while it leaves. */}
+      <Presence>
+        {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
+          <AuthFailedBanner
+            canRetry={!!hostId && forceReconnectHost !== null}
+            onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
+            onRepair={() => router.push('/pair-scan')}
+            onRemove={() => state.setConfirmRemoveHost(true)}
+          />
+        )}
+      </Presence>
 
       {connState !== 'connected' &&
       !relayRecovery.pairingRejected &&
@@ -92,80 +139,63 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       ) : null}
 
-      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
-      {routeNotice && (
-        <HostRouteNoticeBanner
-          message={routeNotice}
-          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
-        />
-      )}
-      {state.serverNotice ? (
-        <HostRouteNoticeBanner
-          message={state.serverNotice}
-          onDismiss={() => state.setServerNotice(null)}
-        />
-      ) : null}
-
-      {/* An action that did not happen. Above the list and dismissible, because the list, the
-          header and the confirm it re-opens all have to stay on screen. */}
-      {state.actionError !== '' && (
-        <HostRouteNoticeBanner
-          message={state.actionError}
-          tone="failure"
-          onDismiss={() => state.setActionError('')}
-        />
-      )}
-
-      {/* Search bar */}
-      {state.showSearch && (
-        <View style={styles.searchBar}>
-          <MobileSearchField
-            value={state.search}
-            onChangeText={state.setSearch}
-            placeholder="Search workspaces…"
-            autoFocus
-            // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
-            focusKey={state.showSearch}
-            accessibilityLabel="Search workspaces"
+      <Presence>
+        {routeNotice && (
+          <HostRouteNoticeBanner
+            message={routeNotice}
+            onDismiss={() => setDismissedNotice(noticeParam ?? null)}
           />
-        </View>
-      )}
+        )}
+      </Presence>
+      <Presence>
+        {state.serverNotice ? (
+          <HostRouteNoticeBanner
+            message={state.serverNotice}
+            onDismiss={() => state.setServerNotice(null)}
+          />
+        ) : null}
+      </Presence>
 
-      {/* A feed this page cannot read: the host is older or newer than the page. */}
+      {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
+      <Presence>
+        {state.actionError !== '' && (
+          <HostRouteNoticeBanner
+            message={state.actionError}
+            tone="failure"
+            onDismiss={() => state.setActionError('')}
+          />
+        )}
+      </Presence>
+
+      {hasRows ? null : pageTitle?.element}
+
       {controller.feed?.kind === 'reopen' ? (
-        <HostWorkspaceListReopen />
-      ) : (
-        <HostWorkspaceListStates
-          connState={connState}
-          // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
-          worktreesLoaded={
-            controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded
-          }
-          // A feed-built list counts its sections, so collapsed ones and a failing worktree.ps never blank it.
-          displayCount={controller.feed ? sections.length : displayWorktrees.length}
-          sectionCount={sections.length}
-          catalogError={state.catalogError}
-          search={state.search}
-          activeFilterCount={controller.activeFilterCount}
-        />
+        <HostWorkspaceListReopen aboveRows={sections.length > 0} />
+      ) : hasRows ? null : (
+        listState
       )}
 
-      {sections.length > 0 && controller.feed?.kind !== 'reopen' && (
-        <SectionList
+      {sections.length > 0 && (
+        <Animated.SectionList
           ref={activeWorktreeScroll.sectionListRef}
+          ListHeaderComponent={pageTitle?.element}
+          ListFooterComponent={listState}
+          onScroll={pageTitle?.collapsing.onScroll}
+          {...pageTitle?.collapsing.touchHandlers}
+          scrollEventThrottle={16}
           sections={sections}
-          keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
+          extraData={colorScheme}
+          keyExtractor={({ row, view }) => view.sectionListKey ?? getWorktreeRowIdentity(row)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear.
           keyboardShouldPersistTaps="handled"
-          // Why: react-native-web dismisses on-drag on any scroll, and a narrowing search fires one.
+          // React Native Web dismisses on-drag for any scroll, including one caused by narrowing search.
           keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           onScrollToIndexFailed={activeWorktreeScroll.onScrollToIndexFailed}
-          // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
           contentContainerStyle={[
             styles.list,
-            // Reserve room so the last row stays tappable above the phone's floating "+" (embedded uses the toolbar +).
-            { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
+            // Before the bar measures, the safe area still keeps the last row off the home indicator.
+            { paddingBottom: Math.max(bottomBarHeight, insets.bottom) + spacing.sm },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
@@ -176,10 +206,10 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             if (!section.title) {
               return pendingCreations ? <>{pendingCreations}</> : null
             }
-            const isCollapsed = controller.collapsedGroups.has(section.key)
+            const collapseKey = section.collapseKey ?? section.key
+            const isCollapsed = controller.collapsedGroups.has(collapseKey)
             const count =
               section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
-            // Why: the desktop's header draws its anchor repo's colour and icon.
             const repoSectionLook =
               state.view.groupBy === 'repo' && section.repo
                 ? repoLookById.get(section.repo.id)
@@ -189,18 +219,30 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             return (
               <>
                 <Pressable
-                  style={styles.sectionHeader}
-                  onPress={() => settings.toggleCollapsed(section.key)}
+                  style={({ pressed }) => [
+                    styles.sectionHeader,
+                    section.projectGroupDepth
+                      ? {
+                          paddingLeft:
+                            WORKTREE_ROW_LAYOUT.indicatorInset +
+                            projectGroupHeaderIndent(section.projectGroupDepth)
+                        }
+                      : null,
+                    pressed && { backgroundColor: colors.translucentFill }
+                  ]}
+                  onPress={() => settings.toggleCollapsed(collapseKey)}
                 >
-                  {isCollapsed ? (
-                    <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                  ) : (
-                    <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                  )}
+                  <View style={styles.sectionChevron}>
+                    <DisclosureChevron expanded={!isCollapsed} collapsedDeg={0} expandedDeg={90}>
+                      <ChevronRight size={12} color={colors.textMuted} />
+                    </DisclosureChevron>
+                  </View>
                   {section.icon === 'pin' && (
                     <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                   )}
-                  {state.view.groupBy === 'repo' ? (
+                  {state.view.groupBy === 'repo' && section.isProjectGroup ? (
+                    <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+                  ) : state.view.groupBy === 'repo' ? (
                     <View style={styles.sectionRepoIcon}>
                       <MobileRepoIcon
                         repoIcon={repoSectionIcon}
@@ -211,11 +253,11 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
                   ) : null}
                   <Text style={styles.sectionTitle}>{section.title}</Text>
                   <Text style={styles.sectionCount}>{count}</Text>
-                  {pendingCollapseKeys.has(section.key) && (
+                  {pendingCollapseKeys.has(collapseKey) && (
                     <ActivityIndicator
                       size="small"
                       color={colors.textMuted}
-                      style={styles.sectionIcon}
+                      style={styles.sectionPendingSpinner}
                     />
                   )}
                 </Pressable>
@@ -233,20 +275,21 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               colors={[colors.textSecondary]}
             />
           }
-          renderItem={({ item }) => (
+          renderItem={({ item: { row: item, view } }) => (
             <WorktreeListRow
               item={item}
+              view={view}
               isReadOnly={isReadOnly}
               now={now}
-              status={getWorktreeStatus(item)}
-              repoColor={repoLookById.get(item.repoId)?.color ?? repoColor(item.repo)}
+              status={getWorktreeDotStatus(item)}
+              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
               repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
-              hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
+              hideRepo={state.view.groupBy === 'repo' && !view.showProjectName}
               cardDetails={cardDetails}
               agentActivityDisplayMode={state.view.agentActivityDisplayMode}
               onPress={actions.openWorktreeSession}
               onAgentPress={actions.openWorktreeSession}
-              statusLive={connState === 'connected' && !item.hostContextHealthLabel}
+              statusLive={connState === 'connected' && !view.hostContextHealthLabel}
               onLongPress={
                 item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
               }
@@ -255,18 +298,11 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           )}
         />
       )}
-
-      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
-      {!embedded && (
-        <NewWorkspaceFab
-          onPress={actions.openNewWorktreeModal}
-          disabled={connState !== 'connected'}
-        />
-      )}
     </>
   )
 }
 
 function ListSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }

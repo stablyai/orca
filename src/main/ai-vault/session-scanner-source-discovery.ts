@@ -1,13 +1,13 @@
 import { delimiter } from 'node:path'
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { hermesDiscoveries } from './scanners/hermes/session-scanner-hermes-sources'
 import { discoverFiles } from './session-scanner-discovery'
-import { opencodeDiscoveries } from './session-scanner-opencode-sources'
-import { zcodeDiscoveries } from './session-scanner-zcode-sources'
-import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
-import { hermesDiscoveries } from './session-scanner-hermes-sources'
+import { opencodeDiscoveries } from './scanners/opencode/session-scanner-opencode-sources'
+import { zcodeDiscoveries } from './scanners/zcode/session-scanner-zcode-sources'
+import { antigravityDiscoveries } from './scanners/antigravity/session-scanner-antigravity-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
-import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
+import { configureOpenCodeWslReaders } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
@@ -24,12 +24,7 @@ export async function discoverAiVaultSessionSources(args: {
   }
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
 
-  // The Cursor chat-meta scan scope is owned by scanAiVaultSessions: it has to
-  // span parse as well, and finalize runs after this returns.
   return Promise.all([
-    // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
-    // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
-    // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
@@ -79,8 +74,7 @@ function agentDiscoveries(
     : rootDirs.map(discover)
 }
 
-// Alternate roots for one install: the limit spans them, so they collapse into
-// a single discovery rather than each claiming a full slice of it.
+// Alternate roots share one recency limit per install.
 async function mergedDiscovery(
   agent: AiVaultAgent,
   rootDirs: readonly string[],

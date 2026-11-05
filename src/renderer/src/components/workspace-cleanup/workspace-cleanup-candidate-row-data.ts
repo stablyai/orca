@@ -1,6 +1,9 @@
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupGitLabel } from './workspace-cleanup-presentation'
+import type {
+  WorkspaceCleanupBlocker,
+  WorkspaceCleanupCandidate
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupGitState } from './workspace-cleanup-presentation'
 import {
   formatUnpushedCommitCount,
   formatWorkspaceCleanupContextDetail,
@@ -18,21 +21,18 @@ export function getWorkspaceCleanupBlockerLabels(candidate: WorkspaceCleanupCand
   return candidate.blockers.map((blocker) => getWorkspaceCleanupBlockerLabel(blocker))
 }
 
-export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): {
+type CandidateFactStatus = {
   label: string
   tone: StatusPillTone
-}[] {
+  /** Git safety verdict; the row renders these as pills and everything else as muted flags. */
+  git: boolean
+}
+
+export function getCandidateFactStatuses(
+  candidate: WorkspaceCleanupCandidate
+): CandidateFactStatus[] {
   if (candidate.blockers.length > 0) {
-    return candidate.blockers.map((blocker) => ({
-      label:
-        blocker === 'dismissed'
-          ? translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
-              'Ignored'
-            )
-          : getWorkspaceCleanupBlockerLabel(blocker),
-      tone: blocker === 'git-status-error' || blocker === 'unknown-base' ? 'destructive' : 'neutral'
-    }))
+    return candidate.blockers.map(getBlockerFactStatus)
   }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return [
@@ -41,7 +41,8 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9623a5107d',
           'Unpushed commits'
         ),
-        tone: 'review'
+        tone: 'review',
+        git: true
       }
     ]
   }
@@ -52,7 +53,8 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e97e4580c7',
           'Dirty'
         ),
-        tone: 'review'
+        tone: 'review',
+        git: true
       }
     ]
   }
@@ -63,15 +65,42 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.archivedStatus',
           'Archived'
         ),
-        tone: 'neutral'
+        tone: 'neutral',
+        git: false
       }
     ]
   }
   return []
 }
 
+const GIT_SAFETY_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
+  'dirty-files',
+  'unpushed-commits',
+  'unknown-base',
+  'git-status-error'
+])
+
+function getBlockerFactStatus(blocker: WorkspaceCleanupBlocker): CandidateFactStatus {
+  return {
+    label:
+      blocker === 'dismissed'
+        ? translate(
+            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
+            'Ignored'
+          )
+        : getWorkspaceCleanupBlockerLabel(blocker),
+    tone:
+      blocker === 'git-status-error' || blocker === 'unknown-base'
+        ? 'destructive'
+        : blocker === 'dirty-files' || blocker === 'unpushed-commits'
+          ? 'review'
+          : 'neutral',
+    git: GIT_SAFETY_BLOCKERS.has(blocker)
+  }
+}
+
 export function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
-  return formatWorkspaceCleanupGitStatusLabel(getWorkspaceCleanupGitLabel(candidate))
+  return formatWorkspaceCleanupGitStatusLabel(getWorkspaceCleanupGitState(candidate))
 }
 
 export function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string[] {
@@ -151,22 +180,7 @@ export function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string |
 }
 
 export function shouldShowGitMetadataChip(candidate: WorkspaceCleanupCandidate): boolean {
-  return !hasGitStatusPill(candidate)
-}
-
-function hasGitStatusPill(candidate: WorkspaceCleanupCandidate): boolean {
-  if (
-    candidate.blockers.includes('dirty-files') ||
-    candidate.blockers.includes('unpushed-commits') ||
-    candidate.blockers.includes('unknown-base') ||
-    candidate.blockers.includes('git-status-error')
-  ) {
-    return true
-  }
-  if (candidate.blockers.length > 0) {
-    return false
-  }
-  return (candidate.git.upstreamAhead ?? 0) > 0 || candidate.git.clean === false
+  return !getCandidateFactStatuses(candidate).some((status) => status.git)
 }
 
 export function getContextCount(candidate: WorkspaceCleanupCandidate): number {

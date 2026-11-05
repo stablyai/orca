@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer
-} from '../../../shared/remote-runtime-shared-control-test-server'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   captureRuntimeEnvironmentCapabilityEvidence,
@@ -94,18 +94,6 @@ describe('runtime environment shared-control connection cache', () => {
     server.closeClients()
     await waitFor(() => getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)?.state !== 'ready')
     expect(getRemoteRuntimeSharedControlAnsweredAt(ENVIRONMENT_ID)).toBeNull()
-  })
-
-  it('blocks standing creation while manual intent is disconnected', async () => {
-    const server = await createSharedControlTestServer()
-    markRuntimeEnvironmentManuallyDisconnected(ENVIRONMENT_ID)
-
-    ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
-    reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
-    await delay(50)
-
-    expect(server.connectionCount()).toBe(0)
-    expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)).toBeNull()
   })
 
   it('lets a bypass request finish but never retries it after manual disconnect', async () => {

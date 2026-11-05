@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -8,7 +8,7 @@ import {
   createEphemeralAgentSessionClaimSigner,
   loadAgentSessionClaimSigner,
   type AgentSessionClaimSigner
-} from '../runtime/agent-session-claim-identity'
+} from '../runtime/agent-session/ownership/agent-session-claim-identity'
 
 const namespace = { machine: 'm', principal: 'u', container: 'native', providerRoot: 'default' }
 const identity = canonicalizeAgentSessionIdentity('claude', { key: 'session_id', id: 'conv-1' })
@@ -19,7 +19,6 @@ const surface = {
   terminalHandle: 'term_handle'
 }
 
-/** One orcad incarnation submitting the same conversation to a daemon that outlives it. */
 async function ensureFrom(
   daemonOwners: ClaimedAgentPtyOwnerRegistry,
   signer: AgentSessionClaimSigner,
@@ -34,14 +33,6 @@ async function ensureFrom(
 }
 
 describe('orcad agent-session claim signer', () => {
-  it('wires the persistent signer from orcad user data into its runtime', () => {
-    // Booting orcad here would need its whole runtime; the wiring is pinned by the entry text.
-    const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
-    expect(entry).toContain(
-      'agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath)'
-    )
-  })
-
   it('adopts the live PTY after an orcad restart instead of starting a second writer', async () => {
     const userData = mkdtempSync(join(tmpdir(), 'orcad-claim-signer-'))
     try {

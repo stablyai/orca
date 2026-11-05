@@ -1,12 +1,14 @@
-/**
- * The host owns a project's shells, so removing the project stops them itself: a client only
- * stops the workspaces it has loaded, and an unhydrated or hidden one would keep running.
- */
+/** Host-owned project removal stops even hidden/unhydrated workspace shells that no client can sweep. */
 import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import {
+  TEST_REPO_ID,
+  TEST_WORKTREE_ID,
+  store
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 const HIDDEN_WORKTREE_ID = `${TEST_REPO_ID}::/tmp/hidden-worktree`
 const OTHER_WORKTREE_ID = 'repo-2::/tmp/other'

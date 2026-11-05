@@ -15,12 +15,14 @@ const { collect, listLiveDaemonPtyIds } = vi.hoisted(() => ({
   listLiveDaemonPtyIds: vi.fn<() => Promise<string[] | null>>()
 }))
 vi.mock('../orcad/orcad-terminal-census', () => ({ collectOrcadTerminalCensus: collect }))
-vi.mock('../daemon/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, store } = await import('./orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_WORKTREE_ID, store } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 7 }
 const target = spawnWorktreeTarget(TEST_WORKTREE_ID, null)
@@ -30,8 +32,7 @@ type CensusRequest = Omit<z.input<typeof OrcadTerminalCensusParamsSchema>, 'acti
 function census(runtime: InstanceType<typeof OrcaRuntimeService>, params: CensusRequest) {
   // Parsed as the server parses it, so a field the server does not know is dropped here too.
   const parsed = OrcadTerminalCensusParamsSchema.parse({ activatedAt: 1, ...params })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only `runtime` from its context.
-  return ORCAD_TERMINAL_CENSUS_METHODS[0]!.handler(parsed, { runtime } as never)
+  return ORCAD_TERMINAL_CENSUS_METHODS[0]!.handler(parsed, { runtime })
 }
 
 // What the SSH and WSL updates send as the last count before the stop.

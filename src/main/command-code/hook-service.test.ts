@@ -65,7 +65,6 @@ describe('CommandCodeHookService', () => {
     }
   })
 
-  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under Command Code's shell.
   it('registers the Windows batch hook command for every event', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {

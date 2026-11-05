@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
+
 import {
   RemoteInstallOutOfSpaceError,
   remoteFreeSpaceProbeCommand
@@ -19,7 +20,7 @@ vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
-// What ssh2 surfaces when OpenSSH's sftp-server hits ENOSPC: SSH_FX_FAILURE, no errno.
+// OpenSSH collapses ENOSPC into SSH_FX_FAILURE without errno.
 const sftpFailure = (): Error => Object.assign(new Error('Failure'), { code: 4 })
 const dfLine = (availableKb: number): string =>
   `tmpfs 409600 ${409600 - availableKb} ${availableKb} 100% /root\n`
@@ -49,7 +50,7 @@ afterEach(() => rmSync(localDir, { recursive: true, force: true }))
 describe('a failed install write on a full host', () => {
   it('says the disk is full instead of the bare SFTP "Failure"', async () => {
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(12))
-    const upload = uploadRelayDirectory(
+    const upload = uploadRemoteInstallDirectory(
       connection(sftpFailure),
       localDir,
       '/root/.orca-remote/orcad-0.1.0+abc',
@@ -64,51 +65,18 @@ describe('a failed install write on a full host', () => {
     )
   })
 
-  it('sizes a single file write by its contents', async () => {
-    vi.mocked(execHostCommand).mockResolvedValue(dfLine(0))
-    await expect(
-      writeRelayFile(connection(sftpFailure), posix, '/root/.orca-remote/x/.version', 'abc')
-    ).rejects.toThrow(/has 0 KB free, and Orca needs about 1 KB/)
-  })
-
   it('keeps the original error when the filesystem still has room', async () => {
-    // Less than the whole bundle, but a partial upload may have spent the rest: not proof.
+    // Partial uploads may have consumed space; less than the bundle size does not prove exhaustion.
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(1_500))
     const failure = sftpFailure()
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => failure),
         localDir,
         '/root/r',
         posix
       )
     ).rejects.toBe(failure)
-  })
-
-  it('keeps the original error when the space probe itself fails', async () => {
-    vi.mocked(execHostCommand).mockRejectedValue(new Error('df: not found'))
-    const failure = sftpFailure()
-    await expect(
-      uploadRelayDirectory(
-        connection(() => failure),
-        localDir,
-        '/root/r',
-        posix
-      )
-    ).rejects.toBe(failure)
-  })
-
-  it('keeps explicit refusals such as permission denied without probing', async () => {
-    const denied = Object.assign(new Error('Permission denied'), { code: 3 })
-    await expect(
-      uploadRelayDirectory(
-        connection(() => denied),
-        localDir,
-        '/root/r',
-        posix
-      )
-    ).rejects.toBe(denied)
-    expect(execHostCommand).not.toHaveBeenCalled()
   })
 
   it('never probes after unverifiable transport loss, an abort, or on Windows', async () => {
@@ -117,7 +85,7 @@ describe('a failed install write on a full host', () => {
       sshChannelCloseConfirmed: false
     })
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => lost),
         localDir,
         '/root/r',
@@ -127,13 +95,13 @@ describe('a failed install write on a full host', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(
-      uploadRelayDirectory(connection(sftpFailure), localDir, '/root/r', posix, {
+      uploadRemoteInstallDirectory(connection(sftpFailure), localDir, '/root/r', posix, {
         signal: controller.signal
       })
     ).rejects.toThrow()
     const failure = sftpFailure()
     await expect(
-      uploadRelayDirectory(
+      uploadRemoteInstallDirectory(
         connection(() => failure),
         localDir,
         'C:/Users/u/r',

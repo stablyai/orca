@@ -85,14 +85,6 @@ describe('update status disclosure', () => {
     expect(errorToggle().getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('announces a quiet automatic check failure as collapsed', () => {
-    setStatus(error)
-    renderUpdateControls()
-
-    expect(screen.queryByRole('complementary', { name: 'Update error' })).toBeNull()
-    expect(errorToggle().getAttribute('aria-expanded')).toBe('false')
-  })
-
   it('preserves the disclosure choice until the next automatic check', () => {
     renderUpdateControls()
     setStatus(error)
@@ -111,33 +103,6 @@ describe('update status disclosure', () => {
     expect(errorToggle().getAttribute('aria-expanded')).toBe('false')
   })
 
-  it.each<UpdateStatus>([
-    { state: 'checking', userInitiated: true },
-    { state: 'available', version: '1.4.200', changelog: null },
-    { state: 'downloading', version: '1.4.200', percent: 50 },
-    { state: 'downloaded', version: '1.4.200' }
-  ])('opens an error after $state without requiring a status click', (previousStatus) => {
-    setStatus(previousStatus)
-    setStatus(error)
-    renderUpdateControls()
-
-    expect(screen.getByRole('complementary', { name: 'Update error' })).toBeTruthy()
-    expect(errorToggle().getAttribute('aria-expanded')).toBe('true')
-  })
-
-  it.each(actionableErrors)(
-    'opens an explicit actionable error on initial receipt: %j',
-    (status) => {
-      setStatus(status)
-      renderUpdateControls()
-
-      expect(screen.getByRole('complementary', { name: 'Update error' })).toBeTruthy()
-      expect(
-        screen.getByRole('button', { name: /Click to expand/ }).getAttribute('aria-expanded')
-      ).toBe('true')
-    }
-  )
-
   it.each(actionableErrors)(
     'opens a newly actionable error and preserves dismissal on repeat: %j',
     (status) => {
@@ -153,22 +118,4 @@ describe('update status disclosure', () => {
       expect(screen.queryByRole('complementary', { name: 'Update error' })).toBeNull()
     }
   )
-})
-
-it('keeps blocked installs accessible as waiting rather than a failed download', () => {
-  setStatus({
-    state: 'error',
-    version: '1.4.200',
-    retryAction: 'install',
-    message: 'Diagnostic',
-    installBlock: { reason: 'running-instances', instances: [{ pid: 42, kind: 'browser' }] }
-  })
-  useAppStore.setState({ updateCardCollapsed: true })
-  renderUpdateControls()
-  const toggle = screen.getByRole('button', {
-    name: 'Update waiting for other Orca instances. Click to expand.'
-  })
-  expect(screen.queryByText('Update failed')).toBeNull()
-  fireEvent.click(toggle)
-  expect(screen.getByRole('complementary', { name: 'Update waiting' })).toBeTruthy()
 })

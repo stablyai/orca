@@ -211,18 +211,28 @@ describe('list-issues pagination contract', () => {
     expect(rawRequest.mock.calls.map((call) => call[1]?.first)).toEqual([250, 50])
   })
 
-  it('stops and reports truncation when a provider never stops offering pages', async () => {
-    rawRequest.mockResolvedValue(
-      pageResponse([issueNode('issue-1', 'ENG-1', '2026-07-01T00:00:00.000Z')], true, 'same-cursor')
-    )
-    const { listMcpIssues } = await import('./mcp-issue-list')
+  it('stops at the page cap and reports truncation when a provider keeps offering pages', async () => {
+    vi.useFakeTimers()
+    try {
+      rawRequest.mockResolvedValue(
+        pageResponse(
+          [issueNode('issue-1', 'ENG-1', '2026-07-01T00:00:00.000Z')],
+          true,
+          'same-cursor'
+        )
+      )
+      const { listMcpIssues } = await import('./mcp-issue-list')
 
-    const result = await listMcpIssues({})
+      const result = await listMcpIssues({})
 
-    expect(result.truncated).toBe(true)
-    expect(result.meta.hasMore).toBe(true)
-    expect(rawRequest.mock.calls.length).toBeLessThanOrEqual(200)
-    expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
+      expect(result.truncated).toBe(true)
+      expect(result.meta.hasMore).toBe(true)
+      expect(rawRequest).toHaveBeenCalledTimes(200)
+      expect(result.issues).toHaveLength(200)
+      expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stops paging when a page claims more results but hands back no cursor', async () => {

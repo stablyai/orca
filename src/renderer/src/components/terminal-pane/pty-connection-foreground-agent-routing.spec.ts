@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   VISIBLE_PTY_SETTLE_MS,
@@ -20,12 +20,17 @@ import {
   resolveMockPaneWindowsShiftEnterEncoding,
   type StoreState
 } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundAgentRoutingTests(): void {
   let mockStoreState: StoreState
@@ -63,6 +68,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
 
     it('drops agent status without retaining when OSC 133 reports the command finished', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport()
@@ -96,7 +103,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
 
       capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
       await flushAsyncTicks()
@@ -108,6 +117,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('clears pre-hook launch config when an Orca-started command exits', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -130,19 +141,24 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       } as StoreState
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({
-          startup: {
-            command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-            launchConfig: {
-              agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-              agentEnv: {}
-            },
-            launchAgent: 'codex'
-          },
-          restoredPtyIdByLeafId: {}
-        }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({
+              startup: {
+                command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+                launchConfig: {
+                  agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+                  agentEnv: {}
+                },
+                launchAgent: 'codex'
+              },
+              restoredPtyIdByLeafId: {}
+            }),
+            agentTitleMocks2
+          )
+        )
       )
 
       expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
@@ -165,6 +181,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('routes a manually typed Droid only after foreground enrichment confirms it', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const pane = createPane(1)
       const ptyId = 'pty-manually-typed-droid'
@@ -184,9 +202,14 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, isVisibleRef: { current: false } }),
+            agentTitleMocks3
+          )
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -210,6 +233,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('confirms a manually typed Droid without OSC command boundaries', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
       const pane = createPane(1)
       const ptyId = 'pty-manual-droid-no-osc'
@@ -218,9 +243,14 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, isVisibleRef: { current: false } }),
+            agentTitleMocks4
+          )
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -241,9 +271,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     })
 
     it('confirms an Orca-launched Droid fresh spawn in a no-OSC shell (Git Bash)', async () => {
-      // Why: no-OSC shells (Git Bash/cmd) emit no command boundary, so without a fresh-spawn sample the pane never earns routing trust and Shift+Enter regresses to Esc+CR (#7620).
+      // No-OSC shells need fresh-spawn sampling to earn routing trust; otherwise Shift+Enter falls back to Esc+CR (#7620).
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
       const pane = createPane(1)
@@ -253,12 +285,17 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({
-          tabId,
-          startup: { command: 'droid', launchAgent: 'droid' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({
+              tabId,
+              startup: { command: 'droid', launchAgent: 'droid' }
+            }),
+            agentTitleMocks5
+          )
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -285,9 +322,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     })
 
     it('trusts a launched Droid whose no-OSC boot only becomes foreground after retries', async () => {
-      // Why: the confirmation ladder must span Droid's boot — the shell is still foreground on the first read(s) before Droid takes over.
+      // Retry across Droid boot while early foreground reads still see its shell.
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const foregroundResults = ['bash.exe', 'bash.exe', 'droid']
       vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(
         async () => foregroundResults.shift() ?? 'droid'
@@ -299,9 +338,14 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }),
+            agentTitleMocks6
+          )
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -325,9 +369,11 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     })
 
     it('stays recoverable when a launched Droid outlasts the fresh-spawn confirmation window', async () => {
-      // Why: a missed ladder (slow boot) must stay recoverable — latching a shell-confirm would clear launch identity and poison Shift+Enter for the session.
+      // A slow-boot miss must remain recoverable; latching shell would erase launch identity and poison later routing.
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let foreground = 'bash.exe'
       // Why both: the pane's process monitor reads the same foreground the confirm read sees.
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
@@ -339,10 +385,15 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }) as never
-      ) as unknown as { sampleForegroundAgentOnFocus: () => void }
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }),
+            agentTitleMocks7
+          )
+        )
+      )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Captured transport options expose onPtySpawn as an optional PTY-id callback.
@@ -379,6 +430,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('confirms a delayed Claude from fresh startup output after the first read window expires', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let foreground = 'sleep'
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
       vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
@@ -387,12 +440,14 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
       transportFactoryQueue.push(createMockTransport(ptyId))
       const binding = connectPanePty(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The pane fixture implements the terminal APIs exercised by this connection test.
-        createPane(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The manager fixture supplies this single pane and its connection callbacks.
-        createManager(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connection dependency fixture supplies all APIs used by the test with the explicit startup override.
-        createDeps({ tabId, startup: { command: 'sleep 30 && claude' } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, startup: { command: 'sleep 30 && claude' } }),
+            agentTitleMocks8
+          )
+        )
       )
       await vi.advanceTimersByTimeAsync(30_000)
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agent).not.toBe('claude')
@@ -416,6 +471,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('revokes trusted Droid after accepted no-OSC exit input until shell confirmation', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
       const pane = createPane(1)
       const ptyId = 'pty-droid-exit-no-osc'
@@ -423,7 +480,13 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
       transportFactoryQueue.push(createMockTransport(ptyId))
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps({ tabId }), agentTitleMocks9)
+        )
+      )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
@@ -441,8 +504,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
         routingConfirmationPending: true,
         shellForeground: false
       })
-      // The provider read is asynchronous; keep the last known safe capability
-      // so a second Shift+Enter cannot become Pi's submit chord in the gap.
+      // Retain safe capability during provider reads so a second Pi Shift+Enter cannot become submit.
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
 
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
@@ -457,6 +519,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('trusts Pi in a no-OSC shell and retires routing after accepted exit input', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let foreground = 'pi'
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('pi')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
@@ -467,10 +531,15 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(createMockTransport(ptyId))
 
       const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, startup: { command: 'pi', launchAgent: 'pi' } }) as never
-      ) as unknown as { requestWindowsShiftEnterReconfirmation: () => void }
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, startup: { command: 'pi', launchAgent: 'pi' } }),
+            agentTitleMocks10
+          )
+        )
+      )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Captured transport options expose onPtySpawn as an optional PTY-id callback.
@@ -511,6 +580,8 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('never promotes typed Droid text when foreground enrichment is unavailable', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.mocked(window.api.pty.confirmForegroundProcess)
         .mockResolvedValueOnce(null)
         .mockRejectedValueOnce(new Error('inspection unavailable'))
@@ -530,9 +601,14 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       transportFactoryQueue.push(transport)
 
       connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, isVisibleRef: { current: false } }),
+            agentTitleMocks11
+          )
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()

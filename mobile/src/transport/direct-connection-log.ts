@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { LivenessTimeoutEvidence } from './rpc-session-liveness-watchdog'
 import type {
   ConnectionLogEntry,

@@ -1,13 +1,12 @@
 import { expect, vi, type Mock } from 'vitest'
-import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
+import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { JsonlRpcAgentConnectionOptions } from '../jsonl-rpc/agent-connection'
-import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
-import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
+import { type JsonlRpcRecord, JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type { PiRpcConnection } from './rpc-session'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -35,24 +34,32 @@ export class FakeConnection implements PiRpcConnection {
   closed = false
   rootVerdict: 'live' | 'unverifiable' | 'exited' = 'live'
   processless = false
+  spawnAbsence: PiRpcConnection['spawnAbsence'] = null
   deferExit = false
   closeError?: Error
   lastCloseResult: PiRpcConnection['lastCloseResult'] = null
   closeResult: Awaited<ReturnType<PiRpcConnection['close']>> = { root: 'exited', tree: 'exited' }
   readonly sent: JsonlRpcRecord[] = []
   readonly requests: string[] = []
+  readonly compactParams: unknown[] = []
   private readonly exitListeners: (() => void)[] = []
   requestOverride?: (command: string) => Promise<unknown> | undefined
   abortRequest?: () => void
-  constructor(readonly handlers: JsonlRpcAgentConnectionOptions) {}
-  async request(command: string): Promise<unknown> {
+  constructor(
+    readonly handlers: JsonlRpcAgentConnectionOptions,
+    private readonly reported: { thinkingLevel?: string } = {}
+  ) {}
+  async request(command: string, params?: Record<string, unknown>): Promise<unknown> {
     this.requests.push(command)
+    if (command === 'compact') {
+      this.compactParams.push(params)
+    }
     const override = this.requestOverride?.(command)
     if (override) {
       return override
     }
     if (command === 'get_state') {
-      return state
+      return { ...state, ...this.reported }
     }
     if (command === 'get_available_models') {
       return { models: [state.model] }
@@ -105,7 +112,6 @@ export class FakeConnection implements PiRpcConnection {
 
 type PiLifecycleEvent = Parameters<PiRpcSessionAdapterDeps['onLifecycle']>[0]
 
-/** The first `type` event the adapter reported; a missing one fails the test. */
 export function reportedEvent<T extends PiLifecycleEvent['type']>(
   lifecycle: Mock<PiRpcSessionAdapterDeps['onLifecycle']>,
   type: T
@@ -121,7 +127,8 @@ export function reportedEvent<T extends PiLifecycleEvent['type']>(
 
 export async function setup(
   options: Readonly<Record<string, string>> = {},
-  eventSink?: (sink: StructuredAgentSessionEventSink) => StructuredAgentSessionEventSink
+  eventSink?: (sink: StructuredAgentSessionEventSink) => StructuredAgentSessionEventSink,
+  reported?: ConstructorParameters<typeof FakeConnection>[1]
 ) {
   const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
   const connections: FakeConnection[] = []
@@ -152,7 +159,7 @@ export async function setup(
   }))
   const openConnection = vi.fn(
     (_launch: ProviderProcessLaunch, handlers: JsonlRpcAgentConnectionOptions) => {
-      const connection = new FakeConnection(handlers)
+      const connection = new FakeConnection(handlers, reported)
       connections.push(connection)
       return connection
     }

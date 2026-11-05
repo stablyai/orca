@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
-import type * as LocalCommandResolver from './command-path-resolver'
+import type * as LocalCommandResolver from './command-path/command-path-resolver'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
 const {
@@ -24,14 +24,13 @@ vi.mock('./preflight-wsl-command', () => ({
   runPreflightCommandInWsl: runPreflightCommandInWslMock
 }))
 
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('./command-path/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   isCommandOnLocalPath: vi.fn(async () => false),
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
-// Why: `findRunnableLocalCommand` decides what to spawn next from the error
-// `execFile` puts on a failed probe, so the shapes below have to be its own.
+// Probe recovery branches on promisified execFile errors; retain their real shape.
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
@@ -344,7 +343,7 @@ describe('findRunnableLocalCommand', () => {
   })
 
   it('gives an explicit binary the full timeout without trying another copy', async () => {
-    // A frozen clock: the budget is deadline - Date.now(), so a ticking clock reads 4999.
+    // Freeze the clock so remaining deadline budget is deterministic.
     vi.spyOn(Date, 'now').mockReturnValue(1000)
     execFileAsyncMock.mockRejectedValue(
       Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' })

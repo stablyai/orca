@@ -13,7 +13,11 @@ import {
   captureCallbackTerminalWrites,
   createManager
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
@@ -21,6 +25,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionSplitSpawnTests(): void {
   const { notifyCodexPaneBoundForStaleSweep } = ptyConnectionTestMocks
@@ -60,6 +65,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
     it('clears the mobile-fit pane binding when the pane connection is disposed', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { getFitOverrideForPane, setFitOverride } =
         await import('@/lib/pane-manager/mobile-fit-overrides')
       const transport = createMockTransport()
@@ -67,9 +74,11 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const pane = createPane(1)
 
       const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps() as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks)
+        )
       )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
@@ -90,6 +99,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
     it('refits immediately when binding to a PTY with an active mobile-fit override', async () => {
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -114,7 +125,13 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       })
       setFitOverride('pty-fit', 'mobile-fit', 49, 20)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks2)
+        )
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -141,6 +158,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       }
 
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       const ptyId = 'pty-post-spawn-transient-lock'
@@ -157,7 +176,13 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         pane.terminal.cols = 80
         pane.terminal.rows = 24
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks3)
+          )
+        )
         runNextFrame()
         await flushAsyncTicks()
 
@@ -208,6 +233,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { applyOrDeferPaneMetricOptions } =
         await import('@/lib/pane-manager/pane-metric-options-deferral')
       const transport = createMockTransport()
@@ -237,11 +264,12 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         mockStoreState.repos[0].executionHostId = 'runtime:env-1'
         mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane, manager and deps doubles implement every member connectPanePty reads on this startup path.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
       if (scenario === 'metrics') {
         applyOrDeferPaneMetricOptions(args[0], { fontSize: 24 }, false)
       }
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks4)
+
       const binding = connectPanePty(...args)
 
       if (visibility === 'visible' && scenario !== 'starved') {
@@ -306,6 +334,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
     it('spawns the delayed primary pane of an issue-command split when its sibling owns the tab PTY fallback', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let mainPtyId: string | null = null
       const mainTransport = createMockTransport()
       mainTransport.getPtyId.mockImplementation(() => mainPtyId)
@@ -352,8 +382,7 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const primaryCwd = createDeferred<string>()
       const sharedTransportsRef = { current: new Map() }
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pane, manager and dependency doubles implement every member reached by fresh split connection.
-      const mainArgs = [
+      const mainArgs = mockPanePtyArgs(
         mainPane,
         manager,
         createDeps({
@@ -363,10 +392,11 @@ export function registerPtyConnectionSplitSpawnTests(): void {
           paneTransportsRef: sharedTransportsRef,
           updateTabPtyId: updateStoreTabPtyId
         })
-      ] as unknown as Parameters<typeof connectPanePty>
+      )
+      bindPaneAgentTitleMocks(mainArgs[2], agentTitleMocks5)
+
       connectPanePty(...mainArgs)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sibling uses the same checked fixture shape with its own command and transport.
-      const issueArgs = [
+      const issueArgs = mockPanePtyArgs(
         issuePane,
         manager,
         createDeps({
@@ -375,7 +405,9 @@ export function registerPtyConnectionSplitSpawnTests(): void {
           paneTransportsRef: sharedTransportsRef,
           updateTabPtyId: updateStoreTabPtyId
         })
-      ] as unknown as Parameters<typeof connectPanePty>
+      )
+      bindPaneAgentTitleMocks(issueArgs[2], agentTitleMocks5)
+
       connectPanePty(...issueArgs)
 
       await flushAsyncTicks(20)
@@ -398,6 +430,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
     it('does not reuse a sibling split pane pending spawn after remount', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
       const mainSpawn = createDeferred<string>()
       const setupSpawn = createDeferred<string>()
@@ -417,22 +451,38 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
       const sharedTransportsRef = { current: new Map() }
       connectPanePty(
-        createPane(1) as never,
-        createManager(2) as never,
-        createDeps({ paneTransportsRef: sharedTransportsRef }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(2),
+          bindPaneAgentTitleMocks(
+            createDeps({ paneTransportsRef: sharedTransportsRef }),
+            agentTitleMocks6
+          )
+        )
       )
       connectPanePty(
-        createPane(2) as never,
-        createManager(2) as never,
-        createDeps({
-          startup: { command: 'bash setup-runner.sh' },
-          paneTransportsRef: sharedTransportsRef
-        }) as never
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(2),
+          bindPaneAgentTitleMocks(
+            createDeps({
+              startup: { command: 'bash setup-runner.sh' },
+              paneTransportsRef: sharedTransportsRef
+            }),
+            agentTitleMocks6
+          )
+        )
       )
 
       const remountDeps = createDeps()
       const remountPane = createPane(1)
-      connectPanePty(remountPane as never, createManager(2) as never, remountDeps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          remountPane,
+          createManager(2),
+          bindPaneAgentTitleMocks(remountDeps, agentTitleMocks6)
+        )
+      )
 
       setupSpawn.resolve('pty-setup')
       mainSpawn.resolve('pty-main')
@@ -450,6 +500,8 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
     it('binds a fresh spawn that resolves as a daemon reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let currentPtyId: string | null = null
       const transport = createMockTransport()
       transport.getPtyId.mockImplementation(() => currentPtyId)
@@ -467,19 +519,22 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const pane = createPane(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks7))
+      )
       await flushAsyncTicks()
 
       expect(pane.container.dataset.ptyId).toBe('pty-daemon-reattach')
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-daemon-reattach')
       expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-daemon-reattach')
-      // Why: the restored shell keeps the CODEX_HOME it was spawned with, and this
-      // bind is the first moment the daemon PTY can be inspected for it.
+      // Inspect stale CODEX_HOME at first binding because the restored shell retains its original environment.
       expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('pty-daemon-reattach')
     })
 
     it('replays a stable-pane adoption without submitting the resume command', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const stablePtyId = 'stable-pane-session'
       const transport = createMockTransport()
       transport.connect.mockImplementation(async ({ callbacks }) => {
@@ -509,7 +564,9 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         startup: { command: 'codex resume provider-session' }
       })
 
-      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks8))
+      )
       await flushAsyncTicks(4)
       if (!onDataHandler || parseCallbacks.length === 0) {
         throw new Error('expected replay and terminal input handlers')
@@ -533,8 +590,10 @@ export function registerPtyConnectionSplitSpawnTests(): void {
     })
 
     it('drops xterm onData while pane is replaying restored bytes', async () => {
-      // Regression: during replay, xterm auto-replies to embedded queries (DA1/DECRQM/OSC/CPR) via onData must not reach transport.sendInput or they land as stray chars on the prompt. See replay-guard.ts.
+      // Guard replay query replies from leaking through onData into fresh-shell stdin (replay-guard.ts).
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
@@ -554,18 +613,18 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       const deps = createDeps({ replayingPanesRef })
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
+      )
 
       expect(onDataHandler).toBeDefined()
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
-      // Simulate xterm emitting a DA1 auto-reply during replay parse.
       ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(transport.claimViewport).not.toHaveBeenCalled()
 
-      // Once replay completes (guard cleared), real keystrokes flow through.
       replayingPanesRef.current.delete(1)
       setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
       transport.claimViewport.mockClear()
@@ -579,9 +638,10 @@ export function registerPtyConnectionSplitSpawnTests(): void {
     })
 
     it('forwards focus and hover reports without claiming a parked mirror (#26469)', async () => {
-      // Regression: a TUI re-arms DECSET 1004 after every SIGWINCH and xterm answers with a focus
-      // report. Claiming on it made two mirrors of different grids take the PTY from each other.
+      // SIGWINCH can re-arm focus reporting; focus replies must not make different-grid mirrors steal PTY ownership from each other.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -597,7 +657,13 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         return { dispose: vi.fn() }
       })
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks10)
+        )
+      )
       const send = registered.onData
       if (!send) {
         throw new Error('expected onData handler to be registered')

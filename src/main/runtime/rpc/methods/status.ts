@@ -1,21 +1,32 @@
 import { defineMethod } from '../core'
 import { getRemoteServerUpdaterSnapshot } from '../../remote-server-updater'
 import { getPublishedHostDescriptor } from '../../host-descriptor'
+import { StatusGetParams } from '../../../../shared/rpc-contract/status-params'
+import { readHostMachineWithin } from '../../runtime-host-machine'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../runtime-machine-name'
 
 export const STATUS_METHODS = [
   defineMethod({
     name: 'status.get',
     permission: 'workspace',
-    params: null,
-    handler: async (_params, { runtime, pairedDeviceId }) => {
-      // Why: a status answered while the friendly-name lookup is still in flight publishes the bare
-      // hostname; the wait is capped below the CLI's status probe so a slow lookup never reads as down.
-      await runtime.machineNameReady()
+    params: StatusGetParams,
+    handler: async (params, { runtime, pairedDeviceId }) => {
+      // Why: a liveness probe needs only an answer; the full status is ~12 KB on every idle probe.
+      if (params.probe === true) {
+        return { runtimeId: runtime.getRuntimeId() }
+      }
+      // Bound friendly-name waiting below the CLI status timeout; slow lookup falls back to hostname, never host-down.
+      // Hardware shares that bound; a slow first probe omits hostMachine until a later read.
+      const [, hostMachine] = await Promise.all([
+        runtime.machineNameReady(),
+        readHostMachineWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
+      ])
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
       const hostDescriptor = getPublishedHostDescriptor(runtime.getRuntimeId())
       return {
         ...runtime.getStatus(),
         ...(hostDescriptor ? { hostDescriptor } : {}),
+        ...(hostMachine ? { hostMachine } : {}),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
         remoteUpdateSupport: snapshot.support

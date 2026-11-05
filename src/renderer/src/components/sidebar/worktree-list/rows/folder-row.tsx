@@ -9,17 +9,20 @@ import type {
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
-import WorktreeCard from '../../WorktreeCard'
+
+import {
+  type FolderWorkspacePathStatus,
+  isConfirmedStaleFolderPathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getFolderWorkspaceRowGeometry } from './indentation'
-import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-display'
+import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
-import { getWorktreeOptionId } from './option-dom'
+import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 
 export type FolderWorkspaceRowContext = {
   groupBy: WorktreeGroupBy
@@ -108,6 +111,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
       ref={args.measureVirtualRowElement}
       className="absolute left-0 right-0 top-0"
       style={{ transform: getVirtualRowTransform(vItem.start) }}
+      onClick={forwardOptionPressToCardSurface}
       onClickCapture={ctx.onRowClickCapture}
       onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
     >

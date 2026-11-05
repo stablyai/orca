@@ -1,22 +1,36 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectNoWindowStart,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_2,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import type { connectPanePty } from './pty-connection'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 type HiddenPaneBinding = {
   noteVisibilityResume: () => void
@@ -25,6 +39,7 @@ type HiddenPaneBinding = {
 
 const PANE_KEY = makePaneKey('tab-1', LEAF_2)
 const DEAD_SESSION_ID = 'wt-1@@dead-session'
+const MAIN_PTY_ID = 'pty-main'
 
 /** After a relaunch: one sleeping agent pane with no live PTY. */
 export function registerPtyConnectionHiddenSleepingResumeTests(): void {
@@ -71,7 +86,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     } as StoreState
   }
 
-  function connectHiddenPane(restoredPtyId: string | null): {
+  function connectHiddenPane(
+    restoredPtyId: string | null,
+    agentTitleMocks: PtyConnectionAgentTitleMocks
+  ): {
     transport: MockTransport
     binding: HiddenPaneBinding
     isVisibleRef: { current: boolean }
@@ -84,7 +102,7 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       restoredPtyIdByLeafId: restoredPtyId ? { [LEAF_2]: restoredPtyId } : {},
       isVisibleRef
     })
-    return { transport, binding: connectPane(deps), isVisibleRef }
+    return { transport, binding: connectPane(deps, agentTitleMocks), isVisibleRef }
   }
 
   /** A pane transport with no PTY until a connect binds one, as after a relaunch. */
@@ -98,13 +116,14 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     return transport
   }
 
-  function connectPane(deps: ReturnType<typeof buildPaneConnectionDeps>): HiddenPaneBinding {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [createPane(2), createManager(2), deps] as unknown as Parameters<
-      typeof connectPanePty
-    >
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connectPanePty returns the PanePtyBinding, which has both methods.
-    return connectPanePtyRef!(...args) as unknown as HiddenPaneBinding
+  function connectPane(
+    deps: ReturnType<typeof buildPaneConnectionDeps>,
+    agentTitleMocks: PtyConnectionAgentTitleMocks
+  ): HiddenPaneBinding {
+    const args = mockPanePtyArgs(createPane(2), createManager(2), deps)
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
+    return connectPanePtyRef!(...args)
   }
 
   function setHostLiveness(isLive: boolean | null): void {
@@ -113,6 +132,13 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
 
   function resumeCommands(transport: MockTransport): (string | undefined)[] {
     return transport.connect.mock.calls.map((call) => call[0]?.command)
+  }
+
+  async function expectAttachedToMainStart(transport: MockTransport): Promise<void> {
+    await expectWindowStartAskedMain(transport, PANE_KEY, mockStoreState)
+    expect(transport.connect).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionId: MAIN_PTY_ID, attachOnlyView: true })
+    )
   }
 
   describe('connectPanePty', () => {
@@ -134,6 +160,11 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       })
       await installTerminalTestGlobals()
       connectPanePtyRef = (await import('./pty-connection')).connectPanePty
+      ;(await mainLayoutApplyTransport()).reset()
+      await mainStartsPaneAs({
+        ptyId: MAIN_PTY_ID,
+        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)
+      })
     })
 
     afterEach(async () => {
@@ -142,7 +173,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
 
     it('waits for the reveal before resuming a hidden pane that has no PTY to reattach', async () => {
       seedSleepingPane(null)
-      const { transport, binding, isVisibleRef } = connectHiddenPane(null)
+      const { transport, binding, isVisibleRef } = connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
 
       expect(transport.connect).not.toHaveBeenCalled()
@@ -153,13 +187,20 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       await flushAsyncTicks(10)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectAttachedToMainStart(transport)
+        return
+      }
       expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
     })
 
     it('holds a hidden reattach the host reports gone, then reattaches it on reveal', async () => {
       seedSleepingPane(DEAD_SESSION_ID)
       setHostLiveness(false)
-      const { transport, binding, isVisibleRef } = connectHiddenPane(DEAD_SESSION_ID)
+      const { transport, binding, isVisibleRef } = connectHiddenPane(
+        DEAD_SESSION_ID,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
 
       expect(transport.connect).not.toHaveBeenCalled()
@@ -171,6 +212,11 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledTimes(1)
       // The reveal takes the same reattach a visible pane would, so the host restores its scrollback.
       expect(transport.connect.mock.calls[0]?.[0]).toMatchObject({ sessionId: DEAD_SESSION_ID })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect(transport.connect.mock.calls[0]?.[0]).toMatchObject({ attachOnlyView: true })
+        expectNoWindowStart(transport, mockStoreState)
+        return
+      }
       expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
     })
 
@@ -180,7 +226,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     ] as const)('reattaches a hidden %s session at mount', async (_label, isLive) => {
       seedSleepingPane(DEAD_SESSION_ID)
       setHostLiveness(isLive)
-      const { transport } = connectHiddenPane(DEAD_SESSION_ID)
+      const { transport } = connectHiddenPane(
+        DEAD_SESSION_ID,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -191,17 +240,44 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { requestSleepingAgentWakeOnMount } = await import('@/lib/sleeping-agent-wake-requests')
       requestSleepingAgentWakeOnMount('wt-1', ['tab-1'])
-      const { transport } = connectHiddenPane(null)
+      const { transport } = connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectAttachedToMainStart(transport)
+        return
+      }
       expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
+    })
+
+    it('keeps an initial hidden workspace-sleep wake explicit', async () => {
+      seedSleepingPane(null, { origin: 'worktree-sleep' })
+      const resumeSleptPane = vi.fn(async () => true)
+      window.api.worktrees = { ...window.api.worktrees, resumeSleptPane }
+      const { requestSleepingAgentWakeOnMount } = await import('@/lib/sleeping-agent-wake-requests')
+      requestSleepingAgentWakeOnMount('wt-1', ['tab-1'])
+      connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
+      await flushAsyncTicks(20)
+      expect(resumeSleptPane).toHaveBeenCalledWith(
+        { worktreeId: 'wt-1', tabId: 'tab-1', leafId: LEAF_2 },
+        undefined
+      )
     })
 
     it('resumes a held hidden pane immediately on a phone wake', async () => {
       seedSleepingPane(DEAD_SESSION_ID)
       setHostLiveness(false)
-      const { transport, binding } = connectHiddenPane(DEAD_SESSION_ID)
+      const { transport, binding } = connectHiddenPane(
+        DEAD_SESSION_ID,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
       expect(transport.connect).not.toHaveBeenCalled()
 
@@ -217,7 +293,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     it('owns its record while held, so an activation sweep does not relaunch it elsewhere', async () => {
       seedSleepingPane(null)
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
-      const { binding, isVisibleRef } = connectHiddenPane(null)
+      const { binding, isVisibleRef } = connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
       expect(isPaneSpawnDeferred(PANE_KEY)).toBe(true)
 
@@ -241,11 +320,16 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
           restoredLeafId: LEAF_2,
           restoredPtyIdByLeafId: { [LEAF_2]: DEAD_SESSION_ID },
           isVisibleRef: { current: false }
-        })
+        }),
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       )
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectAttachedToMainStart(transport)
+        return
+      }
       expect(resumeCommands(transport)[1]).toContain("'resume' 'codex-session-1'")
     })
 
@@ -253,7 +337,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
       const spawn = createDeferred<string>()
-      const { transport, binding, isVisibleRef } = connectHiddenPane(null)
+      const { transport, binding, isVisibleRef } = connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       transport.connect.mockImplementation(() =>
         spawn.promise.then((ptyId) => {
           transport.getPtyId.mockReturnValue(ptyId)
@@ -285,7 +372,8 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
           restoredPtyIdByLeafId: {},
           consumeSuppressedPtyExit: vi.fn(() => true),
           isVisibleRef
-        })
+        }),
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       )
       await flushAsyncTicks(10)
       isVisibleRef.current = true
@@ -296,12 +384,13 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       // Hibernation sleeps the hidden pane again: its own wake, which the activation sweep may clean around.
       isVisibleRef.current = false
       seedSleepingPane(null, { state: 'done', origin: 'worktree-sleep' })
-      mockStoreState.suppressedPtyExitIds['resumed-pty'] = true
+      const resumedPtyId = ORCA_LAYOUT_OWNER_IS_MAIN ? MAIN_PTY_ID : 'resumed-pty'
+      mockStoreState.suppressedPtyExitIds[resumedPtyId] = true
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
       if (typeof onPtyExit !== 'function') {
         throw new Error('expected the transport exit handler')
       }
-      onPtyExit('resumed-pty')
+      onPtyExit(resumedPtyId)
       await flushAsyncTicks(10)
 
       expect(isPaneSpawnDeferred(PANE_KEY)).toBe(false)
@@ -310,11 +399,18 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       binding.noteVisibilityResume()
       await flushAsyncTicks(10)
       expect(transport.connect).toHaveBeenCalledTimes(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toHaveLength(2)
+        expectNoWindowStart(transport, mockStoreState)
+      }
     })
 
     it('resumes a held pane whose record was re-captured for the same session', async () => {
       seedSleepingPane(null)
-      const { transport, binding, isVisibleRef } = connectHiddenPane(null)
+      const { transport, binding, isVisibleRef } = connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
       const held = mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]!
       mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY] = { ...held, updatedAt: 2 }
@@ -323,12 +419,19 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       binding.noteVisibilityResume()
       await flushAsyncTicks(10)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectAttachedToMainStart(transport)
+        return
+      }
       expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
     })
 
     it('drops a held wake once the record names a different session', async () => {
       seedSleepingPane(null)
-      const { transport, binding, isVisibleRef } = connectHiddenPane(null)
+      const { transport, binding, isVisibleRef } = connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
       const held = mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]!
       mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY] = {
@@ -347,7 +450,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(DEAD_SESSION_ID)
       setHostLiveness(false)
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
-      const { transport, binding, isVisibleRef } = connectHiddenPane(DEAD_SESSION_ID)
+      const { transport, binding, isVisibleRef } = connectHiddenPane(
+        DEAD_SESSION_ID,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
       const fallback = createDeferred<string>()
       // The reattach comes back with no PTY; the fallback spawn is still starting.
@@ -372,7 +478,10 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
     it('keeps holding when an exit lands that its held wake did not start', async () => {
       seedSleepingPane(null)
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
-      connectHiddenPane(null)
+      connectHiddenPane(
+        null,
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      )
       await flushAsyncTicks(10)
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
       if (typeof onPtyExit !== 'function') {

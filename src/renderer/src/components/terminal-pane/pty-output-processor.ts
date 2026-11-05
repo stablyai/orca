@@ -1,23 +1,26 @@
-import { extractAllOscTitles } from '../../../../shared/agent-detection'
+import {
+  extractAllOscTitles,
+  extractAllOscTitleEntries
+} from '../../../../shared/agent-status/title/osc-title-extraction'
 import {
   createAgentStatusOscProcessor,
   type ProgramActivityChange
-} from '../../../../shared/agent-status-osc'
-import { createProgramStatusSideEffectScanner } from '../../../../shared/terminal-agent-status-processor'
-import { extractAllOscTitleEntries } from '../../../../shared/osc-title-extraction'
+} from '../../../../shared/agent-status/transport/agent-status-osc'
+import { createProgramStatusSideEffectScanner } from '../../../../shared/program-status/terminal-agent-status-processor'
+
 import { placeProgramActivityAmongTitles } from '../../../../shared/program-status/title-activity-order'
 import {
   enqueueOrderedPtyEffects,
   removeSuppressedCursorNativeTitles
 } from './pty-output-effect-ordering'
-import { createBellDetector } from '../../../../shared/terminal-bell-detector'
+import { createBellDetector } from '../../../../shared/terminal/output/terminal-bell-detector'
 import type { PtyDataMeta } from './pty-dispatcher'
 import {
   createPtyOutputSideEffectQueue,
   type PendingPtySideEffect
 } from './pty-output-side-effect-queue'
 import { createPtyOutputTitleObserver } from './pty-output-title-observer'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
@@ -43,6 +46,7 @@ export type ProcessPtyOutputOptions = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   snapshotCols?: number
   snapshotRows?: number
   carriesNormalBuffer?: boolean
@@ -72,8 +76,7 @@ export function createPtyOutputProcessor({
   const sideEffects = createPtyOutputSideEffectQueue({
     countWorkingTitles: titleObserver.countWorkingTitles,
     apply: (effect) => {
-      // Why seeded on replay: like replayed titles, restored bytes must not move live status, yet the
-      // tracker must still agree with the scanner, which only reports later changes.
+      // Replay seeds agreement with the change-only scanner without publishing restored bytes as live status.
       for (const activity of effect.programActivity ?? []) {
         if (effect.suppressAttentionEvents) {
           titleObserver.seedProgramActivity(activity)
@@ -203,6 +206,7 @@ export function createPtyOutputProcessor({
           ? { alternateScreen: options.alternateScreen }
           : {}),
         ...(options.terminalOwner ? { terminalOwner: options.terminalOwner } : {}),
+        ...(options.lastTitle !== undefined ? { lastTitle: options.lastTitle } : {}),
         ...(options.snapshotCols !== undefined && options.snapshotRows !== undefined
           ? { snapshotCols: options.snapshotCols, snapshotRows: options.snapshotRows }
           : {}),

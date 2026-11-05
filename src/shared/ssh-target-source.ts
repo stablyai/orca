@@ -1,9 +1,6 @@
 import type { SshTarget } from './ssh-types'
 
-/**
- * Legacy manual and imported targets both lack `source`. Only the old import shape counts as
- * imported: the SSH alias kept as label/configHost while host stored the resolved HostName.
- */
+/** Missing source is ambiguous; recognize only the old import shape: label/configHost hold the alias, host holds resolved HostName. */
 export function isLegacyConfigImportTarget(
   target: Pick<SshTarget, 'label' | 'configHost' | 'host'>
 ): boolean {

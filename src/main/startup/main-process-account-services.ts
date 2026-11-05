@@ -1,22 +1,20 @@
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
-import { createProviderAccountServices } from '../provider-account-services'
-import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
-import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'
-import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
-import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
+import { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
+import { startCodexSessionBackfillInBackground } from '../codex/history/backfill/codex-session-backfill'
+import { startCodexSessionIndexHealInBackground } from '../codex/history/index/codex-session-index-heal'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
 } from '../opencode/opencode-go-api-key-store'
 import { agentHookServer } from '../agent-hooks/server'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
-import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
 
 // Settings that change which account or binary a new chat's agent runs under.
@@ -64,15 +62,9 @@ export function initializeMainProcessAccountServices(): void {
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  // Why: migrate historical shared-home sessions after startup; compatibility
-  // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
+  // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
-  const expireModelCatalogs = createAgentModelCatalogSettingsExpiry(
-    agentModelCatalogStore,
-    store.getSettings()
-  )
-  store.onSettingsChanged((updates, settings) => {
-    expireModelCatalogs(updates, settings)
+  store.onSettingsChanged((updates) => {
     // An account switch would otherwise leave the next chat's picker on a cold catalog.
     if (MODEL_CATALOG_ACCOUNT_SETTINGS.some((key) => key in updates)) {
       prewarmStructuredAgentModelCatalogs()

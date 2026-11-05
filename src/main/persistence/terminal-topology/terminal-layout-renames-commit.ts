@@ -6,13 +6,11 @@ import type {
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import { writeRestorable } from './restorable-write'
 import { applyRenamesToSession } from './terminal-pane-admission'
-import { keepFrozen, traced, type TerminalTopologyCommitContext } from './terminal-topology-commit'
+import { traced, type TerminalTopologyCommitContext } from './terminal-topology-commit'
+import { keepFrozen } from './layout-command-commit'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 
-/**
- * Many tabs' renames (`renameTabs`), each in its tab's routed partition, as one write: one frame
- * shows them all. Resolves the renames main refused.
- */
+/** Publish routed tab renames in one frame and return per-tab refusals. */
 export function applyLayoutRenames(
   batches: readonly { hostId: ExecutionHostId; renames: readonly CommandOf<'renameTab'>[] }[],
   context: TerminalTopologyCommitContext
@@ -43,7 +41,7 @@ export function applyLayoutRenames(
         ? { value: refused, persist: false }
         : { value: refused, rollback: () => restores.forEach((restore) => restore()) }
     },
-    // Refusals are per tab; the write itself is never refused.
+    // Per-tab refusals do not reject the remaining write.
     () => undefined
   )
 }

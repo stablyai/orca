@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -46,6 +49,12 @@ import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../shared/protoc
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli automation extra agent args', () => {
+  const originalExitCode = process.exitCode
+
+  afterEach(() => {
+    process.exitCode = originalExitCode
+  })
+
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -75,7 +84,9 @@ describe('orca cli automation extra agent args', () => {
       '/tmp/repo'
     )
 
+    expect(callMock).toHaveBeenCalledTimes(3)
     expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.show', { id: 'auto-1' })
     expect(callMock).toHaveBeenNthCalledWith(3, 'automation.update', {
       id: 'auto-1',
       updates: expect.objectContaining({ extraAgentArgs: '--model opus --add-dir "a b"' })
@@ -92,6 +103,8 @@ describe('orca cli automation extra agent args', () => {
 
     await main(['automations', 'edit', 'auto-1', '--extra-agent-args=', '--json'], '/tmp/repo')
 
+    expect(callMock).toHaveBeenCalledTimes(2)
+    expect(callMock).toHaveBeenNthCalledWith(1, 'automation.show', { id: 'auto-1' })
     expect(callMock).toHaveBeenNthCalledWith(2, 'automation.update', {
       id: 'auto-1',
       updates: expect.objectContaining({ extraAgentArgs: '' })
@@ -101,8 +114,6 @@ describe('orca cli automation extra agent args', () => {
   it('refuses nonempty extras on a runtime that would drop them', async () => {
     queueFixtures(callMock, okFixture('req_status', { capabilities: [] }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       ['automations', 'edit', 'auto-1', '--extra-agent-args=--model opus', '--json'],
@@ -110,9 +121,15 @@ describe('orca cli automation extra agent args', () => {
     )
 
     expect(callMock).toHaveBeenCalledTimes(1)
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Update Orca on this host to use extra arguments.'
-    )
-    process.exitCode = priorExitCode
+    expect(callMock).toHaveBeenCalledWith('status.get')
+    expect(process.exitCode).toBe(1)
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'incompatible_runtime',
+        message: expect.stringContaining('Update Orca on this host to use extra arguments.')
+      }
+    })
   })
 })

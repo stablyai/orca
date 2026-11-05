@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { sealedChildEnv } from '../runtime/structured-session-child-env.test-support'
 import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
@@ -127,7 +127,7 @@ it.skipIf(skip)(
         timeoutMs: 15_000
       })
       expect(skill.code, skill.stderr).toBe(0)
-      expect(skill.stdout).toContain('Worker obligations')
+      expect(skill.stdout).toContain('## When Orca wakes you')
       const version = await runProcess({
         program: childEnv.ORCA_CLI_COMMAND!,
         args: ['--version'],
@@ -136,7 +136,6 @@ it.skipIf(skip)(
       })
       expect(version.code, version.stderr).toBe(0)
       expect(version.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/u)
-      // A person's own selector on the server is honoured, as on any machine.
       const person = await runProcess({
         program: launcher,
         args: ['status', '--json'],

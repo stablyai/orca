@@ -4,12 +4,13 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../../../store/types'
 import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
 import { getAllWorktreesFromState } from '../../../../store/selectors'
-import { getWorkspaceStatus } from '../../workspace-status'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The cards a drag picked up, by host: a twin on another host shares each card's id. */
@@ -27,12 +28,17 @@ export function uniqueDraggedIds(copies: DraggedWorktreeCopies): string[] {
   return [...new Set(copies.map((copy) => copy.id))]
 }
 
+/** Host identities: the sidebar's drag slots and manual ranks keep same-id copies apart. */
+export function uniqueDraggedKeys(copies: DraggedWorktreeCopies): string[] {
+  return [...new Set(copies.map(getWorktreeHostIdentity))]
+}
+
 /** Which rows a drop may write for an id; empty means refuse, never guess a host. */
 export type DropWriteRows = {
   /** Status is each card's own: the dragged copies (read fresh), else the id's only row. */
   status: (worktreeId: string) => readonly Worktree[]
-  /** Manual order is ranked per id (the catalog drops a rank its copies disagree on), so every copy. */
-  order: (worktreeId: string) => readonly Worktree[]
+  /** Manual order ranks each card by host identity, so only that copy. */
+  orderByKey: (key: string) => readonly Worktree[]
 }
 
 export function dropWriteRows(
@@ -47,6 +53,20 @@ export function dropWriteRows(
   ]) {
     rowsById.set(row.id, [...(rowsById.get(row.id) ?? []), row])
   }
+  // Why lazy: board hover previews build these rows every pointer frame but never write by key.
+  let rowsByKey: Map<string, Worktree[]> | null = null
+  const getRowsByKey = (): Map<string, Worktree[]> => {
+    if (!rowsByKey) {
+      rowsByKey = new Map()
+      for (const rows of rowsById.values()) {
+        for (const row of rows) {
+          const key = getWorktreeHostIdentity(row)
+          rowsByKey.set(key, [...(rowsByKey.get(key) ?? []), row])
+        }
+      }
+    }
+    return rowsByKey
+  }
   const dragged = new Set((copies ?? []).map(getWorktreeHostIdentity))
   const draggedIds = new Set((copies ?? []).map((copy) => copy.id))
   return {
@@ -57,17 +77,17 @@ export function dropWriteRows(
       }
       return rows.length === 1 ? rows : []
     },
-    order: (worktreeId) => rowsById.get(worktreeId) ?? []
+    orderByKey: (key) => getRowsByKey().get(key) ?? []
   }
 }
 
-/** The one place a drop turns status and rank changes into per-row writes, each on its row's host. */
 export function collectDropWrites(args: {
   rowsFor: DropWriteRows
   statusIds: readonly string[]
   status: WorkspaceStatus | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  orderUpdates: ReadonlyMap<string, { manualOrder: number }>
+  /** Manual ranks keyed by host identity. */
+  orderUpdatesByKey: ReadonlyMap<string, { manualOrder: number }>
 }): WorktreeMetaBatchUpdate[] {
   const writes = new Map<string, WorktreeMetaBatchUpdate>()
   const write = (row: Worktree, updates: Partial<WorktreeMeta>): void => {
@@ -90,8 +110,8 @@ export function collectDropWrites(args: {
       }
     }
   }
-  for (const [worktreeId, manualOrder] of args.orderUpdates) {
-    for (const row of args.rowsFor.order(worktreeId)) {
+  for (const [key, manualOrder] of args.orderUpdatesByKey) {
+    for (const row of args.rowsFor.orderByKey(key)) {
       write(row, manualOrder)
     }
   }

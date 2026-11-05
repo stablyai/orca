@@ -13,7 +13,7 @@ const RELATIVE_TIME_TICK_MS = 60_000
 export function SettingsAppUpdateSection() {
   const state = useAppUpdateState()
   const [result, setResult] = useState<'up-to-date' | 'failed' | null>(null)
-  // A check newer than this reads as "just now", so the tick only has to age the label.
+  // Tick only when the relative label can age past just now.
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -32,7 +32,6 @@ export function SettingsAppUpdateSection() {
   const runCheck = () => {
     setResult(null)
     void appUpdateChecker.checkNow().then((outcome) => {
-      // An available update shows in the row above, so only the other outcomes need words here.
       setResult(outcome === 'available' ? null : outcome)
     })
   }

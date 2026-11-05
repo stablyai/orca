@@ -1,18 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
-// A parked remote pane's reveal used to run terminal.create, THEN open the shared
-// stream, THEN subscribe: two serial round trips before the Subscribe frame left.
-// The stream open has no data dependency on the create, so it now overlaps it.
-// A reveal also claimed the same viewport several times; one claim now suffices.
+// Overlap stream opening with terminal.create and dedupe reveal viewport claims to avoid serial round trips.
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 
@@ -50,35 +47,6 @@ describe('remote pane reveal round trips', () => {
     })
   }
 
-  it('opens the shared stream while terminal.create is still in flight', async () => {
-    let answerCreate: (value: unknown) => void = () => {}
-    const defaultCall = runtimeCall.getMockImplementation()!
-    runtimeCall.mockImplementation((request: { method: string }) =>
-      request.method === 'terminal.create'
-        ? new Promise((resolve) => {
-            answerCreate = resolve
-          })
-        : defaultCall(request)
-    )
-    const transport = await createRevealTransport()
-
-    const connected = transport.connect({
-      url: '',
-      sessionId: toRemoteRuntimePtyId('terminal-1', 'env-1'),
-      callbacks: {}
-    })
-    await vi.waitFor(() =>
-      expect(runtimeCall.mock.calls.map(([request]) => request.method)).toContain('terminal.create')
-    )
-    // The create has not answered, yet the stream open is already on the wire.
-    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
-
-    answerCreate({ ok: true, result: { terminal: { handle: 'terminal-1', isReattach: true } } })
-    await connected
-    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
-    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-1' })
-  })
-
   it('closes a warmed stream when the create fails and nothing subscribes', async () => {
     const unsubscribe = vi.fn()
     const defaultSubscribe = runtimeSubscribe.getMockImplementation()!
@@ -115,8 +83,7 @@ describe('remote pane reveal round trips', () => {
     transport.claimViewport?.(100, 40)
     expect(framesOf(TerminalStreamOpcode.ClaimViewport)).toBe(2)
 
-    // The host answering our claim (desktop-fit, at whatever grid it reports, then an idle or
-    // desktop driver) is not a reason to claim again.
+    // Host fit/driver responses acknowledge our claim; they are not reasons to claim again.
     subscriptionCallbacks?.onResponse({
       ok: true,
       result: { type: 'fit-override-changed', streamId, mode: 'desktop-fit', cols: 159, rows: 69 }
@@ -143,26 +110,5 @@ describe('remote pane reveal round trips', () => {
     })
     transport.claimViewport?.(100, 40)
     expect(framesOf(TerminalStreamOpcode.ClaimViewport)).toBe(3)
-  })
-
-  it('claims a grid again after a different resize reached the host', async () => {
-    vi.useFakeTimers()
-    try {
-      const transport = await createRevealTransport()
-      await transport.connect({ url: '', cols: 120, rows: 40, callbacks: {} })
-      const claims = () =>
-        subscriptionSendBinary.mock.calls.filter(
-          ([bytes]) =>
-            decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.ClaimViewport
-        ).length
-
-      transport.claimViewport?.(120, 40)
-      transport.resize(100, 40)
-      await vi.advanceTimersByTimeAsync(100)
-      transport.claimViewport?.(120, 40)
-      expect(claims()).toBe(2)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

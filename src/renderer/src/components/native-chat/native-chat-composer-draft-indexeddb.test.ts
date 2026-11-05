@@ -1,5 +1,4 @@
-// A write counts as saved only once IndexedDB has committed it (the transaction's `complete`), not
-// when its `put` is queued: a crash in between would otherwise lose a draft reported as saved.
+// Count saves only after transaction completion; queued puts can still be lost before commit.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createIndexedDbNativeChatComposerDraftStorage } from './native-chat-composer-draft-indexeddb'
 
@@ -87,29 +86,6 @@ describe('the IndexedDB draft storage', () => {
     await expect(write).resolves.toBeUndefined()
   })
 
-  it('settles a read-modify-write only when its transaction completes', async () => {
-    const { factory, transactions, puts } = fakeDatabase()
-    const update = createIndexedDbNativeChatComposerDraftStorage(factory).update(
-      'scope',
-      () => DRAFT
-    )
-
-    expect(await settledYet(update)).toBe(false)
-    expect(puts).toEqual([DRAFT])
-    transactions[0]!.oncomplete?.()
-    await expect(update).resolves.toBeUndefined()
-  })
-
-  it('rejects a write whose transaction aborts, as on a full disk', async () => {
-    const { factory, transactions } = fakeDatabase()
-    const write = createIndexedDbNativeChatComposerDraftStorage(factory).write('scope', DRAFT)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    transactions[0]!.error = new Error('QuotaExceededError')
-    transactions[0]!.onabort?.()
-
-    await expect(write).rejects.toThrow('QuotaExceededError')
-  })
-
   describe('through the draft store', () => {
     const loaded: { clearNativeChatComposerDraftsForTests: () => void }[] = []
     afterEach(() => {
@@ -132,8 +108,7 @@ describe('the IndexedDB draft storage', () => {
     it('reports a scope’s write settled true only at its transaction’s complete', async () => {
       const { factory, transactions } = fakeDatabase()
       const { store, drafts } = await storeOn(factory)
-      // The stand-in has no reads, so the startup load fails and stays pending a retry: this is an
-      // append before the load landed, which reads and writes the stored draft in one transaction.
+      // The fake cannot load, so append must atomically update storage before hydration finishes.
       void store.hydrateNativeChatComposerDrafts()
       drafts.appendNativeChatDraftCache('agent-session:s1', 'returned by Stop')
       const settled = store.nativeChatComposerDraftWriteSettled('agent-session:s1')

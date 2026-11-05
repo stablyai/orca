@@ -12,12 +12,11 @@ export const pendingAcpResolution = {
   resolvedAt: null
 } as const
 
-/** `description`: the agent's own words about what answering means, shown above the choices. */
 export function acpPermissionPresentation(
   params: unknown,
   description?: string
 ): AcpRequestPresentation {
-  // The runtime already read this request and reported any field it dropped.
+  // Runtime parsing already reported dropped fields.
   const request = readAcpPermissionRequest(params, () => {})
   if (!request) {
     throw new AcpRpcError(-32602, 'Invalid ACP permission request')
@@ -69,7 +68,6 @@ export function translateAcpRequest(
 ): {
   events: ProviderTimelineEvent[]
   presentation?: AcpRequestPresentation
-  /** Answered at once: nobody is asked. */
   settled?: { reply: unknown }
 } {
   const session = requestSessionSchema.safeParse(params)
@@ -109,8 +107,7 @@ export function translateAcpRequest(
     options.dialect.request?.(method, params) ??
     (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined)
   if (!presentation) {
-    // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x
-    // repeats each approved edit as a file write it already made): refused, with no row.
+    // OpenCode 1.x repeats completed writes through unadvertised client methods; omit their rows.
     if (UNADVERTISED_CLIENT_METHOD.test(method)) {
       return { events: [] }
     }

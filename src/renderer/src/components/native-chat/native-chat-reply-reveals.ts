@@ -3,14 +3,14 @@ import {
   createNativeChatReplyRevealTracker,
   trackNativeChatReplyRows,
   type NativeChatReplyReveals
-} from '../../../../shared/native-chat-reply-reveals'
+} from '../../../../shared/native-chat/transcript/native-chat-reply-reveals'
 
 export type { NativeChatReplyReveals }
 
 /** Absent outside a transcript: such a row neither begins nor is remembered. */
 export const NativeChatReplyRevealsContext = createContext<NativeChatReplyReveals | null>(null)
 
-/** This transcript's reveals, for the rows it has now. The same object every render. */
+/** Keep reveal state identity stable across renders of this transcript’s current rows. */
 export function useNativeChatReplyReveals(
   rowKeys: readonly string[],
   loadedMessageIds: ReadonlySet<string>

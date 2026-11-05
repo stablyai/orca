@@ -1,6 +1,5 @@
-// The one read of the ORCA_LAYOUT_OWNER build switch: 'main' turns on the dark path where main
-// decides every layout change. Off in every shipped build; deleted with the old path (phase F).
-// Every switch point branches on ORCA_LAYOUT_OWNER_IS_MAIN, so grep finds them all.
+// Centralize ORCA_LAYOUT_OWNER so all branch points are searchable; main enables the dark path.
+// Off in shipped builds; remove with the old path in phase F.
 
 /** Substituted by electron.vite.config.ts; absent (off) in tests, the CLI and the web client. */
 declare const ORCA_LAYOUT_OWNER: 'window' | 'main' | undefined

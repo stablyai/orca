@@ -3,18 +3,16 @@ import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-tab-open'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+} from '@/lib/workspace-browser-route-eligibility'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 
-/** The chat transcript has no PTY, so link ownership comes from the session's
- *  workspace: a runtime id wins, then an SSH connection; an unresolved owner
- *  stays 'unknown' rather than claiming local. */
+/** Without a PTY, resolve runtime then SSH from the workspace; unresolved ownership remains unknown. */
 export function resolveNativeChatHttpLinkSourceOwner(
   state: AppState,
   worktreeId: string
 ): HttpLinkSourceOwner {
-  const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (runtimeEnvironmentId) {
     return { kind: 'runtime', runtimeEnvironmentId }
   }

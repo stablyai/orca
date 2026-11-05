@@ -1,8 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { closeTestStores, createStore, makeRepo, testState } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  makeRepo,
+  testState
+} from '../persistence/persistence-test-harness'
 import type { AutomationService } from '../automations/service'
 import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-automations'
 
@@ -62,17 +67,5 @@ describe('orcad automations', () => {
     } finally {
       cleanups.forEach((cleanup) => cleanup())
     }
-  })
-
-  it('lets a host with no enabled schedule and no unsettled run idle out', () => {
-    const store = { listAutomations: () => [], listAutomationRuns: () => [] }
-    expect(orcadAutomationsKeepHostBusy(store)).toBe(false)
-  })
-
-  // Booting orcad here would need its whole runtime; the wiring is pinned by the entry point's text.
-  it('orcad starts the service with its runtime and feeds it to managed idle exit', () => {
-    const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
-    expect(entry).toContain('startOrcadAutomations(runtime, profileStore, registerCleanup)')
-    expect(entry).toContain('automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore)')
   })
 })

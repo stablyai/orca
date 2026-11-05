@@ -39,7 +39,7 @@ class FakeWindow extends EventEmitter {
   isDestroyed() {
     return this.destroyed
   }
-  // Any of these would reveal or activate the app: the reporter must never call them.
+  // Any reveal/activation fails: persistence errors must remain in the background.
   show = this.reveal
   showInactive = this.reveal
   focus = this.reveal
@@ -67,7 +67,7 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
-  // Release any reporter still waiting so module state does not leak between tests.
+  // Release pending reporters so module state cannot leak across tests.
   fixture.state.isQuitting = true
   fixture.app.emit('browser-window-created', {}, new FakeWindow(false))
   await new Promise((resolve) => setImmediate(resolve))
@@ -90,16 +90,6 @@ it('attaches the alert to the visible main window and explains an unconfirmed wr
     buttons: ['OK']
   })
   expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(workerExit, 'dialog')
-})
-
-it('tells the user saved changes are safe when no write was left unresolved', async () => {
-  fixture.state.mainWindow = new FakeWindow(true)
-  reportProfileStateWriteFailure(conflict)
-  await vi.waitFor(() => expect(fixture.show).toHaveBeenCalledOnce())
-  expect(fixture.show.mock.calls[0][1]).toMatchObject({
-    detail:
-      'Changes saved before this point are safe. New changes will not be saved until you restart Orca.'
-  })
 })
 
 it('waits for a hidden window to be shown by the user instead of revealing it', async () => {

@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Why: Windows hook tests must run the registered command through MSYS too — it
-// rewrites switches and paths, so a launcher can pass under cmd.exe and fail here.
+// MSYS rewrites paths and switches, so Windows hook tests also exercise Git Bash.
 export function findGitBash(): string {
   if (process.env.KIMI_SHELL_PATH) {
     return process.env.KIMI_SHELL_PATH

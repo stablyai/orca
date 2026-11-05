@@ -11,8 +11,7 @@ const PENDING_POINTER_ENTER_INDEX_SQL = `
     WHERE read = 0 AND pointer_enter_pending > 0;
 `
 
-/** v31 identity columns that were never read back; creator_dispatch_id, host_scope, depth, and
- *  retry_of_dispatch_id (published as `retryOfDispatchId`) stay. */
+/** Remove unread v31 identity columns while retaining creator Dispatch, host, depth and retry identity. */
 const DROPPED_DISPATCH_IDENTITY_COLUMNS = [
   'creator_role',
   'endpoint_id',
@@ -21,18 +20,12 @@ const DROPPED_DISPATCH_IDENTITY_COLUMNS = [
   'resource_id'
 ] as const
 
-/**
- * Databases stamped v34 by the pre-fix build kept the old deliveries shape: v34 early-returns at
- * `>= 34`, and every index probe uses IF NOT EXISTS, so whichever predicate ran first survives.
- * Re-apply both halves against the stored SQL rather than the version stamp.
- */
+/** Repair stored schema directly: early v34 stamps could retain old delivery columns and index predicates. */
 export function migrateV35(this: OrchestrationDb, current: number): void {
   if (current >= 35) {
     return
   }
-  // The write-only lifecycle ledger is gone. Old delete triggers still reference it, and
-  // CREATE TRIGGER IF NOT EXISTS cannot replace a body, so drop all three and rebuild the two
-  // that survive.
+  // Drop obsolete lifecycle triggers; IF NOT EXISTS cannot replace their bodies.
   this.db.exec(`
     DROP TRIGGER IF EXISTS trg_tasks_delete_additive_lifecycle;
     DROP TRIGGER IF EXISTS trg_dispatches_delete_additive_lifecycle;

@@ -17,27 +17,29 @@ import {
   STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
   structuredAgentRuntimeRegistration
 } from '../runtime/structured-agent-runtime-registrations'
-import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/structured-agent-session-create-adoption'
+import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { writeOpenCodeSqliteDatabase } from '../ai-vault/session-scanner-opencode-sqlite-fixture'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { writeOpenCodeSqliteDatabase } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { resolveOpenCodeDatabasePath } from '../opencode/opencode-data-directory'
 import * as hostReadableTranscriptPath from './host-readable-transcript-path'
 
-// The OpenCode reader's worker, run in process.
-vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
-  const query = await import('./transcript-opencode-sqlite-query')
-  return {
-    ...(await importOriginal<object>()),
-    readOpenCodeTranscriptPageViaWorker: async (
-      args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
-    ) => query.readOpenCodeTranscriptPage(args),
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (importOriginal) => {
+    const query = await import('./transcript-opencode-sqlite-query')
+    return {
+      ...(await importOriginal<object>()),
+      readOpenCodeTranscriptPageViaWorker: async (
+        args: Parameters<typeof query.readOpenCodeTranscriptPage>[0]
+      ) => query.readOpenCodeTranscriptPage(args),
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 
 const SESSION_ID = '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a'
 let root: string | null = null
@@ -47,7 +49,7 @@ async function createAdoptionTestDirectory(prefix: string): Promise<string> {
 }
 
 beforeEach(() => {
-  // Grok and Pi also look where Session History lists them from; keep that off the real home.
+  // Keep fallback history discovery away from real user homes.
   vi.stubEnv('GROK_HOME', join(tmpdir(), 'orca-adopt-no-grok-home'))
   vi.stubEnv('PI_CODING_AGENT_DIR', join(tmpdir(), 'orca-adopt-no-pi-home'))
 })
@@ -62,7 +64,6 @@ afterEach(async () => {
   root = null
 })
 
-/** Each agent's CLI conversation as its own CLI lays it out under an account home. */
 const RECORDED: Record<'grok' | 'omp' | 'pi', (home: string, text: string) => Promise<string>> = {
   grok: async (home, text) => {
     const dir = join(home, 'sessions', encodeURIComponent('/repo/orca'), SESSION_ID)
@@ -100,7 +101,7 @@ const RECORDED: Record<'grok' | 'omp' | 'pi', (home: string, text: string) => Pr
     )
     return file
   },
-  // Pi's documented format: a system message carries the prompt in `sections`, its content empty.
+  // Pi system prompts live in sections with empty content.
   pi: async (home, text) => {
     const dir = join(home, 'sessions', '--repo-orca--')
     await mkdir(dir, { recursive: true })
@@ -172,7 +173,6 @@ describe('which chats can take over a CLI conversation', () => {
         expect(registration?.sessionHistory.rowAgents, `${agent} takes over ${row}`).toContain(row)
       }
     }
-    // Each importing chat takes over the rows of its own name first.
     for (const registration of importing) {
       const { agent } = registration.definition
       if (adoptsCliConversations(agent)) {
@@ -307,7 +307,7 @@ it.each(['win32', 'linux', 'darwin'] as const)(
     )
     const nativePlatform = process.platform
     const needsWslResolution = hostReadableTranscriptPath.needsWslHostResolution
-    // Simulated home precedence still reads fixture paths native to the actual host.
+    // Simulate home precedence while retaining fixture paths native to the actual host.
     vi.spyOn(hostReadableTranscriptPath, 'needsWslHostResolution').mockImplementation((path) =>
       needsWslResolution(path, nativePlatform)
     )

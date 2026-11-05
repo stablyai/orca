@@ -48,7 +48,7 @@ export class ProjectGroupPersistenceOperations {
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
     let maxOrder = -1
-    // Why: persisted group lists can be large enough to exceed spread limits.
+    // Large persisted lists can exceed spread argument limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
     }
@@ -95,7 +95,7 @@ export class ProjectGroupPersistenceOperations {
     if ((this.state.projectGroups?.length ?? 0) === before) {
       return false
     }
-    // Why: groups are sidebar organization only, so deleting one ungroups its repos rather than deleting them.
+    // Sidebar grouping does not own repos; ungroup them rather than delete them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
         ? { ...repo, projectGroupId: null }
@@ -108,7 +108,7 @@ export class ProjectGroupPersistenceOperations {
         this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }
-    // Every partition, not just the local blob: the same reason `removeFolderWorkspace` does.
+    // Remove all partition copies or folder layouts could resurrect on load.
     removeWorkspaceSessionOwnersEverywhere(this.state, removedFolderWorkspaceKeys)
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)

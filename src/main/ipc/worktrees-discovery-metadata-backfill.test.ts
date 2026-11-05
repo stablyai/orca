@@ -1,21 +1,84 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import { makeWorktreeMeta, expectDetectedWorktreeListResult } from './worktrees-test-fixtures'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+    listWorktreesSharedStrictAllowingTrueEmpty: (await import('./worktrees-test-module-mocks'))
+      .listWorktreesMock,
+    listWorktreesSharedStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
-vi.mock('../git/runner', async () =>
-  (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
-)
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await import('./worktrees-test-module-mocks'))
+    .assertWorktreeCleanForRemovalMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await import('./worktrees-test-module-mocks')).addWorktreeMock
+}))
+
+vi.mock('../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await import('./worktrees-test-module-mocks')).addSparseWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await import('./worktrees-test-module-mocks')).removeWorktreeMock
+}))
+
+vi.mock('../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await import('./worktrees-test-module-mocks')).forceDeleteLocalBranchMock
+}))
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock,
+  describeCreatedWorktree: (await import('./worktrees-test-module-mocks'))
+    .describeCreatedWorktreeMock
+}))
+const { getWorktreeRunnerMocks } = vi.hoisted(() => {
+  function createWorktreeRunnerMocks() {
+    return (async () => (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock())()
+  }
+  let runner: ReturnType<typeof createWorktreeRunnerMocks> | undefined
+  return { getWorktreeRunnerMocks: () => (runner ??= createWorktreeRunnerMocks()) }
+})
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: (await getWorktreeRunnerMocks()).gitExecFileAsync
+}))
+
+vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileSync: (await getWorktreeRunnerMocks()).gitExecFileSync
+}))
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
+vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
+}))
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
@@ -24,32 +87,40 @@ vi.mock('../git/git-username', async (importOriginal) => ({
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
-vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
-vi.mock('../setup-runner-script-text', async (importOriginal) =>
+
+vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: (await import('./worktrees-test-module-mocks'))
+    .findExistingWorktreeSymlinkPathsMock
+}))
+vi.mock('../workspace-hooks/hooks', async () =>
+  (await import('./worktrees-test-module-mocks')).hooksModuleMock()
+)
+vi.mock('../workspace-hooks/setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../worktree-runner-script', async (importOriginal) =>
+vi.mock('../workspace-hooks/worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../effective-hook-config', async (importOriginal) =>
+vi.mock('../workspace-hooks/effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../setup-hook-env-vars', async (importOriginal) =>
+vi.mock('../workspace-hooks/setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
@@ -59,22 +130,22 @@ vi.mock('./worktree-logic', async (importOriginal) =>
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('../terminal-history-deletion', async () =>
+vi.mock('../pty/history/terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
-vi.mock('../workspace-cleanup-scan-snapshot', async () =>
+vi.mock('../workspaces/cleanup/workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
-vi.mock('../workspace-space-analysis-snapshot', async () =>
+vi.mock('../workspaces/space-analysis/workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
-vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
+vi.mock('../workspaces/cleanup/workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>
@@ -90,7 +161,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery so newly-added worktrees sort to the top of Recent', async () => {
-    // Why: a worktree on disk with no persisted WorktreeMeta would otherwise fall back to lastActivityAt: 0 and rank dead last in Recent.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/discovered-wt',
@@ -109,10 +179,11 @@ describe('registerWorktreeHandlers', () => {
     }
     store.setWorktreeMeta.mockReturnValue(stampedMeta)
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      lastActivityAt: number
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/discovered-wt', hostId: 'local' }),
@@ -130,7 +201,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('backfills project-host ownership without re-stamping lastActivityAt for existing meta', async () => {
-    // Why: only first discovery stamps (re-stamping would reshuffle the sidebar); host ownership is still backfilled since it derives from repo setup.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -160,13 +230,11 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      lastActivityAt: number
-      projectId?: string
-      hostId?: string
-      projectHostSetupId?: string
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/existing-wt', hostId: 'local' }),
@@ -185,7 +253,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('repairs legacy project ids when discovery now resolves the same host setup to a logical project', async () => {
-    // Why: provider identity can arrive after metadata was written; existing workspaces must move to the logical project ID without losing activity ordering.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -232,13 +299,11 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      lastActivityAt: number
-      projectId?: string
-      hostId?: string
-      projectHostSetupId?: string
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/existing-wt', hostId: 'local' }),
@@ -286,8 +351,8 @@ describe('registerWorktreeHandlers', () => {
       linkedPR: null,
       instanceId: 'existing-instance',
       projectId: 'github:other/project',
-      hostId: 'ssh:ssh-target-1',
-      projectHostSetupId: 'repo-other-host',
+      hostId: 'local',
+      projectHostSetupId: 'repo-other-setup',
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -295,8 +360,15 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+    const result = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    )
 
+    expect(result.authoritative).toBe(true)
+    expect(result.worktrees[0]).toMatchObject({
+      id: 'repo-1::/workspace/existing-wt',
+      projectId: 'github:other/project'
+    })
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
@@ -309,6 +381,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'ssh-target-1'
     }
+    store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-ssh::/remote/orca': makeWorktreeMeta({
@@ -343,13 +416,11 @@ describe('registerWorktreeHandlers', () => {
       })
     )
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-ssh' })) as {
-      id: string
-      projectId?: string
-      hostId?: string
-      projectHostSetupId?: string
-      lastActivityAt: number
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-ssh'
+      })
+    )
 
     expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -395,8 +466,14 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+    const result = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    )
 
+    expect(result.authoritative).toBe(true)
+    expect(result.worktrees.map((worktree) => worktree.id)).toContain(
+      'repo-1::/workspace/existing-wt'
+    )
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
@@ -429,10 +506,11 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 42
     })
 
-    const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
-      id: string
-      instanceId?: string
-    }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/existing-wt', hostId: 'local' }),
@@ -452,7 +530,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery for folder-mode repos', async () => {
-    // Why: folder repos produce a synthetic worktree; without the stamp a just-added folder sorts to the bottom of Recent.
     store.getRepos.mockReturnValue([
       {
         id: 'repo-1',
@@ -479,7 +556,7 @@ describe('registerWorktreeHandlers', () => {
       lastActivityAt: 1_700_000_000_000
     })
 
-    await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/folder', hostId: 'local' }),
@@ -492,37 +569,8 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('stamps lastActivityAt on first discovery via worktrees:listAll', async () => {
-    // Why: stamping logic is duplicated in worktrees:list and worktrees:listAll; a listAll regression would silently bury newly-discovered worktrees.
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: '/workspace/discovered-wt',
-        head: 'abc123',
-        branch: 'refs/heads/feature',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    store.getWorktreeMeta.mockReturnValue(undefined)
-    store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
-
-    const listed = (await handlers['worktrees:listAll'](null, undefined)) as {
-      id: string
-      lastActivityAt: number
-    }[]
-
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/discovered-wt', hostId: 'local' }),
-      expect.objectContaining({ lastActivityAt: expect.any(Number) })
-    )
-    expect(listed[0]).toMatchObject({
-      id: 'repo-1::/workspace/discovered-wt',
-      lastActivityAt: 1_700_000_000_000
-    })
-  })
-
-  it('omits prunable worktrees from worktrees:listAll', async () => {
-    // Why: a prunable registration has no working directory (issue #8389), so surfacing it yields repeated pty/fs failures and a blank pane.
+  it('omits prunable worktrees from worktrees:listDetected', async () => {
+    // Prunable registrations have no working directory; listing them causes PTY/filesystem failures.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/repo',
@@ -551,87 +599,14 @@ describe('registerWorktreeHandlers', () => {
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({ lastActivityAt: 1_700_000_000_000 })
 
-    const listed = (await handlers['worktrees:listAll'](null, undefined)) as { id: string }[]
+    const { worktrees: listed } = expectDetectedWorktreeListResult(
+      await handlers['worktrees:listDetected'](null, {
+        repoId: 'repo-1'
+      })
+    )
     const listedIds = listed.map((worktree) => worktree.id)
 
     expect(listedIds).toContain('repo-1::/workspace/live-wt')
     expect(listedIds).not.toContain('repo-1::/workspace/stale-wt')
-  })
-
-  it('limits concurrent repo scans in worktrees:listAll while preserving order', async () => {
-    const repos = Array.from({ length: 10 }, (_, index) => ({
-      id: `repo-${index}`,
-      path: `/workspace/repo-${index}`,
-      displayName: `repo-${index}`,
-      badgeColor: '#000',
-      addedAt: 0
-    }))
-    store.getRepos.mockReturnValue(repos)
-    let activeScans = 0
-    let maxActiveScans = 0
-    let notifyScanStarted: (() => void) | undefined
-    const waitForScanCount = async (count: number): Promise<void> => {
-      while (listWorktreesMock.mock.calls.length < count) {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(
-            () => reject(new Error(`Timed out waiting for ${count} scans`)),
-            1000
-          )
-          notifyScanStarted = () => {
-            clearTimeout(timeout)
-            resolve()
-          }
-        })
-      }
-    }
-    const pendingScans: (() => void)[] = []
-    listWorktreesMock.mockImplementation(
-      async (
-        repoPath: string
-      ): Promise<
-        { path: string; head: string; branch: string; isBare: false; isMainWorktree: true }[]
-      > => {
-        activeScans += 1
-        maxActiveScans = Math.max(maxActiveScans, activeScans)
-        await new Promise<void>((resolve) => {
-          pendingScans.push(resolve)
-          notifyScanStarted?.()
-          notifyScanStarted = undefined
-        })
-        activeScans -= 1
-        return [
-          {
-            path: repoPath,
-            head: 'abc123',
-            branch: 'refs/heads/main',
-            isBare: false,
-            isMainWorktree: true
-          }
-        ]
-      }
-    )
-
-    const listPromise = handlers['worktrees:listAll'](null, undefined) as Promise<
-      { path: string }[]
-    >
-    await Promise.resolve()
-
-    expect(listWorktreesMock).toHaveBeenCalledTimes(8)
-    expect(maxActiveScans).toBe(8)
-
-    for (const resolve of pendingScans.splice(0)) {
-      resolve()
-    }
-    await waitForScanCount(10)
-
-    expect(listWorktreesMock).toHaveBeenCalledTimes(10)
-
-    for (const resolve of pendingScans.splice(0)) {
-      resolve()
-    }
-    const listed = await listPromise
-
-    expect(maxActiveScans).toBe(8)
-    expect(listed.map((worktree) => worktree.path)).toEqual(repos.map((repo) => repo.path))
   })
 })

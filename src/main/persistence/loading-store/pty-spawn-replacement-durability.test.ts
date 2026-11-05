@@ -1,4 +1,4 @@
-import { isTerminalSessionStorageCapacityFailure } from '../../../shared/terminal-session-state-save-failure'
+import { isTerminalSessionStorageCapacityFailure } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 import { afterEach, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { deferred, fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
@@ -185,7 +185,6 @@ it.each(
     const deps = createPtySpawnCommitDependencies(runtime, store)
     vi.spyOn(store, 'persistPtyBinding').mockImplementation(async () => {
       if (exitsDuringSave) {
-        // The provider's exit listener, as local-configure wires it.
         clearProviderPtyState(binding.ptyId)
         ptyOwnership.delete(binding.ptyId)
         await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, {
@@ -236,7 +235,6 @@ it.each(
     const { store } = await fixture()
     const runtime = new OrcaRuntimeService(store)
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
-    // The provider's exit listener ran before the commit recorded ownership.
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
     const deps = createPtySpawnCommitDependencies(runtime, store)
     if (saveAndShutdownFail) {
@@ -281,7 +279,7 @@ it.each(['ipc', 'runtime'])(
     await runtime.onPtyExit(binding.ptyId, 0, replacementIncarnation, {
       providerExitObserved: true
     })
-    // A daemon respawn under the same id does not reset that id-keyed verdict.
+    // Same-ID daemon respawn does not reset an ID-keyed exit verdict.
     const deps = createPtySpawnCommitDependencies(runtime, store)
     let commit: () => Promise<unknown>
     if (controller === 'ipc') {

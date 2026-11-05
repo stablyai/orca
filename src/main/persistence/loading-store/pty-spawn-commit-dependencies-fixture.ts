@@ -20,7 +20,6 @@ export function createPtySpawnCommitDependencies(
     adoptStablePane: unexpectedPreflight,
     assertWorkspaceAcceptsNewPty: unexpectedPreflight,
     resolvePtySpawnStartupCwd: unexpectedPreflight,
-    localStartupCwdDirectoryExists: unexpectedPreflight,
     prepareCodexResumeHome: unexpectedPreflight,
     noCodexResumeLaunch: unexpectedPreflight,
     resolveCodexResumeLaunch: unexpectedPreflight,

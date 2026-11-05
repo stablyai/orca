@@ -1,10 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-/**
- * The profile the `orca serve` CLI resolved for this launch. The Electron child refuses to serve
- * on any other profile, so it can never take (or message the owner of) another profile's lock.
- */
+/** Fence the Electron child to the CLI-resolved profile, preventing acquisition or messaging of another profile’s lock. */
 export const SERVE_USER_DATA_PATH_ENV = 'ORCA_SERVE_USER_DATA_PATH'
 
 function canonicalUserDataPath(path: string, platform: NodeJS.Platform): string {

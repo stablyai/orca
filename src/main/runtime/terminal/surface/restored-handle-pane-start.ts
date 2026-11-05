@@ -1,6 +1,4 @@
-// Layout-owner builds: a CLI or orchestration send, wait or read on a handle whose pane main holds
-// with no terminal yet (a saved pane not started since restore) starts it through main's one
-// starter, then acts on the started terminal.
+// Send/wait/read on an unstarted restored pane shares main's starter, then acts on its terminal.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../wait/terminal-interactive-wait'
 import { startedMainTerminalSurfaces } from './main-terminal-surfaces'
@@ -8,11 +6,7 @@ import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../../orca-runtime-core'
 import type { RestoredPane } from '../recovery/restored-pane-start'
 
 export abstract class OrcaRuntimeWithRestoredHandlePaneStart extends OrcaRuntimeWithGetTerminalInteractiveWait {
-  /**
-   * Null unless the handle names a saved pane main holds with no terminal yet; then the started
-   * terminal's own handle, to act on until main's layout binds the pane and the caller's handle
-   * adopts the terminal (adoptFirstPtyForLeafHandle). Null keeps the caller synchronous.
-   */
+  /** Return null synchronously unless main must start this saved pane; use the started terminal's handle until binding/adoption catches up. */
   startRestoredHandlePane(
     handle: string,
     bounds: { signal?: AbortSignal; timeoutMs?: number } = {}
@@ -24,8 +18,8 @@ export abstract class OrcaRuntimeWithRestoredHandlePaneStart extends OrcaRuntime
     return withinCallerBounds(this.ensureRestoredPaneStarted(pane), {
       ...bounds,
       startTimeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
-    }).then((ptyId) => {
-      const pty = ptyId === null ? undefined : this.ptysById.get(ptyId)
+    }).then((started) => {
+      const pty = started === null ? undefined : this.ptysById.get(started.id)
       if (!pty) {
         throw new Error('terminal_not_found')
       }
@@ -50,11 +44,7 @@ export abstract class OrcaRuntimeWithRestoredHandlePaneStart extends OrcaRuntime
   }
 }
 
-/**
- * The start, or the first of: the caller's abort, the caller's deadline (`timeout`), or the start's
- * own cap (`runtime_timeout`, the pending-terminal create bound), so no caller waits on a start
- * forever. The shared start itself runs on.
- */
+/** Bound this caller by abort/deadline/start cap; the shared start continues for other callers. */
 function withinCallerBounds<T>(
   start: Promise<T>,
   {

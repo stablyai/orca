@@ -1,15 +1,28 @@
 import {
+  type AgentSessionHistoryDirection,
+  type AgentSessionSubagentRosterEntry,
+  AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
+  AGENT_SESSION_HISTORY_MAX_LIMIT
+} from '../../../shared/agent-session/agent-session-wire'
+import {
   agentJournalSubmissionKey,
   boundJournalKeyComponent
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
+  AgentJournalSnapshot,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
-import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
-import { subagentFoldKey, subagentItemBlock } from '../../../shared/native-chat-subagent-items'
+import { agentSessionHostStatusBody } from '../../../shared/agent-session/view/agent-session-host-status-rows'
+import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
+import {
+  subagentFoldKey,
+  subagentItemBlock
+} from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -18,11 +31,9 @@ const HISTORY_PAGE_ENVELOPE_RESERVE_BYTES = 64 * 1024
 export const HISTORY_PAGE_CONTENT_BUDGET_BYTES =
   AGENT_SESSION_HISTORY_MAX_PAGE_BYTES - HISTORY_PAGE_ENVELOPE_RESERVE_BYTES
 
-/** Everything a bounded frame carries beside its rows: the bridge envelope, ids and cursors, the
- *  subagent roster, the latest turn and the activity line, each held to its own bound. */
+/** Reserve bridge/envelope metadata separately from row content. */
 const FRAME_METADATA_CEILING_BYTES = 64 * 1024
 
-/** The rows' share of a phone's bridge frame, which its app ends a stream over. */
 export const BOUNDED_FRAME_CONTENT_BUDGET_BYTES =
   MOBILE_BRIDGE_MAX_FRAME_BYTES - FRAME_METADATA_CEILING_BYTES
 
@@ -33,8 +44,25 @@ export function historyEntryBytes(
   return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
 }
 
-// Keyed on the snapshot's own submissions array, which the reducer rebuilds on
-// every change, so a paged read over one snapshot serializes submissions once.
+/** Count removal IDs and submissions alongside the exact items sent to a reader. */
+export function historyContentBytes(
+  items: readonly HistoryItemForm[],
+  removedItemIds: readonly string[],
+  submissionBytes: ReadonlyMap<string, number>
+): number {
+  return (
+    items.reduce(
+      (total, { item, bytes }) => total + bytes + (submissionBytes.get(item.itemId) ?? 0),
+      0
+    ) +
+    removedItemIds.reduce(
+      (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
+      0
+    )
+  )
+}
+
+// Snapshot arrays change with submissions, so cache serialization once per paged snapshot.
 const bytesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],
   ReadonlyMap<string, number>
@@ -74,14 +102,19 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
   return { item, bytes: Buffer.byteLength(JSON.stringify(item), 'utf8') }
 }
 
-/** How a reader receives each item, and the bytes its page may hold of them. A page is measured
- *  in that form, so it carries what it will actually send. */
+/** Measure pages in the exact form sent to each reader. */
 export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
   budgetBytes: number
+  /** Forward reads project touched identities; cold reads include retained sources before bounds. */
+  snapshot?: (
+    journal: AgentSessionJournal,
+    snapshot?: AgentJournalSnapshot,
+    touched?: ReadonlySet<string>
+  ) => AgentJournalSnapshot
+  queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
 }
 
-/** Rows are put in `form` only as the page takes them. */
 export function boundHistoryItemsByBytes(
   items: AgentJournalRenderItem[],
   keep: 'newest' | 'oldest',
@@ -115,9 +148,7 @@ export function boundHistoryItemsByBytes(
   }
 }
 
-/** Adjacent same-sequence runs, walked from the end (`newest`) or the start (`oldest`)
- *  so a caller that stops at its window never groups the history it will not return.
- *  Groups and their items keep the order the eager forward grouping produced. */
+/** Group only visited adjacent sequence runs, preserving item order in either traversal direction. */
 function* groupItemsBySequence(
   items: readonly AgentJournalRenderItem[],
   keep: 'newest' | 'oldest'
@@ -160,9 +191,7 @@ export function newestWholeSequenceGroups(
   return selected.toReversed().flat()
 }
 
-/** `start` moved back to the first sibling of every subagent group the window holds part of, but
- *  never past `floor`: a group spread over a long turn, or helpers outside any turn, may still
- *  split rather than grow the page without bound. */
+/** Include whole sibling groups where possible; floor prevents long groups from growing pages unbounded. */
 export function wholeSubagentGroupsStart(
   items: readonly AgentJournalRenderItem[],
   start: number,
@@ -184,4 +213,29 @@ export function wholeSubagentGroupsStart(
     }
   }
   return whole
+}
+
+export function resolveHistoryLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return AGENT_SESSION_HISTORY_DEFAULT_LIMIT
+  }
+  return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
+}
+
+export function isSubagentRow(item: AgentJournalRenderItem): boolean {
+  return item.body.kind === 'message' && item.body.blocks.some(isSubagentBlock)
+}
+
+export type HistoryPageInput = {
+  snapshot: AgentJournalSnapshot
+  submissions?: AgentJournalSnapshot['submissions']
+  direction: AgentSessionHistoryDirection
+  items: AgentJournalRenderItem[]
+  removedItemIds?: string[]
+  hasOlder: boolean
+  hasNewer: boolean
+  fallbackCursor: AgentJournalCursor
+  nextCursor: AgentJournalCursor | undefined
+  fence?: number
+  subagentRoster?: AgentSessionSubagentRosterEntry[]
 }

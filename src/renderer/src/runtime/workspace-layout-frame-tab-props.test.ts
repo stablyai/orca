@@ -1,9 +1,8 @@
-// Tab properties in a layout-owner build: main's pin, color or rename, drawn from its frame, must
-// look as the window's own action does today, and must restart the same.
+// Main’s frame-drawn pin/color/rename must match current window actions and survive restart in layout-owner builds.
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { testContext } from '../../../shared/workspace-layout/workspace-layout-command.test-fixture'
@@ -78,10 +77,7 @@ afterEach(() => {
 
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-/**
- * What the user sees of the tabs: the startup view (order, groups, labels, titles, panes) plus each
- * tab's pin, preview and color. Record order in the slices and a row's own sortOrder are not shown.
- */
+/** Compare visible startup view plus pin/preview/color; slice order and row sortOrder are not visible. */
 function shownTabs(state: AppState): Record<string, unknown> {
   const view = projectStartupWindowView(state)
   for (const [key, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
@@ -194,7 +190,8 @@ const CASES: Case[] = [
     mainShows: { [`${GIT_KEY} terminal term-agent phone and CLI title`]: 'Terminal 2' }
   },
   {
-    name: 'rename a chat',
+    // A chat's name lives on its host; only a host too old to save it keeps the name on the tab.
+    name: 'rename a chat whose host cannot save names',
     command: {
       type: 'renameTab',
       workspace: GIT_KEY,
@@ -202,7 +199,7 @@ const CASES: Case[] = [
       kind: 'custom',
       title: 'Review'
     },
-    windowAction: (state) => state.setTabCustomTitle('agent-session-1', 'Review')
+    windowAction: (state) => state.setTabCustomLabel('agent-session-1', 'Review')
   },
   {
     name: 'color a terminal',
@@ -247,7 +244,7 @@ const CASES: Case[] = [
     session: previewSession,
     command: PIN_PREVIEW,
     windowAction: (state) => state.pinFile(APP_FILE, 'editor:src/app.ts'),
-    // Preview stays the window's until main opens files (phase C4).
+    // Main's copy keeps the preview until the window's keep reaches main.
     mainCopyLags: {
       [`${GIT_KEY} tab editor:src/app.ts props`]: { pinned: true, preview: true, color: null }
     }
@@ -281,10 +278,15 @@ describe('tab properties through main', () => {
       const mainCopy = { ...expected, ...entry.mainCopyLags }
       expect(shownTabs(drawn.getState())).toEqual(mainCopy)
 
-      // Main's answer then runs the window's action: its frame drew the change, so only what the
-      // window still owns (a preview's end) changes, which leaves what today's action shows.
+      // Frame already drew the command result; answer changes only window-owned preview state for parity with current actions.
       entry.windowAction(drawn.getState())
       await layoutApplyTestTransport.settle()
+      // A preview's end goes to main as well; its frame draws it.
+      const promotes = layoutApplyTestTransport.sentOfType('promotePreviewTab')
+      if (promotes.length > 0) {
+        stream.onFrame!(frameOf(promotes.reduce(mainApplies, afterMain)))
+        await flushMicrotasks()
+      }
       expect(shownTabs(drawn.getState())).toEqual(expected)
       sync.close()
 

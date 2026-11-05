@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import type { GhosttyImportPreview } from '../../../../shared/global-settings-types'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 import type { DiscoveryState } from './ThemeStep'
@@ -13,11 +13,9 @@ export function GhosttyDiscoveryRow({
   discovery: DiscoveryState
   importing: boolean
   disabled: boolean
-  onImport: (preview: GhosttyImportPreview) => void
+  onImport: (preview: TerminalConfigImportPreview) => void
 }) {
-  // Why: 'idle' is the pre-effect state that persists on non-Mac (the
-  // discovery effect short-circuits there), so render nothing instead of
-  // showing the dashed-border "Looking for a Ghostty config..." placeholder.
+  // Non-Mac discovery remains idle; hide it instead of leaving a permanent looking placeholder.
   if (discovery.status === 'absent' || discovery.status === 'idle') {
     return null
   }
@@ -85,7 +83,7 @@ export function GhosttyDiscoveryRow({
         onClick={() => onImport(preview)}
       >
         {importing
-          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing...')
+          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing…')
           : translate('auto.components.onboarding.ThemeStep.248c812283', 'Import')}
       </button>
     </div>

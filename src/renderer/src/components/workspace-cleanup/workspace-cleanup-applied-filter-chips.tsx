@@ -3,11 +3,14 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { toMegabytes } from './workspace-cleanup-facet-panel-model'
-import type { WorkspaceCleanupAppliedFilter } from '../../../../shared/workspace-cleanup-applied-filters'
-import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup-applied-filters'
-import type { WorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup-filter-model'
 
-/** Why in the bar, not the panel: a filter narrowing the list must be visible without opening anything. */
+import {
+  type WorkspaceCleanupAppliedFilter,
+  listAppliedWorkspaceCleanupFilters
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-applied-filters'
+import type { WorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
+
+// Show narrowing filters outside the panel; derive labels per render so language changes cannot reuse stale translations.
 // Why not memoized: the labels are translated at build time, so caching them on
 // `filters` alone reuses the previous language's strings after a language change.
 // Derivation is constant-size (one pass over the filter fields, not per row).

@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
-import { parseHermesSessionFile } from './session-scanner-hermes-parser'
-import { parseDevinSessionFile } from './session-scanner-devin-parser'
-import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
-import { parseClineSessionFile } from './session-scanner-cline-parser'
+import { parseHermesSessionFile } from './scanners/hermes/session-scanner-hermes-parser'
+import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
+import { parseGeminiSessionFile } from './scanners/gemini/session-scanner-gemini-parsers'
+import { parseClineSessionFile } from './scanners/cline/session-scanner-cline-parser'
 
 const providers = [
   { agent: 'hermes', parse: parseHermesSessionFile, array: 'messages' },

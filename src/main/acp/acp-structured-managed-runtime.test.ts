@@ -1,17 +1,21 @@
 import { mkdir, mkdtemp, realpath, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { RUNTIME_RELEASE_RECEIPT } from '../node-runtime/managed-runtime-release'
+import {
+  RUNTIME_RELEASE_RECEIPT,
+  writeRuntimeReleaseReceipt
+} from '../node-runtime/managed-runtime-release'
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { GROK, openAcpAdapterRig } from './acp-structured-adapter.test-support'
 
 afterEach(() => closeProviderTimelineRigs())
 
-it('starts the installed release first, else a copy beside every pinned member', async () => {
+it('prefers the pin even when older, else a complete installed or external copy', async () => {
   const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-acp-managed-'))
+  onTestFinished(() => rm(dataDirectory, { recursive: true, force: true }))
   const homePath = join(dataDirectory, 'home')
   const command = `orca-managed-${basename(dataDirectory)}`
   const root = join(dataDirectory, 'agent-runtimes', 'grok')
@@ -51,11 +55,22 @@ it('starts the installed release first, else a copy beside every pinned member',
   }
   await expect(spawn()).rejects.toMatchObject({ reason: 'runtimeNotInstalled' })
 
-  // A server without its companion beside it is no copy.
+  // A server without its companion is an incomplete runtime.
   const localBin = join(homePath, '.local', 'bin')
   await mkdir(localBin, { recursive: true })
   await writeFile(join(localBin, command), '', { mode: 0o755 })
   await expect(spawn()).rejects.toMatchObject({ reason: 'runtimeNotInstalled' })
+
+  const fallback = join(root, '1.1')
+  await mkdir(fallback, { recursive: true })
+  await writeFile(join(fallback, command), 'server', { mode: 0o755 })
+  await writeFile(join(fallback, 'harness'), 'harness', { mode: 0o755 })
+  await writeRuntimeReleaseReceipt(fallback, {
+    ...pin,
+    version: '1.1',
+    archiveSha256: 'd'.repeat(64)
+  })
+  expect(await spawn()).toBe(join(fallback, command))
 
   const release = join(root, '1.0')
   await mkdir(release, { recursive: true })
@@ -74,7 +89,7 @@ it('starts the installed release first, else a copy beside every pinned member',
   await writeFile(join(localBin, 'harness'), '', { mode: 0o755 })
   expect(await spawn()).toBe(join(release, command))
 
+  await truncate(join(fallback, command), 2)
   await truncate(join(release, command), 2)
   expect(await spawn()).toBe(await realpath(join(localBin, command)))
-  await rm(dataDirectory, { recursive: true, force: true })
 })

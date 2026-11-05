@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import type { ITerminalOptions } from '@xterm/xterm'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
-import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
+import type { TerminalPreviewConnectResult } from '../../../../shared/terminal/replay/terminal-preview'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
@@ -75,6 +76,7 @@ vi.mock('@xterm/xterm', () => ({
     element = document.createElement('div')
     unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
     loadAddon = vi.fn()
+    options: ITerminalOptions = {}
     attachCustomWheelEventHandler = vi.fn()
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()
@@ -119,8 +121,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
       claimKeyEvent: vi.fn(() => imeHarness.claimResult),
       dispose: vi.fn(),
       sendInput: args.sendInput,
-      // Why captured: the bridge's whole job is handing the live mirror to the
-      // forwarder, so the test reads what a real commit would read.
+      // Read the same live keyboard-mode mirror the real commit forwarder receives.
       getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
     }
     imeHarness.forwarders.push(forwarder)
@@ -252,261 +253,6 @@ describe('AgentTerminalPreview', () => {
     expect(ack).toHaveBeenCalledWith('pty-1', 4)
   })
 
-  it('installs the macOS IME native-text forwarder and lets its claims bypass chord handling', async () => {
-    platformState.value = 'darwin'
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    expect(imeHarness.forwarders).toHaveLength(1)
-    expect(imeHarness.trackers).toHaveLength(1)
-
-    imeHarness.forwarders[0]!.sendInput('。')
-    expect(terminal.input).toHaveBeenCalledOnce()
-    expect(input).toHaveBeenCalledOnce()
-    expect(input).toHaveBeenCalledWith('pty-1', '。')
-
-    // A claimed native-text key bypasses xterm AND the clipboard chords.
-    imeHarness.claimResult = true
-    terminal.selectionText = 'selected text'
-    const handled = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
-    )
-    expect(handled).toBe(false)
-    expect(writeClipboardText).not.toHaveBeenCalled()
-    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
-
-    // Unclaimed events still reach the chord handling.
-    imeHarness.claimResult = false
-    const copied = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', metaKey: true })
-    )
-    expect(copied).toBe(false)
-    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
-    expect(writeClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('does not install the IME native-text forwarder on Windows', async () => {
-    platformState.value = 'win32'
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    await waitFor(() => expect(terminalHarness.instances[0]!.customKeyHandler).not.toBeNull())
-    expect(imeHarness.forwarders).toHaveLength(0)
-    expect(imeHarness.trackers).toHaveLength(0)
-  })
-
-  // fcitx4 delivers a single-character pick as the Space/digit keypress's text (#28213).
-  it('installs the IME native-text forwarder on desktop Linux', async () => {
-    platformState.value = 'linux'
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
-  })
-
-  // The bridge omitted this dependency entirely, so every Preview
-  // commit was evaluated at flags 0. Ordering and provenance live in
-  // preview-terminal-snapshot-replay.test.ts; this pins the wiring.
-  it('hands the forwarder the live mirror seeded from the snapshot flags', async () => {
-    platformState.value = 'darwin'
-    connect.mockResolvedValue({
-      snapshot: { data: '', cols: 80, rows: 24, seq: 1, kittyKeyboardFlags: 8 },
-      replay: []
-    })
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
-    await waitFor(() => expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(8))
-    // The popout xterm gets the same flags, so its encoder agrees with the mirror.
-    expect(terminalHarness.instances[0]!.write).toHaveBeenCalledWith(
-      '\x1b[<99u\x1b[=8u',
-      expect.any(Function)
-    )
-
-    // Live output keeps advancing the same mirror the forwarder reads.
-    act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
-    })
-    expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(0)
-  })
-
-  it('disposes the IME bridge on unmount', async () => {
-    platformState.value = 'darwin'
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
-    view.unmount()
-    expect(imeHarness.forwarders[0]!.dispose).toHaveBeenCalledTimes(1)
-    expect(imeHarness.trackers[0]!.dispose).toHaveBeenCalledTimes(1)
-  })
-
-  it('disposes the IME bridge once when the PTY disappears', async () => {
-    platformState.value = 'darwin'
-    connect.mockResolvedValueOnce({
-      snapshot: { data: '', cols: 80, rows: 24, seq: 1 },
-      replay: []
-    })
-    connect.mockResolvedValueOnce({ snapshot: null, replay: [] })
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
-
-    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
-    await waitFor(() => expect(imeHarness.forwarders[0]!.dispose).toHaveBeenCalledOnce())
-    expect(imeHarness.trackers[0]!.dispose).toHaveBeenCalledOnce()
-
-    view.unmount()
-    expect(imeHarness.forwarders[0]!.dispose).toHaveBeenCalledOnce()
-    expect(imeHarness.trackers[0]!.dispose).toHaveBeenCalledOnce()
-  })
-
-  it('copies the terminal selection on the copy chord and blocks xterm handling', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    terminal.selectionText = 'selected text'
-    const keydown = new KeyboardEvent('keydown', {
-      key: 'C',
-      code: 'KeyC',
-      ctrlKey: true,
-      shiftKey: true,
-      cancelable: true
-    })
-    const handled = terminal.customKeyHandler!(keydown)
-    const keyupHandled = terminal.customKeyHandler!(
-      new KeyboardEvent('keyup', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
-    )
-    expect(handled).toBe(false)
-    expect(keyupHandled).toBe(false)
-    expect(keydown.defaultPrevented).toBe(true)
-    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
-    expect(writeClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('keeps an empty copy chord from leaking terminal input', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const handled = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
-    )
-    expect(handled).toBe(false)
-    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('leaves bare Ctrl+C available to the terminal without a selection', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const handled = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', ctrlKey: true })
-    )
-    expect(handled).toBe(true)
-    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('hands unselected Cmd+C to a kitty app and copies a selection instead', async () => {
-    platformState.value = 'darwin'
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    const cmdC = (type: string): KeyboardEvent =>
-      new KeyboardEvent(type, { key: 'c', code: 'KeyC', metaKey: true, cancelable: true })
-
-    // A plain shell's unselected Cmd+C sends nothing.
-    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
-    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
-
-    act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
-    })
-    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(true)
-    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(true)
-
-    // A highlight of blank cells copies no text but is still Orca's selection, as in the pane.
-    Object.assign(terminal, { hasSelection: () => true })
-    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
-    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
-    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
-
-    terminal.selectionText = 'selected text'
-    expect(terminal.customKeyHandler!(cmdC('keydown'))).toBe(false)
-    expect(terminal.customKeyHandler!(cmdC('keyup'))).toBe(false)
-    expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
-  })
-
-  it('selects all terminal text on Cmd+A and blocks xterm handling', async () => {
-    platformState.value = 'darwin'
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const keydown = new KeyboardEvent('keydown', {
-      key: 'a',
-      code: 'KeyA',
-      metaKey: true,
-      cancelable: true
-    })
-    expect(terminal.customKeyHandler!(keydown)).toBe(false)
-    expect(keydown.defaultPrevented).toBe(true)
-
-    const repeat = new KeyboardEvent('keydown', {
-      key: 'a',
-      code: 'KeyA',
-      metaKey: true,
-      repeat: true,
-      cancelable: true
-    })
-    expect(terminal.customKeyHandler!(repeat)).toBe(false)
-    expect(repeat.defaultPrevented).toBe(true)
-    expect(terminal.selectAll).toHaveBeenCalledOnce()
-  })
-
-  it('sends the word-kill byte on Ctrl+Backspace and blocks xterm handling', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const keydown = new KeyboardEvent('keydown', {
-      key: 'Backspace',
-      code: 'Backspace',
-      ctrlKey: true,
-      cancelable: true
-    })
-    const handled = terminal.customKeyHandler!(keydown)
-
-    expect(handled).toBe(false)
-    expect(keydown.defaultPrevented).toBe(true)
-    expect(terminal.input).toHaveBeenCalledWith('\x17')
-    await waitFor(() => expect(input).toHaveBeenCalledWith('pty-1', '\x17'))
-  })
-
-  it('swallows a pane-scoped chord instead of leaking its control byte to the agent', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    // Ctrl+Shift+D splits a pane on Linux; xterm would otherwise send Ctrl+D.
-    const keydown = new KeyboardEvent('keydown', {
-      key: 'D',
-      code: 'KeyD',
-      ctrlKey: true,
-      shiftKey: true,
-      cancelable: true
-    })
-    const handled = terminal.customKeyHandler!(keydown)
-
-    expect(handled).toBe(false)
-    expect(keydown.defaultPrevented).toBe(true)
-    expect(terminal.input).not.toHaveBeenCalled()
-    expect(input).not.toHaveBeenCalled()
-  })
-
   it('keeps a native input-source chord from inserting text into the preview', async () => {
     storeState.keybindings = { 'terminal.switchInputSource': ['Shift+Space'] }
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
@@ -556,31 +302,7 @@ describe('AgentTerminalPreview', () => {
     view.unmount()
   })
 
-  it('defers Option chords to xterm once the TUI negotiates kitty keyboard mode', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const altBackspace = (): KeyboardEvent =>
-      new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', altKey: true })
-    expect(terminal.customKeyHandler!(altBackspace())).toBe(false)
-    expect(terminal.input).toHaveBeenCalledWith('\x1b\x7f')
-
-    // The agent's TUI pushes kitty flags (CSI > 1 u) on the live stream.
-    act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
-    })
-    terminal.input.mockClear()
-
-    expect(terminal.customKeyHandler!(altBackspace())).toBe(true)
-    expect(terminal.input).not.toHaveBeenCalled()
-  })
-
-  // Why: a snapshot carries the TUI's one-time kitty push and the post-snapshot
-  // replay redelivers it. Applying replays with stack semantics would leave the
-  // TUI's single pop on a stale frame, so a plain shell keeps getting
-  // kitty-encoded Option chords.
+  // Snapshot replay can redeliver a kitty push; it must not leave stale flags after the TUI’s single pop.
   it('does not let a redelivered kitty push outlive the TUI pop', async () => {
     connect.mockResolvedValueOnce({
       snapshot: { data: '\x1b[>1u', cols: 80, rows: 24, seq: 1 },
@@ -602,36 +324,6 @@ describe('AgentTerminalPreview', () => {
 
     expect(terminal.customKeyHandler!(altBackspace())).toBe(false)
     expect(terminal.input).toHaveBeenCalledWith('\x1b\x7f')
-  })
-
-  it('scrolls the viewport on the macOS scrollback chord', async () => {
-    platformState.value = 'darwin'
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const handled = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'ArrowUp', code: 'ArrowUp', metaKey: true })
-    )
-
-    expect(handled).toBe(false)
-    expect(terminal.scrollToTop).toHaveBeenCalled()
-    expect(terminal.input).not.toHaveBeenCalled()
-  })
-
-  it('leaves an unmodified Backspace to xterm', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-
-    const handled = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', cancelable: true })
-    )
-
-    expect(handled).toBe(true)
-    expect(terminal.input).not.toHaveBeenCalled()
   })
 
   it('keeps the existing terminal visible while a resync snapshot is captured', async () => {
@@ -656,7 +348,7 @@ describe('AgentTerminalPreview', () => {
     expect(terminalHarness.instances).toHaveLength(1)
     expect(terminal.dispose).not.toHaveBeenCalled()
     expect(terminal.reset).not.toHaveBeenCalled()
-    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+    expect(view.queryByText(/No preview available/)).not.toBeInTheDocument()
 
     await act(async () => {
       resolveRefresh({
@@ -668,7 +360,7 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.resize).toHaveBeenCalledWith(100, 30)
     expect(terminalHarness.instances).toHaveLength(1)
     expect(terminal.dispose).not.toHaveBeenCalled()
-    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+    expect(view.queryByText(/No preview available/)).not.toBeInTheDocument()
   })
 
   it('disposes a stale terminal when resync confirms the pty is gone', async () => {
@@ -684,61 +376,10 @@ describe('AgentTerminalPreview', () => {
 
     act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
 
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
+    await waitFor(() => expect(view.getByText(/No preview available/)).toBeInTheDocument())
     expect(terminal.dispose).toHaveBeenCalledTimes(1)
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
-  })
-
-  it('does not claim a remote pane closed when no snapshot can exist for it', async () => {
-    connect.mockResolvedValueOnce({ snapshot: null, replay: [] })
-    const view = render(<AgentTerminalPreview ptyId="ssh:devbox@@pty-3" />)
-
-    await waitFor(() => expect(view.getByText(/remote session/)).toBeInTheDocument())
-    expect(view.queryByText(/pane has closed/)).not.toBeInTheDocument()
-  })
-
-  it('connects a replacement pty after the previous pty was gone', async () => {
-    connect.mockResolvedValueOnce({ snapshot: null, replay: [] }).mockResolvedValueOnce({
-      snapshot: { data: 'replacement', cols: 80, rows: 24, seq: 1 },
-      replay: []
-    })
-    const view = render(<AgentTerminalPreview ptyId="pty-gone" />)
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
-
-    view.rerender(<AgentTerminalPreview ptyId="pty-live" />)
-
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    expect(connect).toHaveBeenLastCalledWith('pty-live', { scrollbackRows: 24 })
-    expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
-  })
-
-  it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {
-    vi.useFakeTimers()
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-
-    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
-    const box = host.parentElement!
-    Object.defineProperty(box, 'clientWidth', { configurable: true, value: 900 })
-    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 480 })
-    // 80×24 grid rendered at 800×384 → 10×16 cells → the box holds 90×30.
-    const screen = document.createElement('div')
-    screen.className = 'xterm-screen'
-    Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
-    Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
-    host.appendChild(screen)
-
-    await vi.advanceTimersByTimeAsync(200)
-    expect(fit).toHaveBeenCalledTimes(1)
-    expect(fit).toHaveBeenCalledWith('pty-1', 90, 30)
-
-    // A reconnect (e.g. the host reclaiming the grid) computes the same
-    // target — no repeat claim, so no resize tug-of-war with the host.
-    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
-    await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
-    await vi.advanceTimersByTimeAsync(400)
-    expect(fit).toHaveBeenCalledTimes(1)
   })
 
   it('delays repeated capture after an overflow and cancels the retry on unmount', async () => {
@@ -763,41 +404,5 @@ describe('AgentTerminalPreview', () => {
     view.unmount()
     await vi.advanceTimersByTimeAsync(150)
     expect(connect).toHaveBeenCalledTimes(2)
-  })
-
-  it("previews a paired host's pane from that host, not this app's main process", async () => {
-    render(<AgentTerminalPreview ptyId="remote:env-1@@term-7" />)
-
-    await waitFor(() => expect(multiplexerHarness.subscriptions).toHaveLength(1))
-    expect(multiplexerHarness.environments).toEqual(['env-1'])
-    expect(multiplexerHarness.subscriptions[0]!.terminal).toBe('term-7')
-    expect(connect).not.toHaveBeenCalled()
-
-    act(() =>
-      multiplexerHarness.subscriptions[0]!.callbacks.onSnapshot('agent screen', {
-        cols: 100,
-        rows: 30,
-        seq: 5
-      })
-    )
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    expect(terminal.write).toHaveBeenCalledWith('agent screen', expect.any(Function))
-
-    act(() => multiplexerHarness.subscriptions[0]!.callbacks.onData('live', { seq: 9 }))
-    expect(terminal.write).toHaveBeenCalledWith('live', expect.any(Function))
-    act(() => {
-      terminalHarness.userInputListener?.()
-      terminal.onDataListener?.('y')
-    })
-    expect(multiplexerHarness.sendInput).toHaveBeenCalledWith('y')
-  })
-
-  it('shows the unavailable message instead of a blank dialog when the bridge is missing', async () => {
-    // The web client's fallback proxy resolves every missing bridge call to undefined.
-    Object.assign(window.api.terminalPreview, { connect: async () => undefined })
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
   })
 })

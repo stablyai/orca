@@ -25,6 +25,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'writesFrozen'
   | 'workspaceSessionWriteListeners'
   | 'workspaceSessionOperationListeners'
+  | 'layoutEditorViews'
 >
 
 export function markPrimaryStateWriteDurable(
@@ -56,7 +57,7 @@ export async function stopAfterFailedPrimaryStateMutation(
   runtime: PrimaryStateWriteOperationsRuntime,
   error: unknown
 ): Promise<void> {
-  // A throwing callback never returns its rollback; do not persist a partial edit.
+  // Throwing callbacks supply no rollback; freeze persistence rather than commit partial edits.
   runtime.writesFrozen = true
   runtime.quitFlushStarted = true
   runtime.fatalMutationError = error instanceof Error ? error : new Error(String(error))

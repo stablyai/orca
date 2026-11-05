@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -84,13 +87,16 @@ describe('orca terminal list host scope', () => {
 
     await main(['terminal', 'list', '--json'], '/tmp/repo')
 
+    expect(callMock.mock.calls).toEqual([
+      ['terminal.list', { worktree: undefined, limit: undefined, includeVisualLayouts: false }]
+    ])
+
     const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(printed.result.terminals[0].executionHostId).toBe('ssh:box-1')
     expect(printed.result.hostScope).toEqual({
       hostIds: ['ssh:box-1'],
       omittedHostIds: ['local'],
-      // `terminal list` takes no --host, so no flag reaches the answering runtime's own hosts
-      // (#29901); see index-omitted-host-scope-selectors.test.ts.
+      // These hosts are reached through the answering runtime; listing takes no --host flag.
       omittedHostSelectors: [{ hostId: 'local', selector: null }]
     })
   })
@@ -109,10 +115,14 @@ describe('orca terminal list host scope', () => {
 
     await main(['terminal', 'list'], '/tmp/repo')
 
+    expect(callMock.mock.calls).toEqual([
+      ['terminal.list', { worktree: undefined, limit: undefined, includeVisualLayouts: true }]
+    ])
+
     const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('host=ssh:box-1')
-    expect(printed).toContain('scope: ssh:box-1')
-    expect(printed).toContain('not covered: local')
+    expect(printed).toBe(
+      'term_remote  worker  connected  host=ssh:box-1  /remote/wt\npreview: <empty>\n\nscope: ssh:box-1 — not covered: local (reached through this runtime; no flag selects it)'
+    )
   })
 
   it('does not claim a local scope when the host never reported one', async () => {
@@ -124,8 +134,13 @@ describe('orca terminal list host scope', () => {
 
     await main(['terminal', 'list'], '/tmp/repo')
 
+    expect(callMock.mock.calls).toEqual([
+      ['terminal.list', { worktree: undefined, limit: undefined, includeVisualLayouts: true }]
+    ])
+
     const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('scope: unverifiable')
-    expect(printed).not.toContain('scope: local')
+    expect(printed).toBe(
+      'No terminals listed.\nscope: unverifiable — this host does not report which hosts it lists'
+    )
   })
 })

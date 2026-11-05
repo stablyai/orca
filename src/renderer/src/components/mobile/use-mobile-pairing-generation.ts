@@ -4,17 +4,12 @@ import { translate } from '@/i18n/i18n'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 
 type MutableRef<T> = { current: T }
 
-/**
- * Mints (or rotates) a pairing QR. Every caller must go through this path so
- * signed-out Anywhere is refused rather than silently degraded to a local-only
- * code under the Relay label. Anywhere mint failures surface relayFailure and
- * clear any QR.
- */
+/** Mint through one guarded path: signed-out Relay cannot degrade to a mislabeled local-only QR; Relay failures clear the code. */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
   signedIn: boolean
@@ -98,8 +93,7 @@ export function useMobilePairingGeneration(params: {
               refreshAuthStatus()
             } else {
               setRelayMintFailure(null)
-              // Why: IPC now forwards reason/guidance for all unavailability paths;
-              // prefer that copy over a hard-coded WebSocket-only message.
+              // Prefer host reason/guidance across all unavailable states instead of assuming WebSocket failure.
               toast.error(
                 result.guidance ??
                   translate(

@@ -1,8 +1,5 @@
-// How a chat's scratch folder dies: with its chat. The host never deletes a chat record, so no
-// deletion event exists to hang cleanup on; instead every run removes each folder no chat record
-// (readable or not) maps to, so any future record deletion cleans up for free. A folder is never
-// removed for its age: a chat's visuals live as long as the chat, and one an older build set aside
-// as unused goes back to its chat. A failure is logged and never blocks anything else.
+// Keep scratch folders for every retained chat, regardless of age; remove only folders without records.
+// Restore legacy .expired folders still belonging to chats; cleanup failures never block startup.
 
 import type { Dirent } from 'node:fs'
 import { lstat, readdir, rm } from 'node:fs/promises'
@@ -18,7 +15,7 @@ import {
 
 export type NativeChatVisualsSweepDeps = {
   stateDirectory: string
-  /** Every chat this host holds a row for, readable or not; null when that can't be trusted. */
+  /** Include unreadable chats; null means the roster cannot be trusted. */
   listHeldSessionIds: () => readonly string[] | null
   logger: StructuredAgentSessionLogger
   remove?: (path: string) => Promise<void>
@@ -26,15 +23,13 @@ export type NativeChatVisualsSweepDeps = {
 
 export type NativeChatVisualsSweepResult = { removed: number; failed: number }
 
-// What older builds renamed an unused chat's folder to before deleting it; a cut-short delete left it.
+// Legacy cleanup renamed folders before removal; interrupted removals leave these behind.
 const EXPIRED_SUFFIX = '.expired'
-// Bounds one run's disk work; whatever is left goes in a later run.
 const MAX_REMOVALS_PER_RUN = 200
 const YIELD_EVERY = 32
 
 async function listFolders(root: string): Promise<Dirent[]> {
   try {
-    // A root that is not a real directory is not one this host made; nothing under it is touched.
     if (!(await lstat(root)).isDirectory()) {
       return []
     }
@@ -53,8 +48,7 @@ export async function sweepNativeChatVisualsFolders(
 ): Promise<NativeChatVisualsSweepResult> {
   const result = { removed: 0, failed: 0 }
   const root = nativeChatScratchRootFor(deps.stateDirectory)
-  // Listed before the records are read: a folder is created only after its chat's record, so
-  // every folder seen here already has its record in the snapshot below.
+  // List folders first: each was created after its chat record, so the later roster must include it.
   const entries = await listFolders(root)
   const held = deps.listHeldSessionIds()
   if (!held || entries.length === 0) {
@@ -72,7 +66,7 @@ export async function sweepNativeChatVisualsFolders(
     }
     const expired = entry.name.endsWith(EXPIRED_SUFFIX)
     const folderName = expired ? entry.name.slice(0, -EXPIRED_SUFFIX.length) : entry.name
-    // A Dirent describes the entry itself, so a symlink is never followed or removed here.
+    // Dirents inspect the entry itself; never follow or remove symlinks.
     if (!entry.isDirectory() || !isNativeChatScratchFolderName(folderName)) {
       continue
     }
@@ -94,12 +88,10 @@ export async function sweepNativeChatVisualsFolders(
   return result
 }
 
-// Why minutes, not at boot: the first sweep must not compete with session restore; after that, a
-// few runs a day is enough for files nothing reads.
+// Delay the first sweep to avoid competing with session restore.
 const FIRST_SWEEP_DELAY_MS = 2 * 60_000
 const SWEEP_INTERVAL_MS = 6 * 60 * 60_000
 
-/** Runs the sweep after startup and then periodically; the returned stop ends both. */
 export function scheduleNativeChatVisualsSweep(deps: NativeChatVisualsSweepDeps): () => void {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null

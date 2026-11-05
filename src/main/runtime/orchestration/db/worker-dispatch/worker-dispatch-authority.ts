@@ -15,15 +15,13 @@ export function prepareStartingWorkerAuthority(
     effects: unknown[]
     setupState: string
     hostScope?: string | null
-    // 'created': this worker-start operation created the agent terminal (agent-first worktree
-    // creation included; its pre-rename effects rows said 'reused_agent_terminal'). 'external':
-    // an explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
+    // Created terminals acquire custody; external reuse transfers only an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    // Why: read inside the transaction so the guarded UPDATEs below cannot lose a race with a concurrent state change.
+    // Read under the transaction so guarded updates cannot race another state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
@@ -122,7 +120,7 @@ export function prepareStartingWorkerAuthority(
           ownership: 'owned'
         })
       } else {
-        // A chat has no process to take over: it is always the user's own, external resource.
+        // A chat has no process to transfer and remains the user's external resource.
         const exact =
           params.paneKey && params.processIncarnation
             ? { paneKey: params.paneKey, processIncarnation: params.processIncarnation }
@@ -166,15 +164,7 @@ export function prepareStartingWorkerAuthority(
   }
 }
 
-/**
- * Custody for an agent terminal this worker-start just created, recorded at creation instead of
- * after the agent boot wait. Until the row exists a keystroke into the booting pane finds no
- * ownership to flip, so the takeover is silently dropped and a later `worker-release` closes the
- * pane under the user.
- *
- * Ownership of a pane only; lifecycle authority stays behind the boot wait, because authority
- * must not be handed to a process that has not come up.
- */
+/** Record pane custody at creation so boot-time user input can relinquish it; lifecycle authority still waits for successful boot. */
 export function recordCreatedWorkerTerminalCustody(
   this: OrchestrationDb,
   params: {
@@ -188,8 +178,7 @@ export function recordCreatedWorkerTerminalCustody(
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    // Same guard as prepareStartingWorkerAuthority, read inside the transaction: a dispatch stopped
-    // while the terminal was being created must not acquire an owner.
+    // Recheck under the writer transaction: a Dispatch stopped during creation cannot acquire ownership.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {

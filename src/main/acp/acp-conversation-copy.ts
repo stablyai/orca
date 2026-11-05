@@ -1,15 +1,14 @@
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
-// The chat protocol saves an independent conversation; its ordinary CLI opens that copy.
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import type { AiVaultConversationCopy } from '../../shared/ai-vault-resume-preparation'
+import type { AiVaultConversationCopy } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from './acp-errors'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -45,15 +44,13 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   try {
     signal.throwIfAborted()
-    const assertCopyLaunchArgs = deps.spec.assertCopyLaunchArgs
-    if (assertCopyLaunchArgs) {
-      assertCopyLaunchArgs(
-        await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
-      )
-    }
+    deps.spec.assertCopyLaunchArgs?.(
+      await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
+    )
     signal.throwIfAborted()
     const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
     signal.throwIfAborted()
+    deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
     await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
     signal.throwIfAborted()
     connection = deps.connect(
@@ -132,7 +129,7 @@ async function forkAdvertised(
   return connection.forkSession(sessionId, cwd)
 }
 
-/** Rederive selection at the fork boundaries; ordinary terminals still own their normal routing. */
+/** Recheck the selected account at fork boundaries. */
 async function assertCopyAccountSelected(
   { spec, dataDirectory }: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'dataDirectory'>,
   home: AgentSessionAccountHome,

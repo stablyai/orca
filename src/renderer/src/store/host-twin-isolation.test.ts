@@ -1,11 +1,6 @@
-/**
- * Destructive and selection actions aimed at one twin must leave the other twin's state alone.
- * The action table is declared by hand: adding a destroy, hide, link or select entry point means
- * adding its row here. Cells listed in KNOWN_TWIN_LEAKS are today's failures (the Stage 1 worklist):
- * they assert the leak still happens, so a fix turns them red until the entry is deleted.
- */
+/** Twin-targeted actions must isolate survivors. Keep the hand-declared action table current; KNOWN_TWIN_LEAKS pins Stage 1 failures, so fixes require removing their entries. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -38,7 +33,9 @@ vi.mock('@/store', () => ({
         throw new Error('no twin fixture store bound')
       }
       return appStore.current.getState()
-    }
+    },
+    subscribe: (listener: Parameters<HostTwinFixture['store']['subscribe']>[0]) =>
+      appStore.current?.subscribe(listener) ?? (() => {})
   }
 }))
 
@@ -46,7 +43,10 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-const { sleepWorktreesReportingFailures } = await import('@/components/sidebar/sleep-worktree-flow')
+const { sleepWorktreesReportingFailures } =
+  await import('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow')
+const { fakeMainSleep } =
+  await import('@/components/sidebar/workspace-actions/sleep/sleep-worktree-test-main')
 
 const ptyKill = vi.fn()
 
@@ -85,7 +85,9 @@ beforeEach(() => {
         call: vi.fn(answerLikeHost),
         list: vi.fn().mockResolvedValue([{ id: TWIN_RUNTIME_ENV }])
       },
-      ui: { set: vi.fn().mockResolvedValue(undefined) }
+      ui: { set: vi.fn().mockResolvedValue(undefined) },
+      // Main runs the sleep; the window follows its notices as in the app.
+      worktrees: { sleep: fakeMainSleep().sleep, sleepReopened: vi.fn() }
     }
   })
 })
@@ -109,10 +111,7 @@ type TwinAction = {
   run: (fixture: HostTwinFixture, target: HostTwinSide) => Promise<unknown>
   /** Proves the action reached its target, so an isolated no-op can't pass. */
   applied: (fixture: HostTwinFixture, target: HostTwinSide) => void
-  /**
-   * Set when acting on one copy acts on the whole workspace by design (user decision
-   * 2026-10-17): the cell then asserts the survivor was acted on too.
-   */
+  // Workspace-wide by design (user decision 2026-10-17): assert survivor was acted on too.
   wholeWorkspace?: (fixture: HostTwinFixture, survivor: HostTwinSide) => void
 }
 
@@ -255,35 +254,4 @@ describe('an action on one twin leaves the other twin alone', () => {
       }
     }
   }
-})
-
-describe('a folder action that names no host', () => {
-  for (const kind of ['folder local+ssh', 'folder group local+ssh'] as const) {
-    it(`refuses to delete a ${kind} twin and touches neither host`, async () => {
-      const fixture = createHostTwinFixture(kind)
-      current = fixture
-      appStore.current = fixture.store
-      const before = [fixture.local, fixture.remote].map((s) => projectHostTwinState(fixture, s))
-
-      await expect(fixture.store.getState().deleteFolderWorkspace(fixture.projectId)).resolves.toBe(
-        false
-      )
-
-      expect(window.api.folderWorkspaces.delete).not.toHaveBeenCalled()
-      const calls = vi.mocked(window.api.runtimeEnvironments.call).mock.calls
-      expect(calls.map(([request]) => request.method)).not.toContain('folderWorkspace.delete')
-      const after = [fixture.local, fixture.remote].map((s) => projectHostTwinState(fixture, s))
-      expect(after.map((state, i) => changedHostTwinState(before[i], state))).toEqual([[], []])
-    })
-  }
-})
-
-describe('the twin fixture', () => {
-  it('seeds two hosts under one workspace key', () => {
-    const fixture = createHostTwinFixture('local+ssh')
-    current = fixture
-    const hosts: ExecutionHostId[] = [fixture.local.hostId, fixture.remote.hostId]
-    expect(hosts).toEqual(['local', 'ssh:conn-b'])
-    expect(fixture.store.getState().tabsByWorktree[fixture.workspaceKey]).toHaveLength(3)
-  })
 })

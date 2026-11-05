@@ -31,8 +31,7 @@ describe('skill package identity', () => {
     const observed = await observeSkillPackage(root)
     const expected = describeObservedSkillFile('SKILL.md', Buffer.from('first\nsecond\n'), false)
 
-    // Why: scans can observe several package byte budgets concurrently; only
-    // hashes, not raw file buffers, should survive each file's identity pass.
+    // Concurrent identities may reach multiple byte budgets; retain file hashes rather than raw buffers.
     expect(observed.files[0]).not.toHaveProperty('bytes')
     expect(matchesBundledSkillFiles(observed, [expected])).toBe(true)
   })
@@ -134,7 +133,6 @@ describe('skill package identity', () => {
 
     const browsed = await temporarySkill()
     await writeFile(join(browsed, 'SKILL.md'), 'skill\n')
-    // Every name the OS writes on its own, including one that sorts BEFORE SKILL.md.
     await writeFile(join(browsed, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
     await writeFile(join(browsed, '._SKILL.md'), Buffer.from([0, 5]))
     await writeFile(join(browsed, 'Thumbs.db'), Buffer.from([9]))
@@ -150,8 +148,7 @@ describe('skill package identity', () => {
   it('keeps guarding a directory or link that only wears an OS metadata name', async () => {
     const root = await temporarySkill()
     await writeFile(join(root, 'SKILL.md'), 'skill\n')
-    // The OS writes these names as plain files only, so a subtree behind one is real content:
-    // dropping it on the name alone would hide it from identity and read as pristine.
+    // Metadata names are safe only as plain files; a matching directory is real content.
     await mkdir(join(root, '._scripts'))
     await writeFile(join(root, '._scripts', 'payload.sh'), '#!/bin/sh\n')
 
@@ -175,8 +172,7 @@ describe('skill package identity', () => {
     const edited = await temporarySkill()
     await writeFile(join(edited, 'SKILL.md'), 'skill\nlocal tweak\n')
     await writeFile(join(edited, '.DS_Store'), Buffer.from([0, 1]))
-    // Extra sidecar next to an untouched SKILL.md must still match — agent CLIs
-    // write agents/openai.yaml (and similar) without editing official bytes.
+    // Agent CLI sidecars may coexist with unchanged official bytes.
     const withPayload = await temporarySkill()
     await writeFile(join(withPayload, 'SKILL.md'), 'skill\n')
     await mkdir(join(withPayload, 'agents'), { recursive: true })

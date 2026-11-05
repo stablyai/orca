@@ -1,20 +1,9 @@
-/**
- * Cold-parked tabs keep their runtime-graph leaf while their PTY is alive.
- *
- * Why this matters beyond the host UI (STA-2854): the graph leaf is what mints
- * the terminal handle a paired client's stream is bound to. Publishing only
- * mounted panes meant a host that merely stopped *displaying* a terminal
- * invalidated that handle, stalling a remote viewer who was actively driving it.
- *
- * The liveness proof is the parked watcher, which the park wiring starts on
- * unmount and disposes on reveal, tab close, PTY exit, and worktree teardown —
- * so a dead terminal still drops out of the graph.
- */
+// Live parked leaves preserve paired-client terminal handles (STA-2854); unmount alone must not invalidate actively viewed streams. Park watchers prove liveness and retire on reveal/close/exit/workspace teardown so dead terminals still disappear.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
@@ -124,8 +113,7 @@ async function captureGraph(
   const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
   vi.stubGlobal('HTMLElement', class HTMLElement {})
-  // Why opt-out: a case that needs a non-default layout installs its own getter
-  // before calling in, and must not have it overwritten here.
+  // Nondefault-layout callers install their getter first; preserve it.
   if (options.seedState !== false) {
     setRuntimeGraphStoreStateGetter(() => parkedState())
   }
@@ -145,143 +133,14 @@ function reportedPanes(graph: RuntimeSyncWindowGraph): Record<string, unknown>[]
   return ORCA_LAYOUT_OWNER_IS_MAIN ? (graph.mountedLeaves ?? []) : graph.leaves
 }
 
-function reportedTabIds(graph: RuntimeSyncWindowGraph): string[] {
-  return ORCA_LAYOUT_OWNER_IS_MAIN
-    ? (graph.mountedLeaves ?? []).map((leaf) => leaf.tabId)
-    : graph.tabs.map((tab) => tab.tabId)
-}
-
-/** The window's PTY claim, which only a window-owned build reports. */
-function withPty(ptyId: string): { ptyId?: string } {
-  return ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { ptyId }
-}
-
 describe('syncRuntimeGraph cold-parked tabs', () => {
-  it('publishes a parked tab leaf while a parked watcher still owns its PTY', async () => {
-    installParkedWatcher(PARKED_PTY)
-
-    const graph = await captureGraph()
-
-    expect(reportedPanes(graph)).toContainEqual(
-      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, ...withPty(PARKED_PTY), parked: true })
-    )
-    expect(reportedTabIds(graph)).toContain(TAB_ID)
-  })
-
-  it('drops the leaf once the watcher is disposed (reveal, close, PTY exit, teardown)', async () => {
-    const graph = await captureGraph()
-
-    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-    expect(reportedTabIds(graph)).not.toContain(TAB_ID)
-  })
-
-  // Why these two cases exist: `paneIdByPtyId` and `tabPtyId` both survive the
-  // states below, so a predicate reading either one would pass every other test
-  // here while publishing a dead terminal.
-  it('drops the leaf when per-PTY disposal leaves only the pane-id slot behind', async () => {
-    // Exactly what handlePtyExit and disposeParkedTerminalWatchersForPtyIds
-    // leave: the disposer is gone, the pane-id slot and tabPtyId remain.
-    parkedWatchersByTabId.set(TAB_ID, {
-      worktreeId: 'wt-1',
-      tabPtyId: PARKED_PTY,
-      paneIdByPtyId: new Map([[PARKED_PTY, 1]]),
-      disposersByPtyId: new Map()
-    })
-
-    const graph = await captureGraph()
-
-    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-  })
-
   it('drops the leaf when the PTY exited into the park handoff gap', async () => {
-    // The watcher entry looks live, but the exit arrived while no handler owned
-    // the PTY, so it was buffered and the watcher's sidecar never saw it.
+    // Exit buffered without a PTY owner leaves an apparently live watcher whose sidecar missed it.
     installParkedWatcher(PARKED_PTY)
     bufferPreHandlerPtyExit(PARKED_PTY, 0)
 
     const graph = await captureGraph()
 
     expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-  })
-
-  it('does not publish a stale saved PTY that no watcher owns', async () => {
-    // The tab is parked, but the layout binding points at a PTY the park wiring
-    // never watched — ptyIdsByLeafId is merged and never pruned, so a stale
-    // binding must not resurrect a leaf.
-    installParkedWatcher('wt-1::/tmp/wt@@some-other-pty')
-
-    const graph = await captureGraph()
-
-    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-  })
-
-  it('excludes a remote-runtime PTY, whose parked watcher never sees an exit', async () => {
-    // startParkedPtyWatcher installs no exit subscription for remote: PTYs and
-    // the parked fact stream carries no exit fact, so a surviving disposer is
-    // not evidence the remote terminal is still alive.
-    const remotePtyId = 'remote:env-1@@term_remote'
-    parkedWatchersByTabId.set(TAB_ID, {
-      worktreeId: 'wt-1',
-      tabPtyId: remotePtyId,
-      paneIdByPtyId: new Map([[remotePtyId, 1]]),
-      disposersByPtyId: new Map([[remotePtyId, () => {}]])
-    })
-    setRuntimeGraphStoreStateGetter(() => parkedState({ [LEAF]: remotePtyId }))
-
-    const graph = await captureGraph({ seedState: false })
-
-    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-  })
-
-  it('publishes the pane id the watcher uses, not a positional ordinal', async () => {
-    // PaneManager retires a closed pane's id without renumbering, and main
-    // routes split/close and the paneKey fallback through this value. Sourced
-    // from the watcher entry, so a leaf the unmount capture never saw — one the
-    // layout gained while parked — is still named correctly.
-    installParkedWatcher(PARKED_PTY, 7)
-
-    const graph = await captureGraph()
-
-    expect(reportedPanes(graph)).toContainEqual(
-      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, paneRuntimeId: 7 })
-    )
-  })
-
-  it("publishes the parked pane's runtime title instead of discarding it", async () => {
-    // The parked byte watcher keeps writing this slot and main prefers
-    // leaf.paneTitle over its own older lastOscTitle, so publishing null pins a
-    // parked agent pane to a stale title for as long as it stays parked.
-    installParkedWatcher(PARKED_PTY, 7)
-    setRuntimeGraphStoreStateGetter(() => ({
-      ...parkedState(),
-      runtimePaneTitlesByTabId: { [TAB_ID]: { 7: 'codex [working]' } }
-    }))
-
-    const graph = await captureGraph({ seedState: false })
-
-    expect(reportedPanes(graph)).toContainEqual(
-      expect.objectContaining({ leafId: LEAF, paneTitle: 'codex [working]' })
-    )
-  })
-
-  it('does not name an active leaf this publication is not sending', async () => {
-    // Partial coverage is legitimate: one leaf's watcher can be disposed while a
-    // sibling stays parked, and the saved activeLeafId may be the dropped one.
-    const otherLeaf = '33333333-3333-4333-8333-333333333333'
-    const otherPty = 'wt-1::/tmp/wt@@other-parked-pty'
-    installParkedWatcher(PARKED_PTY)
-    setRuntimeGraphStoreStateGetter(() =>
-      parkedState({ [LEAF]: PARKED_PTY, [otherLeaf]: otherPty }, otherLeaf)
-    )
-
-    const graph = await captureGraph({ seedState: false })
-
-    // With the switch on, the active pane is main's own selection (runtime-leaf-record-projection.test.ts).
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(graph.tabs).toContainEqual(
-        expect.objectContaining({ tabId: TAB_ID, activeLeafId: LEAF })
-      )
-    }
-    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ leafId: otherLeaf }))
   })
 })

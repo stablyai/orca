@@ -1,9 +1,9 @@
-export const TRANSFER_PLAN_MAX_RETAINED_BYTES = 32 * 1024 * 1024
-export const TRANSFER_PLAN_MAX_ENTRIES = 100_000
-export const TRANSFER_PLAN_MAX_DEPTH = 256
-export const TRANSFER_PLAN_MAX_PATH_BYTES = 64 * 1024
+const TRANSFER_PLAN_MAX_RETAINED_BYTES = 32 * 1024 * 1024
+const TRANSFER_PLAN_MAX_ENTRIES = 100_000
+const TRANSFER_PLAN_MAX_DEPTH = 256
+const TRANSFER_PLAN_MAX_PATH_BYTES = 64 * 1024
 
-export class DirectoryTransferCapacityError extends Error {
+class DirectoryTransferCapacityError extends Error {
   readonly code = 'directory_transfer_capacity'
   constructor() {
     super(

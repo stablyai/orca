@@ -1,21 +1,6 @@
-/**
- * Owns the cache, the in-flight identity and the generation token for one family of requests, so a
- * reply that outlived its scope has nowhere to land.
- *
- * The fence is structural rather than a callback a caller may forget. `read` and `load` are handed
- * the scope and build the key themselves, and a scope the owner has not seen retires everything it
- * held before it answers. A reply is published only through `commit`, which refuses a lease whose
- * generation has moved; a commit that beat the owner's own notice still cannot be read, because the
- * next read syncs first. What `committed` does not say is that the value in the caller's own hand is
- * fresh: a caller that displays it directly still needs whatever fences its display, which for the
- * file-search pilot is the sequence counter it already had.
- *
- * Three epochs may appear in a scope and they are not the same thing: the logical authority epoch
- * (`StableLogicalRpcClient.getGeneration`, advanced by `migrateTo`), the physical authenticated
- * session (`authenticationGeneration` inside `direct-rpc-client.ts`) and the negotiated capability
- * epoch. Which of them retires a given owner's data is that owner's decision, made by what its
- * callers put in the scope.
- */
+// Sync scope on every read/load and publish only through owner-issued generation leases, so retired replies cannot repopulate cache.
+// A caller displaying returned values directly still needs its own display fence.
+// Logical authority, physical authentication and capability epochs are distinct; each owner chooses its invalidating scope signals.
 
 const LEASE_STATE: unique symbol = Symbol('generation-scoped-request-lease')
 const LEASE_VALUE: unique symbol = Symbol('generation-scoped-request-lease-value')
@@ -26,39 +11,24 @@ type RequestLeaseState = {
   readonly owner: symbol
 }
 
-/**
- * The only way to publish into an owner, and unforgeable: the brand is module-private, so no caller
- * can mint one or read the generation it pins.
- */
+// The private brand prevents callers minting leases or reading their generation.
 export type RequestLease<Value> = {
   readonly [LEASE_STATE]: RequestLeaseState
-  // Phantom, never present at runtime: makes a lease invariant in Value so two owners' leases are
-  // not interchangeable.
+  // The phantom callback makes Value invariant so incompatible owners cannot exchange leases.
   readonly [LEASE_VALUE]?: (value: Value) => void
 }
 
-/**
- * Handed to a loader so it can stop before sending a request whose scope has already moved. A probe
- * and nothing else: it answers the same question `commit` asks and carries no way to publish, so the
- * loader still has only its return value to say anything with.
- */
+// Expose only a read-only currency probe; loaders publish solely by returning their value.
 export type RequestCurrency = {
   readonly isCurrent: () => boolean
 }
 
-/** Named rather than boolean: a refused publish says which fence refused it. */
 type RequestCommitVerdict = 'committed' | 'retired-generation' | 'foreign-owner'
 
-/**
- * What retires a request: the workspace identity plus whichever epoch signals this owner treats as
- * invalidating. Members are compared by identity, so a client instance may sit in one directly.
- */
+// Compare workspace/epoch scope members by identity, including client instances.
 export type RequestScope = readonly RequestScopeMember[]
 
-/**
- * Symbol and bigint are excluded rather than rejected at runtime: two symbols share a description
- * freely and a registered one is not a valid WeakMap key, and a bigint is not JSON-serialisable.
- */
+// Exclude symbol/bigint because descriptions can collide and bigint has no JSON encoding.
 type RequestScopeMember = string | number | boolean | null | undefined | object
 
 /** The domain half of a key. The owner supplies the scope half, so two workspaces cannot share one. */
@@ -69,8 +39,7 @@ export type LoadedRequest<Value> = {
   readonly value: Value
 }
 
-// Both halves of a key are JSON-encoded and joined on a character no encoding emits, so no two
-// distinct scope-and-parameter pairs can spell the same key.
+// Separate JSON-encoded key halves with NUL, which cannot occur literally in either encoding.
 const KEY_SEPARATOR = String.fromCharCode(0)
 
 function parameterKey(parameters: RequestParameters): string {
@@ -89,21 +58,12 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
   private currentGeneration = 0
   private observedScope: string | null = null
 
-  /**
-   * What this owner holds for these parameters, or nothing once the scope moved. Not a getter: an
-   * unseen scope retires everything held and advances the generation before this answers, so it must
-   * not be called from render.
-   */
+  // Reading an unseen scope retires state and advances generation, so never call from render.
   read(scope: RequestScope, parameters: Params): Value | undefined {
     return this.values.get(this.enter(scope, parameters))
   }
 
-  /**
-   * Coalesces on the owner-built key and hands back a lease pinned to the generation the request
-   * started in. `fn` returns the value; the currency probe it is given is read-only, so it still has
-   * nothing it could publish with. A loader that stops on a stale probe returns null and publishes
-   * nothing, which is how a superseded attempt stays off the wire instead of being refused at commit.
-   */
+  // Coalesce by owner-built key and return a generation lease; stale loaders may return null before sending anything.
   load(
     scope: RequestScope,
     parameters: Params,
@@ -113,7 +73,6 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
     return this.inFlight.get(key) ?? this.start(key, fn)
   }
 
-  /** Publishes `value` only while the lease's generation is still the owner's. */
   commit(lease: RequestLease<Value>, value: Value): RequestCommitVerdict {
     const state = lease[LEASE_STATE]
     if (state.owner !== this.owner) {
@@ -137,15 +96,13 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
   ): Promise<LoadedRequest<Value> | null> {
     const state: RequestLeaseState = { key, generation: this.currentGeneration, owner: this.owner }
     const lease: RequestLease<Value> = { [LEASE_STATE]: state }
-    // One probe per physical request. A joiner never sees it: its `fn` is never invoked, it awaits
-    // this promise, and `retire()` clears `inFlight`, so no joiner can join across a generation bump.
+    // Create probes per physical request; joiners reuse its promise, and retirement clears the joinable map.
     const currency: RequestCurrency = {
       isCurrent: () => state.generation === this.currentGeneration
     }
     let loaded: Promise<Value | null>
     try {
-      // Called here rather than off a microtask so the request reaches the wire in the turn the
-      // caller asked for it, which is what orders it against its siblings.
+      // Invoke synchronously to preserve wire ordering against sibling requests.
       loaded = fn(currency)
     } catch (error) {
       loaded = Promise.reject(error instanceof Error ? error : new Error(String(error)))
@@ -171,7 +128,6 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
     }
   }
 
-  /** Syncs the observed scope, then returns the key. Every read path goes through here. */
   private enter(scope: RequestScope, parameters: Params): string {
     const scopeKey = this.scopeKey(scope)
     if (this.observedScope !== scopeKey) {
@@ -199,8 +155,7 @@ export class GenerationScopedRequestOwner<Params extends RequestParameters, Valu
             : typeof member === 'object' && member
               ? member
               : null
-        // A primitive is its own identity; everything else gets a per-owner ordinal, so two scopes
-        // match only when they hold the same instances.
+        // Use per-owner ordinals for references so scopes match only the same instances.
         if (!reference) {
           return `${typeof member}:${JSON.stringify(member) ?? String(member)}`
         }

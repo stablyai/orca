@@ -13,7 +13,7 @@ import {
   deriveSharedKey,
   encrypt,
   generateKeyPair
-} from '../../shared/e2ee-crypto'
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
@@ -25,10 +25,9 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../browser/cdp/screencast/browser-screencast-stream', () => ({ startBrowserScreencast }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 
-/** A real legacy E2EE channel, as every directly connected phone uses. */
 function connectLegacyChannel() {
   const serverKeys = generateKeyPair()
   const clientKeys = generateKeyPair()
@@ -110,7 +109,7 @@ describe('screencast over a backlogged legacy E2EE socket', () => {
     vi.useRealTimers()
   })
 
-  // Why: a busy socket is alive; evicting its viewer as a ghost would blank a working phone.
+  // Backlogged sockets remain live; ghost eviction would blank working phones.
   it('keeps the viewer through a long backlog and then delivers only the newest frame', async () => {
     const transport = connectLegacyChannel()
     const { subscription, onFrame, stop } = await subscribe(transport.sendBinary)

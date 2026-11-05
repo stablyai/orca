@@ -7,8 +7,9 @@ import {
   collectDescendantsFromIndex,
   getProcessTableIndex
 } from '../../../shared/process-table-index'
+import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
-import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-inspection'
+import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
 import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import { isWindowsShellAloneInJob } from '../../providers/windows-shell-alone-in-job'
@@ -29,7 +30,7 @@ export function inspectSpawnFileChildProcessesFromRows(
 ): PtyChildProcessVerdict {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
-  if (!root || !shellName || !root.tty || root.tty === '?') {
+  if (!root || !shellName || !hasControllingTty(root.tty)) {
     return 'unverifiable'
   }
   const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, rootPid)]

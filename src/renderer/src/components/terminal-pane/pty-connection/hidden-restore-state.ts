@@ -1,4 +1,4 @@
-import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
+import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { cancelTerminalScrollIntentBufferRebuildCompletions } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
 import { DeferredReattachLiveDataQueue } from '../deferred-reattach-live-data-queue'
@@ -84,8 +84,7 @@ export function bindHiddenRestoreState(session: ConnectPanePtySession): void {
   session.clearPaneMode2031State = function (): void {
     session.deps.paneMode2031Ref.current.delete(session.pane.id)
     session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
-    // A partial CSI prefix belongs to the stream that produced it; carrying it into a
-    // replacement PTY would splice two unrelated byte ranges into one sequence.
+    // Drop partial CSI tails on PTY replacement so unrelated streams cannot form a fabricated sequence.
     session.mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
   }
 

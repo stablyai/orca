@@ -5,20 +5,13 @@ import {
 } from './session-search-index-generation'
 
 const QUERY_SCHEMA_SQL = `
--- The typo repair's whole dictionary. Why the index's own vocabulary and not a
--- word list: it can never suggest a term this index does not hold, and it needs
--- no model. fts5vocab is a view over the FTS5 b-tree, so it costs no extra rows.
+-- Use indexed vocabulary so typo repair suggests only terms the index holds.
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_vocab USING fts5vocab(messages_fts, 'row');
 ${SESSION_SEARCH_GENERATION_SQL}`
 
-/** Everything the SQL above creates, so a missing one is what triggers a re-run. */
 const OWNED = ['messages_vocab', ...SESSION_SEARCH_GENERATION_TRIGGERS]
 
-/**
- * The vocabulary's target. Creating a fts5vocab table over a missing FTS table
- * succeeds and every query against it then fails, so the feature's health is
- * this name's presence rather than the vocabulary's own.
- */
+// fts5vocab creation succeeds without its source table, so check that source explicitly.
 const VOCABULARY_SOURCE = 'messages_fts'
 
 const PROBED = [...OWNED, VOCABULARY_SOURCE]

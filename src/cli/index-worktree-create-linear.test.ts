@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -145,9 +148,7 @@ describe('orca cli worktree awareness', () => {
       linkedIssue: undefined,
       linkedLinearIssue: 'STA-335',
       linkedLinearIssueWorkspaceId: null,
-      // Why: a bare identifier carries no org, and the two scoping fields
-      // describe the issue being replaced. Inheriting a stale org key would
-      // pin the lookup to a workspace this issue does not live in.
+      // A bare identifier supplies no org; inheriting the replaced issue's org would misroute lookup.
       linkedLinearIssueOrganizationUrlKey: null,
       comment: undefined,
       runHooks: false,

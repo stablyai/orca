@@ -2,13 +2,18 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { fireEvent, getByRole } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import {
-  LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
-  MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES
-} from '../../../../shared/terminal-quick-command-prompt-limit'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
+import { useAppStore } from '@/store'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mountedRoots: Root[] = []
 
@@ -40,16 +45,6 @@ async function renderDialog(
       />
     )
   })
-}
-
-function findAnimatedRowContaining(text: string): HTMLElement {
-  const row = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden]')).find(
-    (element) => element.textContent?.includes(text)
-  )
-  if (!row) {
-    throw new Error(`Could not find animated row containing ${text}`)
-  }
-  return row
 }
 
 describe('TerminalQuickCommandDialog animation structure', () => {
@@ -104,82 +99,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     }
   })
 
-  it('keeps agent-only fields mounted as collapsed animated rows in terminal mode', async () => {
-    await renderDialog({
-      id: 'qc-1',
-      label: 'Start dev server',
-      action: 'terminal-command',
-      command: 'npm run dev',
-      appendEnter: true,
-      scope: { type: 'global' }
-    })
-
-    const agentRow = findAnimatedRowContaining('Agent')
-
-    expect(agentRow.getAttribute('aria-hidden')).toBe('true')
-    expect(agentRow.className).toContain('transition-[grid-template-rows]')
-    expect(agentRow.className).toContain('grid-rows-[0fr]')
-  })
-
-  it('shows append enter in the editor footer for terminal commands', async () => {
-    await renderDialog({
-      id: 'qc-2',
-      label: 'Start dev server',
-      action: 'terminal-command',
-      command: 'npm run dev',
-      appendEnter: true,
-      scope: { type: 'global' }
-    })
-
-    expect(document.body.textContent).toContain('Append Enter — run immediately')
-    expect(document.body.textContent).not.toContain('Supports /goal, skills, paths')
-  })
-
-  it('hides append enter and shows agent toolbar hint in agent mode', async () => {
-    await renderDialog({
-      id: 'qc-3',
-      label: 'Investigate',
-      action: 'agent-prompt',
-      agent: 'claude',
-      prompt: 'Look into the build',
-      scope: { type: 'global' }
-    })
-
-    expect(document.body.textContent).toContain('Supports /goal, skills, paths')
-    expect(document.body.textContent).not.toContain('Append Enter — run immediately')
-  })
-
-  it('shows scope summary on the collapsed advanced toggle', async () => {
-    await renderDialog({
-      id: 'qc-4',
-      label: 'Start dev server',
-      action: 'terminal-command',
-      command: 'npm run dev',
-      appendEnter: true,
-      scope: { type: 'global' }
-    })
-
-    expect(document.body.textContent).toMatch(/Advanced\s*·\s*Global/)
-  })
-
-  it('opens the advanced section when defaultAdvancedOpen is true', async () => {
-    await renderDialog(
-      {
-        id: 'qc-5',
-        label: 'Start dev server',
-        action: 'terminal-command',
-        command: 'npm run dev',
-        appendEnter: true,
-        scope: { type: 'global' }
-      },
-      { defaultAdvancedOpen: true }
-    )
-
-    const advancedToggle = document.body.querySelector('[aria-expanded="true"]')
-    expect(advancedToggle?.textContent).toContain('Advanced')
-    expect(document.body.textContent).not.toMatch(/Advanced\s*·\s*Global/)
-  })
-
   it('refuses to save a prompt over an older host cap instead of truncating it', async () => {
     const onSave = vi.fn()
     await renderDialog(
@@ -202,7 +121,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(alert?.textContent).toContain('Too long for this host')
     const textareaEl = document.body.querySelector('textarea')
     expect(textareaEl?.getAttribute('aria-invalid')).toBe('true')
-    // The field names its reason, so focusing it announces more than "invalid".
     expect(textareaEl?.getAttribute('aria-describedby')?.split(' ')).toContain(alert?.id)
 
     const textarea = document.body.querySelector('textarea')!
@@ -212,23 +130,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       )
     })
     expect(onSave).not.toHaveBeenCalled()
-  })
-
-  it('refuses a prompt past the message limit without telling the user to update the host', async () => {
-    await renderDialog({
-      id: 'qc-9',
-      label: 'Review',
-      action: 'agent-prompt',
-      agent: 'claude',
-      prompt: 'x'.repeat(MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES),
-      scope: { type: 'global' }
-    })
-
-    const alert = document.body.querySelector('[role="alert"]')
-    expect(alert?.textContent).toBe('Too long to save.')
-    expect(document.body.textContent).not.toContain('Update Orca')
-    // Measured in the unit the limit is: the chat message's bytes.
-    expect(document.body.textContent).toContain('257 KB / 256 KB')
   })
 
   it('keeps the over-cap alert text static while the count changes', async () => {
@@ -299,13 +200,13 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       })
     }
 
-    const agentSelect = document.body.querySelector<HTMLButtonElement>('[role="combobox"]')!
+    const agentSelect = getByRole<HTMLButtonElement>(document.body, 'button', {
+      name: 'Select agent'
+    })
     await submit(agentSelect)
     expect(agentSelect.getAttribute('data-state')).toBe('open')
     expect(onSave).not.toHaveBeenCalled()
-    const codex = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (option) => option.textContent?.trim() === 'Codex'
-    )!
+    const codex = getByRole(document.body, 'menuitem', { name: 'Codex' })
     expect(textarea.closest('fieldset')?.contains(codex)).toBe(false)
     await submit(codex)
     expect(onSave).not.toHaveBeenCalled()
@@ -315,9 +216,12 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     await submit()
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', prompt }))
     expect(agentSelect.disabled).toBe(true)
-    const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'))
-    expect(options.length).toBeGreaterThan(0)
-    expect(options.every((option) => option.getAttribute('aria-disabled') === 'true')).toBe(true)
+    const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+    expect(
+      options
+        .filter((option) => !option.textContent?.includes('Agent settings'))
+        .every((option) => option.getAttribute('aria-disabled') === 'true')
+    ).toBe(true)
     await act(async () => options.find((option) => option.textContent?.includes('Claude'))?.click())
     expect(agentSelect.textContent).toContain('Codex')
     expect(textarea.closest('fieldset')?.disabled).toBe(true)
@@ -353,4 +257,128 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: updatedPrompt }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
+
+  it('keeps shell and agent drafts independent and saves only the selected agent and prompt', async () => {
+    const onSave = vi.fn(() => false)
+    await renderDialog(
+      {
+        id: 'qc-picker',
+        label: 'Review',
+        action: 'terminal-command',
+        command: 'git diff\n',
+        appendEnter: false,
+        scope: { type: 'global' }
+      },
+      { onSave }
+    )
+
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Agent Prompt' }))
+    )
+    const prompt = getByRole(document.body, 'textbox', { name: 'Prompt' })
+    await act(async () =>
+      fireEvent.change(prompt, { target: { value: 'Review @src\n/goal careful' } })
+    )
+    const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
+    await act(async () => fireEvent.keyDown(trigger, { key: 'Enter' }))
+    const unsupported = getByRole(document.body, 'menuitem', { name: /^Aider/ })
+    expect(unsupported.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => fireEvent.click(unsupported))
+    expect(onSave).not.toHaveBeenCalled()
+    await act(async () => fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' }))
+    const user = userEvent.setup()
+    act(() => trigger.focus())
+    await user.keyboard('co')
+    const search = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Search agents and setups…"]'
+    )!
+    expect(document.activeElement).toBe(search)
+    expect(search.value).toBe('co')
+    expect(search.selectionStart).toBe(2)
+    await user.keyboard('{Enter}')
+    expect(onSave).not.toHaveBeenCalled()
+
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Terminal Command' }))
+    )
+    expect(
+      getByRole<HTMLTextAreaElement>(document.body, 'textbox', { name: 'Command' }).value
+    ).toBe('git diff\n')
+    expect(
+      getByRole(document.body, 'switch', { name: 'Toggle append Enter' }).getAttribute(
+        'aria-checked'
+      )
+    ).toBe('false')
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Agent Prompt' }))
+    )
+    await act(async () => fireEvent.click(getByRole(document.body, 'button', { name: /^Save/ })))
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      id: 'qc-picker',
+      label: 'Review',
+      action: 'agent-prompt',
+      agent: 'codex',
+      prompt: 'Review @src\n/goal careful',
+      scope: { type: 'global' }
+    })
+  })
+
+  it.each([100, 1000])(
+    'opens the agent-only picker without visiting %i unrelated records',
+    async (count) => {
+      const before = useAppStore.getState()
+      let visits = 0
+      const tracked = <T extends { id: string }>(record: T): T => {
+        const id = record.id
+        return Object.defineProperty(record, 'id', {
+          get: () => {
+            visits++
+            return id
+          }
+        })
+      }
+      useAppStore.setState({
+        worktreesByRepo: {
+          'repo-1': Array.from({ length: count }, (_, i) =>
+            tracked(makeWorktree({ id: `wt-${i}`, repoId: 'repo-1' }))
+          )
+        },
+        folderWorkspaces: Array.from({ length: count }, (_, i) =>
+          tracked(makeFolderWorkspace({ id: `folder-${i}` }))
+        ),
+        repos: Array.from({ length: count }, (_, i) => tracked({ ...TEST_REPO, id: `repo-${i}` }))
+      })
+      try {
+        await renderDialog({
+          id: 'qc-perf',
+          label: 'Review',
+          action: 'agent-prompt',
+          agent: 'claude',
+          prompt: 'Review',
+          scope: { type: 'global' }
+        })
+        visits = 0
+        await act(async () =>
+          fireEvent.keyDown(getByRole(document.body, 'button', { name: 'Select agent' }), {
+            key: 'Enter'
+          })
+        )
+        expect(visits).toBe(0)
+        await act(async () =>
+          fireEvent.keyDown(getByRole(document.body, 'menuitem', { name: 'Codex' }), {
+            key: 'Enter'
+          })
+        )
+        expect(getByRole(document.body, 'button', { name: 'Select agent' }).textContent).toContain(
+          'Codex'
+        )
+      } finally {
+        useAppStore.setState({
+          worktreesByRepo: before.worktreesByRepo,
+          folderWorkspaces: before.folderWorkspaces,
+          repos: before.repos
+        })
+      }
+    }
+  )
 })

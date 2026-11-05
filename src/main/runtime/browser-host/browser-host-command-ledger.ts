@@ -2,15 +2,13 @@ import { randomUUID } from 'node:crypto'
 import {
   BrowserClientHostPageCommand,
   type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult,
   type BrowserClientHostLeaseAuthority
-} from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   assertBrowserHostCommandResultAuthority,
   assertBrowserHostCommandOrder,
   createBrowserHostCommandRecord,
-  DEFAULT_MAX_CACHED_RESULTS,
-  DEFAULT_MAX_CACHED_RESULTS_PER_PAGE,
   DEFAULT_MAX_OUTSTANDING_COMMANDS,
   DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE,
   DEFAULT_MAX_PAGES,
@@ -20,6 +18,7 @@ import {
   type BrowserHostCommandResultParams,
   positiveBrowserHostCommandLimit,
   recordBrowserHostCommandOrder,
+  resolveBrowserHostCommandCacheLimits,
   snapshotBrowserHostPageCommand
 } from './browser-host-command-state'
 import { replayOutstandingBrowserHostCommands } from './browser-host-command-replay'
@@ -59,11 +58,7 @@ export class BrowserHostCommandLedger {
       DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE
     )
     this.resultCache = new BrowserHostCommandResultCache(
-      positiveBrowserHostCommandLimit(options.maxCachedResults, DEFAULT_MAX_CACHED_RESULTS),
-      positiveBrowserHostCommandLimit(
-        options.maxCachedResultsPerPage,
-        DEFAULT_MAX_CACHED_RESULTS_PER_PAGE
-      ),
+      resolveBrowserHostCommandCacheLimits(options),
       (browserPageId) => this.pages.delete(browserPageId)
     )
     this.maxPages = positiveBrowserHostCommandLimit(options.maxPages, DEFAULT_MAX_PAGES)
@@ -198,7 +193,6 @@ export class BrowserHostCommandLedger {
     page.outstanding -= 1
     this.outstandingCommands -= 1
     page.settledSequences.push(params.commandSequence)
-    this.resultCache.remember(page, record)
     if (record.event.command.type === 'switchProfile' && result.status === 'failed') {
       page.profileSwitchPending = false
     }
@@ -208,6 +202,7 @@ export class BrowserHostCommandLedger {
       page.activeCapacityReleased = true
       this.activePages -= 1
     }
+    this.resultCache.remember(page, record)
     return true
   }
 

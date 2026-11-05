@@ -4,10 +4,9 @@ import {
   type NativeChatComposerInput
 } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
+import { withQuoteAppended } from './native-chat-selection-quote-draft'
 
-/** Imperative text insertion and focus for the composer textarea, used by the
- *  paste pipeline and the composer's imperative handle. */
+/** Insert/focus through the composer input for paste and imperative callers. */
 export function useNativeChatTypedInsertion(args: {
   textareaRef: RefObject<NativeChatComposerInput | null>
   isComposing: () => boolean
@@ -66,14 +65,14 @@ export function useNativeChatTypedInsertion(args: {
     (text: string): void => {
       const textarea = usableInput()
       if (textarea) {
-        const next = appendReturnedDraftText(textarea.value, text)
+        // A quote the user adds lands after what they typed, as typing it would.
+        const next = withQuoteAppended({ text: textarea.value }, text).text
         showDraft(textarea, next, next.length)
       }
     },
     [showDraft, usableInput]
   )
 
-  // Reads the live input when a delayed clipboard read settles.
   const insertPastedText = useCallback(
     (text: string): boolean => insertNativeChatPastedText(textareaRef.current, text),
     [textareaRef]

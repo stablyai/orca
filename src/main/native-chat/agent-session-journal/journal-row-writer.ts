@@ -1,34 +1,33 @@
-import type Database from '../../sqlite/sync-database'
+import type { JournalReducerState } from './journal-reducer'
 import { insertJournalRow } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
+import type Database from '../../sqlite/sync-database'
 
-/** Runs between BEGIN IMMEDIATE and COMMIT, on the SAME connection as the row
- *  insert; a throw rolls the whole append back. Synchronous by construction so
- *  nothing can interleave inside the transaction. */
-export type JournalRowTransactionHook = (db: Database.Database, row: JournalRow) => void
-
-/** An operation's receipt, committed with the journal write that makes it true: `write` runs
- *  inside that transaction on the same connection, `committed` synchronously right after its
- *  COMMIT and never after a rollback. */
+/** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  fold?: (draft: JournalReducerState) => void
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
 }
+
+export type JournalReceiptPreparation =
+  | JournalOperationReceipt
+  | ((rows: readonly JournalRow[]) => JournalOperationReceipt | undefined)
 
 export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
   return {
+    fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
     write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
     committed: () => receipts.forEach((receipt) => receipt.committed())
   }
 }
 
-/** `run`, with `receipt` written in its transaction only when `changed` says it wrote something. */
 export function writeReceiptIfChanged<T>(
   run: (db: Database.Database) => T,
   changed: (result: T) => boolean,
@@ -51,72 +50,65 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
-  /** Standing hook run for EVERY appended row — the queued-draft returned
-   *  transition rides here so no rejection path can bypass it. Bookkeeping: it
-   *  runs in its own savepoint, so its failure is reported and never vetoes the row. */
-  inTransaction?: JournalRowTransactionHook
-  /** After any rollback, so a cache filled inside the transaction cannot outlive it. */
-  rolledBack?: () => void
-  /** Rows an OS crash may lose without losing anything but streamed text; they commit without
-   *  the per-commit fsync (`isJournalStreamedTextRevision`). */
+  project?: (rows: readonly JournalRow[]) => JournalRow[]
+  prepare?: (
+    db: Database.Database,
+    rows: readonly JournalRow[],
+    savedAt: number,
+    finishFold?: (draft: JournalReducerState) => void
+  ) => () => void
+  commit: (rows: readonly JournalRow[], savedAt: number, inputChanged?: boolean) => void
+  /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
+  outputRevision?: (row: JournalRow) => boolean
 }
-
-const BOOKKEEPING_SAVEPOINT = 'journal_row_bookkeeping'
 
 export class JournalRowWriter {
   constructor(private readonly deps: JournalRowWriterDeps) {}
 
   enqueue(
     build: (seq: number, ts: number) => JournalRow,
-    hook?: JournalRowTransactionHook,
-    receipt?: JournalOperationReceipt
+    prepareReceipt?: JournalReceiptPreparation
   ): Promise<JournalRow> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
       const savedAt = this.deps.now()
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
-      try {
-        // One INSERT: the chat's epoch pointer moves only when the epoch does.
-        this.deps.database().transaction(
-          (db) => {
+      const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
+      const streamed = !receipt && this.streamed([row])
+      const inputChanged = Boolean(receipt) || !this.outputOnly([row])
+      this.deps.database().transaction(
+        (db) => {
+          if (!this.deps.prepare) {
             insertJournalRow(db, this.deps.sessionId, row, savedAt)
-            hook?.(db, row)
-            receipt?.write(db, row)
-            this.runBookkeeping(db, row)
-          },
-          !hook && !receipt && this.streamed([row])
-        )
-      } catch (error) {
-        this.deps.rolledBack?.()
-        throw error
-      }
-      // COMMIT landed, so the row is durable: adopt it before anything that can
-      // fail. Rejecting here instead would leave the next append reusing a
-      // sequence the table already holds. The ledger first: it cannot throw, the fold can.
+          }
+          const adopt = this.deps.prepare?.(db, [row], savedAt, receipt?.fold)
+          receipt?.write(db, this.project([row])[0])
+          return adopt
+        },
+        streamed,
+        (adopt) => adopt?.()
+      )
       receipt?.committed()
-      this.deps.commit([row], savedAt)
-      return row
+      this.deps.commit([row], savedAt, inputChanged)
+      return this.project([row])[0]!
     })
   }
 
-  /** Several rows in ONE transaction, in order, planned once the lane is this append's: none is
-   *  durable unless all are, so no reader ever meets some without the rest. `receiptRow` picks the
-   *  row `receipt` names. */
+  /** Plan on the write lane and commit all rows atomically; receiptRow identifies the receipt target. */
   enqueueRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
-    receipt?: JournalOperationReceipt,
+    receipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): Promise<JournalRow[]> {
     return this.deps.serialize(() => this.writeRows(plan, receipt, receiptRow))
   }
 
-  /** `enqueueRows`' write, for a caller already running at its own turn in the queue. */
+  /** Caller must already own the write lane. */
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
-    receipt?: JournalOperationReceipt,
+    prepareReceipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
@@ -129,64 +121,49 @@ export class JournalRowWriter {
     for (const row of rows) {
       assertJournalFence(row.fence, this.deps.highestFence())
     }
-    try {
-      this.deps.database().transaction(
-        (db) => {
+    const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
+    const streamed = !receipt && this.streamed(rows)
+    const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
+    this.deps.database().transaction(
+      (db) => {
+        if (!this.deps.prepare) {
           for (const row of rows) {
             insertJournalRow(db, this.deps.sessionId, row, ts)
-            this.runBookkeeping(db, row)
           }
-          receipt?.write(db, receiptRow?.(rows))
-        },
-        !receipt && this.streamed(rows)
-      )
-    } catch (error) {
-      this.deps.rolledBack?.()
-      throw error
-    }
+        }
+        const adopt = this.deps.prepare?.(db, rows, ts, receipt?.fold)
+        receipt?.write(db, receiptRow?.(this.project(rows)))
+        return adopt
+      },
+      streamed,
+      (adopt) => adopt?.()
+    )
     receipt?.committed()
-    this.deps.commit(rows, ts)
-    return rows
+    this.deps.commit(rows, ts, inputChanged)
+    return this.project(rows)
   }
 
-  /** Assign the next sequence, make the row durable, and fold it through the SAME reducer
-   *  replay uses — all inside one serialized step — answering where the row landed. */
+  private project(rows: readonly JournalRow[]): JournalRow[] {
+    return this.deps.project?.(rows) ?? [...rows]
+  }
+
+  /** Serialize sequence assignment, durable write and replay-equivalent folding. */
   append(
     build: (seq: number, ts: number) => JournalRow,
-    hook?: JournalRowTransactionHook,
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    return this.enqueue(build, hook, receipt).then((row) => ({
+    return this.enqueue(build, receipt).then((row) => ({
       epoch: row.epoch,
       sequence: row.seq
     }))
   }
 
+  private outputOnly(rows: readonly JournalRow[]): boolean {
+    return this.deps.outputRevision !== undefined && rows.every(this.deps.outputRevision)
+  }
+
   private streamed(rows: readonly JournalRow[]): boolean {
     const { streamedTextRevision } = this.deps
     return streamedTextRevision !== undefined && rows.every((row) => streamedTextRevision(row))
-  }
-
-  private runBookkeeping(db: Database.Database, row: JournalRow): void {
-    const hook = this.deps.inTransaction
-    if (!hook) {
-      return
-    }
-    db.exec(`SAVEPOINT ${BOOKKEEPING_SAVEPOINT}`)
-    try {
-      hook(db, row)
-      db.exec(`RELEASE ${BOOKKEEPING_SAVEPOINT}`)
-    } catch (error) {
-      db.exec(`ROLLBACK TO ${BOOKKEEPING_SAVEPOINT}`)
-      db.exec(`RELEASE ${BOOKKEEPING_SAVEPOINT}`)
-      this.deps.rolledBack?.()
-      // The draft store re-derives what this missed from the committed rows: at open, and in
-      // the drain step before a draft sends.
-      console.warn('[journal-append] row bookkeeping skipped:', {
-        sessionId: this.deps.sessionId,
-        kind: row.kind,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
   }
 }

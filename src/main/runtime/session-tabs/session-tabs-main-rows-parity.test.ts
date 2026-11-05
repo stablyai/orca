@@ -1,7 +1,4 @@
-// Phone-mirror parity (flip step 7) against main's projection: with the switch on, the rows a
-// phone or paired desktop reads for a workspace main owns follow main's layout after a create, a
-// close and a rename, whatever rows the window's next publication still carries. Main's rows land
-// with that publication (the window republishes after each layout frame), not before it.
+// Phones/paired desktops must project main layout after create/close/rename despite stale window rows; rows arrive with the window's next publication.
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
@@ -10,11 +7,19 @@ import {
   HEADLESS_SECOND_LEAF_ID,
   HEADLESS_THIRD_LEAF_ID,
   TEST_WORKTREE_ID
-} from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime
 } from '../terminal/surface/terminal-surface-replies.test-fixture'
+import {
+  MOVED_STRIP,
+  SAVED_GROUP_ID,
+  SAVED_STRIP,
+  moveAndSplitTabs,
+  tabStrip,
+  threeTabSurfaceRuntime
+} from './session-tabs-layout-moves.test-fixture'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -149,5 +154,22 @@ describe('session.tabs rows follow main’s layout (switch on)', () => {
     })
 
     expect(await phoneActiveRow(runtime)).toBe(row(HEADLESS_SECOND_LEAF_ID))
+  })
+
+  it("a reorder and a move to a split main made, before the window's groups caught up", async () => {
+    const { runtime } = threeTabSurfaceRuntime()
+    runtime.attachWindow(1)
+    const publication = (version: number): RuntimeMobileSessionTabsSnapshot => ({
+      ...stalePublication(version),
+      activeGroupId: SAVED_GROUP_ID,
+      tabGroups: [{ id: SAVED_GROUP_ID, activeTabId: SURFACE_TAB_ID, tabOrder: SAVED_STRIP[0]! }]
+    })
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [publication(1)] })
+    await moveAndSplitTabs(runtime)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [publication(2)] })
+
+    expect(tabStrip(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`))).toEqual(
+      MOVED_STRIP
+    )
   })
 })

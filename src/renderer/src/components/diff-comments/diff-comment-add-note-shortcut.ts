@@ -10,9 +10,7 @@ import {
   type DiffCommentLineTarget
 } from './diff-comment-line-range'
 
-// Why: the "+" button is mouse-only (it exists only under the cursor), so the bindable
-// Add Review Note chord is the keyboard path into the same composer — and because it reads the
-// editor's selection, shift+arrow then chord is the keyboard multi-line select.
+// The hover-only add button needs a keyboard path; editor selection supplies multiline anchors.
 
 type AddNoteShortcutEditor = Pick<
   monacoEditor.ICodeEditor,
@@ -55,9 +53,7 @@ export function installDiffCommentAddNoteShortcut({
   onOpenComposer: (args: { lineNumber: number; startLine?: number; top: number }) => void
 }): () => void {
   return installEditorAddReviewNoteShortcut(editor.getContainerDomNode(), () => {
-    // Why: an open draft card owns the chord (isComposerOpen reports it, and the card's own guard
-    // eats presses from its textarea); claiming it here too would re-open the card at the editor's
-    // selection and move what the user already typed.
+    // The open composer owns this chord; reopening at the editor selection would move the user’s draft.
     if (isComposerOpen()) {
       return true
     }

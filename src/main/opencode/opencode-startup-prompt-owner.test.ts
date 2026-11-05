@@ -72,20 +72,21 @@ function fixture() {
 }
 
 describe('native prompt admission after spawn commit', () => {
-  it('waits through delayed persistence and later runtime identity admission', async () => {
+  it('cancels a registration-exited outcome despite later facts and identity admission', async () => {
     const f = fixture()
+    const outcome = { kind: 'registration-exited' as const, result: f.result }
     const committed = commitPtyWithOpenCodePromptIntent(f.context, async () => {
       await f.waiting
-      f.facts.recordSpawnCommit(f.result)
-      return f.result
+      return outcome
     })
     expect(control.claim(f.body)).toBe('pending')
     f.release()
-    await committed
-    expect(control.claim(f.body)).toBe('pending')
-    f.admit()
-    expect(control.claim(f.body)).toBe(true)
+    await expect(committed).resolves.toBe(outcome)
     expect(control.claim(f.body)).toBe(false)
+    f.facts.recordSpawnCommit(f.result)
+    f.admit()
+    expect(control.claim(f.body)).toBe(false)
+    expect(control.claim({ ...f.body, requestId: 'late-operation' })).toBe(false)
   })
 
   it('keeps pre-commit driving input sticky even if the draft is erased', async () => {
@@ -100,17 +101,6 @@ describe('native prompt admission after spawn commit', () => {
     expect(control.claim(f.body)).toBe('pending')
     f.release()
     await committed
-    f.admit()
-    expect(control.claim(f.body)).toBe(false)
-  })
-
-  it('cancels a failed commit without allowing later admission', async () => {
-    const f = fixture()
-    await expect(
-      commitPtyWithOpenCodePromptIntent(f.context, async () => {
-        throw new Error('persistence rejected')
-      })
-    ).rejects.toThrow('persistence rejected')
     f.admit()
     expect(control.claim(f.body)).toBe(false)
   })

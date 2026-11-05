@@ -1,15 +1,17 @@
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { AppState } from '../types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
+import {
+  getGitHubPRCacheKey,
+  type RuntimeFocusSettings
+} from '../../../../shared/github/github-cache-key'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
-import { derivePRCheckStatus } from '../../../../shared/pr-check-status'
+import { derivePRCheckStatus } from '../../../../shared/source-control/checks/pr-check-status'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
-
-export const deriveCheckStatusFromChecks = derivePRCheckStatus
 
 export function syncPRChecksStatus(
   state: AppState,
@@ -19,7 +21,7 @@ export function syncPRChecksStatus(
   checks: PRCheckDetail[],
   headSha?: string,
   prRepo?: GitHubOwnerRepo | null,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false
@@ -42,8 +44,7 @@ export function syncPRChecksStatus(
   if (!prEntry?.data) {
     return null
   }
-  // Why: fork PR rediscovery can retarget the branch cache while an older
-  // checks request is still in flight; only the matching PR repo may update it.
+  // Fork rediscovery can retarget branch cache mid-check request; update only matching PR repo identity.
   if (prRepo !== undefined && !samePRRepo(prEntry.data.prRepo, prRepo)) {
     return null
   }
@@ -51,19 +52,46 @@ export function syncPRChecksStatus(
     return null
   }
 
-  const nextStatus = deriveCheckStatusFromChecks(checks)
+  const nextStatus = derivePRCheckStatus(checks)
+  // Detail pages are partial; retain the complete same-head summary until the next PR lookup.
   if (prEntry.data.checksStatus === nextStatus) {
     return null
   }
 
+  const hostedKey = getHostedReviewCacheKey(
+    repoPath,
+    normalized,
+    settings,
+    repoId,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
+  const hostedEntry = state.hostedReviewCache?.[hostedKey]
+  const hosted = hostedEntry?.data
   return {
+    ...(hosted?.provider === 'github' &&
+    hosted.number === prEntry.data.number &&
+    hosted.headSha === prEntry.data.headSha &&
+    samePRRepo(hosted.githubRepository, prEntry.data.prRepo)
+      ? {
+          hostedReviewCache: {
+            ...state.hostedReviewCache,
+            [hostedKey]: {
+              ...hostedEntry,
+              data: { ...hosted, status: nextStatus, checksSummary: undefined }
+            }
+          }
+        }
+      : {}),
     prCache: {
       ...state.prCache,
       [prCacheKey]: {
         ...prEntry,
         data: {
           ...prEntry.data,
-          checksStatus: nextStatus
+          checksStatus: nextStatus,
+          checksSummary: undefined
         }
       }
     }

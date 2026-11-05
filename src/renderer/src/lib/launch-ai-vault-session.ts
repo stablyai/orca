@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
 
@@ -34,10 +34,7 @@ export function launchAiVaultSessionInNewTab(args: {
     args.splitDirection && args.targetGroupId
       ? { sourceGroupId: args.targetGroupId, splitDirection: args.splitDirection }
       : undefined
-  const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-    store,
-    args.worktreeId
-  )
+  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why an empty group first: the paired host creates the tab after a round trip.
     const splitGroupId = split

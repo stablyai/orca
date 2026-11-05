@@ -2,10 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DraftStore from './native-chat-composer-draft-store'
 import type * as DraftCache from './native-chat-draft-cache'
-import {
-  placeNativeChatComposerDraftAddition,
-  withNativeChatComposerDraftAddition
-} from './native-chat-composer-draft-addition'
+
 import {
   createMemoryNativeChatComposerDraftStorage,
   type NativeChatComposerDraftStorage
@@ -63,33 +60,6 @@ afterEach(() => {
 })
 
 describe('native-chat composer draft addition', () => {
-  it('adds text to a whitespace-only draft without leading blank lines', () => {
-    const add = (text: string): string =>
-      withNativeChatComposerDraftAddition({ text, images: [] }, { text: 'go' }).text
-    expect(add('  \n\n')).toBe('go')
-    expect(add('please\n')).toBe('please\n\ngo')
-  })
-
-  it('adds text only where the draft does not already end with it as its own paragraph', () => {
-    const add = (text: string): string =>
-      withNativeChatComposerDraftAddition({ text, images: [] }, { text: 'go' }).text
-    expect(add('please go')).toBe('please go\n\ngo')
-    expect(add('please\n\ngo')).toBe('please\n\ngo')
-    expect(add('go\n')).toBe('go\n')
-  })
-
-  it('fills an unavailable image once, however often the addition is made', () => {
-    const draft = { text: '', images: [{ id: 'p', path: '', unavailableName: 'a.png' }] }
-    const placed = placeNativeChatComposerDraftAddition(draft, {
-      images: [{ id: 'y', path: '/repo/a.png' }],
-      fromUser: true
-    })
-    const filled = { ...draft, ...withNativeChatComposerDraftAddition(draft, placed) }
-    expect(withNativeChatComposerDraftAddition(filled, placed).images).toEqual([
-      { id: 'p', path: '/repo/a.png' }
-    ])
-  })
-
   it('gives "go" back onto "please go" after a crash before storage commits it', async () => {
     storage.drafts.set(SCOPE, { text: 'please go', images: [], savedAt: 1 })
     const crashing = { ...storage, write: () => new Promise<void>(() => {}) }

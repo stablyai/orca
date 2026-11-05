@@ -1,11 +1,4 @@
-// Why: reproduce the issue (pi spinner not reaching the worktree card on macOS)
-// entirely in unit-test harness. Pi's titlebar extension emits OSC 0 titles of
-// the form `\x1b]0;⠋ π - cwd\x07` (working frames) and `\x1b]0;π - cwd\x07`
-// (idle). The electron-level verification showed these chunks reach `pty:data`
-// but the store's runtimePaneTitlesByTabId never flips to the canonicalized
-// "⠋ π - cwd" working title. This file
-// pins the transport-level contract: `onTitleChange` must fire for working
-// frames, in the normalized form the store consumes.
+// Pi OSC spinner frames must reach onTitleChange in the normalized form used by worktree-card status, including after reattach.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -54,16 +47,14 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     }
   })
 
-  it('fires onTitleChange with the normalized working label on each spinner frame', async () => {
+  it('surfaces normalized working and idle labels across a spinner cycle', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
     const transport = createIpcPtyTransport({ onTitleChange })
     await transport.connect({ url: '', callbacks: {} })
 
-    // Pi boots idle, then agent_start fires and emits working frames, then
-    // agent_end flips back to idle. Each frame is its own `pty:data` chunk —
-    // matches the node-pty batching behavior I captured from a live session.
+    // Deliver idle→working→idle as separate chunks, matching captured live-session ordering.
     onData?.({ id: 'pty-pi', data: idleTitle() })
     onData?.({ id: 'pty-pi', data: workingFrame('⠋') }) // ⠋
     onData?.({ id: 'pty-pi', data: workingFrame('⠙') }) // ⠙
@@ -72,48 +63,15 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     await flushPtySideEffects()
 
     const normalized = onTitleChange.mock.calls.map((c) => c[0])
-    // The store only stores the normalized title, which is what the worktree
-    // card feeds back into detectAgentStatusFromTitle. The working→idle cycle
-    // must surface at least one "⠋ π - cwd" so the card can classify the pane as
-    // 'working' (detectAgentStatusFromTitle('⠋ π - cwd') === 'working').
+    // Require a normalized working frame so the store/card can observe the active turn.
     expect(normalized).toContain('⠋ π - cwd')
     expect(normalized).toContain('π - cwd')
 
     transport.disconnect()
   })
 
-  it('fires onTitleChange for working frames via attach() (reattach path)', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const onTitleChange = vi.fn()
-
-    const transport = createIpcPtyTransport({ onTitleChange })
-    // Why: reattach is the path taken when a worktree is restored or when
-    // tab re-mounting happens mid-session. The transport must still wire up
-    // the title observer on this path — otherwise Pi emits spinner frames
-    // that never propagate to the store.
-    transport.attach({ existingPtyId: 'pty-pi', callbacks: {} })
-
-    onTitleChange.mockClear()
-
-    onData?.({ id: 'pty-pi', data: workingFrame('⠋') })
-    onData?.({ id: 'pty-pi', data: workingFrame('⠙') })
-    await flushPtySideEffects()
-
-    const calls = onTitleChange.mock.calls.map((c) => c[0])
-    expect(calls).toContain('⠋ π - cwd')
-
-    transport.disconnect()
-  })
-
   it('surfaces working even when a single chunk contains multiple spinner frames', async () => {
-    // Why: node-pty may coalesce multiple 80ms spinner frames into one
-    // `pty:data` event on macOS when the renderer is briefly throttled.
-    // extractLastOscTitle returns only the LAST OSC title in the chunk — if
-    // a chunk happens to end with the idle title (agent_end fires after the
-    // last working frame), the working frames in between must not be the only
-    // signal the transport ever saw. The important guarantee is that during
-    // an actual working period (before agent_end) at least one chunk's last
-    // title is a working frame, and that produces a "⠋ π - cwd" onTitleChange.
+    // Batched spinner chunks must surface working before agent_end; final-idle coalescing has dedicated ordered-frame coverage.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 

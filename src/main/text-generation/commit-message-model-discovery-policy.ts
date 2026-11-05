@@ -1,7 +1,7 @@
 import { buildClaudeModelListArgs } from '../../shared/claude-model-list-probe'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
-import { planAgentBinary } from '../../shared/commit-message-plan'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
+import { planAgentBinary } from '../../shared/agent-launch/startup/agent-command-plan'
 import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import { formatAgentCliFailureMessage } from './source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from './source-control-text-generation-types'
@@ -64,8 +64,7 @@ export function finalizeModelDiscoveryOutput(
       models = [configuredDefault, ...models]
     }
   }
-  // A sentinel model in the static spec (for example `default`) means the CLI
-  // should keep its configured provider even when discovery lists concrete models.
+  // Static default sentinels preserve the CLI's configured provider despite concrete discovered models.
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
       ? spec.defaultModelId

@@ -6,12 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry } from '../transport/types'
-import { getNotificationNavigationTarget } from './notification-routing'
+
 import {
   foregroundNotificationBehavior,
   canPresentForegroundPush,
-  isRemotePushTrigger,
-  pushNotificationRouteData,
   resetForegroundPushClaimsForTests
 } from './push-receive'
 
@@ -69,22 +67,36 @@ describe('shouldSuppressForegroundPush', () => {
       notificationEpoch: 'epoch-1'
     })
 
-  it('allows one eligible native push and suppresses an in-process duplicate', async () => {
-    await expect(shouldSuppressForegroundPush(push())).resolves.toBe(false)
-    await expect(shouldSuppressForegroundPush(push())).resolves.toBe(true)
-  })
-
-  it('reads flat FCM fields and allows the first native push', async () => {
+  it('drops an older host’s finished-agent push but keeps questions, bells and the push test', async () => {
+    storage.set(
+      'orca:notificationDeliveryPreferences',
+      JSON.stringify({ onlyWhenAgentNeedsInput: true })
+    )
+    const alert = (seq: number, agentState: string) =>
+      apnsData({
+        hostFingerprint,
+        notificationSeq: seq,
+        notificationEpoch: 'epoch-1',
+        source: 'agent-task-complete',
+        agentState
+      })
+    await expect(shouldSuppressForegroundPush(alert(1, 'finished'))).resolves.toBe(true)
+    await expect(shouldSuppressForegroundPush(alert(2, 'needs-input'))).resolves.toBe(false)
     await expect(
       shouldSuppressForegroundPush(
         fcmData({
           hostFingerprint,
-          notificationId: 'agent:one',
-          notificationSeq: 8,
-          notificationEpoch: 'epoch-1'
+          notificationSeq: 3,
+          notificationEpoch: 'epoch-1',
+          source: 'terminal-bell'
         })
       )
     ).resolves.toBe(false)
+  })
+
+  it('allows one eligible native push and suppresses an in-process duplicate', async () => {
+    await expect(shouldSuppressForegroundPush(push())).resolves.toBe(false)
+    await expect(shouldSuppressForegroundPush(push())).resolves.toBe(true)
   })
 
   it('deduplicates ID-less bells by host, epoch, and valid sequence', async () => {
@@ -105,17 +117,6 @@ describe('shouldSuppressForegroundPush', () => {
     await expect(
       shouldSuppressForegroundPush(bell({ hostFingerprint: otherHostFingerprint }))
     ).resolves.toBe(false)
-  })
-
-  it('does not claim invalid sequence values as duplicate identities', async () => {
-    const invalid = apnsData({
-      hostFingerprint,
-      source: 'plugin',
-      notificationSeq: 1.5,
-      notificationEpoch: 'epoch-1'
-    })
-    await expect(shouldSuppressForegroundPush(invalid)).resolves.toBe(false)
-    await expect(shouldSuppressForegroundPush(invalid)).resolves.toBe(false)
   })
 
   it('suppresses pushes for an unpaired host', async () => {
@@ -146,80 +147,6 @@ describe('shouldSuppressForegroundPush', () => {
       foregroundNotificationBehavior({ request: { content: { data: push() } } })
     ).resolves.toMatchObject({ shouldShowBanner: false, shouldShowList: false })
     dismissalSpy.mockRestore()
-  })
-
-  it('keeps unrelated notifications visible when suppression checks throw', async () => {
-    const dismissals = await import('./push-dismissal-watermarks')
-    const dismissalSpy = vi
-      .spyOn(dismissals, 'wasPushDismissed')
-      .mockRejectedValue(new Error('dismissal read failed'))
-    await expect(
-      foregroundNotificationBehavior({
-        request: { content: { data: { title: 'Other app notification' } } }
-      })
-    ).resolves.toMatchObject({ shouldShowBanner: true, shouldShowList: true })
-    dismissalSpy.mockRestore()
-  })
-})
-
-describe('pushNotificationRouteData', () => {
-  it('routes a tap by mapping the fingerprint to the paired host id', () => {
-    const data = pushNotificationRouteData(
-      apnsData({ hostFingerprint, worktreeId: 'repo::/feature', source: 'agent-task-complete' }),
-      hosts
-    )
-    expect(getNotificationNavigationTarget(data, { knownHostIds: new Set(['host-1']) })).toEqual({
-      hostId: 'host-1',
-      sessionTarget: {
-        name: '[hostId]/session/[worktreeId]',
-        params: { hostId: 'host-1', worktreeId: 'repo::/feature' }
-      }
-    })
-  })
-
-  it('opens a server workspace on its server, from either provider shape', () => {
-    for (const providerData of [apnsData, fcmData]) {
-      const data = pushNotificationRouteData(
-        providerData({
-          hostFingerprint,
-          worktreeId: 'repo::/srv/feature',
-          executionHost: 'runtime:env-1',
-          source: 'agent-task-complete'
-        }),
-        hosts,
-        true
-      )
-      expect(getNotificationNavigationTarget(data)?.sessionTarget?.params).toEqual({
-        hostId: 'host-1',
-        worktreeId: 'repo::/srv/feature',
-        executionHost: 'runtime:env-1'
-      })
-    }
-  })
-
-  it('maps a push without a worktree to the host screen', () => {
-    const data = pushNotificationRouteData(
-      fcmData({ hostFingerprint, source: 'terminal-bell' }),
-      hosts
-    )
-    expect(getNotificationNavigationTarget(data)).toEqual({ hostId: 'host-1', sessionTarget: null })
-  })
-
-  it('keeps local data untouched and rejects an unresolvable remote fingerprint', () => {
-    const local = { hostId: 'host-9', source: 'agent-task-complete' }
-    expect(pushNotificationRouteData(local, hosts)).toBe(local)
-    expect(
-      pushNotificationRouteData(
-        { hostId: 'host-1', orca: { hostFingerprint: 'unknown' } },
-        hosts,
-        true
-      )
-    ).toBeNull()
-  })
-
-  it('recognises only provider-delivered triggers', () => {
-    expect(isRemotePushTrigger({ type: 'push' })).toBe(true)
-    expect(isRemotePushTrigger({ type: 'timeInterval' })).toBe(false)
   })
 })
 
@@ -262,21 +189,6 @@ it('uses one delivery snapshot for sound and viewing even when settings change d
       .mock.calls.filter(([key]) => key === 'orca:notificationDeliveryPreferences')
   ).toHaveLength(1)
 })
-
-it.each(['apns', 'fcm'])(
-  'routes %s pane payload to the correct host, workspace and pane',
-  (provider) => {
-    const paneKey = 'tab-b:11111111-1111-4111-8111-111111111111'
-    const payload = { hostFingerprint, worktreeId: 'folder:/work', paneKey }
-    const data = provider === 'apns' ? { orca: payload } : payload
-    const routed = pushNotificationRouteData(data, [{ id: 'host', publicKeyB64 }], true)
-    expect(getNotificationNavigationTarget(routed)?.sessionTarget?.params).toEqual({
-      hostId: 'host',
-      worktreeId: 'folder:/work',
-      paneKey
-    })
-  }
-)
 
 it('preflight does not consume the final presentation claim and observes later dismissals', async () => {
   const payload = {

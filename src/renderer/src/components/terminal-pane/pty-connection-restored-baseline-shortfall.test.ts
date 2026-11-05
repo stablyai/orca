@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -154,6 +158,7 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
       terminalMainSideEffectAuthority: true
     } as StoreState['settings']
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -167,9 +172,12 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     connectPanePty(
       pane as never,
       createManager(1) as never,
-      createDeps({
-        isVisibleRef: { current: true }
-      }) as never
+      bindPaneAgentTitleMocks(
+        createDeps({
+          isVisibleRef: { current: true }
+        }) as never,
+        agentTitleMocks
+      )
     )
     await flushAsyncTicks(6)
     const transportOptions = createdTransportOptions.at(-1) as {
@@ -202,9 +210,7 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
   }
 
   it('recovers the backlog a blank snapshot claimed to have painted', async () => {
-    // The model over-reports: seq 2_472 with no cell content behind it. Every
-    // chunk carrying the missing tail sits at or below that seq, so the old
-    // baseline dropped all of it as duplicates with nothing left to re-send.
+    // An imageless snapshot overclaims seq coverage; suppressing its ACK backlog would permanently drop the missing tail.
     const { pane, dataCallback } = await revealPaneWithModelSnapshot({
       data: BLANK_MODEL_IMAGE,
       seq: 2_472,
@@ -215,12 +221,10 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     await flushAsyncTicks(8)
     expect(writtenData(pane)).toContain('TAIL-INSIDE-WINDOW')
 
-    // Straddling the claimed baseline: the whole chunk is recovered, not sliced.
     dataCallback('TAIL-STRADDLING', { seq: 2_475, rawLength: 15 })
     await flushAsyncTicks(8)
     expect(writtenData(pane)).toContain('TAIL-STRADDLING')
 
-    // An idle shell never re-sends: no further restore is needed to heal.
     dataCallback('LIVE-AFTER-BASELINE', { seq: 2_494, rawLength: 19 })
     await flushAsyncTicks(8)
     expect(writtenData(pane)).toContain('LIVE-AFTER-BASELINE')
@@ -242,8 +246,7 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
   })
 
   it('still suppresses backlog duplicates behind a snapshot that painted content', async () => {
-    // Regression guard for the normal path: a snapshot with real cell content
-    // keeps its drop-everything baseline, so the ACK backlog stays suppressed.
+    // Real cell content still authorizes baseline suppression of already-painted ACK backlog.
     const { pane, dataCallback } = await revealPaneWithModelSnapshot({
       data: 'restored snapshot\r\n',
       seq: 2_472,
@@ -254,7 +257,6 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     await flushAsyncTicks(8)
     expect(writtenData(pane)).not.toContain('COVERED-DUPLICATE')
 
-    // Only the post-baseline remainder of a straddling chunk is written.
     dataCallback('ABCDEFGHIJKLMNOPQRSTU', { seq: 2_478, rawLength: 21 })
     await flushAsyncTicks(8)
     expect(writtenData(pane)).toContain('PQRSTU')

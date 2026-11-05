@@ -1,11 +1,3 @@
-// Which Claude subagent a frame belongs to, read from Claude's task frames.
-//
-// The host's child records decide what every subagent is doing and what its saved row says; the
-// task-frame decoder is what feeds them. This only names children, so each row a child writes is
-// filed under it: `task_id` is the key, and each `tool_use_id` is one run of it, since Claude
-// re-announces a resumed task under a NEW tool id. An announcement that a task is not a subagent
-// is remembered too, so later frames for it are never read as a subagent's.
-
 import { BoundedMap } from '../../shared/bounded-map'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
@@ -16,21 +8,16 @@ import {
 } from './claude-subagent-linkage'
 import { readClaudeSubagentTaskFrame } from './claude-subagent-task-frames'
 
-/** Children whose current run attribution remembers; an older one's rows read as its first run. */
+/** Bound live run attribution; older entries can fall back to journaled attempts. */
 const MAX_KNOWN_SUBAGENTS = 1024
 
 type KnownSubagent = { run: string | null; attempt: number }
 
 export type ClaudeSubagentIdentitiesDeps = {
-  /** Whether a tool id was forwarded at the TOP level. A child parented to one
-   *  was spawned by a call the transcript shows, so its announcement is still
-   *  expected; a child parented to anything else names an id that only ever
-   *  existed inside a sidechain, which this CLI will never announce. */
+  /** Top-level spawn calls can still receive an announcement; sidechain-only calls cannot. */
   isForwardedParentTool?: (toolUseId: string) => boolean
-  /** The reference naming the child that journaled a tool call, when a child
-   *  did. It is how a grandchild's row reaches the agent that spawned it. */
+  /** Resolve grandchildren through the child that journaled their spawn call. */
   childOwnerRefOf?: (toolUseId: string) => string | null
-  /** What earlier provider runs of this session journaled. */
   journaled?: ClaudeJournaledSubagents
 }
 
@@ -39,7 +26,6 @@ export class ClaudeSubagentIdentities {
   private readonly known = new BoundedMap<string, KnownSubagent>({
     maxEntries: MAX_KNOWN_SUBAGENTS
   })
-  /** Who produced a row, for every write site journaling this session. */
   readonly linkage: ClaudeSubagentLinkageSource & ClaudeAgentLinkageSource
 
   constructor(private readonly deps: ClaudeSubagentIdentitiesDeps) {
@@ -57,7 +43,6 @@ export class ClaudeSubagentIdentities {
     })
   }
 
-  /** Consume a `message:system:task_*` frame. Returns false when it is not one. */
   observeSystemFrame(message: Record<string, unknown>): boolean {
     const frame = readClaudeSubagentTaskFrame(message)
     if (!frame) {
@@ -88,8 +73,7 @@ export class ClaudeSubagentIdentities {
     this.known.clear()
   }
 
-  /** A new spawn call is the child's next run; one an earlier provider process ran it under was
-   *  that process's, so this run follows the last one its rows record. */
+  /** Count new spawn calls after the latest live or journaled attempt. */
   private announce(taskId: string, run: string | null): void {
     const known = this.known.get(taskId)
     if (known && (run === null || run === known.run)) {

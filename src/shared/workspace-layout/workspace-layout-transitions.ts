@@ -1,7 +1,4 @@
-// Runtime-internal transitions (design 2.3): facts the runtime sees about processes, hosts and
-// owners, applied through the same module as commands. No client sends these. Transitions whose
-// producer arrives later (orphan adoption, legacy worker recovery, client-hosted pages, agent
-// launch verdicts, sleep capture, partition moves) ship with that producer's PR.
+// Apply runtime-only process, host and owner facts through the command model; clients cannot send these transitions.
 
 import { isSameTerminal } from './terminal-owner-invariants'
 import { omitStoredFields } from './stored-record-fields'

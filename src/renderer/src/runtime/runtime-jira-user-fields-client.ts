@@ -3,11 +3,11 @@ import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
   JiraUser
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import {
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
   JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE
-} from '../../../shared/protocol-version'
+} from '../../../shared/jira/jira-detail-capabilities'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,

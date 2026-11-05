@@ -13,7 +13,7 @@ export class ProfileStateIndeterminateWriteError extends Error {
   }
 }
 
-/** Own the write transaction; joining a caller's transaction would weaken its revision fence. */
+/** Joining an existing transaction would weaken this write's revision fence. */
 export function withProfileStateWriteTransaction<T>(db: Database.Database, write: () => T): T {
   if (db.isTransaction) {
     throw new Error('Profile state write requires an idle database connection')
@@ -27,9 +27,7 @@ export function withProfileStateWriteTransaction<T>(db: Database.Database, write
     return result
   } catch (error) {
     if (!db.isTransaction) {
-      // SQLite can roll back a failed statement itself; a failed COMMIT is ambiguous, except
-      // SQLITE_FULL: with powersafe overwrite (the default VFS) the WAL commit frame is the last
-      // write, so a write that ran out of room means no commit frame landed.
+      // Auto-rollback leaves COMMIT uncertain except SQLITE_FULL: the default powersafe VFS writes its frame last.
       if (committing && storageCapacityErrorCode(error) !== 'SQLITE_FULL') {
         throw new ProfileStateIndeterminateWriteError(error, undefined)
       }

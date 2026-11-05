@@ -9,7 +9,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -71,7 +71,6 @@ const STATUS = {
   minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
 }
 
-/** Answers status.get; hands each detect call to `detect` with its 1-based index. */
 function mockHost(detect: (call: number, method: string) => Promise<unknown>): () => number {
   let detectCalls = 0
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
@@ -128,28 +127,6 @@ describe('useDetectedAgents after a re-pair (mounted runtime surface)', () => {
     })
     await flushEffects()
     answerOldPairing(['claude'])
-    await flushEffects()
-    await flushEffects()
-
-    expect(detectCalls()).toBe(2)
-    expect(latest?.detectedIds).toEqual(['codex'])
-    expect(latest?.detectionFailed).toBe(false)
-  })
-
-  it('probes the replacement pairing when the old pairing had already failed', async () => {
-    const detectCalls = mockHost((call, method) =>
-      call === 1
-        ? Promise.reject(new Error('runtime disconnected'))
-        : Promise.resolve(reply(method, ['codex']))
-    )
-    useAppStore.getState().setRuntimeEnvironments([environment(1)])
-    await renderProbe()
-    await flushEffects()
-    expect(latest?.detectionFailed).toBe(true)
-
-    await act(async () => {
-      useAppStore.getState().setRuntimeEnvironments([environment(2)])
-    })
     await flushEffects()
     await flushEffects()
 

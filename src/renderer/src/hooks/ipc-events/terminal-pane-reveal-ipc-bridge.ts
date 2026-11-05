@@ -2,16 +2,13 @@ import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPaneRevealTarget } from '../../../../shared/terminal-pane-reveal'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 
-/**
- * External callers name a tab as its owning host does. This window mirrors a paired server's
- * terminal tab under a prefixed id, with the same leaf ids, so map the tab before revealing it.
- */
+/** Map host terminal IDs to prefixed client mirrors before reveal; leaf IDs remain stable. */
 function toWindowTabId(target: TerminalPaneRevealTarget): string {
   const host = parseExecutionHostId(target.executionHostId)
   const environmentId = host

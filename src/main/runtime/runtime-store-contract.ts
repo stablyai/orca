@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 
@@ -47,6 +47,7 @@ export type RuntimeStore = {
   getAllWorkspaceLineage?: Store['getAllWorkspaceLineage']
   setWorkspaceLineage?: Store['setWorkspaceLineage']
   getGitHubCache: Store['getGitHubCache']
+  onGitHubCacheWritten?: Store['onGitHubCacheWritten']
   getWorkspaceSession?: Store['getWorkspaceSession']
   getWorkspaceSessionHostIds?: Store['getWorkspaceSessionHostIds']
   onWorkspaceSessionWritten?: Store['onWorkspaceSessionWritten']
@@ -54,6 +55,8 @@ export type RuntimeStore = {
   onStateWritten?: Store['onStateWritten']
   setWorkspaceSession?: Store['setWorkspaceSession']
   getRemoteLayoutSnapshots?: Store['getRemoteLayoutSnapshots']
+  readTerminalScrollbackSnapshotAsync?: Store['readTerminalScrollbackSnapshotAsync']
+  statTerminalScrollbackSnapshotSize?: Store['statTerminalScrollbackSnapshotSize']
   runDurableMutation?: Store['runDurableMutation']
   flushOrThrow?: Store['flushOrThrow']
   flushPendingOrThrowAsync?: Store['flushPendingOrThrowAsync']
@@ -72,11 +75,14 @@ export type RuntimeStore = {
   consumeOrcadMigrationTerminalRestoreHint?: Store['consumeOrcadMigrationTerminalRestoreHint']
   persistPtyBinding?: Store['persistPtyBinding']
   getPtyBindingGeneration?: Store['getPtyBindingGeneration']
+  getLayoutEditorViews?: Store['getLayoutEditorViews']
   admitTerminalPane?: Store['admitTerminalPane']
   withdrawTerminalPane?: Store['withdrawTerminalPane']
   applyLayoutCommand?: Store['applyLayoutCommand']
   applyTabRenames?: Store['applyTabRenames']
+  moveTerminalLeafToNewTab?: Store['moveTerminalLeafToNewTab']
   moveTabToWorkspaceAcrossPartitions?: Store['moveTabToWorkspaceAcrossPartitions']
+  applyEditorFileRenamesAcrossPartitions?: Store['applyEditorFileRenamesAcrossPartitions']
   getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
   onUIChanged?: Store['onUIChanged']
@@ -97,6 +103,7 @@ export type RuntimeStore = {
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
+    browserClientHostedRemoteEnabled?: GlobalSettings['browserClientHostedRemoteEnabled']
     autoRenameBranchFromWork?: GlobalSettings['autoRenameBranchFromWork']
     nativeChatAutoName?: GlobalSettings['nativeChatAutoName']
     notifications?: GlobalSettings['notifications']
@@ -107,13 +114,17 @@ export type RuntimeStore = {
     activeCodexManagedAccountIdsByRuntime?: GlobalSettings['activeCodexManagedAccountIdsByRuntime']
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
+    codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
+    orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']
     // Read by worktree placement: decides whether this project's worktrees
     // mirror into a WSL distro instead of the Windows drive.
     localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
+    // Stage 1 is opt-in: WSL-host-only explanations and routing need the setting on.
+    experimentalWslHosts?: GlobalSettings['experimentalWslHosts']
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
@@ -122,8 +133,11 @@ export type RuntimeStore = {
     newWorkspaceSetupOnly?: GlobalSettings['newWorkspaceSetupOnly']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+    agentLaunchChoices?: GlobalSettings['agentLaunchChoices']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
+    agentPermissionOverrides?: GlobalSettings['agentPermissionOverrides']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     // Read by the launch-line carry rule to name the shell a local line is typed into.
     terminalDefaultShell?: GlobalSettings['terminalDefaultShell']
@@ -131,10 +145,11 @@ export type RuntimeStore = {
     floatingTerminalCwd?: GlobalSettings['floatingTerminalCwd']
     floatingTerminalTrustedCwds?: GlobalSettings['floatingTerminalTrustedCwds']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
+    claudeSubagentNavigationEnabled?: GlobalSettings['claudeSubagentNavigationEnabled']
     followSymlinkedDirectories?: GlobalSettings['followSymlinkedDirectories']
     tabAutoGenerateTitle?: GlobalSettings['tabAutoGenerateTitle']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
-    experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
+    agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -149,6 +164,9 @@ export type RuntimeStore = {
     minimaxEndpoint?: GlobalSettings['minimaxEndpoint']
     zcodePlanSite?: GlobalSettings['zcodePlanSite']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
+    sourceControlGroupOrder?: GlobalSettings['sourceControlGroupOrder']
+    sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
+    diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
@@ -158,8 +176,7 @@ export type RuntimeStore = {
     machineName?: GlobalSettings['machineName']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
-    // Why: Phase-5 query responder kill switches — read per chunk in
-    // onPtyData to capture reply ownership at ingestion.
+    // Read query-responder kill switches per ingested chunk to capture reply ownership.
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
@@ -170,7 +187,9 @@ export type RuntimeStore = {
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
     nativeChatPermissionMode?: GlobalSettings['nativeChatPermissionMode']
-    agentNativeChatPermissionModes?: GlobalSettings['agentNativeChatPermissionModes']
+    nativeChatQueueFollowUps?: GlobalSettings['nativeChatQueueFollowUps']
+    nativeChatAutoContinueAfterUsageLimit?: GlobalSettings['nativeChatAutoContinueAfterUsageLimit']
+    nativeChatIdleStopMinutes?: GlobalSettings['nativeChatIdleStopMinutes']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']
@@ -178,9 +197,7 @@ export type RuntimeStore = {
     sourceControlAi?: GlobalSettings['sourceControlAi']
     commitMessageAi?: GlobalSettings['commitMessageAi']
   }
-  // Why: narrow to `unknown` return so test mocks can return void without
-  // a cast. The runtime never reads the return value — the persisted value
-  // is read back via getSettings() on the next access.
+  // Unknown return lets mocks return void; runtime reads persisted settings on next access, never this return.
   updateSettings?: (
     updates: Partial<GlobalSettings>,
     options?: { notifyListeners?: boolean; originWebContentsId?: number }

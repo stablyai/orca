@@ -1,10 +1,11 @@
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import {
   recordPtySurface,
   spawnSurfaceClaimSequence,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
+} from '../surface/pty-recorded-surface-topology'
 import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSubscribeToTerminalResize } from '../layout/terminal-resize-listeners'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -13,17 +14,23 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { adoptRuntimeTerminalOrphansFromInventory } from '../../runtime-terminal-orphan-adoption'
+import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { adoptRuntimeTerminalOrphansFromInventory } from './runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntimeWithSubscribeToTerminalResize {
-  protected abstract issueHandle(leaf: RuntimeLeafRecord): string
+  protected abstract issueHandle(
+    leaf: RuntimeLeafRecord,
+    context?: TerminalIdentityReadContext
+  ): string
 
-  protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
+  protected abstract getPaneKeyForTerminalHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null
 
   abstract assertGraphReady(): void
 
@@ -51,7 +58,6 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         currentRevision: this.getTerminalTopologyRevision(workspace.id)
       }
     }
-    // Refuse an unreadable session before any owner lookup, as before.
     readSession()
     const runDurableMutation = store.runDurableMutation?.bind(store)
     const worktreeConnectionId = workspace.connectionId
@@ -74,13 +80,28 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       ports: {
         readSession,
         getPty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
+        paneOf: (pty) => this.paneOfPty(pty),
         getLeaves: (ptyId) => this.getLeavesForPty(ptyId),
         getLeaf: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId)),
         getDisplayTitle: (pty) => getLatestPtyTitle(this.getPtyDisplayRecord(pty)),
         replayPersistedSurface: (pty, tabId, paneKey) =>
-          recordPtySurface(pty, tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING),
-        recordAdoptedSurface: (pty, tabId, paneKey) =>
-          recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence)),
+          recordPtySurface(
+            this.terminalIdentity,
+            pty,
+            tabId,
+            paneKey,
+            SURFACE_CLAIM_WITHOUT_STANDING
+          ),
+        recordAdoptedSurface: (pty, tabId, paneKey) => {
+          recordPtySurface(
+            this.terminalIdentity,
+            pty,
+            tabId,
+            paneKey,
+            spawnSurfaceClaimSequence(this.graphSequence)
+          )
+          this.followExportedPaneKeys()
+        },
         getMobileSnapshots: () => this.mobileSessionTabsByWorktree.values(),
         getSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
         setSession: (worktreeId, next) => this.setWorkspaceSessionForWorktree(worktreeId, next),
@@ -104,24 +125,28 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId)
+    return this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
   }
 
-  // Why: when --terminal is omitted, the CLI auto-resolves to the active
-  // terminal in the current worktree — matching browser's implicit active tab.
+  // Omitted --terminal follows the current worktree's active terminal, like browser active-tab resolution.
   async resolveActiveTerminal(
     worktreeSelector?: string,
     options: { requireUnambiguous?: boolean } = {}
   ): Promise<string> {
     if (this.graphStatus !== 'ready') {
       const targetWorktreeId = worktreeSelector
-        ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+        ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
         : null
       const snapshots = targetWorktreeId
-        ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
-        : await this.listAllMobileSessionTabs()
-      // Skipped for an identity claim for the same reason as the ready path below: the active tab
-      // is where the user last looked, which says nothing about which terminal the CALLER is.
+        ? [
+            this.getMobileSessionTabsForWorktree(targetWorktreeId, undefined, {
+              includeAgentSenders: false
+            })
+          ]
+        : await this.listAllMobileSessionTabs(undefined, { includeAgentSenders: false })
+      // Active-tab focus cannot establish the caller's identity.
       for (const snapshot of options.requireUnambiguous ? [] : snapshots) {
         const activeTerminal = snapshot.tabs.find(
           (tab) =>
@@ -137,7 +162,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       const listed = await this.listTerminals(worktreeSelector, undefined, {
         includeVisualLayouts: false
       })
-      // Same arbitrary pick, same misattribution: refuse for callers claiming their own identity.
+      // Multiple terminals make any identity claim an arbitrary guess.
       if (options.requireUnambiguous && listed.terminals.length > 1) {
         throw new Error('no_active_terminal')
       }
@@ -150,13 +175,10 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     this.assertGraphReady()
 
     const targetWorktreeId = worktreeSelector
-      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
       : null
 
-    // Prefer the tab's activeLeafId — this is the pane the user last focused.
-    //
-    // Skipped entirely for an identity claim: which pane the user last looked at says nothing
-    // about which terminal the CALLER is, so preferring it is still a guess.
+    // Prefer last-focused panes only outside identity claims.
     for (const tab of options.requireUnambiguous ? [] : this.tabs.values()) {
       if (targetWorktreeId && tab.worktreeId !== targetWorktreeId) {
         continue
@@ -171,22 +193,8 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       }
     }
 
-    // Fallback: any leaf in the target worktree.
-    //
-    // `requireUnambiguous` callers are asking "which terminal AM I" — today the implicit `--from`
-    // sender — and an arbitrary iteration-order pick answers that with someone else's pane: a bare
-    // `send --type worker_done` then settles a SIBLING's context-only dispatch, a tier that has no
-    // capability token to reject on, and every message it sends is attributed to that sibling.
-    // Refusing is the only safe answer when more than one leaf could be meant.
-    //
-    // `check` resolves through the `--terminal` scope, which still guesses, and a DISPATCHED
-    // structured worker is covered by the `ORCA_TERMINAL_HANDLE` its child is spawned with. That
-    // was once written as covering structured sessions generally, and it never did: an ordinary
-    // structured chat session is not in the worker registry, so it is spawned with no handle at
-    // all, and the guess below handed it a sibling's pane — which a destructive `check` then
-    // consumed. `requireUnambiguous` does not save it either, because with exactly one terminal
-    // pane the guess resolves. Such a child now carries `ORCA_STRUCTURED_SESSION` and the CLI
-    // refuses before reaching here (`shared/structured-session-marker.ts`).
+    // An arbitrary identity guess can attribute worker_done to a sibling and settle its tokenless dispatch.
+    // Worker children carry ORCA_TERMINAL_HANDLE; ordinary structured chats instead use ORCA_STRUCTURED_SESSION so the CLI refuses guesses even with one pane.
     const candidates: RuntimeLeafRecord[] = []
     for (const leaf of this.leaves.values()) {
       if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
@@ -207,49 +215,48 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     throw new Error('no_active_terminal')
   }
 
-  // Why: orchestration records the pane key as the remint-stable assignee
-  // identity at dispatch time; null (best-effort) rather than throwing so
-  // dispatch still works for handles without a resolvable pane.
-  getTerminalPaneKey(handle: string): string | null {
+  // Dispatch uses remint-stable pane keys; unresolved handles return null so best-effort dispatch can proceed.
+  getTerminalPaneKey(handle: string, context?: TerminalIdentityReadContext): string | null {
     return (
-      resolveStructuredWorkerAuthority(handle, this.getOrchestrationDbIfAvailable?.() ?? null)
-        ?.identity.paneKey ??
-      this.getPaneKeyForTerminalHandle(handle) ??
-      this.getOrchestrationCompatibilitySshTerminal(handle)?.paneKey ??
+      resolveStructuredWorkerAuthority(
+        handle,
+        this.getOrchestrationDbIfAvailable?.() ?? null,
+        context?.structured
+      )?.identity.paneKey ??
+      this.getPaneKeyForTerminalHandle(handle, context) ??
+      this.getOrchestrationCompatibilitySshTerminal(handle, context)?.paneKey ??
       null
     )
   }
 
-  getLiveTerminalPaneKey(handle: string): string | null {
+  getLiveTerminalPaneKey(handle: string, context?: TerminalIdentityReadContext): string | null {
     const structured = resolveStructuredWorkerAuthority(
       handle,
       this.getOrchestrationDbIfAvailable?.() ?? null
     )
     if (structured) {
-      // `resolveBareOrchestrationRecipient` routes direct mail through this. A structured worker is
-      // a recipient while this runtime owns it, running or at rest: mail to one at rest is a send,
-      // and the send starts its agent.
+      // Runtime-owned structured workers accept direct mail even at rest; sending starts their agent.
       return structured.identity.paneKey
     }
-    const runtimePty = this.getLivePtyForHandle(handle)
+    const runtimePty = this.getLivePtyForHandle(handle, context)
     if (runtimePty) {
-      return runtimePty.pty.connected ? (runtimePty.pty.paneKey ?? null) : null
+      return runtimePty.pty.connected
+        ? (context ? context.paneOf(runtimePty.pty) : this.paneOfPty(runtimePty.pty)).paneKey
+        : null
     }
     try {
-      const leaf = this.resolveLiveLeafForHandle(handle)
+      const leaf = this.resolveLiveLeafForHandle(handle, context)
       if (!leaf?.ptyId) {
-        return this.getOrchestrationCompatibilitySshTerminal(handle)?.paneKey ?? null
+        return this.getOrchestrationCompatibilitySshTerminal(handle, context)?.paneKey ?? null
       }
       const pty = this.ptysById.get(leaf.ptyId)
-      return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle)
+      return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle, context)
     } catch {
       return null
     }
   }
 
-  // Resolve through the retained handle record, not the liveness-gated agent-status lookup: that
-  // one throws `terminal_handle_stale` once the process is gone, which is exactly when the earned
-  // death certificate has to stay readable.
+  // Retained handles keep earned death certificates readable after liveness-gated lookups become stale.
   getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
     const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
     return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null

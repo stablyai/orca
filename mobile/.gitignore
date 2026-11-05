@@ -14,5 +14,3 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
-
-.cache/typechecks/

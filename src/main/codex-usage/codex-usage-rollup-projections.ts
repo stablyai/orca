@@ -52,7 +52,6 @@ export function buildSummary(
       hasAnyBillableCost = true
       estimatedCostUsd += cost
     } else if (row.model !== null) {
-      // A named model with no pricing entry: its tokens silently leave the total.
       hasUnpricedModels = true
     }
   }
@@ -110,7 +109,7 @@ export function buildBreakdown(
   kind: CodexUsageBreakdownKind
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
-  // Why: long-context counts price the row but are not part of the renderer-facing row shape.
+  // Keep billing-only long-context counts out of renderer-facing rows.
   const longContextByKey = new Map<string, CodexLongContextTokens>()
   const filteredDaily = getFilteredDaily(state, scope, range)
   if (filteredDaily.length === 0) {

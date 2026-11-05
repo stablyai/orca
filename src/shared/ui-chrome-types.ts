@@ -12,6 +12,8 @@ export type OpenInApplication = {
 export type SourceControlViewMode = 'list' | 'tree'
 export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
+// Why 'match-terminal' stays: it mirrors the app theme slots for older Orca (syncLegacyMatchTerminalSidebar);
+// this version's sidebar treats it as 'default'.
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
 /** Strategy for the prefix prepended to worktree branch names. */
@@ -54,8 +56,7 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
-// Re-exported so existing importers keep one home for UI chrome types; the
-// value domain lives with the normalizers that police it.
+// Keep existing chrome imports compatible; normalizers own these value domains.
 export type { ActivityGroupBy, ThreadReadFilter } from './agents-view-thread-filters'
 
 export type StatusBarItem =
@@ -101,8 +102,7 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
-  // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
-  // static union stays closed while plugin tabs remain type-representable.
+  // Plugin IDs encode their dynamic panel namespace without opening the static tab union.
   | `plugin:${string}`
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'

@@ -1,19 +1,25 @@
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import { markEnvironmentUsed, resolveEnvironment } from '../../../shared/runtime-environment-store'
+
+import {
+  type KnownRuntimeEnvironment,
+  getPreferredPairedRuntimeConnection
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import {
+  markEnvironmentUsed,
+  resolveEnvironment
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime-client'
+} from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import {
   isRuntimeEnvironmentCapabilityOutcomeCurrent,
@@ -56,9 +62,7 @@ export function shouldRouteCallBySupport(method: string, environmentId: string):
     return false
   }
   if (method === 'session.tabs.list' || method === 'session.tabs.listAll') {
-    // Why: snapshot recovery must stay available while shared-control streams reconnect after a
-    // restart, but on a ready shared socket a one-shot socket per worktree switch only adds a
-    // connect and handshake to every switch (#26785).
+    // Use ready shared sockets for tab reads; one-shot recovery remains available during reconnect (#26785).
     return getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready'
   }
   return true
@@ -220,7 +224,7 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
       outcome.kind !== 'stale_incarnation' &&
       isRuntimeEnvironmentCapabilityOutcomeCurrent(outcome)
     ) {
-      // Why: checked after the connection is ready, just before sending, where a reconnect lands.
+      // Verify identity after connection readiness, immediately before send.
       if (args.expectedRuntimeId !== undefined && outcome.runtimeId !== args.expectedRuntimeId) {
         return runtimeEnvironmentChangedFailure(environment, args.method)
       }

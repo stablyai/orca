@@ -5,8 +5,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import * as environmentStore from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import * as environmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
+import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
@@ -53,7 +55,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
@@ -69,7 +71,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
       reconnectRemoteRuntimeSharedControlConnectionMock,
     retryRemoteRuntimeSharedControlConnectionsNow:
       retryRemoteRuntimeSharedControlConnectionsNowMock,
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
@@ -87,6 +88,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    setHostRepoCatalogSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -94,6 +96,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      setHostRepoCatalogSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -117,9 +120,58 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     resetRuntimeEnvironmentStatusOwners()
+    vi.unstubAllGlobals()
     rmSync(userDataPath, { recursive: true, force: true })
   })
+
+  it.each([false, true])(
+    'dispatches with minting membership while durability is unresolved (lost reply: %s)',
+    async (lostReply) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      const environment = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+        name: 'desk',
+        pairingCode: pairingCode()
+      })
+      const history = desktopChatCreationHistory(userDataPath)
+      vi.spyOn(AtomicSnapshotWriter.prototype, 'write').mockImplementation(
+        () => new Promise(() => {})
+      )
+      sendRemoteRuntimeRequestMock.mockImplementation(async (_connection, method) => {
+        if (method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: { runtimeId: 'runtime-remote', capabilities: [] },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+        }
+        expect(history.sessionIds()).toEqual(['codex_minted'])
+        if (lostReply) {
+          throw new RemoteRuntimeClientError('connection_closed', 'reply lost')
+        }
+        return { id: 'create', ok: true, result: {}, _meta: { runtimeId: 'runtime-remote' } }
+      })
+      const call = handler<
+        { selector: string; method: string; params: unknown },
+        RuntimeRpcResponse<unknown>
+      >('runtimeEnvironments:call')
+      await expect(
+        call(null, {
+          selector: environment.id,
+          method: 'agentSession.create',
+          params: { envelope: { sessionId: 'codex_minted' } }
+        })
+      ).resolves.toMatchObject(
+        lostReply ? { ok: false, error: { message: 'reply lost' } } : { ok: true }
+      )
+      expect(history.sessionIds()).toEqual(['codex_minted'])
+      expect(
+        sendRemoteRuntimeRequestMock.mock.calls.some((call) => call[1] === 'agentSession.create')
+      ).toBe(true)
+    }
+  )
 
   it('proxies generic one-shot RPC calls to the saved remote runtime', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
@@ -156,6 +208,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeConnectionRequestMock).not.toHaveBeenCalled()
+    // Only WSL hosts keep a saved project list; a paired server is listed live.
+    expect(store.setHostRepoCatalogSnapshot).not.toHaveBeenCalled()
   })
 
   it('falls back to one-shot RPC when the saved runtime lacks shared-control support', async () => {
@@ -612,7 +666,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
 
-    // A worktree switch lists its tabs; before, each list opened and authenticated a new socket.
+    // Repeated tab reads should reuse the authenticated shared socket.
     for (let i = 0; i < 10; i += 1) {
       await expect(
         call(null, { selector: 'desk', method: 'session.tabs.list', params: { worktree: 'id:w' } })
@@ -628,7 +682,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.listAll'
     ])
 
-    // The shared socket dropped (a host restart): snapshot recovery goes back to one-shot.
+    // Reconnecting shared sockets must leave one-shot snapshot recovery available.
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({ state: 'reconnecting' })
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'session.tabs.list',

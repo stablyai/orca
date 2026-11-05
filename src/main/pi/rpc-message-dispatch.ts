@@ -2,9 +2,9 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   withProviderDiagnostic
-} from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { ClaudeDispatchContentError } from '../claude/claude-structured-dispatch-content'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { ClaudeDispatchContentError } from '../claude/structured/claude-structured-dispatch-content'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type {
   AgentSessionDispatchOutcome,
@@ -12,7 +12,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { applyPiRpcSessionOption } from './rpc-options'
-import { PiRpcPromptError, preparePiRpcPrompt } from './rpc-prompt'
+import { PiRpcPromptError, preparePiRpcPrompt, type PiRpcPrompt } from './rpc-prompt'
 import type { PiRpcSession, PiRpcSessionDeps } from './rpc-session'
 
 type DispatchInput = Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
@@ -57,61 +57,64 @@ export async function dispatchPiRpcMessage(
     return exited()
   }
   input.onInputPreparation?.()
-  const model = input.executionOptions?.model ?? session.initialOptions.model
-  if (!input.executionOptions) {
-    input.signal?.throwIfAborted()
-    return session.submit(
-      input.clientMessageId,
-      input.requestedAt ?? Date.now(),
-      { ...prompt },
-      input.beforeDispatch
-    )
-  }
-  for (const key of ['model', 'effort'] as const) {
-    const value =
-      input.executionOptions?.[key] ??
-      (key === 'model' || model === session.initialOptions.model
-        ? session.initialOptions[key]
-        : undefined)
-    if (value === undefined && session.optionProof.writes.has(key)) {
-      throw new AgentSessionOptionRejectedError(
-        new Error(`The default ${key} for this model is unknown`)
-      )
-    }
-    if (value === undefined || session.optionProof.current.get(key) === value) {
-      continue
-    }
-    try {
-      await applyPiRpcSessionOption(
-        session.connection,
-        session.selected,
-        key,
-        value,
-        { signal: input.signal },
-        session.optionProof
-      )
-    } catch (error) {
-      input.signal?.throwIfAborted()
-      if (session.connection.closed) {
-        return exited()
+  // Pi refuses prompts during a requested compaction. Wait it out, then reapply this send's
+  // options in case a pick changed them meanwhile, until none started during the option RPCs.
+  do {
+    await session.turns.compaction.waitForEnd(input.signal)
+    for (const key of ['model', 'effort'] as const) {
+      const value = input.executionOptions?.[key]
+      if (value === undefined || session.optionProof.current.get(key) === value) {
+        continue
       }
-      if (error instanceof JsonlRpcResponseError) {
-        throw withProviderDiagnostic(
-          new AgentSessionOptionRejectedError(error),
-          providerDiagnostic(error.message, 'person')
+      try {
+        await applyPiRpcSessionOption(
+          session.connection,
+          session.selected,
+          key,
+          value,
+          { signal: input.signal },
+          session.optionProof
         )
+      } catch (error) {
+        input.signal?.throwIfAborted()
+        if (session.connection.closed) {
+          return exited()
+        }
+        if (error instanceof JsonlRpcResponseError) {
+          throw withProviderDiagnostic(
+            new AgentSessionOptionRejectedError(error),
+            providerDiagnostic(error.message, 'person')
+          )
+        }
+        throw new AgentSessionOptionRejectedError(error)
       }
-      throw new AgentSessionOptionRejectedError(error)
     }
-  }
+  } while (session.turns.compaction.running)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()
   }
-  return session.submit(
+  return submitPiRpcPrompt(session, input, prompt)
+}
+
+/** Pi runs the prompt on the model and effort it proved: its own state, never a stale report. */
+async function submitPiRpcPrompt(
+  session: PiRpcSession,
+  input: DispatchInput,
+  prompt: PiRpcPrompt
+): Promise<AgentSessionDispatchOutcome> {
+  let ranOptions: Record<string, string> = {}
+  const outcome = await session.submit(
     input.clientMessageId,
     input.requestedAt ?? Date.now(),
     { ...prompt },
-    input.beforeDispatch
+    async () => {
+      await input.beforeDispatch?.()
+      input.onExecutionSnapshot?.()
+      ranOptions = Object.fromEntries(session.optionProof.current)
+    }
   )
+  return outcome.state === 'accepted' || outcome.state === 'admitted'
+    ? { ...outcome, ranOptions }
+    : outcome
 }

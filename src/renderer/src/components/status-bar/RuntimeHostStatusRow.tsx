@@ -9,11 +9,12 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
+import '@/runtime/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedCopy } from './remote-host-connection-status'
 
 function runtimeStatusLabel(state: RuntimeHostConnectionState): string {

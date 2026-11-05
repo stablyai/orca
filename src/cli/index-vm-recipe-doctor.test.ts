@@ -33,9 +33,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -44,7 +47,8 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
+import { encodePairingOffer } from '../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
@@ -251,7 +255,6 @@ describe('orca cli worktree awareness', () => {
           expect.objectContaining({ id: 'recipe.destroy.run', status: 'pass' })
         ])
       )
-      // The transcript carries both stages so the agent can self-diagnose.
       expect(output.provisionTranscript?.provision.exitCode).toBe(0)
       expect(output.provisionTranscript?.destroy?.exitCode).toBe(0)
       const cleanupPayload = JSON.parse(
@@ -288,7 +291,6 @@ describe('orca cli worktree awareness', () => {
         stdin: { write: vi.fn(), end: vi.fn() },
         kill: vi.fn()
       })
-      // create emits a non-JSON line to stdout + a real diagnostic to stderr, then exits 0
       spawnMock.mockImplementationOnce(() => {
         process.nextTick(() => {
           startChild.stdout.emit('data', Buffer.from('Provisioning sandbox...\n'))
@@ -330,7 +332,6 @@ describe('orca cli worktree awareness', () => {
           expect.objectContaining({ id: 'recipe.provision', status: 'fail' })
         ])
       )
-      // The agent gets the full create output, not a 500-char tail.
       expect(output.provisionTranscript?.provision.stdout).toContain('Provisioning sandbox...')
       expect(output.provisionTranscript?.provision.stderr).toContain('missing scope')
       expect(output.provisionTranscript?.provision.parseError).toBeTruthy()

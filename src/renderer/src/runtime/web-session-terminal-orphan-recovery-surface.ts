@@ -5,9 +5,12 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionClaim
 } from '../../../shared/runtime-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   hasTerminalHandleRetirementProof,
   isRemovedSnapshot,

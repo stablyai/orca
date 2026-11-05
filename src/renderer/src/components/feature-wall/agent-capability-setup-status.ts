@@ -7,12 +7,12 @@ import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
 import { translate } from '@/i18n/i18n'
 import { isAgentCapabilitiesDone } from './feature-wall-setup-progress'
 
@@ -47,19 +47,17 @@ export type AgentCapabilitySetupStatus = {
 }
 
 export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+  const activeSkillRuntime = useOnboardingSkillRuntime()
+  const skillOptions = {
+    enabled: activeSkillRuntime.enabled,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
+    agent: activeSkillRuntime.agent,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
+  }
+  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, skillOptions)
+  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, skillOptions)
+  const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, skillOptions)
   const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)
   const readiness: AgentCapabilityReadiness = useMemo(
     () => ({
@@ -91,8 +89,7 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
       browserUse: getSkillInstallStatus(browserUseSkill),
       computerUse: getComputerUseInstallStatus(computerUseSkill, computerUsePermissionStatus),
       orchestration: getSkillInstallStatus(orchestrationSkill),
-      // Why: linearTickets remains in the onboarding selection shape, but the
-      // generic feature wall must not become a Linear skill install surface.
+      // Retain the selection field without offering Linear installation in the generic feature wall.
       linearTickets: getFeatureWallExcludedLinearTicketsStatus()
     }),
     [browserUseSkill, computerUsePermissionStatus, computerUseSkill, orchestrationSkill]
@@ -106,8 +103,7 @@ export function getDefaultAgentCapabilitySetupSelection(
 ): OnboardingFeatureSetupSelection {
   return {
     browserUse: !readiness.browserUseSkillInstalled,
-    // Why: Computer Use has OS permission setup in addition to the skill install.
-    // Keep it selected when permissions still need action, even if the skill exists.
+    // Keep Computer Use selected when OS permission still needs action, even if its skill is installed.
     computerUse:
       !readiness.computerUseSkillInstalled ||
       (!readiness.computerUseReady && !readiness.computerUseUnavailable),

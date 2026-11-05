@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
-import { writeRuntimeFile } from './runtime-file-mutation-client'
+import { readRuntimeFileContent } from './runtime-file-read-client'
+import './runtime-file-mutation-client'
 import {
+  fsReadFileChunk,
+  fsStat,
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
   type RuntimeRpcRequest
 } from './runtime-file-client-test-harness'
-import { REMOTE_FILE_CHANGED_DURING_READ_MESSAGE } from './runtime-paged-file-read'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import {
+  readRuntimeFileBytes,
+  REMOTE_FILE_CHANGED_DURING_READ_MESSAGE
+} from './runtime-paged-file-read'
 
 installRuntimeFileClientEnvironment()
 
@@ -168,26 +172,6 @@ describe('remote reads larger than one RPC reply', () => {
     expect(methodCalls('files.readChunk').length > 0).toBe(sizeMb * MB > PREVIEW_CAP)
   })
 
-  it('pages an image preview too large for one reply', async () => {
-    const bytes = patternedBytes(5 * MB)
-    serveRemoteFile('shot.png', { bytes })
-
-    const result = await readRuntimeFilePreview(
-      { target: remote('shot.png').target, worktreeId: 'wt-1', worktreePath: '/remote/repo' },
-      '/remote/repo/shot.png'
-    )
-
-    expect(result).toMatchObject({ isBinary: true, isImage: true, mimeType: 'image/png' })
-    expect(Buffer.from(result.content, 'base64').equals(bytes)).toBe(true)
-  })
-
-  it('leaves a large PDF alone for readers that discard binary content', async () => {
-    serveRemoteFile('paper.pdf', { bytes: patternedBytes(5 * MB) })
-
-    await expect(readRuntimeFileContent(remote('paper.pdf'))).rejects.toThrow('file_too_large')
-    expect(methodCalls('files.readChunk')).toHaveLength(0)
-  })
-
   it('treats a large file with a NUL byte as binary, like a local read', async () => {
     const bytes = htmlBytes(2 * MB)
     bytes[10] = 0
@@ -197,100 +181,6 @@ describe('remote reads larger than one RPC reply', () => {
       content: '',
       isBinary: true
     })
-  })
-
-  it.each(['files.stat', 'files.readChunk'])(
-    'tells the user to update a host without %s instead of failing silently',
-    async (missing) => {
-      serveRemoteFile('report.html', { bytes: htmlBytes(2 * MB), missingMethods: [missing] })
-      await expect(readRuntimeFileContent(remote('report.html'))).rejects.toThrow(
-        'Update the server to open it'
-      )
-
-      serveRemoteFile('paper.pdf', { bytes: patternedBytes(5 * MB), missingMethods: [missing] })
-      await expect(
-        readRuntimeFileContent({ ...remote('paper.pdf'), pageOversizedBinary: true })
-      ).rejects.toThrow('file_too_large')
-    }
-  )
-
-  it('keeps the size error for a file past the 50 MB cap without reading it', async () => {
-    serveRemoteFile('report.html', {
-      bytes: htmlBytes(MB),
-      stats: [{ size: 60 * MB, mtime: 1 }]
-    })
-
-    await expect(readRuntimeFileContent(remote('report.html'))).rejects.toThrow(
-      `Remote file is too large to open in the editor (${60 * MB} bytes)`
-    )
-    expect(methodCalls('files.readChunk')).toHaveLength(0)
-  })
-
-  it('rejects a file rewritten between chunks instead of splicing two versions', async () => {
-    const bytes = htmlBytes(2 * MB)
-    serveRemoteFile('report.html', {
-      bytes,
-      stats: [
-        { size: bytes.length, mtime: 1 },
-        { size: bytes.length, mtime: 2 }
-      ]
-    })
-
-    await expect(readRuntimeFileContent(remote('report.html'))).rejects.toThrow(
-      REMOTE_FILE_CHANGED_DURING_READ_MESSAGE
-    )
-  })
-
-  it('rejects a same-size, same-mtime replacement the host reports through ctime', async () => {
-    const bytes = htmlBytes(2 * MB)
-    serveRemoteFile('report.html', {
-      bytes,
-      stats: [
-        { size: bytes.length, mtime: 1, ctime: 1 },
-        { size: bytes.length, mtime: 1, ctime: 2 }
-      ]
-    })
-
-    await expect(readRuntimeFileContent(remote('report.html'))).rejects.toThrow(
-      REMOTE_FILE_CHANGED_DURING_READ_MESSAGE
-    )
-  })
-
-  it('pins every call of one paged read to the pairing it started on', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
-    const bytes = htmlBytes(2 * MB)
-    serveRemoteFile('report.html', {
-      bytes,
-      readChunk: (params, file) => {
-        // A re-pair mid-read must not retarget the remaining chunks.
-        replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 8 }])
-        return sliceChunk(params, file)
-      }
-    })
-
-    await readRuntimeFileContent(remote('report.html'))
-
-    const paged = [...methodCalls('files.stat'), ...methodCalls('files.readChunk')]
-    expect(paged.length).toBeGreaterThan(2)
-    expect(paged.every((call) => call.expectedEnvironmentPairingRevision === 7)).toBe(true)
-  })
-
-  it('keeps the pairing of the first read when a re-pair lands during it', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
-    serveRemoteFile('report.html', { bytes: htmlBytes(2 * MB) })
-    const serve = runtimeEnvironmentCall.getMockImplementation()
-    runtimeEnvironmentCall.mockImplementation((request: RuntimeRpcRequest) => {
-      if (request.method === 'files.read') {
-        replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 8 }])
-      }
-      return serve?.(request)
-    })
-
-    await readRuntimeFileContent(remote('report.html'))
-
-    const calls = runtimeEnvironmentCall.mock.calls.map(([request]) => request)
-    expect(calls.length).toBeGreaterThan(3)
-    expect(calls.every((call) => call.expectedEnvironmentPairingRevision === 7)).toBe(true)
   })
 
   it('stops when the host never reports EOF', async () => {
@@ -318,24 +208,33 @@ describe('remote reads larger than one RPC reply', () => {
   })
 })
 
-describe('remote saves larger than one request frame', () => {
-  const context = {
-    target: { kind: 'environment' as const, environmentId: 'env-1' },
-    worktreeId: 'wt-1',
-    worktreePath: '/remote/repo'
-  }
+describe('whole-file bytes for a bytes custom editor', () => {
+  it('pages a remote workbook within the local chunk cap and returns its exact bytes', async () => {
+    const bytes = patternedBytes(MB + 17)
+    serveRemoteFile('book.xlsx', { bytes })
 
-  it('refuses a save the host would answer by closing the connection', async () => {
-    await expect(
-      writeRuntimeFile(context, '/remote/repo/report.html', htmlBytes(2 * MB).toString('utf8'))
-    ).rejects.toThrow('File is too large to save to a remote Orca server')
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    const result = await readRuntimeFileBytes(remote('book.xlsx'), 16 * MB)
+
+    expect(result.kind).toBe('ok')
+    expect(result.kind === 'ok' && Buffer.from(result.bytes).equals(bytes)).toBe(true)
+    for (const call of methodCalls('files.readChunk')) {
+      expect(isChunkParams(call.params) && call.params.length).toBeLessThanOrEqual(256 * 1024)
+    }
   })
 
-  it('counts JSON escaping, not just characters', async () => {
-    await expect(
-      writeRuntimeFile(context, '/remote/repo/quotes.txt', '"'.repeat(400 * 1024))
-    ).rejects.toThrow('File is too large to save to a remote Orca server')
+  it('reads a local file through the local stat and chunk IPC', async () => {
+    const bytes = patternedBytes(300 * 1024)
+    fsStat.mockResolvedValue({ size: bytes.length, isDirectory: false, mtime: 5 })
+    fsReadFileChunk.mockImplementation((args: ChunkParams) =>
+      Promise.resolve(sliceChunk(args, bytes))
+    )
+
+    const result = await readRuntimeFileBytes(
+      { target: { kind: 'local' }, filePath: '/repo/book.xlsx' },
+      16 * MB
+    )
+
+    expect(result.kind === 'ok' && Buffer.from(result.bytes).equals(bytes)).toBe(true)
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

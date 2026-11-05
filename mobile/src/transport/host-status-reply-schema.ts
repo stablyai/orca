@@ -1,28 +1,17 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
+import { HOST_MACHINE_KINDS } from '../../../src/shared/host-machine-line'
 
-/**
- * The status the transport's own `status.get` reads.
- *
- * Checked against src/main/runtime/rpc/methods/status.ts, which spreads `runtime.getStatus()` and
- * adds `appVersion` and `remoteUpdateSupport`. Every member is optional, because this reply has to
- * decode from every host version the protocol gate admits and each of the four fields arrived in a
- * different release: an older host that answers none of them must still read, or the gate would
- * refuse the build it exists to evaluate.
- *
- * `capabilities` is an array of strings and salvages whole rather than per element, because that
- * was main's own rule: the probe read the member off the raw reply and took the list only when
- * `Array.isArray(raw) && raw.every((value) => typeof value === 'string')`, so one bad entry cost
- * the whole list. No line is cited for it because this change is what deleted that code from
- * runtime-capability-probe.ts; the behaviour it describes lives in the reply-salvage drop below.
- * Dropping just the bad entry would publish a capability set main never published, which the
- * `transport-capability-probe-non-string-capabilities-drop` golden records as `published: [[]]`.
- *
- * The object itself is required, and the three callers each keep the guard that decides what an
- * unreadable status means to them: see `readProbedHostStatus`, `readProbedHostCapabilities` and
- * `hostAnsweredStatusProbe` in host-status-probe-operations.ts.
- */
+// An unknown future kind drops the whole field, so the row shows the OS alone; a bad model only loses the model.
+export const HostMachineSchema = z.object({
+  kind: z.enum(HOST_MACHINE_KINDS),
+  model: z.string().trim().min(1).max(128).nullable().catch(null)
+})
+
+// Keep fields optional across host versions; older admitted hosts may report none.
+// Salvage capabilities as a whole: dropping only bad entries would publish a set the legacy probe rejected.
+// Require an object; each transport reader decides what unreadable status means to its own fallback policy.
 export const hostStatusSchema = z.looseObject({
   protocolVersion: salvagedOptional('protocolVersion', z.number()),
   minCompatibleMobileVersion: salvagedOptional('minCompatibleMobileVersion', z.number()),
@@ -30,7 +19,8 @@ export const hostStatusSchema = z.looseObject({
   floatingWorkspaceEnabled: salvagedOptional('floatingWorkspaceEnabled', z.boolean()),
   capabilities: salvagedOptional('capabilities', z.array(z.string())),
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
-  machineName: salvagedOptional('machineName', z.string())
+  machineName: salvagedOptional('machineName', z.string()),
+  hostMachine: salvagedOptional('hostMachine', HostMachineSchema)
 })
 
 export type HostStatusReply = z.output<typeof hostStatusSchema>

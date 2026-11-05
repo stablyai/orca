@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
@@ -74,7 +75,6 @@ const INVALID_SSH_RECIPE_JSON = SSH_RECIPE_JSON.replace('/workspace/repo', 'rela
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 const PROFILE = resolve('/profiles/serve')
 const PIN_PROFILE = `--user-data-dir=${PROFILE}`
-// Linux CI runners get the X11 pin; macOS and Windows hosts get nothing.
 const HOST_SERVE_OZONE_SWITCHES = headlessServeOzonePlatformSwitches(process.platform)
 
 function restoreEnv(key: string, value: string | undefined): void {
@@ -112,7 +112,7 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
-    // These cover Electron serve itself; the orcad default is in launch-serve-runtime.test.ts.
+    // Test Electron here; launch-serve-runtime.test.ts covers orcad selection.
     process.env.ORCA_SERVE_RUNTIME = 'electron'
     process.env.ORCA_USER_DATA_PATH = PROFILE
   })

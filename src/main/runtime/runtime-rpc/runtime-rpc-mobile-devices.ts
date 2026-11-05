@@ -6,6 +6,7 @@ import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
 } from '../../../shared/delegated-mobile-device-contract'
+import type { DeviceEntry } from '../device-registry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
@@ -13,51 +14,57 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
   private onPushUnregisterQueued?: () => void
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
-    const revoked = this.revokeMobileDeviceNow(deviceId)
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    const revoked = device?.scope === 'mobile' && this.revokeDevicesNow([device])
     if (revoked) {
       this.mobileDesktopRelay?.phonesChanged()
     }
     return revoked
   }
 
-  private revokeMobileDeviceNow(deviceId: string): boolean {
-    const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'mobile') {
-      return false
-    }
-    if (device.relayBinding) {
-      if (!this.queueRelayDeviceRevoke(device.relayBinding)) {
-        return false
-      }
-    }
-    // Why: unpairing must delete the phone's push token at the gateway too, and the
-    // registration id is only readable while the device row still exists.
-    this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
-    if (!this.deviceRegistry?.removeDevice(deviceId)) {
-      return false
-    }
-    this.mobileRelayPairingProvider?.onDemandStateChanged?.()
-    this.runtime.forgetClientNavigationState(deviceId)
-    this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
-    return true
-  }
-
   revokeRuntimeAccess(deviceId: string): boolean {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'runtime') {
+    return device?.scope === 'runtime' && this.revokeDevicesNow([device])
+  }
+
+  private revokeDevicesNow(roots: readonly DeviceEntry[]): boolean {
+    const registry = this.deviceRegistry
+    if (!registry) {
       return false
     }
-    for (const child of this.deviceRegistry?.listDelegatedMobileDevices(deviceId) ?? []) {
-      // Why: keep the parent until every child's cleanup is saved, so a retry can still find them.
-      if (!this.revokeMobileDeviceNow(child.deviceId)) {
-        return false
+    // Saves adopt disk deletions, so capture every descendant's cleanup facts before the first write.
+    const paired = registry.listDevices()
+    const plan: DeviceEntry[] = []
+    const visited = new Set<string>()
+    const visit = (device: DeviceEntry): void => {
+      if (visited.has(device.deviceId)) {
+        return
       }
+      visited.add(device.deviceId)
+      for (const child of paired) {
+        if (child.parentDeviceId === device.deviceId || child.forkedFrom === device.deviceId) {
+          visit(child)
+        }
+      }
+      plan.push(device)
     }
-    if (!this.deviceRegistry?.removeDevice(deviceId)) {
-      return false
+    roots.forEach(visit)
+    for (const device of plan) {
+      const { deviceId } = device
+      // Keep ancestors until child cleanup is durable so retry can rediscover them.
+      if (device.scope === 'mobile') {
+        if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
+          return false
+        }
+        this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
+      }
+      registry.removeDevice(deviceId)
+      if (device.scope === 'mobile') {
+        this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+      }
+      this.runtime.forgetClientNavigationState(deviceId)
+      this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
     }
-    this.runtime.forgetClientNavigationState(deviceId)
-    this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
     return true
   }
 
@@ -72,16 +79,24 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       throw new Error('delegated_device_parent_unavailable')
     }
     const wanted = new Set(phones.map((phone) => phone.phoneKey))
-    for (const child of registry.listDelegatedMobileDevices(parentDeviceId)) {
-      if (
-        (!child.phoneKey || !wanted.has(child.phoneKey)) &&
-        !this.revokeMobileDeviceNow(child.deviceId)
-      ) {
-        throw new Error('delegated_device_revoke_failed')
+    const dropped = registry
+      .listDelegatedMobileDevices(parentDeviceId)
+      .filter((child) => !child.phoneKey || !wanted.has(child.phoneKey))
+    if (!this.revokeDevicesNow(dropped)) {
+      throw new Error('delegated_device_revoke_failed')
+    }
+
+    let devices = registry.upsertDelegatedMobileDevices(parent, phones)
+    // A child removed on disk meanwhile is dropped by the save; one rerun mints it fresh.
+    if (devices.length < phones.length) {
+      const current = registry.getDevice(parentDeviceId)
+      if (current?.scope !== 'runtime') {
+        throw new Error('delegated_device_parent_unavailable')
       }
+      devices = registry.upsertDelegatedMobileDevices(current, phones)
     }
     return {
-      devices: registry.upsertDelegatedMobileDevices(parent, phones).map((device) => ({
+      devices: devices.map((device) => ({
         phoneKey: device.phoneKey,
         deviceId: device.deviceId,
         token: device.token

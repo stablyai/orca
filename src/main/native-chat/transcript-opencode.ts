@@ -1,14 +1,14 @@
 import {
   OPENCODE_CAPTURE_RECORD_LIMIT,
   OPENCODE_CAPTURE_TEXT_LIMIT
-} from '../ai-vault/opencode-transcript-capture-limits'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+} from '../ai-vault/scanners/opencode/sqlite/opencode-transcript-capture-limits'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import type { ReadTranscriptResult } from './transcript-reader'
 import {
   readOpenCodeTranscriptPageViaWorker,
   readOpenCodeTranscriptSignalViaWorker
-} from '../ai-vault/session-scanner-opencode-sqlite-worker-spawn'
+} from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { discoverOpenCodeTranscriptDatabase } from './transcript-opencode-database'
 import type {
   OpenCodeTranscriptPage,
@@ -16,8 +16,6 @@ import type {
 } from './transcript-opencode-sqlite-query'
 import { DESKTOP_READ_WINDOW } from './transcript-watch-contract'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
-
-// OpenCode SQLite reads use the same bounded worker as AI Vault.
 
 export type OpenCodeTranscriptDeps = {
   resolveDbPath?: (
@@ -102,7 +100,7 @@ export async function readOpenCodeNativeChatTranscriptFull(
   signal?: AbortSignal,
   agent?: 'zcode'
 ): Promise<ReadTranscriptResult> {
-  // Pages arrive newest-window first; reverse windows, preserving message order.
+  // Reverse newest-first windows while preserving order inside each page.
   const pages: NativeChatMessage[][] = []
   let records = 0
   let bytes = 0

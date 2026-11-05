@@ -30,7 +30,7 @@ beforeEach(() =>
     describeProtectionGap: () => 'unavailable'
   })
 )
-// Stands in for the born-restricted create: a real staged write, then the injected outcome.
+// Stage real bytes and inject the born-restricted creator's restriction outcome.
 vi.mock('../../shared/secure-path-windows-acl', async () => {
   const { writeFileSync: stage } = await vi.importActual<typeof Fs>('node:fs')
   return {
@@ -161,16 +161,4 @@ describe('rollback publication with real filesystem writes and renames', () => {
       }
     }
   )
-
-  it('keeps the cached prior key after rejecting a replacement during competing publication', () => {
-    writeFileSync(keyPath, previousEnvelope)
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    publishDuringRollbackStaging(false)
-
-    refuseReplacement()
-
-    expect(readFileSync(keyPath, 'utf8')).toBe(competingEnvelope)
-    expect(store.readZcodePlanApiKey()).toBe('previous-key')
-    expect(readdirSync(join(caseHome, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-  })
 })

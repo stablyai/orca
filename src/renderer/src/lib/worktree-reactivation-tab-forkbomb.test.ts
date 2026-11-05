@@ -37,11 +37,7 @@ vi.mock('@/runtime/runtime-layout-client', () => ({
 
 const initialAppStoreState = useAppStore.getState()
 
-/**
- * A `session.tabs.list` answer holding no agent-session tab. The gate asks the host for one
- * workspace's snapshot rather than the whole `session.tabs.listAll` inventory, and refuses an answer
- * that does not name the scope it listed — so the fake host has to report its worktree.
- */
+// The gate requires a scoped workspace snapshot, so the empty fake session.tabs.list answer must name its worktree.
 function emptySessionTabsSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult {
   return {
     worktree: worktreeId,

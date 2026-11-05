@@ -1,5 +1,5 @@
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
@@ -17,6 +17,7 @@ import {
 import { sendTabChangeToLayoutOwner } from '../../terminals/tab-change-through-layout-owner'
 import { recordTabOrderInLayoutOwner } from './tab-order-layout-owner'
 import { withPreviewEnded } from './tab-preview-flag'
+import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 function oppositeViewMode(mode: 'terminal' | 'chat'): 'terminal' | 'chat' {
@@ -46,9 +47,7 @@ export function createTabsLabelActions(
       }
       return {
         ...tabPatch,
-        // Why the row too: viewMode is declared on both types and host-sync
-        // already writes it to the row. Only these local toggles skipped it, so
-        // readers had to OR the two indices to find out who owns the surface.
+        // Recovery reads terminal rows; mirror viewMode there to match host sync.
         ...rowPatch
       }
     })
@@ -243,14 +242,20 @@ export function createTabsLabelActions(
 
     pinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
+      const before = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
           return state
         }
         const { tab, worktreeId } = found
+        // Switch point: main makes a pinned preview permanent; its frame clears the flag.
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-          candidate.id === tabId ? withPreviewEnded({ ...candidate, isPinned: true }) : candidate
+          candidate.id !== tabId
+            ? candidate
+            : endsPreviewHere(state, worktreeId)
+              ? withPreviewEnded({ ...candidate, isPinned: true })
+              : { ...candidate, isPinned: true }
         )
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const group = groups.find((candidate) => candidate.id === tab.groupId)
@@ -265,7 +270,7 @@ export function createTabsLabelActions(
             ...state.unifiedTabsByWorktree,
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
-          // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
+          // Reconciliation derives pin from terminal rows; mirror it there or host echoes unpin during the round trip.
           ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
@@ -274,6 +279,9 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, true)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && before?.isPreview) {
+        promotePreviewTabsThroughLayoutOwner(get(), set, [before])
+      }
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

@@ -18,7 +18,6 @@ export function formatUsagePercentageLabel(
       })
 }
 
-/** Percentage without the used/left word, for rows that state the unit once. */
 export function formatBareUsagePercentage(
   usedPercent: number,
   display: UsagePercentageDisplay

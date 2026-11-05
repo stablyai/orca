@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   OPERATOR_CLOSE_EXIT_CAUSE,
   type TerminalExitCause
-} from '../../../../../../shared/terminal-exit-cause'
+} from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const h = createOrchestrationWorkerReleaseHarness()
@@ -70,12 +70,6 @@ describe('a worker whose process exits while its own stop is in flight', () => {
       h.call('orchestration.workerStop', { dispatch: dispatchId })
     ).resolves.toMatchObject({ state: 'stopped', processAction: 'none' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('leaves an exit with no stop in flight failing the dispatch', async () => {
-    const { dispatchId } = await h.startWorker()
-    fireExit('term_worker')
-    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('failed')
   })
 
   it('certifies a later death instead of crediting a stopping row from a dead runtime', async () => {

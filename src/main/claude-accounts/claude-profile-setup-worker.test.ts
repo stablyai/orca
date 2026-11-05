@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, expect, it } from 'vitest'
+import { JSONC_PARSER_ESM_ALIAS } from '../../../config/build-plugins/jsonc-parser-esm'
 import { describeClaudeProfile } from './claude-profile-paths'
 import { runClaudeProfileSetupInWorker } from './claude-profile-setup-worker'
 
@@ -25,6 +26,7 @@ it('runs account setup in the built worker entry, off the calling thread', async
     entryPoints: [resolve('src/main/claude-accounts/claude-profile-setup-worker-entry.ts')],
     outfile: entry,
     bundle: true,
+    alias: JSONC_PARSER_ESM_ALIAS,
     platform: 'node',
     format: 'cjs',
     external: ['electron'],

@@ -1,6 +1,11 @@
+import {
+  getProviderChecksOutcome,
+  summarizeProviderChecks
+} from './source-control/checks/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceAttachment } from './worktree/types'
-import { getWorkspaceAttachmentKey } from './workspace-attachment-normalization'
+import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
+import { getWorkspaceAttachmentKey } from './workspace-attachments/workspace-attachment-normalization'
 import {
   summarizeWorkspaceReviewChecks,
   type WorkspaceReviewCheckDetails
@@ -33,6 +38,68 @@ function map(
 }
 
 describe('all workspace review checks', () => {
+  it.each<{ states: (HostedReviewState | undefined)[]; expected: HostedReviewState | undefined }>([
+    { states: ['merged', 'merged'], expected: 'merged' },
+    { states: ['draft', 'draft'], expected: 'draft' },
+    { states: ['closed', 'closed'], expected: 'closed' },
+    { states: ['merged', 'open'], expected: 'open' },
+    { states: ['merged', 'draft'], expected: 'open' },
+    { states: ['merged', 'closed'], expected: 'closed' },
+    { states: ['merged', undefined], expected: undefined },
+    { states: ['draft', undefined], expected: 'open' },
+    { states: [undefined, undefined], expected: undefined }
+  ])(
+    'derives collection lifecycle $states independently of passing checks',
+    ({ states, expected }) => {
+      const items = states.map((_, index) =>
+        attachment(index + 1, index === 0 ? 'github' : 'gitlab')
+      )
+      const entries: [WorkspaceAttachment, WorkspaceReviewCheckDetails][] = items.map(
+        (item, index) => [
+          item,
+          {
+            review: {
+              provider: item.provider,
+              number: item.number,
+              url: item.url,
+              state: states[index],
+              status: 'success'
+            }
+          }
+        ]
+      )
+      const summary = summarizeWorkspaceReviewChecks(items, map(entries))
+      expect(summary.reviewState).toBe(expected)
+      expect(summary).toMatchObject({
+        state: 'success',
+        passed: items.length
+      })
+    }
+  )
+
+  it('retains matched lifecycle and staleness without check results and rejects foreign details', () => {
+    const item = attachment(1)
+    const retained = {
+      stale: true,
+      review: { provider: 'github', number: 1, url: item.url, state: 'merged' }
+    } as const
+    expect(summarizeWorkspaceReviewChecks([item], map([[item, retained]]))).toMatchObject({
+      reviewState: 'merged',
+      stale: 1,
+      state: 'unknown',
+      unknown: 1
+    })
+    const foreign = {
+      ...retained,
+      review: { ...retained.review, url: 'https://github.com/other/project/pull/1' }
+    }
+    expect(summarizeWorkspaceReviewChecks([item], map([[item, foreign]]))).toMatchObject({
+      reviewState: undefined,
+      stale: 0,
+      state: 'unknown'
+    })
+  })
+
   it('aggregates every review rather than a selected compatibility slot', () => {
     const first = attachment(1)
     const second = attachment(2)
@@ -56,22 +123,6 @@ describe('all workspace review checks', () => {
     expect(
       summarizeWorkspaceReviewChecks([first, second], map([[first, details(first, 'success')]]))
     ).toMatchObject({ state: 'unknown', known: 1, unknown: 1 })
-  })
-  it('gives pending checks precedence over unknown data and passing over neutral', () => {
-    const first = attachment(1)
-    const second = attachment(2)
-    expect(
-      summarizeWorkspaceReviewChecks([first, second], map([[first, details(first, 'pending')]]))
-    ).toMatchObject({ state: 'pending' })
-    expect(
-      summarizeWorkspaceReviewChecks(
-        [first, second],
-        map([
-          [first, details(first, 'neutral')],
-          [second, details(second, 'success')]
-        ])
-      )
-    ).toMatchObject({ state: 'success' })
   })
   it('never certifies stale success and conservatively retains stale failure', () => {
     const item = attachment(1)
@@ -114,4 +165,45 @@ describe('all workspace review checks', () => {
     ).toMatchObject({ total: 2, failed: 1, state: 'failure' })
     expect(summarizeWorkspaceReviewChecks([task], {})).toMatchObject({ state: 'none', total: 0 })
   })
+})
+
+it('counts nested cancelled and pending review outcomes once per review', () => {
+  const first = attachment(1)
+  const second = attachment(2)
+  const summaryFor = (...conclusions: string[]) =>
+    summarizeProviderChecks(conclusions.map((conclusion) => ({ status: 'completed', conclusion })))
+  const mixed = {
+    ...details(first, 'failure'),
+    review: {
+      ...details(first, 'failure').review!,
+      checksSummary: summaryFor('cancelled', 'pending')
+    }
+  }
+  const cancelled = {
+    ...details(second, 'failure'),
+    review: {
+      ...details(second, 'failure').review!,
+      checksSummary: summaryFor('cancelled', 'cancelled')
+    }
+  }
+  const alone = summarizeWorkspaceReviewChecks([first], map([[first, mixed]]))
+  expect(alone).toMatchObject({ total: 1, pending: 1, failed: 0, cancelled: 0 })
+  expect(getProviderChecksOutcome(alone)).toBe('pending')
+  const combined = summarizeWorkspaceReviewChecks(
+    [first, second],
+    map([
+      [first, mixed],
+      [second, cancelled]
+    ])
+  )
+  expect(combined).toMatchObject({ total: 2, failed: 1, cancelled: 1, pending: 1 })
+  expect(getProviderChecksOutcome(combined)).toBe('pending')
+  expect(
+    getProviderChecksOutcome(summarizeWorkspaceReviewChecks([second], map([[second, cancelled]])))
+  ).toBe('cancelled')
+  expect(
+    getProviderChecksOutcome(
+      summarizeWorkspaceReviewChecks([first, second], map([[second, cancelled]]))
+    )
+  ).not.toBe('success')
 })

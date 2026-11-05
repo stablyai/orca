@@ -1,8 +1,9 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
@@ -10,7 +11,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -73,6 +78,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       } as unknown as Document
 
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -110,7 +117,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       const writes: string[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         writes.push(data)
         callback?.()
       })
@@ -119,7 +127,11 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const binding = connectPanePty(pane as never, manager as never, deps as never)
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hiddenFrame, {
@@ -163,6 +175,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('restores hidden Codex output after a suppressed exit revives the same ptyId with a restarted seq counter', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -200,7 +214,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       const writes: string[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         writes.push(data)
         callback?.()
       })
@@ -210,7 +225,11 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         startup: { command: 'codex' },
         consumeSuppressedPtyExit: vi.fn(() => true)
       })
-      const binding = connectPanePty(pane as never, manager as never, deps as never)
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hiddenFrame, { seq: hiddenSeq, rawLength: hiddenFrame.length })
@@ -258,6 +277,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('restores hidden Codex output when the pty seq counter restarts without an observed exit', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -282,7 +303,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       const writes: string[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         writes.push(data)
         callback?.()
       })
@@ -291,7 +313,11 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         isVisibleRef: { current: true },
         startup: { command: 'codex' }
       })
-      const binding = connectPanePty(pane as never, manager as never, deps as never)
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(6)
 
       const establishedFrame = '\r\x1b[2KWorking established'
@@ -330,6 +356,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('writes ordinary hidden output live instead of proactively restoring a snapshot', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -358,7 +386,11 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -378,6 +410,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('pauses capable paired output while hidden and restores exactly on reveal', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       let callbacks: ConnectCallbacks = {}
@@ -412,10 +446,11 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         isVisibleRef: { current: false },
         recordPaneMode2031Subscription
       })
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as {
-        syncProcessTracking: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       await flushAsyncTicks(6)
 
       expect(transport.setOutputPaused).toHaveBeenLastCalledWith(true)
@@ -464,8 +499,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
           state: 'working',
           prompt: 'paired task',
           agentType: 'claude',
-          // Why: the renderer parsed these OSC 9999 bytes itself for a remote-runtime pane, so it
-          // is the sequencing authority for the row (STA-4293).
+          // Renderer-parsed OSC 9999 owns remote-runtime row sequencing (STA-4293).
           observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
         },
         undefined,
@@ -519,6 +553,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('locally gates hidden paired output when a legacy host cannot pause it', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const remotePtyId = 'remote:legacy-env@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       let callbacks: ConnectCallbacks = {}
@@ -553,10 +589,11 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
       const pane = createPane(1)
       const deps = createDeps({ isVisibleRef: { current: false } })
-      const binding = connectPanePty(pane as never, createManager(1) as never, deps as never) as {
-        syncProcessTracking: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       await flushAsyncTicks(6)
 
       expect(transport.setOutputPaused).toHaveBeenLastCalledWith(true)

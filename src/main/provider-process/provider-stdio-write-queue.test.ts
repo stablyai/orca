@@ -21,7 +21,7 @@ describe('ProviderStdioWriteQueue aborts', () => {
     const dropped = queue.write('waiting\n', waiting.signal)
     waiting.abort(new Error('timed out'))
     await expect(dropped).rejects.toThrow('timed out')
-    // Nothing of it reached the agent, so the connection stays up for the next request.
+    // An unsent aborted line cannot poison the connection.
     expect(onFailure).not.toHaveBeenCalled()
     void queue.write('next\n')
     expect(onFailure).not.toHaveBeenCalled()
@@ -32,8 +32,7 @@ describe('ProviderStdioWriteQueue aborts', () => {
     const active = new AbortController()
     void queue.write('active\n', active.signal)
     active.abort(new Error('timed out'))
-    // The stream owns the line, possibly partly on the pipe; leaving it would hold every later
-    // write, a Stop included, behind a reader that stopped.
+    // A partly sent line cannot be retracted and would block later writes, including Stop.
     expect(onFailure).toHaveBeenCalledWith(new Error('timed out'))
   })
 })

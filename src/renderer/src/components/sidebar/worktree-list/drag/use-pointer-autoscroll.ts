@@ -1,12 +1,11 @@
 import { useCallback } from 'react'
 import type React from 'react'
-import { getWorktreeSidebarDragAutoscroll } from '../../worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import type { WorktreeDragRuntime } from './use-runtime'
 import type { WorktreeDragSession } from './use-session'
 import type { WorktreePointerDrag } from './row-state'
 
-// Scrolls the sidebar while a pointer drag hovers near its top or bottom edge, refreshing
-// the drag session on every scrolled frame so the insertion line stays on the right row.
+// Refresh drag geometry on each autoscrolled frame so the insertion line tracks the correct row.
 export function useWorktreePointerDragAutoscroll(args: {
   session: WorktreeDragSession
   runtime: WorktreeDragRuntime

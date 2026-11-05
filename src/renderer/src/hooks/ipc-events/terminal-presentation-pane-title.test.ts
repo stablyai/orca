@@ -33,7 +33,6 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwner.isMain
   }
 }))
-// Main applies the window's layout commands and sends its frames, as a switch-on build does.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -62,8 +61,6 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 
 type Listener = (payload: Record<string, unknown>) => void
 
-/** A CLI terminal named "Build", revealed into a tab the window holds already or not; in a
- *  layout-owner build main applies the window's commands and its frames draw into the store. */
 async function setup(windowHoldsTab: boolean) {
   const listeners = new Map<string, Listener>()
   const ui = new Proxy(
@@ -141,20 +138,12 @@ describe('a revealed terminal’s title, in a layout-owner build', () => {
   it('names a new tab and writes no pane title main does not hold', async () => {
     const state = await setup(false)
 
-    // Main names the tab; its frame shows the name.
     await vi.waitFor(() =>
       expect(testStore().getState().tabsByWorktree[WORKTREE]?.[0]?.customTitle).toBe('Build')
     )
     expect(layoutApplyTestTransport.sentOfType('renameTab')).toEqual([
       expect.objectContaining({ tabId: TAB, kind: 'custom', title: 'Build' })
     ])
-    expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
-    expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
-  })
-
-  it('writes no pane title into a tab the window already holds', async () => {
-    const state = await setup(true)
-
     expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
     expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
   })

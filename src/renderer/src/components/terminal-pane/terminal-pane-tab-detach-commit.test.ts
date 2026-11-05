@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../../shared/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
 import {
   createStore,
@@ -16,8 +16,7 @@ import {
 } from './terminal-pane-tab-detach-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Main answers through today's IPC; the layout-owner build's equivalents (main's command plus its
-// frame) are in terminal-pane-tab-detach-main-commit.test.ts.
+// Window-side IPC coverage; main-command/frame equivalents live in terminal-pane-tab-detach-main-commit.test.ts.
 const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
 const toastErrorMock = vi.hoisted(() => vi.fn())

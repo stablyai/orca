@@ -1,6 +1,3 @@
-// Why: the challenge/proof handshake every push request rides on, split out of
-// push-gateway-client.ts so the session cache and its refusal cache stay readable
-// next to the request methods rather than buried under them.
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { E2EEKeypair } from '../e2ee-keypair'
@@ -12,14 +9,11 @@ import {
   type PushGatewayFailure
 } from './push-gateway-response'
 
-// Re-auth a little early so a send never spends its one retry on a token that
-// expired between the check and the request.
+// Renew early so expiry between check and send cannot consume the single retry.
 const SESSION_RENEWAL_MARGIN_MS = 60_000
-// Why: a gateway that refuses this host's proof refuses the identical next one,
-// so without this every dispatch pays two full handshake round trips to relearn it.
+// Cache proof refusal to avoid repeating identical failed handshakes on every dispatch.
 const HANDSHAKE_REFUSAL_TTL_MS = 30_000
-// Why: the handshake routes sit behind a per-IP bucket. Backing off keeps this
-// host from spending the whole bucket on challenges it will never get to use.
+// Back off the per-IP challenge bucket instead of exhausting it on unusable sessions.
 const HANDSHAKE_RATE_LIMIT_TTL_MS = 60_000
 
 const ChallengeResponseSchema = z
@@ -71,11 +65,7 @@ export class PushGatewaySession {
     this.hostFingerprint = deriveRelayHostId(options.keypair.publicKey)
   }
 
-  /**
-   * `staleToken` is the token that just received a 401. Only that exact session is
-   * dropped: a concurrent request may already have installed a good one, and
-   * clearing unconditionally would throw it away and re-handshake for nothing.
-   */
+  /** Invalidate only the token that received 401; concurrent requests may already have installed its replacement. */
   async ensure(staleToken: string | null): Promise<PushSessionOutcome> {
     if (staleToken !== null && this.session?.token === staleToken) {
       this.session = null
@@ -139,8 +129,7 @@ export class PushGatewaySession {
     const response = await postPushGatewayJson(this.fetchImpl, `${this.origin}${path}`, body)
     if (response.ok && response.response.status === 429) {
       await cancelUnreadResponseBody(response.response)
-      // Rate limiting refuses the moment, not this host: back off, stay retryable
-      // so register reports gateway_unreachable and send keeps its one retry.
+      // Rate limiting is temporary, not host rejection; retain register/send retry semantics.
       this.negative = { until: this.now() + HANDSHAKE_RATE_LIMIT_TTL_MS, reason: 'unreachable' }
       return { ok: false, reason: 'unreachable' }
     }

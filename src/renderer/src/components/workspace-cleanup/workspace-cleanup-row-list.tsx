@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useMemo } from 'react'
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { CandidateRow, type WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
@@ -8,13 +9,18 @@ import { WorkspaceCleanupEmptyState } from './workspace-cleanup-dialog-notices'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import {
+  findWorkspaceCleanupCandidateRepo,
+  groupWorkspaceCleanupReposById
+} from './workspace-cleanup-presentation'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupRowListState = {
   rows: readonly WorkspaceCleanupFacets[]
   /** The dialog's "as of" clock; keeps row labels consistent with filter bucketing. */
   now: number
   /** Rows the scan produced before filtering; separates "empty fleet" from "no matches". */
-  scannedCount: number
+  scannedCandidates: readonly WorkspaceCleanupCandidate[]
   hasScanned: boolean
   loading: boolean
   deletionPhaseByIdentity: Record<string, WorkspaceCleanupDeletionPhase>
@@ -31,14 +37,26 @@ export type WorkspaceCleanupRowListState = {
   onToggleSelected: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
+  onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
   onForgetLocally: (candidate: WorkspaceCleanupCandidate) => void
   onDeleteAnyway: (candidate: WorkspaceCleanupCandidate) => void
 }
 
 export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): React.JSX.Element {
-  const { rows, loading, hasScanned, scannedCount } = props
+  const { rows, loading, hasScanned, scannedCandidates } = props
+  const scannedCount = scannedCandidates.length
   const settled = !loading && hasScanned
+  const repos = useAppStore((s) => s.repos)
+  const reposById = useMemo(() => groupWorkspaceCleanupReposById(repos), [repos])
+  // Count hosts across every scanned row so filtering down to one host does not hide the label.
+  const showHostLabels = useMemo(
+    () =>
+      new Set(scannedCandidates.map((candidate) => getWorkspaceCleanupCandidateHostId(candidate)))
+        .size > 1,
+    [scannedCandidates]
+  )
+  const showSizeColumn = rows.some((row) => row.sizeBytes !== null)
   return (
     <>
       {settled && scannedCount === 0 ? (
@@ -76,6 +94,9 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             identity={row.identity}
             candidate={row.candidate}
             reviewInfo={row.review}
+            repo={findWorkspaceCleanupCandidateRepo(row.candidate, reposById)}
+            showHostLabel={showHostLabels}
+            showSizeColumn={showSizeColumn}
             last={rows.length > 1 && index === rows.length - 1}
             expanded={props.expandedRowIds.has(row.identity)}
             lastActivityLabel={formatWorkspaceCleanupRelativeTime(row.lastActivityAt, props.now)}
@@ -83,8 +104,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             workspaceStatusLabel={row.workspaceStatusLabel}
             gitEvidencePending={props.gitPendingWorktreeIds.has(row.worktreeId)}
             deletionPhase={props.deletionPhaseByIdentity[row.identity]}
-            // Why: a background rescan must not lock rows; only an actual
-            // removal batch or this row's own deletion disables it.
+            // Background scans leave rows interactive; only batch removal or the row’s own delete disables them.
             removing={props.deletingIdentities.has(row.identity)}
             selected={
               props.selectedIds.has(row.identity) && !props.deletingIdentities.has(row.identity)
@@ -94,6 +114,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             onToggleSelected={props.onToggleSelected}
             onView={props.onView}
             onIgnore={props.onIgnore}
+            onRestore={props.onRestore}
             onRemove={props.onRemove}
             onForgetLocally={props.onForgetLocally}
             onDeleteAnyway={props.onDeleteAnyway}

@@ -139,8 +139,7 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
   })
 })
 
-// The notice is read against `daemon_pty_cwd_denied`, so it carries the same enum-only budget:
-// no daemon scope, no path, no folder name.
+// Match the denied-event enum-only privacy budget: no daemon scope, path or folder name.
 describe('daemon_folder_access_notice schema', () => {
   const shown = { action: 'shown', cwd_class: 'documents' }
 

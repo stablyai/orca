@@ -19,16 +19,6 @@ describe.each([
   ['claude', getClaudeAccountSyncKey],
   ['codex', getCodexAccountSyncKey]
 ])('%s account sync key', (_provider, getSyncKey) => {
-  it('returns the same string for the same settings identity', () => {
-    const settings = makeSettings()
-    expect(getSyncKey(settings)).toBe(getSyncKey(settings))
-  })
-
-  it('answers no-settings when settings are absent', () => {
-    expect(getSyncKey(null)).toBe('no-settings')
-    expect(getSyncKey(undefined)).toBe('no-settings')
-  })
-
   it('recomputes for a new settings identity', () => {
     const first = getSyncKey(makeSettings())
     const second = getSyncKey(

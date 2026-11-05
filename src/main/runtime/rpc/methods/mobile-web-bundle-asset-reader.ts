@@ -3,8 +3,7 @@ import { open } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { MobileWebBundleAsset } from '../../../../shared/mobile-web-bundle/manifest-contract'
 
-// Why keyed by buildId as well as path: buildId is a content hash, so a dev rebuild that swaps the
-// bundle under a running app can never reuse a verdict recorded against the previous bytes.
+// Include content-hash buildId so live dev rebuilds cannot reuse verdicts for previous bytes.
 const verdicts = new Map<string, Promise<boolean>>()
 
 /** Tests own the process, so they own the cache; nothing in the app may call this. */
@@ -12,11 +11,7 @@ export function resetMobileWebBundleAssetVerdictsForTests(): void {
   verdicts.clear()
 }
 
-/**
- * Whether the bytes on disk still hash to what the manifest promised, computed once per asset and
- * then remembered. Concurrent first readers share one hash: the promise goes into the map before
- * the first await, so four parallel chunk requests for the same asset read it once, not four times.
- */
+/** Cache one asset hash verdict per build; store the pending promise before await so concurrent readers share the hash. */
 export function verifyMobileWebBundleAsset(
   root: string,
   buildId: string,
@@ -40,8 +35,7 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
   const handle = await open(join(root, asset.path), 'r')
   try {
     const hash = createHash('sha256')
-    // Streamed rather than read whole: the contract ceiling is 10 MiB per asset, and this runs on
-    // the main process's event loop.
+    // Stream assets (up to 10 MiB) to bound main-process memory.
     for await (const block of handle.createReadStream({ autoClose: false })) {
       hash.update(block)
     }
@@ -51,14 +45,7 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
   }
 }
 
-/**
- * The bytes of one asset in the range starting at `offset`, clamped to the asset's manifest length.
- * The window is always filled: a read that stops early only means the file really ended, which the
- * caller answers as a changed asset instead of paging a client past a truncation.
- *
- * Packaged builds ship the bundle unpacked (#27976), so `open` is a plain file and a positional read
- * costs one pread. Nothing to cache here.
- */
+/** Fill a manifest-bounded window; early EOF means asset-changed, never a short page. Packaged bundles are unpacked, so positional reads need no file cache (#27976). */
 export async function readMobileWebBundleAssetWindow(
   root: string,
   asset: MobileWebBundleAsset,
@@ -70,8 +57,7 @@ export async function readMobileWebBundleAssetWindow(
   if (wanted === 0) {
     return buffer
   }
-  // `asset.path` is a manifest member the caller matched exactly, never a client string, and the
-  // manifest schema already rejects absolute paths, backslashes, and traversal segments.
+  // Use only the exact manifest member; its schema rejects absolute paths, backslashes and traversal.
   const handle = await open(join(root, asset.path), 'r')
   try {
     const filled = await fillMobileWebBundleReadWindow(handle, buffer, wanted, offset)
@@ -86,9 +72,7 @@ export async function readMobileWebBundleAssetWindow(
   }
 }
 
-/** Just the member the window fill needs, so it can be driven by a stub, like the relay's
- *  `readFullStreamChunk` it mirrors. That one is not imported: it sits behind the relay
- *  dispatcher's module graph, which the runtime bundle has no business pulling in. */
+/** Keep the positional reader structural for tests; importing relay's equivalent would pull its dispatcher graph into the runtime bundle. */
 type PositionalReader = {
   read(
     buffer: Buffer,
@@ -98,11 +82,7 @@ type PositionalReader = {
   ): Promise<{ bytesRead: number }>
 }
 
-/**
- * Bytes actually placed in `buffer`, reading until the window is full. `read` may answer short of
- * what it was asked for before EOF, so a single call is not evidence of anything; only a read that
- * returns nothing means the file ended early.
- */
+/** Fill the window across short reads; only a zero-byte read proves early EOF. */
 export async function fillMobileWebBundleReadWindow(
   reader: PositionalReader,
   buffer: Buffer,

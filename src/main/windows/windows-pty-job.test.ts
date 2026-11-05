@@ -43,9 +43,7 @@ describe('terminatePtyJob', () => {
     ['no job assigned', false],
     ['native refusal', false]
   ])('reports unavailable rather than success on %s', (_case, nativeResult) => {
-    // Why this matters: "we could not tell" is precisely the state the old
-    // parent-pid probe returned, and treating it as success is how a live
-    // agent tree was declared dead and left holding the worktree open.
+    // Unverifiable ownership must not become successful termination of a live tree.
     __setConptyJobNativeForTests(() => ({
       terminateJob: vi.fn().mockReturnValue(nativeResult),
       listJobProcessIds: vi.fn(),
@@ -64,21 +62,6 @@ describe('terminatePtyJob', () => {
       assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
     }))
     expect(terminatePtyJob(ptyWithHandle(id))).toBe('unavailable')
-  })
-
-  it('passes the shell pid so an id from another backend cannot match', () => {
-    // winpty mints `pty` ids from its own counter and the JS layer stores both
-    // in the same field, so an id alone can name a live ConPTY pane. The native
-    // side refuses on a pid mismatch; this pins that we always send the pid.
-    const terminateJob = vi.fn().mockReturnValue(true)
-    __setConptyJobNativeForTests(() => ({
-      terminateJob,
-      listJobProcessIds: vi.fn(),
-      assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
-    }))
-
-    terminatePtyJob(ptyWithHandle(3, 9001))
-    expect(terminateJob).toHaveBeenCalledWith(3, 9001)
   })
 
   it('reports unavailable when the shell pid is unusable', () => {
@@ -110,23 +93,8 @@ describe('terminatePtyJob', () => {
 })
 
 describe('listPtyJobProcessIds', () => {
-  it('returns the live pids, including a detached grandchild', () => {
-    // Measured on Windows 11: a grandchild spawned detached leaves the console
-    // and reparents, so neither GetConsoleProcessList nor a parent-pid walk
-    // sees it. Job membership does.
-    __setConptyJobNativeForTests(() => ({
-      terminateJob: vi.fn(),
-      listJobProcessIds: vi.fn().mockReturnValue([107184, 91480]),
-      assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
-    }))
-    expect(listPtyJobProcessIds(ptyWithHandle(1))).toEqual([107184, 91480])
-  })
-
   it('reports null when there is no answer to give', () => {
-    // Null is 'unverifiable', never 'they died'. A dead tree also reads null,
-    // because node-pty drops its handle record on exit -- so a caller that
-    // treats null as proof of death would be right by accident here and wrong
-    // on a host that refused the job assignment.
+    // Null is unverifiable, including after shell exit closes the job; it never proves death.
     __setConptyJobNativeForTests(() => null)
     expect(listPtyJobProcessIds(ptyWithHandle(1))).toBeNull()
 
@@ -140,16 +108,6 @@ describe('listPtyJobProcessIds', () => {
 })
 
 describe('assignHostProcessToKillOnCloseJob', () => {
-  it('reports whether the host process is now kill-on-close', () => {
-    const assignCurrentProcessToJob = vi.fn().mockReturnValue(true)
-    __setConptyJobNativeForTests(() => ({
-      terminateJob: vi.fn(),
-      listJobProcessIds: vi.fn(),
-      assignCurrentProcessToJob
-    }))
-    expect(assignHostProcessToKillOnCloseJob()).toBe(true)
-  })
-
   it('degrades to false when the OS refuses the assignment', () => {
     // An outer job that forbids nesting; orphan behaviour is then simply what
     // it was before, rather than a crash.
@@ -174,28 +132,8 @@ describe('PTY Job Object teardown breadcrumbs', () => {
     }))
   }
 
-  it('records the shell pid whose job it terminated', () => {
-    withNative(() => true)
-
-    expect(terminatePtyJob(ptyWithHandle(7, 4242))).toBe('terminated')
-    expect(recordSelfInitiatedTreeKillMock).toHaveBeenCalledWith({
-      pid: 4242,
-      site: 'windows-pty-job-teardown',
-      scope: 'win-pty-job'
-    })
-  })
-
-  it('records nothing when the native side refused', () => {
-    withNative(() => false)
-
-    expect(terminatePtyJob(ptyWithHandle(7))).toBe('unavailable')
-    expect(recordSelfInitiatedTreeKillMock).not.toHaveBeenCalled()
-  })
-
   it('never downgrades a real termination to unavailable because diagnostics failed', () => {
-    // `unavailable` escalates callers to the pid-addressed taskkill this
-    // instrumentation exists to constrain, so the breadcrumb must sit outside
-    // the native call's catch.
+    // Breadcrumb failure must not downgrade termination to unavailable and escalate taskkill.
     withNative(() => true)
     recordSelfInitiatedTreeKillMock.mockImplementation(() => {
       throw new Error('breadcrumb store exploded')

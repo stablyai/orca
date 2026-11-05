@@ -41,7 +41,6 @@ export function readActiveProfileId(userDataPath: string): string | null | undef
 export function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
   const activeProfileId = readActiveProfileId(userDataPath)
   if (activeProfileId === null) {
-    // A malformed profile index leaves the active profile unknowable.
     return false
   }
 
@@ -63,8 +62,7 @@ export function readPersistedHttp1CompatibilityMode(userDataPath: string): boole
     activeProfileId !== DEFAULT_LOCAL_PROFILE_ID &&
     (profileDataFile === undefined || !existsSync(profileDataFile))
   ) {
-    // A known but unseeded non-default profile has default settings. The
-    // install-level legacy file belongs to another profile and must not leak.
+    // Unseeded non-default profiles use defaults; install-level JSON belongs to another profile.
     return false
   }
   const dataFile = profileDataFile ?? join(userDataPath, 'orca-data.json')

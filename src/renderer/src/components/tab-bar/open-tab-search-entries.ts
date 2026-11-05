@@ -1,6 +1,3 @@
-// Builds one worktree's tabs, browser pages and simulator tabs into the shapes
-// the three Cmd+J engines search.
-
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
@@ -54,6 +51,58 @@ export type OpenTabSearchEntryState = Pick<
   worktree: Worktree
 }
 
+export type OpenTabSearchBrowserPageState = Pick<
+  OpenTabSearchEntryState,
+  | 'activeBrowserTabId'
+  | 'activeTabType'
+  | 'activeWorktreeId'
+  | 'browserPagesByWorkspace'
+  | 'browserTabsByWorktree'
+  | 'executionHostId'
+  | 'folderWorkspaces'
+  | 'repo'
+  | 'unifiedTabsByWorktree'
+  | 'worktree'
+  | 'worktreesByRepo'
+>
+
+// Select browser state separately so terminal-title and editor writes cannot rerender browser-only consumers.
+export function selectOpenTabSearchBrowserPageState(
+  state: AppState,
+  worktreeId: string
+): OpenTabSearchBrowserPageState | null {
+  const entry = selectOpenTabSearchEntryState(state, worktreeId)
+  if (!entry) {
+    return null
+  }
+  const {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces,
+    repo,
+    unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo
+  } = entry
+  return {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces,
+    repo,
+    unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo
+  }
+}
+
 export type OpenTabSearchAgentState = Pick<
   AppState,
   | 'agentStatusByPaneKey'
@@ -63,8 +112,7 @@ export type OpenTabSearchAgentState = Pick<
   | 'terminalLayoutsByTabId'
 >
 
-// No group id: every tab of the worktree is offered, including the one the
-// column already shows, matching how Cmd+J lists the tab you are on.
+// Offer every workspace tab across groups, including the active one, to match Cmd+J.
 export function selectOpenTabSearchEntryState(
   state: AppState,
   worktreeId: string
@@ -86,8 +134,7 @@ export function selectOpenTabSearchEntryState(
       : undefined) ??
     repoCandidates[0] ??
     null
-  // preferredHostId last: it found this worktree, so it beats the local default
-  // when neither the worktree nor a repo names a host.
+  // Use the host that found the workspace when workspace/repo metadata has no host; do not silently fall back to local.
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined, preferredHostId)
   return {
     activeBrowserTabId: state.activeBrowserTabId,
@@ -124,22 +171,40 @@ export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAge
   }
 }
 
-export function buildOpenTabSearchEntries(
-  state: OpenTabSearchEntryState,
-  agentState: OpenTabSearchAgentState
-): OpenTabSearchEntries {
+function openTabSearchScope(state: OpenTabSearchBrowserPageState) {
   const { repo, worktree } = state
   const scopedWorktree =
     worktree.hostId === state.executionHostId
       ? worktree
       : { ...worktree, hostId: state.executionHostId }
-  const worktrees = [scopedWorktree]
-  const scope = {
-    worktrees,
+  return {
+    worktrees: [scopedWorktree],
     ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),
     repoMap: new Map(repo ? [[repo.id, repo]] : []),
     worktreeOrder: new Map([[worktree.id, 0]])
   }
+}
+
+export function buildOpenTabSearchBrowserPages(
+  state: OpenTabSearchBrowserPageState,
+  scope = openTabSearchScope(state)
+): SearchableBrowserPage[] {
+  return buildSearchableBrowserPages({
+    ...scope,
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    browserPagesByWorkspace: state.browserPagesByWorkspace,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    activeBrowserTabId: state.activeBrowserTabId,
+    activeWorktreeId: state.activeWorktreeId,
+    activeTabType: state.activeTabType
+  })
+}
+
+export function buildOpenTabSearchEntries(
+  state: OpenTabSearchEntryState,
+  agentState: OpenTabSearchAgentState
+): OpenTabSearchEntries {
+  const scope = openTabSearchScope(state)
 
   return {
     workspaceTabs: buildSearchableWorkspaceTabs({
@@ -163,15 +228,7 @@ export function buildOpenTabSearchEntries(
       activeTabTypeByWorktree: state.activeTabTypeByWorktree,
       generatedTitlesEnabled: state.generatedTitlesEnabled
     }),
-    browserPages: buildSearchableBrowserPages({
-      ...scope,
-      browserTabsByWorktree: state.browserTabsByWorktree,
-      browserPagesByWorkspace: state.browserPagesByWorkspace,
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-      activeBrowserTabId: state.activeBrowserTabId,
-      activeWorktreeId: state.activeWorktreeId,
-      activeTabType: state.activeTabType
-    }),
+    browserPages: buildOpenTabSearchBrowserPages(state, scope),
     simulatorTabs: buildSearchableSimulatorTabs({
       ...scope,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,

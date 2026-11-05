@@ -1,16 +1,16 @@
-import { foldComparableGitLabHost } from '../../../shared/git-remote-host-alias'
+import { foldComparableGitLabHost } from '../../../shared/git/remotes/git-remote-host-alias'
 import {
   matchGitRemoteKeyParts,
   splitGitRemoteKey,
   type GitRemoteKeyParts
-} from '../../../shared/git-remote-identity'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+} from '../../../shared/git/remotes/git-remote-identity'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   parseGitLabIssueOrMRLink,
   type ProjectSlug
 } from '../../../shared/new-workspace/gitlab-links'
 import type { Repo } from '../../../shared/repo-types'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 
 export type GitLabIssueOrMRLink = NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
@@ -49,10 +49,7 @@ function repoMatchesGitLabSlug(repo: Repo | undefined, slug: ProjectSlug): boole
   if (!identityParts) {
     return 'unknown'
   }
-  // Why trust a project-path mismatch whichever remote it came from: a resolved identity is
-  // re-probed once a repo/project list sweep finds it past its ~6h TTL, so it is not frozen at the
-  // moment the repo was added. Accepted cost: only one remote is stored, so a fork whose `upstream`
-  // outranks its own `origin` loses bare-iid matches for MR URLs on the fork.
+  // Resolved identities re-probe after ~6h TTL, so project mismatches are authoritative. Accepted gap: only one remote is kept; preferred upstream hides a fork’s origin and rejects its bare-iid matches.
   return matchGitRemoteKeyParts(identityParts, gitLabProjectKeyParts(slug))
 }
 

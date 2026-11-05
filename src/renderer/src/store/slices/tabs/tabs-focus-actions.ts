@@ -8,15 +8,15 @@ import {
 import type { Tab } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { recordPromotedEditorTabsInLayoutOwner } from '../editor/tabs/editor-tab-layout-owner'
 import { withPreviewEnded } from './tab-preview-flag'
+import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
 
-/** Activation ends a preview unless it preserves it. */
-function withPreviewOnActivation(tab: Tab, preservePreview: boolean): Tab {
+/** Activation ends a preview unless it preserves it; main's frame ends one main owns. */
+function withPreviewOnActivation(tab: Tab, preservePreview: boolean, endsHere: boolean): Tab {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return { ...tab, isPreview: preservePreview ? tab.isPreview : false }
   }
-  return preservePreview ? tab : withPreviewEnded(tab)
+  return preservePreview || !endsHere ? tab : withPreviewEnded(tab)
 }
 
 type ActivationState = Pick<
@@ -24,12 +24,14 @@ type ActivationState = Pick<
   'unifiedTabsByWorktree' | 'groupsByWorktree' | 'activeGroupIdByWorktree'
 >
 
-/** The store update that makes `tab` its group's active tab and its group the active one. */
+/** The store update that makes `tab` its group's active tab and its group the active one;
+ *  `endsPreview` is `endsPreviewHere` for the tab's workspace. */
 export function tabActivationPatch(
   state: ActivationState,
   tab: Tab,
   worktreeId: string,
-  opts?: { preservePreview?: boolean; recordFocus?: boolean }
+  opts: { preservePreview?: boolean; recordFocus?: boolean } | undefined,
+  endsPreview: boolean
 ): ActivationState {
   const tabId = tab.id
   return {
@@ -38,7 +40,7 @@ export function tabActivationPatch(
       [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
         item.id === tabId
           ? {
-              ...withPreviewOnActivation(item, opts?.preservePreview === true),
+              ...withPreviewOnActivation(item, opts?.preservePreview === true, endsPreview),
               ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
             }
           : item
@@ -51,7 +53,7 @@ export function tabActivationPatch(
           ? {
               ...group,
               activeTabId: tabId,
-              // Why: track every activation in the group's MRU so closeUnifiedTab returns to the previous tab; sanitize to prune removed ids.
+              // Track MRU for close-time selection, pruning removed IDs.
               recentTabIds: pushRecentTabId(
                 sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
                 tabId
@@ -121,11 +123,11 @@ export function createTabsFocusActions(
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }
-        return tabActivationPatch(state, tab, worktreeId, opts)
+        return tabActivationPatch(state, tab, worktreeId, opts, endsPreviewHere(state, worktreeId))
       })
-      // Switch point: main records that activating a preview made it permanent.
+      // Switch point: main makes the activated preview permanent; its frame clears the flag.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
-        recordPromotedEditorTabsInLayoutOwner(get(), promoted)
+        promotePreviewTabsThroughLayoutOwner(get(), set, promoted)
       }
     }
   }

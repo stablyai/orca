@@ -1,10 +1,4 @@
-/**
- * Where `known_hosts` entries come from for one lookup.
- *
- * Reading the user's real files is the entire migration story — most developers already verified
- * their hosts through `ssh` and `git`. We only read; writing to a file shared with every other SSH
- * tool on the machine is out of scope. See docs/reference/ssh-host-key-verification.md (D1, D2).
- */
+/** Read existing SSH trust sources without writing other tools' known_hosts files. */
 import { access, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -20,19 +14,14 @@ export function defaultKnownHostsFiles(): string[] {
   return [join(home, '.ssh', 'known_hosts'), join(home, '.ssh', 'known_hosts2')]
 }
 
-/**
- * Async because the rejoin below stats the very paths that can hang. Its one caller is already
- * inside a bounded async read, and a synchronous stat there blocked the whole main process on a
- * stalled NFS/SMB mount — worse than the wedged connection the bound was added to prevent.
- */
+/** Path-rejoin stats must stay async: slow NFS/SMB mounts cannot block main while its caller enforces a read deadline. */
 export async function resolveKnownHostsFiles(
   resolved: SshResolvedConfig | null
 ): Promise<string[]> {
   const reported = resolved
     ? [...resolved.userKnownHostsFiles, ...resolved.globalKnownHostsFiles]
     : []
-  // No `ssh`, a non-zero exit or a timeout must not turn a host the user already verified into
-  // first contact, so an empty report falls back rather than reading nothing.
+  // Missing probe output must fall back to normal trust sources, never erase prior verification.
   if (reported.length === 0) {
     return defaultKnownHostsFiles()
   }
@@ -41,22 +30,7 @@ export async function resolveKnownHostsFiles(
   ]
 }
 
-/**
- * Undo the split when `ssh -G` reported ONE path that happens to contain a space.
- *
- * OpenSSH prints this value unquoted and space-separated, even when the config quoted it — verified
- * against 10.2p1, which echoes `UserKnownHostsFile "/tmp/a b/known_hosts"` back as
- * `userknownhostsfile /tmp/a b/known_hosts`. So the format cannot distinguish one spaced path from
- * two paths, and splitting shreds `C:\Users\John Doe\.ssh\known_hosts` into fragments that resolve
- * to nothing. Every fragment then misses with ENOENT, which reads as "absent" rather than
- * "unreadable" — so the user appears to know no hosts at all, and a changed key that known_hosts
- * would have refused is accepted as first contact instead.
- *
- * The filesystem is the only thing that can disambiguate, so it decides: the longest run of tokens
- * that resolves to a real file is taken as one path, then the scan continues after it. That handles
- * a spaced path sitting alongside ordinary ones, which a whole-list check could not — it would see
- * the ordinary path exist and leave the spaced one in fragments.
- */
+/** Measured OpenSSH10.2p1 prints space-containing paths unquoted. Rejoin the longest existing token runs, including mixed spaced/ordinary files, or missed trust files can make changed keys look like first contact. */
 async function rejoinSpaceSplitPaths(paths: readonly string[]): Promise<string[]> {
   if (paths.length < 2) {
     return [...paths]
@@ -64,9 +38,7 @@ async function rejoinSpaceSplitPaths(paths: readonly string[]): Promise<string[]
   const rejoined: string[] = []
   let index = 0
   while (index < paths.length) {
-    // Longest run first, so a spaced path wins over its own first fragment when both happen to
-    // exist. Falls back to the single token when no run resolves, which leaves a genuinely absent
-    // path reported as-is rather than inventing one.
+    // Prefer the longest existing path; preserve an unmatched single token as absent rather than inventing a path.
     let consumed = 0
     for (let end = paths.length; end > index; end -= 1) {
       const candidate = paths.slice(index, end).join(' ')
@@ -92,17 +64,9 @@ async function exists(path: string): Promise<boolean> {
   )
 }
 
-export type KnownHostsEvidence = {
+type KnownHostsEvidence = {
   entries: KnownHostsEntry[]
-  /**
-   * Files that EXIST but could not be read — a permissions problem, a directory, an I/O error.
-   *
-   * Deliberately not "files that produced no entries": a file that is simply absent is the normal
-   * state (ssh creates known_hosts on its own first connect, and most Orca profiles start without
-   * one), and it is real evidence that no host is known. A file that exists and refuses to open is
-   * the opposite — evidence withheld, so an entry that would have said "this key changed" may be
-   * sitting in it. The caller must not record trust while any source is silent that way.
-   */
+  /** Count existing unreadable sources separately from normal absence; withheld evidence must never become durable new trust. */
   unreadableFileCount: number
 }
 
@@ -125,23 +89,13 @@ export async function loadKnownHostsEvidence(
   }
 }
 
-/**
- * The name the lookup keys on: `HostKeyAlias` when set, else the resolved hostname, else the host
- * ssh2 dials. Never the Orca label — bastions tunnelled through `localhost:port` depend on the
- * alias, and a label keys on nothing `ssh` ever wrote.
- */
+/** Key by HostKeyAlias or the dialed host after HostName resolution, never the Orca label; bastion loopback connections depend on the alias. */
 export function resolveKnownHostsLookupHost(
   resolved: SshResolvedConfig | null,
   dialedHost: string
 ): { host: string; isHostKeyAlias: boolean } {
-  // Deliberately NOT `resolved.hostname`: `ssh -G` echoes its own argument back as `hostname` when
-  // no Host block matches, which for a manual target is the Orca label. Keying on that consults a
-  // name `ssh` never wrote, so the real host's entries are missed entirely and an impersonated
-  // host reads as first contact. `dialedHost` is what ssh2 actually connects to, with HostName
-  // resolution already applied by buildConnectConfig.
+  // ssh -G can echo an unknown Orca label as hostname; dialedHost already has real HostName resolution and cannot hide existing trust.
   const alias = resolved?.hostKeyAlias
-  // The flag matters as much as the name: ssh looks an alias up WITHOUT the port, so bracketing it
-  // would consult a form ssh never writes and, worse, let a stale `[alias]:port` line stop the bare
-  // lookup that ssh actually performs.
+  // Alias lookups never append ports; a stale bracketed alias could otherwise block the real bare lookup.
   return alias ? { host: alias, isHostKeyAlias: true } : { host: dialedHost, isHostKeyAlias: false }
 }

@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,9 +19,9 @@ import {
 } from './orcad-remote-host-support'
 import { orcadLaunchCommand } from './orcad-remote-launch'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
-// The readiness file carries the pairing offer's device token: under a login umask of 022 it must
-// still come out owner-only, and so must the slot and `~/.orca-remote` that hold it.
+// Pairing tokens in readiness require owner-only launch artifacts even under login umask 022.
 
 const posix = getRemoteHostPlatform('linux-x64')
 const READY_LINE = '{"type":"orca_server_ready","pairing":{"url":"orca://pair#token"}}'
@@ -29,6 +30,10 @@ let home: string
 let baseDir: string
 let slotDir: string
 
+function writeEntry(dir: string, before = ''): void {
+  writeFileSync(join(dir, 'orcad.js'), `${before}console.log(${JSON.stringify(READY_LINE)})\n`)
+}
+
 function mode(path: string): number {
   return statSync(path).mode & 0o777
 }
@@ -36,8 +41,8 @@ function mode(path: string): number {
 async function launchUnderLoginUmask(): Promise<void> {
   const command = orcadLaunchCommand(posix, {
     remoteInstallDir: slotDir,
-    // No runtime marker in the slot, so this legacy path runs the stub entry below.
-    nodePath: '/bin/sh',
+    // No runtime marker selects the legacy host runtime; /bin/sh rejects V8 flags, so a JS one stands in.
+    nodePath: process.execPath,
     fullVersion: '0.2.0+bb01',
     userDataDir: join(home, '.orca'),
     bindHost: '127.0.0.1',
@@ -60,7 +65,7 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     mkdirSync(slotDir, { recursive: true, mode: 0o755 })
     chmodSync(baseDir, 0o755)
     chmodSync(slotDir, 0o755)
-    writeFileSync(join(slotDir, 'orcad.js'), `printf '%s\\n' '${READY_LINE}'\n`)
+    writeEntry(slotDir)
   })
 
   afterEach(() => {
@@ -91,11 +96,11 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     expect(mode(baseDir)).toBe(0o700)
   })
 
-  // Regression (#31125): git, terminals and agents the daemon spawns create the user's files.
+  // Daemon children create user files and must retain login umask (#31125).
   it('runs the daemon itself at the login umask', async () => {
-    writeFileSync(
-      join(slotDir, 'orcad.js'),
-      `mkdir daemon-dir && : > daemon-file && printf '%s\\n' '${READY_LINE}'\n`
+    writeEntry(
+      slotDir,
+      "require('node:fs').mkdirSync('daemon-dir'); require('node:fs').writeFileSync('daemon-file', '');"
     )
 
     await launchUnderLoginUmask()
@@ -111,11 +116,35 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     slotDir = join(home, 'custom-slot')
     mkdirSync(slotDir, { mode: 0o755 })
     chmodSync(home, 0o755)
-    writeFileSync(join(slotDir, 'orcad.js'), `printf '%s\\n' '${READY_LINE}'\n`)
+    writeEntry(slotDir)
 
     await launchUnderLoginUmask()
 
     expect(mode(home)).toBe(0o755)
     expect(mode(slotDir)).toBe(0o700)
+  })
+
+  // Artifact paths are relative to the slot, so a failed cd must not launch from the login cwd.
+  it('creates nothing in the login directory when the slot is missing', async () => {
+    rmSync(slotDir, { recursive: true, force: true })
+    const command = orcadLaunchCommand(posix, {
+      remoteInstallDir: slotDir,
+      nodePath: process.execPath,
+      fullVersion: '0.2.0+bb01',
+      userDataDir: join(home, '.orca'),
+      bindHost: '127.0.0.1',
+      port: 7777,
+      activationRoot: join(baseDir, '.orcad-activation-transaction')
+    })
+
+    const result = await runProcess({
+      program: '/bin/sh',
+      args: ['-c', `cd ${quotePosixShell(home)}; ${command}`],
+      timeoutMs: 10_000
+    })
+
+    expect(result.code).not.toBe(0)
+    expect(existsSync(join(home, ORCAD_READINESS_FILENAME))).toBe(false)
+    expect(existsSync(join(home, ORCAD_LOG_FILENAME))).toBe(false)
   })
 })

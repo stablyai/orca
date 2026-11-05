@@ -1,9 +1,7 @@
 import { switchBrowserHostClientProfile } from './browser-host-client-profile-switch'
 import { randomUUID } from 'node:crypto'
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserHostCommandResultParams } from './browser-host-command-state'
 import {
   assertBrowserHostLeaseAdmission,
@@ -70,18 +68,9 @@ export class BrowserHostLeaseRegistry {
       authorityRuntimeId: string
       authorityEpoch?: string
       reconnectGraceMs?: number
-      /**
-       * Called when a client page stops being reachable -- retired, or fenced with its lease. Runs
-       * even when the client transport is already gone, so runtime-side per-page state (staged
-       * download transfers) is not stranded.
-       */
-      /** A generation limits the release to that page generation's resources. */
+      /** Release staged per-page state even after transport loss; an optional generation scopes cleanup. */
       onClientPageReleased?: (browserPageId: string, pageHostGeneration?: number) => void
-      /**
-       * Called when a lease fence takes a client page's placement away. The page itself outlives
-       * the host that placed it, so this hands the runtime its record back to retain rather than
-       * to drop -- a host returning under the same identity recovers it from there.
-       */
+      /** Retain fenced page records for recovery when the same host identity returns. */
       onClientPageFenced?: (browserPageId: string, placement: RuntimeBrowserClientPlacement) => void
     }
   ) {

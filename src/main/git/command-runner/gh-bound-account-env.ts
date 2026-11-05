@@ -21,10 +21,7 @@ export function isGhBoundAccountError(error: unknown): boolean {
   )
 }
 
-/**
- * Child env for a bound gh call: pins the host, resolves the bound login's
- * token, and injects it into this child only — never process-wide.
- */
+/** Pin the host and inject the bound account token into this child only. */
 export async function resolveBoundGhExecEnv(
   options: GhExecOptions,
   resolved: ResolvedCommand,
@@ -35,7 +32,7 @@ export async function resolveBoundGhExecEnv(
   if (!binding || args[0] === 'auth') {
     return options.env
   }
-  // Why: dynamic import avoids a load-time cycle (command runner ↔ github token module).
+  // Dynamic import breaks the runner/token-module load cycle.
   const {
     buildBoundGhChildEnv,
     createGhBoundAccountHostMismatchError,

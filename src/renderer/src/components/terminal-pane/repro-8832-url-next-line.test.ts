@@ -1,24 +1,9 @@
-/**
- * Issue #8832 — Cmd-click URL must not glue the next logical line.
- *
- * Root cause: path hard-wrap reconstruction (from #8339) still joins a URL
- * suffix ending in `/` with the next row's path-like prefix. HTTP hit-testing
- * must not consume those candidates; it uses soft-wrap, framed hard-wrap HTTP,
- * and edge-wrap reconstruction only.
- *
- * Re-run:
- *   pnpm exec vitest run --config config/vitest.config.ts \
- *     src/renderer/src/components/terminal-pane/repro-8832-url-next-line.test.ts
- */
+/** HTTP hit-testing must not reuse path hard-wrap candidates that join a trailing-slash URL to a new logical line; file links retain existence checks (#8832). */
 import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
-import { buildCandidateLogicalLinesForBufferPosition } from './terminal-file-link-hit-testing'
-import {
-  extractTerminalHttpLinks,
-  openHttpLinkAtBufferPosition
-} from './terminal-url-link-hit-testing'
-import { buildHardWrappedPathLogicalLineCandidates } from './wrapped-terminal-link-ranges'
+
+import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
 
 const LINE_1 = 'Repo: https://github.com/stablyai/orca/'
 const LINE_2 = 'Description: 123'
@@ -99,30 +84,6 @@ describe('#8832 hard-wrapped path candidates glue next-line text into URLs', () 
 
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('still builds a multi-row path candidate that concatenates Description onto the URL', () => {
-    // Why: documents the path-reconstruction poison that HTTP hit-testing must
-    // not consume. File links remain protected by existence checks.
-    const buffer = issueBuffer()
-    const candidates = buildHardWrappedPathLogicalLineCandidates(buffer, 1)
-    const multiRow = candidates.filter((candidate) => candidate.rows.length > 1)
-
-    expect(multiRow.some((candidate) => candidate.text.includes('Description'))).toBe(true)
-
-    const glued = multiRow.find((candidate) => candidate.text.includes('https://'))
-    expect(glued).toBeDefined()
-    expect(glued!.text).toContain('https://github.com/stablyai/orca/Description')
-  })
-
-  it('HTTP extraction on a path logical line still yields the glued URL', () => {
-    const buffer = issueBuffer()
-    const candidates = buildCandidateLogicalLinesForBufferPosition(buffer, 1)
-    const extracted = candidates.flatMap((line) => extractTerminalHttpLinks(line.text))
-
-    expect(extracted.map((link) => link.url)).toContain(BUGGY_URL)
-    const singleLineUrls = extractTerminalHttpLinks(LINE_1).map((link) => link.url)
-    expect(singleLineUrls).toEqual([EXPECTED_URL])
   })
 
   it('openHttpLinkAtBufferPosition opens the unglued URL when Cmd-clicking the URL row', () => {

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -202,8 +202,7 @@ it('keeps a terminal-free degraded workspace selected through hydration and pers
 
 it('keeps chrome when a non-authoritative fallback lists only some of the repo worktrees', () => {
   const store = createTestStore()
-  // Why: an SSH metadata fallback can be non-empty yet partial (host-less metas are skipped on multi-owner
-  // repos, agent-scratch stays hidden). A partial list must not read as proof the missing worktree was deleted.
+  // Nonempty SSH metadata fallback can still omit ambiguous/hidden rows; partial lists prove no deletion.
   const sibling = makeWorktree({
     id: 'repo1::/path/sibling',
     repoId: 'repo1',
