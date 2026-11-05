@@ -21,6 +21,9 @@ import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-cha
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
+import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { RpcClient } from '../../transport/rpc-client'
+import { MobileSessionCrewActivity } from './input/MobileSessionCrewActivity'
 import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
@@ -59,6 +62,8 @@ type Props = {
   /** Opens a host terminal tab in this chat's workspace running `command`. */
   onRunInTerminal: (command: string) => void
   hostOutage?: MobileNativeChatHostOutage | null
+  crewClient?: RpcClient | null
+  crewTab?: MobileSessionTab | null
 }
 
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
@@ -88,7 +93,9 @@ export function MobileNativeChatOverlay({
   hostName,
   onOpenUrlInOrca,
   onRunInTerminal,
-  hostOutage = null
+  hostOutage = null,
+  crewClient = null,
+  crewTab = null
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -284,7 +291,19 @@ export function MobileNativeChatOverlay({
                       onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
                       permission={controller.nativeChatPermission}
                       onRespondPermission={controller.handleNativeChatRespondPermission}
-                      composerTray={composerTray}
+                      composerTray={{
+                        ...composerTray,
+                        content: (
+                          <>
+                            {composerTray.content}
+                            <MobileSessionCrewActivity
+                              client={crewClient}
+                              tab={crewTab}
+                              setComposerText={controller.setChatComposerText}
+                            />
+                          </>
+                        )
+                      }}
                       onOpenFile={onOpenFile}
                       hasMore={session.hasMore}
                       olderPages={session.olderPages}

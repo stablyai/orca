@@ -7,7 +7,7 @@ import {
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../structured-session-lineage'
-import { crewDisplayName, crewTaskDisplay } from './crew-rules'
+import { crewDisplayName, crewRowStatus, crewTaskDisplay } from './crew-rules'
 import type { CrewAssignmentRow } from './crew-query'
 
 import type { Party } from './crew-parties'
@@ -166,13 +166,7 @@ export function buildCrewSnapshot(
         live?.kind === 'here'
           ? live.record.provider
           : (fresh?.activity.agentType ?? assignment?.agent ?? 'Agent'),
-      status:
-        fresh?.activity.state ??
-        (assignment
-          ? ['pending', 'dispatched'].includes(assignment.status)
-            ? 'working'
-            : 'done'
-          : 'unknown'),
+      status: crewRowStatus(fresh?.activity.state, assignment?.status),
       ...(title && assignment ? { task: { title, state: assignment.task_status } } : {}),
       ...(assignment?.stage && !['accepted', 'ready'].includes(assignment.stage)
         ? { progress: assignment.stage.replaceAll('_', ' ') }

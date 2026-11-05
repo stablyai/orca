@@ -6,6 +6,7 @@ import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildCrewSnapshot, CrewReadModel } from './crew-read-model'
+import { crewRowStatus } from './crew-rules'
 import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
@@ -215,6 +216,14 @@ it('preserves a bound offline manager and the complete committed clear conversat
   })
 })
 
+it('keeps an open dispatch idle when the agent last reported done, and done only after it settles', () => {
+  expect(crewRowStatus('done', 'dispatched')).toBe('idle')
+  expect(crewRowStatus('working', 'dispatched')).toBe('working')
+  expect(crewRowStatus('done', 'completed')).toBe('done')
+  expect(crewRowStatus(undefined, 'pending')).toBe('idle')
+  expect(crewRowStatus(undefined, undefined)).toBe('unknown')
+})
+
 it('uses qualified terminal status and keeps canonical native status without requiring a terminal binding', () => {
   const { deps, assign, handles } = fixture()
   const worker = assign('term_worker')
@@ -254,11 +263,11 @@ it('uses qualified terminal status and keeps canonical native status without req
     { ...status, clock: { kind: 'observed', at: now - 31 * 60_000 } }
   ] satisfies FleetAgentStatusEvidence[]) {
     deps.statuses = [invalid]
-    expect(read()?.status).toBe('working')
+    expect(read()?.status).toBe('idle')
     expect(read()?.agentKind).toBe('Agent')
   }
   deps.statuses = [status]
-  expect(read()?.status).toBe('done')
+  expect(read()?.status).toBe('idle')
   const native = agentSessionConversationView(
     agentSessionRecordFixture({ sessionId: 'chat-native' })
   )
