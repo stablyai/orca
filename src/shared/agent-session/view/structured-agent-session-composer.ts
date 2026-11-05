@@ -1,8 +1,8 @@
 import {
-  getAgentSlashCommands,
   getNativeChatAgentProfile,
   getTextDrivenNativeChatCommands
 } from '../../native-chat/native-chat-agent-profiles'
+import { getAgentSlashCommands } from '../../native-chat/input/native-chat-slash-commands'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
