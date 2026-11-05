@@ -16,7 +16,7 @@ export function readGitBaselineSources(repo, ref, sources) {
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
     })
     if (result.code !== 0 || result.outputTruncated) {
-      throw new Error(`Cannot read pinned Docker baseline sources: ${result.stderr}`)
+      throw new Error(`Cannot read pinned Git baseline sources: ${result.stderr}`)
     }
     return result.stdout
   }
@@ -33,7 +33,7 @@ export function readGitBaselineSources(repo, ref, sources) {
           ? historical
           : null
       if (!source) {
-        throw new Error(`Pinned Docker baseline source is absent: ${ref}:${current}`)
+        throw new Error(`Pinned Git baseline source is absent: ${ref}:${current}`)
       }
       return [
         resolve(repo, current),

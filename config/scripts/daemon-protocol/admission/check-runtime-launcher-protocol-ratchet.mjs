@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { readDaemonProtocolRevisionFacts } from '../schema-facts/daemon-protocol-revision-facts.mjs'
 import {
   DAEMON_PROTOCOL_SOURCE_PATH,
   parseDaemonProtocolFacts
@@ -89,10 +90,7 @@ export function checkRuntimeLauncherProtocolRatchet({ repoRoot, base, env = proc
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-  const baseFacts = parseDaemonProtocolFacts(
-    git(repoRoot, ['show', `${base}:${DAEMON_PROTOCOL_SOURCE_PATH}`]),
-    `${base}:${DAEMON_PROTOCOL_SOURCE_PATH}`
-  )
+  const baseFacts = readDaemonProtocolRevisionFacts(repoRoot, base)
   const candidateFacts = parseDaemonProtocolFacts(
     readFileSync(join(repoRoot, DAEMON_PROTOCOL_SOURCE_PATH), 'utf8'),
     DAEMON_PROTOCOL_SOURCE_PATH

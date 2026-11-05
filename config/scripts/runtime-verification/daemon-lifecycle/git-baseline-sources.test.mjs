@@ -71,5 +71,5 @@ it('reads the selected revision before and after a move, preserving its import d
       beforeMove,
       new Map([['src/main/absent.ts', `${beforeMove}:src/main/also-absent.ts`]])
     )
-  ).toThrow('Pinned Docker baseline source is absent:')
+  ).toThrow('Pinned Git baseline source is absent:')
 })
