@@ -5,7 +5,10 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { loadHosts } from '../transport/host-store'
-import { loadTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
+import {
+  loadTerminalAccessoryLayout,
+  saveTerminalSmartRail
+} from '../terminal/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
@@ -25,6 +28,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     setCustomKeys,
     setVisibleBuiltInIds,
     setDirectionPadEnabled,
+    setSmartRailEnabled,
     setHostEndpoint,
     setHostName,
     connStateRef,
@@ -100,6 +104,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         if (layout) {
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
           setDirectionPadEnabled(layout.directionPadEnabled !== false)
+          setSmartRailEnabled(layout.smartRail === true)
         }
         setAccessoryLayoutLoaded(true)
       }
@@ -110,6 +115,19 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       }
     }
   }, [padAvailable, shellStorage])
+
+  const handleSmartRailChange = useCallback(
+    (enabled: boolean) => {
+      // A read that started before the toggle must not flip it back.
+      layoutReadRevisionRef.current += 1
+      setSmartRailEnabled(enabled)
+      saveTerminalSmartRail(enabled, padAvailable).catch((error: unknown) => {
+        console.warn('[terminal-keys] the store would not take the Smart rail setting', error)
+        setSmartRailEnabled(!enabled)
+      })
+    },
+    [padAvailable]
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -192,6 +210,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
   return {
     accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
+    handleSmartRailChange,
     pendingForegroundRecoveryRef
   }
 }

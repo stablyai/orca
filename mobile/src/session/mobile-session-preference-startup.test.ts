@@ -91,6 +91,7 @@ function sessionScope() {
     setCustomKeys: vi.fn(),
     setVisibleBuiltInIds: vi.fn(),
     setDirectionPadEnabled: vi.fn(),
+    setSmartRailEnabled: vi.fn(),
     setHostEndpoint: vi.fn(),
     connStateRef: { current: 'connecting' },
     terminalRefs: { current: new Map() },

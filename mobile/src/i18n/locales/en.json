@@ -1401,6 +1401,10 @@
         "partial": "Partial diff",
         "showMoreFiles": "Show {{count}} more"
       }
+    },
+    "smartRailRow": {
+      "title": "Smart rail",
+      "subtitle": "Shows keys for what your agent is doing"
     }
   },
   "pullRequest": {
@@ -2792,6 +2796,23 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "smartKeys": {
+      "always": "Always",
+      "answerEdit": "Answer · Edit",
+      "background": "Background",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "history": "History",
+      "keyLabel": "{{word}}, sends {{combo}}",
+      "mode": "Mode",
+      "no": "No",
+      "queue": "Queue",
+      "reject": "Reject",
+      "rewind": "Rewind",
+      "sendNow": "Send now",
+      "stop": "Stop",
+      "yes": "Yes"
     }
   },
   "chat": {

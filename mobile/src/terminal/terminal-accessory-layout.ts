@@ -9,6 +9,8 @@ export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
   directionPadEnabled?: boolean
+  /** Agent keys at the front of the phone's key row; off unless the user turns it on. */
+  smartRail?: boolean
 }
 
 export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
@@ -29,7 +31,8 @@ function defaultPreference(
     visibleBuiltInIds: directionPadAvailable
       ? ids.filter((id) => !id.startsWith('arrow'))
       : [...ids],
-    directionPadEnabled: true
+    directionPadEnabled: true,
+    smartRail: false
   }
 }
 
@@ -88,11 +91,9 @@ export function getDefaultTerminalAccessoryBuiltInIds(): string[] {
 export function getDefaultTerminalAccessoryLayout(
   directionPadAvailable = false
 ): TerminalAccessoryLayout {
-  const { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled } = defaultPreference(
-    builtInIds(),
-    directionPadAvailable
-  )
-  return { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled }
+  const { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled, smartRail } =
+    defaultPreference(builtInIds(), directionPadAvailable)
+  return { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled, smartRail }
 }
 
 export function normalizeTerminalAccessoryLayoutPreference(
@@ -110,7 +111,8 @@ export function normalizeTerminalAccessoryLayoutPreference(
     orderedBuiltInIds: 'orderedBuiltInIds' in value ? value.orderedBuiltInIds : undefined,
     visibleBuiltInIds: 'visibleBuiltInIds' in value ? value.visibleBuiltInIds : undefined,
     knownBuiltInIds: 'knownBuiltInIds' in value ? value.knownBuiltInIds : undefined,
-    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined
+    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined,
+    smartRail: 'smartRail' in value ? value.smartRail : undefined
   }
   const builtInSet = new Set(currentBuiltInIds)
 
@@ -131,6 +133,7 @@ export function normalizeTerminalAccessoryLayoutPreference(
     return {
       version: 2,
       directionPadEnabled: candidate.directionPadEnabled !== false,
+      smartRail: candidate.smartRail === true,
       orderedBuiltInIds: ordered,
       visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
     }
@@ -153,6 +156,7 @@ export function normalizeTerminalAccessoryLayoutPreference(
     return {
       version: 2,
       directionPadEnabled: candidate.directionPadEnabled !== false,
+      smartRail: candidate.smartRail === true,
       orderedBuiltInIds: [...currentBuiltInIds],
       visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id))
     }
@@ -174,6 +178,7 @@ export function createTerminalAccessoryLayoutPreference(
   return {
     version: 2,
     directionPadEnabled: layout.directionPadEnabled !== false,
+    smartRail: layout.smartRail === true,
     orderedBuiltInIds: ordered,
     visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
   }
@@ -189,6 +194,7 @@ export function setTerminalAccessoryBuiltInVisible(
   if (!new Set(currentBuiltInIds).has(id)) {
     return {
       directionPadEnabled: preference.directionPadEnabled,
+      smartRail: preference.smartRail,
       orderedBuiltInIds: preference.orderedBuiltInIds,
       visibleBuiltInIds: preference.visibleBuiltInIds
     }
@@ -201,6 +207,7 @@ export function setTerminalAccessoryBuiltInVisible(
   }
   return {
     directionPadEnabled: preference.directionPadEnabled,
+    smartRail: preference.smartRail,
     orderedBuiltInIds: preference.orderedBuiltInIds,
     visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) => visibleSet.has(builtInId))
   }
@@ -217,6 +224,7 @@ export function reorderTerminalAccessoryBuiltInIds(
   )
   return {
     directionPadEnabled: preference.directionPadEnabled,
+    smartRail: preference.smartRail,
     orderedBuiltInIds: preference.orderedBuiltInIds,
     visibleBuiltInIds: preference.visibleBuiltInIds
   }
@@ -258,4 +266,35 @@ export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayou
   const preference = createTerminalAccessoryLayoutPreference(layout)
   const value = JSON.stringify(preference)
   await persistMirrored(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, value)
+}
+
+// A malformed value may be replaced; only a failed read must stop the write.
+function parseStoredLayout(raw: string | null): unknown {
+  try {
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+// Serialize read-modify-write so quick toggles land in order.
+let layoutWriteTurn: Promise<unknown> = Promise.resolve()
+
+/** Turns the Smart rail on or off, keeping the rest of the stored layout. */
+export function saveTerminalSmartRail(
+  enabled: boolean,
+  directionPadAvailable = false
+): Promise<void> {
+  const run = layoutWriteTurn.then(async () => {
+    // A failed read must not save defaults over the user's layout.
+    const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
+    const layout = normalizeTerminalAccessoryLayoutPreference(
+      parseStoredLayout(raw),
+      builtInIds(),
+      directionPadAvailable
+    )
+    await saveTerminalAccessoryLayout({ ...layout, smartRail: enabled })
+  })
+  layoutWriteTurn = run.catch(() => {})
+  return run
 }
