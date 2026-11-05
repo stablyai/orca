@@ -8,7 +8,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 
 // #25900: empty windowless snapshots hid persisted live agents and stranded clients on Reconnecting.
 

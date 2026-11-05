@@ -2,8 +2,8 @@ import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction
 import {
   persistClientHostedBrowserPages,
   rehydrateClientHostedBrowserPages
-} from '../client-hosted-browser-page-persistence'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+} from '../browser/client-pages/client-hosted-browser-page-persistence'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 

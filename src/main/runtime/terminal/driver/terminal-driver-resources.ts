@@ -10,7 +10,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserWindow } from 'electron'
-import type { BrowserSessionTabSelectionOptions } from '../../browser-tab-create-publication'
+import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
@@ -30,10 +30,10 @@ import type {
 
 import { RuntimeTerminalDriverController } from './runtime-terminal-driver-controller'
 import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 
-import { RuntimeBrowserDriverController } from '../../runtime-browser-driver-controller'
+import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
 import { RemoteDesktopTerminalFloor } from '../../remote-desktop-terminal-floor'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
 import type { StatsCollector } from '../../../stats/collector'
@@ -41,7 +41,7 @@ import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-
 import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../serve-browser-tabs'
-import { readBrowserTabBar } from '../../browser/browser-tab-listing'
+import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
