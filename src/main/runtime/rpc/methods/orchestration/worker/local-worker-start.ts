@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: worker-start owns one flow — placement, custody, and the launch recipe a reopen replays (#37693) — and splitting it would spread the placement result's consumers across files. */
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
@@ -202,9 +203,11 @@ export async function startLocalWorker(args: {
       effects
     }
     recordCreatedWorkerTerminalCustody(runtime, setupStage, created && !structuredSession)
-    // Record the launch recipe now that custody exists: a reopen replays this
-    // launch's flags instead of falling back to the agent's default (#37693).
-    recordWorkerLaunchRecipe(db, started.dispatch.id, placed.terminalCreation?.launchConfig)
+    recordWorkerLaunchRecipe(
+      db,
+      started.dispatch.id,
+      placed.terminalCreation?.launchConfig ?? placed.reopened?.launchRecipe
+    )
     if (persistGatedSetupSpawnFailure(setupStage)) {
       failedStage = 'setup_start'
       throw new Error('Setup terminal failed to start before the gated agent launch.')
