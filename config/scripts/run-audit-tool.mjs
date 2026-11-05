@@ -1,7 +1,7 @@
 import { runProcessSync } from '@orca/process-host'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
+import { resolvePnpmCliInvocation } from './tool-invocation/pnpm-cli-invocation.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
 const TOOL_ENTRIES = {

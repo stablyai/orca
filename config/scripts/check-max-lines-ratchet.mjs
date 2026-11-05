@@ -2,7 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runEntryRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet gate for the oxlint `max-lines` rule.
 //

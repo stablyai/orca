@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import baseConfig from './vitest.config'
-import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 
 const contracts = [
   'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts',

@@ -278,9 +278,13 @@ async function main() {
   const bundlePath = join(bundleDir, 'wsl-agent-hook-relay.js')
   const versionPath = join(bundleDir, '.version')
   if (!existsSync(bundlePath) || !existsSync(versionPath)) {
-    await run(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
-      cwd: process.cwd()
-    })
+    await run(
+      process.execPath,
+      [join('config', 'scripts', 'remote-host-build', 'wsl-guest', 'build-wsl-guest.mjs')],
+      {
+        cwd: process.cwd()
+      }
+    )
   }
 
   // Why: main's PTY graph reads app paths at import time; keep it inside a disposable directory.

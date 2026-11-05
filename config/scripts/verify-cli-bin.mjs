@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { resolveBuildSourceCommit } from './build-source-commit.mjs'
+import { resolveBuildSourceCommit } from './build-identity/build-source-commit.mjs'
 
 // Packager restamps channel version after compilation; compiled CLI’s commit pins official skill installs.
 function buildOutPackageJson(version, commit) {

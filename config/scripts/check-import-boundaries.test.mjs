@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { COMPAT_FOLDERS } from './check-compat-boundary-imports.mjs'
 import { main } from './check-import-boundaries.mjs'
-import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
+import { collectModuleSpecifiers } from './static-analysis/module-requests/static-module-specifiers.mjs'
 
 const roots = []
 afterEach(() => {

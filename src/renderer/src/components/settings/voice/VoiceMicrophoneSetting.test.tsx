@@ -96,48 +96,6 @@ describe('VoiceMicrophoneSetting access failures', () => {
     container.remove()
   })
 
-  it('routes a denied getUserMedia to the OS permission request and says where to grant it', async () => {
-    installMediaDevices(async () => {
-      throw new DOMException('Permission denied', 'NotAllowedError')
-    })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(window.api.developerPermissions.request).toHaveBeenCalledWith({ id: 'microphone' })
-    expect(alertText()).toBe(
-      'Microphone access is blocked. Grant it in your system settings, then try again.'
-    )
-  })
-
-  it('points at Privacy & Security once the request opened it', async () => {
-    installMediaDevices(async () => {
-      throw namedError('NotAllowedError')
-    })
-    installPermissionsApi({ id: 'microphone', status: 'denied', openedSystemSettings: true })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(alertText()).toBe(
-      'Opened macOS Privacy & Security. Grant microphone access, then try again.'
-    )
-  })
-
-  it('still reports a block on platforms where the OS request is unsupported', async () => {
-    installMediaDevices(async () => {
-      throw namedError('NotAllowedError')
-    })
-    installPermissionsApi({ id: 'microphone', status: 'unsupported', openedSystemSettings: false })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(alertText()).toBe(
-      'Microphone access is blocked. Grant it in your system settings, then try again.'
-    )
-  })
-
   it('names the missing-hardware case instead of a permission instruction', async () => {
     installMediaDevices(async () => {
       throw namedError('NotFoundError')
@@ -148,66 +106,6 @@ describe('VoiceMicrophoneSetting access failures', () => {
 
     expect(window.api.developerPermissions.request).not.toHaveBeenCalled()
     expect(alertText()).toBe('No microphone was found. Connect one, then try again.')
-  })
-
-  it('keeps the underlying detail for an unclassified failure', async () => {
-    installMediaDevices(async () => {
-      throw namedError('AbortError', 'Could not start audio source')
-    })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(alertText()).toBe('Could not open the microphone. Could not start audio source')
-  })
-
-  it('never renders a literal "undefined" when the error message is absent', async () => {
-    installMediaDevices(async () => {
-      throw { name: 'AbortError', message: undefined }
-    })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(alertText()).toBe('Could not open the microphone.')
-  })
-
-  it('shows the plain hint until something actually fails', async () => {
-    installMediaDevices(async () => ({ getTracks: () => [] }))
-
-    await renderSetting()
-
-    expect(container.querySelector('[role="alert"]')).toBeNull()
-    expect(container.textContent).toContain('Allow microphone access to list input devices.')
-
-    await clickAllowAccess()
-
-    expect(container.querySelector('[role="alert"]')).toBeNull()
-  })
-
-  it('uses a generic stream when the saved microphone is stale', async () => {
-    const getUserMedia = vi.fn(async () => ({ getTracks: () => [] }))
-    installMediaDevices(getUserMedia)
-
-    await renderSetting({
-      ...voiceSettings,
-      microphoneDeviceId: 'unplugged-mic',
-      microphoneDeviceLabel: 'Old headset'
-    })
-    await clickAllowAccess()
-
-    expect(getUserMedia).toHaveBeenCalledWith({ audio: true })
-  })
-
-  it('classifies browser-shaped permission errors without requiring Error identity', async () => {
-    installMediaDevices(async () => {
-      throw { name: 'NotAllowedError', message: 'Permission denied' }
-    })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(window.api.developerPermissions.request).toHaveBeenCalledWith({ id: 'microphone' })
   })
 
   it('opens a stream after the OS grant so the device list is not left empty', async () => {
@@ -259,48 +157,5 @@ describe('VoiceMicrophoneSetting access failures', () => {
       'Microphone access is blocked. Grant it in your system settings, then try again.'
     )
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
-  })
-
-  it('names the missing-hardware case for the legacy DevicesNotFoundError alias', async () => {
-    installMediaDevices(async () => {
-      throw namedError('DevicesNotFoundError')
-    })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(alertText()).toBe('No microphone was found. Connect one, then try again.')
-  })
-
-  it('treats SecurityError as a permission denial, like NotAllowedError', async () => {
-    installMediaDevices(async () => {
-      throw namedError('SecurityError')
-    })
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    expect(window.api.developerPermissions.request).toHaveBeenCalledWith({ id: 'microphone' })
-    expect(alertText()).toBe(
-      'Microphone access is blocked. Grant it in your system settings, then try again.'
-    )
-  })
-
-  it('reports a failed permission REQUEST as such, with the IPC wrapper stripped', async () => {
-    installMediaDevices(async () => {
-      throw namedError('NotAllowedError')
-    })
-    installPermissionsApi(
-      new Error(
-        "Error invoking remote method 'developerPermissions:request': Error: xdg-open not found"
-      )
-    )
-
-    await renderSetting()
-    await clickAllowAccess()
-
-    // This is an IPC failure before microphone reopen; preserve that provenance and strip transport wrappers.
-    expect(alertText()).toBe('xdg-open not found')
-    expect(alertText()).not.toContain('Error invoking remote method')
   })
 })

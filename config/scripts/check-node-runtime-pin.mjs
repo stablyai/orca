@@ -5,7 +5,10 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { nodeDistArchiveName, windowsImportLibFile } from './node-dist-archive-name.mjs'
+import {
+  nodeDistArchiveName,
+  windowsImportLibFile
+} from './node-runtime/archive-identity/node-dist-archive-name.mjs'
 import { lockedVersion, lockfileRootImporter } from './pnpm-lockfile-root-importer.mjs'
 
 // require avoids MODULE_TYPELESS_PACKAGE_JSON from ESM-importing TS under typeless package.json.
@@ -164,7 +167,7 @@ export function main(root = resolve(import.meta.dirname, '../..')) {
       console.error(`- ${problem}`)
     }
     console.error(
-      'Regenerate with: node config/scripts/update-node-runtime-pin.mjs --version <x.y.z>'
+      'Regenerate with: node config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs --version <x.y.z>'
     )
     return 1
   }

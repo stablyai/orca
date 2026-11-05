@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
-import { PR_CHECK_JOBS } from './pr-code-change-scope.mjs'
+import { PR_CHECK_JOBS } from './workflow/source-routing/pr-code-change-scope.mjs'
 import {
   lookupReadyCheckRun,
   prCheckRunTitle,

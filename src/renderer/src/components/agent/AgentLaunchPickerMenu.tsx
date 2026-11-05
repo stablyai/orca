@@ -79,6 +79,7 @@ export function AgentLaunchPickerMenu({
     )
   }, [entries, draftScope, mode, setupDisabled])
   const [query, setQuery] = useState(initialQuery)
+  const [searchFocused, setSearchFocused] = useState(false)
   const [activeSetup, setActiveSetup] = useState<{
     id: string
     agent: AgentPickerEntry['agent']
@@ -123,6 +124,11 @@ export function AgentLaunchPickerMenu({
       visible.push(entry)
     }
   }
+  // Why: Enter in the search picks the first enabled row, so show it highlighted like cmdk comboboxes.
+  const enabled = (entry: AgentPickerEntry) => !disabled && entry.surfaces.length > 0
+  const firstSetup = setups.find((setup) => enabled(setup.entry))
+  const firstEntry = firstSetup ? undefined : visible.find(enabled)
+  const showSearchDefault = searchFocused && query.trim().length > 0
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
@@ -132,7 +138,9 @@ export function AgentLaunchPickerMenu({
             value={query}
             density="compact"
             autoFocus={!searchInputRef}
+            onBlur={() => setSearchFocused(false)}
             onFocus={(event) => {
+              setSearchFocused(true)
               // Why: a seeded query must keep the caret after the typed key.
               const end = event.currentTarget.value.length
               event.currentTarget.setSelectionRange(end, end)
@@ -175,6 +183,7 @@ export function AgentLaunchPickerMenu({
               openSetup={openSetup}
               onSetupOpenChange={setActiveSetup}
               label={setup.label}
+              searchDefault={showSearchDefault && setup === firstSetup}
               source={source}
               selected={value?.agent === setup.entry.agent ? value : undefined}
               onSelectAgent={onSelectAgent}
@@ -191,6 +200,7 @@ export function AgentLaunchPickerMenu({
               draftScope={draftScope}
               entry={entry}
               mode={mode}
+              searchDefault={showSearchDefault && entry === firstEntry}
               source={source}
               selected={value?.agent === entry.agent ? value : undefined}
               setupDisabled={setupDisabled}

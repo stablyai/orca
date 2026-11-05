@@ -1,17 +1,17 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { isDocsOnlyPath } from './pr-code-change-scope.mjs'
+import { isDocsOnlyPath } from './workflow/source-routing/pr-code-change-scope.mjs'
 
 const NON_TEST_FILES = new Set([
   'mobile/Gemfile',
   'mobile/Gemfile.lock',
   'mobile/README.md',
   '.github/workflows/mobile-ios-release.yml',
-  'config/scripts/pr-code-change-scope.mjs',
-  'config/scripts/pr-package-test-paths.mjs',
-  'config/scripts/pr-code-change-scope.test.mjs',
-  'config/scripts/pr-layout-oracle-route.mjs',
-  'config/scripts/pr-shell-contract-prefixes.mjs',
+  'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+  'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
+  'config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs',
+  'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
+  'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
   'config/scripts/mobile-release-check-scope.mjs',
   'config/scripts/mobile-release-check-scope.test.mjs'
 ])

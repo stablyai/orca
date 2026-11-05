@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium } from 'playwright-core'
-import { mobileWebAppBuildOptions } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppBuildOptions } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,

@@ -53,7 +53,7 @@ export type NodeRuntimeAsset = {
   executableSize: number
 }
 
-// @generated-begin by config/scripts/update-node-runtime-pin.mjs
+// @generated-begin by config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs
 export const NODE_RUNTIME_PIN: NodeRuntimePin = {
   version: '24.22.1',
   electron: '43.8.6',
