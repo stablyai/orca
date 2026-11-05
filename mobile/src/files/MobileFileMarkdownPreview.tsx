@@ -3,6 +3,7 @@ import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operation
 import { ScrollView, View } from 'react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileFileAddressToolbar } from '../components/MobileFileAddressToolbar'
+import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../components/mobile-markdown-styles'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
@@ -11,9 +12,6 @@ import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-
-// Lifts the 13pt base to 14pt body text; headings scale with it.
-const DOCUMENT_TEXT_SCALE = 14 / 13
 
 type Props = {
   mode: MarkdownPreviewMode
@@ -67,7 +65,7 @@ export function MobileFileMarkdownPreview({
           {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
           <MobileMarkdown
             content={content}
-            textScale={DOCUMENT_TEXT_SCALE}
+            textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE}
             onOpenFile={onOpenFile}
             renderImage={
               worktreeId

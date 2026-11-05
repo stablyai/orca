@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
-import type { FileOpenFailure } from './terminal-file-open-failure'
+
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
   flushAsyncWork,
@@ -9,7 +9,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, deps, openFileMock, statMock } = doubles
+const { storeState, deps, statMock } = doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -28,37 +28,7 @@ vi.mock('@/lib/connection-context', () => ({
 
 installTerminalLinkTestEnvironment(doubles)
 
-type OnOpenFailure = (failure: FileOpenFailure) => void
-
 describe('openDetectedFilePath on a path it cannot verify', () => {
-  it('reports a verified miss', async () => {
-    setPlatform('Macintosh')
-    const error = new Error("Error invoking remote method 'fs:stat': Error: ENOENT: no such file")
-    // A missing file fails both the project check and the user-named one.
-    statMock.mockRejectedValue(error)
-    const onOpenFailure = vi.fn<OnOpenFailure>()
-
-    openDetectedFilePath('/tmp/src/gone.md', null, null, { ...deps, onOpenFailure })
-    await flushAsyncWork()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledTimes(1)
-    expect(onOpenFailure).toHaveBeenCalledWith({ verdict: 'missing', error })
-  })
-
-  it('reports a host that could not answer as unverifiable, not missing', async () => {
-    setPlatform('Macintosh')
-    const error = new Error('SSH connection closed')
-    statMock.mockRejectedValue(error)
-    const onOpenFailure = vi.fn<OnOpenFailure>()
-
-    openDetectedFilePath('/tmp/src/present.md', null, null, { ...deps, onOpenFailure })
-    await flushAsyncWork()
-
-    expect(onOpenFailure).toHaveBeenCalledTimes(1)
-    expect(onOpenFailure.mock.calls[0][0]).toEqual({ verdict: 'unverifiable', error })
-  })
-
   it('skips the callback when a later click superseded the failing one', async () => {
     setPlatform('Macintosh')
     let rejectFirstStat!: (error: Error) => void

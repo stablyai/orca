@@ -32,6 +32,13 @@ export async function steerCodexTurn(
         return { kind: 'acquire' as const, reason: 'permission' as const }
       }
       checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+      host.dispatchEchoes.expect(
+        input.clientMessageId,
+        host.threadId,
+        'steer',
+        turnInputFor(host, input.body),
+        expectedTurnId
+      )
       return {
         kind: 'sent' as const,
         response: host.connection.request(

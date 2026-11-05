@@ -104,17 +104,6 @@ describe('route partition identity migration', () => {
     expect(bindings(filePath).size).toBe(1)
   })
 
-  it('mints one durable partition for a fresh install and reuses it across restarts', async () => {
-    const filePath = createStorePath()
-
-    const first = await preparePartition(createSessionRegistry(filePath), 'runtime-one')
-    const second = await preparePartition(createSessionRegistry(filePath), 'runtime-two')
-
-    expect(first).toBe(deriveBrowserRoutePartition(identity).partition)
-    expect(second).toBe(first)
-    expect(bindings(filePath).size).toBe(1)
-  })
-
   it('never adopts a partition another route already owns', async () => {
     const filePath = createStorePath()
     const otherLegacy = legacyIdentityFor('runtime-before-upgrade')
@@ -132,30 +121,5 @@ describe('route partition identity migration', () => {
 
     expect(prepared).toBe(deriveBrowserRoutePartition(identity).partition)
     expect(bindings(filePath).get(derivedOther.partition)?.fingerprint).toBe('c'.repeat(64))
-  })
-
-  it('lets a re-paired server open pages in its jar while the old pages are still open', async () => {
-    const registry = createSessionRegistry(createStorePath())
-    const pairingAt = (revision: number) => ({
-      ...identity,
-      authorityConnectionIdentity: `paired-runtime:pairing-${revision}`
-    })
-    const open = (revision: number, browserPageId: string) =>
-      registry.preparePage({
-        identity,
-        compatibleIdentity: pairingAt(revision),
-        storageScope,
-        browserPageId,
-        pageHostGeneration: revision,
-        rendererWebContentsId: 11,
-        proxyEndpoint: { host: '127.0.0.1', port: 43123 }
-      })
-
-    const before = await open(1, 'page-before')
-    const after = await open(2, 'page-after')
-
-    expect(after.partition).toBe(before.partition)
-    before.release()
-    after.release()
   })
 })

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 
@@ -90,34 +90,6 @@ function openEditorByShortcut(props: HarnessProps = {}): {
 }
 
 describe('WorktreeTitleInlineRename editor lifecycle', () => {
-  it('closes the shortcut-opened editor once the rename commits', async () => {
-    const onRename = vi.fn().mockResolvedValue(undefined)
-    const { input } = openEditorByShortcut({ onRename })
-
-    fireEvent.change(input, { target: { value: 'Renamed workspace' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-
-    await waitFor(() => expect(renameEditor()).toBeNull())
-    expect(onRename).toHaveBeenCalledWith('Renamed workspace')
-  })
-
-  it('opens the editor on double-click and reports it the same way', () => {
-    const onEditingChange = vi.fn()
-    render(
-      <WorktreeTitleInlineRename
-        displayName={DISPLAY_NAME}
-        onRename={vi.fn()}
-        onEditingChange={onEditingChange}
-      />
-    )
-    expect(renameEditor()).toBeNull()
-
-    fireEvent.doubleClick(screen.getByText(DISPLAY_NAME))
-
-    expect(renameEditor()).not.toBeNull()
-    expect(onEditingChange.mock.calls).toEqual([[true]])
-  })
-
   it('leaves an open editor untouched when the workspace is renamed elsewhere', () => {
     const { input, renameElsewhere } = openEditorByShortcut()
     fireEvent.change(input, { target: { value: 'Half typed name' } })

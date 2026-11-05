@@ -4,7 +4,6 @@ import {
   identityFor,
   THREAD_ID
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
-
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createAgentChildWorkAdmission } from '../../../../shared/agent-status/child-work/agent-status-child-work-admission'
@@ -15,7 +14,7 @@ import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-statu
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
-import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
+import { createCodexHistoryTranslator } from '../journal/codex-structured-journal-translation'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
@@ -587,7 +586,7 @@ describe('a restored thread', () => {
   function restored(replayed = [spawnCompleted, waitCompleted]) {
     const executions = new CodexSubagentExecutions()
     const rows = new Map<string, AgentJournalItemBody>()
-    const translator = createCodexJournalTranslator({
+    const translator = createCodexHistoryTranslator({
       sink: {
         appendItem: (identity, body) => rows.set(JSON.stringify(identity), body),
         appendTombstone: () => {},

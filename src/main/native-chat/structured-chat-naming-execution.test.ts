@@ -1,7 +1,7 @@
 import { cancelLocalGeneration } from '../text-generation/source-control-generation-lanes'
 import { AgentSessionJournal } from './agent-session-journal/journal-store'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
+import { structuredChatNamingDeps } from '../runtime/agent-session/naming/structured-chat-naming-runtime'
 import { getDefaultSettings } from '../../shared/constants'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
 import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
@@ -200,7 +200,7 @@ it.each([10, 100])(
           openOutstanding--
         }
       })
-    const reads = vi.spyOn(host, 'journalSnapshot')
+    const reads = vi.spyOn(host, 'journalCurrentRead')
     const seed = Promise.withResolvers<void>()
     const generated = Promise.withResolvers<void>()
     const publications = vi.spyOn(host, 'publishConversationName')

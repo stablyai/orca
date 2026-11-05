@@ -1,4 +1,4 @@
-import type { PrimaryAction } from '../../source-control-primary-action-types'
+import type { PrimaryAction } from './source-control-primary-action-types'
 
 export function resolveVisibleCreatePrHeaderAction({
   createPrHeaderAction

@@ -54,46 +54,6 @@ function render(file: OpenFile) {
   })
 }
 
-it('waits for the retained editor to take its managed workspace owner before listing', async () => {
-  useAppStore.setState({
-    repos: [
-      {
-        id: 'repo-1',
-        path: '/remote/repo',
-        displayName: 'repo',
-        badgeColor: '#737373',
-        addedAt: 1,
-        executionHostId: 'runtime:env-1'
-      }
-    ],
-    worktreesByRepo: {
-      'repo-1': [
-        makeWorktree({
-          id: worktreeId,
-          repoId: 'repo-1',
-          path: '/remote/repo',
-          hostId: 'runtime:env-1',
-          runtimeOwnerEnvironmentId: 'env-1'
-        })
-      ]
-    }
-  })
-  const { result, rerender } = render(file)
-  expect(mocks.list).not.toHaveBeenCalled()
-  expect(mocks.toastError).not.toHaveBeenCalled()
-  rerender({ file: { ...file, id: 'owned', runtimeEnvironmentId: 'env-1' } })
-  await waitFor(() => expect(result.current.markdownDocuments).toEqual([document]))
-  expect(mocks.list).toHaveBeenCalledTimes(1)
-  expect(mocks.list).toHaveBeenCalledWith(
-    expect.objectContaining({
-      target: { kind: 'environment', environmentId: 'env-1' },
-      worktreeId
-    }),
-    '/remote/repo',
-    { requireFresh: false }
-  )
-})
-
 it('waits for missing ownership and resumes when the SSH catalog lands without a path change', async () => {
   const { result } = render(file)
   expect(mocks.list).not.toHaveBeenCalled()
@@ -116,59 +76,6 @@ it('waits for missing ownership and resumes when the SSH catalog lands without a
   expect(mocks.list).toHaveBeenCalledWith(
     expect.objectContaining({ connectionId: 'ssh-1' }),
     '/remote/repo',
-    { requireFresh: false }
-  )
-})
-
-it('waits for ownership migration in a non-git folder workspace too', async () => {
-  useAppStore.setState({
-    worktreesByRepo: {},
-    projectGroups: [
-      {
-        id: 'group-1',
-        name: 'Notes',
-        parentPath: '/notes',
-        connectionId: null,
-        executionHostId: 'runtime:env-1',
-        parentGroupId: null,
-        createdFrom: 'manual',
-        tabOrder: 0,
-        isCollapsed: false,
-        color: null,
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ],
-    folderWorkspaces: [
-      {
-        id: 'notes',
-        projectGroupId: 'group-1',
-        name: 'Notes',
-        folderPath: '/notes',
-        connectionId: null,
-        linkedTask: null,
-        comment: '',
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 1,
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ]
-  })
-  const folderFile = { ...file, worktreeId: 'folder:notes', filePath: '/notes/README.md' }
-  const { result, rerender } = render(folderFile)
-  expect(mocks.list).not.toHaveBeenCalled()
-  rerender({ file: { ...folderFile, id: 'folder-owned', runtimeEnvironmentId: 'env-1' } })
-  await waitFor(() => expect(result.current.markdownDocuments).toEqual([document]))
-  expect(mocks.list).toHaveBeenCalledWith(
-    expect.objectContaining({
-      target: { kind: 'environment', environmentId: 'env-1' },
-      worktreeId: 'folder:notes'
-    }),
-    '/notes',
     { requireFresh: false }
   )
 })

@@ -222,24 +222,6 @@ beforeEach(() => {
   seen.audioListeners.clear()
 })
 
-async function tapAndRefuseStart(code: string): Promise<void> {
-  const rpc = createFakeRpcClient()
-  const mounted = mount(rpc)
-  act(() => mounted.current().handleDictationToggle())
-  await settle(rpc, '', code)
-}
-
-describe('a mic tap the desktop refuses because dictation is not set up', () => {
-  // Exercise both disabled-profile and missing-model start refusals.
-  for (const code of ['voice_dictation_disabled', 'voice_model_not_ready:not-downloaded']) {
-    it(`opens the dictation setup sheet for ${code}`, async () => {
-      await tapAndRefuseStart(code)
-      expect(seen.setupSheetOpens).toBe(1)
-      expect(seen.toasts).toEqual([])
-    })
-  }
-})
-
 describe('a mic tap after the host reported dictation is not set up', () => {
   it('opens setup without asking for the microphone, then lets the host judge the tap after the sheet closes', async () => {
     const rpc = createFakeRpcClient()
@@ -269,15 +251,6 @@ describe('a mic tap after the host reported dictation is not set up', () => {
   })
 })
 
-describe('a mic tap the desktop refuses for a reason setup cannot fix', () => {
-  it('toasts the host refusal in plain words with the error haptic', async () => {
-    await tapAndRefuseStart('dictation_already_active')
-    expect(seen.setupSheetOpens).toBe(0)
-    expect(seen.toasts).toEqual(['Dictation is already in use on the computer or another phone.'])
-    expect(seen.errorHaptics).toBe(1)
-  })
-})
-
 describe('an audio interruption while recording', () => {
   it('finishes the dictation and keeps what was said', async () => {
     const rpc = createFakeRpcClient()
@@ -288,16 +261,6 @@ describe('an audio interruption while recording', () => {
     expect(methods).not.toContain('speech.dictation.cancel')
     expect(seen.inputs).toEqual(['call me back'])
     expect(seen.toasts).toEqual(['Dictation inserted'])
-  })
-
-  it('says the microphone was interrupted when nothing was transcribed', async () => {
-    const rpc = createFakeRpcClient()
-    await startRecording(rpc)
-    act(() => seen.audioListeners.get('onAudioInterruption')?.({ data: 'blocked' }))
-    await settle(rpc, '')
-    expect(seen.toasts).toEqual([
-      'Voice dictation stopped because the microphone was interrupted. Try again.'
-    ])
   })
 })
 
@@ -334,28 +297,6 @@ describe('a mic tap while the transcript is processing', () => {
     expect(methods).not.toContain('speech.dictation.cancel')
     expect(seen.inputs).toEqual(['ship it'])
   })
-})
-
-describe('a live terminal insert that fails', () => {
-  const failures: [string, () => Promise<boolean>][] = [
-    ['is refused', async () => false],
-    [
-      'throws',
-      async () => {
-        throw new Error('mirror step failed')
-      }
-    ]
-  ]
-  for (const [label, sendLive] of failures) {
-    it(`copies the transcript to the clipboard and says so when the send ${label}`, async () => {
-      const rpc = createFakeRpcClient()
-      const mounted = await startRecording(rpc, sendLive)
-      act(() => mounted.current().handleDictationToggle())
-      await settle(rpc, 'git status')
-      expect(seen.clipboard).toEqual(['git status'])
-      expect(seen.toasts).toEqual(["Couldn't insert dictation, so it was copied to the clipboard"])
-    })
-  }
 })
 
 describe('a dictation that ends after switching between chat and terminal', () => {

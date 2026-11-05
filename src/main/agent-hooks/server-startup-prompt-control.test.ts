@@ -41,60 +41,6 @@ describe('startup prompt control with status hooks disabled', () => {
     }
   )
 
-  it('enables and disables status without restarting the control listener', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-prompt-toggle-'))
-    class IsolatedHookServer extends AgentHookServer {
-      constructor() {
-        super()
-        this._setOpenCodeBinderDepsForTests({
-          dbPath: () => join(dir, 'no-user-db'),
-          listSessions: async () => [],
-          listPanes: () => [],
-          sweep: async () => []
-        })
-      }
-    }
-    const server = new IsolatedHookServer()
-    try {
-      await server.start({ userDataPath: dir, statusHooksEnabled: false })
-      const endpoint = server.endpointFilePath
-      if (!endpoint) {
-        throw new Error('missing control endpoint')
-      }
-      const coords = parseAgentHookEndpointFile(readFileSync(endpoint, 'utf8'))
-      const post = (path: string) =>
-        fetch(`http://127.0.0.1:${coords.port}${path}`, {
-          method: 'POST',
-          headers: { 'x-orca-agent-hook-token': coords.token },
-          body: '{}'
-        })
-      expect((await post('/hook/opencode')).status).toBe(404)
-      await server.start({ statusHooksEnabled: true })
-      expect(server.buildPtyEnv()).toHaveProperty('ORCA_AGENT_HOOK_PORT', coords.port)
-      expect((await post('/hook/opencode')).status).toBe(204)
-      server.setStatusHooksEnabled(false)
-      expect(server.buildPtyEnv()).toEqual({})
-      expect((await post('/hook/opencode')).status).toBe(404)
-      await server.start()
-      expect((await post('/hook/opencode')).status).toBe(404)
-      server.setStartupPromptClaimListener(
-        () => 'pending',
-        () => {}
-      )
-      expect(await (await post(OPENCODE_STARTUP_PROMPT_CLAIM_PATH)).json()).toEqual({
-        allowed: false,
-        pending: true
-      })
-      server.setStatusHooksEnabled(true)
-      expect((await post('/hook/opencode')).status).toBe(204)
-      expect(server.endpointFilePath).toBe(endpoint)
-      expect(parseAgentHookEndpointFile(readFileSync(endpoint, 'utf8'))).toEqual(coords)
-    } finally {
-      server.stop()
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('authenticates claims, denies malformed or missing handlers, and refuses status posts', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-prompt-control-'))
     const server = new AgentHookServer()

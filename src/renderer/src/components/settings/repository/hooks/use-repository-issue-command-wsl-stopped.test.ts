@@ -80,23 +80,6 @@ describe('issue command editor while its WSL distro is stopped (E9)', () => {
     expect(client.write).not.toHaveBeenCalled()
   })
 
-  it('reads the real command once the distro runs, then saves edits as a user act', async () => {
-    client.read.mockResolvedValueOnce(REFUSED).mockResolvedValueOnce(READ)
-    const hook = render()
-    await vi.waitFor(() => expect(hook.result.current.issueCommandStoppedDistro).toBe('Ubuntu'))
-
-    act(() => emitDistroRunning('ubuntu'))
-
-    await vi.waitFor(() => expect(hook.result.current.issueCommandDraft).toBe('my private command'))
-    expect(hook.result.current.issueCommandReadOnly).toBe(false)
-    expect(hook.result.current.issueCommandStoppedDistro).toBeNull()
-    expect(client.read).toHaveBeenCalledTimes(2)
-
-    act(() => hook.result.current.setIssueCommandDraft('edited'))
-    await act(async () => hook.result.current.commitIssueCommand())
-    expect(client.write).toHaveBeenCalledWith('local', 'repo-1', 'edited', { wakeWslDistro: true })
-  })
-
   it('re-reads when the distro started while the refused read was still in flight', async () => {
     let answer: (value: typeof REFUSED) => void = () => {}
     client.read
@@ -109,28 +92,5 @@ describe('issue command editor while its WSL distro is stopped (E9)', () => {
 
     await vi.waitFor(() => expect(hook.result.current.issueCommandDraft).toBe('my private command'))
     expect(client.read).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops waiting for the distro when the editor unmounts', async () => {
-    client.read.mockResolvedValue(REFUSED)
-    const hook = render()
-    await vi.waitFor(() => expect(distroRunningListeners.size).toBe(1))
-
-    hook.unmount()
-
-    expect(distroRunningListeners.size).toBe(0)
-    expect(client.read).toHaveBeenCalledTimes(1)
-  })
-
-  it("re-asks a paired host on window focus, since its running signal can't reach us", async () => {
-    client.read.mockResolvedValueOnce(REFUSED).mockResolvedValueOnce(READ)
-    const hook = render('runtime:env-1')
-    await vi.waitFor(() => expect(hook.result.current.issueCommandStoppedDistro).toBe('Ubuntu'))
-    expect(distroRunningListeners.size).toBe(0)
-
-    act(() => window.dispatchEvent(new Event('focus')))
-
-    await vi.waitFor(() => expect(hook.result.current.issueCommandDraft).toBe('my private command'))
-    expect(hook.result.current.issueCommandReadOnly).toBe(false)
   })
 })

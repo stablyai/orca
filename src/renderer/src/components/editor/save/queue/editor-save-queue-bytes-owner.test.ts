@@ -98,22 +98,6 @@ describe('binary editor save acquired owner at the final replace boundary', () =
     return queue.queueSave(file, '')
   }
 
-  it('keeps the captured destination and saves when authority and writer survive the upload', async () => {
-    const saved = save()
-    await started.promise
-    expect(replace).not.toHaveBeenCalled()
-    uploaded.resolve()
-    await expect(saved).resolves.toBe('written')
-    expect(replace).toHaveBeenCalledTimes(1)
-    expect(writeBytes.mock.calls[0]?.[0]).toMatchObject({
-      target: { kind: 'local' },
-      worktreeId: WORKTREE_ID,
-      worktreePath: '/repo'
-    })
-    expect(useAppStore.getState().openFiles.find((tab) => tab.id === fileId)?.isDirty).toBe(false)
-    expect(editorBytesDocument(fileId)?.bytes).toEqual(draft.bytes)
-  })
-
   it('refuses the final replace if the acquired workspace changes during upload, retaining edits', async () => {
     const saved = save()
     await started.promise

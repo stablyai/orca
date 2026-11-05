@@ -21,10 +21,8 @@ import {
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<
     AgentSessionJournal,
-    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody'
-  > & {
-    submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
-  }
+    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody' | 'inputOrder'
+  >
 }
 
 const signedOut = (failure: unknown): boolean =>
@@ -38,16 +36,7 @@ export function structuredAgentSessionChildReportedSignedOut(
   if (!child || child.phase === 'starting' || child.close) {
     return false
   }
-  if (
-    journal
-      .submissions()
-      .some(
-        (submission) =>
-          submission.dispatchState === 'rejected' &&
-          submission.fence === child.fence &&
-          signedOut(submission.rejection)
-      )
-  ) {
+  if (journal.inputOrder.signedOutAt(child.fence)) {
     return true
   }
   // A subagent’s sign-in failure says nothing about the parent.

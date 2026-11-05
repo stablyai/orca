@@ -125,6 +125,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
+        statusRead: () => ({ items, submissions: [] }),
+        inputOrder: {
+          inputCount: () => 0,
+          inputOrdinal: () => Infinity,
+          recoverableSubmissions: () => []
+        },
         context: { floor: () => null },
         item: ((itemId) =>
           items.find((item) => item.itemId === itemId) ??
@@ -246,6 +252,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({ items, submissions: [] }),
+      statusRead: () => ({ items, submissions: [] }),
+      inputOrder: {
+        inputCount: () => 0,
+        inputOrdinal: () => Infinity,
+        recoverableSubmissions: () => []
+      },
       item: ((itemId) =>
         items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
       itemFence: () => undefined,

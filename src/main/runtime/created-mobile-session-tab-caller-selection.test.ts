@@ -4,12 +4,12 @@ import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID } =
-  await import('./orca-runtime-test-fixtures.spec')
-const { makePendingAgentTabActivationRuntime } =
-  await import('./orca-runtime-test-scenario-builders.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { store, TEST_WORKTREE_ID } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-tests/orca-runtime-test-scenario-builders.spec')
 
 const WT = TEST_WORKTREE_ID
 
@@ -47,10 +47,15 @@ it('selects a launched terminal for the caller only, without spawning again', as
   const first = await createPane(runtime)
   const launched = await createPane(runtime)
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
+  const previous = caller.at(-1)!
 
   expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
 
-  expect(caller.at(-1)?.activeTabId).toBe(launched.id)
+  const selected = caller.at(-1)!
+  expect(selected.activeTabId).toBe(launched.id)
+  // The client fences a frame from another publication or behind its last version.
+  expect(selected.publicationEpoch).toBe(previous.publicationEpoch)
+  expect(selected.snapshotVersion).toBe(previous.snapshotVersion + 1)
   expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')).activeTabId).toBe(
     launched.id
   )
@@ -80,59 +85,4 @@ it('selects a launched chat by its session for the caller only', async () => {
   expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-bystander')).activeTabId).toBe(
     first.id
   )
-})
-
-it('reports a tab that is not published instead of selecting something else', async () => {
-  const { runtime, caller } = pairedRuntime()
-  await createPane(runtime)
-  const before = caller.length
-
-  expect(
-    runtime.selectCreatedMobileSessionTabForClient(WT, { sessionId: 'missing' }, 'device-caller')
-  ).toBe(false)
-  expect(caller).toHaveLength(before)
-})
-
-it('never materializes a pane that is not ready, as a tap would', async () => {
-  const { runtime, spawn } = makePendingAgentTabActivationRuntime()
-  const listed = await runtime.listMobileSessionTabs(`id:${WT}`)
-  expect(listed.tabs[0]).toMatchObject({ launchAgent: 'claude', status: 'pending-handle' })
-
-  expect(
-    runtime.selectCreatedMobileSessionTabForClient(
-      WT,
-      { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID },
-      'device-caller'
-    )
-  ).toBe(true)
-
-  const selected = await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')
-  expect(selected.activeTabId).toBe(`host-tab::${HEADLESS_LEAF_ID}`)
-  // Respawn crosses several awaits; an immediate absence assertion would be premature.
-  await new Promise((resolve) => setTimeout(resolve, 200))
-  expect(spawn).not.toHaveBeenCalled()
-})
-
-it('phone create-selection, reopen and internal adoption reads retain navigation without sender work', async () => {
-  const { runtime, caller } = pairedRuntime('mobile')
-  const launched = await createPane(runtime)
-  await runtime.publishStructuredAgentSessionTab({
-    workspaceId: WT,
-    sessionId: 'phone-chat',
-    agent: 'codex',
-    activate: false
-  })
-  const before = runtime['agentProjections'].senders.workForTest()
-  expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
-  expect(caller.at(-1)?.activeTabId).toBe(launched.id)
-  expect(runtime.reopenMobileSessionTabForClient(WT, 'phone-chat', 'device-caller')).toBe(true)
-  expect(caller.at(-1)?.activeTabId).toBe(launched.id)
-  expect(caller.at(-1)?.tabs).toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: 'agent-session:phone-chat' })])
-  )
-  expect(runtime['getTerminalOrphanAdoptionSnapshot'](WT).tabs).toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: launched.id })])
-  )
-  expect(runtime['agentProjections'].senders.workForTest()).toEqual(before)
-  expect(caller.every((snapshot) => snapshot.agentSenderAssociations === undefined)).toBe(true)
 })

@@ -8,7 +8,7 @@ import {
   resolveHostedReviewForCheckRunDetailsFix,
   resolveCheckRunDetailsFixRepo
 } from './check-run-details-fix-context'
-import { openSourceControlAiSettingsTarget } from '@/components/right-sidebar/source-control-ai-settings-navigation'
+import { openSourceControlAiSettingsTarget } from '@/components/right-sidebar/source-control/panel/source-control-ai-settings-navigation'
 import { getConnectionId } from '@/lib/connection-context'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'

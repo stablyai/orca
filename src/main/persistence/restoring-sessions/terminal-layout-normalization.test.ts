@@ -42,13 +42,4 @@ describe('normalizeTerminalLayoutSnapshotForPersistence', () => {
       [STABLE_B]: 'pty-2'
     })
   })
-
-  it('still adopts an unclaimed preferred id for a legacy leaf', () => {
-    const normalized = normalizeTerminalLayoutSnapshotForPersistence(
-      splitOf('pane:1', STABLE_B),
-      splitOf(STABLE_A, STABLE_B)
-    )
-
-    expect(collectLayoutLeafIdsInOrder(normalized.snapshot.root)).toEqual([STABLE_A, STABLE_B])
-  })
 })

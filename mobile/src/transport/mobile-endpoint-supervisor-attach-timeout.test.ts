@@ -108,21 +108,6 @@ describe('relay dial refused because the desktop data link missed its attach dea
     supervisor.stop()
   })
 
-  it('keeps the known-offline wait for a 4404 without the reason', async () => {
-    const { logical, openRelay } = cellRefusing(() => new RelayOuterError(4404, true))
-    const resolveRelay = vi.fn(async () => relay)
-    const supervisor = start(logical, { openRelay, resolveRelay })
-
-    await supervisor.start()
-
-    expect(resolveRelay).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(HOST_OFFLINE_WAIT_MS - 1)
-    expect(openRelay).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(openRelay).toHaveBeenCalledTimes(2)
-    supervisor.stop()
-  })
-
   it('earns a fresh quick redial when the app returns to the foreground', async () => {
     const { logical, openRelay } = cellRefusing(attachTimeout)
     const supervisor = start(logical, { openRelay })

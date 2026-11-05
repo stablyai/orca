@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
-import { selectFreshExplicitAgentStatus } from '../runtime/runtime-hook-agent-row-selection'
+import { selectFreshExplicitAgentStatus } from '../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 

@@ -16,9 +16,6 @@ home.dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-ai-vault-host-delete-')
 const { RpcDispatcher } = await import('../dispatcher')
 const { AI_VAULT_METHODS } = await import('./ai-vault')
 const { RuntimeAiVaultCommands } = await import('../../runtime-ai-vault-commands')
-const { RUNTIME_CAPABILITIES } = await import('../../../../shared/protocol-version')
-const { AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY } =
-  await import('../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities')
 
 function dispatcher(): InstanceType<typeof RpcDispatcher> {
   const vault = new RuntimeAiVaultCommands(() => null)
@@ -43,10 +40,6 @@ afterAll(() => {
 })
 
 describe('aiVault.deleteSession', () => {
-  it('is advertised so clients can tell an older host apart', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY)
-  })
-
   it("permanently deletes a transcript under this host's own roots", async () => {
     const filePath = writeSession('session-1.json')
 

@@ -13,6 +13,100 @@ export function registerQueuedMessageStopPauseTests(
   fixture: ReturnType<typeof createFixture>
 ): void {
   describe("the queue's pause, derived from the journal", () => {
+    it('does not release a retained failure whose chronology was already made conservative by a real removal', async () => {
+      const journal = await fixture.open()
+      await fixture.turn(journal, 'accepted')
+      const identity = { provider: 'claude', sessionId: 'native-1', uuid: 'F' } as const
+      const body = { kind: 'turn', turnId: 'F', state: 'completed', outcome: 'failure' } as const
+      const kept = [{ identity, body, ownerFence: 0 }]
+      await journal.appendItem(identity, body, { fence: 0, turnScope: { kind: 'thread' } })
+      await fixture.queueDraft(journal, 'carried')
+      await journal.appendQueueResume(0)
+      await journal.replaceEpochItems('handle_forked', 0, kept)
+      expect(fixture.reason(journal)).toBeNull()
+      const later = { ...identity, uuid: 'T' }
+      await journal.appendItem(
+        later,
+        { ...body, turnId: 'T', outcome: 'success' },
+        { fence: 0, turnScope: { kind: 'thread' } }
+      )
+      await journal.appendTombstone(later, { fence: 0 })
+      expect(fixture.reason(journal)).toBe('failed')
+      await journal.replaceEpochItems('handle_forked', 0, kept)
+      expect(fixture.reason(journal)).toBe('failed')
+      expect(journal.queuedMessages.nextInputCard()).toBeNull()
+      await journal.appendQueueResume(0)
+      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('carried')
+    })
+
+    it('retains known resumed failure beneath a removed turn without lifting later Stop or reopen, including rollback', async () => {
+      const journal = await fixture.open()
+      await fixture.turn(journal, 'accepted')
+      const identity = { provider: 'claude', sessionId: 'native-1', uuid: 'known-F' } as const
+      const body = {
+        kind: 'turn',
+        turnId: 'known-F',
+        state: 'completed',
+        outcome: 'failure'
+      } as const
+      await journal.appendItem(identity, body, { fence: 0, turnScope: { kind: 'thread' } })
+      await journal.appendQueueResume(0)
+      await fixture.turn(journal, 'later-T')
+      await journal.appendItem(
+        { ...identity, uuid: 'later-T' },
+        { ...body, turnId: 'later-T', outcome: 'success' },
+        { fence: 0, turnScope: { kind: 'thread' } }
+      )
+      await fixture.queueDraft(journal, 'O')
+      await fixture.userStop(journal)
+      await journal.markQueueReopen(0)
+      await fixture.queueDraft(journal, 'N')
+      const pauses = structuredClone(journal.queuedMessages.pauses())
+      const cards = structuredClone(journal.queuedMessages.list())
+      const cursor = journal.cursor()
+      const kept = [{ identity, body, ownerFence: 0 }]
+      await expect(
+        journal.replaceEpochItems('handle_forked', 0, kept, () => ({
+          write: () => {
+            throw new Error('receipt unavailable')
+          },
+          committed: () => {}
+        }))
+      ).rejects.toThrow('receipt unavailable')
+      expect(journal.cursor()).toEqual(cursor)
+      expect(journal.queuedMessages.pauses()).toEqual(pauses)
+      expect(journal.queuedMessages.list()).toEqual(cards)
+      await journal.replaceEpochItems('handle_forked', 0, kept)
+      expect(journal.queuedMessages.pauses()).toEqual(pauses)
+      expect(journal.queuedMessages.pauses().map((p) => p.reason)).toEqual(['stopped', 'restarted'])
+      expect(fixture.held(journal)).toEqual([
+        ['O', true],
+        ['N', false]
+      ])
+      await journal.queuedMessages.withdraw(['O'])
+      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('N')
+      await journal.replaceEpochItems('handle_forked', 0, [
+        ...kept,
+        {
+          identity: { ...identity, uuid: 'new-report' },
+          body: { kind: 'status', tone: 'error', text: 'new evidence' },
+          ownerFence: 0,
+          turnScope: { kind: 'turn', turnItemId: 'claude:native-1:known-F' }
+        }
+      ])
+      expect(journal.queuedMessages.pauses().some((p) => p.reason === 'failed')).toBe(true)
+      expect(journal.queuedMessages.nextInputCard()).toBeNull()
+      await journal.appendQueueResume(0)
+      // A changed failure cannot inherit the original failure's known Resume chronology.
+      await journal.replaceEpochItems('handle_forked', 0, [
+        { identity, body: { ...body, turnId: 'changed-F' }, ownerFence: 0 }
+      ])
+      expect(journal.queuedMessages.pauses().some((p) => p.reason === 'failed')).toBe(true)
+      expect(journal.queuedMessages.nextInputCard()).toBeNull()
+      await journal.appendQueueResume(0)
+      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('N')
+    })
+
     it.each([false, true])(
       'preserves failure Resume state across a forked rewind (resumed=%s)',
       async (resumed) => {

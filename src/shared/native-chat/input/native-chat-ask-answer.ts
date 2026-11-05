@@ -2,6 +2,7 @@
 
 import type { AgentJournalSubmission } from '../../agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../agent-session/requests/structured-agent-session-send-evidence'
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
 import type { AsyncQuestionContributor } from './native-chat-ask'
@@ -25,10 +26,10 @@ export function isDeliveredNativeChatUserMessage(message: NativeChatMessage): bo
 export function isPendingNativeChatUserMessage(message: NativeChatMessage): boolean {
   return (
     isHumanSend(message) &&
-    (message.journalPosition !== undefined || (!message.deliveryState && !message.pendingSend)) &&
     (message.deliveryState === 'pending' ||
-      message.pendingSend !== undefined ||
-      message.queued === true)
+      ((message.journalPosition !== undefined ||
+        (!message.deliveryState && !message.pendingSend)) &&
+        (message.pendingSend !== undefined || message.queued === true)))
   )
 }
 
@@ -235,13 +236,14 @@ export function nativeChatAnswerOperationEvidence(
   }
   const key = agentJournalSubmissionKey(clientMessageId)
   const message = messages.find((row) => row.id === key)
-  if (
-    message?.journalPosition ||
-    submissions.some((row) => row.clientMessageId === clientMessageId)
-  ) {
+  const submission = submissions.find((row) => row.clientMessageId === clientMessageId)
+  if (submission && submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING) {
+    return submission.dispatchState === 'pending'
+  }
+  if (message && isDeliveredNativeChatUserMessage(message)) {
     return false
   }
-  return message?.deliveryState === 'pending' && !message.journalPosition ? true : undefined
+  return message?.deliveryState === 'pending' ? true : undefined
 }
 
 export function nativeChatAnswerOperationPending(

@@ -45,9 +45,9 @@ import {
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
-} from '../../src/renderer/src/components/right-sidebar/ai-vault-session-refresh'
-import { aiVaultSessionRowResumeGating } from '../../src/renderer/src/components/right-sidebar/ai-vault-session-resume'
-import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components/right-sidebar/use-ai-vault-session-display-title'
+} from '../../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
+import { aiVaultSessionRowResumeGating } from '../../src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume'
+import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components/right-sidebar/ai-vault/session-list/use-ai-vault-session-display-title'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('@/store', async () => {

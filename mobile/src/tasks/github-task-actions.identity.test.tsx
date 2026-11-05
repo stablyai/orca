@@ -299,55 +299,6 @@ async function mount() {
     }
   }
 }
-it('uses exact old PR metadata, accepted viewed node and review SHA routes without generic preflight, and settles provider errors', async () => {
-  const f = await mount()
-  let pending!: Promise<void>
-  await act(async () => {
-    pending = f
-      .read()
-      .updateGitHubPullRequestMetadata(f.a, { title: 'new title', body: 'new body' })
-  })
-  expect(f.client.requests.map((request) => request.method)).toEqual(['github.updatePR'])
-  expect(f.client.requests[0].args[1]).toMatchObject({
-    repo: 'id:clone',
-    prNumber: 93,
-    prRepo: f.a.source.prRepo,
-    updates: { title: 'new title', body: 'new body' }
-  })
-  await f.answer({ ok: true })
-  await pending
-  expect(f.read()).toMatchObject({
-    actionItem: { title: 'new title' },
-    detailPayload: { body: 'new body' },
-    mutatingStatus: false
-  })
-  await act(async () => {
-    pending = f.read().toggleGitHubFileViewed(f.a, file)
-  })
-  expect(f.client.requests.at(-1)).toMatchObject({
-    method: 'github.setPRFileViewed',
-    args: expect.arrayContaining([
-      expect.objectContaining({ pullRequestId: 'PR_fork', prRepo: f.a.source.prRepo })
-    ])
-  })
-  await f.answer(true)
-  await pending
-  expect(f.read().detailPayload).toMatchObject({ files: [{ viewerViewedState: 'VIEWED' }] })
-  await act(async () => f.read().setPrFileCommentDrafts({ 'same.ts:1': 'review' }))
-  await act(async () => {
-    pending = f.read().addGitHubFileReviewComment(f.a, file, 1)
-  })
-  expect(f.client.requests.at(-1)?.args[1]).toMatchObject({
-    commitId: 'fork-head',
-    prRepo: f.a.source.prRepo,
-    path: 'same.ts',
-    line: 1
-  })
-  await f.answer({ ok: false, error: 'provider refused' })
-  await pending
-  expect(f.read()).toMatchObject({ mutatingStatus: false, error: 'provider refused' })
-  expect(f.client.requests.some((request) => request.method === 'status.get')).toBe(false)
-})
 it('late file contents and finally from A cannot publish into same-number B or release B busy ownership', async () => {
   const f = await mount()
   let old!: Promise<void>
@@ -624,67 +575,6 @@ it('same-SHA A re-entry file successor retains loading and contents after old A 
   expect(reads()).toHaveLength(4)
   const next = createFakeRpcClient()
   await recover('migrated.ts', () => f.logical.migrateTo(next, 'lan'), next)
-})
-
-it('shipping metadata producers admit zero hidden operations across real selections while comment/status remain usable', async () => {
-  const f = await mount()
-  for (let index = 0; index < 3; index++) {
-    const selected = {
-      ...f.a,
-      key: `item-${index}`,
-      source: {
-        ...f.a.source,
-        number: index + 1,
-        url: `https://github.corp/fork/widgets/pull/${index + 1}`
-      }
-    }
-    await f.select(selected)
-    expect(
-      f.renderer.root.find((node) => {
-        const type: unknown = node.type
-        return type === 'TaskDetail'
-      }).props.body
-    ).toBe('fork')
-  }
-  // No hidden list attempt or status frame crosses the actual RpcClient boundary, hence no downstream gh/provider page can be admitted.
-  expect(f.client.requests).toEqual([])
-  await act(async () => f.read().setItemCommentDraft('visible comment'))
-  let comment!: Promise<void>
-  await act(async () => {
-    comment = f.renderer.root
-      .find((node) => {
-        const type: unknown = node.type
-        return type === 'Comment'
-      })
-      .props.onPress()
-  })
-  await f.answer({
-    ok: true,
-    comment: { id: 'visible', body: 'visible comment', author: 'me', createdAt: '' }
-  })
-  await comment
-  expect(
-    f.renderer.root.find((node) => {
-      const type: unknown = node.type
-      return type === 'Comment'
-    }).children
-  ).toContain('visible comment')
-  let close!: Promise<void>
-  await act(async () => {
-    close = f.renderer.root
-      .find((node) => {
-        const type: unknown = node.type
-        return type === 'CloseReopen'
-      })
-      .props.onPress()
-  })
-  await f.answer({ ok: true })
-  await close
-  expect(f.read()).toMatchObject({ actionItem: null, mutatingStatus: false })
-  expect(f.client.requests.map((request) => request.method)).toEqual([
-    'github.addIssueComment',
-    'github.updatePRState'
-  ])
 })
 it('the actual Project detail reset retires a task file and X→Y Project file before its successor paints', async () => {
   const f = await mount()

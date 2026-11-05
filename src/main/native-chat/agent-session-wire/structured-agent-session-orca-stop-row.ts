@@ -23,7 +23,7 @@ import { orcaShutdownRowClientMessageId } from '../../../shared/native-chat/nati
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-type OrcaStopRowJournal = Pick<AgentSessionJournal, 'snapshot' | 'appendItem'>
+type OrcaStopRowJournal = Pick<AgentSessionJournal, 'itemsRead' | 'appendItem'>
 
 /** Keep legacy stop wording/tone alongside the cause that newer clients render muted. */
 export function orcaStopRowBody(
@@ -44,11 +44,11 @@ export function orcaStopRowBody(
 }
 
 export function runningRootTurnItemId(
-  journal: Pick<AgentSessionJournal, 'snapshot'>
+  journal: Pick<AgentSessionJournal, 'itemsRead'>
 ): string | null {
   return (
     journal
-      .snapshot()
+      .itemsRead()
       .items.findLast(
         (item) =>
           isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
@@ -89,7 +89,7 @@ export async function recordStructuredAgentSessionShutdownCut(input: {
       input.fence,
       input.generation
     )
-    const items = input.journal.snapshot().items
+    const items = input.journal.itemsRead().items
     const written = items.some((item) => {
       const identity = parseAgentJournalItemKey(item.itemId)
       return identity?.provider === 'orca' && identity.clientMessageId === clientMessageId

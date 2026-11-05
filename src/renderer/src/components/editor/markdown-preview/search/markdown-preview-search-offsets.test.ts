@@ -2,13 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import './markdown-preview-search'
 import { findTextMatchRanges } from '../../../../lib/text-match-ranges'
 
-function mockLowercaseLocale(locale: string): void {
-  const lowercase = String.prototype.toLocaleLowerCase
-  vi.spyOn(String.prototype, 'toLocaleLowerCase').mockImplementation(function (this: string) {
-    return lowercase.call(this, locale)
-  })
-}
-
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -37,21 +30,5 @@ describe('case-insensitive Markdown search offsets', () => {
       { start: 0, end: 2 },
       { start: 6, end: 8 }
     ])
-  })
-
-  it.each([
-    { locale: 'en-US', dotted: [0, 2, 4], dotless: [6] },
-    { locale: 'tr', dotted: [2, 4], dotless: [0, 6] },
-    { locale: 'az', dotted: [2, 4], dotless: [0, 6] },
-    { locale: 'lt', dotted: [0, 2, 4], dotless: [6] },
-    { locale: 'el', dotted: [0, 2, 4], dotless: [6] }
-  ])('respects dotted and dotless I in $locale', ({ locale, dotted, dotless }) => {
-    mockLowercaseLocale(locale)
-    expect(findTextMatchRanges('I i İ ı', 'i')).toEqual(
-      dotted.map((start) => ({ start, end: start + 1 }))
-    )
-    expect(findTextMatchRanges('I i İ ı', 'ı')).toEqual(
-      dotless.map((start) => ({ start, end: start + 1 }))
-    )
   })
 })

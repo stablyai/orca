@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'

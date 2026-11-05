@@ -10,6 +10,7 @@ import { TASK_PROVIDERS } from './task-providers'
 import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from './native-chat/native-chat-idle-stop'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
@@ -18,6 +19,7 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control/listing/source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal/replay/terminal-scrollback-policy'
+import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from './nested-worker-depth'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -66,6 +68,7 @@ export function buildDefaultSettings(args: {
     editorFontFamily: '',
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
+    markdownDefaultViewMode: 'rich',
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,
     primarySelectionMiddleClickPasteDefaultedForLinux: args.primarySelectionDefaultedForLinux,
@@ -145,11 +148,13 @@ export function buildDefaultSettings(args: {
     terminalUrlMiddleClickBehavior: 'open',
     experimentalBrowserExtensions: false,
     agentDefaultSurface: 'terminal',
-    nativeChatResumeWorkOnRestart: false,
+    nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
     nativeChatAutoContinueAfterUsageLimit: false,
+    nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
+    nativeChatScrollToLatestOnSend: true,
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},
@@ -168,7 +173,8 @@ export function buildDefaultSettings(args: {
     artifactsEnabled: true,
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
-    nestedWorkerMaxDepth: 1,
+    nestedWorkerMaxDepth: NESTED_WORKER_MAX_DEPTH_DEFAULT,
+    nestedWorkerMaxDepthDefaultedToFour: true,
     orchestrationWorkerAutoReleaseEnabled: true,
     showArtifactsButton: false,
     showSkillsButton: false,

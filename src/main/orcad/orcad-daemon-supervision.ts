@@ -3,9 +3,9 @@ import {
   disconnectDaemon,
   daemonOwnsFreshPersistentPtys,
   readDaemonPidRecord
-} from '../daemon/daemon-provider-state'
-import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
-import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import { initDaemonPtyProvider } from '../daemon/providers/lifecycle/daemon-provider-init'
+import { resolveTerminalSpawnAdmissionMode } from '../daemon/admission/terminal-spawn-admission-mode'
 import { errorMessage } from '../../shared/error-message'
 
 const WINDOWS_DAEMON_STARTUP_TIMEOUT_MS = 30_000

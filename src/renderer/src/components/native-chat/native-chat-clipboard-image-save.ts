@@ -1,3 +1,4 @@
+import { stageNativeChatPendingImage } from './native-chat-draft-attachment-staging'
 import { translate } from '@/i18n/i18n'
 import { setNativeChatPasteFailure } from './native-chat-composer-notice'
 import {
@@ -95,16 +96,17 @@ export async function saveNativeChatClipboardImage(
 }
 
 /** With accompanying text, quietly omit image upload on unsupported servers while preserving the text paste. */
-export function saveNativeChatPastedClipboardImage(
+export async function saveNativeChatPastedClipboardImage(
   owner: NativeChatAttachmentOwner,
   paste: {
+    pendingId: string | null
     besideText: boolean
     canNotify: () => boolean
     setNotice: (notice: string, errorText?: string) => void
     ready?: () => void
   }
 ): ReturnType<typeof saveNativeChatClipboardImage> {
-  return saveNativeChatClipboardImage(owner, {
+  const saved = await saveNativeChatClipboardImage(owner, {
     ready: paste.ready,
     setNotice: (notice, cause, errorText) => {
       if ((cause === 'serverTooOld' && paste.besideText) || !paste.canNotify()) {
@@ -117,4 +119,10 @@ export function saveNativeChatPastedClipboardImage(
       }
     }
   })
+  return saved.status === 'saved' &&
+    owner.kind === 'local' &&
+    owner.stagingScope &&
+    !stageNativeChatPendingImage(owner.stagingScope, paste.pendingId, saved.tempPath)
+    ? { status: 'empty' }
+    : saved
 }

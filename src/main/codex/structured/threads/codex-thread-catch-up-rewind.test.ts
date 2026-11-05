@@ -118,7 +118,13 @@ it('retains the original adoption cutoff through native rewind and disk recovery
   clock.now = 500_000
   const deps = () => ({ store, logger: testEventSinkLogging().logger })
   await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
-  expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(original)
+  const restated = c.journal.snapshot().items.slice(0, original.length)
+  expect(restated).toHaveLength(original.length)
+  for (const [index, item] of restated.entries()) {
+    const previous = original[index]!
+    expect(item).toEqual({ ...previous, revision: previous.revision + 2, sequence: item.sequence })
+    expect(item.sequence).toBeGreaterThan(previous.sequence)
+  }
   await c.reopen()
   store = await openTestAgentSessionRecordStore(c.root)
   await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
@@ -130,7 +136,7 @@ it('retains the original adoption cutoff through native rewind and disk recovery
     'assistant:answer 250',
     'assistant:answer 600'
   ])
-  expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(original)
+  expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(restated)
   const complete = c.journal.snapshot()
   await c.reopen()
   await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])

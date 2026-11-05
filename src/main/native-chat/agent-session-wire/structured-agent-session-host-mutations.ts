@@ -87,7 +87,7 @@ export function sendStructuredAgentSessionTurn(
             return blocked
           }
           if (params.usageLimitContinuationOfTurnItemId !== undefined) {
-            const snapshot = ctx.journal.snapshot()
+            const snapshot = ctx.journal.statusRead()
             const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
             if (
               cut?.turnItemId !== params.usageLimitContinuationOfTurnItemId ||

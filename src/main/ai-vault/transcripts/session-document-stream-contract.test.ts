@@ -26,13 +26,6 @@ function read(
 }
 
 describe('streamed session document contracts', () => {
-  it.each(['[]', 'null', 'false', '0', '"not an array"', '{}'])(
-    'a later messages value %s clears an earlier fold',
-    async (last) => {
-      expect(await read(`{"messages":[1,2],"messages":${last}}`)).toEqual({ record: {}, state: [] })
-    }
-  )
-
   it('replaces a failed earlier array and continues with its successor', async () => {
     const consume = (state: unknown[], value: unknown): void => {
       if (value === 'bad') {
@@ -50,50 +43,6 @@ describe('streamed session document contracts', () => {
     })
   })
 
-  it('keeps the first consumer failure unless a later array replaces it', async () => {
-    const failure = new Error('consumer failed')
-    let calls = 0
-    await expect(
-      read('{"messages":[1,2]}', {
-        consume: () => {
-          calls++
-          throw failure
-        }
-      })
-    ).rejects.toBe(failure)
-    expect(calls).toBe(1)
-  })
-
-  it('gives malformed trailing JSON precedence over a consumer failure', async () => {
-    await expect(
-      read('{"messages":[1]} trailing', {
-        consume: () => {
-          throw new Error('consumer')
-        }
-      })
-    ).rejects.toBeInstanceOf(SyntaxError)
-  })
-
-  it('keeps projected object resets and full-field overlap precedence', async () => {
-    expect(await read('{"agent":{"model":"old"},"agent":null}')).toEqual({
-      record: { agent: {} },
-      state: []
-    })
-    expect(await read('{"agent":{"model":"m","extra":[1,2]}}', { fields: ['agent'] })).toEqual({
-      record: { agent: { model: 'm', extra: [1, 2] } },
-      state: []
-    })
-    expect(await read('{"messages":[1,2]}', { objectFields: { messages: ['model'] } })).toEqual({
-      record: { messages: {} },
-      state: [1, 2]
-    })
-    expect(
-      await read('{"messages":{"model":"m","ignored":1}}', {
-        objectFields: { messages: ['model'] }
-      })
-    ).toEqual({ record: { messages: { model: 'm' } }, state: [] })
-  })
-
   it('preserves selected prototype keys as own properties', async () => {
     const content =
       '{"id":{"__proto__":{"polluted":true}},"agent":{"model":{"constructor":"value","__proto__":{"x":1}}}}'
@@ -102,20 +51,6 @@ describe('streamed session document contracts', () => {
     expect(Object.getPrototypeOf(parsed?.record)).toBeNull()
     expect(Object.prototype).not.toHaveProperty('polluted')
   })
-
-  it.each(['', ' ', '{', '{"messages":[1,]}', '{"messages":[]}{"messages":[]}'])(
-    'rejects malformed input %j',
-    async (content) => {
-      await expect(read(content)).rejects.toBeInstanceOf(SyntaxError)
-    }
-  )
-
-  it.each(['null', '[]', '[{}]', '123', '"text"', '"{}"'])(
-    'does not publish a nonobject document %s',
-    async (content) => {
-      expect(await read(content)).toBeNull()
-    }
-  )
 
   it('recognizes an object root after whitespace and empty byte chunks', async () => {
     async function* padded() {

@@ -1,17 +1,32 @@
+import { createCodexStructuredNotificationRetry } from '../session-lifecycle/codex-structured-notification-retry'
+import {
+  codexSessionLifecycle,
+  type CodexSession
+} from '../session-lifecycle/codex-structured-session-state'
+import { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
+import { createCodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { describe, expect, it, vi } from 'vitest'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+
+import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
-  CODEX_USER_INPUT_METHOD
+  CODEX_USER_INPUT_METHOD,
+  CodexPromptRegistry
 } from '../prompts/codex-prompt-registry'
-
 import {
+  LIFECYCLE_KEY,
+  reduced,
   SESSION_ID,
   THREAD_ID,
   TURN_ID,
   notification,
   recorder
 } from './codex-turn-lifecycle-contract-test-fixture'
+
 import '../prompts/codex-structured-prompt-replies'
 
 describe('codex turn lifecycle rows', () => {
@@ -143,5 +158,102 @@ describe('codex turn lifecycle rows', () => {
       startedAt: 1_000,
       requestedAt: 900
     })
+  })
+
+  it('keeps the verdict when a send echoed after completion revises the settled row', () => {
+    const tap = recorder()
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      sessionId: SESSION_ID,
+      primaryThreadId: () => THREAD_ID,
+      dispatchRequestOrigin: () => ({ requestedAt: 900, sequence: 0 })
+    })
+
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }, 2_000)
+    )
+    translator.handle(
+      notification(
+        'item/started',
+        {
+          turn: { id: TURN_ID },
+          item: { type: 'userMessage', id: 'user-1', clientId: 'client-1' }
+        },
+        2_100
+      )
+    )
+
+    // requestedAt distinguishes the post-echo revision from the original terminal row.
+    const lifecycle = reduced(tap.rows).find((row) => row.key === LIFECYCLE_KEY)
+    expect(lifecycle?.body).toMatchObject({
+      kind: 'turn',
+      state: 'completed',
+      outcome: 'failure',
+      requestedAt: 900
+    })
+  })
+
+  it('replays an oversized backpressured notification with its original receipt time', async () => {
+    vi.useFakeTimers()
+    const connection = {
+      pid: 4321,
+      closed: false,
+      request: async () => ({}),
+      notify: () => {},
+      respond: () => {},
+      respondWithError: () => {},
+      close: async () => true,
+      pauseReading: vi.fn(),
+      resumeReading: vi.fn()
+    } satisfies CodexAppServerConnection
+    const session: CodexSession = {
+      ...codexSessionLifecycle(1, 'generation-1'),
+      connection,
+      threadId: THREAD_ID,
+      prompts: new CodexPromptRegistry(),
+      options: new Map(),
+      reportedOptions: {},
+      dispatchEchoes: createCodexDispatchEchoes(),
+      translator: null,
+      backgroundTasks: new CodexBackgroundTaskTracker(THREAD_ID)
+    }
+    const translate = vi
+      .fn<Parameters<typeof createCodexStructuredNotificationRetry>[0]['translate']>()
+      .mockReturnValueOnce({ accepted: false, reason: 'backpressure' })
+      .mockReturnValue({ accepted: true })
+    const retries = createCodexStructuredNotificationRetry({
+      sessionFor: () => session,
+      translate
+    })
+
+    expect(
+      retries.handle(
+        SESSION_ID,
+        'turn/started',
+        { turn: { id: TURN_ID }, output: 'x'.repeat(9 * 1024 * 1024) },
+        1_000,
+        -1
+      )
+    ).toEqual({ accepted: false, reason: 'backpressure' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(translate.mock.calls.map((call) => call[4])).toEqual([1_000, 1_000])
+    expect(translate.mock.calls.map((call) => call[5])).toEqual([-1, -1])
+    expect(connection.resumeReading).not.toHaveBeenCalled()
+  })
+
+  it('restores no lifecycle rows without a session identity to key them by', () => {
+    const tap = recorder()
+    const translator = createCodexHistoryTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID
+    })
+
+    translator.restoreThread(THREAD_ID, {
+      turns: [{ id: 'turn-done', status: 'completed', startedAt: 1, completedAt: 2, items: [] }]
+    })
+
+    expect(tap.rows).toEqual([])
   })
 })

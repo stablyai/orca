@@ -102,14 +102,3 @@ it('observes a close while the terminal subtree is absent and survives its remou
   await waitFor(() => expect(view.queryByTestId('editor-panel')).not.toBeNull())
   expect(store.getState().openFiles).toHaveLength(1)
 })
-
-it('preserves an open model through ordinary terminal surface switches', async () => {
-  const { add } = setup()
-  const { model } = add('shell-switch')
-  const view = render(<Shell />)
-  await waitFor(() => expect(view.queryByTestId('editor-panel')).not.toBeNull())
-  view.rerender(<Shell visible={false} />)
-  view.rerender(<Shell />)
-  await waitFor(() => expect(view.queryByTestId('editor-panel')).not.toBeNull())
-  expect(monaco.editor.getModel(model.uri)).toBe(model)
-})

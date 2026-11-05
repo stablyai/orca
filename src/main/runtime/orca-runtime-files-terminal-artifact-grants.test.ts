@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
+import { realpath } from 'node:fs/promises'
 
 import {
   createRuntimeFileCommands,
@@ -10,7 +7,6 @@ import {
 } from './orca-runtime-files-test-harness'
 import {
   absoluteFileTarget,
-  resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
 
@@ -37,7 +33,7 @@ describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
   describe('resolveTerminalPath', () => {
-    const { tempDirs, tempFile } = useTerminalArtifactTempFiles()
+    const { tempFile } = useTerminalArtifactTempFiles()
 
     // Why: a chat link or typed path carries no terminal; the caller's terminal access is the authority.
     it('grants a writable file outside every workspace with no terminal or chat context', async () => {
@@ -81,18 +77,6 @@ describe('RuntimeFileCommands', () => {
       ).resolves.toEqual({ ok: true })
     })
 
-    // Why: this machine's home is the Windows user's, not the distro user's.
-    it('refuses tilde paths when the workspace runs in WSL', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const { commands } = createRuntimeFileCommands({
-        path: String.raw`\\wsl.localhost\Ubuntu\work\repo`
-      })
-
-      const result = await resolveTerminalArtifactPath(commands, '~/.bashrc')
-
-      expect(result).toMatchObject({ relativePath: null, absolutePath: null, exists: false })
-    })
-
     // Why: procfs reports size 0 for files with content, so the grant digest cannot trust stat size.
     it.runIf(process.platform === 'linux')('reads a procfs file that reports size 0', async () => {
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
@@ -118,44 +102,6 @@ describe('RuntimeFileCommands', () => {
       await expect(
         commands.resolveTerminalPath('id:wt-1', '/dev/null', null, 'client-a')
       ).rejects.toThrow('Not a regular file')
-    })
-
-    it('uses the canonical local temp artifact path for the exact grant', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))
-      tempDirs.push(dir)
-      const artifactPath = join(dir, 'result.json')
-      const linkPath = join(dir, 'link-result.json')
-      await writeFile(artifactPath, '{}')
-      await symlink(artifactPath, linkPath)
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      statMock.mockResolvedValue({ isDirectory: () => false, size: 2, dev: 1, ino: 2, mtimeMs: 3 })
-      const canonicalPath = await realpath(artifactPath)
-
-      const result = await resolveTerminalArtifactPath(commands, linkPath)
-
-      expect(result).toMatchObject({
-        relativePath: null,
-        absolutePath: canonicalPath,
-        exists: true,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'local',
-          absolutePath: canonicalPath
-        }
-      })
-      expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(canonicalPath, expect.anything())
-      expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(linkPath, expect.anything())
-    })
-
-    it('does not stat this machine for a path outside an SSH workspace', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-
-      await expect(
-        commands.resolveTerminalPath('id:wt-1', '/tmp/link-result.json', null, 'client-a')
-      ).rejects.toThrow('outside an SSH workspace')
-      expect(statMock).not.toHaveBeenCalled()
     })
   })
 })

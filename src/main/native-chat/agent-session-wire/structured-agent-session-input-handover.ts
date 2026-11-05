@@ -161,11 +161,8 @@ export async function beginStructuredAgentSessionInputHandover(
             deps.serialize(sessionId, async () => {
               validate(signal)
               if (
-                !session.journal
-                  .submissions()
-                  .some(
-                    (s) => s.clientMessageId === next.clientMessageId && s.fence === binding.fence
-                  ) ||
+                !ownsInput() ||
+                session.journal.submission(next.clientMessageId)?.fence !== binding.fence ||
                 !continuingStructuredAgentSessionInput(session.journal, next.clientMessageId)
               ) {
                 throw new Error('input continuation no longer owns its submission')

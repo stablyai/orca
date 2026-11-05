@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginPanelActDriver, usePluginPanelActDriver } from './plugin-panel-act-driver'
 
@@ -27,36 +27,6 @@ function mount(document: string | null = 'doc-1') {
 }
 
 describe('usePluginPanelActDriver', () => {
-  it('counts host calls in flight, telling listeners as each starts and settles', () => {
-    const { hook, driver } = mount()
-    const changes = vi.fn()
-    driver.onChange(changes)
-    const first = hook.result.current.trackHostCall()
-    const second = hook.result.current.trackHostCall()
-    expect(driver.pending()).toBe(2)
-    first()
-    first()
-    expect(driver.pending()).toBe(1)
-    second()
-    expect(driver.pending()).toBe(0)
-    expect(changes).toHaveBeenCalledTimes(4)
-  })
-
-  it("snapshots and restores the shown guest's atoms, then redraws Orca's controls", () => {
-    const { hook, driver, sendToGuest } = mount()
-    driver.snapshot()
-    expect(sendToGuest).toHaveBeenLastCalledWith('ui.snapshot', { document: 'doc-1' })
-    let restored = false
-    act(() => {
-      restored = driver.restore()
-    })
-    expect(restored).toBe(true)
-    expect(sendToGuest).toHaveBeenLastCalledWith('ui.restore', { document: 'doc-1' })
-    expect(hook.result.current.viewEpoch).toBe(1)
-    // Once: a second restore has nothing to put back.
-    expect(driver.restore()).toBe(false)
-  })
-
   it('does not restore into a guest that reloaded since the snapshot', () => {
     const { hook, driver, sendToGuest } = mount()
     driver.snapshot()

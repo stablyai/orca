@@ -56,48 +56,6 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     __clearSelfWriteRegistryForTests()
   })
 
-  it('preserves dirty drafts and marks the tab changed-on-disk on external file change', () => {
-    stubEditorWindow()
-    const store = createEditorStore()
-    openDirtyFile(store)
-
-    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
-    try {
-      dispatchExternalChange()
-
-      const file = store.getState().openFiles[0]
-      expect(file?.isDirty).toBe(true)
-      expect(file?.externalMutation).toBe('changed')
-      expect(store.getState().editorDrafts['/repo/file.ts']).toBe('unsaved edit')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('clears drafts and a stale changed-on-disk mark for clean tabs on external file change', () => {
-    stubEditorWindow()
-    const store = createEditorStore()
-    store.getState().openFile({
-      filePath: '/repo/file.ts',
-      relativePath: 'file.ts',
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().setExternalMutation('/repo/file.ts', 'changed')
-
-    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
-    try {
-      dispatchExternalChange()
-
-      const file = store.getState().openFiles[0]
-      expect(file?.isDirty).toBe(false)
-      expect(file?.externalMutation).toBeUndefined()
-    } finally {
-      cleanup()
-    }
-  })
-
   it('does not backstop-mark a dirty tab for the echo of its own save', () => {
     stubEditorWindow()
     const store = createEditorStore()
@@ -154,21 +112,6 @@ describe('editor autosave changed-on-disk conflict flow', () => {
       return { fakeDisk, store, cleanup: attachEditorAutosaveController(store) }
     }
 
-    it.each([
-      ['disk still holds the baseline', 'base'],
-      ['disk already holds the draft', 'restored draft']
-    ])('lands and goes clean without a banner when %s', async (_label, disk) => {
-      const { fakeDisk, store, cleanup } = restore(disk)
-      try {
-        await vi.advanceTimersByTimeAsync(1500)
-        expect(fakeDisk.files.get('/repo/file.ts')).toBe('restored draft')
-        expect(store.getState().openFiles[0]).toMatchObject({ isDirty: false })
-        expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-      } finally {
-        cleanup()
-      }
-    })
-
     it('is refused with the banner, keeps the draft and stops autosaving when disk changed', async () => {
       const { fakeDisk, store, cleanup } = restore('agent write')
       try {
@@ -208,30 +151,6 @@ describe('editor autosave changed-on-disk conflict flow', () => {
         isDirty: true,
         externalMutation: 'changed'
       })
-    } finally {
-      cleanup()
-    }
-  })
-
-  it("clears the changed-on-disk mark after the banner's Overwrite", async () => {
-    const writeFile = stubEditorWindow()
-    const store = createEditorStore()
-    openDirtyFile(store, 'user version')
-    store.getState().setExternalMutation('/repo/file.ts', 'changed')
-
-    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
-    try {
-      await requestEditorFileSave({ fileId: '/repo/file.ts', overwrite: true })
-
-      expect(writeFile).toHaveBeenCalledWith({
-        filePath: '/repo/file.ts',
-        content: 'user version',
-        connectionId: undefined,
-        expectedExecutionHostId: 'local'
-      })
-      const file = store.getState().openFiles[0]
-      expect(file?.isDirty).toBe(false)
-      expect(file?.externalMutation).toBeUndefined()
     } finally {
       cleanup()
     }

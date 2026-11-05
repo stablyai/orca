@@ -1,7 +1,13 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalHostDatabase } from './journal-host-database'
-import { JournalOutcomeDecodeError } from './journal-outcome-codec'
+import {
+  decodeJournalOutcome,
+  decodingOutcome,
+  JournalOutcomeDecodeError
+} from './journal-outcome-codec'
+import { outcomeFormat1StoredScalars } from './journal-outcome-format-1'
 import { journalOutcomeSource } from './journal-outcome-format'
+import { journalContextCursor } from './journal-context-cursor'
 import { readJournalSessionEpoch } from './journal-row-table'
 import {
   agentSessionExecutionLocationsEqual,
@@ -52,5 +58,19 @@ function readStoredJournalCursor(
   if (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) {
     throw new JournalOutcomeDecodeError('invalid journal cursor')
   }
-  return { epoch, sequence }
+  const boundary = source
+    ? db
+        .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted
+          FROM journal_outcomes WHERE generation = ? AND field = '$' AND entry_key = ?
+          AND seq <= ? ORDER BY seq DESC LIMIT 1`)
+        .get(source.generation, JSON.stringify('contextBoundary'), source.through)
+    : undefined
+  const contextBoundary = boundary
+    ? (decodingOutcome(() =>
+        outcomeFormat1StoredScalars.shape.contextBoundary.parse(
+          JSON.parse(decodeJournalOutcome(boundary).json)
+        )
+      ) ?? 1)
+    : 1
+  return journalContextCursor({ epoch, contextBoundary, lastSequence: sequence })
 }

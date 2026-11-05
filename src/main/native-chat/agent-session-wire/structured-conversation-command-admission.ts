@@ -29,7 +29,7 @@ export type ConversationCommandAdmissionContext = {
   sessionId: string
   fence: number
   journal: StructuredAgentSessionCurrentWorkJournal & {
-    snapshot(): Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
+    itemsRead: () => Pick<ReturnType<AgentSessionJournal['itemsRead']>, 'items'>
   }
   /** Without host projection, assume the generation at fence is live. */
   currentWork?: () => StructuredAgentSessionCurrentWork | null
@@ -56,8 +56,8 @@ export function conversationCommandBlocked(
   admission?: 'at-rest' | 'handover'
 ): AgentSessionWireRefusal | null {
   const { items, submissions } = agentSessionCurrentContextRows(
-    ctx.journal.snapshot().items,
-    ctx.journal.submissions()
+    ctx.journal.itemsRead().items,
+    ctx.journal.inputOrder.recoverableSubmissions()
   )
   if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
     return blocked('rewindUnconfirmed', 'agent_session_rewind:outcome-unknown')

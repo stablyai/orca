@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
-import { useWorktreeGitOwnerTarget } from '../worktree-git-owner-target'
+import { useWorktreeGitOwnerTarget } from '../source-control/sync/worktree-git-owner-target'
 import { useWorktreeGitCopyHostId } from '@/lib/worktree-git-copy'
 import { useAppStore, type AppState } from '@/store'
 import { useActiveWorktree, selectReviewRepositoryForWorkspace } from '@/store/selectors'
-import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
+import { useChecksPanelTerminalWorktree } from './refresh/use-checks-panel-terminal-worktree'
 import { getConnectionId } from '@/lib/connection-context'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -22,11 +22,11 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
-import type { PRCommentsListSelectionClearRequest } from '../pr-comments-list-selection'
+import type { PRCommentsListSelectionClearRequest } from './comments/pr-comments-list-selection'
 import {
   buildChecksPanelGitStatusContextKey,
   type ChecksPanelGitStatusSnapshot
-} from '../checks-panel-git-status-snapshot'
+} from './refresh/checks-panel-git-status-snapshot'
 import type { ChecksAgentComposerState, HostedReviewCreationSnapshot } from './panel-state-types'
 
 export function useChecksPanelControllerState() {

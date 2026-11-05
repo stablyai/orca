@@ -10,7 +10,7 @@ import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profil
 import { DelayedAuthority } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { Store } from '../persistence/loading-store/store'
 import { OrcaRuntimeService } from './orca-runtime'
-import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
+import { buildHeadlessMobileSessionTerminalTabs } from './terminal/surface/mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 

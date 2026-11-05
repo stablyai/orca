@@ -1,3 +1,6 @@
+import { journalInputOrder } from './journal-input-order'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -11,7 +14,7 @@ import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
 import { JournalStopAcceptor } from './journal-stop-acceptance'
-import { journalQueuePauseRestatement } from './queued-message-pause'
+import { projectJournalRows } from './journal-context-cursor'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
@@ -20,7 +23,11 @@ import { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
-import { journalInputClaimsReceipt, type JournalAttachmentClaim } from './journal-submission-hook'
+import {
+  journalInputClaimsReceipt,
+  journalAttachmentClaimsReceipt,
+  type JournalAttachmentClaim
+} from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import {
@@ -74,27 +81,6 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     })
     return () => goalAttachments.acquired(claim.referenced, claim.inserted, goalId)
   }
-  const epochController = new JournalEpochController({
-    claimAttachments,
-    isLiveGoal: (id) => goalAttachments.isLive(id),
-    identity: host.identity,
-    now: host.now,
-    mintEpoch: host.mintEpoch,
-    serialize: host.serialize,
-    database: host.database,
-    readOnly: host.readOnly,
-    highestFence: () => host.state().highestFence,
-    state: host.state,
-    queuePauseRestatement: () =>
-      journalQueuePauseRestatement(
-        host.state().queuePauseMarks,
-        host.state().latestAcceptedTurnSequence,
-        host.journal().queuedMessages.pauses()
-      ),
-    queueRestatement: () => host.journal().queuedMessages.restatement(),
-    cursor: host.cursor,
-    adopt: host.adopt
-  })
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
     now: host.now,
@@ -105,6 +91,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     nextSequence: () => host.state().lastSequence + 1,
     prepare: host.prepare,
     commit: host.commit,
+    project: (rows) => projectJournalRows(host.state(), rows),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
     outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
@@ -121,6 +108,32 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     committed: host.notifyCommitted,
     claimAttachments
   })
+  const rewindReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
+    const state = host.state()
+    const pending = journalInputOrder(state)
+      .recoverableSubmissions()
+      .filter(isQueuedAgentJournalSubmission)
+    const bodies = queuedMessages.list().map((card) => card.body)
+    for (const submission of pending) {
+      const body = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))?.body
+      if (body?.kind !== 'message') {
+        throw new Error('journal_queued_submission_body_missing')
+      }
+      bodies.push(body)
+    }
+    return inputReceipt(rows, journalAttachmentClaimsReceipt(claimAttachments, bodies, receipt))
+  }
+  const epochController = new JournalEpochController({
+    identity: host.identity,
+    now: host.now,
+    mintEpoch: host.mintEpoch,
+    database: host.database,
+    state: host.state,
+    writer: rowWriter,
+    inputReceipt: rewindReceipt,
+    cards: queuedMessages,
+    adopt: host.adopt
+  })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
     cursor: host.cursor,
@@ -134,7 +147,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     context: new JournalContextController({
       state: host.state,
       writer: rowWriter,
-      cards: queuedMessages
+      cards: queuedMessages,
+      inputReceipt: rewindReceipt
     }),
     stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.

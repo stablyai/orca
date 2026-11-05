@@ -221,6 +221,22 @@ describe("the queue's one rule for the next card", () => {
     await handOver(journal, 'A')
   })
 
+  it('reconsiders a cleared personal card behind unavailable mail when Resume lifts its pause', async () => {
+    const journal = await queue(new Set(['A']))
+    await journal.queuedMessages.insert({ messageId: 'C', body: personal('held across clear') })
+    await journal.context.clear(
+      { operationId: 'clear', afterFence: 0, clearedAt: 1 },
+      { write: () => {}, committed: () => {} }
+    )
+    await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
+    await journal.queuedMessages.move({ messageId: 'A', beforeMessageId: 'C' })
+    expect(next(journal)).toBeUndefined()
+    await journal.appendQueueResume(0)
+    expect(next(journal)).toBe('C')
+    await handOver(journal, 'C')
+    expect(journal.queuedMessages.get('C')?.state).toBe('dispatched')
+  })
+
   it('asks mail authority only once nothing else stops a send', async () => {
     const journal = await queue(new Set())
     const authority = vi.fn((_card: QueuedMessageRow) => true)

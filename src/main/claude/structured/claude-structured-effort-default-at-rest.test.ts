@@ -210,7 +210,8 @@ async function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRec
     journal: {
       threadGoal: () => null,
       visitItems: () => {},
-      submissions: () => [],
+      inputOrder: { hasInputs: () => false },
+      statusRead: () => ({ items: [], submissions: [] }),
       contextUsage: () => null,
       context: { floor: () => null }
     }
@@ -294,8 +295,9 @@ describe('Claude effort default at rest', () => {
       return { shown, sends: structuredAgentSessionSendSelection(state)?.model }
     }
     const reopened = await readAtRest(store, restingRecord({}, [{ origin: 'adopted' }]))
-    expect(reopened.current).toMatchObject({ model: 'opus[1m]', defaulted: ['model'] })
-    expect(picker(reopened)).toEqual({ shown: 'opus[1m]', sends: undefined })
+    // The default row is keyed by the model it runs, so it is the row the run reports.
+    expect(reopened.current).toMatchObject({ model: 'claude-opus-5-5[1m]', defaulted: ['model'] })
+    expect(picker(reopened)).toEqual({ shown: 'claude-opus-5-5[1m]', sends: undefined })
 
     const ran = (await child.readOptions({ sessionId: SESSION, fence: 7 })).current
     expect(ran).toMatchObject({ model: 'claude-opus-5-5[1m]' })

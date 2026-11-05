@@ -38,16 +38,43 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.usageLimitContinueSearchReset', 'reset')
     ]
   },
+  idleStop: {
+    targetSectionId: 'chat-idle-stop',
+    title: translate('components.settings.nativeChat.idleStopTitle', 'Stop idle agents after'),
+    description: translate(
+      'components.settings.nativeChat.idleStopCopy',
+      "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns."
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.idleStopSearchIdle', 'idle'),
+      translate('components.settings.nativeChat.idleStopSearchTimeout', 'timeout'),
+      translate('components.settings.nativeChat.idleStopSearchKeepAlive', 'keep alive')
+    ]
+  },
   queueFollowUps: {
     targetSectionId: 'chat-queue-follow-ups',
     title: translate('components.settings.nativeChat.followUpBehaviorTitle', 'Queue follow-ups'),
     description: translate(
       'components.settings.nativeChat.followUpBehaviorCopy',
-      'Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.'
+      'Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.'
     ),
     keywords: [
       translate('components.settings.nativeChat.queueSearchQueue', 'queue'),
       translate('components.settings.nativeChat.queueSearchSteer', 'steer')
+    ]
+  },
+  scrollToLatestOnSend: {
+    targetSectionId: 'chat-scroll-to-latest-on-send',
+    title: translate(
+      'components.settings.nativeChat.scrollToLatestOnSendTitle',
+      'Scroll to latest when sending'
+    ),
+    description: translate(
+      'components.settings.nativeChat.scrollToLatestOnSendCopy',
+      'Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
     ]
   },
   linkPreviews: {

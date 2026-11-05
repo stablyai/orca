@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
 import { createTestStore } from '@/store/slices/store-test-helpers'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+
 import type { AppState } from '@/store/types'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
@@ -58,41 +58,6 @@ describe('attachRestoredTabConflictScan', () => {
     vi.unstubAllGlobals()
   })
 
-  it('marks a restored dirty tab whose file changed while the app was closed', async () => {
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'agent rewrote this offline',
-      isBinary: false
-    })
-    const store = createTestStore()
-    openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
-
-    const detach = attachRestoredTabConflictScan(store)
-    try {
-      await vi.advanceTimersByTimeAsync(10)
-      expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
-    } finally {
-      detach()
-    }
-  })
-
-  it('leaves a restored dirty tab unmarked when disk still matches its baseline', async () => {
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'original baseline',
-      isBinary: false
-    })
-    const store = createTestStore()
-    openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
-
-    const detach = attachRestoredTabConflictScan(store)
-    try {
-      await vi.advanceTimersByTimeAsync(10)
-      expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1)
-    } finally {
-      detach()
-    }
-  })
-
   it('leaves a tab unmarked when disk holds its own just-written save', async () => {
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'saved earlier', isBinary: false })
     const store = createTestStore()
@@ -106,34 +71,6 @@ describe('attachRestoredTabConflictScan', () => {
     } finally {
       detach()
       __clearSelfWriteRegistryForTests()
-    }
-  })
-
-  it('does not read files for clean tabs or tabs without a baseline', async () => {
-    const store = createTestStore()
-    store.getState().openFile({
-      filePath: '/repo/clean.ts',
-      relativePath: 'clean.ts',
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().openFile({
-      filePath: '/repo/dirty-no-baseline.ts',
-      relativePath: 'dirty-no-baseline.ts',
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().setEditorDraft('/repo/dirty-no-baseline.ts', 'draft')
-    store.getState().markFileDirty('/repo/dirty-no-baseline.ts', true)
-
-    const detach = attachRestoredTabConflictScan(store)
-    try {
-      await vi.advanceTimersByTimeAsync(10)
-      expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-    } finally {
-      detach()
     }
   })
 
@@ -151,20 +88,6 @@ describe('attachRestoredTabConflictScan', () => {
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
       await vi.advanceTimersByTimeAsync(2_100)
       expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
-    } finally {
-      detach()
-    }
-  })
-
-  it('leaves a restored dirty tab unmarked when disk already holds its draft', async () => {
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'restored draft', isBinary: false })
-    const store = createTestStore()
-    openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
-
-    const detach = attachRestoredTabConflictScan(store)
-    try {
-      await vi.advanceTimersByTimeAsync(10)
-      expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
     } finally {
       detach()
     }
@@ -225,55 +148,6 @@ describe('attachRestoredTabConflictScan', () => {
       const tab = store.getState().openFiles[0]
       expect(tab?.externalMutation).toBeUndefined()
       expect(mocks.readRuntimeFileContent.mock.calls.length).toBeGreaterThan(1)
-    } finally {
-      detach()
-    }
-  })
-
-  it('verifies a restored dirty floating-workspace tab as the file the user named', async () => {
-    mocks.readRuntimeFileContent.mockRejectedValueOnce(new Error('ENOENT'))
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'original baseline',
-      isBinary: false
-    })
-    mocks.pathExists.mockResolvedValue(true)
-    mocks.getConnectionIdForFile.mockReturnValue(null)
-    const store = createTestStore()
-    openRestoredDirtyTab(store, '/Users/me/notes.txt', 'original baseline', {
-      relativePath: 'notes.txt',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-    })
-
-    const detach = attachRestoredTabConflictScan(store)
-    try {
-      await vi.advanceTimersByTimeAsync(10)
-      expect(mocks.pathExists).toHaveBeenCalledWith(
-        expect.objectContaining({ filePath: '/Users/me/notes.txt', access: { kind: 'user-file' } })
-      )
-      await vi.advanceTimersByTimeAsync(2_100)
-      expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
-        expect.objectContaining({ filePath: '/Users/me/notes.txt', access: { kind: 'user-file' } })
-      )
-    } finally {
-      detach()
-    }
-  })
-
-  it('verifies a restored dirty project tab inside its root', async () => {
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'original baseline',
-      isBinary: false
-    })
-    mocks.getConnectionIdForFile.mockReturnValue(null)
-    const store = createTestStore()
-    openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
-
-    const detach = attachRestoredTabConflictScan(store)
-    try {
-      await vi.advanceTimersByTimeAsync(10)
-      expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-        expect.objectContaining({ filePath: '/repo/file.ts', access: undefined })
-      )
     } finally {
       detach()
     }

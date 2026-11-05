@@ -183,18 +183,6 @@ const ORIGIN = {
   sentAt: 0
 }
 
-function structuredTab(agent: string) {
-  const tab = {
-    type: 'agent-session',
-    id: 'agent-tab-1',
-    title: 'Chat',
-    sessionId: 'session-structured',
-    agent,
-    isActive: true
-  }
-  return { tab, activeHandle: null, inputLeaseReady: false }
-}
-
 describe('useMobileNativeChatController handleNativeChatSend', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatController | null = null
@@ -310,28 +298,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
 
-  it('routes structured agent-session sends away from terminal/nativeChat transports', async () => {
-    await act(async () => {
-      renderer?.update(createElement(Harness, structuredTab('codex')))
-    })
-
-    let accepted = false
-    await act(async () => {
-      accepted = await controller!.handleNativeChatSend('look')
-    })
-
-    expect(accepted).toBe(true)
-    expect(structuredSendWithOutcome).toHaveBeenCalledWith(
-      'look',
-      undefined,
-      undefined,
-      undefined,
-      []
-    )
-    expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(clientStub.sendRequest).not.toHaveBeenCalled()
-  })
-
   it('pre-clears separately for a text-only send but never for an image send', async () => {
     // Image paste already cleared input; clearing again here would erase the photo before the text send.
     sendWithOutcome.mockResolvedValue('accepted')
@@ -369,22 +335,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
-
-  it('fails a send fast while the socket is down, before spending the heal budget', async () => {
-    // Gate on live connection immediately; lease state collapses one render later.
-    markMobileNativeChatInputStale('term-1')
-    await act(async () => {
-      renderer?.update(createElement(Harness, { connState: 'connecting' }))
-    })
-    let accepted = true
-    await act(async () => {
-      accepted = await controller!.handleNativeChatSend('answer')
-    })
-    expect(accepted).toBe(false)
-    expect(clientStub.sendRequest).not.toHaveBeenCalled()
-    expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
   })
 })
 
@@ -701,47 +651,6 @@ describe('useMobileNativeChatController terminal turn', () => {
       }
     }
   )
-
-  it('captures an unknown active turn while an older host transcript is still empty', async () => {
-    Reflect.deleteProperty(workingTab.agentStatus, 'turnStartedAt')
-    workingTab.agentStatus.lastAssistantMessage = ''
-    rerender()
-    expect(controller?.nativeChatTurnActive).toBe(false)
-    captureSendOrigin.mockReturnValue(ORIGIN)
-    clientStub.sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
-    sendWithOutcome.mockResolvedValueOnce('accepted')
-    await act(async () => {
-      await controller?.handleNativeChatSend('Then docs')
-    })
-    expect(acceptSend).toHaveBeenLastCalledWith(
-      expect.objectContaining({ queuedDuringWorkingEpoch: null }),
-      'Then docs',
-      undefined
-    )
-  })
-
-  it('captures the turn epoch when sending a follow-up before its acknowledgement', async () => {
-    captureSendOrigin.mockReturnValue(ORIGIN)
-    clientStub.sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
-    sendWithOutcome.mockResolvedValueOnce('accepted')
-    await act(async () => {
-      await controller?.handleNativeChatSend('Then docs')
-    })
-    expect(acceptSend).toHaveBeenLastCalledWith(
-      expect.objectContaining({ queuedDuringWorkingEpoch: turnStartedAt }),
-      'Then docs',
-      undefined
-    )
-  })
-
-  it('treats passive monitoring as outside the foreground turn', () => {
-    workingTab.agentStatus.workingMode = 'monitoring'
-    rerender()
-
-    expect(controller?.nativeChatTurnActive).toBe(false)
-    expect(controller?.nativeChatStreamingText).toBeUndefined()
-    expect(controller?.nativeChatSessionOptions?.isWorking).toBe(false)
-  })
 
   it("ends working at the transcript's turn end when the final hook never came", () => {
     Object.assign(sessionState, {

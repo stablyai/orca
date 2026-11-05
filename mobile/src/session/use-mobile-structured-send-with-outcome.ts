@@ -1,5 +1,4 @@
 import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
-
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
@@ -77,7 +76,8 @@ export function useMobileStructuredSendWithOutcome(args: {
   /** The host's queue sends next: commands that cannot wait in line read the chat as working. */
   queueSendsNext: boolean
   accept: MobileStructuredSends['accept']
-  hold: MobileStructuredSends['hold']
+  acknowledge: MobileStructuredSends['acknowledge']
+  reject: MobileStructuredSends['reject']
   commandPending: { current: boolean }
   /** This chat's message sends still out, which a command waits behind as on desktop. */
   sendsOut: MobileStructuredSendsOut
@@ -103,13 +103,14 @@ export function useMobileStructuredSendWithOutcome(args: {
 ) => Promise<MobileNativeChatSendOutcome> {
   const {
     accept,
+    acknowledge,
     agent,
     client,
     commandPending,
     commandsWait,
     controller,
     enabled,
-    hold,
+    reject,
     onSendError,
     queueCapable,
     queueFollowUps,
@@ -212,8 +213,11 @@ export function useMobileStructuredSendWithOutcome(args: {
         clientMessageId: structuredSessionOperationId(),
         body,
         queuedAt: Date.now(),
+        ...captured,
+        afterSequence: stateRef.current.cursor?.sequence,
         ...(stopping ? { sentWhileStopping: true as const } : {})
       }
+      accept(send, images)
       intent?.onCreated?.(send.clientMessageId)
       const outcome = await sendsOut.trackSend(sendMobileStructuredAgentSessionMessage)({
         client,
@@ -233,24 +237,24 @@ export function useMobileStructuredSendWithOutcome(args: {
         ...captured,
         deadline,
         clientMessageId: send.clientMessageId,
-        onAccepted: (cursor) =>
-          accept({ ...send, ...(cursor ? { recordedCursor: cursor } : {}) }, images),
+        onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),
         onError: onSendError
       })
-      if (outcome === 'unknown') {
-        hold(send)
+      if (outcome === 'rejected' || outcome === 'queued') {
+        reject(send.clientMessageId)
       }
       return outcome
     },
     [
       accept,
+      acknowledge,
       agent,
       client,
       commandPending,
       commandsWait,
       controller,
       enabled,
-      hold,
+      reject,
       onSendError,
       queueCapable,
       queueFollowUps,

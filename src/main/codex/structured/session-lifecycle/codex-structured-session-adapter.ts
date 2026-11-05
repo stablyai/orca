@@ -1,6 +1,6 @@
+import { readCodexSessionAccountUsage } from './codex-session-account-usage'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
-import * as codexRewind from '../threads/codex-structured-rewind'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
@@ -36,7 +36,6 @@ import {
   deliverCodexUnhandledFrame,
   translateCodexNotification
 } from './codex-structured-provider-events'
-import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from '../acquisition/codex-structured-session-acquire'
 import * as requestEndWait from '../turns/codex-request-end-wait'
@@ -49,6 +48,8 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
+import * as codexRewind from '../threads/codex-structured-rewind'
+import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
 import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
 
@@ -82,6 +83,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
   }
 
+  readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+
   supportsLocation = supportsCodexStructuredLocation
 
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
@@ -95,7 +98,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     renameCodexProviderSession({
       ...input,
       session: this.sessions.get(input.record.sessionId),
-      invocation: this.deps.renameInvocation
+      invocation: this.deps.providerInvocation
     })
 
   permissionModeRequiresAcquisition = permission.codexNativeResumeRequirement(this.sessions)
@@ -158,9 +161,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
-      turnEnd.settleCodexSendsInEndedTurn(session, event, (settlement) =>
-        this.deps.onDispatchSettledLate?.({ sessionId: event.sessionId, ...settlement })
-      )
+      turnEnd.settleCodexSendsInEndedTurn(session, event)
       // Child records observe refused frames only after a retry reaches the journal.
       session.backgroundTasks.observe(event, session.prompts.takeAbandonedCommands())
       // After the journal and the parent's republished row, never ahead of either.

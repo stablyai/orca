@@ -18,7 +18,7 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
-import { SourceControlFixSplitButton } from '../../source-control-fix-split-button'
+import { SourceControlFixSplitButton } from '../panel/source-control-fix-split-button'
 
 export type SourceControlRecoveryKind = 'commit' | 'push'
 

@@ -89,6 +89,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
+  /** View newly opened Markdown files start in (see markdown-default-view-mode.ts); absent = Rich. */
+  markdownDefaultViewMode?: 'source' | 'rich'
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
   /** Selection paste preserves the normal clipboard; defaults on for Linux/macOS, off for Windows. */
@@ -203,7 +205,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
+  /** Resume working structured chats after restart; on for new profiles, off for profiles that predate the default. Off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
@@ -246,8 +248,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
-  /** Maximum worker nesting; 1 forbids sub-workers. Renderer-only: omit from SettingsUpdate RPC so workers cannot raise their cap. */
-  nestedWorkerMaxDepth?: number
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
   orchestrationWorkerAutoReleaseEnabled?: boolean

@@ -102,11 +102,8 @@ export async function recordStructuredAgentSessionStartFailure(
   failure: StructuredAgentSessionStartFailure,
   clientMessageId: string | null
 ): Promise<void> {
-  const selected = session.journal
-    .submissions()
-    .find(
-      (entry) => entry.clientMessageId === clientMessageId && isQueuedAgentJournalSubmission(entry)
-    )
+  const entry = clientMessageId === null ? undefined : session.journal.submission(clientMessageId)
+  const selected = entry && isQueuedAgentJournalSubmission(entry) ? entry : undefined
   const startKey = failure.startKey ?? clientMessageId
   const rejection = { reason: failure.reason, rejection: failure.rejection }
   if (startKey === null || (clientMessageId !== null && !selected)) {
@@ -114,6 +111,7 @@ export async function recordStructuredAgentSessionStartFailure(
   }
   await session.journal.appendLifecycleBatch({
     settlementId: `start-failure:${startKey}`,
+    keepFailedStart: true,
     fence: session.fence,
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],

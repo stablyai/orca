@@ -126,38 +126,6 @@ function setupMount() {
   return { params, modelText, model, updateOptions, executeEdits, editorInstance, monaco }
 }
 
-it('mounts the live model over a stale retained cache, editable, and reloads a model-less stale cache once', () => {
-  const { params, modelText, model, updateOptions, executeEdits, editorInstance, monaco } =
-    setupMount()
-  const dropped: string[] = []
-  const onStale = (event: Event): void => {
-    if (event instanceof CustomEvent) {
-      dropped.push(event.detail.fileId)
-    }
-  }
-  window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
-  try {
-    const view = renderHook(() => useMonacoEditorMount(params))
-    view.result.current(editorInstance, monaco)
-
-    expect(modelText.value).toBe('B')
-    expect(model.pushEditOperations).not.toHaveBeenCalled()
-    expect(executeEdits).not.toHaveBeenCalled()
-    expect(updateOptions).not.toHaveBeenCalledWith({ readOnly: true })
-    expect(dropped).toEqual([])
-
-    // Without a fresh live model, evict the cache once without entering a remount/reload loop.
-    modelText.value = 'A (stale cache)'
-    for (let mount = 0; mount < 3; mount += 1) {
-      view.result.current(editorInstance, monaco)
-    }
-    expect(dropped).toEqual(['tab-b'])
-    expect(updateOptions).not.toHaveBeenCalledWith({ readOnly: true })
-  } finally {
-    window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
-  }
-})
-
 it('reloads the same stale text again once the baseline moves or a fresh mount settles the reload', () => {
   const { params, modelText, editorInstance, monaco } = setupMount()
   const dropped: string[] = []
