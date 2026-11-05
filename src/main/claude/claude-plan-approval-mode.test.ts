@@ -78,9 +78,16 @@ function recordingQuery(setPermissionMode: Query['setPermissionMode']): Query {
   })
 }
 
-async function pendingPlanApproval(input: Record<string, unknown>, initPermissionMode?: string) {
+async function pendingPlanApproval(
+  input: Record<string, unknown>,
+  initPermissionMode?: string,
+  requested?: 'full-access'
+) {
   const claude = fakeClaude({ replayUuid: 'turn-1', initPermissionMode })
-  const adapter = await acquired(claude)
+  const adapter = await acquired(
+    claude,
+    requested ? { options: claudeStructuredPermissionOptions(requested) } : {}
+  )
   await adapter.dispatch({
     sessionId: 'session-1',
     clientMessageId: 'client-turn-1',
@@ -92,6 +99,29 @@ async function pendingPlanApproval(input: Record<string, unknown>, initPermissio
     throw new Error('expected Claude connection')
   }
   claudeFrame(connection, { type: 'system', subtype: 'status', permissionMode: 'plan' })
+  if (requested) {
+    for (const frame of [
+      {
+        type: 'system',
+        subtype: 'status',
+        status: null,
+        permissionMode: 'plan',
+        session_id: PROVIDER_SESSION_ID
+      },
+      {
+        type: 'control_request',
+        request_id: 'permission-plan',
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'ExitPlanMode',
+          input,
+          tool_use_id: 'tool-plan'
+        }
+      }
+    ]) {
+      connection.handlers.onStdout?.(`${JSON.stringify(frame)}\n`)
+    }
+  }
   const request = new AbortController()
   const answered = invokeCanUseTool(connection, 'ExitPlanMode', 'permission-plan', 'tool-plan', {
     input,
@@ -306,3 +336,52 @@ describe('leaving Claude plan mode on an approved plan', () => {
     setMode.mockRestore()
   })
 })
+
+it.each([true, false])(
+  'uses the approved Build policy only after successful native restoration: %s',
+  async (restored) => {
+    const { adapter, connection, answered } = await pendingPlanApproval(
+      {},
+      'default',
+      'full-access'
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const setMode = vi.spyOn(connection, 'setPermissionMode').mockImplementationOnce(async () => {
+      if (!restored) {
+        throw new Error('native restoration failed')
+      }
+    })
+    try {
+      await adapter.answerPrompt({
+        sessionId: 'session-1',
+        itemId: 'journal-plan',
+        kind: 'approval',
+        response: { kind: 'option', optionId: 'allow' },
+        fence: 7,
+        commit: async () => {}
+      })
+      await expect(answered.promise).resolves.toMatchObject({ behavior: 'allow' })
+      await tick()
+      expect(setMode).toHaveBeenCalledWith('bypassPermissions')
+      for (const clientMessageId of ['build-first', 'build-second']) {
+        claudeFrame(connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
+        await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+        expect(
+          await adapter.dispatch({
+            sessionId: 'session-1',
+            clientMessageId,
+            body: USER_MESSAGE,
+            fence: 7,
+            executionOptions: { interactionMode: 'default' }
+          })
+        ).toMatchObject({ state: 'admitted' })
+        expect(setMode).toHaveBeenLastCalledWith(restored ? 'bypassPermissions' : 'default', {
+          timeoutMs: undefined
+        })
+      }
+    } finally {
+      warn.mockRestore()
+      await adapter.closeAll()
+    }
+  }
+)

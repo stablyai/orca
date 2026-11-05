@@ -1,5 +1,5 @@
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { beforeEach, describe, expect, it, type Mock } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -25,7 +25,8 @@ import {
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
-  HOST_TEST_THREAD as THREAD
+  HOST_TEST_THREAD as THREAD,
+  hostTestMessage
 } from './structured-agent-session-host-test-data'
 
 const OLD = NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 60_000
@@ -487,17 +488,44 @@ it.each(['allow', 'deny'])(
     const prompt = page.ok ? page.page.items.find((item) => item.itemId === itemId)! : null
     expect(prompt).not.toBeNull()
     const params = answer(prompt!, opId(), choice)
-    const restore = failReceiptWrites()
-    await expect(host.respondToPrompt(CALLER, params)).rejects.toThrow('receipt unavailable')
-    restore()
+    const db = openTestJournalHostDatabase(root).db
+    db.exec(`CREATE TRIGGER fail_plan_record AFTER UPDATE ON agent_session_records
+      WHEN json_extract(NEW.record_json, '$.options.interactionMode') = '${after}'
+      BEGIN SELECT RAISE(ABORT, 'record unavailable'); END`)
+    await expect(host.respondToPrompt(CALLER, params)).rejects.toThrow('record unavailable')
+    db.exec('DROP TRIGGER fail_plan_record')
+    expect(receipt(params.envelope.clientOperationId)).toEqual({ verdict: 'absent' })
+    expect(promptBody(itemId)).toMatchObject({ resolution: { state: 'pending' } })
     expect(store.getRecord(SESSION)?.options).toEqual({
       model: 'opus[1m]',
       interactionMode: before
     })
     expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'opus[1m]', interactionMode: after })
+    if (choice === 'deny') {
+      const body = hostTestMessage('Continue planning')
+      expect(
+        await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+      ).toMatchObject({ ok: true })
+      await vi.waitFor(() =>
+        expect(hostTestState().dispatch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            executionOptions: { model: 'opus[1m]', fastMode: 'false', interactionMode: 'plan' }
+          })
+        )
+      )
+    }
     await pick(before)
     expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(store.getRecord(SESSION)?.options).toEqual({
+      model: 'opus[1m]',
+      interactionMode: before
+    })
+    const delivered = answerPrompt.mock.calls.length
+    expect(await host.respondToPrompt(CALLER, answer(prompt!, opId(), choice))).toMatchObject({
+      ok: true
+    })
+    expect(answerPrompt).toHaveBeenCalledTimes(delivered)
     expect(store.getRecord(SESSION)?.options).toEqual({
       model: 'opus[1m]',
       interactionMode: before

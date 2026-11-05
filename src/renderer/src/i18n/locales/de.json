@@ -19378,6 +19378,9 @@
       },
       "composer": {
         "send": "Senden",
+        "buildMode": "Umsetzen",
+        "planMode": "Planen",
+        "modeNextTurn": "Gilt für den nächsten Gesprächsschritt",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
         "alternateQueueHint": "{{shortcut}} zum Einreihen",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",

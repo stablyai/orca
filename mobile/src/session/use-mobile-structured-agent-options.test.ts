@@ -565,7 +565,7 @@ it('refreshes saved planning intent from the same host status stamp without remo
     ...OPTIONS,
     current: { interactionMode, acceptedInputSources: { interactionMode: 'saved' } }
   }))
-  const { mutate } = recordingMutate(async () => null)
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
   const harness = await mountOptions({
     ...BASE,
     client: client.client,

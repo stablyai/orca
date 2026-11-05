@@ -65,7 +65,12 @@ type Props = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
   insertDictation?: (insert: (draft: string) => string) => boolean | void
   draftScopeKey?: string | null
-  editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
+  editSession?: {
+    cancel: () => void
+    refuseCommand: (text: string) => boolean
+    locked: boolean
+    interactionModeSupported?: boolean
+  }
   onPickSkill?: (skill: { name: string; path: string }) => void
   inputRef?: React.RefObject<TextInput | null>
   // Terminal-backed chats keep curated commands and image-only attachment actions.
@@ -176,9 +181,9 @@ export function MobileNativeChatComposer({
     editing: editSession !== undefined,
     agent,
     structuredCatalog: structured?.catalog,
-    interactionModeSupported: sessionOptions?.controller.snapshot.some(
-      (entry) => entry.id === 'interactionMode'
-    ),
+    interactionModeSupported:
+      editSession?.interactionModeSupported ??
+      sessionOptions?.controller.snapshot.some((entry) => entry.id === 'interactionMode'),
     filePaths,
     onNeedFiles,
     skillDiscovery,

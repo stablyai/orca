@@ -14,6 +14,7 @@ import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/st
 import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
 import * as dispatchContent from '../claude-structured-dispatch-content'
 import { ClaudeControlRequestError } from '../../claude-agent-sdk-control-requests'
+import { claudeStructuredPermissionOptions } from './claude-structured-launch-resolution'
 import { createClaudeCliFlagSupport } from '../../claude-cli-flag-support'
 
 /** Claude ends a turn; a message sent before this joins the running turn on its choices. */
@@ -755,7 +756,9 @@ it.each([false, true])(
 
 it('applies explicit planning at fresh turns, preserves startup permission fallback, and leaves steers alone', async () => {
   const claude = fakeClaude({ initPermissionMode: 'default' })
-  const adapter = await acquired(claude)
+  const adapter = await acquired(claude, {
+    options: claudeStructuredPermissionOptions('full-access')
+  })
   const connection = claude.connections[0]!
   claudeFrame(connection, {
     type: 'system',

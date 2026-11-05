@@ -19118,6 +19118,9 @@
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
       },
       "composer": {
+        "buildMode": "建置",
+        "planMode": "規劃",
+        "modeNextTurn": "套用至下一輪對話",
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
         "alternateQueueHint": "{{shortcut}} 加入佇列",

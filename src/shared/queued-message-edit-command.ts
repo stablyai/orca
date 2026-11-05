@@ -11,21 +11,23 @@ export function queuedMessageEditAcceptsText(
   text: string,
   agent: AgentType,
   reported?: readonly AgentSessionSlashCommand[],
-  hostSetsGoals = false
+  hostSetsGoals = false,
+  hostSetsInteractionMode = false
 ): boolean {
-  return prepareQueuedMessageEditText(agent, reported, hostSetsGoals)(text)
+  return prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode)(text)
 }
 
 export function prepareQueuedMessageEditText(
   agent: AgentType,
   reported?: readonly AgentSessionSlashCommand[],
-  hostSetsGoals = false
+  hostSetsGoals = false,
+  hostSetsInteractionMode = false
 ): (text: string) => boolean {
   const hostCommand = prepareStructuredAgentSessionComposerCommand(agent, reported)
   return (text) =>
     !(
       hostCommand(text) ||
-      agentSessionInteractionCommand(agent, text) !== null ||
+      (hostSetsInteractionMode && agentSessionInteractionCommand(agent, text) !== null) ||
       (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
       /^\/resume(?:\s|$)/i.test(text)
     )

@@ -142,19 +142,23 @@ class FakeRpcCallError extends Error {
 }
 
 type Answers = {
-  options?: () => Promise<unknown>
+  options?: (target: RuntimeClientTarget) => Promise<unknown>
   modelCatalog?: () => Promise<unknown>
 }
 
 function answer(answers: Answers): void {
   mocks.call.mockImplementation(
-    async (_target: unknown, method: string, params: { key: string; value: string }) => {
+    async (
+      _target: RuntimeClientTarget,
+      method: string,
+      params: { key: string; value: string }
+    ) => {
       if (method === 'agentSession.setOption') {
         const value = await mocks.pick(method, method, { key: params.key, value: params.value })
         return value ? { ok: true, value } : Promise.reject(new Error('Unconfirmed option write'))
       }
       if (method === 'agentSession.options' && answers.options) {
-        return answers.options()
+        return answers.options(_target)
       }
       if (method === 'agentSession.modelCatalog' && answers.modelCatalog) {
         return answers.modelCatalog()
@@ -189,6 +193,7 @@ type RenderProps = {
   paired?: boolean
   /** Pass the production presentation scope, which is closed while transport is disabled. */
   presentation?: boolean
+  onRender?: () => void
 }
 
 const PROVISIONAL: RenderProps = { transportEnabled: false, fence: null, launch: 'new' }
@@ -203,6 +208,7 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
   mocks.agent = initial.agent ?? 'codex'
   return renderHook(
     (props: RenderProps) => {
+      props.onRender?.()
       const { capturePresentation } = useStructuredAgentSessionMutate({
         sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,

@@ -36,9 +36,12 @@ export function useNativeChatComposerCommandPicker(
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
   const reported = structuredTransport?.sessionCommands
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
+  const hostSetsInteractionMode = structuredTransport?.optionSnapshot.some(
+    (entry) => entry.id === 'interactionMode'
+  )
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals),
-    [agent, reported, hostSetsGoals]
+    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode),
+    [agent, reported, hostSetsGoals, hostSetsInteractionMode]
   )
   const commandAvailable = useCallback(
     (name: string) => mode === undefined || acceptsText(`/${name}`),

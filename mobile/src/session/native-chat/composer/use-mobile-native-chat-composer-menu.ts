@@ -53,8 +53,14 @@ export function useMobileNativeChatComposerMenu(input: {
 
   const reported = structuredCatalog?.reported
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent ?? 'codex', reported),
-    [agent, reported]
+    () =>
+      prepareQueuedMessageEditText(
+        agent ?? 'codex',
+        reported,
+        false,
+        input.interactionModeSupported
+      ),
+    [agent, reported, input.interactionModeSupported]
   )
   const commandAvailable = useMemo(
     () => (input.editing ? (name: string) => acceptsText(`/${name}`) : undefined),

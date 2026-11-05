@@ -55,8 +55,8 @@ export function MobileQueuedMessageComposer({
   const agent = context?.agent ?? 'codex'
   const reported = context?.structured?.catalog.reported
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported),
-    [agent, reported]
+    () => prepareQueuedMessageEditText(agent, reported, false, context?.interactionModeSupported),
+    [agent, reported, context?.interactionModeSupported]
   )
   const refuseCommand = (text: string): boolean => {
     if (acceptsText(text)) {
@@ -91,7 +91,12 @@ export function MobileQueuedMessageComposer({
         value={editor.text}
         onChangeText={editor.change}
         onSend={() => editor.save()}
-        editSession={{ cancel: editor.cancel, locked: editor.saving, refuseCommand }}
+        editSession={{
+          cancel: editor.cancel,
+          locked: editor.saving,
+          refuseCommand,
+          interactionModeSupported: context?.interactionModeSupported
+        }}
         sendSurfaceId={editor.scopeKey}
         getSendCompletionGeneration={() => 0}
         getComposerEditGeneration={() => 0}

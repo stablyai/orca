@@ -19770,6 +19770,9 @@
       },
       "composer": {
         "send": "Send",
+        "buildMode": "Build",
+        "planMode": "Plan",
+        "modeNextTurn": "Applies to the next turn",
         "alternateSteerHint": "{{shortcut}} to steer",
         "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",

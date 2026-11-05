@@ -117,7 +117,8 @@ it.each<{ label: string; choices: Readonly<Record<string, string>> }>([
 
 it.each([
   { label: 'model', choices: { model: 'other-model', effort: 'high' } },
-  { label: 'effort', choices: { model: 'gpt-ran', effort: 'low' } }
+  { label: 'effort', choices: { model: 'gpt-ran', effort: 'low' } },
+  { label: 'planning mode', choices: { model: 'gpt-ran', effort: 'high', interactionMode: 'plan' } }
 ])('holds a different $label until the goal turn ends', async ({ choices }) => {
   await startGoalTurn()
   const steering = rig.send('Use different choices', undefined, { carried: choices })

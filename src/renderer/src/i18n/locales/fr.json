@@ -19296,6 +19296,9 @@
         "notDoneGoalChangeIncomplete": "Impossible de terminer la modification de l’objectif. Consultez le chat."
       },
       "composer": {
+        "buildMode": "Réaliser",
+        "planMode": "Planifier",
+        "modeNextTurn": "S’applique au prochain tour",
         "imageUnavailable": "Aperçu indisponible",
         "send": "Envoyer",
         "alternateSteerHint": "{{shortcut}} pour envoyer maintenant",

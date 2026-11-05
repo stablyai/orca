@@ -7,6 +7,7 @@ import {
   classifyPickerCommands
 } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat/native-chat-agent-profiles'
@@ -22,7 +23,9 @@ import { dispatchNativeChatStructuredComposerText } from './native-chat-structur
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 
-function transport(sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']) {
+function transport(
+  sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']
+): NativeChatStructuredComposerTransport {
   return {
     sessionCommands,
     optionSnapshot: [],
@@ -411,5 +414,62 @@ it.each([
       expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ kind: 'command', name }))
     }
     view.unmount()
+  }
+)
+
+it.each(['old-host', 'supported-host', 'structured-launch'] as const)(
+  'keeps provider Plan command picks unless the %s owns mode changes',
+  (host) => {
+    const native = transport([{ name: 'plan', kind: 'command' }])
+    if (host === 'supported-host') {
+      native.optionSnapshot = [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'default',
+          transport: 'agent-session',
+          settable: true
+        }
+      ]
+    }
+    const { result, unmount } = renderHook(() =>
+      useNativeChatComposerCommandPicker({
+        agent: 'claude',
+        terminalTabId: 'plan-command',
+        draftScopeKey: 'plan-command',
+        draft: '/pl',
+        caret: 3,
+        recalledFromHistory: false,
+        disabled: false,
+        isComposing: () => false,
+        editor: {
+          textareaRef: { current: null },
+          setDraft: vi.fn(),
+          setCaret: vi.fn(),
+          setActiveSuggestion: vi.fn()
+        },
+        setNotice: vi.fn(),
+        structuredTransport: native,
+        mode: host === 'structured-launch' ? 'launch' : 'edit'
+      })
+    )
+    const autocomplete = result.current.picker.autocomplete
+    expect(autocomplete.mode).toBe('slash')
+    if (autocomplete.mode !== 'slash') {
+      throw new Error('Expected command menu')
+    }
+    expect(autocomplete.items.some((item) => item.kind === 'command' && item.name === 'plan')).toBe(
+      host !== 'supported-host'
+    )
+    unmount()
   }
 )

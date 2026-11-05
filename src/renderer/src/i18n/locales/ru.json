@@ -19957,6 +19957,9 @@
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
       },
       "composer": {
+        "buildMode": "Реализация",
+        "planMode": "Планирование",
+        "modeNextTurn": "Применяется к следующему ходу",
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
         "alternateQueueHint": "{{shortcut}}, чтобы поставить в очередь",
