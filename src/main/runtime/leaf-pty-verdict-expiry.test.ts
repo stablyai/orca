@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { PROVEN_ABSENT_LEAF_PTY_TTL_MS as TTL_MS } from './orca-runtime-core'
+import { PROVEN_ABSENT_LEAF_PTY_TTL_MS as TTL_MS } from './terminal/input/proven-absent-leaf-pty'
 
 type VerdictInternals = {
   provenAbsentLeafPtyVerdicts: Map<string, number>

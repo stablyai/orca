@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { Store } from '../loading-store/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { applyWindowLayoutCommand } from '../../runtime/runtime-layout-apply'
+import { applyWindowLayoutCommand } from '../../runtime/terminal/layout/runtime-layout-apply'
 import { WindowSession } from './terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,

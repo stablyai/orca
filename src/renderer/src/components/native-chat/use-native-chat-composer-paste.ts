@@ -8,11 +8,13 @@ import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-targ
 import { isMacPlatform } from './native-chat-shortcut'
 import {
   clipboardEventCopiedFilePaths,
-  clipboardEventImageFile,
-  clipboardEventPromptText,
   readClipboardPasteText,
   type ClipboardEventLike
 } from './native-chat-clipboard-payload'
+import {
+  clipboardEventImageFile,
+  clipboardEventPromptText
+} from '../../../../shared/native-chat/input/native-chat-clipboard-event'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice,

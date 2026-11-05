@@ -264,6 +264,7 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    menuPane,
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,

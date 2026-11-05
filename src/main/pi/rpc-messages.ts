@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import { BoundedMap } from '../../shared/bounded-map'
-import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from '../native-chat/agent-session-timeline/provider-timeline-budget'
 import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   boundToolInput,
@@ -44,22 +42,7 @@ export class PiRpcMessages {
   private streamed = -1
   private readonly tools = new Map<string, AgentJournalToolCallItem>()
   // Closing events take these latest full fields; running journal rows retain only previews.
-  private readonly whole = new BoundedMap<
-    string,
-    {
-      input?: unknown
-      output?: string
-      inputBytes: number
-      outputBytes: number
-    }
-  >({
-    maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES,
-    sizeOf: (value, key) => value.inputBytes + value.outputBytes + Buffer.byteLength(key) + 64
-  })
-
-  get retainedToolBytes(): number {
-    return this.whole.retainedBytes
-  }
+  private readonly whole = new Map<string, { input?: unknown; output?: string }>()
 
   constructor(
     private readonly generation: string,
@@ -108,9 +91,6 @@ export class PiRpcMessages {
           )
         )
       } else if (update.delta !== undefined) {
-        if (this.text.size >= 128 && !this.text.has(item)) {
-          throw new Error('Pi message stream capacity exceeded')
-        }
         this.text.add(item)
         events.push({ type: 'text.delta', item: { id: item }, channel, text: update.delta })
       }
@@ -191,38 +171,8 @@ export class PiRpcMessages {
           })
     }
     if (state === 'running') {
-      if (this.tools.size >= 128 && !previous) {
-        throw new Error('Pi tool stream capacity exceeded')
-      }
       this.tools.set(event.toolCallId, body)
-      if (!held && this.whole.size >= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES) {
-        throw new Error('Pi tool stream capacity exceeded')
-      }
-      if (
-        !this.whole.set(event.toolCallId, {
-          input,
-          output,
-          inputBytes:
-            event.args === undefined
-              ? (held?.inputBytes ?? 0)
-              : Buffer.byteLength(JSON.stringify(input) ?? ''),
-          outputBytes:
-            result === undefined
-              ? (held?.outputBytes ?? 0)
-              : Buffer.byteLength(JSON.stringify(output) ?? '')
-        })
-      ) {
-        throw new Error('Pi tool snapshot could not be retained')
-      }
-      if (
-        [...this.tools.values()].reduce(
-          (bytes, tool) => bytes + Buffer.byteLength(JSON.stringify(tool)),
-          0
-        ) >
-        1024 * 1024
-      ) {
-        throw new Error('Pi tool stream byte capacity exceeded')
-      }
+      this.whole.set(event.toolCallId, { input, output })
     } else {
       this.tools.delete(event.toolCallId)
       this.whole.delete(event.toolCallId)

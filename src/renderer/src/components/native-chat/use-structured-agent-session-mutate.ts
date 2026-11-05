@@ -146,7 +146,9 @@ export function useStructuredAgentSessionMutate(args: {
         const message = result.refusal.message
         if (
           fingerprintMethod === 'agentSession.threadGoal' &&
-          (message === GOAL_COPY.settingsRejected || message === GOAL_COPY.settingsUnconfirmed)
+          (message === GOAL_COPY.settingsRejected ||
+            message === GOAL_COPY.settingsUnconfirmed ||
+            message === GOAL_COPY.noGoal)
         ) {
           outcome.notice = agentSessionGoalControlWords(message)
         }

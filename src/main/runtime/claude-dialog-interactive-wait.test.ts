@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
-import type { RuntimeVisibleTerminalState } from './runtime-terminal-state-records'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
+import type { RuntimeVisibleTerminalState } from './terminal/records/runtime-terminal-state-records'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

@@ -10,6 +10,7 @@ import {
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
+  Quote,
   PanelRightClose,
   Pencil,
   RotateCcw,
@@ -41,6 +42,7 @@ import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-co
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import { getRevealInFileManagerLabel } from '@/lib/reveal-in-file-manager'
+import { AddToChatSubmenu } from '../native-chat/AddToChatMenu'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -52,6 +54,8 @@ type TerminalContextMenuProps = {
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
   onCopy: () => void
+  /** The selection to add and the workspace whose chats can take it; null with no selection. */
+  addToChat: { worktreeId: string; quote: string } | null
   onSelectAll: () => void
   onPaste: () => void
   onRevealInFileManager: () => void
@@ -147,6 +151,7 @@ function TerminalContextMenuItems({
   canExpandPane,
   menuPaneIsExpanded,
   onCopy,
+  addToChat,
   onSelectAll,
   onPaste,
   onRevealInFileManager,
@@ -208,6 +213,14 @@ function TerminalContextMenuItems({
         {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
         <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
       </DropdownMenuItem>
+      {addToChat ? (
+        <AddToChatSubmenu {...addToChat} launchSource="terminal_context_menu" />
+      ) : (
+        <DropdownMenuItem disabled>
+          <Quote />
+          {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem onSelect={onSelectAll}>
         <TextSelect />
         {translate('auto.components.terminal.pane.TerminalContextMenu.selectAll', 'Select All')}

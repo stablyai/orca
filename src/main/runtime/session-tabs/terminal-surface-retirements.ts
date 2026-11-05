@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import { OrcaRuntimeWithTouchMobileSessionTabsForWorktree } from './mobile-session-membership'
-import type { RetiredTerminalSurface } from '../mobile-session-terminal-retirement'
+import type { RetiredTerminalSurface } from '../terminal/surface/mobile-session-terminal-retirement'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../shared/runtime-types'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -10,9 +10,9 @@ import {
   forgetClosedPaneOfExit,
   type ClosedPaneOfExit
 } from '../terminal/lifecycle/closed-pane-of-exited-pty'
-import { retireTerminalSurfaceFromPersistence } from '../mobile-session-terminal-persistence-retirement'
-import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
-import { attachRetirementProofsToSnapshot } from '../mobile-session-terminal-retirement-proof'
+import { retireTerminalSurfaceFromPersistence } from '../terminal/surface/mobile-session-terminal-persistence-retirement'
+import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
+import { attachRetirementProofsToSnapshot } from '../terminal/surface/mobile-session-terminal-retirement-proof'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntimeWithTouchMobileSessionTabsForWorktree {

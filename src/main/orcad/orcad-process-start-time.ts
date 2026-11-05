@@ -5,7 +5,7 @@ import {
   getProcessStartedAtMs,
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance
-} from '../daemon/daemon-process-start-time'
+} from '../daemon/endpoint/identity/daemon-process-start-time'
 import { readWindowsProcessCreationTime } from '../windows/windows-process-table'
 
 export type OrcadProcessIncarnation = { linuxStartTicks: string; bootId: string }
