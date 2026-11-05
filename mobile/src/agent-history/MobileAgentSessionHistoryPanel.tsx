@@ -41,7 +41,7 @@ import {
 import {
   AgentHistoryResumeNotice,
   AgentHistoryResumeToast,
-  AgentHistorySkippedNotice,
+  AgentHistoryScanNotices,
   useAgentHistoryResumeToast
 } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
@@ -363,7 +363,7 @@ function MobileAgentSessionHistoryPanelContent({
         <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
-          {issues.length > 0 ? <AgentHistorySkippedNotice issues={issues} /> : null}
+          <AgentHistoryScanNotices sessions={sessions} issues={issues} />
           {resumeMessage ? (
             <AgentHistoryResumeNotice
               message={resumeMessage}
@@ -415,7 +415,7 @@ function MobileAgentSessionHistoryPanelContent({
 }
 
 const EMPTY_SESSIONS: AiVault.AiVaultSession[] = []
-const EMPTY_ISSUES: { agent: AiVault.AiVaultSession['agent']; path: string; message: string }[] = []
+const EMPTY_ISSUES: AiVault.AiVaultScanIssue[] = []
 
 function createMobileAiVaultResumeMutationId(sessionId: string): string {
   const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'
