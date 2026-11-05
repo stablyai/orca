@@ -8,7 +8,7 @@ import { isRestoreSpawnIntent } from '../../shared/host-spawn-admission'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { readWorkspaceRecord, writeWorkspaceRecord } from './sidebar-inputs/sort-stamp-records'
-import { createKeyedTrailingEdgeCoalescer } from './keyed-trailing-edge-coalescer'
+import { createKeyedTrailingEdgeCoalescer } from './client/events/keyed-trailing-edge-coalescer'
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace

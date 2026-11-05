@@ -23,8 +23,8 @@ import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
-import { RuntimeMobileSpeechCatalog } from '../runtime-mobile-speech-catalog'
-import { RuntimeMobileDictationController } from '../runtime-mobile-dictation-controller'
+import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
+import { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
 import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'

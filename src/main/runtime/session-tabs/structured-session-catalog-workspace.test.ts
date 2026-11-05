@@ -4,7 +4,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 vi.mock('../session-graph/session-graph-reload-lifecycle.ts', () => ({
   OrcaRuntimeWithHasTerminalsForWorktree: class {}
 }))
-vi.mock('../orca-runtime-read-kitty-file.ts', () => ({ OrcaRuntimeWithReadKittyFile: class {} }))
+vi.mock('../files/paths/orca-runtime-read-kitty-file.ts', () => ({
+  OrcaRuntimeWithReadKittyFile: class {}
+}))
 vi.mock('./headless-tab-group-moves.ts', () => ({ RuntimeHeadlessTabGroups: class {} }))
 vi.mock('./structured-session-account-home.ts', () => ({
   OrcaRuntimeWithStructuredSessionAccountHome: class {}

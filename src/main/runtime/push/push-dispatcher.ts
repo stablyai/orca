@@ -2,7 +2,7 @@ import { reserveNotificationCooldown } from '../../../shared/notification-burst-
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
 import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
 import { allowsMobilePushDelivery, mobilePushAlertContent } from '../../../shared/mobile-push-alert'
-import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
+import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
 

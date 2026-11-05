@@ -64,7 +64,7 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
   ]) {
     vi.stubEnv(name, '')
   }
-  const { OrcaRuntimeRpcServer } = await import('./runtime-rpc')
+  const { OrcaRuntimeRpcServer } = await import('./rpc/server/runtime-rpc')
   const fixture = await import('./orchestration-mailbox-notification-test-harness')
   const { registerBoundPty } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
   const coord = fixture.TERMINAL_HANDLE

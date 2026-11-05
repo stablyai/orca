@@ -113,7 +113,7 @@ vi.mock('node:worker_threads', async () => {
 import { registerSpeechHandlers } from './speech'
 import { SttService as SpeechService } from '../speech/stt-service'
 import { handleSttWorkerFailure } from '../speech/stt-session-stop'
-import { RuntimeMobileDictationController } from '../runtime/runtime-mobile-dictation-controller'
+import { RuntimeMobileDictationController } from '../runtime/speech/runtime-mobile-dictation-controller'
 
 class TestContents extends EventEmitter {
   id = 9

@@ -25,8 +25,8 @@ import {
   saveMarkdownTabToDisk,
   type ListedMarkdownTab,
   type MarkdownTabDiskHost
-} from '../markdown-tab-disk-documents'
-import { createMarkdownTabDiskHost } from '../markdown-tab-disk-host'
+} from '../files/paths/markdown-tab-disk-documents'
+import { createMarkdownTabDiskHost } from '../files/paths/markdown-tab-disk-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {

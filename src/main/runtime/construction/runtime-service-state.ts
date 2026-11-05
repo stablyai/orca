@@ -11,7 +11,7 @@ import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-auth
 import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
 import { RuntimeTerminalAgentPresence } from '../terminal/query/runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from '../runtime-notifier-contract'
-import { RuntimeClientEventBus } from '../runtime-client-event-bus'
+import { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import { RuntimeNativeChatDraftResolutions } from '../runtime-native-chat-draft-resolutions'
 import { RuntimeWorktreeLifecycleEvents } from '../workspaces/lifecycle/runtime-worktree-lifecycle-events'
 import type {
