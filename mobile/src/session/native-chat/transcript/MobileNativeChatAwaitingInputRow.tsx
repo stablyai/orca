@@ -35,7 +35,8 @@ export function MobileNativeChatAwaitingInputRow({
   const count = subject?.kind === 'questions' ? copy.questionCount : null
   const type = scaledType(typography.bodySize, fontScale)
   const question = subject?.kind === 'question' ? subject.text : null
-  const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
+  const questions =
+    subject?.kind === 'questions' && listsQuestions ? keyedQuestions(subject.questions) : null
   const indent = { paddingLeft: ICON_SIZE * fontScale + spacing.sm }
   return (
     <>
@@ -65,8 +66,8 @@ export function MobileNativeChatAwaitingInputRow({
       {questions === null ? null : (
         <View style={indent}>
           {/* Numbers stay outside the agent's text so its own markdown cannot restyle them. */}
-          {questions.map((entry, index) => (
-            <View key={entry} style={styles.entry}>
+          {questions.map(({ key, entry }, index) => (
+            <View key={key} style={styles.entry}>
               <Text style={[styles.question, type]}>{`${index + 1}.`}</Text>
               <MobileNativeChatQuestionText
                 content={entry}
@@ -80,6 +81,16 @@ export function MobileNativeChatAwaitingInputRow({
       )}
     </>
   )
+}
+
+// Agents may repeat a question, so its text alone is not a unique key.
+function keyedQuestions(questions: readonly string[]): { key: string; entry: string }[] {
+  const seen = new Map<string, number>()
+  return questions.map((entry) => {
+    const occurrence = seen.get(entry) ?? 0
+    seen.set(entry, occurrence + 1)
+    return { key: `${occurrence}:${entry}`, entry }
+  })
 }
 
 const styles = themedStyleSheet(() => ({
