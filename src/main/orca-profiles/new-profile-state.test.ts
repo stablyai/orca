@@ -56,7 +56,7 @@ describe('new desktop profile initialization', () => {
         const published = readPublishedState()
         const [home] = published.repos
         expect(published.repos).toHaveLength(1)
-        expect(home).toMatchObject({ kind: 'folder', path: homedir(), displayName: 'Home' })
+        expect(home).toMatchObject({ kind: 'folder', path: homedir() })
         expect(published.projects).toHaveLength(1)
         expect(published.projectHostSetups).toHaveLength(1)
         const worktreeId = getRepoMainWorktreeId(home)
