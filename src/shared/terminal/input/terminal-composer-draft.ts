@@ -8,8 +8,6 @@ export type TerminalCursorContext = {
   rowsBelowWrapped?: boolean[]
   rowsBelowCustomForeground?: boolean[]
   beforeCursor: string
-  /** Untrimmed, so the cells the cursor has passed show typed spaces. */
-  rawBeforeCursor?: string
   afterCursor: string
   rawAfterCursor: string
   cursorHidden: boolean
@@ -309,20 +307,6 @@ export function readTerminalComposerTypedText(
 ): string | null {
   const boxed = context ? detectBoxedComposerDraft(context) : null
   return boxed ? boxed.text : (detectTerminalComposer(context, true)?.text ?? null)
-}
-
-/** Whether the composer holds exactly one-line `text` with the cursor right after it. Typed text
- *  alone trims edge spaces; the cells before the cursor still show them. */
-export function isTerminalComposerExactly(
-  context: TerminalCursorContext | null | undefined,
-  text: string
-): boolean {
-  return (
-    !!context &&
-    !/[\r\n]/.test(text) &&
-    readTerminalComposerTypedText(context) === text &&
-    context.rawBeforeCursor?.replace(COMPOSER_PROMPT_PREFIX, '') === text
-  )
 }
 
 export function hasTerminalComposerPlaceholder(

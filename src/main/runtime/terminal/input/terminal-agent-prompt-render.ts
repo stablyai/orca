@@ -4,12 +4,8 @@ import type {
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { sanitizeAgentPromptText } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
-import {
-  isTerminalComposerExactly,
-  type TerminalCursorContext,
-  readTerminalComposerTypedText
-} from '../../../../shared/terminal/input/terminal-composer-draft'
+import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
 const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
@@ -111,8 +107,8 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
           if (!composerProof) {
             return
           }
-          const context = screen ? this.readCaughtUpCursorContext(ptyId) : null
-          if (!isTerminalComposerExactly(context, sanitizeAgentPromptText(prompt))) {
+          const typed = screen ? this.readCaughtUpComposerTypedText(ptyId) : null
+          if (!isCompleteAgentPromptDraft(typed, prompt)) {
             draftMatchedAt = null
             return
           }
@@ -167,9 +163,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     return {
       arm: () => {
         armed = true
-        composerProof =
-          prompt !== undefined &&
-          readTerminalComposerTypedText(this.readCaughtUpCursorContext(ptyId)) === ''
+        composerProof = prompt !== undefined && this.readCaughtUpComposerTypedText(ptyId) === ''
         markerCarry = ''
         armIngestTimer()
         armHardTimer()
@@ -188,11 +182,11 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     }
   }
 
-  /** The cursor context of a screen model that has fully caught up; null when unknown. */
-  private readCaughtUpCursorContext(ptyId: string): TerminalCursorContext | null {
+  /** The user's text in a composer the screen model has fully caught up on; null when unknown. */
+  private readCaughtUpComposerTypedText(ptyId: string): string | null {
     const state = this.readWholeScreenModel(ptyId)
     return state && state.outputSequence === this.getPtyOutputSequence(ptyId)
-      ? state.emulator.getCursorLineContext()
+      ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
       : null
   }
 

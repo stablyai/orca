@@ -216,10 +216,7 @@ describe('agent prompt render gate on a ConPTY host', () => {
       [
         'a dim suggestion already showed the prompt',
         { before: suggesting(prompt), after: suggesting(prompt) }
-      ],
-      // Typed text trims these; only the cells before the cursor show them.
-      ['spaces follow the paste', { before: composer(''), after: composer(`${prompt}  `) }],
-      ['spaces were already there', { before: composer('  '), after: composer(`  ${prompt}`) }]
+      ]
     ])('waits for the cap when %s', async (_case, shown) => {
       useHostPlatform('win32')
       vi.useFakeTimers()
