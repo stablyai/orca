@@ -73,12 +73,12 @@ export type ProviderTimelineEvent =
       Joined)
   /** Final text overrides accumulated deltas; join must match the same item. */
   | ({ type: 'text.close'; item: ProviderTimelineTextItem; text?: string } & Joined)
-  /** Unowned requests stay at thread level, outside an open turn they do not belong to. */
+  /** A request that outlives its turn stays pending until answered or withdrawn. */
   | ({
       type: 'request.open'
       request: string
       body: ProviderTimelineRequestBody
-      unowned?: true
+      outlivesTurn?: true
     } & Produced &
       Joined)
   /** Withdraw only unanswered requests. */

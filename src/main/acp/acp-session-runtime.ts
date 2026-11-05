@@ -103,11 +103,6 @@ export class AcpSessionRuntime {
     return this.peer.closed
   }
 
-  /** The agent refused the prompt as busy, so its own turn owns requests until a retry is admitted. */
-  get promptHeld(): boolean {
-    return this.prompts.waitingToRetry
-  }
-
   subscribe(listener: (event: AcpSessionEvent) => void): () => void {
     this.listeners.add(listener)
     return () => {

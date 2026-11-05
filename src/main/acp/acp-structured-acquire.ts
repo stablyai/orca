@@ -75,8 +75,7 @@ export async function acquireAcpStructuredSession(input: {
   const options = new AcpStructuredOptions(launch.spec.dialect)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
-    () => isAcpReadySession(session) && session.turns?.acceptsRequests === true,
-    () => session?.connection.promptHeld === true
+    () => isAcpReadySession(session) && session.turns?.acceptsRequests === true
   )
   const early: (() => void)[] = []
   const whenLane = (deliver: () => void): void => {

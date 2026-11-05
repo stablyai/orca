@@ -98,14 +98,14 @@ describe('ACP session runtime', () => {
     }
   )
 
-  it('marks the prompt held for the agent own permission, even in the refusal chunk', async () => {
-    const held: boolean[] = []
+  it('lets the agent ask from its own turn while a busy refusal holds the prompt', async () => {
+    const asked: string[] = []
     const { runtime, agent } = fixture(
       {},
       {
         retryBusyPrompts: true,
-        onPermission: () => {
-          held.push(runtime.promptHeld)
+        onPermission: (request) => {
+          asked.push(request.toolCall.toolCallId)
           return { outcome: { outcome: 'selected', optionId: 'allow' } }
         }
       }
@@ -138,7 +138,7 @@ describe('ACP session runtime', () => {
     })
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await pending).toEqual({ stopReason: 'end_turn' })
-    expect(held).toEqual([true, false])
+    expect(asked).toHaveLength(2)
   })
 
   it.each(['close', 'EOF'] as const)('ends delayed busy recovery on %s', async (action) => {

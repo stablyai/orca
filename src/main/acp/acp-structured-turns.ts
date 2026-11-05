@@ -86,8 +86,11 @@ export class AcpStructuredTurns {
     return this.stopAt
   }
 
+  /** A Stop covers only Orca's running prompt; the agent's own later work may ask again. */
   stop(at: number): boolean {
-    this.stopAt ??= at
+    if (this.active) {
+      this.stopAt ??= at
+    }
     return this.withdrawSteers()
   }
 
@@ -192,8 +195,6 @@ export class AcpStructuredTurns {
 
   private start(send: Send): void {
     const { lane } = this.deps
-    // A Stop covers only the work it interrupted; the next message may ask again.
-    this.stopAt = null
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)
@@ -269,6 +270,7 @@ export class AcpStructuredTurns {
   private finish(send: Send): void {
     if (this.active === send) {
       this.active = null
+      this.stopAt = null
     }
     if (this.steerCancelled === send) {
       this.steerCancelled = null

@@ -137,16 +137,24 @@ async function pendingCard(host: Awaited<ReturnType<typeof fixture>>['host']) {
   })
 }
 
-it('shows a permission from OMP own turn outside the held message and returns the answer', async () => {
+it('keeps OMP own permission answerable after the held message fails', async () => {
   const { rig, host, send, fence } = await fixture()
   await send('first')
   await rig.frame('session/prompt')
   await rig.settle()
-  const asked = rig
-    .child()
-    .agent.request('own-turn', 'session/request_permission', ownPermission('own-call'))
+  const { agent } = rig.child()
+  const asked = agent.request('own-turn', 'session/request_permission', ownPermission('own-call'))
   const card = await pendingCard(host)
-  expect(card.turnScope).toEqual({ kind: 'thread' })
+  agent.on('session/prompt', (frame) => agent.fail(frame, -32603, 'model unavailable'))
+  await vi.advanceTimersByTimeAsync(1_000)
+  await waitFor(async () => {
+    await host.flushStreamedEvents(SESSION)
+    const turns = (
+      await host.history({ sessionId: SESSION, direction: 'tail' })
+    ).page.items.flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+    expect(turns).toMatchObject([{ state: 'completed' }])
+  })
+  expect((await pendingCard(host)).itemId).toBe(card.itemId)
   await rig.adapter.answerPrompt({
     sessionId: SESSION,
     itemId: card.itemId,
