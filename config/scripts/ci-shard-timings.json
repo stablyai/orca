@@ -6866,7 +6866,6 @@
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-keyboard.test.ts": 49,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-input-model.test.ts": 45,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-pane.address-bar.test.tsx": 2987,
-      "src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-pane.chrome-chords.test.tsx": 2999,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-session.test.ts": 390,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-service-failure.test.ts": 465,
       "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts": 643,
