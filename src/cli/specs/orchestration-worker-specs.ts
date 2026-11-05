@@ -37,7 +37,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
-      'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
+      'A reused --terminal runs in its own worktree when --worktree is omitted.',
       "Reusing a settled worker's terminal with --terminal before its autoReleaseAt cancels that automatic release; after it, the start is refused while the release runs.",
       'A terminal the user kept open takes --terminal work and stays kept open.',
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',

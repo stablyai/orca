@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
@@ -52,6 +53,20 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       `Terminal ${terminal} is not running a recognized agent.`
     )
   }
+}
+
+/** With no --worktree, a named worker works where it already is. */
+export async function explicitWorkerWorktreeSelector(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  terminal: OrchestrationParty
+): Promise<string> {
+  const chat = chatAssigneeOf(terminal)
+  const worktreeId = chat
+    ? (await admitChatAssignee(runtime, chat, db)).location.workspaceId
+    : (await runtime.showTerminal(terminal.address)).worktreeId
+  // A floating terminal has no managed worktree to place a worker in; the mismatch refusal names that.
+  return worktreeId && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID ? `id:${worktreeId}` : 'current'
 }
 
 /** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID. */

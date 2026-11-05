@@ -468,6 +468,50 @@ describe('a follow-up to a finished terminal worker', () => {
     ).resolves.toMatchObject({ workers: [] })
   })
 
+  it('continues the worker when the coordinator replies to its report', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await h.call('orchestration.send', {
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+    })
+    const [report] = h.db.getUnreadMessages(`run:${h.activeRunId}`, ['worker_done'])
+
+    await expect(
+      h.call('orchestration.reply', { id: report.id, from: 'term_coord', body: 'fix the lint too' })
+    ).resolves.toMatchObject({
+      delivery: 'follow_up',
+      followUpOf: dispatchId,
+      message: { body: 'fix the lint too' }
+    })
+    const followUp = getFollowUpDispatch(h.db, dispatchId)!
+    expect(h.db.getTask(followUp.task_id)?.spec).toContain('fix the lint too')
+    // The Task carries the reply; its thread copy is never delivered again.
+    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([])
+  })
+
+  it('continues the follow-up another send claimed first when that one has already finished too', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    const create = h.db.createStartingWorkerDispatch.bind(h.db)
+    // The other send claims the worker while this one starts, and its follow-up reports before this one resumes.
+    vi.spyOn(h.db, 'createStartingWorkerDispatch').mockImplementationOnce((params) => {
+      const winner = create({ ...params, taskSpec: 'first' })
+      h.db.markWorkerDispatchReady(winner.dispatch.id)
+      h.settle(winner.dispatch.task_id, winner.dispatch.id, 'succeeded')
+      return create(params)
+    })
+
+    await expect(send(dispatchId, 'and the docs')).resolves.toMatchObject({
+      followUpOf: expect.not.stringMatching(dispatchId)
+    })
+    const winner = getFollowUpDispatch(h.db, dispatchId)!
+    const next = getFollowUpDispatch(h.db, winner.id)!
+    expect(h.db.getTask(next.task_id)?.spec).toContain('and the docs')
+  })
+
   it('takes mail for a working worker even when its report settles the Dispatch in the same turn', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
@@ -476,6 +520,8 @@ describe('a follow-up to a finished terminal worker', () => {
     h.settle(taskId, dispatchId, 'succeeded')
 
     await expect(sent).resolves.toMatchObject({ message: { to_handle: `dispatch:${dispatchId}` } })
+    // The report saw that mail unread, so it is held for the worker's follow-up.
+    expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).not.toBeNull()
   })
 
   it("keeps the conversation a kept worker's pane moves to after its report", async () => {

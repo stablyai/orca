@@ -47,6 +47,35 @@ export function registerWorkerStartTerminalTargetTests(): void {
       const started = await harness.startWorker({ terminal: 'term_worker' })
       expect(started.dispatchId).toEqual(expect.any(String))
     })
+
+    it('runs a terminal from another worktree in that worktree unless --worktree names one', async () => {
+      const show = vi.mocked(harness.runtime.showTerminal).getMockImplementation()!
+      vi.mocked(harness.runtime.showTerminal).mockImplementation(async (handle) => ({
+        ...(await show(handle)),
+        worktreeId: handle === 'term_worker' ? 'repo::other' : 'repo::worktree'
+      }))
+      const workspace = vi.mocked(harness.runtime.showManagedTerminalWorkspace)
+      const showWorkspace = workspace.getMockImplementation()!
+      workspace.mockImplementation(async (selector) => ({
+        ...(await showWorkspace(selector)),
+        id: selector === 'id:repo::other' ? 'repo::other' : 'repo::worktree'
+      }))
+      const task = harness.db.createTask({ spec: 'reuse', runId: harness.activeRunId })
+      const start = (worktree?: string) =>
+        harness.call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          ...(worktree ? { worktree } : {})
+        })
+
+      await expect(start('current')).rejects.toMatchObject({ code: 'terminal_worktree_mismatch' })
+      await start()
+      const dispatch = harness.db.getDispatchContext(task.id)!
+      expect(harness.db.getWorkerDispatch(dispatch.id)).toMatchObject({
+        worktree_id: 'repo::other'
+      })
+    })
   })
 
   // Manual inject is another self-adoption path; compare target with caller too.

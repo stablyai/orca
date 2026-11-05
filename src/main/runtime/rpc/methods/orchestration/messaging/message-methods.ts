@@ -13,9 +13,9 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
-import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
+import { replyToMessage } from './reply-local'
 import { withAnswerNext } from '../receipt-next'
 import {
   ReplyParams,
@@ -35,6 +35,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       {
         orchestrationCompatibilityEvidence,
         orchestrationCaller,
+        orchestrationMutation,
         runtime,
         legacyCoordinatorRunId,
         recordMutationReceipt,
@@ -145,26 +146,18 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       if (db.getRun(original.run_id)?.home_database === 'remote') {
         return await replyToRemoteRunHome({ runtime, db, original, params, signal })
       }
-      const recipient = resolveReplyRecipient({
-        runtime,
+      return await replyToMessage({
+        ctx: {
+          runtime,
+          orchestrationCompatibilityEvidence,
+          orchestrationCaller,
+          orchestrationMutation
+        },
         db,
-        originalFrom: original.from_handle,
-        originalRunId: original.run_id
+        original,
+        params,
+        recordMutationReceipt
       })
-      db.markAsRead([original.id])
-      const reply = db.insertMessage({
-        from: params.from ?? original.to_handle,
-        to: recipient.to,
-        subject: `Re: ${original.subject}`,
-        body: params.body,
-        threadId: original.thread_id ?? original.id,
-        runId: recipient.runId
-      })
-
-      const receipt = { message: exposeMessage(reply) }
-      return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
-        runtime.notifyMessageArrived(reply.to_handle, reply.type)
-      )
     }
   }),
 
