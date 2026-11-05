@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('accepted spawn followed by failed startup readiness', () => {
   it.each(
-    (['fresh', 'wrong-incarnation'] as const).flatMap((context) =>
+    (['fresh', 'repeated-exit', 'wrong-incarnation'] as const).flatMap((context) =>
       [true, false].map((exitBeforeWait) => ({ context, exitBeforeWait }))
     )
   )(
@@ -37,18 +37,25 @@ describe('accepted spawn followed by failed startup readiness', () => {
         launchAgent: 'hermes',
         data: '\x1b]133;C\x07\x1b[31mTraceback: startup failed\x1b[0m\r\nImportError: broken client\r\n'
       })
-      const exit = () =>
-        runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 1, 'inc-1', {
-          providerExitObserved: true,
-          cause: { kind: 'exited', exitCode: 1 }
-        })
+      const exit = () => {
+        // A stop's cleanup can report the exit again after the buffer is gone.
+        for (let report = context === 'repeated-exit' ? 2 : 1; report > 0; report -= 1) {
+          runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 1, 'inc-1', {
+            providerExitObserved: true,
+            cause: { kind: 'exited', exitCode: 1 }
+          })
+        }
+      }
       if (exitBeforeWait) {
         exit()
       }
       const result = waitForWorkerAgentReady(runtime, handle, {
         agent: 'hermes',
         reusesTerminal: false,
-        creation: context === 'fresh' ? terminal : { ...terminal, incarnationId: 'replacement' },
+        creation:
+          context === 'wrong-incarnation'
+            ? { ...terminal, incarnationId: 'replacement' }
+            : terminal,
         timeoutMs: 50
       }).catch((error: unknown) => error)
       if (!exitBeforeWait) {
@@ -57,7 +64,7 @@ describe('accepted spawn followed by failed startup readiness', () => {
       const error = await result
       expect(error).toHaveProperty('terminalExitCause', { kind: 'exited', exitCode: 1 })
       expect(String(error).includes('Traceback: startup failed\nImportError: broken client')).toBe(
-        context === 'fresh'
+        context !== 'wrong-incarnation'
       )
     }
   )

@@ -98,8 +98,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null
-  /** What the last command printed before the PTY exited. */
-  lastExitOutput?: string
+  /** What the last command printed before the incarnation's PTY exited. */
+  lastExitOutput?: { incarnationId: PtyIncarnationId | null; text: string }
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
   /** First-party OSC 9999 report, distinct from title-inferred lastAgentStatus; absent until one arrives. */
