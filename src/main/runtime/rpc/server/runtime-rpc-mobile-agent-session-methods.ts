@@ -1,6 +1,8 @@
 /** The structured agent-session methods (and chat attachment uploads) a phone may call; spread into the execution-host routes. */
 export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.createSupport',
+  // The host's agents and what each can do: the phone's "Fork from this response" reads it.
+  'agentSession.agents',
   'agentSession.create',
   'agentSession.ensure',
   'agentSession.reveal',
