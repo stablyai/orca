@@ -108,17 +108,17 @@ export async function callRuntimeEnvironment(
         endpoint = pairedConnection.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
+        const call = {
+          method,
+          params,
+          timeoutMs: effectiveTimeoutMs,
+          signal: options?.signal,
+          prepareRequest: options?.prepareRequest
+        }
         if (envelope && !sharedControlEnvelope) {
           const response = await sendEnvelopedOneShotCall(
             { environment: currentEnvironment, connection: pairedConnection },
-            {
-              method,
-              params,
-              timeoutMs: effectiveTimeoutMs,
-              envelope,
-              signal: options?.signal,
-              prepareRequest: options?.prepareRequest
-            },
+            { ...call, envelope },
             options?.expectedEnvironmentRuntimeId
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
@@ -140,13 +140,10 @@ export async function callRuntimeEnvironment(
           return executeSupportRoutedCall({
             userDataPath,
             environment: currentEnvironment,
-            method,
-            params,
-            timeoutMs: effectiveTimeoutMs,
+            ...call,
             expectedPairingRevision: expectedEnvironmentPairingRevision,
             expectedRuntimeId: options?.expectedEnvironmentRuntimeId,
-            envelope: sharedControlEnvelope,
-            signal: options?.signal
+            envelope: sharedControlEnvelope
           })
         }
         // One-shot startup/control RPCs keep repo hydration independent of stale terminal-control sockets.
@@ -157,7 +154,8 @@ export async function callRuntimeEnvironment(
           effectiveTimeoutMs,
           sharedControlEnvelope,
           options?.signal,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          options?.prepareRequest
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response

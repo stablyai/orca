@@ -1,27 +1,17 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
 import { sendRemoteRuntimeRequestAbortable } from './runtime-environment-abortable-requests'
-import type {
-  RuntimeOrchestrationEnvelope,
-  RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { sendRemoteRuntimeSharedControlRequestOnRuntime } from './runtime-environment-request-connections'
+import type { RuntimeEnvironmentCall } from './runtime-environment-call'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
-
-type PinnedCall = {
-  method: string
-  params: unknown
-  timeoutMs: number
-  envelope?: RuntimeOrchestrationEnvelope
-  signal?: AbortSignal
-}
 
 /** A one-shot socket that sends only after its own `status.get` names `expectedRuntimeId`; null otherwise. */
 async function sendOneShotRequestOnRuntime(
   connection: PairedRuntimeConnection,
-  call: PinnedCall,
+  call: RuntimeEnvironmentCall,
   expectedRuntimeId: string
 ): Promise<RuntimeRpcResponse<unknown> | null> {
   let otherRuntime = false
@@ -39,7 +29,9 @@ async function sendOneShotRequestOnRuntime(
       },
       call.envelope,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-      call.signal
+      call.signal,
+      undefined,
+      call.prepareRequest
     )
   } catch (error) {
     if (otherRuntime) {
@@ -52,7 +44,7 @@ async function sendOneShotRequestOnRuntime(
 /** Cached support identity can survive server restart; verify identity on the sending socket. */
 export async function sendSupportRoutedCallOnRuntime(
   route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
-  call: PinnedCall,
+  call: RuntimeEnvironmentCall,
   expectedRuntimeId: string,
   transport: 'shared' | 'one-shot'
 ): Promise<RuntimeRpcResponse<unknown>> {
@@ -61,12 +53,8 @@ export async function sendSupportRoutedCallOnRuntime(
       ? await sendRemoteRuntimeSharedControlRequestOnRuntime<unknown>(
           route.environment.id,
           route.connection,
-          call.method,
-          call.params,
-          call.timeoutMs,
-          expectedRuntimeId,
-          call.envelope,
-          call.signal
+          call,
+          expectedRuntimeId
         )
       : await sendOneShotRequestOnRuntime(route.connection, call, expectedRuntimeId)
   return response ?? runtimeEnvironmentChangedFailure(route.environment, call.method)
@@ -75,7 +63,7 @@ export async function sendSupportRoutedCallOnRuntime(
 /** One-shot enveloped call; a pinned one proves its runtime on the sending socket, since the registry's id can predate a restart. */
 export function sendEnvelopedOneShotCall(
   route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
-  call: PinnedCall,
+  call: RuntimeEnvironmentCall,
   expectedRuntimeId: string | undefined
 ): Promise<RuntimeRpcResponse<unknown>> {
   return expectedRuntimeId === undefined
@@ -86,7 +74,8 @@ export function sendEnvelopedOneShotCall(
         call.timeoutMs,
         call.envelope,
         call.signal,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        call.prepareRequest
       )
     : sendSupportRoutedCallOnRuntime(route, call, expectedRuntimeId, 'one-shot')
 }

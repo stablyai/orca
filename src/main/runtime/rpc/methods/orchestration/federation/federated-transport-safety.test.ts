@@ -8,6 +8,7 @@ import {
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import type { OrchestrationEnvironmentSendOptions } from '../../../../orchestration/environment-transport'
 import { readFederatedWorkerOutput } from './federated-worker-read'
 import { parseRemoteReleaseReceipt, releaseFederatedWorker } from './federated-worker-release'
 import { callFederatedWorkerShow } from '../worker/worker-observation'
@@ -73,9 +74,9 @@ describe('federated transport safety', () => {
         _timeoutMs?: number,
         _envelope?: unknown,
         _pairingRevision?: number,
-        expectedRuntimeId?: string
+        send?: OrchestrationEnvironmentSendOptions
       ) =>
-        expectedRuntimeId !== undefined && expectedRuntimeId !== currentRuntimeId
+        send?.expectedRuntimeId !== undefined && send.expectedRuntimeId !== currentRuntimeId
           ? {
               id: method,
               ok: false as const,
@@ -103,7 +104,7 @@ describe('federated transport safety', () => {
         15_000,
         { orchestrationRequestId: 'ack-request' }
       )
-    const sent = () => call.mock.calls.map((entry) => [entry[1], entry[6]])
+    const sent = () => call.mock.calls.map((entry) => [entry[1], entry[6]?.expectedRuntimeId])
 
     await ack()
     await ack()

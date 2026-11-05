@@ -707,6 +707,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
       ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
     ] as const
+    // The import's batch-prefix selection must reach whichever socket sends it.
+    const prepareImport = vi.fn(({ params, envelope }) => ({ params, envelope }))
 
     async function runTick(capabilities: string[]): Promise<string[]> {
       sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => ({
@@ -739,7 +741,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           {
             orchestrationContractVersion: 1,
             orchestrationRequestId: `request-${method}`
-          }
+          },
+          method === 'orchestration.federationImport'
+            ? { prepareRequest: prepareImport }
+            : undefined
         )
       }
       return tick.map(([method]) => method)
@@ -754,6 +759,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect(sendRemoteRuntimeSharedControlRequestMock.mock.calls.map((entry) => entry[2])).toEqual(
         methods
       )
+      expect(sendRemoteRuntimeSharedControlRequestMock.mock.calls.at(-1)?.[7]).toBe(prepareImport)
     })
 
     it('keeps the whole tick on one-shot sockets when the host lacks shared control', async () => {
@@ -763,6 +769,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         'status.get',
         ...methods
       ])
+      expect(sendRemoteRuntimeRequestMock.mock.calls.at(-1)?.[7]).toBe(prepareImport)
       expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
     })
   })
