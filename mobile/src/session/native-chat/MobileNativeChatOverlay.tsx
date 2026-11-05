@@ -19,6 +19,8 @@ import { MobileNativeChatRowOverlaysHost } from './transcript/MobileNativeChatRo
 import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
+import { appendReturnedDraftText } from '../../../../src/shared/returned-draft-text'
+import { formatNativeChatQuote } from '../../../../src/shared/native-chat/native-chat-quote'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
 
 type Props = {
@@ -130,6 +132,12 @@ export function MobileNativeChatOverlay({
         : null,
     [itemSource, fullContent.detail, load]
   )
+  const setComposerText = controller.setChatComposerText
+  const quoteInComposer = useCallback(
+    (text: string) =>
+      setComposerText((draft) => appendReturnedDraftText(draft, formatNativeChatQuote(text))),
+    [setComposerText]
+  )
   const queuedComposerContext = useMemo(
     () => ({
       agent,
@@ -175,6 +183,7 @@ export function MobileNativeChatOverlay({
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
+      onQuote={quoteInComposer}
     >
       <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
         <View style={styles.overlay}>

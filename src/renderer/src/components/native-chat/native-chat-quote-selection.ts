@@ -67,8 +67,3 @@ function selectedTextEdges(range: Range): { first: Text; last: Text } | null {
 function isSelectableText(node: Text): boolean {
   return node.parentElement !== null && getComputedStyle(node.parentElement).userSelect !== 'none'
 }
-
-export function formatNativeChatQuote(text: string): string {
-  const lines = text.trim().split(/\r?\n/)
-  return `${lines.map((line) => (line.trim() ? `> ${line}` : '>')).join('\n')}\n\n`
-}

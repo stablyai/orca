@@ -2929,10 +2929,12 @@
       "responding": "Agent is responding"
     },
     "message": {
-      "copyMessage": "Copy message"
+      "copyMessage": "Copy message",
+      "quoteMessage": "Quote message"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
+      "quote": "Quote",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",
       "selectText": "Select text"

@@ -31,10 +31,8 @@ import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
-import {
-  formatNativeChatQuote,
-  readNativeChatTranscriptSelection
-} from './native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../../../shared/native-chat/native-chat-quote'
+import { readNativeChatTranscriptSelection } from './native-chat-quote-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'

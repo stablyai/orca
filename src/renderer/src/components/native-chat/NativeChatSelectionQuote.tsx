@@ -6,8 +6,8 @@ import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-list
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import { formatNativeChatQuote } from '../../../../shared/native-chat/native-chat-quote'
 import {
-  formatNativeChatQuote,
   readNativeChatQuotableSelection,
   readNativeChatTranscriptSelection
 } from './native-chat-quote-selection'

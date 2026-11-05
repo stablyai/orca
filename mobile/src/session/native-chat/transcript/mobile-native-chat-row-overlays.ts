@@ -8,6 +8,8 @@ export type MobileNativeChatViewedImage = { uri: string; label: string }
 export type MobileNativeChatRowOverlays = {
   openImage: (image: MobileNativeChatViewedImage) => void
   openActions: (message: NativeChatMessage) => void
+  /** Adds reply text to the composer as a quote; absent where there is no composer. */
+  quote?: (text: string) => void
   /** Reads host image paths the phone cannot load itself. */
   imageSource?: MobileNativeChatImageSource
 }
