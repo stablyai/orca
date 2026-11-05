@@ -144,7 +144,7 @@ function AuthForm({
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <Label htmlFor={`${id}-method`} className="text-xs">
+        <Label htmlFor={`${id}-method`} variant="settings">
           {translate('accounts.antigravity.authMethod', 'Sign-in method')}
         </Label>
         <Select
@@ -155,7 +155,7 @@ function AuthForm({
             setMethod(value)
           }}
         >
-          <SelectTrigger id={`${id}-method`} className="h-8 text-xs">
+          <SelectTrigger id={`${id}-method`} size="sm" density="compact">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -170,15 +170,15 @@ function AuthForm({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label htmlFor={`${id}-project`} className="text-xs">
+          <Label htmlFor={`${id}-project`} variant="settings">
             {translate('accounts.antigravity.gcpProject', 'Google Cloud project')}
           </Label>
           <Input
             id={`${id}-project`}
-            className="h-8 text-xs"
+            density="compact"
             value={project}
             disabled={blocked || method !== 'oauth-business'}
-            placeholder="my-project-id"
+            placeholder={translate('accounts.antigravity.projectPlaceholder', 'my-project-id')}
             onChange={(event) => {
               edited.current = true
               setProject(event.target.value)
@@ -186,15 +186,15 @@ function AuthForm({
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor={`${id}-location`} className="text-xs">
+          <Label htmlFor={`${id}-location`} variant="settings">
             {translate('accounts.antigravity.gcpLocation', 'Google Cloud location')}
           </Label>
           <Input
             id={`${id}-location`}
-            className="h-8 text-xs"
+            density="compact"
             value={location}
             disabled={blocked || method !== 'oauth-business'}
-            placeholder="us-central1"
+            placeholder={translate('accounts.antigravity.locationPlaceholder', 'us-central1')}
             onChange={(event) => {
               edited.current = true
               setLocation(event.target.value)

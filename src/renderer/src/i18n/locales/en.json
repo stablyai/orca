@@ -22192,7 +22192,9 @@
       "enterprise": "Gemini Enterprise",
       "gcpProject": "Google Cloud project",
       "gcpLocation": "Google Cloud location",
-      "applyAuth": "Apply account settings"
+      "applyAuth": "Apply account settings",
+      "projectPlaceholder": "my-project-id",
+      "locationPlaceholder": "us-central1"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
