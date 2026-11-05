@@ -507,7 +507,12 @@ it.each([1, 10])(
         )
       })
     })
-    const known = { ...fields, statusCheckRollup: [], headDefaultBranchName: 'trunk' }
+    const known = {
+      ...fields,
+      stack: undefined,
+      statusCheckRollup: [],
+      headDefaultBranchName: 'trunk'
+    }
     for (let target = 0; target < n; target++) {
       await expect(
         getPRByNumber(repository, 42, options, 'local:host', known)
@@ -529,6 +534,7 @@ it('retains the rich exact metadata path when the optional combined read fails',
   await expect(
     getPRByNumber(repository, 42, options, 'local:host', {
       ...fields,
+      stack: undefined,
       statusCheckRollup: [],
       headDefaultBranchName: 'trunk'
     })
