@@ -1,5 +1,9 @@
 import type * as AppServerSession from './app-server/codex-app-server-session'
-import { mkdir, mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
+import type * as LocalHistory from '../native-chat/codex-local-history'
+import type * as RolloutStream from '../native-chat/codex-rollout-history-stream'
+import { readCodexLocalHistory } from '../native-chat/codex-local-history'
+import { readCodexRolloutBytes } from '../native-chat/codex-rollout-history-stream'
+import { mkdir, mkdtemp, rm, writeFile, readFile, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -14,6 +18,14 @@ const state = vi.hoisted(() => ({
   request: vi.fn<CodexAppServerRpc['request']>(),
   initialize: vi.fn()
 }))
+vi.mock('../native-chat/codex-local-history', async (importOriginal) => {
+  const original = await importOriginal<typeof LocalHistory>()
+  return { ...original, readCodexLocalHistory: vi.fn(original.readCodexLocalHistory) }
+})
+vi.mock('../native-chat/codex-rollout-history-stream', async (importOriginal) => {
+  const original = await importOriginal<typeof RolloutStream>()
+  return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
+})
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))
@@ -47,6 +59,8 @@ beforeEach(async () => {
   state.paths.clear()
   state.request.mockReset()
   state.initialize.mockReset()
+  vi.mocked(readCodexLocalHistory).mockClear()
+  vi.mocked(readCodexRolloutBytes).mockClear()
   await mkdir(join(root, 'sessions'), { recursive: true })
 })
 afterEach(async () => {
@@ -209,3 +223,75 @@ it('reports a provider in-progress rejection without suggesting an update', asyn
   state.request.mockRejectedValue(new Error('Cannot fork thread with an in-progress turn'))
   await expect(copy()).rejects.toThrow('Wait for it to finish')
 })
+
+it.each([
+  { count: 250, kept: 125, capturePages: 3, verificationPages: 2 },
+  { count: 2500, kept: 1250, capturePages: 25, verificationPages: 13 }
+])(
+  'bounds fallback paging and rollout passes for $count turns',
+  async ({ count, kept, capturePages, verificationPages }) => {
+    const sourcePath = await history(
+      SOURCE,
+      Array.from({ length: count }, (_, index) => turn(undefined, index + 1)).flat()
+    )
+    const source = await readFile(sourcePath, 'utf8')
+    const childPath = await history(CHILD, [])
+    await writeFile(
+      childPath,
+      `${JSON.stringify({
+        type: 'session_meta',
+        ordinal: count * 2 + 1,
+        payload: {
+          id: CHILD,
+          history_mode: 'paginated',
+          history_base: {
+            thread_id: SOURCE,
+            end_ordinal_exclusive: count * 2 + 1,
+            end_byte_offset: Buffer.byteLength(source)
+          }
+        }
+      })}\n`
+    )
+    let reverted = false
+    const pages = { capture: 0, verification: 0 }
+    state.request.mockImplementation(async (method, params) => {
+      if (method === 'thread/fork') {
+        return { thread: { id: CHILD, historyMode: 'paginated' } }
+      }
+      expect(params?.threadId).toBe(CHILD)
+      if (method === 'thread/revert') {
+        expect(params?.beforeTurnId).toBe(`legacy-${kept + 1}`)
+        reverted = true
+        return { thread: { id: CHILD } }
+      }
+      expect(method).toBe('thread/turns/list')
+      expect(params?.limit).toBe(100)
+      expect(params?.sortDirection).toBe('asc')
+      pages[reverted ? 'verification' : 'capture']++
+      const offset = params?.cursor ? Number(params.cursor) : 0
+      const end = Math.min(offset + 100, reverted ? kept : count)
+      return {
+        data: Array.from({ length: end - offset }, (_, index) => ({
+          id: `legacy-${offset + index + 1}`
+        })),
+        nextCursor: end < (reverted ? kept : count) ? String(end) : null
+      }
+    })
+    await expect(copy(`${SOURCE}:a${kept}`)).resolves.toEqual({ sessionId: CHILD })
+    expect(pages).toEqual({ capture: capturePages, verification: verificationPages })
+    expect(state.request.mock.calls.filter(([method]) => method === 'thread/revert')).toHaveLength(
+      1
+    )
+    expect(vi.mocked(readCodexLocalHistory).mock.calls.map(([input]) => input.filePath)).toEqual([
+      sourcePath,
+      childPath
+    ])
+    // Each pass reads a header and a body; the child's pass also visits its source prefix.
+    const streams = vi.mocked(readCodexRolloutBytes).mock.calls.map(([path]) => path)
+    expect(streams).toHaveLength(6)
+    const sourcePhysicalPath = await realpath(sourcePath)
+    const childPhysicalPath = await realpath(childPath)
+    expect(streams.filter((path) => path === sourcePhysicalPath)).toHaveLength(4)
+    expect(streams.filter((path) => path === childPhysicalPath)).toHaveLength(2)
+  }
+)
