@@ -75,7 +75,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('lucide-react', async () =>
-  (await import('../tab-bar/lucide-icon-stub-fixture')).stubEveryIcon()
+  (await import('../../../tab-bar/lucide-icon-stub-fixture')).stubEveryIcon()
 )
 
 vi.mock('@/i18n/i18n', () => ({
