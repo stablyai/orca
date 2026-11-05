@@ -45,6 +45,7 @@ export function WorktreeWorkspaceUrlField({
   onEnter: () => void
 }): React.JSX.Element {
   const inputId = useId()
+  const messageId = `${inputId}-message`
   return (
     <div className="space-y-1">
       <label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
@@ -54,6 +55,7 @@ export function WorktreeWorkspaceUrlField({
         id={inputId}
         value={draft.input}
         aria-invalid={!draft.valid}
+        aria-describedby={messageId}
         onChange={(event) => draft.setInput(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
@@ -67,7 +69,7 @@ export function WorktreeWorkspaceUrlField({
         )}
         className="h-8"
       />
-      <p className="text-[10px] text-muted-foreground">
+      <p id={messageId} className="text-[10px] text-muted-foreground">
         {draft.valid
           ? translate(
               'auto.components.sidebar.WorktreeWorkspaceUrlField.hint',
