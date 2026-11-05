@@ -42,6 +42,13 @@ export function isStopStrandedByAnotherRuntime(
   return worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
 }
 
+/** worker-stop fenced this Dispatch: it starts no helper, and a helper it was starting is stopped too. */
+export function isWorkerStopRequested(this: OrchestrationDb, dispatchId: string): boolean {
+  const state =
+    this.getWorkerDispatch(dispatchId)?.state ?? this.getRemoteDispatchAttachment(dispatchId)?.state
+  return state === 'stopping' || state === 'stop_unknown' || state === 'stopped'
+}
+
 export function beginWorkerStop(
   this: OrchestrationDb,
   dispatchId: string,
@@ -276,6 +283,7 @@ export function markWorkerStopUnknown(
 
 export type WorkerDispatchStopMethods = {
   isDispatchProcessCurrent: typeof isDispatchProcessCurrent
+  isWorkerStopRequested: typeof isWorkerStopRequested
   beginWorkerStop: typeof beginWorkerStop
   settleWorkerStop: typeof settleWorkerStop
   reconcileFederatedWorkerStop: typeof reconcileFederatedWorkerStop
@@ -286,6 +294,7 @@ export type WorkerDispatchStopMethods = {
 export function attachWorkerDispatchStop(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     isDispatchProcessCurrent,
+    isWorkerStopRequested,
     beginWorkerStop,
     settleWorkerStop,
     reconcileFederatedWorkerStop,

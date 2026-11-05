@@ -295,6 +295,14 @@ export function hasOpenHelperDispatch(this: OrchestrationDb, dispatchId: string)
   )
 }
 
+/** Every Dispatch this one started as its helper, oldest first. */
+export function listHelperDispatchIds(this: OrchestrationDb, creatorDispatchId: string): string[] {
+  return this.db
+    .prepare('SELECT id FROM dispatch_contexts WHERE creator_dispatch_id = ? ORDER BY rowid')
+    .all(creatorDispatchId)
+    .map((row) => String(row.id))
+}
+
 export type DispatchLookupMethods = {
   getActiveDispatchForTerminal: typeof getActiveDispatchForTerminal
   hasAnyDispatchContexts: typeof hasAnyDispatchContexts
@@ -305,6 +313,7 @@ export type DispatchLookupMethods = {
   listSessionDispatchesForPresentation: typeof listSessionDispatchesForPresentation
   getLatestDispatchForTerminal: typeof getLatestDispatchForTerminal
   hasOpenHelperDispatch: typeof hasOpenHelperDispatch
+  listHelperDispatchIds: typeof listHelperDispatchIds
 }
 
 export function attachDispatchLookup(ctor: { prototype: object }): void {
@@ -317,6 +326,7 @@ export function attachDispatchLookup(ctor: { prototype: object }): void {
     findActiveDispatchForAssignee,
     getLatestDispatchForTerminal,
     hasOpenHelperDispatch,
+    listHelperDispatchIds,
     listSessionDispatchesForPresentation
   })
 }

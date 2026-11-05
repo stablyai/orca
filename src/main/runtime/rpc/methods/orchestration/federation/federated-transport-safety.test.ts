@@ -270,7 +270,8 @@ describe('federated transport safety', () => {
     const db = {
       getFederatedDispatch: () => federatedDispatch(),
       beginWorkerStop: () => ({ disposition: 'stopping', worker: { state: 'stopping' } }),
-      reconcileFederatedWorkerStop: () => ({ state: 'stopped' })
+      reconcileFederatedWorkerStop: () => ({ state: 'stopped' }),
+      listHelperDispatchIds: () => []
     }
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) =>
       method === 'status.get'

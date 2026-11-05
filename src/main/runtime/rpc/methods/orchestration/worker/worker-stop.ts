@@ -1,18 +1,14 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
-import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
-import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
-import {
-  resolveStructuredWorkerForDispatch,
-  stopStructuredWorker
-} from '../../orchestration-structured-worker-lifecycle'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
+import {
+  stopSingleWorker,
+  type HelperStopOutcome,
+  type StopMutation,
+  type WorkerStopReceipt
+} from './single-worker-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
@@ -20,241 +16,134 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) =>
-      dedupeWorkerStop(runtime, params.dispatch, async () => {
-        const db = runtime.getOrchestrationDb()
-        const federated = db.getFederatedDispatch(params.dispatch)
-        if (federated) {
-          if (!orchestrationMutation) {
-            throw new OrchestrationError(
-              'invalid_argument',
-              'Remote worker-stop requires a durable retry request.'
-            )
-          }
-          await refuseFederatedStopWhileKeptOpen(runtime, federated)
-          const server = resolvePinnedFederatedServer(runtime, federated)
-          const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
-          if (begun.disposition === 'already_settled') {
-            return settledReceipt(params.dispatch, begun.worker.state)
-          }
-          try {
-            const status = (await runtime.callOrchestrationWorkerServer(
-              server.environmentId,
-              'status.get',
-              undefined,
-              30_000,
-              undefined,
-              { expectedEnvironmentPairingRevision: server.pairingRevision }
-            )) as RuntimeStatus
-            if (
-              !status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY)
-            ) {
-              return unknownReceipt(
-                params.dispatch,
-                db.markWorkerStopUnknown(
-                  params.dispatch,
-                  `Connected server ${server.name} cannot prove the worker stop outcome.`
-                ),
-                'none'
-              )
-            }
-            const remote = (await runtime.callOrchestrationWorkerServer(
-              server.environmentId,
-              'orchestration.federationStop',
-              { dispatchId: params.dispatch },
-              30_000,
-              { orchestrationRequestId: orchestrationMutation.requestId },
-              { expectedEnvironmentPairingRevision: server.pairingRevision }
-            )) as RemoteStopReceipt
-            if (remote.state === 'stopped') {
-              const worker = db.reconcileFederatedWorkerStop(params.dispatch)
-              return {
-                dispatchId: params.dispatch,
-                state: worker.state,
-                alreadySettled: remote.alreadySettled,
-                processAction: remote.processAction,
-                close: remote.close
-              }
-            }
-            if (remote.state === 'succeeded' || remote.state === 'failed') {
-              db.resumeFederatedWorkerForTerminalRelay(params.dispatch)
-              await runtime
-                .syncOrchestrationFederatedDispatchAfterCurrent(params.dispatch)
-                .catch(() => undefined)
-              return {
-                dispatchId: params.dispatch,
-                state: db.getWorkerDispatch(params.dispatch)?.state ?? remote.state,
-                alreadySettled: true,
-                processAction: 'none'
-              }
-            }
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(
-                params.dispatch,
-                remote.lastError ?? `The worker server returned ${remote.state}.`
-              ),
-              remote.processAction
-            )
-          } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error)
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, reason),
-              'unknown'
-            )
-          }
-        }
-
-        const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
-        if (begun.disposition === 'already_settled') {
-          return settledReceipt(params.dispatch, begun.worker.state)
-        }
-        if (begun.disposition === 'context_only') {
-          if (!begun.alreadySettled) {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-          }
-          return {
-            dispatchId: params.dispatch,
-            state: begun.state,
-            alreadySettled: begun.alreadySettled,
-            processAction: 'none' as const,
-            warning: contextOnlyStopWarning(begun)
-          }
-        }
-        const handle = begun.worker.agent_terminal_handle
-        if (!handle) {
-          return unknownReceipt(
-            params.dispatch,
-            db.markWorkerStopUnknown(
-              params.dispatch,
-              'The Dispatch has no recorded agent terminal.'
-            ),
-            'unknown'
-          )
-        }
-        if (isStructuredWorkerHandle(handle)) {
-          // Install the structured host after restart or observation/close stay unknown forever.
-          await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
-            console.warn(
-              '[orchestration] structured host install failed before stop',
-              handle,
-              error
-            )
-          })
-        }
-        const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-        const liveHandle = observation.terminalHandle ?? handle
-        // The host exit can settle this stop while terminal inspection is awaiting inventory.
-        if (db.getWorkerDispatch(params.dispatch)?.state === 'stopped') {
-          runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-          return {
-            dispatchId: params.dispatch,
-            state: 'stopped',
-            alreadySettled: false,
-            processAction: 'none'
-          }
-        }
-        // Still attempt stop on unverifiable contact. Structured exited is also addressable: close/hide its current /clear session to prevent restart on mail.
-        if (
-          !observation.exact ||
-          (observation.status !== 'live' &&
-            observation.status !== 'unverifiable' &&
-            !isStructuredWorkerHandle(handle))
-        ) {
-          return unknownReceipt(
-            params.dispatch,
-            db.markWorkerStopUnknown(
-              params.dispatch,
-              `The recorded worker process is ${observation.status}; no terminal was closed.`
-            ),
-            'none'
-          )
-        }
-        const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-        if (!resource || resource.ownership_state !== 'owned') {
-          const ownership = resource?.ownership_state ?? 'unproven'
-          return unknownReceipt(
-            params.dispatch,
-            db.markWorkerStopUnknown(
-              params.dispatch,
-              `The worker terminal is ${ownership}; no terminal was closed.`
-            ),
-            'none'
-          )
-        }
-        await archiveWorkerOutputBeforeStop({
-          runtime,
-          db,
-          dispatchId: params.dispatch,
-          terminalHandle: liveHandle,
-          attachedAt: begun.worker.created_at
-        })
-        const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
-        if (structured) {
-          const stop = await stopStructuredWorker(structured, runtime)
-          if (!stop.stopped) {
-            // Only proven exit settles; if no close was issued, the receipt must not claim one.
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, stop.reason ?? 'The close was not proven.'),
-              stop.closeAttempted ? 'closed_agent_terminal' : 'none'
-            )
-          }
-          const stopped = db.settleWorkerStop(params.dispatch)
-          runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-          return {
-            dispatchId: params.dispatch,
-            state: stopped.state,
-            alreadySettled: false,
-            processAction: 'closed_agent_terminal'
-          }
-        }
-        const closed = await runtime
-          .closeTerminal(liveHandle)
-          .then((close) => ({ close }) as const)
-          .catch(
-            (error: unknown) =>
-              ({ error: error instanceof Error ? error.message : String(error) }) as const
-          )
-        // A concurrent process exit already proves and settles stop; do not re-settle or report uncertainty.
-        if (db.getWorkerDispatch(params.dispatch)?.state !== 'stopped') {
-          if ('error' in closed) {
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, closed.error),
-              'unknown'
-            )
-          }
-          if (!closed.close.ptyKilled) {
-            // Tab retirement alone does not prove the agent stopped.
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, describeUnconfirmedAgentStop(closed.close)),
-              'closed_agent_terminal'
-            )
-          }
-          db.settleWorkerStop(params.dispatch)
-        }
-        runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-        return {
-          dispatchId: params.dispatch,
-          state: db.getWorkerDispatch(params.dispatch)?.state ?? 'stopped',
-          alreadySettled: false,
-          processAction: 'closed_agent_terminal',
-          ...('close' in closed ? { close: closed.close } : {})
-        }
-      })
+      stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
   })
 ]
 
-const activeStopByRuntime = new WeakMap<OrcaRuntimeService, Map<string, Promise<unknown>>>()
+/** Stopping a worker stops every helper under it; a kept-open helper is reported, not refused. */
+export function stopWorkerAndHelpers(
+  runtime: OrcaRuntimeService,
+  dispatchId: string,
+  mutation: StopMutation
+): Promise<WorkerStopReceipt> {
+  return dedupeWorkerStop(runtime, dispatchId, async () =>
+    withStoppedHelpers(
+      runtime,
+      dispatchId,
+      mutation,
+      await stopSingleWorker(runtime, dispatchId, mutation)
+    )
+  )
+}
+
+/** Runs after the creator's fence commits, so a helper started later was refused, or is stopped when its start finishes. */
+export async function withStoppedHelpers(
+  runtime: OrcaRuntimeService,
+  creatorDispatchId: string,
+  mutation: StopMutation,
+  receipt: WorkerStopReceipt
+): Promise<WorkerStopReceipt> {
+  const helpers = [
+    ...(receipt.helpers ?? []),
+    ...(await stopHelpers(runtime, creatorDispatchId, mutation))
+  ]
+  return helpers.length ? { ...receipt, helpers } : receipt
+}
+
+async function stopHelpers(
+  runtime: OrcaRuntimeService,
+  creatorDispatchId: string,
+  mutation: StopMutation
+): Promise<HelperStopOutcome[]> {
+  const db = runtime.getOrchestrationDb()
+  const outcomes = await mapWithConcurrency(
+    db.listHelperDispatchIds(creatorDispatchId),
+    8,
+    async (dispatchId): Promise<HelperStopOutcome[]> => {
+      const helper = { dispatchId, creatorDispatchId }
+      const state = db.getWorkerDispatch(dispatchId)?.state
+      if (state === 'starting') {
+        return [{ ...helper, outcome: 'starting', state }]
+      }
+      try {
+        const receipt = await stopWorkerAndHelpers(
+          runtime,
+          dispatchId,
+          mutation && { ...mutation, requestId: `${mutation.requestId}:${dispatchId}` }
+        )
+        const outcome = receipt.alreadySettled
+          ? 'already_finished'
+          : receipt.state === 'stopped'
+            ? 'stopped'
+            : 'unconfirmed'
+        return [
+          {
+            ...helper,
+            outcome,
+            state: receipt.state,
+            ...(receipt.lastError ? { lastError: receipt.lastError } : {})
+          },
+          ...(receipt.helpers ?? [])
+        ]
+      } catch (error) {
+        if (error instanceof OrchestrationError && error.code === 'terminal_kept_open') {
+          return [{ ...helper, outcome: 'kept_open', state }]
+        }
+        return [
+          {
+            ...helper,
+            outcome: 'unconfirmed',
+            state,
+            lastError: error instanceof Error ? error.message : String(error)
+          }
+        ]
+      }
+    }
+  )
+  return outcomes.flat()
+}
+
+/** A helper whose start finished after its creator was stopped; the creator's stop saw it starting. */
+export async function stopHelperOfStoppedCreator(
+  runtime: OrcaRuntimeService,
+  startReceipt: unknown,
+  mutation: StopMutation
+): Promise<void> {
+  const dispatchId =
+    startReceipt && typeof startReceipt === 'object' && 'dispatchId' in startReceipt
+      ? startReceipt.dispatchId
+      : undefined
+  if (typeof dispatchId !== 'string') {
+    return
+  }
+  const db = runtime.getOrchestrationDb()
+  const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
+  if (
+    creator &&
+    db.isWorkerStopRequested(creator) &&
+    db.getWorkerDispatch(dispatchId)?.state === 'ready'
+  ) {
+    await stopWorkerAndHelpers(
+      runtime,
+      dispatchId,
+      mutation && { ...mutation, requestId: `${mutation.requestId}:${dispatchId}` }
+    ).catch((error: unknown) => {
+      console.warn('[orchestration] helper stop after creator stop failed', dispatchId, error)
+    })
+  }
+}
+
+const activeStopByRuntime = new WeakMap<
+  OrcaRuntimeService,
+  Map<string, Promise<WorkerStopReceipt>>
+>()
 
 /** Coalesce same-runtime stops so only one closes; beginWorkerStop admits this epoch only to recover a row stranded by a dead runtime. */
 function dedupeWorkerStop(
   runtime: OrcaRuntimeService,
   dispatchId: string,
-  stop: () => Promise<unknown>
-): Promise<unknown> {
+  stop: () => Promise<WorkerStopReceipt>
+): Promise<WorkerStopReceipt> {
   let active = activeStopByRuntime.get(runtime)
   if (!active) {
     active = new Map()
@@ -264,50 +153,11 @@ function dedupeWorkerStop(
   if (inFlight) {
     return inFlight
   }
-  const started: Promise<unknown> = stop().finally(() => {
+  const started = stop().finally(() => {
     if (active.get(dispatchId) === started) {
       active.delete(dispatchId)
     }
   })
   active.set(dispatchId, started)
   return started
-}
-
-type RemoteStopReceipt = {
-  state: string
-  alreadySettled: boolean
-  processAction: string
-  close?: unknown
-  lastError?: string | null
-}
-
-function settledReceipt(dispatchId: string, state: string) {
-  return { dispatchId, state, alreadySettled: true, processAction: 'none' }
-}
-
-function contextOnlyStopWarning(result: {
-  state: string
-  alreadySettled: boolean
-  releasedCurrentTask: boolean
-}): string {
-  if (result.alreadySettled) {
-    return `Dispatch was already ${result.state}; no terminal process changed.`
-  }
-  return result.releasedCurrentTask
-    ? 'The assignment was stopped without closing its unsupervised terminal process.'
-    : 'The superseded assignment was stopped without changing the current Task or terminal process.'
-}
-
-function unknownReceipt(
-  dispatchId: string,
-  worker: { state: string; last_error: string | null },
-  processAction: string
-) {
-  return {
-    dispatchId,
-    state: worker.state,
-    alreadySettled: false,
-    processAction,
-    lastError: worker.last_error
-  }
 }

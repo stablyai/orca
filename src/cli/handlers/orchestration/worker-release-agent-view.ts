@@ -36,15 +36,52 @@ export const WORKER_RELEASE_VIEW: OrchestrationAgentView<
       : undefined
 }
 
-export function workerStopFailure(value: {
+export type WorkerStopResult = {
   dispatchId: string
   state: string
+  processAction: string
   lastError?: string
-}): OrchestrationFailure | undefined {
-  return value.state === 'stop_unknown'
+  warning?: string
+  helpers?: HelperStop[]
+}
+
+type HelperStop = {
+  dispatchId: string
+  creatorDispatchId: string
+  outcome: 'stopped' | 'already_finished' | 'kept_open' | 'starting' | 'unconfirmed'
+  state?: string
+  lastError?: string | null
+}
+
+const HELPER_STOP_TEXT: Record<HelperStop['outcome'], string> = {
+  stopped: 'stopped',
+  already_finished: 'already finished',
+  kept_open: 'kept open by the user, not stopped',
+  starting: 'starting; stopped once its start finishes',
+  unconfirmed: 'stop unconfirmed'
+}
+
+export function workerStopFailure(value: WorkerStopResult): OrchestrationFailure | undefined {
+  if (value.state === 'stop_unknown') {
+    return {
+      code: 'stop_unknown',
+      message: value.lastError ?? `Stop of ${value.dispatchId} is unconfirmed.`
+    }
+  }
+  const unconfirmed = value.helpers?.filter((helper) => helper.outcome === 'unconfirmed') ?? []
+  return unconfirmed.length
     ? {
-        code: 'stop_unknown',
-        message: value.lastError ?? `Stop of ${value.dispatchId} is unconfirmed.`
+        code: 'helper_stop_unknown',
+        message: `Could not confirm that helpers ${unconfirmed.map((helper) => helper.dispatchId).join(', ')} stopped; check worker-show for each.`
       }
     : undefined
+}
+
+export function formatHelperStops(helpers: HelperStop[] | undefined): string {
+  return (helpers ?? [])
+    .map(
+      (helper) =>
+        `\nHelper ${helper.dispatchId} (started by ${helper.creatorDispatchId}): ${HELPER_STOP_TEXT[helper.outcome]}${helper.lastError ? ` (${helper.lastError})` : ''}`
+    )
+    .join('')
 }
