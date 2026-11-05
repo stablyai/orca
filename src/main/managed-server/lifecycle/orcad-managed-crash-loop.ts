@@ -7,10 +7,7 @@ import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-sl
 import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
-import {
-  ORCAD_LAUNCH_MACHINE_COMMAND,
-  ORCAD_LOG_FILENAME
-} from '../install/orcad-remote-host-support'
+import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
 import { readBoundedOrcadRemoteRecord } from '../install/orcad-remote-record-file'
 import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
@@ -231,20 +228,21 @@ async function recordLatchedBoot(environmentId: string, slot: ManagedOrcadSlot):
   }
 }
 
-/** "<boot id>\n<hostname>" on Linux; null elsewhere or when unreadable. */
+/** "<boot id>\n<hostname>\n<machine id>" on Linux; null elsewhere or without a machine id. */
 async function readMachineBoot(slot: ManagedOrcadSlot): Promise<string | null> {
   if (isWindowsRemoteHost(slot.host)) {
     return null
   }
   try {
     const answer = (await execOrcadRemote(slot, MACHINE_BOOT_COMMAND)).trim()
-    return answer.split('\n').length === 2 ? answer : null
+    return answer.split('\n').length === 3 ? answer : null
   } catch {
     return null
   }
 }
 
-const MACHINE_BOOT_COMMAND = `{ ${ORCAD_LAUNCH_MACHINE_COMMAND}; } 2>/dev/null || :`
+const MACHINE_BOOT_COMMAND =
+  '{ cat /proc/sys/kernel/random/boot_id && uname -n && cat /etc/machine-id; } 2>/dev/null || :'
 
 /**
  * A served run releases orcad.lock on a clean exit. A reboot ends every run, but only a new boot of
@@ -257,8 +255,9 @@ async function latchedRunEndedWithoutCrash(
   const latched = brake.latchedBootOf(environmentId)
   if (latched) {
     const current = await readMachineBoot(slot)
-    const [, latchedHost] = latched.split('\n')
-    if (current && current !== latched && current.split('\n')[1] === latchedHost) {
+    // Same hostname and machine id, new boot id: this machine rebooted since the brake engaged.
+    const machine = (boot: string) => boot.split('\n').slice(1).join('\n')
+    if (current && current !== latched && machine(current) === machine(latched)) {
       return true
     }
   }

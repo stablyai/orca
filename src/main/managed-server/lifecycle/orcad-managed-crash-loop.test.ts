@@ -21,8 +21,8 @@ vi.mock('../install/orcad-remote-record-file', () => ({
   readBoundedOrcadRemoteRecord: vi.fn(async () => ({ state: 'present', raw: '{}' }))
 }))
 vi.mock('../install/orcad-remote-runtime-control', () => ({
-  // The answering machine's boot id and hostname.
-  execOrcadRemote: vi.fn(async () => 'boot-a\nnode-1\n')
+  // The answering machine's boot id, hostname and machine id.
+  execOrcadRemote: vi.fn(async () => 'boot-a\nnode-1\nmachine-1\n')
 }))
 vi.mock('../install/orcad-remote-log-tail', () => ({
   withOrcadLogTail: vi.fn(
@@ -98,6 +98,7 @@ const CRASHED = { pid: 4242, version: '1.2.3', acquiredAt: '2026-11-04T10:00:00.
 beforeEach(() => {
   vi.clearAllMocks()
   launches = 0
+  vi.mocked(execOrcadRemote).mockResolvedValue('boot-a\nnode-1\nmachine-1\n')
   getManagedOrcadCrashLoopBrake().forget('env-1')
   setManagedOrcadStartListener(listener)
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -241,7 +242,7 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
       startsReporting(null)
 
       expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
-      vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\n')
+      vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-1\n')
       expect(await findStopped()).toMatchObject({ state: 'started' })
     }
   )
@@ -272,13 +273,24 @@ describe('a managed orcad that keeps exiting unexpectedly', () => {
     expect(launches).toBe(3)
   })
 
-  // Shared homes: a login node behind the same name may answer, with its own boot.
+  it('stays braked without a machine id to tell this machine apart', async () => {
+    vi.mocked(execOrcadRemote).mockResolvedValue('boot-a\nnode-1\n')
+    startsReporting(CRASHED)
+    for (let i = 0; i < 3; i++) {
+      await findStopped()
+    }
+    vi.mocked(execOrcadRemote).mockResolvedValue('boot-b\nnode-1\n')
+
+    expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
+  })
+
+  // Shared homes: login nodes behind one hostname may answer, each with its own boot.
   it('stays braked when a different machine answers', async () => {
     startsReporting(CRASHED)
     for (let i = 0; i < 3; i++) {
       await findStopped()
     }
-    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-2\n')
+    vi.mocked(execOrcadRemote).mockResolvedValueOnce('boot-b\nnode-1\nmachine-2\n')
 
     expect(await findStopped()).toMatchObject({ state: 'unverifiable' })
     expect(launches).toBe(3)
