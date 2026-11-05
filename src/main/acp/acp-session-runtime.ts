@@ -144,12 +144,16 @@ export class AcpSessionRuntime {
   }
 
   /** Reject core session methods for session-free discovery. */
-  async requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> {
+  async requestSessionFreeExtension(
+    method: string,
+    params: unknown,
+    timeoutMs: number | null = null
+  ): Promise<unknown> {
     if (!method.includes('/') || method.startsWith('session/')) {
       throw new Error(`Not an ACP extension method: ${method}`)
     }
     await this.initialize()
-    return this.peer.request(method, params, { timeoutMs: null })
+    return this.peer.request(method, params, { timeoutMs })
   }
 
   /** Fork without starting a session here; requires advertised fork support. */

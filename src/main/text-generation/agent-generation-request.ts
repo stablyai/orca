@@ -14,6 +14,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './source-control-local-generation'
+import { runOpenCodeTextTask } from '../opencode/opencode-text-task'
 import { emptyResultFailure } from './source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
@@ -56,14 +57,24 @@ export async function runGenerationRequest(input: {
           target: input.target,
           operation: input.operation
         })
-      : runLocalPlanForAgent({
-          agentId: input.params.agentId,
-          plan,
-          target: input.target,
-          operation: input.operation,
-          spawnAgent: input.spawnAgent,
-          shouldExecute: input.shouldExecute
-        })
+      : plan.openCodeTask
+        ? runOpenCodeTextTask({
+            plan,
+            target: input.target,
+            operation: input.operation,
+            spawnAgent: input.spawnAgent,
+            shouldExecute: input.shouldExecute,
+            legacyVariantFlag:
+              input.params.agentId === 'opencode' && input.operation !== 'jira-issue-summary'
+          })
+        : runLocalPlanForAgent({
+            agentId: input.params.agentId,
+            plan,
+            target: input.target,
+            operation: input.operation,
+            spawnAgent: input.spawnAgent,
+            shouldExecute: input.shouldExecute
+          })
   let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
     run: (attempt): Promise<InternalTextGenerationResult> => {

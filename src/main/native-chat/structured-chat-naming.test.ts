@@ -99,8 +99,7 @@ function rig(provider: 'claude' | 'codex') {
     readJournalFirstPrompt: vi.fn(async () => 'Please repair the login flow'),
     generate: vi.fn(async (): Promise<StructuredChatNameGeneration> => ({ name: 'auth/login' })),
     onNamed: vi.fn(),
-    logger: { warn: vi.fn(), error: vi.fn() },
-    wait: vi.fn(async () => {})
+    logger: { warn: vi.fn(), error: vi.fn() }
   }
   const summary: AgentSessionStatusSummary = {
     sessionId: record.sessionId,
@@ -290,7 +289,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
   })
 
   it.each(['rejected', 'failed', 'empty'] as const)(
-    'retries %s generation twice, then keeps the first-prompt name and the failure',
+    'keeps the first-prompt name and the %s generation failure',
     async (outcome) => {
       const state = rig(provider)
       state.deps.generate = vi.fn(async () => {
@@ -305,9 +304,6 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       state.handle({ ...state.summary, latestPrompt: 'Second request' }, { replay: false })
       await settle()
       expect(state.read()?.conversationName).toBe('Please repair the login flow')
-      expect(state.deps.generate).toHaveBeenCalledTimes(3)
-      expect(state.deps.wait).toHaveBeenNthCalledWith(1, 2000)
-      expect(state.deps.wait).toHaveBeenNthCalledWith(2, 4000)
       expect(state.setConversationName).toHaveBeenCalledTimes(1)
       expect(state.handle.failure(state.summary.sessionId)).toMatchObject({
         forName: 'Please repair the login flow',
@@ -324,7 +320,6 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     await settle()
     expect(state.read()?.conversationName).toBe('Please repair the login flow')
     expect(state.deps.generate).toHaveBeenCalledTimes(1)
-    expect(state.deps.wait).not.toHaveBeenCalled()
     expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
   })
 
@@ -338,7 +333,6 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     expect(state.handle.regenerate(state.summary.sessionId)).toBe(true)
     await settle()
     expect(state.deps.generate).toHaveBeenCalledTimes(1)
-    expect(state.deps.wait).toHaveBeenCalledTimes(2)
     expect(state.handle.failure(state.summary.sessionId)).toMatchObject({
       message: 'Still invalid'
     })
@@ -425,7 +419,7 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
     }
   )
 
-  it('takes the generated name from a retry after a failed first try', async () => {
+  it('keeps an automatic failure until the user regenerates the name', async () => {
     const state = rig(provider)
     state.deps.generate = vi
       .fn<StructuredChatNamingDeps['generate']>()
@@ -433,8 +427,17 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       .mockResolvedValueOnce({ name: 'auth/login' })
     state.handle(state.summary, { replay: false })
     await settle()
+    expect(state.read()?.conversationName).toBe('Please repair the login flow')
+    expect(state.handle.failure(state.summary.sessionId)).toMatchObject({
+      forName: 'Please repair the login flow'
+    })
+    state.handle({ ...state.summary, status: 'idle' }, { replay: false })
+    await settle()
+    expect(state.read()?.conversationName).toBe('Please repair the login flow')
+    state.handle.regenerate(state.summary.sessionId)
+    await settle()
     expect(state.read()?.conversationName).toBe('auth/login')
-    expect(state.deps.generate).toHaveBeenCalledTimes(2)
+    expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
   })
 
   it('protects a name changed while generation runs', async () => {
@@ -747,39 +750,4 @@ it('lets first input replace an empty Regenerate still reading its journal', asy
   await settle()
   expect(state.read()?.conversationName).toBe('auth/login')
   expect(state.deps.generate).toHaveBeenCalledOnce()
-})
-
-it.each([false, true])('retains an entered backoff only (entered=%s)', async (entered) => {
-  const state = rig('codex')
-  const result = deferred<StructuredChatNameGeneration>()
-  const wait = deferred<void>()
-  state.deps.generate = vi
-    .fn()
-    .mockReturnValueOnce(result.promise)
-    .mockResolvedValue({ name: 'Latest' })
-  state.deps.wait = vi.fn(() => wait.promise)
-  state.handle(state.summary, { replay: false })
-  await settle()
-  if (entered) {
-    result.resolve({ error: 'Retryable' })
-    await settle()
-  }
-  state.replace({
-    ...state.read()!,
-    conversationName: undefined,
-    providerContextBoundary: { operationId: 'latest', afterFence: 1, clearedAt: 101 }
-  })
-  state.handle(state.summary, { replay: false })
-  await settle()
-  if (entered) {
-    expect(state.deps.generate).toHaveBeenCalledTimes(1)
-  } else {
-    result.resolve({ error: 'Obsolete' })
-  }
-  wait.resolve()
-  await settle()
-  expect(state.deps.wait).toHaveBeenCalledTimes(entered ? 1 : 0)
-  expect(state.deps.generate).toHaveBeenCalledTimes(2)
-  expect(state.read()?.conversationName).toBe('Latest')
-  expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
 })

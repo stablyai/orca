@@ -16,6 +16,13 @@ import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import { AcpLaunchGate } from './acp-launch-gate'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
+import type { InitializeResponse } from './generated/acp-protocol.generated'
+import type * as GrokTextTaskModule from '../grok/grok-text-task'
+import { runGrokTextTask } from '../grok/grok-text-task'
+vi.mock('../grok/grok-text-task', async (original) => ({
+  ...(await original<typeof GrokTextTaskModule>()),
+  runGrokTextTask: vi.fn()
+}))
 
 const boundary = vi.hoisted(() => ({
   adapter: vi.fn<() => StructuredAgentSessionAdapter>(),
@@ -48,8 +55,9 @@ afterEach(async () => {
 async function stagedRig(
   options: {
     antigravity?: boolean
+    modeFailure?: boolean
     proveExit?: boolean
-    deletion?: 'unsupported' | 'stalled'
+    initialized?: InitializeResponse
     prepare?: () => Promise<Record<string, string>>
     onConnect?: () => void
     shouldExecute?: () => boolean
@@ -59,7 +67,7 @@ async function stagedRig(
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-naming-task-test-'))
   folders.push(root)
-  const base = acpLaunchSpecFor(options.antigravity ? 'antigravity' : 'grok')
+  const base = acpLaunchSpecFor(options.antigravity !== false ? 'antigravity' : 'grok')
   if (!base) {
     throw new Error('ACP spec is missing')
   }
@@ -99,16 +107,18 @@ async function stagedRig(
       }
       const agent = child.agent
       agent.on('initialize', (frame) =>
-        agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
+        agent.reply(frame, options.initialized ?? { protocolVersion: 1, agentCapabilities: {} })
       )
+      agent.on('authenticate', (frame) => agent.reply(frame, {}))
+      agent.on('_x.ai/session/delete', (frame) => agent.reply(frame, { success: true }))
       agent.on('session/new', (frame) =>
         agent.reply(frame, { sessionId: '11111111-1111-4111-8111-111111111111' })
       )
-      agent.on('_x.ai/session/delete', (frame) => {
-        if (options.deletion === 'unsupported') {
-          agent.fail(frame, -32601, 'Method not found')
-        } else if (options.deletion !== 'stalled') {
-          agent.reply(frame, { success: true })
+      agent.on('session/set_config_option', (frame) => {
+        if (options.modeFailure) {
+          agent.fail(frame, -32602, 'Mode control rejected')
+        } else {
+          agent.reply(frame, { configOptions: [] })
         }
       })
       agent.on('session/prompt', () => {
@@ -127,7 +137,10 @@ async function stagedRig(
   boundary.adapter.mockReturnValue(router)
   const record = agentSessionRecordFixture()
   record.provider = spec.agent
-  record.accountHome = { variable: options.antigravity ? 'GEMINI_HOME' : 'GROK_HOME', path: root }
+  record.accountHome = {
+    variable: spec.agent === 'antigravity' ? 'GEMINI_HOME' : 'GROK_HOME',
+    path: root
+  }
   const naming = structuredChatNamingDeps(
     () => ({ getSettings: () => getDefaultSettings(root) }),
     {
@@ -148,7 +161,7 @@ async function stagedRig(
         shouldExecute: options.shouldExecute
       })
   void result.catch(() => {})
-  return { root, ready, result, tasks, logger, gate: spec.launchGate }
+  return { root, ready, result, tasks, logger, gate: spec.launchGate, child: () => child }
 }
 
 async function rig(options: Parameters<typeof stagedRig>[0] = {}) {
@@ -174,57 +187,73 @@ async function rig(options: Parameters<typeof stagedRig>[0] = {}) {
   return { ...state, root, server, agent, frame, promptId, result, tasks, text }
 }
 
-it.each(['turn_completed', 'x.ai/session/prompt_complete', '_x.ai/session/prompt_complete'])(
-  'settles matching Grok %s without waiting for its prompt RPC',
-  async (method) => {
-    const r = await rig()
-    r.text('Repair login')
-    const complete = (sessionId: string, promptId: string, stopReason: string) => {
-      if (method === 'turn_completed') {
-        r.agent.notify('session/update', {
-          sessionId,
-          update: { sessionUpdate: method, prompt_id: promptId, stop_reason: stopReason }
-        })
-      } else {
-        r.agent.notify(method, { sessionId, promptId, stopReason })
+it.each(['success', 'failure'] as const)(
+  'deletes only the owned Grok session after its headless writer settles on %s',
+  async (outcome) => {
+    const writer = Promise.withResolvers<string>()
+    const launched = Promise.withResolvers<Parameters<typeof runGrokTextTask>[0]>()
+    vi.mocked(runGrokTextTask).mockImplementationOnce((input) => {
+      launched.resolve(input)
+      return writer.promise
+    })
+    const r = await stagedRig({
+      antigravity: false,
+      runtime: true,
+      initialized: {
+        protocolVersion: 1,
+        authMethods: [{ id: 'cached_token', name: 'Saved login' }],
+        _meta: { defaultAuthMethodId: 'cached_token' }
       }
+    })
+    const input = await launched.promise
+    const child = r.child()!
+    expect(input).toMatchObject({
+      launch: { command: '/fixture/agent', env: { GROK_HOME: r.root, GROK_STORAGE_MODE: 'local' } },
+      prompt: expect.stringContaining('Repair login'),
+      sessionId: expect.stringMatching(/^[0-9a-f-]{36}$/)
+    })
+    expect(child.launch.env?.GROK_STORAGE_MODE).toBe('local')
+    expect(child.launch.args).toEqual(['agent', '--no-leader', 'stdio'])
+    expect(child.exited).toBe(false)
+    expect(child.agent.frames.some((frame) => frame.method === '_x.ai/session/delete')).toBe(false)
+    if (outcome === 'success') {
+      writer.resolve('Repair login\n')
+      expect(await r.result).toEqual({ name: 'Repair login' })
+    } else {
+      writer.reject(new Error('Writer failed after shutdown'))
+      await expect(r.result).resolves.toMatchObject({ errorCode: 'grokFailed' })
     }
-    complete('other-session', r.promptId, 'error')
-    complete('11111111-1111-4111-8111-111111111111', 'other-prompt', 'error')
-    await Promise.resolve()
-    expect(r.server.exited).toBe(false)
-    complete('11111111-1111-4111-8111-111111111111', r.promptId, 'end_turn')
-    expect(await r.result).toBe('Repair login')
-    const start = r.agent.frames.find((frame) => frame.method === 'session/new')
-    expect(start?.params).toEqual({ cwd: r.server.launch.cwd, mcpServers: [] })
-    expect(r.server.launch.args).toEqual(['agent', 'stdio'])
-    expect(r.server.exited).toBe(true)
     expect(
-      r.agent.frames.some((frame) =>
-        ['session/load', 'session/resume', 'session/fork', 'session/cancel'].includes(
-          frame.method ?? ''
-        )
+      child.agent.frames.find((frame) => frame.method === '_x.ai/session/delete')?.params
+    ).toEqual({ sessionId: input.sessionId, cwd: input.cwd })
+    expect(
+      child.agent.frames.some((frame) =>
+        ['session/new', 'session/prompt'].includes(frame.method ?? '')
       )
     ).toBe(false)
-    expect(r.agent.frames.find((frame) => frame.method === '_x.ai/session/delete')?.params).toEqual(
-      { sessionId: '11111111-1111-4111-8111-111111111111', cwd: r.server.launch.cwd }
-    )
-    await expect(access(r.server.launch.cwd!)).rejects.toThrow()
+    expect(child.exited).toBe(true)
+    await expect(access(input.cwd)).rejects.toThrow()
   }
 )
 
-it.each(['unsupported', 'stalled'] as const)(
-  'preserves a title after %s deletion and closes',
-  async (deletion) => {
-    vi.useFakeTimers()
-    const r = await rig({ deletion, shouldExecute: () => true })
-    r.text('Repair login')
-    r.agent.reply(r.frame, { stopReason: 'end_turn' })
-    await vi.advanceTimersByTimeAsync(2_001)
-    expect(await r.result).toBe('Repair login')
-    expect(r.server.exited).toBe(true)
-  }
-)
+it('does not send a Grok naming prompt when headless would change the selected account', async () => {
+  const r = await stagedRig({
+    antigravity: false,
+    prepare: async () => ({ PATH: '/usr/bin', XAI_API_KEY: 'fixture-only' }),
+    initialized: {
+      protocolVersion: 1,
+      authMethods: [
+        { id: 'xai.api_key', name: 'API key' },
+        { id: 'cached_token', name: 'Saved login' }
+      ],
+      _meta: { defaultAuthMethodId: 'cached_token' }
+    }
+  })
+  await expect(r.result).rejects.toThrow('cannot preserve the naming account')
+  expect(runGrokTextTask).not.toHaveBeenCalled()
+  expect(r.child()?.agent.frames.some((frame) => frame.method === 'session/new')).toBe(false)
+  expect(r.child()?.exited).toBe(true)
+})
 
 it('does not spawn when preparation finishes after the deadline', async () => {
   vi.useFakeTimers()
@@ -420,11 +449,41 @@ it('runs healthy own-agent naming through the runtime, registered router and ACP
       prompt: [expect.objectContaining({ text: expect.stringContaining('Repair login') })]
     })
   )
-  expect(r.server.launch.env?.GROK_HOME).toBe(r.root)
-  expect(r.server.launch.args).toEqual(['agent', 'stdio'])
+  expect(r.server.launch.env?.GEMINI_HOME).toBe(r.root)
+  expect(r.server.launch.args).toEqual(process.platform === 'linux' ? ['--uid='] : [])
   r.text('Repair login\n')
   r.agent.reply(r.frame, { stopReason: 'end_turn' })
   expect(await r.result).toEqual({ name: 'Repair login' })
   expect(r.logger.warn).not.toHaveBeenCalled()
   expect(r.server.exited).toBe(true)
+})
+
+it('applies Antigravity default mode and returns its advertised denial before completing', async () => {
+  const r = await rig({ antigravity: true })
+  expect(
+    r.agent.frames.find((frame) => frame.method === 'session/set_config_option')?.params
+  ).toEqual({
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    configId: 'mode',
+    value: 'default'
+  })
+  const response = await r.agent.request('permission', 'session/request_permission', {
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    toolCall: { toolCallId: 'shell-call', title: 'run_shell_command', kind: 'execute' },
+    options: [
+      { optionId: 'allow', name: 'Allow once', kind: 'allow_once' },
+      { optionId: 'deny', name: 'Reject once', kind: 'reject_once' }
+    ]
+  })
+  expect(response).toMatchObject({ result: { outcome: { outcome: 'selected', optionId: 'deny' } } })
+  r.text('Harbor Lantern')
+  r.agent.reply(r.frame, { stopReason: 'end_turn' })
+  expect(await r.result).toBe('Harbor Lantern')
+  expect(r.server.exited).toBe(true)
+})
+
+it('never prompts Antigravity after rejection of its task permission mode', async () => {
+  const r = await stagedRig({ antigravity: true, modeFailure: true })
+  await expect(r.result).rejects.toThrow('Mode control rejected')
+  await r.tasks.closeAll()
 })

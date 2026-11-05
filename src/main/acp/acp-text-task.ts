@@ -2,31 +2,28 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { z } from 'zod'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { removeAntigravitySignInSessionFiles } from '../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
 import { prepareAcpLaunch } from './acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from './acp-private-temp'
 import { AcpRpcError } from './acp-errors'
+import {
+  acpTextTaskCompletion,
+  acpTextTaskArgs,
+  acpTextTaskEnv,
+  cleanupAcpTextTaskProtocol,
+  denyAcpTextTaskPermission,
+  TASK_ENV_TO_DELETE
+} from './acp-text-task-policy'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
+import { grokTextTaskPreservesAccount, runGrokTextTask } from '../grok/grok-text-task'
 
 type TextInput = Parameters<NonNullable<StructuredAgentSessionAdapter['generateText']>>[0]
-const envelope = z.looseObject({ sessionId: z.string() })
-const TASK_ENV_TO_DELETE = [
-  ...STRUCTURED_CHILD_ENV_TO_DELETE,
-  'ORCA_AGENT_SESSION_ID',
-  'ORCA_AGENT_SESSION_SPAWN_TOKEN',
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_STRUCTURED_SESSION',
-  'ORCA_CHAT_SCRATCH_DIR',
-  'ORCA_CHAT_VISUALS_DIR'
-]
 
 /** Disposable native tasks belong to the adapter so shutdown also owns uncertain closes. */
 export class AcpTextTasks {
@@ -69,6 +66,7 @@ export class AcpTextTasks {
     observeRoot: (connection: AcpStructuredConnection) => void
   ): Promise<string | null> {
     const { spec } = this.deps
+    const deadlineAt = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
     const deadline = new AbortController()
     const timer = setTimeout(
       () => deadline.abort(new Error('Chat naming timed out')),
@@ -86,6 +84,7 @@ export class AcpTextTasks {
     let cwd: string | undefined
     let home = ''
     let sessionId = ''
+    let modeConfigId = 'mode'
     let completed = false
     let starting = false
     let done = false
@@ -138,35 +137,29 @@ export class AcpTextTasks {
       const promptId = randomUUID()
       const terminal = Promise.withResolvers<{ stopReason: string }>()
       const notification = (method: string, params: unknown): void => {
-        if (!sessionId || envelope.safeParse(params).data?.sessionId !== sessionId) {
-          return
-        }
-        const completion = spec.dialect.textTaskCompletion?.(method, params)
-        if (completion?.promptId === promptId) {
+        const completion = acpTextTaskCompletion(spec.dialect, sessionId, promptId, method, params)
+        if (completion) {
           terminal.resolve(completion)
-        }
-        const mapped = spec.dialect.notification?.(method, params, Date.now())
-        if (
-          mapped?.disposition === 'map' &&
-          mapped.turn === promptId &&
-          !mapped.replay &&
-          mapped.end
-        ) {
-          terminal.resolve(mapped.end)
         }
       }
       const spawn = (connect: typeof this.deps.connect): AcpStructuredConnection => {
         connection = connect(
           {
             ...launch,
+            env: acpTextTaskEnv(spec.agent, launch.env),
             cwd,
-            args: spec.args({ fullAccess: false, pluginDir: null }),
+            args: acpTextTaskArgs(spec),
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           {
             clientInfo: { name: 'orca-chat-naming', version: '1' },
             signIn: spec.signIn,
-            onPermission: reject,
+            onPermission: (request) => {
+              if (spec.agent !== 'antigravity') {
+                return reject()
+              }
+              return denyAcpTextTaskPermission(request)
+            },
             onRequest: reject,
             onExtensionNotification: notification
           }
@@ -218,12 +211,39 @@ export class AcpTextTasks {
         advertised: initialized.authMethods?.map((method) => method.id) ?? [],
         env: launch.env
       })
+      if (spec.agent === 'grok') {
+        if (!grokTextTaskPreservesAccount(initialized, authMethodId)) {
+          throw new Error('Grok cannot preserve the naming account with the text task policy')
+        }
+        sessionId = promptId
+        if (authMethodId) {
+          await waitForPromiseWithSignal(server.authenticate(authMethodId), taskSignal)
+        }
+        checkCurrent()
+        return await runGrokTextTask({
+          launch: {
+            ...launch,
+            args: [],
+            env: acpTextTaskEnv(spec.agent, launch.env),
+            envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
+          },
+          cwd,
+          prompt: input.prompt,
+          sessionId,
+          signal: taskSignal,
+          timeoutMs: Math.max(1, deadlineAt - Date.now())
+        })
+      }
       starting = true
       await waitForPromiseWithSignal(
         server
           .start({ cwd, mcpServers: [], authMethodId })
           .then((started) => {
             sessionId = started.sessionId
+            modeConfigId =
+              started.response.configOptions?.find(
+                (option) => option.category === 'mode' && option.type === 'select'
+              )?.id ?? 'mode'
           })
           .finally(() => {
             starting = false
@@ -231,6 +251,13 @@ export class AcpTextTasks {
           }),
         taskSignal
       )
+      if (spec.permissionModeConfig) {
+        await waitForPromiseWithSignal(
+          server.setConfigOption(modeConfigId, spec.permissionModeConfig.values.ask),
+          taskSignal
+        )
+      }
+      checkCurrent()
       const response = await waitForPromiseWithSignal(
         Promise.race([
           server.prompt([{ type: 'text', text: input.prompt }], { promptId, requestId: promptId }),
@@ -253,24 +280,16 @@ export class AcpTextTasks {
       clearTimeout(timer)
       unsubscribe()
       deadline.abort()
-      const cleanup = async (work: () => Promise<unknown>): Promise<void> => {
-        try {
-          await waitForPromiseWithSignal(work(), AbortSignal.timeout(2_000))
-        } catch (error) {
-          this.deps.logger?.warn('Naming helper protocol cleanup failed', {
-            scope: 'acp-text-task',
-            error
-          })
-        }
-      }
       if (connection && sessionId) {
         const server = connection
-        if (!completed) {
-          await cleanup(() => server.cancel())
+        if (!completed && spec.agent !== 'grok') {
+          await cleanupAcpTextTaskProtocol(() => server.cancel(), this.deps.logger)
         }
         if (spec.agent === 'grok') {
-          await cleanup(() =>
-            server.requestExtension('_x.ai/session/delete', { sessionId, cwd }, 2_000)
+          await cleanupAcpTextTaskProtocol(
+            () =>
+              server.requestSessionFreeExtension('_x.ai/session/delete', { sessionId, cwd }, 2_000),
+            this.deps.logger
           )
         }
       }

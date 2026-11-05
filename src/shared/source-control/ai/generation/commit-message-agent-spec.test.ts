@@ -266,6 +266,7 @@ describe('buildArgs (Jcode)', () => {
       '--no-selfdev',
       '--tool-profile',
       'none',
+      '--tools=',
       '--model',
       'claude-haiku-4-5',
       'run',
@@ -282,6 +283,7 @@ describe('buildArgs (Jcode)', () => {
       '--no-selfdev',
       '--tool-profile',
       'none',
+      '--tools=',
       'run',
       '--json',
       'name this branch'
@@ -309,6 +311,7 @@ describe('buildArgs (Jcode)', () => {
       '--no-selfdev',
       '--tool-profile',
       'none',
+      '--tools=',
       '--model',
       'claude-haiku-4-5'
     ])

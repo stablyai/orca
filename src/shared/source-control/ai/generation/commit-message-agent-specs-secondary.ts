@@ -170,7 +170,14 @@ export function buildSecondaryCommitMessageAgentSpecs({
         '--no-custom-instructions',
         '--model',
         model,
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
+        '--available-tools=view,glob,grep',
+        '--allow-tool=read',
+        '--deny-tool=write',
+        '--deny-tool=shell',
+        '--deny-tool=memory',
+        '--disable-builtin-mcps',
+        '--allow-all-paths'
       ],
       modelSource: 'static',
       // Copilot filters the picker by account/org policy; retain the full hosted catalog for permitted selections.
@@ -188,10 +195,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
           id: 'claude-sonnet-4.6',
           label: 'Claude Sonnet 4.6'
         },
-        {
-          id: 'claude-opus-4.5',
-          label: 'Claude Opus 4.5'
-        },
+        { id: 'claude-opus-4.5', label: 'Claude Opus 4.5' },
         {
           id: 'claude-opus-4.6',
           label: 'Claude Opus 4.6'
@@ -292,6 +296,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
         // Staged patches are attacker-influenced; none removes shell/read/write and MCP via tools.rs base_allowed_tools, matching read-only siblings.
         '--tool-profile',
         'none',
+        '--tools=',
         ...(model && model !== 'default' ? ['--model', model] : []),
         'run',
         '--json',
