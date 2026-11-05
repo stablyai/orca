@@ -5,10 +5,11 @@ import {
   createRuntimeWithSshLease,
   deferred,
   store
-} from './orca-runtime-test-fixtures.spec'
-import { makePaneKey } from './orca-runtime-test-mocks.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
-import { registerBoundPty } from './bind-first-pane.test-fixture'
+import { registerBoundPty } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import type {
   RuntimeTerminalCreate,
   RuntimeTerminalResolvePane

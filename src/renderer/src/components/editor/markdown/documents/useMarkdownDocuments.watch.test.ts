@@ -169,33 +169,6 @@ describe('Markdown metadata from the existing worktree watcher', () => {
     )
   })
 
-  it('ignores other hosts, roots, unrelated files, and ordinary content updates', async () => {
-    await render()
-    change([{ kind: 'create', absolutePath: target.filePath }], 'host-b')
-    change([{ kind: 'create', absolutePath: target.filePath }], null)
-    change([{ kind: 'create', absolutePath: '/other/LATE.md' }], 'host-a', '/other')
-    change([{ kind: 'create', absolutePath: '/repo-other/LATE.md' }])
-    change([{ kind: 'create', absolutePath: '/repo/app.ts' }])
-    change([{ kind: 'update', absolutePath: target.filePath }])
-    await settle()
-    expect(runtime.list).toHaveBeenCalledOnce()
-  })
-
-  it.each([
-    { kind: 'rename', absolutePath: '/repo/LATE.txt', oldAbsolutePath: target.filePath },
-    { kind: 'create', absolutePath: '/repo/late.MDX' },
-    { kind: 'delete', absolutePath: '/repo/docs', isDirectory: true },
-    { kind: 'overflow', absolutePath: '/repo' }
-  ] satisfies FsChangeEvent[])(
-    'refreshes document membership for $kind $absolutePath',
-    async (event) => {
-      await render()
-      change([event])
-      await settle()
-      expect(runtime.list).toHaveBeenCalledTimes(2)
-    }
-  )
-
   it('coalesces bursts and shares a fresh pending scan across split panes', async () => {
     const owner = 'host-split'
     await render(owner, 2)

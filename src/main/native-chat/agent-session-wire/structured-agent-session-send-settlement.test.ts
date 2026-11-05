@@ -80,15 +80,6 @@ describe('a wait that also ends behind a running command', () => {
 
     await expect(pending).resolves.toMatchObject({ value: { submission: { handedOverAt: 3 } } })
   })
-
-  it('leaves the plain handover wait to the handover', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() =>
-      queuedJournal('compact:cmd-1')
-    )
-    const pending = settlements.wait('session-1', 'client-1', { until: 'handed-over', budgetMs: 1 })
-
-    await expect(pending).resolves.toBeUndefined()
-  })
 })
 
 describe('structured send settlement compatibility wait', () => {

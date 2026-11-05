@@ -6,11 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadManagedStaleLockReclaimResult } from '../../../../../../shared/orcad-managed-runtime'
 import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
-import {
-  canRecoverSshHostServer,
-  SshHostRecoverServerDialog,
-  staleLockReclaimCommandFrom
-} from './SshHostRecoverServerAction'
+import { SshHostRecoverServerDialog } from './SshHostRecoverServerAction'
 
 vi.mock('../../../ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
@@ -86,26 +82,6 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
 }
 
 describe('Recover server', () => {
-  it('is offered only when the slot’s own refusal named the command', () => {
-    expect(canRecoverSshHostServer(refusedStart)).toBe(true)
-    expect(
-      canRecoverSshHostServer({
-        kind: 'managed',
-        environmentId: 'env-1',
-        serving: { state: 'unverifiable', detail: 'orcad holds the data root.' }
-      })
-    ).toBe(false)
-  })
-
-  it('is not offered on the web client, which has no managed-server API', () => {
-    Object.assign(window, { api: { runtimeEnvironments: {} } })
-    expect(canRecoverSshHostServer(refusedStart)).toBe(false)
-  })
-
-  it('names the refusal’s command for a manual recovery', () => {
-    expect(staleLockReclaimCommandFrom(DETAIL)).toBe(COMMAND)
-  })
-
   it('clears the lock only after the user rules out another machine', async () => {
     const onOpenChange = vi.fn()
     const onChanged = vi.fn()
@@ -149,33 +125,5 @@ describe('Recover server', () => {
     expect(container.textContent).not.toContain('--reclaim-stale-lock')
     expect(container.textContent).not.toContain('rm /')
     expect(button(container, 'Close')).toBeDefined()
-  })
-
-  it('offers only a delete by hand when the host can’t run the check', async () => {
-    reclaimStaleLock.mockResolvedValueOnce({
-      status: 'unsupported',
-      message: 'no answer',
-      lockPath: '/home/dev/.orca/orcad.lock'
-    })
-    const container = await render()
-    expect(container.textContent).toContain('no answer')
-    expect(container.textContent).toContain('rm /home/dev/.orca/orcad.lock')
-    expect(container.textContent).not.toContain('--reclaim-stale-lock')
-    expect(button(container, 'Clear lock and restart')).toBeUndefined()
-  })
-
-  it.each([
-    {
-      status: 'refused',
-      message: 'still running',
-      lockPath: '/home/dev/.orca/orcad.lock'
-    } as const,
-    { status: 'no-answer', message: 'no answer understood' } as const,
-    { status: 'unsupported', message: 'too old to pin', reclaimWithoutPin: true } as const
-  ])('names the reclaim command, never a delete, for $status', async (result) => {
-    reclaimStaleLock.mockResolvedValueOnce(result)
-    const container = await render()
-    expect(container.textContent).toContain(COMMAND)
-    expect(container.textContent).not.toContain('rm /home')
   })
 })

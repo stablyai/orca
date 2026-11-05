@@ -13,7 +13,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import type { RuntimeStore } from './runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import { bindPaneFirst, registerBoundPty } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'

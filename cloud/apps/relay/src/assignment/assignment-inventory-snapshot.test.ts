@@ -3,7 +3,7 @@ import {
   formatAssignmentInventorySnapshot,
   readAssignmentInventorySnapshot
 } from './assignment-inventory-snapshot.js'
-import { openInMemoryRelayDatabase } from '../database.js'
+import { openInMemoryRelayDatabase } from '../database/database.js'
 
 describe('assignment inventory snapshot', () => {
   it('reports per-cell counters, lease backlog, and reservation debt', async () => {

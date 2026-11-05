@@ -61,6 +61,8 @@ const fsAllowances: Record<string, readonly string[]> = {
     'rmSync',
     'writeFileSync'
   ],
+  // Writes the account's copy of the user's settings and a digest-only sync record.
+  'claude-accounts/claude-profile-settings.ts': ['writeFileAtomically'],
   'claude-accounts/claude-profile-sharing.ts': [
     'mkdirSync',
     'rmdirSync',

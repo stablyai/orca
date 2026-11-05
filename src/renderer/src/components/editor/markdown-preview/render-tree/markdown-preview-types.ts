@@ -6,6 +6,8 @@ export type MarkdownPreviewProps = {
   filePath: string
   sourceFileId?: string | null
   sourceWorktreeId?: string | null
+  /** Workspace-relative path of the previewed file, as the editor names it. */
+  sourceRelativePath?: string | null
   sourceRuntimeEnvironmentId?: string | null
   scrollCacheKey: string
   initialAnchor?: string | null

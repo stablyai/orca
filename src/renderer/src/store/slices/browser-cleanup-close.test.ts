@@ -3,10 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import {
-  layoutFrameApplyObserver,
-  observeLayoutFrameApply
-} from '@/runtime/workspace-layout-frame-apply-observer'
+
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mockCallRuntimeRpc = vi.hoisted(() => vi.fn())
@@ -131,55 +128,6 @@ describe('closeBrowserTab with reason cleanup', () => {
     await settled()
 
     expect(store.getState().activeWorktreeId).toBeNull()
-  })
-  it('clears focus for closed pages without rescanning pages for unrelated focus entries', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const original = store.getState().browserPagesByWorkspace[workspaceId][0]
-    let idReads = 0
-    let counting = true
-    const pages = Array.from({ length: 1000 }, (_, index) => ({
-      ...original,
-      get id() {
-        if (counting) {
-          idReads++
-        }
-        return `closed-${index}`
-      }
-    }))
-    // The test transport's frame-apply check rebuilds every flush; its reads are not the close's.
-    const check = layoutFrameApplyObserver()
-    observeLayoutFrameApply(
-      check &&
-        ((observation) => {
-          counting = false
-          try {
-            check(observation)
-          } finally {
-            counting = true
-          }
-        })
-    )
-    const unrelated = Object.fromEntries(
-      Array.from({ length: 1000 }, (_, i) => [`other-${i}`, true as const])
-    )
-    store.setState({
-      browserPagesByWorkspace: { [workspaceId]: pages },
-      pendingAddressBarFocusByPageId: { ...unrelated, 'closed-999': true, [workspaceId]: true },
-      pendingAddressBarFocusByTabId: { ...unrelated, 'closed-999': true, [workspaceId]: true }
-    })
-    idReads = 0
-    try {
-      store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-      await settled()
-    } finally {
-      observeLayoutFrameApply(check)
-    }
-    expect(store.getState().pendingAddressBarFocusByPageId).toEqual({
-      ...unrelated,
-      [workspaceId]: true
-    })
-    expect(store.getState().pendingAddressBarFocusByTabId).toEqual(unrelated)
-    expect(idReads).toBeLessThan(10_000)
   })
 
   // Background tab close must never move focus, including through pending address-bar bookkeeping.

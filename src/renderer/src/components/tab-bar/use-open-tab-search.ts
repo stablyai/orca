@@ -14,6 +14,7 @@ import {
 } from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useWorktreeStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
@@ -50,9 +51,21 @@ export function useOpenTabSearch({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refresh on open or tab-set changes, never agent-status churn.
     [enabled, state?.tabsByWorktree, state?.unifiedTabsByWorktree, worktreeId]
   )
+  // The omnibox searches one workspace on one host, the scope its entries are built for.
+  const scopeWorktree = state?.worktree
+  const scopeHostId = state?.executionHostId
+  const chatWorktree = useMemo(
+    () => (scopeWorktree && scopeHostId ? { ...scopeWorktree, hostId: scopeHostId } : null),
+    [scopeWorktree, scopeHostId]
+  )
+  const chatNames = useWorktreeStructuredChatTabNames(
+    chatWorktree,
+    state?.unifiedTabsByWorktree[worktreeId],
+    enabled
+  )
   const entries = useMemo(
-    () => (state && agentState ? buildOpenTabSearchEntries(state, agentState) : null),
-    [agentState, state]
+    () => (state && agentState ? buildOpenTabSearchEntries(state, agentState, chatNames) : null),
+    [agentState, chatNames, state]
   )
   const deferredQuery = useDeferredValue(query)
   const evaluationSnapshot = useMemo(

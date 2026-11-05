@@ -3,7 +3,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const reads = vi.hoisted(() => ({ count: 0, names: 0, failNext: 0 }))
 const { removeHostTreeMock } = vi.hoisted(() => ({

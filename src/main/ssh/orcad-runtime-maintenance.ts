@@ -163,7 +163,9 @@ export async function runManagedOrcadUpdate(
     return deferral
   }
   clearManagedOrcadUpdateDeferral(environment.id)
-  const started = result.outcome === 'already-active' && (await wakeAlreadyActiveOrcad(slot))
+  const alreadyActive = result.outcome === 'already-active'
+  const managed = { environmentId: environment.id, hostLabel: context.target.label }
+  const started = alreadyActive && (await wakeAlreadyActiveOrcad(slot, managed))
   const readiness = await probeManagedOrcadReadiness(
     context,
     localOrcadDir,

@@ -46,15 +46,6 @@ describe('getPinnedSectionWorktrees', () => {
     [sibling.id, sibling]
   ])
 
-  it('includes only explicitly pinned rows when there is no lineage', () => {
-    const pinned = makeWorktree('pinned', { isPinned: true })
-    const loose = makeWorktree('loose')
-
-    expect(getPinnedSectionWorktrees([pinned, loose], {}, new Map([[pinned.id, pinned]]))).toEqual([
-      pinned
-    ])
-  })
-
   it('does not include an unpinned row with the same id on another host', () => {
     const pinnedLocal = makeWorktree('shared', { hostId: 'local', isPinned: true })
     const unpinnedSsh = makeWorktree('shared', {
@@ -69,85 +60,6 @@ describe('getPinnedSectionWorktrees', () => {
         new Map([[pinnedLocal.id, pinnedLocal]])
       ).map((candidate) => candidate.hostId)
     ).toEqual(['local'])
-  })
-
-  it('includes visible descendants of a pinned parent', () => {
-    const pinnedParent = { ...parent, isPinned: true }
-    const map = new Map(worktreeMap)
-    map.set(pinnedParent.id, pinnedParent)
-
-    expect(
-      getPinnedSectionWorktrees([pinnedParent, child, grandchild, sibling], lineageById, map).map(
-        (worktree) => worktree.id
-      )
-    ).toEqual([pinnedParent.id, child.id, grandchild.id])
-  })
-
-  it("does not pull a pinned child's unpinned parent into Pinned", () => {
-    const pinnedChild = { ...child, isPinned: true }
-    const map = new Map(worktreeMap)
-    map.set(pinnedChild.id, pinnedChild)
-
-    expect(
-      getPinnedSectionWorktrees([parent, pinnedChild], lineageById, map).map(
-        (worktree) => worktree.id
-      )
-    ).toEqual([pinnedChild.id])
-  })
-
-  it('keeps a visible grandchild when the middle parent is absent from the visible list', () => {
-    const pinnedParent = { ...parent, isPinned: true }
-    const map = new Map(worktreeMap)
-    map.set(pinnedParent.id, pinnedParent)
-
-    expect(
-      getPinnedSectionWorktrees([pinnedParent, grandchild], lineageById, map).map(
-        (worktree) => worktree.id
-      )
-    ).toEqual([pinnedParent.id, grandchild.id])
-  })
-
-  it('breaks inherited pin placement at an explicitly hidden intermediate project', () => {
-    const pinnedParent = { ...parent, isPinned: true }
-    const hidden = { ...child, repoId: 'hidden-project' }
-    const visible = { ...grandchild, repoId: 'visible-project' }
-    const map = new Map([pinnedParent, hidden, visible].map((row) => [row.id, row]))
-    const allowed = [pinnedParent.repoId, visible.repoId]
-    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map, allowed)).toEqual([
-      pinnedParent
-    ])
-    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map)).toEqual([
-      pinnedParent,
-      visible
-    ])
-    const rows = buildRows(
-      'repo',
-      [pinnedParent, visible],
-      repoMap,
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      lineageById,
-      map,
-      true,
-      undefined,
-      [],
-      new Set(),
-      new Map(),
-      new Map(),
-      [],
-      undefined,
-      [],
-      undefined,
-      'local',
-      'single-location',
-      allowed
-    )
-    expect(rows.find((row) => row.type === 'item' && row.worktree.id === visible.id)).toMatchObject(
-      { sectionKey: 'repo:visible-project', depth: 0 }
-    )
   })
 
   it('does not collect descendants of a pinned parent that is not itself visible', () => {

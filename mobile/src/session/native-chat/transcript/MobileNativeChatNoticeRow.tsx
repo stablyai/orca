@@ -25,7 +25,7 @@ import {
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeNames
 } from '../../mobile-native-chat-notice-context'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -117,12 +117,10 @@ function NoticeDisclosureSummary({
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onOpenFile,
   onLongPress
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
@@ -250,11 +248,10 @@ export function MobileNativeChatNoticeRow({
       return (
         <View style={styles.card}>
           <Text style={styles.planTitle}>{copy.plan}</Text>
-          <MobileMarkdown
+          <MobileNativeChatMarkdown
             content={notice.text}
             rangeSelectable
             textScale={fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={onLongPress}
           />
         </View>

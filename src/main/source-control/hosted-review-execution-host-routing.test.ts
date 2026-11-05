@@ -90,7 +90,8 @@ vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', () => ({
 }))
 
 vi.mock('../git/remotes/remote-url-probe', () => ({
-  assertRemoteUrlReadable: assertRemoteUrlReadableMock
+  assertRemoteUrlReadable: assertRemoteUrlReadableMock,
+  withSharedRemoteUrlReads: <T>(work: () => Promise<T>) => work()
 }))
 
 vi.mock('../gitlab/client', () => ({
@@ -101,6 +102,15 @@ vi.mock('../gitlab/client', () => ({
 
 vi.mock('../gitlab/merge-request-creation', () => ({
   createGitLabMergeRequest: createGitLabMergeRequestMock
+}))
+
+vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
+  getRepoSlug: getRepoSlugMock,
+  getRepoUpstream: getRepoUpstreamMock
+}))
+
+vi.mock('../github/client/lookup/pr-for-branch-outcome', () => ({
+  getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
 vi.mock('../github/client', () => ({
@@ -151,7 +161,7 @@ vi.mock('../gitea/pull-request-creation', () => ({
 import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
 import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
-import { RuntimeHostedReviewCommands } from '../runtime/runtime-hosted-review-commands'
+import { RuntimeHostedReviewCommands } from '../runtime/integrations/reviews/runtime-hosted-review-commands'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const REPO_PATH = '/remote/workspace/repo'

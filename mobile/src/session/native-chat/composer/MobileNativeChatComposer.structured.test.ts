@@ -36,6 +36,9 @@ import {
   MobileNativeChatDraftComposer
 } from './MobileNativeChatComposer'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
 }))
@@ -478,7 +481,9 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     )
     const sends = () =>
       sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send').map(([, p]) => p)
-    const send = () => labelled('Queue')[0]!
+    const send = () => labelled('Send message')[0]!
+    // Like desktop, the arrow stays while the agent works; a hold is the only other way.
+    expect(send().findAll((node) => String(node.type) === 'ArrowUp')).toHaveLength(1)
     await act(async () => send().props.onLongPress())
     const steer = drawers()[0]!.findAll(
       (node) =>

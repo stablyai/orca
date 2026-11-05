@@ -1,8 +1,8 @@
-import { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { setBrowserHostClientProfileResolver } from '../runtime/browser-host/browser-host-client-profile-metadata'
+import { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/browser/installation/runtime-browser-commands-factory'
+import { setBrowserHostClientProfileResolver } from '../runtime/browser-host/profiles/browser-host-client-profile-metadata'
 import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
-import { setManagedBrowserProfileDeleter } from '../runtime/browser-host/managed-browser-profile-removal'
+import { setManagedBrowserProfileDeleter } from '../runtime/browser-host/profiles/managed-browser-profile-removal'
 import { deleteManagedBrowserProfile } from '../browser/sessions/browser-managed-session-profiles'
 
 /** Importing this desktop factory loads the Chromium browser cluster. */

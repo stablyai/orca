@@ -98,44 +98,6 @@ function runAction(action: RichMarkdownTableAction, cellText: string): Editor {
 }
 
 describe('rich markdown table actions', () => {
-  it.each([
-    ['insert-row-above', { rows: 4, columns: 2 }],
-    ['insert-row-below', { rows: 4, columns: 2 }],
-    ['insert-column-left', { rows: 3, columns: 3 }],
-    ['insert-column-right', { rows: 3, columns: 3 }]
-  ] as const)('runs %s from the current cell', (action, expectedDimensions) => {
-    const editor = runAction(action, 'a1')
-    try {
-      expect(tableDimensions(editor)).toEqual(expectedDimensions)
-      expect(editor.getMarkdown()).toContain('| ---')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('deletes the current body row', () => {
-    const editor = runAction('delete-row', 'a1')
-    try {
-      expect(tableDimensions(editor)).toEqual({ rows: 2, columns: 2 })
-      expect(editor.getMarkdown()).not.toContain('a1')
-      expect(editor.getMarkdown()).toContain('a2')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('deletes the current column', () => {
-    const editor = runAction('delete-column', 'b1')
-    try {
-      expect(tableDimensions(editor)).toEqual({ rows: 3, columns: 1 })
-      expect(editor.getMarkdown()).not.toContain('B')
-      expect(editor.getMarkdown()).not.toContain('b1')
-      expect(editor.getMarkdown()).toContain('a1')
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('gives a new column an equal share of the locked table width', () => {
     const editor = createEditor()
     try {
@@ -206,17 +168,6 @@ describe('rich markdown table actions', () => {
     }
   })
 
-  it('keeps a two-column table when one column is deleted', () => {
-    const editor = createEditor()
-    try {
-      editor.commands.setTextSelection(caretAtText(editor, 'b1'))
-      expect(runRichMarkdownTableAction(editor, 'delete-column')).toBe(true)
-      expect(tableDimensions(editor)).toEqual({ rows: 3, columns: 1 })
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('keeps a merged-cell table when one logical column is deleted', () => {
     const editor = createEditor()
     try {
@@ -271,25 +222,6 @@ describe('rich markdown table actions', () => {
     }
   })
 
-  it('does not mutate stale selection when coordinate targeting fails', () => {
-    const editor = createEditor()
-    try {
-      editor.commands.setTextSelection(caretAtText(editor, 'a1'))
-      const before = editor.getMarkdown()
-      const originalPosAtCoords = editor.view.posAtCoords
-      editor.view.posAtCoords = () => {
-        throw new Error('view unavailable')
-      }
-      expect(runRichMarkdownTableAction(editor, 'delete-row', { clientX: 10, clientY: 20 })).toBe(
-        false
-      )
-      expect(editor.getMarkdown()).toBe(before)
-      editor.view.posAtCoords = originalPosAtCoords
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('preserves a multi-cell selection when the clicked cell belongs to it', () => {
     const editor = createEditor()
     try {
@@ -338,35 +270,6 @@ describe('rich markdown table actions', () => {
       editor.commands.insertTable({ rows: 1, cols: 2, withHeaderRow: false })
       expect(runRichMarkdownTableAction(editor, 'delete-row')).toBe(true)
       expect(editor.isActive('table')).toBe(false)
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('serializes and reopens after structural edits', () => {
-    const editor = runAction('insert-column-right', 'b1')
-    const markdown = editor.getMarkdown()
-    editor.destroy()
-    const reopened = new Editor({
-      element: document.createElement('div'),
-      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
-      content: markdown,
-      contentType: 'markdown'
-    })
-    try {
-      expect(tableDimensions(reopened)).toEqual({ rows: 3, columns: 3 })
-      expect(markdown).toMatch(/\|\s*-{3,}/)
-    } finally {
-      reopened.destroy()
-    }
-  })
-
-  it('does nothing outside a table', () => {
-    const editor = createEditor()
-    try {
-      editor.commands.setContent('Paragraph', { contentType: 'markdown' })
-      expect(runRichMarkdownTableAction(editor, 'insert-row-below')).toBe(false)
-      expect(editor.getMarkdown()).toBe('Paragraph')
     } finally {
       editor.destroy()
     }

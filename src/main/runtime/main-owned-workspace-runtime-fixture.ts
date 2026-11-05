@@ -6,7 +6,10 @@ import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layo
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
-import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
+import {
+  withDurableRuntimeStore,
+  withRuntimePaneAdmission
+} from './orca-runtime-tests/runtime-durable-store-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 
 export const REPO = {

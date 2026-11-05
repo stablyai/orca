@@ -97,6 +97,7 @@ export async function closeCliChatResumeTerminal(
     }
     signal.addEventListener('abort', cancel, { once: true })
     closeTerminalTab(source.tabId, {
+      reason: 'user',
       // Continuing is the user's consent to stop this pane's agent, so only other panes' work asks.
       ...(consents && bindings[leafId] ? { consentedPtyId: bindings[leafId] } : {}),
       // The chat opens in this worktree, so emptying it must not leave it.

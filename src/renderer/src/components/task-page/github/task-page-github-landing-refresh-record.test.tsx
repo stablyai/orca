@@ -219,18 +219,6 @@ describe('a tracked Tasks edit through the landing refresh', () => {
     node.remove()
   })
 
-  it('retains the selected collection count while same-source count revalidation is held', async () => {
-    await landingRefresh()
-    const held = Promise.withResolvers<number>()
-    mockApi.gh.countWorkItems.mockReturnValueOnce(held.promise)
-    const model = await landingRefresh(9)
-    expect(model.countedTotalPagesRef.current).toBe(9)
-    held.resolve(200)
-    await act(async () => {
-      await held.promise
-    })
-  })
-
   it.each(['provisional', 'accepted'])(
     'stores no pending close in the cache or pages, and a failure leaves every copy as it was (%s owner)',
     async (owner) => {

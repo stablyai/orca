@@ -31,7 +31,7 @@ import {
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
-import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
+import { readMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 
 function runtimeCallEvent() {
   const mainFrame = {}
@@ -135,8 +135,12 @@ describe('registerRuntimeHandlers', () => {
     expect(result).toEqual({ graphStatus: 'ready' })
   })
 
-  it("serves the authoritative window's sidebar catalog to paired phones, and keeps it when omitted", () => {
-    const runtime = { syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }) }
+  // #37067: a phone's re-read on the add's reposChanged came before this publish.
+  it("serves the authoritative window's catalog to paired phones, re-announces only changes, and keeps it when omitted", () => {
+    const runtime = {
+      syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }),
+      notifyReposChangedForRemoteClients: vi.fn()
+    }
     registerRuntimeHandlers(runtime as never)
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:syncWindowGraph'
@@ -147,9 +151,14 @@ describe('registerRuntimeHandlers', () => {
     const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
 
     handler(event, { ...graph, projectSectionCatalog: PROJECT_SECTION_PARITY_SERVED })
+    handler(event, {
+      ...graph,
+      projectSectionCatalog: structuredClone(PROJECT_SECTION_PARITY_SERVED)
+    })
     handler(event, graph)
 
     expect(readMobileProjectSections()).toEqual({ catalog: PROJECT_SECTION_PARITY_SERVED })
+    expect(runtime.notifyReposChangedForRemoteClients).toHaveBeenCalledTimes(1)
   })
 
   it('does not serve a catalog from a graph the runtime refused', () => {

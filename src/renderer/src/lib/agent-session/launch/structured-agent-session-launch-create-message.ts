@@ -57,8 +57,12 @@ export function prepareStructuredLaunchCreateMessage(
     return
   }
   const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
-  const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
-  if (hadPrompt || firstMessage) {
+  const { firstMessage, deferred } = prepareStructuredLaunchPromptForCreate(
+    intent.sessionId,
+    intent.target,
+    intent.sendSkillsSupport === true
+  )
+  if (!deferred && (hadPrompt || firstMessage)) {
     const beforeCreate = intent.beforeCreate
     intent.beforeCreate = () =>
       beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
