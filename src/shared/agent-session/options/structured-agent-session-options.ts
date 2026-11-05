@@ -149,7 +149,7 @@ export function applyStructuredAgentSessionModelCatalog(
     catalog: {
       ...(state.catalogSource === 'live' ? (state.catalog ?? seed) : seed),
       models,
-      defaultModelIsCliDefault: namesDefault
+      ...(namesDefault ? { defaultModelIsCliDefault: true } : {})
     },
     ...(installed ? { verifiedModelIds } : {}),
     catalogSource: state.catalogSource === 'live' ? 'live' : 'host',

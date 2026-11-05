@@ -48,58 +48,6 @@ describe('useStructuredAgentSessionOptions', () => {
     resetHostModelCatalogSnapshotsForTests()
   })
 
-  it.each([false, undefined])(
-    'retires a draft observation before late discovery (next fact: %s)',
-    async (sessionNeverStarted) => {
-      mocks.coherentCatalog = true
-      mocks.sendSelection = true
-      const pending = Promise.withResolvers<AgentSessionOptionsResult>()
-      const catalog = Promise.withResolvers<typeof HOST_CATALOG>()
-      let reads = 0
-      const current: AgentSessionOptionsResult = {
-        models: [],
-        modelsKnown: false,
-        sessionNeverStarted: true,
-        current: { defaulted: [], acceptedInputSources: {} }
-      }
-      answer({
-        options: () =>
-          ++reads === 1
-            ? Promise.resolve(current)
-            : reads === 2
-              ? pending.promise
-              : Promise.resolve({ ...current, sessionNeverStarted }),
-        modelCatalog: () => catalog.promise
-      })
-      const view = renderOptions({ ...REOPENED, agent: 'claude' }, vi.fn())
-      await waitFor(() =>
-        expect(view.result.current.sendSource.optionStateRef.current.optionsAnswerPresent).toBe(
-          true
-        )
-      )
-      view.rerender({ ...REOPENED, agent: 'claude', turnId: 'pending-turn' })
-      await waitFor(() => expect(reads).toBe(2))
-      view.rerender({ ...REOPENED, agent: 'claude', turnId: 'newer-turn' })
-      await act(async () => pending.resolve(current))
-      await waitFor(() =>
-        expect(view.result.current.sendSource.optionStateRef.current.sessionNeverStarted).toBe(
-          sessionNeverStarted
-        )
-      )
-      await act(async () => catalog.resolve({ ...HOST_CATALOG, listingNamesConfiguredModel: true }))
-      await tick()
-      expect(currentValue(view.result.current.optionSnapshot, 'model')).toBeNull()
-      expect(currentValue(view.result.current.optionSnapshot, 'effort')).toBeNull()
-      expect(
-        structuredAgentSessionMessageSelection(
-          view.result.current.sendSource.optionStateRef.current
-        )
-      ).toEqual({})
-      expect(mocks.enqueue).not.toHaveBeenCalled()
-      view.unmount()
-    }
-  )
-
   it('keeps the latest dependent menu after same-stamp receipts and an older delayed answer', async () => {
     const menu = (model: string, effort?: string): AgentSessionOptionsResult => ({
       models: ['family', 'newer'].map((id) => ({

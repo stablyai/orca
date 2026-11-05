@@ -219,10 +219,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 reportedPermissionMode: undefined,
                 reportedModel: undefined,
                 reportedEffort: undefined,
-                sessionNeverStarted: undefined,
-                catalogNamesConfiguredModel: previous
-                  ? undefined
-                  : current.catalogNamesConfiguredModel
+                sessionNeverStarted: undefined
               }
             : context.seed()
         // Support stays tagged with its session; consumers filter by session, so it bridges a re-pair.

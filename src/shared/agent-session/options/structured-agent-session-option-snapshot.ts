@@ -117,23 +117,32 @@ export function structuredAgentSessionDrawnValues(
   return drawnModelControls(state)?.values ?? state.record.values
 }
 
+/** Current draft/catalog observations extend display authority without changing accepted input. */
+export function structuredAgentSessionDisplayCatalog(
+  state: StructuredAgentSessionOptionState
+): AgentSessionOptionCatalog | null {
+  const catalog = state.catalog
+  return catalog &&
+    state.catalogSource !== 'seed' &&
+    state.sessionNeverStarted === true &&
+    state.catalogNamesConfiguredModel === true &&
+    catalog.models.some((model) => model.isDefault)
+    ? { ...catalog, defaultModelIsCliDefault: true }
+    : catalog
+}
+
 function drawnModelControls(state: StructuredAgentSessionOptionState) {
   const { record } = state
+  const displayCatalog = structuredAgentSessionDisplayCatalog(state)
   if (
-    !state.catalog ||
+    !displayCatalog ||
     (state.catalogSource === 'seed' && structuredAgentSessionModelId(record, 'own') === null)
   ) {
     return null
   }
   // Before discovery, name only accepted input; static rows cannot supply installed capabilities.
   const catalog =
-    state.catalogSource === 'seed'
-      ? { ...state.catalog, models: [] }
-      : state.sessionNeverStarted === true &&
-          state.catalogNamesConfiguredModel === true &&
-          state.catalog.models.some((model) => model.isDefault)
-        ? { ...state.catalog, defaultModelIsCliDefault: true }
-        : state.catalog
+    state.catalogSource === 'seed' ? { ...displayCatalog, models: [] } : displayCatalog
   const models = withTrackedNativeChatModel(catalog, catalog.models, { model: record.values.model })
   const shown = structuredAgentSessionShownModel(catalog, models, record)
   // A listed row describes the chat's model by id or resolved name; stand-ins keep their own options.

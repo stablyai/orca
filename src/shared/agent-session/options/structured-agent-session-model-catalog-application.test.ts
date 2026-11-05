@@ -10,6 +10,7 @@ import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
+  structuredAgentSessionOptionPicks,
   createStructuredAgentSessionOptionState,
   commitStructuredAgentSessionOption,
   settleStructuredAgentSessionBuiltinCatalog
@@ -286,6 +287,9 @@ it('requires current session and explicit catalog proof, replacing each observat
       ? answer(listing(start, true), true)
       : listing(answer(start, true), true)
     expect(value(known)).toBe('gpt-hosted')
+    expect(structuredAgentSessionOptionPicks(known, { effort: 'high' }, true)).toEqual([
+      { modelId: 'gpt-hosted', adoptModelAsLaunchDefault: false, optionId: 'effort', value: 'high' }
+    ])
     expect(structuredAgentSessionMessageSelection(known)).toEqual({})
     for (const proof of [false, undefined]) {
       expect(value(listing(answer(known, proof), true))).toBeUndefined()
@@ -312,4 +316,38 @@ it('requires current session and explicit catalog proof, replacing each observat
     const own = commitStructuredAgentSessionOption(known, 'model', 'own-unlisted')
     expect(value(listing(own, false))).toBe('own-unlisted')
   }
+})
+
+it('keeps existing new-launch default authority when its live catalog refresh cannot name a default', () => {
+  const launch = { newLaunch: true, coherentCatalog: true }
+  const listed = applyStructuredAgentSessionModelCatalog(
+    createStructuredAgentSessionOptionState('codex', SEED),
+    SEED,
+    { ...HOST_CATALOG, listingNamesConfiguredModel: true },
+    launch
+  )
+  const live = applyStructuredAgentSessionOptions(
+    listed,
+    SEED,
+    {
+      models: HOST_CATALOG.models,
+      current: { model: 'gpt-hosted', defaulted: ['model'], acceptedInputSources: {} }
+    },
+    launch
+  )
+  const refreshing = applyStructuredAgentSessionModelCatalog(
+    live,
+    SEED,
+    {
+      ...HOST_CATALOG,
+      listingInProgress: true,
+      listingNamesConfiguredModel: false,
+      models: HOST_CATALOG.models.map((row) => ({ ...row, isDefault: false }))
+    },
+    launch
+  )
+  expect(
+    structuredAgentSessionShownSnapshot(refreshing).find(({ id }) => id === 'model')?.kind
+      .currentValue
+  ).toBe('gpt-hosted')
 })
