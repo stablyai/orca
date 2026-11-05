@@ -1,12 +1,12 @@
-import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
+import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachments/workspace-attachment-mutation'
 import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   assertFolderWorkspacePathUsable,
   folderWorkspacePathRefusal,
@@ -21,6 +21,7 @@ import {
   runtimeVisibleProjectGroups
 } from './runtime-visible-catalog'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import { createFolderWorkspaceWithPluginHooks } from '../plugins/hooks/workspace-create-plugin-hook'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
@@ -173,6 +174,7 @@ export class RuntimeProjectGroupController {
     if (!store?.createFolderWorkspace) {
       throw new FolderWorkspaceCreateRefusedError('runtime_unavailable')
     }
+    const createFolder = store.createFolderWorkspace.bind(store)
     const projectGroups = store.getProjectGroups?.() ?? []
     const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
     const folderPath =
@@ -197,10 +199,12 @@ export class RuntimeProjectGroupController {
     if (pathRefusal) {
       throw new FolderWorkspaceCreateRefusedError(pathRefusal)
     }
-    const workspace = store.createFolderWorkspace({
-      ...input,
-      creatorProvenance: input.creatorProvenance ?? { kind: 'host' }
-    })
+    const workspace = await createFolderWorkspaceWithPluginHooks(input, (request) =>
+      createFolder({
+        ...request,
+        creatorProvenance: request.creatorProvenance ?? { kind: 'host' }
+      })
+    )
     this.deps.notifyReposChanged()
     return workspace
   }

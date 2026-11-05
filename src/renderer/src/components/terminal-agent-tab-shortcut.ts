@@ -1,8 +1,8 @@
 import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../store'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
-import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   listBoundAgentTabActions,
   resolveDefaultAgentForNewTab,

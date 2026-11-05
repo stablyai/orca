@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
   buildAgentRowLineageTree,
@@ -26,6 +26,7 @@ type Props = {
   statusLive?: boolean
   isReadOnly?: boolean
   onAgentPress?: (paneKey: string) => void
+  onAgentLongPress?: () => void
   /** The desktop's "Full list" agent activity layout: every row, no summary. */
   fullList?: boolean
 }
@@ -47,6 +48,7 @@ export function WorktreeAgentList({
   statusLive = false,
   isReadOnly = false,
   onAgentPress,
+  onAgentLongPress,
   fullList = false
 }: Props) {
   const roots = useMemo(
@@ -76,6 +78,7 @@ export function WorktreeAgentList({
       unvisited={unvisited}
       isReadOnly={isReadOnly}
       onPress={onAgentPress}
+      onLongPress={onAgentLongPress}
     />
   )
 
@@ -114,6 +117,9 @@ export function WorktreeAgentList({
           depth={node.depth}
           now={now}
           unvisited={unvisited}
+          isReadOnly={isReadOnly}
+          onPress={onAgentPress}
+          onLongPress={onAgentLongPress}
           trailing={
             children.length > 0 ? (
               <WorktreeAgentChildToggle

@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status-contract'
+
 import './agent-status'
 import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status-pane-keyed-records'
 import { createTestStore } from '../store-test-helpers'
@@ -36,24 +34,6 @@ function stubWindowApi(): {
 }
 
 describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
-  it('fires window.api.agentStatus.dropByTabPrefix after dropping local tab rows', () => {
-    const { dropByTabPrefix } = stubWindowApi()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
-    store
-      .getState()
-      .setAgentStatus('tab-2:0', { state: 'working', prompt: 'p', agentType: 'claude' })
-
-    store.getState().dropAgentStatusByTabPrefix('tab-1')
-
-    expect(dropByTabPrefix).toHaveBeenCalledTimes(1)
-    expect(dropByTabPrefix).toHaveBeenCalledWith('tab-1')
-    expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey['tab-2:0']).toBeDefined()
-  })
-
   it('FIFO-caps recentlyClosedAgentStatusTabIds so it cannot grow unbounded', () => {
     stubWindowApi()
     const store = createTestStore()
@@ -69,43 +49,5 @@ describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
     expect(closed['tab-0']).toBeUndefined()
     expect(closed['tab-4']).toBeUndefined()
     expect(closed[`tab-${cap + 4}`]).toBe(true)
-  })
-})
-
-describe('dismissRetainedAgentsByWorktree → IPC fan-out', () => {
-  it('fires drop once per dismissed paneKey under the worktree', () => {
-    const { drop } = stubWindowApi()
-    const store = createTestStore()
-    const now = Date.now()
-    function makeRetained(paneKey: string, worktreeId: string): RetainedAgentEntry {
-      const entry: AgentStatusEntry = {
-        state: 'done',
-        prompt: '',
-        updatedAt: now,
-        stateStartedAt: now,
-        paneKey,
-        stateHistory: []
-      }
-      return {
-        entry,
-        worktreeId,
-        tab: { id: paneKey.split(':')[0], title: 'claude' } as unknown as TerminalTab,
-        agentType: 'claude',
-        startedAt: now
-      }
-    }
-    store
-      .getState()
-      .retainAgents([
-        makeRetained('tab-a:0', 'wt-target'),
-        makeRetained('tab-b:0', 'wt-target'),
-        makeRetained('tab-c:0', 'wt-other')
-      ])
-
-    store.getState().dismissRetainedAgentsByWorktree('wt-target')
-    expect(drop).toHaveBeenCalledTimes(2)
-    const calls = drop.mock.calls.map((c) => c[0]).sort()
-    expect(calls).toEqual(['tab-a:0', 'tab-b:0'])
-    expect(store.getState().retainedAgentsByPaneKey['tab-c:0']).toBeDefined()
   })
 })

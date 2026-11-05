@@ -5,8 +5,8 @@ import {
   getLocalAutomaticWorkStatus,
   localTerminalLimit,
   resumeLocalAutomaticWork
-} from '../../../daemon/daemon-automatic-work-resume'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../daemon/providers/lifecycle/daemon-automatic-work-resume'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
@@ -29,6 +29,7 @@ import {
   hasPtyFromRuntimeController,
   getPtyAvailabilityFromRuntimeController,
   hasRendererSerializerFromRuntimeController,
+  supportsForegroundObservationFromRuntimeController,
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
@@ -76,6 +77,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
+    supportsForegroundObservation: (ptyId) =>
+      supportsForegroundObservationFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),

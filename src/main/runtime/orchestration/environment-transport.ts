@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { fingerprintAuthenticatedPairingCredential } from '../device-principal'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -8,6 +9,7 @@ export type OrchestrationWorkerServer = {
   environmentId: string
   name: string
   peerFingerprint: string
+  homePeerFingerprint?: string
   pairingRevision?: number
 }
 
@@ -31,4 +33,13 @@ export type OrchestrationEnvironmentTransport = {
 
 export function fingerprintOrchestrationPeer(publicKeyB64: string): string {
   return createHash('sha256').update(Buffer.from(publicKeyB64, 'base64')).digest('base64url')
+}
+
+/** How a home names a paired runtime and itself; the runtime derives the same pair from its own
+ *  pairing key and from the home's credential when it authenticates the home's socket. */
+export function pairedOrchestrationPeers(hostPublicKeyB64: string, deviceToken: string) {
+  return {
+    peerFingerprint: fingerprintOrchestrationPeer(hostPublicKeyB64),
+    homePeerFingerprint: fingerprintAuthenticatedPairingCredential(deviceToken)
+  }
 }

@@ -1,11 +1,9 @@
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
-import { structuredAgentSessionAttachAccount } from './structured-agent-session-attach-account'
 import {
   publishAttachedChild,
   readBoundChildRewind,
   type AttachAttempt
 } from './structured-agent-session-attach-publish'
-
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { randomUUID } from 'node:crypto'
@@ -27,19 +25,20 @@ import type {
   StructuredAgentSessionAttachContext,
   StructuredAgentSessionAttachOptions
 } from './structured-agent-session-attach-context'
-export type { StructuredAgentSessionAttachOptions } from './structured-agent-session-attach-context'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionAttachPermission } from './structured-agent-session-launch-permission'
 import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
 import {
-  addAgentSessionCreatePhaseAttributes,
-  withAgentSessionSpan,
-  type AgentSessionCreatePhaseRecorder
-} from '../../observability/agent-session-instrumentation'
-import {
   heldStructuredAgentSessionAttachLock,
   type StructuredAgentSessionAttachLock
 } from './structured-agent-session-attach-lock'
+
+export type { StructuredAgentSessionAttachOptions } from './structured-agent-session-attach-context'
+import {
+  type AgentSessionCreatePhaseRecorder,
+  addAgentSessionCreatePhaseAttributes,
+  withAgentSessionSpan
+} from '../../observability/agent-session-instrumentation'
 
 /** The attach an agent start runs under its own lock (`structured-agent-session-start-flight`);
  *  `attachStructuredAgentSession` runs the same steps inside one `serialize`, for a client. */
@@ -163,7 +162,6 @@ async function runAttachUnderAbort(
       location: params.location
     })
   }
-  const { startupAttempts } = context.runtimeState
   try {
     const attached = await performAttach({
       models: priorRecord ? undefined : options.catalogModels,
@@ -203,11 +201,10 @@ async function runAttachUnderAbort(
           attempt.catalogSource?.bind?.(record)
         }
         attempt.startup = startup
-        return startupAttempts.track(sessionId, startup)
+        return context.runtimeState.startupAttempts.track(sessionId, startup)
       },
       ...(options.startupOptions ? { startupOptions: options.startupOptions } : {}),
       launchPermissionMode: structuredAgentSessionAttachPermission(context, options, lock),
-      launchAccountRecipe: structuredAgentSessionAttachAccount(context, options.startedFor, lock),
       assertNoTerminalWriter: async (record) => {
         await lock.wait(Promise.resolve(context.deps.assertNoTerminalWriter?.(record)))
       },
@@ -280,7 +277,7 @@ async function runAttachUnderAbort(
       attempt.catalogSource?.release?.()
       attemptSink.close()
       if (attempt.startup) {
-        startupAttempts.abandon(sessionId, attempt.startup.attemptId)
+        context.runtimeState.startupAttempts.abandon(sessionId, attempt.startup.attemptId)
       }
     }
   }

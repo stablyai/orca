@@ -1,13 +1,13 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
   PickerModal,
-  BottomDrawer,
   View,
   Text,
   Pressable,
   ScrollView,
   type TaskProvider
 } from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import {
   normalizeGitHubPreset,
   getTaskPresetQuery,
@@ -341,6 +341,8 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
     <BottomDrawer
       visible={taskUiReady && showGitHubPagePicker}
       onClose={() => setShowGitHubPagePicker(false)}
+      // The page list scrolls itself; a drawer ScrollView around it would nest same-axis scrolling.
+      contentScrollable={false}
     >
       <View style={styles.sheetHeader}>
         <Text style={styles.sheetTitle}>{t('tasks.providerPickers.pages', 'GitHub Pages')}</Text>

@@ -1,7 +1,7 @@
-import { agentStopDisplayStatus } from '../../../shared/agent-stop-display-status'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import { agentStopDisplayStatus } from '../../../shared/agent-status/lifecycle/agent-stop-display-status'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { translate } from '@/i18n/i18n'
-import type { AgentRowState } from '../../../shared/agent-row-decay-state'
+import type { AgentRowState } from '../../../shared/agent-status/presentation/agent-row-decay-state'
 
 /** Replace the last tool line with Stopping… while a user-requested stop ends a working turn. */
 export function agentRowStoppingLabel(

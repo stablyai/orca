@@ -1,11 +1,10 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import {
-  supportsMobileQuickCommands,
-  terminalQuickCommandAgentPromptMaxLength
-} from '../terminal/quick-commands'
+import { supportsMobileQuickCommands } from '../terminal/quick-commands'
+import { terminalQuickCommandAgentPromptMaxLength } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import '../../../src/shared/protocol-version'
+import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../src/shared/program-status/protocol'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'

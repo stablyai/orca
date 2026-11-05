@@ -7,7 +7,7 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSnapshot
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -15,7 +15,7 @@ import {
 import type { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import type { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type { createClaudeJournalTranslator } from '../../../src/main/claude/structured/journal/claude-structured-journal-translation'
-import type { createCodexJournalTranslator } from '../../../src/main/codex/codex-structured-journal-translation'
+import type { createCodexJournalTranslator } from '../../../src/main/codex/structured/journal/codex-structured-journal-translation'
 import type { createDeferredStructuredAgentSessionEventSink } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import {
@@ -51,17 +51,11 @@ async function released(ref: string) {
   const load = async <T>(path: string, name: string): Promise<T> =>
     releaseModuleExport<T>(await importReleaseCheckoutModule(checkout, path), name)
   const fact = await load<typeof agentSessionFailureFact>(
-    existsSync(join(checkout.root, 'src/shared/agent-session/failures/agent-session-failure.ts'))
-      ? 'src/shared/agent-session/failures/agent-session-failure.ts'
-      : 'src/shared/agent-session-failure.ts',
+    'src/shared/agent-session/failures/agent-session-failure.ts',
     'agentSessionFailureFact'
   )
   const words = await load<typeof agentSessionFailureWords>(
-    existsSync(
-      join(checkout.root, 'src/shared/agent-session/failures/agent-session-failure-words.ts')
-    )
-      ? 'src/shared/agent-session/failures/agent-session-failure-words.ts'
-      : 'src/shared/agent-session-failure-words.ts',
+    'src/shared/agent-session/failures/agent-session-failure-words.ts',
     'agentSessionFailureWords'
   )
   return {
@@ -71,18 +65,11 @@ async function released(ref: string) {
       'createTrackedJournalOpener'
     ),
     claude: await load<typeof createClaudeJournalTranslator>(
-      existsSync(
-        join(
-          checkout.root,
-          'src/main/claude/structured/journal/claude-structured-journal-translation.ts'
-        )
-      )
-        ? 'src/main/claude/structured/journal/claude-structured-journal-translation.ts'
-        : 'src/main/claude/claude-structured-journal-translation.ts',
+      'src/main/claude/structured/journal/claude-structured-journal-translation.ts',
       'createClaudeJournalTranslator'
     ),
     codex: await load<typeof createCodexJournalTranslator>(
-      'src/main/codex/codex-structured-journal-translation.ts',
+      'src/main/codex/structured/journal/codex-structured-journal-translation.ts',
       'createCodexJournalTranslator'
     ),
     sink: await load<typeof createDeferredStructuredAgentSessionEventSink>(

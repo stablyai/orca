@@ -7,8 +7,8 @@ import {
 } from '../../shared/skills'
 import {
   BundledSkillAutoUpdateRequestSchema,
-  BundledSkillExecuteRequestSchema,
-  BundledSkillPlanRequestSchema,
+  LocalBundledSkillExecuteRequestSchema,
+  LocalBundledSkillPlanRequestSchema,
   type BundledSkillInstallResult,
   type BundledSkillPlan
 } from '../../shared/bundled-skill-plan'
@@ -17,7 +17,7 @@ import {
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
 import { unavailableWhileWslDistroStopped } from '../skills/skill-discovery-stopped-wsl-roots'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
@@ -77,12 +77,12 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   handleMainWindowSkillIpc(
     'skills:bundledPlan',
     async (_event, value: unknown): Promise<BundledSkillPlan> =>
-      runtime.planLocalBundledSkills(BundledSkillPlanRequestSchema.parse(value ?? {}))
+      runtime.planLocalBundledSkills(LocalBundledSkillPlanRequestSchema.parse(value ?? {}))
   )
   handleMainWindowSkillIpc(
     'skills:bundledExecute',
     async (_event, value: unknown): Promise<BundledSkillInstallResult> =>
-      runtime.executeLocalBundledSkills(BundledSkillExecuteRequestSchema.parse(value))
+      runtime.executeLocalBundledSkills(LocalBundledSkillExecuteRequestSchema.parse(value))
   )
   handleMainWindowSkillIpc(
     'skills:bundledAutoUpdate',

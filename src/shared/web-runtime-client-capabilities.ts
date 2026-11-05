@@ -1,4 +1,4 @@
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './structured-agent-session-renderer-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
 import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from './agent-session/agent-session-runtime-capabilities'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
@@ -14,7 +14,7 @@ import {
 import {
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
-} from './terminal-quick-command-capabilities'
+} from './terminal/quick-commands/terminal-quick-command-capabilities'
 
 /** What the browser client advertises in its handshake with the host it is paired to. */
 export const WEB_RUNTIME_CLIENT_CAPABILITIES = [

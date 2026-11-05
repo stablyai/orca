@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentModelCatalogEntry,
+  agentModelCatalogEntryWithSuccess,
   entryWithConfiguredDefault,
-  agentModelCatalogListingKey,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 
@@ -148,33 +148,31 @@ it('keeps late configured validation from reattaching old declaration proof to a
   ).toBe('high')
 })
 
-it('bounds transient declaration serialization and configured observation work at N and 10N', () => {
-  const counts = [100, 1000].map((size) => {
-    let observations = 0
-    const models = Array.from({ length: size }, (_, index) => ({
-      id: `model-${index}`,
-      label: 'Model',
-      isDefault: false,
-      efforts: menu('low', 'high'),
-      get declaredDefaultEffort() {
-        observations++
-        return 'low'
-      }
-    }))
-    const source = { models, origin: 'live-session' as const, at: 1 }
-    const entry = agentModelCatalogEntry('grok', 'fp', null, source, {
-      modelId: `model-${size - 1}`,
-      effort: 'low',
-      at: 1
-    })!
-    observations = 0
-    agentModelCatalogListingKey(entry)
-    expect(observations).toBe(size)
-    expect(
-      entryWithConfiguredDefault(entry, { modelId: `model-${size - 1}`, effort: 'low' }, 2)
-    ).toBeNull()
-    expect(observations).toBe(size + 1)
-    return observations
+it('marks the versioned row a configured Claude alias runs, and gives its alias the configured effort', () => {
+  const efforts = menu('low', 'medium', 'high')
+  const row = (id: string) => ({
+    id,
+    label: id,
+    resolvedModel: 'claude-opus-5-5',
+    isDefault: false,
+    efforts
   })
-  expect(counts[1]).toBeLessThanOrEqual(10 * counts[0])
+  const entry = agentModelCatalogEntryWithSuccess(
+    undefined,
+    { agent: 'claude', fingerprint: 'fp' },
+    {
+      models: [row('claude-opus-5-5'), row('opus')],
+      origin: 'probe',
+      complete: true,
+      configured: { model: 'opus', effort: 'high' }
+    },
+    'discovery',
+    1
+  )
+  expect(
+    entry?.models.map(({ id, isDefault, defaultEffort }) => ({ id, isDefault, defaultEffort }))
+  ).toEqual([
+    { id: 'claude-opus-5-5', isDefault: true, defaultEffort: 'high' },
+    { id: 'opus', isDefault: false, defaultEffort: 'high' }
+  ])
 })

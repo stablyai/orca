@@ -17,7 +17,7 @@ vi.mock('./github-api-repository-remote-probe', () => ({
   getOriginGitHubApiRepository: remote,
   getGitHubApiRepositoryForRemote: remote
 }))
-vi.mock('../git/remote-name-listing', () => ({ shouldProbeGitRemote: async () => false }))
+vi.mock('../git/remotes/remote-name-listing', () => ({ shouldProbeGitRemote: async () => false }))
 vi.mock('./rate-limit', () => ({
   repositoryRateLimitGuard: () => ({ blocked: false }),
   noteRepositoryRateLimitSpend: () => {},
@@ -26,7 +26,7 @@ vi.mock('./rate-limit', () => ({
 vi.mock('./client/list/work-item-search-page', () => ({ usesGraphqlWorkItemSearch: () => false }))
 vi.mock('./client/lookup/pr-lookup-rate-limit', () => ({ assertRateLimitBudget: async () => {} }))
 
-vi.mock('../source-control/forge-provider', () => ({
+vi.mock('../source-control/forge-provider-detection', () => ({
   detectHostedReviewProvider: async () => 'github',
   getForgeProviderForRepository: async () => ({
     id: 'github',
@@ -53,7 +53,7 @@ import { getPRChecks } from './client/check/get-pr-checks'
 import { rerunPRChecks } from './client/check/rerun-pr-checks'
 import { getPRFileContents } from './work-item-details'
 import { resolveGitHubPrStartPoint } from './pr-start-point'
-import { RuntimeGitHubRepositoryQueryCommands } from '../runtime/runtime-github-repository-query-commands'
+import { RuntimeGitHubRepositoryQueryCommands } from '../runtime/integrations/github/runtime-github-repository-query-commands'
 import { clearGhAccountTokenCacheForTests } from './gh-account-token'
 import { clearGhCapabilityStateForTests } from './gh-capability-state'
 import { _resetGhRateLimitBreaker } from '../git/gh-rate-limit-breaker'

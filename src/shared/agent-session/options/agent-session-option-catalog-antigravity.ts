@@ -1,4 +1,4 @@
-import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
+import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
 const ANTIGRAVITY_EFFORT: CatalogOption = {

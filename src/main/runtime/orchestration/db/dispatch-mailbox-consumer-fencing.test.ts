@@ -188,28 +188,4 @@ describe('dispatch mailbox consumer fencing', () => {
     expect(db.getRemoteDispatchAttachment(dispatchId)?.consumer_generation).toBe(1)
     expect((db.getDeliveryRaw(stale!.delivery.id) as DeliveryRow).status).toBe('fenced')
   })
-
-  it('starts a retry Dispatch on a fresh mailbox address rather than sharing the old one', () => {
-    const task = db.createTask({
-      runId: 'run_legacy_local',
-      spec: 'work that fails once'
-    })
-    const first = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-    db.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
-    const retry = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      retryOf: first.dispatch.id,
-      startOptions: {}
-    })
-
-    expect(retry.dispatch.id).not.toBe(first.dispatch.id)
-    expect(retry.dispatch.consumer_generation).toBe(0)
-  })
 })

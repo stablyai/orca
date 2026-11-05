@@ -1,3 +1,7 @@
+import {
+  CLAUDE_MODEL_FALLBACK_COPY,
+  claudeModelFallbackLabels
+} from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, ChevronRight, Info } from 'lucide-react-native'
@@ -11,7 +15,11 @@ import {
   type NativeChatBlock,
   type NativeChatTextBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import {
+  agentSessionFailureDetailText,
+  readWholeAgentSessionFailureFact
+} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatNoticeContext,
@@ -25,6 +33,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
+import { sayMobileAgentSessionFailure } from '../../agent-session-failure-copy'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
@@ -52,8 +61,19 @@ function noticeLineText(
     )
   }
   const failure = readWholeAgentSessionFailureFact(notice.failure)
-  return failure?.kind === 'usageLimitReached'
-    ? nativeChatUsageLimitText(failure.usageLimit, names.agentName, t)
+  if (failure?.kind === 'usageLimitReached') {
+    return nativeChatUsageLimitText(failure.usageLimit, names.agentName, t)
+  }
+  // Only reword text fully described by its fact; other host text stays as written.
+  const context = { agentName: names.agentName }
+  const surface =
+    failure?.kind === 'savedConversationMissing'
+      ? (['row', 'rejection'] as const).find(
+          (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
+        )
+      : undefined
+  return failure && surface
+    ? agentSessionFailureSentence(failure, surface, context, sayMobileAgentSessionFailure)
     : notice.text
 }
 
@@ -125,6 +145,41 @@ export function MobileNativeChatNoticeRow({
     ) : null
   }
   const look = nativeChatNoticeLook(notice)
+  const lineText = noticeLineText(notice, names, t)
+  const failureDetail = agentSessionFailureDetailText(
+    readWholeAgentSessionFailureFact(notice.failure)
+  )
+  const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
+  const diagnosticText = look.kind === 'settled-permission' ? notice.text : detail
+  const payload = notice.providerFrame?.payload
+  const diagnosticBody = (
+    <MobileNativeChatOwnedScrollView
+      positionKey={detailId}
+      style={[toolStyles.codeBox, toolStyles.codeScroll]}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text
+        selectable={INLINE_TEXT_SELECTION}
+        style={[
+          toolStyles.codeText,
+          scaledType(MONO_SIZE, fontScale),
+          look.kind === 'settled-permission' && { color: toneColor(look.tone) }
+        ]}
+      >
+        {diagnosticText}
+        {diagnosticText && payload ? '\n\n' : ''}
+        {payload?.truncated
+          ? `${t(
+              'chat.notice.truncatedResponse',
+              'Provider response truncated (original size: {{bytes}} bytes).',
+              { bytes: payload.byteLength }
+            )}\n`
+          : ''}
+        {payload?.head}
+      </Text>
+    </MobileNativeChatOwnedScrollView>
+  )
   switch (look.kind) {
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
@@ -140,7 +195,6 @@ export function MobileNativeChatNoticeRow({
                 agent
               }
             )
-      const payload = notice.providerFrame?.payload
       return (
         <View>
           <NoticeDisclosureSummary
@@ -150,34 +204,7 @@ export function MobileNativeChatNoticeRow({
             onPress={() => setExpanded((open) => !open)}
             onLongPress={onLongPress}
           />
-          {expanded ? (
-            <MobileNativeChatOwnedScrollView
-              positionKey={detailId}
-              style={[toolStyles.codeBox, toolStyles.codeScroll]}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-            >
-              <Text
-                selectable={INLINE_TEXT_SELECTION}
-                style={[
-                  toolStyles.codeText,
-                  scaledType(MONO_SIZE, fontScale),
-                  { color: toneColor(look.tone) }
-                ]}
-              >
-                {notice.text}
-                {payload ? '\n\n' : ''}
-                {payload?.truncated
-                  ? `${t(
-                      'chat.notice.truncatedResponse',
-                      'Provider response truncated (original size: {{bytes}} bytes).',
-                      { bytes: payload.byteLength }
-                    )}\n`
-                  : ''}
-                {payload?.head}
-              </Text>
-            </MobileNativeChatOwnedScrollView>
-          ) : null}
+          {expanded ? diagnosticBody : null}
         </View>
       )
     }
@@ -209,6 +236,16 @@ export function MobileNativeChatNoticeRow({
           {nativeChatHostStatusCopy(t)[look.presentation]}
         </Text>
       )
+    case 'model-fallback':
+      return (
+        <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
+          {t(
+            'chat.notice.modelFallback',
+            CLAUDE_MODEL_FALLBACK_COPY,
+            claudeModelFallbackLabels(look)
+          )}
+        </Text>
+      )
     case 'plan':
       return (
         <View style={styles.card}>
@@ -231,18 +268,32 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
-      const lineText = noticeLineText(notice, names, t)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
         look.tone && { color: toneColor(look.tone) }
       ]
-      if (!look.tone) {
-        return (
+      const content = (
+        <View style={look.tone ? styles.toneText : undefined}>
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
             {lineText}
           </Text>
-        )
+          {detail || payload ? (
+            <View>
+              <NoticeDisclosureSummary
+                summary={t('pullRequest.markdownBlocks.details', 'Details')}
+                expanded={expanded}
+                fontScale={fontScale}
+                onPress={() => setExpanded((open) => !open)}
+                onLongPress={onLongPress}
+              />
+              {expanded ? diagnosticBody : null}
+            </View>
+          ) : null}
+        </View>
+      )
+      if (!look.tone) {
+        return content
       }
       const Icon =
         look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
@@ -254,9 +305,7 @@ export function MobileNativeChatNoticeRow({
             strokeWidth={2}
             style={styles.toneIcon}
           />
-          <Text selectable={INLINE_TEXT_SELECTION} style={[...textStyle, styles.toneText]}>
-            {lineText}
-          </Text>
+          {content}
         </View>
       )
     }

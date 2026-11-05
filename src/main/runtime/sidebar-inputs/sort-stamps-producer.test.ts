@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { TerminalSideEffectFact } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectFact } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import {
@@ -14,7 +14,7 @@ import {
 import {
   AGENT_TRANSITION_SCENARIOS,
   type AgentTransitionStep
-} from '../../../shared/agent-transitions.test-fixture'
+} from '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 import { AgentTransitionDetector } from '../../agent-hooks/agent-transition-detector'
 import { compareSmartStamps } from '../../../shared/sidebar-list/stamp-order'
 import {

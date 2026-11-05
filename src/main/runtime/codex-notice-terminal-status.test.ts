@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import {
   CODEX_CAPACITY_MESSAGE,
   createCodexCapacityNoticeTracker
 } from '../../shared/codex-native-notice'
 import { observeCodexCapacityTerminalStatus } from './codex-notice-terminal-status'
-import * as agentProcessRecognition from '../../shared/agent-process-recognition'
+import * as agentProcessRecognition from '../../shared/agent-status/process/agent-process-recognition'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
 const transcript = readFileSync(

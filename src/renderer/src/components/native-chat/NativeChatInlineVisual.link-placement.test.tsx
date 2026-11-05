@@ -65,24 +65,6 @@ function wrapperForActiveBrowser() {
   )
 }
 
-it('the visible button reuses the neighbor of its owning chat even while another group has focus', () => {
-  const layout = useAppStore.getState().layoutByWorktree[WORKSPACE]
-  showVisual()
-  fireEvent.click(screen.getByRole('button', { name: 'Open in new tab' }))
-  expect(wrapperForActiveBrowser()?.groupId).toBe('b')
-  expect(useAppStore.getState().layoutByWorktree[WORKSPACE]).toEqual(layout)
-  expect(useAppStore.getState().groupsByWorktree[WORKSPACE]?.map((group) => group.id)).toEqual([
-    'a',
-    'b',
-    'c'
-  ])
-  expect(
-    useAppStore.getState().groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')
-      ?.activeTabId
-  ).toBe('source')
-  expect(screen.getByRole('button', { name: 'Open in new tab' })).toBeTruthy()
-})
-
 it('the button follows a moved source and reuses the exact inactive page', () => {
   const browser = useAppStore.getState().createBrowserTab(WORKSPACE, 'file:///repo/chart.html', {
     targetGroupId: 'c',

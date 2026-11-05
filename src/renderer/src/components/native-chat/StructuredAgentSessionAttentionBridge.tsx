@@ -1,3 +1,4 @@
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -17,7 +18,7 @@ import {
 import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/structured-agent-session-turn-completion-feed'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/structured-agent-session-client'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -112,7 +113,16 @@ function StructuredAgentSessionOwnedAttention({
           await window.api?.notifications?.dismiss?.(
             [],
             [paneKey],
-            [{ paneKey, sessionId: read.sessionId, observedCursor: read.observedCursor }]
+            [
+              {
+                paneKey,
+                sessionId: read.sessionId,
+                observedCursor: read.observedCursor,
+                ...(target.kind === 'environment'
+                  ? { executionHost: toRuntimeExecutionHostId(target.environmentId) }
+                  : {})
+              }
+            ]
           )
           return true
         } catch (error) {
@@ -194,7 +204,11 @@ function StructuredAgentSessionOwnedAttention({
       }
       settling = true
       void Promise.resolve(
-        window.api?.notifications?.settleStructuredPrompts?.(owed.scope, tab.entityId)
+        window.api?.notifications?.settleStructuredPrompts?.(
+          owed.scope,
+          tab.entityId,
+          toRuntimeExecutionHostId(target.environmentId)
+        )
       )
         .then(
           () => {

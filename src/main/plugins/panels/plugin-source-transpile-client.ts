@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 import type {
   PluginSourceTranspiled,
   PluginSourceTranspileRequest,
@@ -34,7 +35,7 @@ function defaultWorkerFactory(): PluginSourceTranspileWorker {
   if (!existsSync(path)) {
     throw new Error(`plugin source transpile worker entry not found: ${path}`)
   }
-  return new Worker(path)
+  return spawnWorkerThread(path)
 }
 
 /**

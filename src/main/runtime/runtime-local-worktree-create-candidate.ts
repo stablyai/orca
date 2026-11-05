@@ -14,17 +14,17 @@ import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import { getRetiredNameRegistryForRepo } from '../workspaces/removal/retirement/worktree-name-retirement'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import {
   getSelectedReviewBranch,
   isAllowedPushTargetRemoteConflict,
   isMatchingSelectedGitHubPr
-} from './selected-review-branch'
+} from './integrations/reviews/selected-review-branch'
 import {
   canCheckoutExistingLocalBranch,
   getLocalGitHubPrForBranch,
@@ -32,8 +32,8 @@ import {
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from './runtime-worktree-filesystem'
-import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
-import type { WorktreeCreatePathClaim } from '../worktree-create-in-flight'
+import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
+import type { WorktreeCreatePathClaim } from '../workspaces/creation/worktree-create-in-flight'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'

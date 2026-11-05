@@ -1,7 +1,7 @@
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalStatusItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type { AgentSessionStopOutcome } from './structured-agent-session-adapter-stop'
@@ -49,7 +49,8 @@ function stillRunsStoppedTurn(
   return stoppedTurnId === null || work.activeTurnId() === stoppedTurnId
 }
 
-/** A refusal that may still open a turn is unconfirmed, never proof that nothing ran. */
+/** The row for a Stop the provider declined, in its words when it gave any. One that could not
+ *  reach a turn still able to open says the Stop is unconfirmed, never that nothing ran. */
 function stopRefusedNote(
   ctx: Pick<AgentSessionTurnContext, 'failureTextContext'>,
   refusal: AgentSessionCancelOutcome['refusal']

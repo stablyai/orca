@@ -28,10 +28,10 @@ type FolderSubmitOrchestrationInput = Pick<
 >
 
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { submitFolderWorkspaceCreate } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
 import { translate } from '@/i18n/i18n'
 import {
   formatWorkspaceCreateError,
@@ -106,6 +106,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           note,
           quickAgent: agent,
           launchChoice: options?.launchChoice,
+          launchInputs: options?.launchInputs,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
           settings: settings ?? undefined,
           agentCmdOverrides: settings?.agentCmdOverrides,

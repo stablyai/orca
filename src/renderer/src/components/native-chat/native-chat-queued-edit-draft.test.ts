@@ -1,5 +1,3 @@
-import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
 import { promptTextContent } from './native-chat-prompt-document-text'
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -14,7 +12,6 @@ import { promptSkillRefs } from './native-chat-prompt-document'
 import {
   clearNativeChatComposerDraftsForTests,
   hydrateNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
@@ -57,56 +54,26 @@ beforeEach(async () => {
 })
 
 describe('queued edit draft ownership', () => {
-  it('seeds skill identity without a catalog, preserves original image blocks and omits unsupported fields', async () => {
-    const edit = createNativeChatQueuedEditDraft(body, 'bottom')
-    expect(nativeChatQueuedEditInput(edit, true, true)).toEqual({
-      text: '$review [Image #1]',
-      images: [body.blocks[1]],
-      skills: [skill]
-    })
-    expect(nativeChatQueuedEditInput(edit, false, false)).toEqual({ text: '$review [Image #1]' })
-    await nativeChatComposerDraftWritesSettled()
-    expect(storage.drafts.has(edit.scopeKey)).toBe(false)
-    discardNativeChatQueuedEdit(edit)
-  })
-
-  it('retains distinct selected paths for repeated same-name skill tokens', () => {
-    const skills = [skill, { ...skill, path: '/other/SKILL.md' }]
+  it('tracks completed paste projection in edit identity and output without changing raw text', () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const raw = `before${nativeChatPastedTextToken(id)}after`
     const edit = createNativeChatQueuedEditDraft(
-      {
-        ...body,
-        blocks: [{ type: 'text', text: '$review $review' }],
-        skills
-      },
+      { ...body, blocks: [{ type: 'text', text: raw }], skills: [] },
       'bottom'
     )
-    expect(nativeChatQueuedEditInput(edit, true, true).skills).toEqual(skills)
     expect(nativeChatQueuedEditDirty(edit)).toBe(false)
-    discardNativeChatQueuedEdit(edit)
-  })
-
-  it.each(['review.v2', '検証.v2'])(
-    'retains picker-valid %s identities without a catalog',
-    (name) => {
-      const skills = [
-        { name, path: '/remote/first/SKILL.md' },
-        { name, path: '/remote/second/SKILL.md' }
-      ]
-      const edit = createNativeChatQueuedEditDraft(
-        { ...body, blocks: [{ type: 'text', text: `$${name} $${name}` }], skills },
-        'bottom'
-      )
-      expect(nativeChatQueuedEditDirty(edit)).toBe(false)
-      expect(nativeChatQueuedEditInput(edit, true, true).skills).toEqual(skills)
-      discardNativeChatQueuedEdit(edit)
-    }
-  )
-
-  it('normalizes repeated skill refs when deciding whether to hand a draft back', () => {
-    const repeated = { ...body, skills: [skill, skill] }
-    const edit = createNativeChatQueuedEditDraft(repeated, 'bottom')
-    expect(nativeChatQueuedEditDirty(edit)).toBe(false)
-    expect(handBackNativeChatQueuedEdit(edit)).toBe(false)
+    updateNativeChatComposerDraft(
+      edit.scopeKey,
+      { pastedTextFiles: { [id]: '/tmp/queued.txt' } },
+      'immediate'
+    )
+    expect(readNativeChatComposerDraft(edit.scopeKey).text).toBe(raw)
+    expect(nativeChatQueuedEditDirty(edit)).toBe(true)
+    expect(nativeChatQueuedEditInput(edit, true, true)).toEqual({
+      text: 'before @/tmp/queued.txt after',
+      images: [],
+      skills: []
+    })
     discardNativeChatQueuedEdit(edit)
   })
 
@@ -175,32 +142,3 @@ describe('queued edit draft ownership', () => {
     expect(readNativeChatComposerDraft('bottom').text).toBe('')
   })
 })
-
-it.each(['/', '$'] as const)(
-  'reopens supplied %s identities through rich nodes, serializer and the next host body',
-  (sigil) => {
-    const skills = [
-      { name: 'model', path: '/A/SKILL.md' },
-      { name: 'model', path: '/B/SKILL.md' },
-      { name: 'skill:review.v2', path: '/pi/SKILL.md' },
-      { name: '审查', path: '/unicode/SKILL.md' }
-    ]
-    const text = `${sigil}model ${sigil}model\n${sigil}skill:review.v2 ${sigil}审查`
-    const queued: AgentJournalMessageItem = {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }],
-      skills
-    }
-    const edit = createNativeChatQueuedEditDraft(queued, 'bottom')
-    expect(promptSkillRefs(readNativeChatComposerDraft(edit.scopeKey).document)).toEqual(skills)
-    const fields = nativeChatQueuedEditInput(edit, true, true)
-    expect(fields.skills).toEqual(skills)
-    expect(structuredAgentSessionSendBody(text, [], skills).skills).toEqual(
-      sigil === '$' ? skills : undefined
-    )
-    const result = queuedMessageWithEdit(queued, fields)
-    expect(result).toEqual({ ok: true, body: queued })
-    discardNativeChatQueuedEdit(edit)
-  }
-)

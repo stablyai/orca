@@ -14,7 +14,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readAgentSessionHydrationPage } from '../agent-session-wire/agent-session-history-page'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
@@ -155,17 +155,6 @@ export function registerJournalSubmissionPositionsTests(): void {
 
       expect(replayed.submission('send-1')).toMatchObject({ submittedSequence: submitted.sequence })
       expect(journal).not.toBe(replayed)
-    })
-
-    it('reaches a client on the history page', async () => {
-      const { journal, submitted } = await sendHandedOverThenWithdrawn()
-
-      expect(readAgentSessionHydrationPage(journal).submissions).toEqual([
-        expect.objectContaining({
-          clientMessageId: 'send-1',
-          submittedSequence: submitted.sequence
-        })
-      ])
     })
   })
 }

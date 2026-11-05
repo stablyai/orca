@@ -2,12 +2,16 @@
 
 import {
   agentSessionScopeKey,
+  agentSessionExecutionLocationsEqual,
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation
 } from './lifecycle/agent-session-record'
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type { AgentSessionTurnCompletionEvent } from './view/agent-session-turn-completion-wire'
-import { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from '../agent-turn-outcome'
+import {
+  AGENT_JOURNAL_TURN_OUTCOMES,
+  type AgentJournalTurnOutcome
+} from '../agent-status/lifecycle/agent-turn-outcome'
 
 /** What the host says needs the user: a settled request, or a prompt it raised. */
 export type AgentSessionAttentionEdge = Extract<
@@ -22,7 +26,11 @@ export type StructuredAttentionOrigin = {
   journalCursor: AgentJournalCursor
 }
 
-export type StructuredAttentionRead = { sessionId: string; observedCursor: AgentJournalCursor }
+export type StructuredAttentionRead = {
+  sessionId: string
+  observedCursor: AgentJournalCursor
+  scope?: AgentSessionExecutionLocation
+}
 export function isStructuredAttentionRead(value: unknown): value is StructuredAttentionRead {
   if (
     !value ||
@@ -35,7 +43,8 @@ export function isStructuredAttentionRead(value: unknown): value is StructuredAt
   return (
     typeof value.sessionId === 'string' &&
     value.sessionId.length > 0 &&
-    isAttentionCursor(value.observedCursor)
+    isAttentionCursor(value.observedCursor) &&
+    (!('scope' in value) || isAgentSessionExecutionLocation(value.scope))
   )
 }
 
@@ -56,6 +65,7 @@ export type StructuredAttentionState = {
   scope: AgentSessionExecutionLocation
   sessionId: string
   pendingPromptIds: readonly string[]
+  executionHost?: `runtime:${string}`
 }
 
 export function structuredAttentionOrigin(
@@ -83,6 +93,7 @@ export function attentionOriginWasRead(
   return (
     origin !== undefined &&
     origin.sessionId === read.sessionId &&
+    (!read.scope || agentSessionExecutionLocationsEqual(origin.scope, read.scope)) &&
     origin.journalCursor.epoch === read.observedCursor.epoch &&
     origin.journalCursor.sequence <= read.observedCursor.sequence
   )

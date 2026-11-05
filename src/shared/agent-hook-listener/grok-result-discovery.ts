@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import {
   buildGrokChatHistoryPathCandidates,
   findGrokChatHistoryBySessionId,

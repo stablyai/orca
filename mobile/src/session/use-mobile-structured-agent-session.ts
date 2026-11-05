@@ -6,7 +6,7 @@ import { createStructuredQuestionProjection } from '../../../src/shared/structur
 import { projectStructuredAgentStartItem } from '../../../src/shared/structured-agent-start-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionTranscriptRows } from '../../../src/shared/agent-session/agent-session-context-clear'
-import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
@@ -31,6 +31,7 @@ import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredCommandController } from './use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import {
@@ -42,7 +43,7 @@ import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
-import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
 
@@ -56,6 +57,7 @@ export function useMobileStructuredAgentSession(
   const {
     agent,
     client,
+    pairedHostClient: paired,
     connected,
     sessionId,
     sourceIdentity = '',
@@ -68,7 +70,7 @@ export function useMobileStructuredAgentSession(
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const queueFollowUps = useMobileNativeChatQueueFollowUps(client, connected && enabled, sessionId)
+  const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const hostStopsConversation = hostSupport?.conversationStop ?? null
@@ -104,19 +106,10 @@ export function useMobileStructuredAgentSession(
     mutate,
     optionStamp,
     turnId,
+    hasTurn: state.latestTurn != null || state.submissions.length > 0,
     hostSupport
   })
-  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
-    options
-  const sendController = useMemo(
-    () => ({
-      snapshot: optionSnapshot,
-      setOption: setStructuredOption,
-      invokeAction: invokeStructuredOption,
-      conversationCommands
-    }),
-    [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
-  )
+  const sendController = useMobileStructuredCommandController(options)
 
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
@@ -197,7 +190,8 @@ export function useMobileStructuredAgentSession(
     stateRef,
     stopping,
     accept: sends.accept,
-    hold: sends.hold,
+    acknowledge: sends.acknowledge,
+    reject: sends.reject,
     commandPending: commandPendingRef,
     sendsOut,
     controller: sendController,
@@ -276,6 +270,7 @@ export function useMobileStructuredAgentSession(
     visualSource,
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
+    submissions: state.submissions,
     session: {
       messages,
       status,

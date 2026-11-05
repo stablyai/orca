@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import { projectTerminalVisibleLines } from './orca-runtime-terminal-projection'
 import { redactWorkerTerminalView } from './orchestration/worker-terminal-redaction'
 

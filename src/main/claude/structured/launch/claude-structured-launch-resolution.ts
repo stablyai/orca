@@ -1,5 +1,5 @@
-import type { ClaudeAccountRecipe } from '../../../../shared/agent-session-acquired-account'
-import { prepareClaudeReceivingAccount } from '../../claude-receiving-account'
+import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
@@ -11,7 +11,7 @@ import type {
 import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
-} from '../../../../shared/agent-chat-permission-mode'
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
@@ -39,6 +39,21 @@ import {
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
+const CLAUDE_ARTIFACT_ENV = 'CLAUDE_CODE_ARTIFACT'
+
+// SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins,
+// matched case-insensitively on Windows, where claude_code_artifact=0 is the same opt-out.
+export function withClaudeArtifactDefault(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
+): Record<string, string> {
+  const chosen = Object.keys(env).some(
+    (key) =>
+      key === CLAUDE_ARTIFACT_ENV ||
+      (platform === 'win32' && key.toUpperCase() === CLAUDE_ARTIFACT_ENV)
+  )
+  return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
+}
 
 type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
   resolvePermissionModeInCli?: true
@@ -233,15 +248,14 @@ export function claudeStructuredLaunchPart(
         hasTranscript: deps.hasTranscript
       }))
     // Fixed homes can be checked before the final account-routing recheck.
-    const resumedWithoutRouter =
-      router || basis.accountRecipe ? undefined : await resumes(accountHome.path)
+    const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
     // Resolve auth after awaited launch preparation; account routing is rechecked below.
     const { command, prefixArgs, env } = await resolveClaudeStructuredInvocation(
       envDeps,
       (base) =>
         withNativeChatVisualsEnv(
           {
-            ...base,
+            ...withClaudeArtifactDefault(base),
             // The turn translator relies on Claude's authoritative idle frame when no result arrives.
             [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
           },
@@ -250,12 +264,7 @@ export function claudeStructuredLaunchPart(
       sources,
       { runtimeOnPath: false }
     )
-    const accountRecipe = await prepareClaudeReceivingAccount(
-      router,
-      env,
-      accountHome.path,
-      basis.accountRecipe
-    )
+    const accountRecipe = await prepareClaudeLaunchAccount(router, env, accountHome.path)
     const launchHome = accountRecipe.home
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {

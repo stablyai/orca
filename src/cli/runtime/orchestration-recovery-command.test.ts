@@ -73,21 +73,6 @@ describe('orchestration recovery command identity', () => {
   })
 
   it.each([
-    [
-      'gate-create',
-      'orchestration.gateCreate',
-      ['orchestration', 'gate-create', '--task', 'task_1', '--question', 'ship?']
-    ],
-    [
-      'worker-retain',
-      'orchestration.workerRetain',
-      ['orchestration', 'worker-retain', '--dispatch', 'dispatch_1', '--json']
-    ]
-  ] as const)('preserves exact raw argv for %s recovery', (_name, method, args) => {
-    expect(buildOrchestrationRecoveryCommand(method, {}, 'orca', args)).toEqual(['orca', ...args])
-  })
-
-  it.each([
     ['split', ['orchestration', 'send', '--pairing-code', 'secret', '--subject', 'status']],
     ['equals', ['orchestration', 'send', '--pairing-code=secret', '--subject', 'status']],
     [

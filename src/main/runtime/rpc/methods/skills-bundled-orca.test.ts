@@ -80,6 +80,10 @@ describe('skills.planBundledOrca / skills.executeBundledOrca', () => {
     const plan = method('skills.planBundledOrca').params
     const execute = method('skills.executeBundledOrca').params
     expect(() => plan?.parse({ wsl: { distro: 'Ubuntu' } })).toThrow()
+    expect(() => plan?.parse({ agent: 'claude' })).toThrow()
+    expect(() =>
+      execute?.parse({ planDigest: 'a'.repeat(64), request: { agent: 'claude' } })
+    ).toThrow()
     expect(() => execute?.parse({ planDigest: 'a'.repeat(64), request: {}, ops: [] })).toThrow()
     expect(() => execute?.parse({ planDigest: 'a'.repeat(64), force: [] })).toThrow()
     expect(execute?.parse({ planDigest: 'a'.repeat(64), request: { force: ['/x'] } })).toEqual({

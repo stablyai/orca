@@ -1,8 +1,6 @@
 import { webContents } from 'electron'
-import { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
-import { BrowserManagerFinal } from './browser-manager-final'
-
-export type { BrowserGuestPolicy, BrowserGuestRegistration } from './browser-manager-types'
+import { BrowserCertificateTrustController } from './certificate-trust/browser-certificate-trust-controller'
+import { BrowserManagerFinal } from './guest-lifecycle/manager/browser-manager-final'
 
 export class BrowserManager extends BrowserManagerFinal {}
 

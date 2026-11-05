@@ -1,5 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
+import {
+  formatRateLimitWindowChipLabel,
+  formatWindowLabel
+} from '../../../../shared/rate-limit-window-label'
 import type {
   ProviderRateLimits,
   RateLimitBucket,

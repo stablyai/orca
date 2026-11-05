@@ -7,13 +7,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   PtyFencedTerminationOutcome,
   PtyFencedTerminationRequest
-} from '../../../../shared/pty-fenced-termination'
+} from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ResourcePtyPanel } from './ResourcePtyPanel'
 import { useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 import * as model from './resource-pty-view-model'
-import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en',

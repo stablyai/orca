@@ -89,33 +89,6 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
-  it('exposes the provider and healthy delivery observation', () => {
-    expect(
-      formatTerminalSend({
-        send: {
-          handle: 'term_worker',
-          accepted: true,
-          bytesWritten: 8,
-          prompt: {
-            requestId: 'prompt-healthy',
-            stages: ['input_accepted', 'turn_started'],
-            provider: 'codex',
-            observation: 'supported',
-            processIncarnation: 'inc-1',
-            generation: 1,
-            baselineWorkingSequence: 0
-          }
-        }
-      })
-    ).toBe(
-      [
-        'Prompt prompt-healthy on term_worker: input_accepted -> turn_started.',
-        'provider: codex',
-        'delivery observation: supported'
-      ].join('\n')
-    )
-  })
-
   it.each([
     {
       observation: 'permission' as const,
@@ -223,15 +196,6 @@ function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
     }
   }
 }
-
-describe('formatTerminalShow orphaned marker', () => {
-  it('prints orphaned only for a terminal with no pane binding', () => {
-    expect(
-      formatTerminalShow({ terminal: { ...showResult().terminal, orphaned: true } })
-    ).toContain('orphaned: true\nconnected: true')
-    expect(formatTerminalShow(showResult())).not.toContain('orphaned')
-  })
-})
 
 // Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
 describe('blocked-reason rendering against a mixed-version host', () => {

@@ -7,8 +7,8 @@ import {
   withDurableRuntimeStore
 } from '../../runtime/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../runtime/worktree-terminals-sleeping-error'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace-sleep'
 import { registerPtyHandlers } from './register-handlers'
 
 type IpcHandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>

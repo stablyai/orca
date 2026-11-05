@@ -4,17 +4,20 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
-import { extractLastOsc7Uri, extractOscScanTail } from '../../../daemon/osc7-uri-extraction'
-import { parseFileUriPathParts } from '../../../daemon/osc7-file-uri'
+import {
+  extractLastOsc7Uri,
+  extractOscScanTail
+} from '../../../daemon/emulation/osc7-uri-extraction'
+import { parseFileUriPathParts } from '../../../daemon/emulation/osc7-file-uri'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../runtime-worktree-status-projection'
 import type { RuntimeTerminalAgentStatusEvent } from '../../runtime-terminal-contracts'
 import { programStatusStateOutlivesProgram } from '../../../../shared/program-status/protocol'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-lead-status-fold'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { lapsedProgramStatusChildHold } from '../../../../shared/program-status/agent-status-projector'
 
 // Why: programs report only changes, so a long `working` renews its row inside AGENT_STATUS_STALE_AFTER_MS.

@@ -10,7 +10,7 @@ import type {
 import type { WorktreeTerminalStopOptions } from './worktree-terminal-stop-options'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeTerminalMutationKind } from '../../worktree-terminal-mutation-lock'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import {
@@ -57,7 +57,9 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
       // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
       const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
-      const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`)
+      const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
+        includeAgentSenders: false
+      })
       const targetPtyIds = collectWorktreePtyIds(
         // Switch point: main's bound terminals too, registered or not.
         ORCA_LAYOUT_OWNER_IS_MAIN

@@ -10,7 +10,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
@@ -35,6 +35,8 @@ import {
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
 import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
+import { orchestrationMailFixture } from '../../runtime/orchestration/orchestration-mail.test-fixture'
+import { agentMessageTranscriptText } from '../../../shared/agent-session/agent-message-display-text'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value
 // takes into it, so restating that chat on a new epoch never drops a newer build's key.
@@ -70,6 +72,27 @@ function open(opener: typeof journals) {
     mintEpoch: () => `epoch-${clock}`
   })
 }
+
+it('retains exact mail display ranges across journal and queue reloads', async () => {
+  const message = orchestrationMailFixture()
+  const body = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: message.blocks,
+    from: message.from
+  }
+  const journal = await open(journals)
+  await journal.appendItem(item(1), body, SCOPE)
+  await journal.queuedMessages.insert({ messageId: 'mail-queued', body })
+  await journals.closeAll()
+  const restored = await open(journals)
+  const saved = restored.snapshot().items[0].body
+  expect(saved).toEqual(body)
+  expect(restored.queuedMessages.list()[0].body).toEqual(body)
+  expect(agentMessageTranscriptText(body.blocks, readAgentMessageSource(body.from))).toBe(
+    'Review complete\n\nThe result is ready.'
+  )
+})
 
 function item(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
@@ -196,7 +219,8 @@ const prefix = z
   )
 
 function plain(state: JournalReducerState): unknown {
-  const { inputEntries, inputCards, ...ordinary } = state
+  const { inputEntries, inputCards, contextBoundary, inputs: _inputs, ...ordinary } = state
+  expect(contextBoundary).toBe(1)
   expect([...inputEntries]).toEqual([])
   expect([...inputCards]).toEqual([['card-2', { introduced: 11 }]])
   const fields: Record<string, unknown> = ordinary

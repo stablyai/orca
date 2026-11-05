@@ -29,6 +29,7 @@
       "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
     },
     "runFailures": {
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",
@@ -56,6 +57,9 @@
     }
   },
   "chat": {
+    "notice": {
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
@@ -144,6 +148,16 @@
       "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
       "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
+    "hostCard": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files"
+      }
+    },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
       "hideChildAgents_other": "Hide {{count}} child agents",
@@ -180,10 +194,6 @@
       "monthsAgo_other": "{{count}}mo ago",
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})"
     },
     "emptyState": {
       "commitsReady_one": "{{count}} commit on {{branch}} is ready to go into {{base}}.",
@@ -307,11 +317,11 @@
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commits."
     },
-    "branchCompare": {
+    "changesHeader": {
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
+      "filesNeedDecision_other": "{{count}} files need a decision before you can finish."
     },
     "commitDetail": {
       "files_one": "{{count}} file",
@@ -354,10 +364,6 @@
       "checksFailing_other": "{{count}} checks failing",
       "checksRunning_one": "{{count}} check still running",
       "checksRunning_other": "{{count}} checks still running"
-    },
-    "prChip": {
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
     },
     "primaryAction": {
       "commitFiles_one": "Commit {{count}} file",

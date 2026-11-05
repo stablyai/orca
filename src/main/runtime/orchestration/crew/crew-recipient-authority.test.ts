@@ -1,7 +1,7 @@
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { CrewReadModel } from './crew-read-model'
@@ -169,7 +169,7 @@ it('matches actual sender Dispatch R1 before coordinator R2 and never uses sende
       senderRunId: ordinary.run!.id
     })
   ).toMatchObject({ ok: true, to: `run:${f.run.id}` })
-  f.db.insertMessage({ from: peer, to: caller.address, subject: 'history' })
+  f.db.insertMessage({ from: peer, to: caller.address, subject: 'history', body: 'history' })
   expect(
     new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read(caller.address).sections
       .talkingWith[0].sendAddress

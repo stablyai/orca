@@ -1,18 +1,18 @@
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
 import { getPRForBranch } from '../github/client'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from '../git/runner'
 import { foldGitRefNameCase } from '../git/repo-branch-conflict'
-import { listWorktrees } from '../git/worktree'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
 import { computeValidatedBranchName } from '../ipc/worktree-branch-name'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import {
   getSelectedReviewBranch,
   getSelectedReviewLookupHints,
   type SelectedReviewBranchInput
-} from './selected-review-branch'
+} from './integrations/reviews/selected-review-branch'
 import { hasLocalGitOptions, normalizeLocalBranchName } from './runtime-worktree-selection'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 

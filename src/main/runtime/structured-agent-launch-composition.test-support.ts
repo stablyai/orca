@@ -1,10 +1,9 @@
-import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
 // Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import {
@@ -17,11 +16,11 @@ import {
   claudeStructuredLaunchPart,
   type ClaudeStructuredLaunchPartDeps
 } from '../claude/structured/launch/claude-structured-launch-resolution'
-import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../codex/structured/launch/codex-structured-agent-definition'
 import {
   codexStructuredLaunchPart,
   type CodexStructuredLaunchPartDeps
-} from '../codex/codex-structured-launch-resolution'
+} from '../codex/structured/launch/codex-structured-launch-resolution'
 import type { PrepareNativeChatVisuals } from '../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'
@@ -108,7 +107,6 @@ function withTestSpawnToken<L>(
     identity: AgentSessionJournalIdentity
     spawnToken?: string | null
     permissionMode?: AgentChatPermissionChoice
-    accountRecipe?: ClaudeAccountRecipe
   }) => {
     const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
     return spawnToken === null
@@ -116,7 +114,6 @@ function withTestSpawnToken<L>(
       : resolve({
           identity: input.identity,
           spawnToken,
-          ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
           ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
         })
   }

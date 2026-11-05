@@ -215,7 +215,10 @@
       "title": "{{distro}} als Host ausführen (empfohlen)",
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
       "accept": "Als Host ausführen",
-      "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste."
+      "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste.",
+      "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
+      "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
+      "existingAccept": "Auf Host hinzufügen"
     }
   },
   "app": {
@@ -515,7 +518,18 @@
         "antigravityAccount": "Konto",
         "antigravitySignInNeeded": "Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto."
       },
-      "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten."
+      "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
+      "launch": {
+        "on": "Die Chat-Oberfläche ist aktiviert",
+        "off": "Die Chat-Oberfläche ist deaktiviert",
+        "agents": "Standard-Startmodus pro Agent",
+        "agentsDescription": "Wähle, ob jeder Agent in der Chat-Oberfläche oder seiner CLI geöffnet wird.",
+        "chatDescription": "Neue Agenten starten standardmäßig im Chatmodus.",
+        "cliDescription": "Neue Agenten starten standardmäßig als CLI.",
+        "turnOn": "Aktivieren",
+        "turnOff": "Deaktivieren",
+        "toggle": "Chat-Oberfläche standardmäßig verwenden"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC oder U.S. — Option sendet Alt/Esc-Sequenzen",
@@ -610,7 +624,7 @@
         "inheritFont": "Wie IDE-Schrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
-        "title": "Chat",
+        "title": "Chat-Oberfläche",
         "textSize": "Textgröße",
         "textSizeDescription": "Nachrichten, Werkzeugaktivitäten und das Nachrichtenfeld. {{increase}} / {{decrease}} in einem Chat ändern diese Einstellung ebenfalls.",
         "codeTextSize": "Code-Textgröße",
@@ -844,6 +858,8 @@
       "claudeRemoveFolder": "Orca löscht den Claude-Ordner dieses Kontos und dessen Anmeldung von diesem Computer. Der mit „Systemstandard“ geteilte Chat-Verlauf bleibt erhalten. Falls dieses Konto ausgewählt ist, verwendet der nächste Claude-Start „Systemstandard“."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
+      "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang, etwa Push, Pull oder erzwungener Push. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
       "actionModel": {
         "on": "Ein",
         "off": "Aus",
@@ -969,6 +985,28 @@
         "notPng": "Repository-Symbole müssen PNG-Dateien sein.",
         "tooLarge": "Das Bild für das Repository-Symbol darf höchstens 256 KB groß sein."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Beim Speichern formatieren",
+      "description": "Text vor manuellem und automatischem Speichern formatieren. Konfiguriere einen Formatierungsbefehl unter Einstellungen > Projekte. Standardmäßig deaktiviert.",
+      "keywords": "Formatierer Formatierung beim Speichern prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Abschließenden Zeilenumbruch einfügen",
+      "description": "Beim Speichern einer nicht leeren Codedatei einen Zeilenumbruch hinzufügen, falls sie nicht damit endet. Standardmäßig deaktiviert.",
+      "keywordNewline": "Zeilenumbruch",
+      "keywordEndOfFile": "Dateiende"
+    },
+    "repositoryFormatter": {
+      "title": "Formatierungsbefehl",
+      "description": "Den Formatierer dieses Projekts für „Beim Speichern formatieren“ verwenden.",
+      "saveFailed": "Formatierungseinstellungen konnten nicht gespeichert werden.",
+      "command": "Befehl",
+      "commandHelp": "Wird auf dem Host der Datei im Stammverzeichnis des Arbeitsbereichs ausgeführt. Liest den Puffer von stdin und darf nur formatierten Text auf stdout ausgeben. Verwende ${file} oder ${relativeFile} für den Pfad. Argumente werden direkt und ohne Shell übergeben. Verwende nicht --write. Leer lassen, um die Funktion für dieses Projekt zu deaktivieren.",
+      "include": "Einzuschließende Glob-Muster (eines pro Zeile)",
+      "includeHelp": "Pfade relativ zum Stammverzeichnis des Arbeitsbereichs abgleichen. Ohne passendes Glob-Muster erfolgt keine Formatierung. * und ** überspringen Namen, die mit einem Punkt beginnen; führe diese explizit auf, z. B. .github/**/*.yml. Aktiviere „Beim Speichern formatieren“ unter Allgemein > Editor, um diesen Befehl zu verwenden.",
+      "saving": "Wird gespeichert…",
+      "save": "Formatierer speichern"
     }
   },
   "menu": {
@@ -1762,7 +1800,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "Die strukturierte Agenten-Sitzung ist noch nicht verfügbar. In Kürze erneut versuchen.",
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
-        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden."
+        "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
+        "worktreeDeleted": "Der Worktree wurde gelöscht.",
+        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
@@ -2098,7 +2138,6 @@
         "9c3ba11a05": "Status:",
         "934d87ab96": "Check-Details werden geladen…",
         "71c11aff84": "Alle Checks erneut ausführen",
-        "e31651a224": "Fehlgeschlagene Checks erneut ausführen",
         "1b56e28faa": "Erneut ausführen",
         "f4b1292569": "Standard-KI-Agenten für diese Checks starten",
         "9a1004fc76": "Checks aktualisieren",
@@ -2576,8 +2615,6 @@
         "25690a3855": "Arbeitsbereich aus PR starten",
         "a459866967": "Mit dem PR verknüpften Arbeitsbereich fortsetzen",
         "347034903a": "GitHub-Link kopieren",
-        "5a01ca7253": "Der Status „Angesehen“ konnte nicht mit GitHub synchronisiert werden.",
-        "996a1897d2": "Der Status „Angesehen“ konnte für diesen Pull Request nicht synchronisiert werden.",
         "e0b15c793f": "GitHub-Link konnte nicht kopiert werden",
         "992e799227": "GitHub-Link kopiert",
         "61bfc81ada": "Der mit diesem Pull Request verknüpfte Arbeitsbereich konnte nicht geöffnet werden.",
@@ -2605,7 +2642,6 @@
         "662bc2998d": "Status:",
         "d8e82b7f15": "Check-Details werden geladen…",
         "54cddd1858": "Alle Checks erneut ausführen",
-        "68605516dd": "Fehlgeschlagene Checks erneut ausführen",
         "522d9353e1": "Erneut ausführen",
         "0fa8b8faec": "Standard-KI-Agenten für diese Checks starten",
         "5d0f42766d": "Checks aktualisieren",
@@ -3705,7 +3741,6 @@
             "e8b3741ff7": "Ignoriert",
             "a9957007eb": "{{value0}} ignorieren",
             "bef0adef9b": "Branch",
-            "0b1766738a": "Repo",
             "bbb1ab6a6f": "{{value0}} auswählen",
             "b771c92598": "Ausgewählte löschen",
             "7eee951968": "Arbeitsbereiche werden durchsucht",
@@ -3714,7 +3749,6 @@
             "b2c1331844": "Inaktive Arbeitsbereiche löschen",
             "7f451a3e2c": "Bereinigungsvorschlag konnte nicht ignoriert werden",
             "662b8ec3f8": "Suche nach zu bereinigenden Arbeitsbereichen fehlgeschlagen",
-            "4d0b72481c": "Ignorieren",
             "9cc26c019d": "Entfernen",
             "0e2d235c63": "Suche in Arbeitsbereichen abgeschlossen",
             "4a35c08764": "Prüfen",
@@ -3722,9 +3756,6 @@
             "1d3503357d": "Dieses Fenster kann geschlossen und später wieder geöffnet werden, während das Löschen fortgesetzt wird.",
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
-            "deletingCount": "Arbeitsbereiche werden gelöscht: {{value0}}",
-            "deleteCount": "Arbeitsbereiche löschen: {{value0}}?",
-            "selectedForDeletionCount": "Zum Löschen ausgewählt: {{value0}}",
             "deleteButtonCount": "{{value0}} löschen",
             "archivedStatus": "Archiviert",
             "74f6c16279": "Zurück"
@@ -3739,7 +3770,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Commits",
             "contextLabel": "Kontext",
             "flagsLabel": "Labels",
             "collapseDetails": "Details einklappen",
@@ -3980,7 +4010,7 @@
             "copyFilePathFailed": "Kopieren des Dateipfads fehlgeschlagen",
             "downloadOpenWithDefaultApp": "Herunterladen und mit Standard-App öffnen",
             "downloadOpenFailed": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "openInThisGroup": "In dieser Gruppe öffnen",
+            "openInNewTab": "In neuem Tab öffnen",
             "openInThisGroupRefused": "{{value0}} konnte nicht in dieser Gruppe geöffnet werden"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -4543,8 +4573,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Keine weiteren Konten",
-            "9332ba8684": "Wechseln zu",
             "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
@@ -6006,8 +6034,6 @@
           "expandAriaLabel": "Ausgeblendete Worktrees für {{repo}} ausklappen",
           "hiding_one": "{{count}} entdeckter Worktree ausgeblendet",
           "hiding_other": "{{count}} entdeckte Worktrees ausgeblendet",
-          "hidingInRepo_one": "{{count}} entdeckter Worktree in {{repo}} ausgeblendet",
-          "hidingInRepo_other": "{{count}} entdeckte Worktrees in {{repo}} ausgeblendet",
           "keepHiddenAriaLabel_one": "{{count}} entdeckten Worktree für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenAriaLabel_other": "{{count}} entdeckte Worktrees für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
           "keepHiddenTooltip": "Ausgeblendet lassen - über das Projektmenü wieder einblenden",
@@ -6399,11 +6425,7 @@
           "dbe2d18972": "Weitere Aktionen für {{value0}}",
           "openInOrcaBrowser": "Im Orca-Browser öffnen",
           "2c67730e07": "In Orca öffnen",
-          "e42941631a": "In Linear anzeigen",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Issue bearbeiten",
-          "b22f058067": "Auf GitHub anzeigen",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "Weitere Issue-Aktionen",
           "copyLink": "Link kopieren",
           "copyLinkSuccess": "{{value0}} kopiert",
@@ -6426,8 +6448,6 @@
           "cliCreatedFromShell": "Über `orca worktree create` erstellt",
           "cliStartupAgent": "Mit {{value0}} gestartet",
           "cliCreated": "Durch Orca CLI erstellt",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "In Jira anzeigen",
           "linkedJira": "Verknüpft mit Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
@@ -7332,6 +7352,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "c2d2751587": "Konto entfernen",
           "dbb9626ed1": "Abbrechen",
           "63843e37e2": "Claude-Konto entfernen?",
@@ -7680,7 +7701,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Computer Use öffnen",
-          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
+          "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden"
         },
         "BrowserUseEnableSwitch": {
@@ -7800,7 +7821,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Ermöglicht Agenten, lokale Desktop-Apps zu untersuchen und zu bedienen.",
-          "93255aaf18": "Computer Use-Skill",
+          "93255aaf18": "Orca Computer Use-Skill",
           "45f8e22c2e": "Öffnen",
           "d95d1cfab8": "Aktualisieren",
           "0c29da5805": "Bereit",
@@ -8081,7 +8102,6 @@
           "9d3e56ca36": "Änderungen anwenden",
           "f96688b6bc": "Abbrechen",
           "b7ddae600c": "Abschließen",
-          "e4bda7ce6f": "Auf diesem System wurde keine Ghostty-Konfiguration gefunden.",
           "b58d4c9051": "Nicht unterstützte Schlüssel",
           "674b5ccd6b": "Keine neuen Einstellungen zum Importieren – die aktuellen Einstellungen stimmen bereits überein.",
           "a4c5dec640": "Zu aktualisierende Einstellungen",
@@ -8686,8 +8706,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Befehlsvorlage",
-          "2b2f38652b": "Benutzerdefinierter Befehl",
-          "0ffb081b3a": "Standardagenten verwenden",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Anpassen",
           "403876bb48": "Globale Einstellung verwenden",
@@ -9232,7 +9250,7 @@
           "902f5dee1f": "Beim Auswählen kopieren",
           "9129b7e805": "Das Bewegen des Mauszeigers über einen Terminalbereich aktiviert diesen ohne Klick.",
           "8eefeaa3da": "Fokus folgt der Maus",
-          "96fe15def8": "Verhalten von Maus und Zwischenablage in Terminalbereichen.",
+          "96fe15def8": "Verhalten von Scrollen, Maus und Zwischenablage in Terminalbereichen.",
           "45721f3e67": "Terminalinteraktion",
           "9c0b1c1792": "Ein",
           "c1fc9e9444": "GPU-Beschleunigung",
@@ -11265,7 +11283,8 @@
                   "supportedAgents": "Unterstützte Agenten für dieses Rezept: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} kann dieses Textgenerierungsrezept nicht ausführen. Einen der unten aufgeführten unterstützten Agenten auswählen.",
                   "resolveComments": "Einen Agenten anhand ausgewählter ungelöster PR- oder MR-Kommentare starten.",
-                  "fixPushFailure": "Einen Agenten starten, wenn ein pre-push-Hook oder git push fehlschlägt."
+                  "fixPushFailure": "Einen Agenten starten, wenn ein pre-push-Hook oder git push fehlschlägt.",
+                  "commitMessageSharedModel": "Pull-Request-Details, Branch-Name und Chat-Name können dieses Modell ebenfalls verwenden, wenn sie kein eigenes auswählen; ihre Option „Wie Standard“ zeigt das verwendete Modell an."
                 }
               }
             }
@@ -13281,7 +13300,8 @@
           "pluginIconTheme": {
             "title": "Symboldesign",
             "description": "Datei- und Ordnersymbole aus einem aktivierten Plugin.",
-            "builtIn": "Integriert"
+            "builtIn": "Integriert",
+            "search": "Icon-Themes suchen…"
           }
         },
         "PluginAddMenu": {
@@ -13358,7 +13378,12 @@
         },
         "AppearanceThemeControl": {
           "matchTerminal": "An Terminal anpassen",
-          "dynamic": "dynamisch"
+          "dynamic": "dynamisch",
+          "searchThemes": "Themes suchen…",
+          "noThemes": "Keine Themes entsprechen deiner Suche."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Keine Treffer."
         }
       },
       "right": {
@@ -13994,6 +14019,7 @@
                 "baseCommitLabel": "Basis-Commit:",
                 "failingChecks_one": "{{count}} fehlgeschlagener Check",
                 "failingChecks_other": "{{count}} fehlgeschlagene Checks",
+                "pipelineFailed": "{{name}} fehlgeschlagen",
                 "pendingChecks_one": "{{count}} Check ausstehend",
                 "pendingChecks_other": "{{count}} Checks ausstehend",
                 "unresolvedChecks_one": "{{count}} Check ungeklärt",
@@ -15027,9 +15053,7 @@
           "ae3b00ca82": "GitHub-Aufgaben einrichten",
           "ff92d15436": "Orca zeigt Benachrichtigungen an, wenn Agenten fertig sind oder Hilfe benötigen.",
           "b054332836": "Benachrichtigungen einrichten",
-          "04ae28d8ca": "Ein Erscheinungsbild auswählen, das auch nach Stunden noch gefällt.",
           "f396db9f20": "Vertraute Umgebung einrichten",
-          "322fc50a18": "Orca funktioniert mit jedem CLI-Agenten. Den bevorzugten Agenten auswählen. Ein Wechsel ist jederzeit möglich.",
           "198b148b3c": "Standardagenten auswählen",
           "windowsTerminalTitle": "Standardeinstellungen für Windows-Terminals festlegen",
           "windowsTerminalSubtitle": "Die Standard-Shell für neue Bereiche und das Verhalten bei Rechtsklicks im Terminal auswählen.",
@@ -15485,8 +15509,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "z. B. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Benutzerdefinierter Befehl",
-            "4b2fc4b80c": "Denkaufwand",
-            "be8917699e": "Modell",
             "560d4feb00": "Benutzerdefiniert",
             "29d119fe95": "Agent",
             "f9382b48a1": "KI-Autor aktivieren",
@@ -17974,6 +17996,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Der gespeicherte Ausführungshost stimmt nicht mehr mit dieser Projekteinrichtung überein."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Agent-Starteinstellungen erfordern für jeden Durchlauf eine neue Sitzung."
         }
       },
       "agent": {
@@ -19043,7 +19068,32 @@
           "system": "An Betriebssystem anpassen",
           "dark": "Angenehm für die Augen",
           "light": "Hell & klar"
-        }
+        },
+        "looks": {
+          "activeNow": "jetzt",
+          "browsePlugins": "Plugins durchsuchen",
+          "browseThemePlugins": "Design-Plugins durchsuchen",
+          "colorMode": "Farbmodus",
+          "colorModeCaption": "Hell, dunkel oder wie dein System.",
+          "darkLook": "Dunkler Look",
+          "darkLooks": "Dunkle Looks",
+          "lightLook": "Heller Look",
+          "lightLooks": "Helle Looks",
+          "moreThemes": "Weitere Designs",
+          "next": "Weitere Looks",
+          "orcaDark": "Orca Dunkel",
+          "orcaLight": "Orca Hell",
+          "pluginsHint": "Weitere Designs gibt es als Plugins.",
+          "previous": "Vorherige Looks",
+          "showsWhenDark": "Wird angezeigt, wenn dein System dunkel ist",
+          "showsWhenLight": "Wird angezeigt, wenn dein System hell ist",
+          "slotLabel": "Zu bearbeitender Look",
+          "sourceBuiltIn": "Integriert",
+          "sourceCommunity": "Terminal-Palette",
+          "themes": "Design",
+          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
+        },
+        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
       },
       "integrations": {
         "capabilities": {
@@ -19073,6 +19123,7 @@
       "failureWords": {
         "theAgent": "Der Agent",
         "providerStartFailed": "{{agent}} wurde beendet, bevor der Start abgeschlossen war.",
+        "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden.",
         "runCommandAgain": "/{{command}} erneut ausführen.",
         "sendToTryAgain": "Die Nachricht senden, um es erneut zu versuchen.",
         "sendAgainToTryOnceMore": "Die Nachricht erneut senden, um es noch einmal zu versuchen.",
@@ -19125,6 +19176,7 @@
         "attachmentNotAFile": "Ein Bild in dieser Nachricht ist keine Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentNoSource": "Für ein Bild in dieser Nachricht fehlt die zu sendende Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentInvalid": "Ein Anhang dieser Nachricht kann nicht an den Agenten gesendet werden.",
+        "attachmentsExpired": "Abgelaufen: {{names}}.",
         "attachmentUnreadable": "Ein Anhang dieser Nachricht konnte nicht gelesen werden, daher wurde die Nachricht nicht gesendet.",
         "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
         "commandUnavailable": "Dieser Befehl ist in Chats mit {{agent}} nicht verfügbar und wurde daher nicht gesendet.",
@@ -19213,6 +19265,7 @@
         "recordFailed": "Orca konnte dies nicht im Chatverlauf speichern.",
         "attachmentExpired": "Dieser Anhang ist abgelaufen.",
         "reattachFile": "Den Anhang entfernen und erneut anhängen.",
+        "reattachFiles": "Die Anhänge entfernen und erneut anhängen.",
         "conversationCleared": "Diese Unterhaltung wurde geleert.",
         "openCurrentConversation": "Zum Fortfahren die aktuelle Unterhaltung öffnen.",
         "clearUnfinished": "Der letzte /clear-Befehl wurde nicht abgeschlossen.",
@@ -19275,8 +19328,6 @@
       },
       "turnDiff": {
         "partial": "Teilweiser Diff",
-        "showDiff": "Diff anzeigen",
-        "hideDiff": "Diff ausblenden",
         "changedFiles_one": "{{count}} geänderte Datei",
         "changedFiles_other": "{{count}} geänderte Dateien"
       },
@@ -19286,7 +19337,10 @@
         "cancelled": "Abgebrochen",
         "resolved": "Erledigt",
         "resolver": "Auf {{device}} beantwortet",
-        "cancelledBy": "Auf {{device}} abgebrochen"
+        "cancelledBy": "Auf {{device}} abgebrochen",
+        "thisComputer": "diesem Computer",
+        "computer": "dem Computer",
+        "otherDevice": "einem anderen Gerät"
       },
       "notices": {
         "contextCleared": "Kontext geleert",
@@ -19593,8 +19647,6 @@
         "stateUnverifiableCount_other": "{{value0}} mit nicht verfügbarem Status"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
-      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
-      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",
@@ -19608,7 +19660,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
+        "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen.",
+        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung in einem anderen Terminal aus. Dort beenden oder das Terminal schließen, dann erneut versuchen."
       },
       "state": {
         "loading": {
@@ -19748,7 +19801,11 @@
         "handedOffToAgent": "An Agenten übergeben",
         "startedAgent": "Agent gestartet",
         "taskFromCoordinator": "Aufgabe vom Koordinator",
-        "updateFromWorker": "Aktualisierung vom Worker"
+        "updateFromWorker": "Aktualisierung vom Worker",
+        "senderReplaced": "{{name}} läuft nicht mehr in seinem Terminal; dort läuft jetzt ein anderer Agent. Öffne das Terminal bei Bedarf über die Seitenleiste.",
+        "senderAmbiguous": "Orca kann nicht feststellen, in welchem Terminal {{name}} läuft. Öffne es über die Seitenleiste.",
+        "senderNotRunning": "{{name}} läuft nicht mehr. Starte einen neuen Agenten über die Seitenleiste, um die Arbeit fortzusetzen.",
+        "unnamedSenderSubject": "Ein Agent"
       },
       "goal": {
         "placeholder": "Ziel beschreiben und für beste Ergebnisse messbare Resultate festlegen",
@@ -19786,7 +19843,6 @@
       "dismissDeliveryNotice": "Ausblenden",
       "addSelectionToChat": "Zum Chat hinzufügen",
       "messageNotSent": "Nachricht nicht gesendet",
-      "deliveryUnconfirmed": "Zustellung unbestätigt — vor erneutem Versuch den Chat prüfen",
       "messageSending": "Wird gesendet…",
       "userMessage": {
         "showFull": "Vollständige Nachricht anzeigen",
@@ -19858,8 +19914,7 @@
       "interruptedContinue": {
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
-        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde.",
-        "unconfirmed": "Es konnte nicht bestätigt werden, ob {{agent}} „Fortfahren“ erhalten hat. Vor einem erneuten Versuch den Chat prüfen."
+        "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
@@ -20013,6 +20068,24 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
+      },
+      "settings": "Chat-Einstellungen",
+      "textAttachmentPreview": {
+        "copiedContents": "Kopierter Inhalt",
+        "textAttachment": "Textanhang",
+        "byteSize": "{{size}} Bytes",
+        "copyContents": "Inhalt kopieren",
+        "saveFile": "Datei speichern",
+        "copyTooLarge": "Diese Datei ist zu groß zum Kopieren. Speichere sie stattdessen.",
+        "exportError": "Anhang konnte nicht exportiert werden. Versuche es erneut.",
+        "unreadableReply": "Antwort zum Anhang ist nicht lesbar. Versuche es erneut.",
+        "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließe ihn und versuche es erneut.",
+        "notText": "Diese Datei kann nicht als Text angezeigt werden. Speichere sie, um sie in einer anderen App zu öffnen.",
+        "openFailed": "Anhang konnte nicht geöffnet werden. Versuche es erneut.",
+        "hostUpdate": "Dieser Host kann Textanhänge noch nicht öffnen. Aktualisiere Orca auf diesem Host und versuche es erneut.",
+        "hostUnavailable": "Der Host des Anhangs ist nicht verfügbar. Stelle die Verbindung erneut her und versuche es erneut.",
+        "connectionChanged": "Die Verbindung hat sich geändert. Schließe diesen Anhang und öffne ihn erneut.",
+        "readFailed": "Dieser Anhang konnte auf seinem Host nicht gelesen werden. Stelle die Verbindung erneut her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert."
       }
     },
     "tab": {
@@ -20061,9 +20134,7 @@
         "browse": {
           "noSizes": "Es wurden noch keine Arbeitsbereichsgrößen gemessen.",
           "noSizesDescription": "Die Größen werden nach der Messung des Speicherplatzbedarfs angezeigt.",
-          "measureSizes": "Scannen",
           "measureSizesTitle": "Arbeitsbereichsgrößen erfassen",
-          "measureSizesDescription": "Speicherplatzbedarf erfassen, um Arbeitsbereiche nach Größe zu vergleichen, zu sortieren und zu filtern.",
           "sizeOnDisk": "Speicherplatzbedarf: {{value0}}",
           "checkingGitRow": "Git-Status wird geprüft",
           "searchPlaceholder": "Name, Repo, Branch, Pfad, Host suchen",
@@ -20328,6 +20399,7 @@
       "detectingAgents": "Agenten auf dem Host dieses Arbeitsbereichs werden erkannt…",
       "detectionFailed": "Agenten auf dem Host dieses Arbeitsbereichs konnten nicht erkannt werden.",
       "noAgents": "Auf dem Host dieses Arbeitsbereichs wurden keine aktivierten Agenten erkannt.",
+      "onlySourceFamilyDetected": "Auf dem Host dieses Arbeitsbereichs sind nur Agenten verfügbar, die dasselbe Nutzungslimit wie {{agent}} haben. Einen anderen Agenten aktivieren oder installieren.",
       "context": "Kontext",
       "modeFocused": "Gezielte Übergabe (empfohlen)",
       "modeFocusedDescription": "Verwendet den neuesten Status und den aktuellen Arbeitsbereich. Ältere Protokolldetails werden nur bei Bedarf gelesen.",
@@ -20376,7 +20448,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Linken Rand beim Kopieren entfernen",
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
-        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren."
+        "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
+        "scrollOnUserInput": "Bei Eingabe nach unten scrollen",
+        "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten."
       },
       "terminal": {
         "clipboard": {
@@ -20391,10 +20465,22 @@
             "whitespace": "Leerraum",
             "spaces": "Leerzeichen"
           }
+        },
+        "search": {
+          "typing": "tippen",
+          "input": "eingabe",
+          "jump": "springen",
+          "bottom": "unten",
+          "scrollback": "scrollback",
+          "snap": "einrasten",
+          "position": "position"
         }
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
+        "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
+        "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
+        "scrollToLatestOnSendSearchPosition": "Position",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20406,7 +20492,13 @@
         "queueSearchSteer": "Steuern",
         "shellEnvSearchVariables": "Umgebungsvariablen",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "Proxy"
+        "shellEnvSearchProxy": "Proxy",
+        "idleStopTitle": "Inaktive Agenten beenden nach",
+        "idleStopCopy": "Beendet den Agenten eines Chats, sobald der Chat so lange inaktiv war, um Speicher freizugeben. Der Chat bleibt erhalten, und deine nächste Nachricht startet den Agenten erneut. Wähle Nie für Agenten, die zwischen Durchgängen im Hintergrund weiterarbeiten.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "Zeitlimit",
+        "idleStopSearchKeepAlive": "aktiv halten",
+        "idleStopNever": "Nie"
       }
     },
     "agentChildRow": {
@@ -20441,7 +20533,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
-      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen."
+      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Auswählen, ob die Einrichtung vor dem Erstellen dieses Arbeitsbereichs ausgeführt werden soll.",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "setupScript": "Einrichtungsskript",
+        "defaultTabCommands": "Standard-Tab-Befehle",
+        "setupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle",
+        "askRunSetup": "Einrichtung jetzt ausführen?",
+        "askRunDefaultTabs": "Standard-Tab-Befehle jetzt ausführen?",
+        "askRunSetupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle jetzt ausführen?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + lokal",
+        "localSource": "Lokale Einstellungen"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Eine weitere Issue-Änderung ist in Bearbeitung."
@@ -20527,7 +20635,18 @@
       "workerAutoClose": {
         "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
         "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "keepOpen": "Offen halten"
+        "keepOpen": "Offen halten",
+        "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
+        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
+        "temporaryBadge": "Temporär"
+      }
+    },
+    "wslHostMark": {
+      "runsOn": "Läuft in WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "{{file}} konnte nicht formatiert werden. Wird ohne Formatierung gespeichert: {{reason}}"
       }
     }
   },
@@ -20710,10 +20829,8 @@
       "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
       "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
       "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
-      "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",
       "stayInTerminal": "Im Terminal bleiben",
       "cta": "Chat-Oberfläche nutzen",
-      "saveFailed": "Die Chat-Oberfläche konnte nicht aktiviert werden. Unter Einstellungen → Agenten „Chat“ wählen.",
       "demoTabTitle": "Anmeldung erklären",
       "demoPrompt": "Zeig mir, wie die Anmeldung funktioniert",
       "demoReply": "Die Anmeldung beginnt in {{file}}: Der Browser sendet an /login, der Server prüft das Passwort und erstellt eine Sitzung, dann leitet er dich zur App weiter. So läuft es ab:",
@@ -21174,6 +21291,7 @@
     "scanIssues": {
       "issuesOmitted": "Weitere Probleme beim Scannen wurden ausgelassen.",
       "sessionMetadataUnreadable": "Sitzungsmetadaten konnten bei diesem Scan nicht gelesen werden.",
+      "transcriptTooLarge": "Eine Unterhaltung mit {{label}} ist zu groß, um im Sitzungsverlauf geladen zu werden. Stattdessen direkt in {{label}} fortsetzen, falls möglich.",
       "openCodeScannerUnavailable": "Der OpenCode-Verlauf wurde übersprungen, weil der Hintergrundscanner nicht starten konnte; die App reagiert weiterhin.",
       "openCodeScanIncomplete": "Der Scan des OpenCode-Verlaufs wurde nicht abgeschlossen: {{detail}}",
       "openCodeWslReaderPreparing": "Das SQLite-Leseprogramm für WSL wird vorbereitet. Nach Abschluss der Einrichtung Vault aktualisieren.",
@@ -21479,7 +21597,10 @@
         "reviewBody_one": "{{count}} weitere Claude-Sitzung wurde nicht zu {{next}} verschoben.",
         "reviewBody_other": "{{count}} weitere Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
         "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
-        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind."
+        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
+        "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
+        "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
+        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
       }
     },
     "managedData": {
@@ -21723,7 +21844,8 @@
       "showLinked_one": "{{count}} verknüpftes Review oder verknüpfte Aufgabe anzeigen",
       "showLinked_other": "{{count}} verknüpfte Reviews und Aufgaben anzeigen",
       "linkedCount_one": "{{count}} verknüpft",
-      "linkedCount_other": "{{count}} verknüpft"
+      "linkedCount_other": "{{count}} verknüpft",
+      "labels": "Labels: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Die entfernte Laufzeitumgebung aktualisieren, um Verknüpfungen des Arbeitsbereichs zu ändern",
@@ -22020,7 +22142,8 @@
       "changed": "Zuvor verschoben, dann hier durch eine ältere Version von Orca geändert. Es wird nicht erneut verschoben.",
       "chatsStay": "Bestehende Chats bleiben auf diesem Computer. Neue Chats in diesem Projekt starten auf dem WSL-Host.",
       "browserLoginsConflict": "Browser-Anmeldungen werden nicht übernommen, da das Browser-Profil des Hosts bereits verwendet wird. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden.",
-      "browserLoginsNotCarried": "Browser-Anmeldungen werden nicht auf diesen Host übernommen. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden."
+      "browserLoginsNotCarried": "Browser-Anmeldungen werden nicht auf diesen Host übernommen. Nach dem Verschieben in den Browser-Tabs des Hosts erneut anmelden.",
+      "why": "Die Arbeit läuft dann in Linux, direkt bei den Dateien, sodass Terminals, Git und Dateiänderungen schneller und zuverlässiger sind. Die Projekte ändern sich nicht, und jedes Projekt lässt sich mit „Wieder auf diesem Computer verwenden“ zurückholen."
     },
     "cancel": "Abbrechen",
     "progress": {
@@ -22457,6 +22580,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: Es gibt keine lesbare Sicherungskopie, daher startet dieser Abschnitt leer.",
+      "sectionKeptCurrent": "{{section}}: Ihre aktuellen Ausführungen bleiben erhalten",
       "sectionRestored": "{{section}}: aus der {{time}} gespeicherten Sicherungskopie wiederhergestellt.",
       "projectsForgotten": "Orca vergisst die Projekte und ihre Arbeitsbereichsdetails. Dateien auf dem Datenträger bleiben unverändert.",
       "newerProjectsRemoved": "Projekte, die nach dieser Sicherungskopie hinzugefügt wurden, werden zusammen mit ihren Arbeitsbereichsdetails aus Orca entfernt. Dateien auf dem Datenträger bleiben unverändert.",
@@ -22499,7 +22623,7 @@
       "noneFound": "(keine gefunden)",
       "sqlitePath": "SQLite-Pfad: {{path}}",
       "sectionsDamaged": "Ein Teil des gespeicherten Zustands dieses Profils ist beschädigt: {{sections}}. Alles andere ist intakt.",
-      "repairCommand": "Orca beenden und dann `{{command}}` ausführen, um nur die beschädigten Teile aus Sicherungskopien zu ersetzen und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
+      "repairCommand": "Beenden Sie Orca und führen Sie dann `{{command}}` aus, um nur die beschädigten Teile zu reparieren und alles andere beizubehalten. Orca bewahrt eine Kopie der beschädigten Datei auf.",
       "restoreWholeBackup": "Um stattdessen eine vollständige Sicherungskopie wiederherzustellen, zuerst `{{exportsCommand}}` und dann `{{rollbackCommand}}` ausführen.",
       "sqliteUnreadable": "Orca kann das aktive Profil nicht sicher öffnen, da sein SQLite-Zustand nicht lesbar ist.",
       "legacyJsonPath": "Pfad der alten JSON-Datei: {{path}}",
@@ -22964,6 +23088,7 @@
       "serveSimUnavailable": "serve-sim ist nicht verfügbar.",
       "serveSimNoEndpoints": "serve-sim hat keine Stream-Endpunkte zurückgegeben.",
       "serveSimEndpointUnreachable": "serve-sim wurde gestartet, aber der Stream-Endpunkt ist nicht erreichbar.",
+      "deviceHubInputBlocked": "Device Hub von Xcode hat die Eingabe für diesen Simulator übernommen, daher kommen Tippen und Texteingabe nicht an. Beende Device Hub und verbinde den Simulator erneut.",
       "androidSdkMissing": "Android SDK nicht gefunden. Android Studio installieren und ANDROID_HOME setzen.",
       "adbUnavailable": "adb ist nicht verfügbar.",
       "noAndroidDevices": "Keine Android-Geräte oder AVDs gefunden. Eines in Android Studio erstellen.",
@@ -23067,6 +23192,12 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
+    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
+    "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogInstall": "Installiere {{agent}} auf diesem Host, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
+    "catalogUnresolved": "Modelle für {{agent}} wurden nicht geladen. Schließe die Agentenauswahl und öffne sie erneut.",
+    "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
@@ -23080,6 +23211,14 @@
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
-    "launchTerminal": "Terminal starten"
+    "launchTerminal": "Terminal starten",
+    "use": "Verwenden",
+    "select": "Agent auswählen",
+    "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",
+    "workspaceStartupFailed": "{{agent}} konnte nicht gestartet werden. Überprüfe die Argumente in dieser Einrichtung und versuche es erneut.",
+    "sameAsTextDefault": "Wie Standard · {{value0}}",
+    "chatChoicesNote": "Modell- oder Effort-Auswahlen für {{agent}} ohne CLI-Flag gelten für Chats.",
+    "composedChoicesNote": "Effort- und Geschwindigkeitsauswahlen für {{agent}} sind im Modellargument enthalten."
   }
 }

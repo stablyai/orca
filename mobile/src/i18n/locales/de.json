@@ -5,10 +5,13 @@
       "connecting": "Verbindung zum Host wird hergestellt…",
       "connectingTo": "Verbindung zu {{name}} wird hergestellt…",
       "default": "Systemstandard",
+      "fableWindow": "Fable",
       "hostNotFound": "Host nicht gefunden",
       "invalidSnapshot": "Ungültige Momentaufnahme der Konten vom Host",
       "loadingAccounts": "Konten werden geladen…",
       "manageAccountsHint": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen oder erneut authentifizieren.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Weitere Agenten",
       "refreshAccounts": "Konten aktualisieren",
       "sessionWindow": "5 h",
       "switchFailed": "Konto konnte nicht gewechselt werden",
@@ -110,13 +113,8 @@
       "tryAgain": "Erneut versuchen"
     },
     "terminalSettings": {
-      "autocomplete": "Autovervollständigung & Autokorrektur",
-      "autocompleteOff": "Aus",
-      "autocompleteOn": "Ein",
       "defaultText": "Standard (100 %)",
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "keyboardInputDescription": "Autovervollständigung, Autokorrektur und Rechtschreibvorschläge gelten nur für die gepufferte Befehlseingabe. Mit der Doppelpfeil-Schaltfläche über der Tastatur von der direkten zur gepufferten Eingabe wechseln und den Befehl vor dem Tippen auf „Senden“ bearbeiten. Standardmäßig deaktiviert, damit Befehle, Flags und Pfade nicht verändert werden.",
-      "keyboardInputHeading": "TASTATUREINGABE",
       "largeText": "Groß (125 %)",
       "largerText": "Größer (150 %)",
       "largestText": "Am größten (200 %)",
@@ -283,7 +281,8 @@
       "stoppedManually": "Manuell gestoppt",
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
-      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes)."
+      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
+      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -330,7 +329,10 @@
       "emptyAnswer": "Leere Antwort",
       "resolved": "Erledigt",
       "resolver": "Auf {{device}} beantwortet",
-      "unavailable": "Ausgewählte Antwort nicht verfügbar"
+      "unavailable": "Ausgewählte Antwort nicht verfügbar",
+      "thisPhone": "diesem Smartphone",
+      "computer": "dem Computer",
+      "otherDevice": "einem anderen Gerät"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
@@ -373,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Standard",
-      "notReportedMarker": "Nicht gemeldet"
+      "notReportedMarker": "Nicht gemeldet",
+      "moreModels": "Weitere Modelle",
+      "fewerModels": "Weniger Modelle"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt"
@@ -529,6 +533,24 @@
     "agentMessage": {
       "handedOffToAgent": "An Agenten übergeben",
       "startedAgent": "Agent gestartet"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
+      "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
+      "notText": "Diese Datei kann nicht als Text angezeigt werden. Speichere sie, um sie in einer anderen App zu öffnen.",
+      "openFailed": "Anhang konnte nicht geöffnet werden. Erneut versuchen.",
+      "hostUpdate": "Dieser Host kann Textanhänge noch nicht öffnen. Aktualisiere Orca auf diesem Host und versuche es erneut.",
+      "copyTooLarge": "Diese Datei ist zu groß zum Kopieren. Speichere sie stattdessen.",
+      "connectionChanged": "Die Verbindung hat sich geändert. Versuche erneut, den Anhang zu öffnen.",
+      "hostChanged": "Der Host des Anhangs hat sich geändert. Schließe den Anhang und öffne ihn erneut.",
+      "readFailed": "Anhang konnte nicht gelesen werden. Stelle die Verbindung wieder her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert.",
+      "copyFrame": "Für „Vollständig kopieren“ bei diesem Anhang ist das kommende Smartphone-Update erforderlich.",
+      "copyFailed": "Anhang konnte nicht kopiert werden. Erneut versuchen.",
+      "pastedText": "Eingefügter Text",
+      "textAttachment": "Textanhang",
+      "byteSize": "{{size}} Byte",
+      "saveUpdate": "Speichern wird mit einem Smartphone-Update verfügbar sein.",
+      "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
     }
   },
   "common": {
@@ -723,6 +745,8 @@
     },
     "hostCard": {
       "hostActions": "Aktionen für {{title}}",
+      "needsYou_one": "{{count}} braucht dich",
+      "needsYou_other": "{{count}} brauchen dich",
       "openHost": "{{title}} öffnen",
       "pairingInvalid": "Kopplung ungültig",
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
@@ -803,7 +827,8 @@
     },
     "prSidebar": {
       "loading": "Pull Request wird geladen…",
-      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden."
+      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden.",
+      "retryLoading": "Pull Request erneut laden"
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",
@@ -1255,10 +1280,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} aktiv",
+      "heading": "Agenten",
+      "showAll": "Alle {{count}} anzeigen",
+      "showFewer": "Weniger anzeigen"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Update-Hinweis für Orca {{version}} ausblenden",
       "title": "Orca {{version}} ist verfügbar",
       "updateAccessibilityLabel": "Orca {{version}} ist verfügbar, zum Aktualisieren antippen"
+    },
+    "automationsTab": {
+      "connectDesktop": "{{desktop}} verbinden, um Automatisierungen anzuzeigen und auszuführen.",
+      "createHint": "Auf + tippen, um einen Agenten zu planen.",
+      "emptyTitle": "Agentenarbeit planen",
+      "lastStatus": "Zuletzt: {{status}}",
+      "newAutomation": "Neue Automatisierung",
+      "noAutomations": "Noch keine Automatisierungen",
+      "pairDesktop": "Einen Desktop koppeln, um Automatisierungen anzuzeigen und auszuführen.",
+      "paused": "Pausiert",
+      "scheduled": "Geplant",
+      "showFor": "Automatisierungen anzeigen für",
+      "toggleFailed": "{{name}} konnte nicht aktualisiert werden",
+      "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen."
     },
     "emptyState": {
       "connectedDescription": "Der Desktop erscheint hier. Alles ist Ende-zu-Ende-verschlüsselt.",
@@ -1270,9 +1315,7 @@
       "title": "Desktop verbinden"
     },
     "listFooter": {
-      "hostPickerTitle": "Aufgaben auf Host öffnen",
-      "automationsHeading": "Automatisierungen",
-      "automationsHostPickerTitle": "Automatisierungen öffnen auf"
+      "hostPickerTitle": "Aufgaben auf Host öffnen"
     },
     "listHeader": {
       "desktopsHeading": "Desktop-Computer"
@@ -1283,6 +1326,33 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "removeHostTitle": "Host entfernen",
       "tryAgain": "Bitte erneut versuchen."
+    },
+    "stats": {
+      "agentTime": "Agentenzeit",
+      "agentsSpawned": "Gestartete Agenten",
+      "days": "{{days}} T",
+      "heading": "Deine Statistiken",
+      "hours": "{{hours}} Std.",
+      "minutes": "{{minutes}} Min.",
+      "prsCreated": "Erstellte PRs"
+    },
+    "tabs": {
+      "automations": "Automatisierungen",
+      "chooseDesktop": "{{desktop}}, anderen Desktop auswählen",
+      "feed": "Feed",
+      "usage": "Nutzung"
+    },
+    "usage": {
+      "active": "Aktiv",
+      "addAccounts": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen.",
+      "connectDesktop": "{{desktop}} verbinden, um die Nutzung der Agentenkonten zu sehen.",
+      "emptyTitle": "Noch keine Nutzung",
+      "openAccountsHint": "Öffnet die Konten dieses Desktops",
+      "pairDesktop": "Einen Desktop koppeln, um die Nutzung der Agentenkonten zu sehen.",
+      "refresh": "Nutzung aktualisieren",
+      "showUsageFor": "Nutzung anzeigen für",
+      "updatedAgo": "Vor {{time}} aktualisiert",
+      "updatedJustNow": "Gerade eben aktualisiert"
     }
   },
   "hooks": {
@@ -1483,7 +1553,7 @@
       "notificationsTitle": "Nicht verpassen, wenn ein Agent dich braucht",
       "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen",
       "openInTerminal": "Sitzungen im Terminal öffnen",
-      "sessionViewDescription": "Festlegen, ob unterstützte Agenten-Sitzungen auf diesem Gerät im Terminal oder in der Chat-Oberfläche geöffnet werden. Einen Sitzungs-Tab gedrückt halten, um die Ansicht zu wechseln, oder den Standard später in den Einstellungen ändern.",
+      "sessionViewDescription": "Festlegen, ob unterstützte Agenten-Sitzungen auf diesem Gerät im Terminal oder in der Chat-Oberfläche geöffnet werden. Einen Sitzungs-Tab gedrückt halten, um die Ansicht zu wechseln, oder den Standard jederzeit unter Einstellungen → Chat-Oberfläche ändern.",
       "sessionViewTitle": "Wie sollen Sitzungen geöffnet werden?",
       "skipNotifications": "Benachrichtigungen vorerst überspringen",
       "useChatUi": "Chat-Oberfläche verwenden"
@@ -1524,21 +1594,6 @@
       "noDescription": "Keine Beschreibung angegeben.",
       "showMore": "{{count}} weitere anzeigen",
       "title": "Kommentare"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} Commit im Rückstand (Basis-Commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} Commits im Rückstand (Basis-Commit: {{baseCommit}})",
-      "copyCommands": "Befehle kopieren",
-      "copyFailed": "Text konnte nicht kopiert werden",
-      "copyRefreshCommands": "Befehle zum Aktualisieren der Merge-Fähigkeit kopieren",
-      "detailsUnavailable": "Details zu Dateien mit Konflikten sind nicht verfügbar",
-      "filesHeading": "Dateien mit Konflikten",
-      "localMergeClean": "GitHub meldet Konflikte, die mit lokalem Git nicht reproduziert werden konnten. PR aktualisieren oder Branch pushen, um die Merge-Fähigkeit neu zu berechnen.",
-      "mustResolve": "Dieser Branch enthält Konflikte, die gelöst werden müssen",
-      "refreshing": "Konfliktdetails werden aktualisiert…",
-      "resolveWithAi": "Konflikte mit KI lösen",
-      "runFromWorktree": "Aus diesem Worktree ausführen",
-      "title": "Konflikte"
     },
     "linkPrForm": {
       "linkButton": "Pull Request verknüpfen",
@@ -1658,7 +1713,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
-      "providerUnavailable": "Gehostetes Review-Panel für diesen Anbieter nicht verfügbar."
+      "githubRemoteRequired": "Dieser Tab benötigt ein GitHub-Remote, um Pull-Request-Details anzuzeigen. Für andere unterstützte Plattformen kannst du unter Änderungen ein Review erstellen und im Browser öffnen."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",
@@ -1681,15 +1736,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Tastatur ausblenden",
       "sendKey": "{{label}} senden",
-      "modifierHint": "Gilt für die nächste Taste. Doppeltippen zum Beibehalten.",
       "typeCharacter": "{{character}} eingeben",
       "interrupt": "Terminal unterbrechen",
       "keysModeLabel": "Tastenmodus: Eingaben gehen direkt an das Terminal. Zum Nachrichtenmodus wechseln",
       "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
-      "keysMode": "Tasten",
-      "messageMode": "Nachricht",
       "moreKeys": "Weitere Tasten und Aktionen",
-      "showKeyboard": "Tastatur anzeigen"
+      "showKeyboard": "Tastatur anzeigen",
+      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
+      "switchToDesktopMode": "In den Desktop-Modus wechseln",
+      "switchToPhoneMode": "In den Smartphone-Modus wechseln",
+      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
+      "paste": "Einfügen",
+      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1800,11 +1858,7 @@
     },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
-      "liveInputLabel": "Live-Eingabe im Terminal",
-      "sendCommand": "Befehl senden",
-      "messageAgentPlaceholder": "Nachricht an {{agent}}",
-      "writeCommandPlaceholder": "Befehl schreiben und dann senden",
-      "theAgent": "dem Agenten"
+      "liveInputLabel": "Live-Eingabe im Terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
@@ -1853,6 +1907,7 @@
       "attachmentAtMost": "{{agent}} akzeptiert höchstens {{limit}} Bilder pro Nachricht, daher wurde diese Nachricht nicht gesendet.",
       "attachmentEmpty": "Ein Bild in dieser Nachricht ist leer, daher wurde die Nachricht nicht gesendet.",
       "attachmentInvalid": "Ein Anhang dieser Nachricht kann nicht an den Agenten gesendet werden.",
+      "attachmentsExpired": "Abgelaufen: {{names}}.",
       "attachmentLargerThan": "Ein Bild in dieser Nachricht ist größer als {{size}} MB, daher wurde die Nachricht nicht gesendet.",
       "attachmentNoSource": "Für ein Bild in dieser Nachricht fehlt die zu sendende Datei, daher wurde die Nachricht nicht gesendet.",
       "attachmentNotAFile": "Ein Bild in dieser Nachricht ist keine Datei, daher wurde die Nachricht nicht gesendet.",
@@ -1926,6 +1981,7 @@
       "providerRetrying": "{{agent}} ist auf ein vorübergehendes Problem gestoßen und versucht es erneut.",
       "providerRetryingQuoted": "{{agent}} versucht es erneut: {{detail}}.",
       "providerStartFailed": "{{agent}} wurde beendet, bevor der Start abgeschlossen war.",
+      "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden.",
       "queueFull": "Zu viele Nachrichten warteten auf den Agenten, daher wurde diese Nachricht nicht gesendet.",
       "quitTerminalAgent": "Diesen Agenten beenden, um den Chat hier fortzusetzen.",
       "runCommandAgain": "/{{command}} erneut ausführen.",
@@ -2437,6 +2493,7 @@
       "queueTooLarge": "In der Warteschlange befindet sich zu viel Text.",
       "quitTerminalAgent": "Diesen Agenten beenden, um den Chat hier fortzusetzen.",
       "reattachFile": "Den Anhang entfernen und erneut anhängen.",
+      "reattachFiles": "Die Anhänge entfernen und erneut anhängen.",
       "recordFailed": "Orca konnte dies nicht im Chatverlauf speichern.",
       "recordUnreadable": "Orca konnte den gespeicherten Zustand dieses Chats nicht lesen.",
       "reopenChat": "Den Chat erneut öffnen, um dies nochmals zu prüfen.",
@@ -2484,14 +2541,6 @@
       "saveFailedTitle": "Layout konnte nicht gespeichert werden",
       "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
     },
-    "terminalArrowPad": {
-      "label": "Pfeiltasten",
-      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
-      "up": "Nach oben",
-      "down": "Nach unten",
-      "left": "Nach links",
-      "right": "Nach rechts"
-    },
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",
       "paste": "Einfügen",
@@ -2512,6 +2561,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, zum Fokussieren tippen",
       "inputPane": "{{title}} · Eingabe"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Der Worktree wurde gelöscht.",
+      "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
     }
   },
   "settings": {
@@ -2659,6 +2712,9 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
+    },
+    "agents": {
+      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     }
   },
   "sourceControl": {
@@ -2670,7 +2726,6 @@
       "checkingReviewStatus": "Review-Status wird geprüft.",
       "checkoutBeforePublish": "Vor dem Veröffentlichen von Commits einen Branch auschecken.",
       "commitStagedChanges": "Vorgemerkte Änderungen committen.",
-      "commits": "Commits",
       "committing": "Commit läuft.",
       "createPr": "PR erstellen",
       "enterCommitMessage": "Zum Committen eine Commit-Nachricht eingeben.",
@@ -2698,23 +2753,11 @@
       "resolveFailed": "Branch-Basis konnte nicht ermittelt werden."
     },
     "branchCard": {
-      "branchCount": "{{count}} auf Branch",
-      "changedCount": "{{count}} geändert",
-      "cherryPickState": "Cherry-pick",
-      "mergeState": "Merge",
-      "rebaseState": "Rebase",
-      "stagedCount": "{{count}} vorgemerkt",
       "completingMerge": "Wird abgeschlossen…",
       "completeMerge": "Merge abschließen"
     },
     "branchCompare": {
-      "commits_one": "{{count}} Commit",
-      "commits_other": "{{count}} Commits",
-      "files_one": "{{count}} Datei",
-      "files_other": "{{count}} Dateien",
-      "sectionTitle": "Auf Branch committet",
-      "summary": "{{files}} – gegenüber {{baseRef}}",
-      "summaryWithCommits": "{{files}} – {{commits}} – gegenüber {{baseRef}}"
+      "sectionTitle": "Auf Branch committet"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Basis-Branch für den Vergleich konnte nicht ermittelt werden.",
@@ -2773,11 +2816,8 @@
       "emptyMessage": "Der Worktree ist sauber.",
       "emptyTitle": "Keine lokalen Änderungen",
       "generateMessage": "Commit-Nachricht mit KI generieren",
-      "openActions": "Aktionen der Quellcodeverwaltung öffnen",
       "reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
-      "regenerateHint": "Nachricht leeren, um sie neu zu generieren.",
-      "stageAll": "Alle vormerken",
-      "unstageAll": "Alle Vormerkungen aufheben"
+      "regenerateHint": "Nachricht leeren, um sie neu zu generieren."
     },
     "createPrAction": {
       "checkingStatus": "Review-Status wird geprüft…",
@@ -2806,20 +2846,15 @@
       "titleUnpublishedForcePushCount_one": "Push von {{count}} Branch-Commit mit Lease erzwingen und bei Bedarf einen Upstream festlegen.",
       "titleUnpublishedForcePushCount_other": "Push von {{count}} Branch-Commits mit Lease erzwingen und bei Bedarf einen Upstream festlegen."
     },
-    "fileList": {
-      "committedSection": "Auf Branch committet"
-    },
     "fileRows": {
       "addedByThem": "Von ihnen hinzugefügt",
       "addedByUs": "Von uns hinzugefügt",
       "bothAdded": "Beidseitig hinzugefügt",
       "bothDeleted": "Beidseitig gelöscht",
       "bothModified": "Beidseitig geändert",
-      "committedSection": "Auf Branch committet",
       "committedUnavailable": "Committete Änderungen nicht verfügbar.",
       "deletedByThem": "Von ihnen gelöscht",
       "deletedByUs": "Von uns gelöscht",
-      "discardFile": "Änderungen an {{path}} verwerfen",
       "loadingCommitted": "Committete Änderungen werden geladen…",
       "openChangedFile": "Geänderte Datei {{path}} öffnen",
       "openCommittedChange": "Committete Änderung an {{path}} öffnen",
@@ -2852,9 +2887,7 @@
       "waitingForDesktop": "Warten auf Desktop…"
     },
     "gitStatus": {
-      "changes": "Änderungen",
-      "conflicts": "Konflikte",
-      "stagedChanges": "Vorgemerkte Änderungen"
+      "conflicts": "Konflikte"
     },
     "header": {
       "backToSession": "Zurück zur Sitzung",
@@ -2922,7 +2955,6 @@
       "waitingForDesktop": "Warten auf den Desktop…"
     },
     "modals": {
-      "actionsTitle": "Quellcodeverwaltung",
       "currentBranch": "aktuell",
       "discardButton": "Verwerfen",
       "discardConfirmMessage": "Änderungen an „{{path}}“ verwerfen? Dies kann nicht rückgängig gemacht werden.",
@@ -2934,15 +2966,6 @@
     },
     "panel": {
       "unavailableTitle": "Quellcodeverwaltung nicht verfügbar"
-    },
-    "prChip": {
-      "createPr": "Pull Request erstellen",
-      "loading": "Pull Request wird geladen…",
-      "loadingLabel": "Pull Request wird geladen",
-      "openLabel": "Pull Request #{{number}}, {{state}}, {{checks}}. Pull Request öffnen.",
-      "openWithComments_one": "Pull Request #{{number}}, {{state}}, {{checks}}, {{count}} ungelöster Kommentar. Pull Request öffnen.",
-      "openWithComments_other": "Pull Request #{{number}}, {{state}}, {{checks}}, {{count}} ungelöste Kommentare. Pull Request öffnen.",
-      "unavailableLabel": "Pull Request nicht verfügbar: {{message}}"
     },
     "prCreate": {
       "authRequired": "Vor dem Erstellen eines {{reviewLabel}}s ist eine Authentifizierung erforderlich.",
@@ -3031,7 +3054,6 @@
       "noBranch": "Kein Branch"
     },
     "state": {
-      "noUpstream": "Kein Upstream",
       "syncStatus": "{{ahead}} voraus, {{behind}} zurück"
     },
     "textGenerationFailure": {
@@ -3238,7 +3260,6 @@
       "pipelineJobs_one": "{{count}} Job",
       "pipelineJobs_other": "{{count}} Jobs",
       "rerunAll": "Alle erneut ausführen",
-      "rerunFailed": "Fehlgeschlagene erneut ausführen",
       "subIssueTitle": "Titel des Unter-Issues",
       "subIssues": "Untergeordnete Issues"
     },
@@ -3469,7 +3490,6 @@
       "requestReview": "Review anfordern",
       "requestReviewers": "Prüfer anfordern",
       "rerunAll": "Alle erneut ausführen",
-      "rerunFailed": "Fehlgeschlagene erneut ausführen",
       "reviewers": "Prüfer",
       "viewFile": "Anzeigen"
     },
@@ -3918,7 +3938,6 @@
       "unknownResult": "Unbekanntes Ergebnis",
       "notReported": "Nicht gemeldet",
       "searchOptions": "Optionen suchen",
-      "scheduleAgentWorkAndViewRuns": "Agentenarbeit planen und Ausführungen ansehen",
       "task": "Aufgabe",
       "review": "Prüfen"
     },

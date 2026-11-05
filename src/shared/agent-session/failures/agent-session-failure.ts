@@ -1,5 +1,3 @@
-// Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
-
 import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
@@ -9,7 +7,6 @@ import {
   readAgentSessionUsageLimit,
   type AgentSessionUsageLimit
 } from './agent-session-usage-limit'
-
 import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
@@ -19,11 +16,13 @@ import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from './agent-session-wire-refusals'
+// Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
 
 /** One per situation with its own honest next step; a new one needs copy before it compiles. */
 export const AGENT_SESSION_FAILURE_KINDS = [
   /** Only an observed exit: the provider stopped while starting. */
   'providerStartFailed',
+  'savedConversationMissing',
   /** A start that did not land, with no one to blame: Orca's fault, a failed spawn, a close. */
   'startFailed',
   'notSignedIn',
@@ -61,6 +60,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'chatClosed',
   'hostRestarted',
   'notDelivered',
+  'unconfirmed',
   /** A conversation command the chat's state refused when its turn to run came. */
   'commandRefused',
   'compactionFailed',

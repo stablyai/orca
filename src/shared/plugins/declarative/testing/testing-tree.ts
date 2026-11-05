@@ -67,6 +67,7 @@ const ROLES: Record<string, string> = {
   Callout: 'note',
   Skeleton: 'status',
   RelativeTime: 'time',
+  Box: 'group',
   Unsupported: 'unsupported'
 }
 

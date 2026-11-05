@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import type * as NodeOsModule from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const state = vi.hoisted((): { home: string; syncCalls: { name: string; target: string }[] } => ({
   home: '',
@@ -37,9 +37,9 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
 
 import { MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS } from './managed-agent-hook-registry'
-import { ClaudeAgentViewService } from '../claude/agent-view-service'
-import { reconcileClaudeAgentViewConfig } from '../claude/agent-view-config'
-import { ensureClaudeAgentViewPluginAsync } from '../claude/agent-view-plugin'
+import { ClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
+import { reconcileClaudeAgentViewConfig } from '../claude/agent-view/agent-view-config'
+import { ensureClaudeAgentViewPluginAsync } from '../claude/agent-view/agent-view-plugin'
 import { listClaudeProfileHomesAsync } from '../claude-accounts/claude-profile-homes'
 
 function syncCallsUnderHome(): string[] {
@@ -120,7 +120,9 @@ describe('managed hook script refresh stays off the main thread', () => {
     expect(syncCallsUnderHome()).toEqual([])
     const refreshed = await readFile(claudeScript, 'utf8')
     expect(refreshed).not.toBe('stale')
-    expect(refreshed).toContain(process.platform === 'win32' ? 'echo {}' : 'printf "{}\\n"')
+    expect(refreshed).toContain(
+      process.platform === 'win32' ? 'echo {}' : 'trap orca_hook_finish EXIT'
+    )
     await expect(readFile(modScript, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     for (const mod of profileMods) {
       await expect(readFile(mod, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })

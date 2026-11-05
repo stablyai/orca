@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { PASTE_PAYLOAD_CORPUS } from '../../lib/paste-payload-corpus'
+import './terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   normalizeTerminalPasteLineEndings
-} from './terminal-bracketed-paste'
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'

@@ -1,5 +1,5 @@
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLease } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -97,7 +97,7 @@ function installHost(options: {
       present: true,
       sessionIds: options.tabListed ? [SESSION_ID] : []
     }),
-    journalSnapshot: async () => ({ items: options.items ?? [idleTurn()] }),
+    journalCurrentRead: async () => ({ items: options.items ?? [idleTurn()] }),
     currentWork: () => null
   }
 }

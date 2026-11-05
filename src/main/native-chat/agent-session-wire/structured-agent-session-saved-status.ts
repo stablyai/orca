@@ -2,11 +2,11 @@ import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-ownership'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   AGENT_SESSION_TURN_PREVIEW_CHARS,
   type AgentSessionLastTurn
-} from '../../../shared/agent-session-last-turn'
+} from '../../../shared/agent-session/lifecycle/agent-session-last-turn'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StatusPublication } from './structured-agent-session-status-feed-deps'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -17,9 +17,12 @@ import type {
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
-import { isAgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+
+import { isAgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 export function savedStructuredAgentSessionStatus(
   record: AgentSessionConversationView,

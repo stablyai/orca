@@ -12,23 +12,27 @@ import type {
   AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRowsRead } from './journal-read-row'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalRowWriter } from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
+import type { QueuedMessageOwed } from './queued-message-consume-error'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
   database: JournalHostDatabase
   now?: () => number
   mintEpoch?: () => string
+  /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
+  withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
 }
 
 export type JournalReadSince =
@@ -94,12 +98,13 @@ export type JournalLifecycleBatchInput = {
   dispatches?: readonly ResolveDispatchInput[]
   /** Atomically reject queued sends before the batch; skip the batch when none remain. */
   rejectsQueued?: AgentJournalDispatchRejection
+  keepFailedStart?: boolean
 }
 
 /** Plan after preceding writes, including answers and Stops. */
 export type JournalPlannedLifecycleBatchInput = Pick<
   JournalLifecycleBatchInput,
-  'settlementId' | 'fence' | 'recovered'
+  'settlementId' | 'fence' | 'recovered' | 'keepFailedStart'
 > & {
   plan: () => {
     mutations: readonly JournalLifecycleMutationInput[]
@@ -136,6 +141,10 @@ export type JournalSubmissionConsume = {
   expect: 'waiting' | 'returned'
   /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
   yieldsToPause?: true
+  /** Transient selection for mail joining active work; never persisted. */
+  steer?: boolean
+  /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
+  owed?: () => QueuedMessageOwed
 }
 
 export type JournalItemAppendInput = {

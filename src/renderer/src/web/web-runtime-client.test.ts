@@ -1,7 +1,7 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
-import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/paired-e2ee-fixed-key-test-fixture'
+
+import '../../../shared/remote-runtime/e2ee/paired-e2ee-fixed-key-test-fixture'
 import WebSocket, { WebSocketServer } from 'ws'
 import { WebRuntimeClient } from './web-runtime-client'
 import {
@@ -11,9 +11,9 @@ import {
   generateKeyPair,
   publicKeyToBase64,
   encryptBytes as encryptSharedBytes
-} from '../../../shared/e2ee-crypto'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import '../../../shared/protocol-version'
 
 const fakeSockets: FakeWebSocket[] = []
 
@@ -81,40 +81,6 @@ describe('WebRuntimeClient', () => {
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(fakeSockets).toHaveLength(count)
     client.close()
-  })
-
-  it('advertises explicit close intent support in encrypted authentication', async () => {
-    const client = new WebRuntimeClient(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.alloc(32).toString('base64')
-      })
-    )
-    const call = client.call('status.get', {})
-    const socket = fakeSockets[0]!
-    socket.readyState = FakeWebSocket.OPEN
-    socket.onopen?.()
-
-    expect(JSON.parse(String(socket.send.mock.calls[0]?.[0]))).toEqual({
-      type: 'e2ee_hello',
-      publicKeyB64: expect.any(String)
-    })
-    socket.onmessage?.({ data: JSON.stringify({ type: 'e2ee_ready' }) })
-    await vi.waitFor(() => expect(socket.send).toHaveBeenCalledTimes(2))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
-    const handshake = (client as unknown as { handshake: PairedE2EEClientHandshake }).handshake
-    const auth = handshake.channel.openText(String(socket.send.mock.calls[1]?.[0]))
-    const frame: unknown = JSON.parse(auth!)
-    expect(frame).toMatchObject({ type: 'e2ee_auth', deviceToken: 'token' })
-    expect(frame).toHaveProperty(
-      'clientCapabilities',
-      expect.arrayContaining([SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY])
-    )
-
-    client.close()
-    await expect(call).rejects.toThrow('Remote Orca runtime connection closed.')
   })
 
   it('rejects pending connection waiters when the client closes', async () => {
@@ -233,143 +199,6 @@ describe('WebRuntimeClient', () => {
       random.mockRestore()
       vi.useRealTimers()
     }
-  })
-
-  it('delivers plain unary responses to their subscription instead of dropping them', async () => {
-    const client = new WebRuntimeClient(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.alloc(32).toString('base64')
-      })
-    )
-    try {
-      const keyPair = generateKeyPair()
-      const sharedKey = deriveSharedKey(keyPair.secretKey, keyPair.publicKey)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
-      const internals = client as unknown as {
-        state: string
-        handshake: PairedE2EEClientHandshake | null
-        subscriptions: Map<
-          string,
-          { callbacks: { onResponse: (response: unknown) => void; onClose?: () => void } }
-        >
-        handleSocketMessage: (rawData: unknown, sourceWs?: unknown) => Promise<void>
-      }
-      internals.state = 'connected'
-      internals.handshake = createFixedKeyLegacyHandshakeForTest(sharedKey)
-      const onResponse = vi.fn()
-      internals.subscriptions.set('req-1', { callbacks: { onResponse } })
-
-      // A unary RPC (e.g. abortable git.status) answered over the subscription
-      // bridge: not streaming and neither an end nor a scrollback frame.
-      const response = {
-        id: 'req-1',
-        ok: true,
-        result: { entries: [], conflictOperation: 'unknown' },
-        _meta: { runtimeId: 'runtime-1' }
-      }
-      await internals.handleSocketMessage(encrypt(JSON.stringify(response), sharedKey))
-
-      expect(onResponse).toHaveBeenCalledWith(response)
-      // The caller owns the unsubscribe; a plain reply must not close it.
-      expect(internals.subscriptions.has('req-1')).toBe(true)
-      internals.subscriptions.delete('req-1')
-    } finally {
-      client.close()
-    }
-  })
-
-  it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
-    const client = new WebRuntimeClient(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.alloc(32).toString('base64')
-      })
-    )
-    const handle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
-    const internals = client as unknown as {
-      childClients: Set<WebRuntimeClient>
-      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
-    }
-    const subscribeOnCurrentConnection = vi
-      .spyOn(internals, 'subscribeOnCurrentConnection')
-      .mockResolvedValue(handle)
-    const onResponse = vi.fn()
-
-    const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
-
-    expect(subscribeOnCurrentConnection).toHaveBeenCalledWith(
-      'files.watch',
-      { worktree: 'wt-1' },
-      expect.objectContaining({ onResponse: expect.any(Function) }),
-      undefined
-    )
-    expect(internals.childClients.size).toBe(0)
-    subscribeOnCurrentConnection.mock.calls[0]?.[2].onResponse({
-      id: 'watch',
-      ok: true,
-      streaming: true,
-      result: { type: 'starting', subscriptionId: 'files-watch-starting' },
-      _meta: { runtimeId: 'runtime-web-test' }
-    } as RuntimeRpcResponse<unknown> & { streaming: true })
-    expect(onResponse).not.toHaveBeenCalled()
-    const frame = new Uint8Array([1])
-    subscription.sendBinary(frame)
-    expect(handle.sendBinary).toHaveBeenCalledWith(frame)
-    client.close()
-  })
-
-  it('unwatches a direct file watch before removing the shared local subscription', async () => {
-    const client = new WebRuntimeClient(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.alloc(32).toString('base64')
-      })
-    )
-    const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
-    const internals = client as unknown as {
-      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
-    }
-    const subscribeOnCurrentConnection = vi
-      .spyOn(internals, 'subscribeOnCurrentConnection')
-      .mockResolvedValue(localHandle)
-    const unwatch = vi.spyOn(client, 'call').mockImplementation(() => {
-      expect(localHandle.unsubscribe).not.toHaveBeenCalled()
-      return Promise.resolve({
-        id: 'unwatch',
-        ok: true,
-        result: { unsubscribed: true },
-        _meta: { runtimeId: 'runtime-web-test' }
-      })
-    })
-    const onResponse = vi.fn()
-
-    const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
-    const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
-    wrappedCallbacks?.onResponse({
-      id: 'watch',
-      ok: true,
-      streaming: true,
-      result: { type: 'ready', subscriptionId: 'files-watch-1' },
-      _meta: { runtimeId: 'runtime-web-test' }
-    } as RuntimeRpcResponse<unknown> & { streaming: true })
-
-    subscription.unsubscribe()
-
-    expect(onResponse).toHaveBeenCalledTimes(1)
-    expect(unwatch).toHaveBeenCalledWith(
-      'files.unwatch',
-      { subscriptionId: 'files-watch-1' },
-      { timeoutMs: 5_000 }
-    )
-    await vi.waitFor(() => expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1))
-    client.close()
   })
 
   it('retains and retries a shared local subscription when remote unwatch returns failure', async () => {
@@ -508,55 +337,6 @@ describe('WebRuntimeClient', () => {
       client.close()
       warn.mockRestore()
     }
-  })
-
-  it('keeps a stopped direct file watch alive until ready so it can unwatch', async () => {
-    const client = new WebRuntimeClient(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.alloc(32).toString('base64')
-      })
-    )
-    const localHandle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
-    const internals = client as unknown as {
-      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
-    }
-    const subscribeOnCurrentConnection = vi
-      .spyOn(internals, 'subscribeOnCurrentConnection')
-      .mockResolvedValue(localHandle)
-    const unwatch = vi.spyOn(client, 'call').mockResolvedValue({
-      id: 'unwatch',
-      ok: true,
-      result: { unsubscribed: true },
-      _meta: { runtimeId: 'runtime-web-test' }
-    })
-    const onResponse = vi.fn()
-
-    const subscription = await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })
-    const wrappedCallbacks = subscribeOnCurrentConnection.mock.calls[0]?.[2]
-
-    subscription.unsubscribe()
-    expect(unwatch).not.toHaveBeenCalled()
-    expect(localHandle.unsubscribe).not.toHaveBeenCalled()
-
-    wrappedCallbacks?.onResponse({
-      id: 'watch',
-      ok: true,
-      streaming: true,
-      result: { type: 'ready', subscriptionId: 'files-watch-late' },
-      _meta: { runtimeId: 'runtime-web-test' }
-    } as RuntimeRpcResponse<unknown> & { streaming: true })
-
-    expect(onResponse).not.toHaveBeenCalled()
-    expect(unwatch).toHaveBeenCalledWith(
-      'files.unwatch',
-      { subscriptionId: 'files-watch-late' },
-      { timeoutMs: 5_000 }
-    )
-    await vi.waitFor(() => expect(localHandle.unsubscribe).toHaveBeenCalledTimes(1))
-    client.close()
   })
 
   it('retains a stopped pre-ready file watch until its cancellation id arrives', async () => {

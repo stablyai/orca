@@ -2,8 +2,8 @@ import {
   renderConversationNamePrompt,
   sanitizeGeneratedConversationName,
   type ConversationNameContext
-} from '../../shared/conversation-name-generation'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+} from '../../shared/source-control/ai/generation/conversation-name-generation'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
 import { runGenerationRequest } from './agent-generation-request'
 import type {

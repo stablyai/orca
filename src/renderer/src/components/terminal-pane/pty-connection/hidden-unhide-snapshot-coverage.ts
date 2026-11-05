@@ -1,4 +1,4 @@
-import type { PtyModelRestoreNeededEvent } from '../../../../../shared/pty-model-restore-marker'
+import type { PtyModelRestoreNeededEvent } from '../../../../../shared/terminal/replay/pty-model-restore-marker'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function handleUnhideRestoreBackpressure(

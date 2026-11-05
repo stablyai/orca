@@ -4,6 +4,12 @@ export const spinnerVariants = {
     .agent-working-spinner { animation-duration: 1s; animation-timing-function: steps(12, end); }
   `,
   long: '',
+  // Keeps scrolled-out rings animating, as before offscreen pausing.
+  unpaused: `
+    .agent-working-spinner[data-animation-offscreen] {
+      animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+    }
+  `,
   // Retain the rejected containment experiment for reproducible ablation.
   contained:
     '.spinner-benchmark-container { content-visibility: auto; overflow-clip-margin: var(--spacing); }'

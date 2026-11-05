@@ -1,4 +1,8 @@
-import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
+import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
+import {
+  AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+} from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -76,6 +80,11 @@ async function requireHostCreateSupport(
       support.kind === 'declined' ? support.reason : undefined
     )
   }
+  if (support.kind === 'refused') {
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    const { code } = support.refusal
+    throw new StructuredAgentSessionCreateRefusalError(code, code, support.refusal)
+  }
   return support.seedOptions
 }
 
@@ -113,6 +122,18 @@ export async function launchStructuredAgentSession(
   /** A chat closed while its host was being asked issues no create. */
   isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
+  // Gates only the intent it was set on, once; a user Retry builds a new intent without it.
+  if (intent.createAfter) {
+    const go = await intent.createAfter
+    if (go instanceof StructuredAgentSessionCreateRefusalError) {
+      throw go
+    }
+    if (!go) {
+      abandonStructuredAgentSessionLaunchIntent(intent)
+      throw new StructuredAgentSessionCreateAbandonedError('Conversation source kept its terminal.')
+    }
+    delete intent.createAfter
+  }
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
@@ -130,6 +151,10 @@ export async function launchStructuredAgentSession(
       intent.sendSelectionSupport = await structuredAgentSessionHostSupports(
         intent.target,
         AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+      )
+      intent.sendSkillsSupport = await structuredAgentSessionHostSupports(
+        intent.target,
+        AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
       )
     } catch {
       // Unknown capability stays on the compatible create path.
@@ -190,11 +215,17 @@ export async function launchStructuredAgentSession(
     throw new StructuredAgentSessionCreateRefusalError(message, code, refusal)
   }
   const firstMessage = intent.params.firstMessage
-    ? (result.value.firstMessage ??
-      result.value.page.submissions.find(
-        (submission) => submission.clientMessageId === intent.params.firstMessage?.clientMessageId
-      ))
+    ? structuredAgentSessionSettledSends(
+        [
+          ...(result.value.firstMessage ? [result.value.firstMessage] : []),
+          ...result.value.page.submissions
+        ],
+        []
+      ).recorded.get(intent.params.firstMessage.clientMessageId)
     : undefined
+  if (intent.createMessageSupport === true) {
+    publishStructuredAgentSessionCreateHydration(intent, result.value.page, result.value.fence)
+  }
   if (
     intent.params.firstMessage &&
     firstMessage?.clientMessageId !== intent.params.firstMessage.clientMessageId
@@ -203,9 +234,6 @@ export async function launchStructuredAgentSession(
       'The created chat did not confirm its first message.',
       'agent_session_operation_unknown'
     )
-  }
-  if (intent.createMessageSupport === true) {
-    publishStructuredAgentSessionCreateHydration(intent, result.value.page, result.value.fence)
   }
   return {
     sessionId: result.value.sessionId,

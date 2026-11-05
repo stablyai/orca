@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
+import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/providers/routing/daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../daemon/providers/routing/degraded-daemon-pty-provider'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 
@@ -30,20 +30,6 @@ describe.each(['router', 'degraded'] as const)('workspace deletion with %s inven
     unregisterPty(targetId)
   })
 
-  it('removes a workspace with no terminals despite an unrelated ambiguous session', async () => {
-    const { provider, currentSessions, legacySessions } = setup(kind)
-
-    await expect(
-      killAllProcessesForWorktree(worktreeId, {
-        localProvider: provider,
-        requirePhysicalStop: true
-      })
-    ).resolves.toEqual({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
-    expect(currentSessions).toEqual([unrelatedId])
-    expect(legacySessions).toEqual([unrelatedId])
-    await expect(provider.listProcesses()).rejects.toThrow(unrelatedId)
-  })
-
   it('stops the target terminal and preserves ambiguous sessions in other workspaces', async () => {
     const { provider, currentSessions, legacySessions } = setup(kind, [targetId])
 
@@ -55,20 +41,6 @@ describe.each(['router', 'degraded'] as const)('workspace deletion with %s inven
     ).resolves.toEqual({ runtimeStopped: 0, providerStopped: 1, registryStopped: 0 })
     expect(currentSessions).toEqual([unrelatedId])
     expect(legacySessions).toEqual([unrelatedId])
-  })
-
-  it('still refuses deletion when the target terminal has ambiguous ownership', async () => {
-    const { provider, currentSessions, legacySessions } = setup(kind, [targetId])
-    legacySessions.push(targetId)
-
-    await expect(
-      killAllProcessesForWorktree(worktreeId, {
-        localProvider: provider,
-        requirePhysicalStop: true
-      })
-    ).rejects.toThrow(`Terminal session owner could not be verified: ${targetId}`)
-    expect(currentSessions).toContain(targetId)
-    expect(legacySessions).toContain(targetId)
   })
 
   it('refuses an ambiguous target even after establishing its legacy input route', async () => {

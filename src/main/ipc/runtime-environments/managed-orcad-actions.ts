@@ -9,14 +9,15 @@ import {
   rollbackManagedOrcadEnvironment,
   updateManagedOrcadEnvironment
 } from '../../ssh/orcad-runtime-maintenance'
-import { getOrcadSshDeployment } from '../../../shared/runtime-environments'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type {
   OrcadManagedRestartResult,
   OrcadManagedStaleLockReclaimRequest,
   OrcadManagedStaleLockReclaimResult
 } from '../../../shared/orcad-managed-runtime'
 import { restartManagedOrcadEnvironment } from '../../managed-server/lifecycle/orcad-managed-launch-session'
+import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { runManagedOrcadStaleLockReclaim } from '../../managed-server/lifecycle/orcad-managed-stale-lock-reclaim'
 import { clearLaunchSessionNote } from './runtime-environment-managed-tunnel'
 import { forgetLaunchSessionVerdict } from '../ssh/ssh-host-launch-session-note'
@@ -53,6 +54,7 @@ export function createManagedOrcadActions(
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),
     update: async (selector, force, pastLiveTerminals) => {
+      forgetFailuresForExplicitAction(userDataPath(), selector)
       const result = await updateManagedOrcadEnvironment(userDataPath(), {
         selector,
         force,
@@ -70,6 +72,7 @@ export function createManagedOrcadActions(
       return result
     },
     rollback: async (selector) => {
+      forgetFailuresForExplicitAction(userDataPath(), selector)
       const result = await rollbackManagedOrcadEnvironment(userDataPath(), { selector })
       if (result.outcome === 'rolled-back') {
         await options.invalidateTransport(result.environment.id)
@@ -77,6 +80,7 @@ export function createManagedOrcadActions(
       return result
     },
     recover: async (selector, acceptChangedState) => {
+      forgetFailuresForExplicitAction(userDataPath(), selector)
       const result = await recoverManagedOrcadEnvironment(userDataPath(), {
         selector,
         acceptChangedState: acceptChangedState === true
@@ -108,6 +112,7 @@ export async function restartManagedOrcad(
   options: ManagedOrcadActionOptions,
   selector: string
 ): Promise<OrcadManagedRestartResult> {
+  forgetFailuresForExplicitAction(options.getUserDataPath(), selector)
   const result = await restartManagedOrcadEnvironment(options.getUserDataPath(), selector)
   if (result.outcome === 'restarted') {
     await reconnectRestartedManagedOrcad(options, result.environmentId)
@@ -139,5 +144,14 @@ async function reconnectRestartedManagedOrcad(
     options.clearHostServerNotes(targetId, environmentId)
     forgetLaunchSessionVerdict(targetId)
     clearLaunchSessionNote(targetId, environmentId)
+  }
+}
+
+/** A user's Update, Rollback, Recover or Restart, like Connect, re-arms automatic starts on that host. */
+function forgetFailuresForExplicitAction(userDataPath: string, selector: string): void {
+  try {
+    forgetManagedOrcadAutomaticFailures(userDataPath, resolveEnvironment(userDataPath, selector).id)
+  } catch {
+    // An unknown selector fails in the action itself with its own error.
   }
 }

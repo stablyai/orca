@@ -1,5 +1,5 @@
 import type { OrcadPeerDesktopsResult } from '../../shared/orcad-peer-desktops-contract'
-import { sanitizeDeviceLabel } from '../../shared/device-key-proof'
+import { sanitizeDeviceLabel } from '../../shared/remote-runtime/pairing/device-key-proof'
 import type { DeviceEntry } from './device-entry'
 
 const UNNAMED_DESKTOP = 'another Orca'

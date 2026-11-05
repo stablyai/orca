@@ -1,6 +1,4 @@
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
-// The shared projection decides each card's hold; this layer words it for the phone.
-
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -14,8 +12,9 @@ import {
   queuedMessageCardNeedsAttention,
   queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from '../../../src/shared/structured-agent-session-queued-cards'
+} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
+// The shared projection decides each card's hold; this layer words it for the phone.
 
 export type MobileQueuedMessageCard = QueuedMessageCard & {
   /** The text, or for a card of images alone, the image's name or their count. */
@@ -34,6 +33,9 @@ function queuedMessageCardCaption(
   switch (card.hold) {
     case 'returned': {
       const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      if (notice === null) {
+        return null
+      }
       return notice === 'withdrawn'
         ? 'Stopped before it was sent'
         : mobileAgentSessionWriteNoticeText(notice)

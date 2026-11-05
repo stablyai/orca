@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type {
   AgentSessionStatusEvent,

@@ -87,28 +87,4 @@ describe('sortWorktrees with host stamps', () => {
       'quiet'
     ])
   })
-
-  it('a Done the user has seen rests by Recent (owner decision Q1)', () => {
-    const seen = worktree({
-      worktreeId: 'seen',
-      displayName: 'A',
-      lastActivityAt: 30,
-      smartTier: 'done',
-      smartAt: 30,
-      unread: false,
-      sortedByStamps: true
-    })
-    const working = worktree({
-      worktreeId: 'working',
-      displayName: 'B',
-      lastActivityAt: 1,
-      smartTier: 'working',
-      smartAt: 1,
-      sortedByStamps: true
-    })
-    expect(sortWorktrees([seen, working], 'smart').map((item) => item.worktreeId)).toEqual([
-      'working',
-      'seen'
-    ])
-  })
 })

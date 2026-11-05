@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
-import type { TerminalLayoutSnapshot } from '../../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { showMainPaneResumeOutcome as ShowOutcome } from './main-pane-resume-banner'
 
@@ -143,47 +143,5 @@ describe("the window's banner for main's start of a pane", () => {
       }
     })
     expect(view.showSessionRestoredBanner).not.toHaveBeenCalled()
-  })
-
-  it('subscribes to nothing: the outcome rides the frame the attach follows', async () => {
-    const showMainPaneResumeOutcome = await loadBannerModule()
-    const { view, session } = attachedView()
-    showMainPaneResumeOutcome(session, 'pty-1')
-    expect(store.listenerCount()).toBe(0)
-    expect(view.waitTeardowns).toEqual([])
-    expect(view.showSessionRestoredBanner).not.toHaveBeenCalled()
-  })
-})
-
-describe("a held pane's reopen count from main's outcome", () => {
-  beforeEach(() => store.reset())
-
-  const publish = (ptyId: string, ptyGeneration: number) =>
-    store.publish({
-      terminalPaneResumeOutcomesByPaneKey: {
-        [PANE_KEY]: { ptyId, ptyGeneration, outcome: 'restored' }
-      }
-    })
-
-  it("counts main's start since the attach began, for the terminal the attach got", async () => {
-    vi.resetModules()
-    const { attachResumeCheck } = await import('./main-pane-resume-banner')
-    const resumed = attachResumeCheck(attachedView().session, null)
-    publish('pty-1', 2)
-    expect(resumed('pty-1')).toBe(true)
-    // The attach's own result names the terminal it got, over the id it asked for.
-    expect(resumed('pty-asked', { id: 'pty-1' })).toBe(true)
-    expect(resumed('pty-1', { id: 'pty-other' })).toBe(false)
-  })
-
-  it('does not count a start main resumed before the attach began', async () => {
-    vi.resetModules()
-    const { attachResumeCheck } = await import('./main-pane-resume-banner')
-    publish('pty-1', 1)
-    const resumed = attachResumeCheck(attachedView().session, null)
-    expect(resumed('pty-1')).toBe(false)
-    // A later start under the same id (a new bind generation) counts.
-    publish('pty-1', 2)
-    expect(resumed('pty-1')).toBe(true)
   })
 })

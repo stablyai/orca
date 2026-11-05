@@ -1,6 +1,6 @@
 /** Exclude only positively identified daemon service children from reap decisions. Persistent AI Vault sidecars made raw childCount===0 unreachable (#13614); unknown argv/children still retain the relay (docs/reference/ssh-execution-boundary.md). */
 import { RELAY_DAEMON_SERVICE_ENTRY_FILENAMES } from './relay-install-artifacts'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export const RELAY_CHILD_COUNT_VAR = 'kids'
 

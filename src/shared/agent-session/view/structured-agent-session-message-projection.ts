@@ -1,9 +1,10 @@
-import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structured-agent-session-send-evidence'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import { isQueuedAgentJournalSubmission } from '../requests/agent-session-queued-submission'
@@ -28,7 +29,11 @@ export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
   queuedAt: number
+  phase?: 'sending' | 'recorded' | 'unconfirmed'
   recordedCursor?: AgentJournalCursor
+  /** In-memory placement captured at Send, independent of any acknowledgement. */
+  afterSequence?: number
+  options?: Readonly<Record<string, string>>
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
 }
@@ -126,18 +131,28 @@ export function projectStructuredAgentSessionMessages(
     }
   }
   const journalled = new Set(visibleItems.map((item) => item.itemId))
-  // Until handover, a queued send has no conversation position, even relative to commands it waits behind.
-  const queued = new Set(
-    submissions
-      .filter(isQueuedAgentJournalSubmission)
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  const submissionsByItemId = new Map(
+    submissions.map((submission) => [
+      agentJournalSubmissionKey(submission.clientMessageId),
+      submission
+    ])
   )
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
   const shownStopped = new Set<string>()
   let moved = false
-  for (const message of projectItems(visibleItems)) {
-    if (queued.has(message.id)) {
+  for (const row of projectItems(visibleItems)) {
+    const submission = submissionsByItemId.get(row.id)
+    const message: NativeChatMessage =
+      submission?.dispatchState === 'pending' || submission?.dispatchState === 'unknown'
+        ? {
+            ...row,
+            deliveryState: submission.dispatchState,
+            ...(submission.queuedMessageId ? { queuedMessageId: submission.queuedMessageId } : {})
+          }
+        : row
+    // Until handover, queued sends have no conversation position.
+    if (submission && isQueuedAgentJournalSubmission(submission)) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(message)
@@ -175,19 +190,38 @@ export function projectStructuredAgentSessionMessages(
     ...held,
     // Host rows supersede client echoes under either client or provider IDs.
     ...optimistic
-      .filter(
-        (entry) =>
-          !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)) &&
-          !submissions.some((submission) => submission.clientMessageId === entry.clientMessageId)
-      )
-      .map((entry): NativeChatMessage => ({
-        id: agentJournalSubmissionKey(entry.clientMessageId),
-        role: 'user',
-        source: 'transcript',
-        timestamp: entry.queuedAt,
-        blocks: entry.body.blocks,
-        ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
-      }))
+      .filter((entry) => {
+        const key = agentJournalSubmissionKey(entry.clientMessageId)
+        const submission = submissionsByItemId.get(key)
+        return (
+          !journalled.has(key) &&
+          (!submission ||
+            submission.dispatchState === 'pending' ||
+            submission.reason === STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING)
+        )
+      })
+      .map((entry): NativeChatMessage => {
+        const id = agentJournalSubmissionKey(entry.clientMessageId)
+        const submission = submissionsByItemId.get(id)
+        const hostPending =
+          submission?.dispatchState === 'pending' &&
+          submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+        return {
+          id,
+          role: 'user',
+          source: 'transcript',
+          deliveryState:
+            hostPending || entry.phase === 'recorded' || entry.recordedCursor !== undefined
+              ? 'pending'
+              : 'unknown',
+          timestamp: entry.queuedAt,
+          blocks: entry.body.blocks,
+          ...(entry.afterSequence !== undefined
+            ? { journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt } }
+            : {}),
+          ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
+        }
+      })
   ]
 }
 
