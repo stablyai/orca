@@ -31,16 +31,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     tabWideAgentHintLeafId,
     worktreeId
   } = controller
-  const {
-    clearCodexRestartNotice,
-    consumePendingPaneAccountRestart,
-    setTabCanExpandPane,
-    setTabLayout,
-    setTabPaneExpanded,
-    setTabViewMode,
-    suppressPtyExit,
-    toggleTabViewMode
-  } = useTerminalPaneStoreActions()
+  const storeActions = useTerminalPaneStoreActions()
+  const { setTabLayout, setTabViewMode, toggleTabViewMode } = storeActions
   // Bundle unified-tab reads to reduce lookups and subscriptions per mounted tab.
   const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
@@ -270,11 +262,11 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
 
   return {
-    setTabPaneExpanded,
-    setTabCanExpandPane,
-    suppressPtyExit,
-    consumePendingPaneAccountRestart,
-    clearCodexRestartNotice,
+    setTabPaneExpanded: storeActions.setTabPaneExpanded,
+    setTabCanExpandPane: storeActions.setTabCanExpandPane,
+    suppressPtyExit: storeActions.suppressPtyExit,
+    consumePendingPaneAccountRestart: storeActions.consumePendingPaneAccountRestart,
+    clearCodexRestartNotice: storeActions.clearCodexRestartNotice,
     unifiedTabId,
     isChatViewMode,
     effectiveChatViewMode,
