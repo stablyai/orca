@@ -62,6 +62,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserCookieGet',
   'browserCookieSet',
   'browserCookieDelete',
+  'browserCookieImport',
   'browserSetViewport',
   'browserSetGeolocation',
   'browserInterceptEnable',

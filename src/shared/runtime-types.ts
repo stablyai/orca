@@ -29,6 +29,7 @@ export type {
   BrowserConsoleResult,
   BrowserCookie,
   BrowserCookieDeleteResult,
+  BrowserCookieImportFromFileResult,
   BrowserCookieGetResult,
   BrowserCookieSetResult,
   BrowserDetectedInfo,
