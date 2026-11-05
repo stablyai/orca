@@ -111,6 +111,10 @@ export function windowsOrcadLaunchCommand(
   ])
 }
 
+export function hasWindowsOrcadLaunchReport(output: string): boolean {
+  return parseWindowsBreakawayLaunchReport(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, output) !== null
+}
+
 /** Return launched PID or surface native-breakaway refusal/failure. */
 export function readWindowsOrcadLaunchReport(output: string): number {
   const report = parseWindowsBreakawayLaunchReport(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, output)

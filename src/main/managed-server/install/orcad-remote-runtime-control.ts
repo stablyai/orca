@@ -6,6 +6,7 @@ import {
   type OrcadReadinessParse
 } from './orcad-remote-launch'
 import {
+  hasWindowsOrcadLaunchReport,
   readWindowsOrcadLaunchReport,
   readWindowsOrcadSlotRuntime,
   readWindowsOrcadSlotEntry,
@@ -185,7 +186,8 @@ async function windowsLaunchReportOutput(
   try {
     return await execOrcadRemote(target, command)
   } catch (error) {
-    if (isSshCommandExitError(error)) {
+    // Without a report the command error carries the better diagnostic.
+    if (isSshCommandExitError(error) && hasWindowsOrcadLaunchReport(error.stdout)) {
       return error.stdout
     }
     throw error
