@@ -14,7 +14,7 @@ import { addNodePtyRecoveryHint } from '../../pty-subprocess/node-pty-error-hint
 export type PendingRequest = {
   resolve: (value: unknown) => void
   reject: (reason: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  cancelDeadline: () => void
 }
 
 export class DaemonPendingRequests {
@@ -37,7 +37,7 @@ export class DaemonPendingRequests {
       const pending = this.requests.get(response.id)
       if (pending) {
         this.requests.delete(response.id)
-        clearTimeout(pending.timer)
+        pending.cancelDeadline()
         if (response.ok) {
           pending.resolve(response.payload)
         } else {
@@ -58,7 +58,7 @@ export class DaemonPendingRequests {
   // Keep transport failures distinct from refusal replies: only the former may tear down shared sockets.
   rejectAll(reason: string): void {
     for (const [id, pending] of this.requests) {
-      clearTimeout(pending.timer)
+      pending.cancelDeadline()
       pending.reject(new DaemonConnectionLostError(reason))
       this.requests.delete(id)
     }
