@@ -60,16 +60,32 @@ describe('incremental Codex session names', () => {
     await writeFile(path, initial)
     const first = await readCodexIndexUpdate(path, await stat(path))
     const stream = vi.spyOn(transcriptFs, 'openTranscriptReadStream')
-    await appendFile(path, `${entry('session', 'Renamed')}{"id":"session","thread_name":"Final"}`)
+    await appendFile(path, `${entry('session', 'Renamed')}{"id":"session","thread_name":"Fin`)
     const next = await readCodexIndexUpdate(path, await stat(path), first)
     expect(next.titles.get('session')).toBe('Renamed')
     expect(
       stream.mock.calls.some(([, options]) => options.start === Buffer.byteLength(initial))
     ).toBe(true)
-    await appendFile(path, '\n')
+    await appendFile(path, 'al"}\n')
     expect((await readCodexIndexUpdate(path, await stat(path), next)).titles.get('session')).toBe(
       'Final'
     )
+  })
+
+  it('reads valid EOF JSON and rereads that tail after growth instead of retaining it', async () => {
+    const { path } = await indexHome()
+    await writeFile(path, entry('head', 'Head') + entry('tail', 'EOF name').trimEnd())
+    const first = await readCodexIndexUpdate(path, await stat(path))
+    expect([...first.titles]).toEqual([
+      ['head', 'Head'],
+      ['tail', 'EOF name']
+    ])
+    await appendFile(path, `invalid\n${entry('new', 'New name')}`)
+    const next = await readCodexIndexUpdate(path, await stat(path), first)
+    expect([...next.titles]).toEqual([
+      ['head', 'Head'],
+      ['new', 'New name']
+    ])
   })
 
   it('rebuilds on replacement, a growing rewrite, and shrink instead of retaining removed names', async () => {

@@ -1,6 +1,8 @@
 import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 function terminalTab(worktreeId: string, aiVaultTitle?: TerminalTab['aiVaultTitle']): TerminalTab {
   return {
@@ -48,7 +50,8 @@ export function makeState(args: {
     providerSession,
     stateHistory: []
   }
-  let state = {
+  let state: AppState = {
+    ...useAppStore.getInitialState(),
     activeWorktreeId: args.worktreeId,
     activeWorkspaceExecutionHostId: args.executionHostId,
     agentStatusByPaneKey: args.sleeping
@@ -82,7 +85,8 @@ export function makeState(args: {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
-    getKnownWorktreeById: () => ({ path: args.path }),
+    getKnownWorktreeById: () =>
+      makeWorktree({ id: args.worktreeId, repoId: 'repo-1', path: args.path }),
     setAiVaultTabTitle: (tabId: string, aiVaultTitle: TerminalTab['aiVaultTitle'] | null) => {
       const previous = state
       state = {
@@ -97,7 +101,7 @@ export function makeState(args: {
         listener(state, previous)
       }
     }
-  } as unknown as AppState
+  }
   return {
     getState: () => state,
     update: (patch: Partial<AppState>) => {

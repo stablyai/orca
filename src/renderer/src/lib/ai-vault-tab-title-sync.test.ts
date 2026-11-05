@@ -6,7 +6,7 @@ import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 
-import { makeState, titleResult } from './ai-vault-tab-title-test-store'
+import { makeState, titleResult } from './ai-vault-tab-title-test-fixture'
 
 describe('AI Vault tab title sync', () => {
   it('retains a recovered sleeping title after its lifecycle record disappears', async () => {

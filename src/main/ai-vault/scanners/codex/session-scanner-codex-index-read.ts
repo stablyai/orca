@@ -41,6 +41,7 @@ export async function readCodexIndexUpdate(
   let append = false
   if (
     previous?.firstRecord &&
+    previous.offset === previous.size &&
     stat.size > previous.size &&
     stat.dev !== 0 &&
     stat.ino !== 0 &&
@@ -59,18 +60,23 @@ export async function readCodexIndexUpdate(
     }
   }
   const titles = append ? new Map(previous!.titles) : new Map<string, string>()
-  const { consumedThrough } = await consumeCompleteJsonlLines({
+  const applyLine = (line: string) => {
+    const record = parseJsonObject(line)
+    const sessionId = record && extractString(record.id)
+    const title = record && normalizeTitleText(extractString(record.thread_name) ?? '')
+    if (sessionId && title) {
+      titles.set(sessionId, title)
+    }
+  }
+  const { consumedThrough, trailingPartialLine } = await consumeCompleteJsonlLines({
     path,
     start: append ? previous!.offset : 0,
-    onLine: (line) => {
-      const record = parseJsonObject(line)
-      const sessionId = record && extractString(record.id)
-      const title = record && normalizeTitleText(extractString(record.thread_name) ?? '')
-      if (sessionId && title) {
-        titles.set(sessionId, title)
-      }
-    }
+    onLine: applyLine
   })
+  // EOF JSON remains readable; a tail forces the next growth to reread rather than retain it.
+  if (trailingPartialLine) {
+    applyLine(trailingPartialLine)
+  }
   return {
     titles,
     offset: consumedThrough,

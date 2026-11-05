@@ -1,12 +1,14 @@
 import type { AiVaultSessionTitlesArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY } from '../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
-import { makeState, titleResult } from './ai-vault-tab-title-test-store'
+import { makeState, titleResult } from './ai-vault-tab-title-test-fixture'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
+import type * as MountedTerminalTabRegistry from '@/runtime/mounted-terminal-tab-registry'
 
-vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+vi.mock('@/runtime/mounted-terminal-tab-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
   findRegisteredTerminalTab: () => ({
     tab: {
       getManager: () => ({
