@@ -143,195 +143,57 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows).toEqual([])
   })
 
-  it('shows one imported line after the repo rows in its first status section', () => {
-    const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
-    const rows = buildRows(
-      'workspace-status',
-      [worktree, review],
-      repoMap,
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([
-        [worktree.id, worktree],
-        [review.id, review]
-      ]),
-      false,
-      undefined,
-      [],
-      new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
-    )
-
-    const cards = rows.filter((row) => row.type === 'imported-worktrees-card')
-    expect(cards).toMatchObject([{ placement: 'pinned-fallback', repo: { id: 'repo-1' } }])
-    const cardIndex = rows.indexOf(cards[0]!)
-    expect(rows[cardIndex - 1]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
-    expect(rows.slice(cardIndex + 1)).toMatchObject([
-      { type: 'header' },
-      { type: 'item', worktree: { id: 'wt-review' } }
-    ])
-  })
-
-  it('shows the imported line in a later status section when the first is collapsed', () => {
-    const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
-    const firstKey = buildRows(
-      'workspace-status',
-      [worktree],
-      repoMap,
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([[worktree.id, worktree]])
-    )[0]!
-    const rows = buildRows(
-      'workspace-status',
-      [worktree, review],
-      repoMap,
-      null,
-      new Set([firstKey.type === 'header' ? firstKey.key : '']),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([
-        [worktree.id, worktree],
-        [review.id, review]
-      ]),
-      false,
-      undefined,
-      [],
-      new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
-    )
-
-    expect(rows.slice(-2)).toMatchObject([
-      { type: 'item', worktree: { id: 'wt-review' } },
-      { type: 'imported-worktrees-card', placement: 'pinned-fallback' }
-    ])
-  })
-
-  it('places non-repo imported fallbacks after each repo last pinned row when expanded', () => {
+  it('shows one line for every project at the end of a list not grouped by project', () => {
     const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
-    const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
-    const pinnedTwo = {
+    const pinned = { ...worktree, id: 'repo-1-pinned', isPinned: true }
+    const review = {
       ...worktree,
-      id: 'repo-2-pinned',
+      id: 'repo-2-review',
       repoId: repoTwo.id,
-      isPinned: true,
-      displayName: 'auth-main'
+      workspaceStatus: 'in-review' as const
     }
-    const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
-
-    const rows = buildRows(
-      'none',
-      [pinnedOneA, pinnedTwo, pinnedOneB],
-      new Map([
-        [repo.id, repo],
-        [repoTwo.id, repoTwo]
-      ]),
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([
-        [pinnedOneA.id, pinnedOneA],
-        [pinnedTwo.id, pinnedTwo],
-        [pinnedOneB.id, pinnedOneB]
-      ]),
-      false,
-      undefined,
-      [],
-      new Set(),
-      new Map([
-        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
-        [
-          repoTwo.id,
-          {
-            repo: repoTwo,
-            hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
-          }
-        ]
-      ])
-    )
-
-    expect(
-      rows.map((row) =>
-        row.type === 'item'
-          ? row.worktree.id
-          : row.type === 'imported-worktrees-card'
-            ? `${row.placement}:${row.repo.id}`
-            : row.key
+    const hiddenOne = makeDetectedWorktree({ id: 'hidden-one' })
+    const hiddenTwo = makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })
+    for (const [groupBy, collapsed] of [
+      ['workspace-status', new Set<string>()],
+      ['workspace-status', new Set([PINNED_GROUP_KEY])],
+      ['none', new Set(['all'])]
+    ] as const) {
+      const rows = buildRows(
+        groupBy,
+        [pinned, review],
+        new Map([
+          [repo.id, repo],
+          [repoTwo.id, repoTwo]
+        ]),
+        null,
+        new Set(collapsed),
+        undefined,
+        undefined,
+        undefined,
+        {},
+        new Map([
+          [pinned.id, pinned],
+          [review.id, review]
+        ]),
+        false,
+        undefined,
+        [],
+        new Set(),
+        new Map([
+          [repo.id, { repo, hiddenWorktrees: [hiddenOne] }],
+          [repoTwo.id, { repo: repoTwo, hiddenWorktrees: [hiddenTwo] }]
+        ])
       )
-    ).toEqual([
-      'pinned',
-      'repo-1-pinned-a',
-      'repo-2-pinned',
-      'pinned-fallback:repo-2',
-      'repo-1-pinned-b',
-      'pinned-fallback:repo-1'
-    ])
-  })
 
-  it('places collapsed non-repo imported fallbacks after Pinned in pinned repo order', () => {
-    const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
-    const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
-    const pinnedTwo = {
-      ...worktree,
-      id: 'repo-2-pinned',
-      repoId: repoTwo.id,
-      isPinned: true,
-      displayName: 'auth-main'
+      expect(rows.filter((row) => row.type === 'imported-worktrees-card')).toHaveLength(1)
+      expect(rows.at(-1)).toMatchObject({
+        type: 'imported-worktrees-card',
+        placement: 'all-projects',
+        projects: [{ hiddenWorktrees: [hiddenOne] }, { hiddenWorktrees: [hiddenTwo] }]
+      })
+      expect(rows.at(-1)).not.toHaveProperty('hostContextLabel')
     }
-    const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
-
-    const rows = buildRows(
-      'workspace-status',
-      [pinnedOneA, pinnedTwo, pinnedOneB],
-      new Map([
-        [repo.id, repo],
-        [repoTwo.id, repoTwo]
-      ]),
-      null,
-      new Set([PINNED_GROUP_KEY]),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([
-        [pinnedOneA.id, pinnedOneA],
-        [pinnedTwo.id, pinnedTwo],
-        [pinnedOneB.id, pinnedOneB]
-      ]),
-      false,
-      undefined,
-      [],
-      new Set(),
-      new Map([
-        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
-        [
-          repoTwo.id,
-          {
-            repo: repoTwo,
-            hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
-          }
-        ]
-      ])
-    )
-
-    expect(rows).toMatchObject([
-      { type: 'header', key: PINNED_GROUP_KEY, count: 3 },
-      { type: 'imported-worktrees-card', placement: 'pinned-fallback', repo: { id: repo.id } },
-      { type: 'imported-worktrees-card', placement: 'pinned-fallback', repo: { id: repoTwo.id } }
-    ])
   })
 
   it('emits a new external worktrees inbox row before repo worktree rows', () => {
@@ -601,56 +463,6 @@ describe('buildRows with pinned worktrees', () => {
           sectionKey: `repo:${repo.id}`,
           worktree: expect.objectContaining({ id: 'wt-pinned' })
         })
-      ])
-    )
-  })
-
-  it('moves the duplicate-mode imported line from Pinned to the open natural section', () => {
-    const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
-    const imported = new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
-    const expanded = buildRows(
-      'none',
-      [pinnedWorktree],
-      repoMap,
-      null,
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([[pinnedWorktree.id, pinnedWorktree]]),
-      false,
-      { showPinnedWorktreesInGroups: true } as never,
-      [],
-      new Set(),
-      imported
-    )
-    const collapsedAll = buildRows(
-      'none',
-      [pinnedWorktree],
-      repoMap,
-      null,
-      new Set(['all']),
-      undefined,
-      undefined,
-      undefined,
-      {},
-      new Map([[pinnedWorktree.id, pinnedWorktree]]),
-      false,
-      { showPinnedWorktreesInGroups: true } as never,
-      [],
-      new Set(),
-      imported
-    )
-
-    expect(expanded.filter((row) => row.type === 'imported-worktrees-card')).toHaveLength(1)
-    expect(expanded.at(-1)).toMatchObject({
-      type: 'imported-worktrees-card',
-      placement: 'pinned-fallback'
-    })
-    expect(collapsedAll).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: 'imported-worktrees-card', placement: 'pinned-fallback' })
       ])
     )
   })

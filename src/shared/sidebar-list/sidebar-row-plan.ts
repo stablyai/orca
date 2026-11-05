@@ -52,7 +52,7 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import { orderMainWorktreeFirst } from './section-order'
-import { placeImportedWorktreeLines } from './imported-worktree-lines'
+import { appendImportedWorktreeLines } from './imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
@@ -217,14 +217,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       mixedWorktreeHostContextLabels
     )
     const withImportedLines = (rows: Row[]): Row[] =>
-      placeImportedWorktreeLines(rows, {
-        importedWorktreesByRepo,
-        pinnedSectionWorktrees,
-        collapsedGroups,
-        repoOf,
-        defaultHostId,
-        noticeHostContextLabelByRepoId
-      })
+      appendImportedWorktreeLines(rows, { importedWorktreesByRepo, defaultHostId, hostLabelById })
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {

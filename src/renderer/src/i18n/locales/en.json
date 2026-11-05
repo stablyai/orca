@@ -6195,8 +6195,6 @@
           "expandAriaLabel": "Expand hidden worktrees for {{repo}}",
           "hiding_one": "Hiding {{count}} discovered worktree",
           "hiding_other": "Hiding {{count}} discovered worktrees",
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
           "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
           "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
           "keepHiddenTooltip": "Keep hidden - recover from the project menu",
