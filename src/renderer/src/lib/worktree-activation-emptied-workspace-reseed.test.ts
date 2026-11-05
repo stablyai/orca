@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { restoreWorktreeCreateMenuSurface } from '@/components/sidebar/workspace-card/surface/restore-worktree-create-menu-surface'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
 import * as activationGate from './worktree-agent-activation-gate'
@@ -303,5 +304,44 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     expect(result).not.toBe(false)
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
     expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(SSH_HOST_ID)
+  })
+})
+
+describe('dismissing the sidebar create menu', () => {
+  beforeEach(() => {
+    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('empty')
+  })
+  it('restores an empty workspace and preserves an already created surface', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    activateAndRevealWorktree(worktree.id, {
+      providesInitialSurface: true,
+      executionHostId: 'local',
+      notifyHostRuntime: false
+    })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+    restoreWorktreeCreateMenuSurface(worktree.id, 'local')
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+    const tabId = useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.id
+    restoreWorktreeCreateMenuSurface(worktree.id, 'local')
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]?.map((tab) => tab.id)).toEqual([
+      tabId
+    ])
+  })
+
+  it.each(['workspace', 'host'])('does not seed after the active %s changes', async (changed) => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.setState({
+      activeWorktreeId: changed === 'workspace' ? 'another-workspace' : worktree.id,
+      activeWorkspaceExecutionHostId: changed === 'host' ? toSshExecutionHostId('other') : 'local'
+    })
+    restoreWorktreeCreateMenuSurface(worktree.id, 'local')
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
   })
 })

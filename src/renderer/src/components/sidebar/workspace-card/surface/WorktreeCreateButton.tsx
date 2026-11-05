@@ -1,3 +1,4 @@
+import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
 import { useState } from 'react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { workspaceRootGroupId } from '../../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -49,7 +50,10 @@ export function WorktreeCreateButton({
         <WorktreeCreateMenu
           worktreeId={worktreeId}
           groupId={groupId}
-          onClose={() => setGroupId(null)}
+          onClose={() => {
+            setGroupId(null)
+            restoreWorktreeCreateMenuSurface(worktreeId, executionHostId)
+          }}
         />
       ) : (
         <Trigger
