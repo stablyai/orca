@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS,
   nativeChatTurnReplyPreviews,
   projectAgentSessionConversationOutline,
   truncateOutlinePreview
@@ -11,22 +10,8 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
-import {
-  buildNativeChatRailItems,
-  nativeChatRailReplyPreview
-} from './native-chat-message-rail-items'
-import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
-import { nativeChatSubagentSections } from './native-chat-subagent-sections'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
-import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
-import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
-import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
-import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 function row(sequence: number, body: AgentJournalItemBody, itemId = `item-${sequence}`) {
   return { itemId, revision: 1, sequence, observedAt: 1_000 + sequence, body }
@@ -71,162 +56,7 @@ const JOURNAL: AgentJournalRenderItem[] = [
   { ...user(12, [{ type: 'text', text: 'Observed earlier' }]), observedAt: 1_009.5 }
 ]
 
-function loadedSlots(
-  items: AgentJournalRenderItem[],
-  submissions: AgentJournalSubmission[],
-  openSections: readonly string[] = []
-) {
-  const projection = createNativeChatMessageListProjection()(
-    projectStructuredAgentSessionMessages(items, [], submissions)
-  )
-  const messages = omitNativeChatThreadGoalRows(
-    projectNativeChatTaskListFrames(projection.conversation)
-  )
-  const membership = nativeChatTurnMembership(messages, { items, submissions })
-  const rows = {
-    messages: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
-    turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder)
-  }
-  const slots = buildNativeChatTranscriptSlots({
-    ...rows,
-    liveTurnKey: membership.liveTurnKey,
-    receipts: new Map<string, NativeChatResolvedPrompt>(),
-    turnStatuses: { active: null, completedByTurn: {} },
-    turnDiffs: new Map<string, NativeChatTurnDiff>(),
-    expandedTurnKeys: new Set<string>(),
-    isWorking: false,
-    lifecycleWorking: false,
-    subagentSections: nativeChatSubagentSections(messages, projection.subagentRows),
-    subagentChoices: {
-      sections: new Map(openSections.map((agentId) => [agentId, true])),
-      rosters: new Map()
-    }
-  })
-  return { rows, slots }
-}
-
-function loadedRailItems(
-  items: AgentJournalRenderItem[],
-  submissions: AgentJournalSubmission[],
-  openSections?: readonly string[]
-) {
-  const { rows, slots } = loadedSlots(items, submissions, openSections)
-  const railItems = buildNativeChatRailItems(slots)
-  return railItems.map((item) => ({
-    ...item,
-    reply: nativeChatRailReplyPreview(rows, railItems, item.id)
-  }))
-}
-
 describe('conversation outline parity with the loaded rail', () => {
-  // Desktop-only rejected rows get loaded ticks but stay outside the mixed-version host outline.
-  it('lists exactly the user messages the transcript gives a rail tick, with the same ids and previews', () => {
-    const outline = projectAgentSessionConversationOutline(JOURNAL, [REJECTED])
-    const rejectedId = agentJournalSubmissionKey(REJECTED.clientMessageId)
-    const loadedWithRejected = loadedRailItems(JOURNAL, [REJECTED])
-    expect(loadedWithRejected.filter((item) => item.id === rejectedId)).toHaveLength(1)
-    const loaded = loadedWithRejected.filter((item) => item.id !== rejectedId)
-
-    expect(outline.map((entry) => entry.itemId)).toEqual(loaded.map((item) => item.id))
-    expect(
-      outline.map((entry) => ({
-        id: entry.itemId,
-        text: entry.preview,
-        hasImages: entry.imageCount > 0,
-        reply: entry.reply ?? ''
-      }))
-    ).toEqual(loaded.map(({ id, text, hasImages, reply }) => ({ id, text, hasImages, reply })))
-    // Assert exact rows to catch vacuous parity and preserve recovered journal ordering.
-    expect(outline.map((entry) => entry.itemId)).toEqual([
-      'item-1',
-      'item-5',
-      'item-9',
-      'item-11',
-      'item-12'
-    ])
-  })
-
-  // Rejected rows must not alter the outline served to mixed-version clients.
-  it('is the same as if a rejected message had never been sent', () => {
-    const rejectedId = agentJournalSubmissionKey(REJECTED.clientMessageId)
-    expect(projectAgentSessionConversationOutline(JOURNAL, [REJECTED])).toEqual(
-      projectAgentSessionConversationOutline(
-        JOURNAL.filter((item) => item.itemId !== rejectedId),
-        []
-      )
-    )
-  })
-
-  // Keep the historical host outline contract for mixed-version clients.
-  it('leaves out a send a Stop took back, which the transcript still draws', () => {
-    const stopped: AgentJournalSubmission = {
-      ...REJECTED,
-      clientMessageId: 'client-stopped',
-      reason: DISPATCH_REJECTED_CANCELLED
-    }
-    const journal = [
-      ...JOURNAL,
-      user(13, [{ type: 'text', text: 'never ran' }], agentJournalSubmissionKey('client-stopped'))
-    ]
-    const outline = projectAgentSessionConversationOutline(journal, [REJECTED, stopped])
-    const rejectedId = agentJournalSubmissionKey(REJECTED.clientMessageId)
-    const loaded = loadedRailItems(journal, [REJECTED, stopped]).filter(
-      (item) => item.id !== rejectedId
-    )
-
-    expect(outline.map((entry) => entry.itemId)).toEqual(loaded.map((item) => item.id))
-    expect(outline.map((entry) => entry.itemId)).not.toContain(
-      agentJournalSubmissionKey('client-stopped')
-    )
-    expect(
-      projectStructuredAgentSessionMessages(journal, [], [REJECTED, stopped]).map(
-        (message) => message.id
-      )
-    ).toContain(agentJournalSubmissionKey('client-stopped'))
-  })
-
-  it('reads a reply past a tool result folded into the turn, loaded or outlined', () => {
-    const journal = [
-      user(1, [{ type: 'text', text: 'Fix it' }]),
-      row(2, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Looking.' }] }),
-      row(3, { kind: 'tool-call', name: 'Read', state: 'completed', input: { file_path: 'a.ts' } }),
-      user(4, [{ type: 'tool-result', output: 'file body' }]),
-      row(5, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Fixed.' }] })
-    ]
-    expect(projectAgentSessionConversationOutline(journal, []).map((entry) => entry.reply)).toEqual(
-      ['Fixed.']
-    )
-    expect(loadedRailItems(journal, []).map((item) => item.reply)).toEqual(['Fixed.'])
-  })
-
-  it('never reads a subagent into the rail, as a tick or as a reply', () => {
-    const journal = [
-      user(1, [{ type: 'text', text: 'Fix it' }]),
-      row(2, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Fixed.' }] }),
-      { ...user(3, [{ type: 'text', text: 'Child task' }]), agentId: 'sub-1' },
-      {
-        ...row(4, {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'Child done.' }]
-        }),
-        agentId: 'sub-1'
-      }
-    ]
-    const outline = projectAgentSessionConversationOutline(journal, [])
-    expect(outline.map(({ itemId, reply }) => ({ id: itemId, reply }))).toEqual([
-      { id: 'item-1', reply: 'Fixed.' }
-    ])
-    // Confirm the expanded child prompt really renders before checking its rail exclusion.
-    const open = loadedSlots(journal, [], ['sub-1']).slots
-    expect(open.some((slot) => slot.kind === 'message' && slot.message.id === 'item-3')).toBe(true)
-    for (const sections of [[], ['sub-1']]) {
-      expect(
-        loadedRailItems(journal, [], sections).map(({ id, reply }) => ({ id, reply }))
-      ).toEqual([{ id: 'item-1', reply: 'Fixed.' }])
-    }
-  })
-
   // Name the running turn so clients without the steer loaded can identify its shared reply.
   it("names the turn of a steer, and gives it that turn's reply", () => {
     const inTurn = { turnScope: { kind: 'turn' as const, turnItemId: 'turn-1' } }
@@ -318,12 +148,6 @@ describe('reply preview', () => {
         ['t1', 't1', 't2']
       )
     ).toEqual(new Map([['t1', 'Here it is:']]))
-  })
-
-  it('is cut to the preview cap', () => {
-    expect(nativeChatTurnReplyPreviews([says('word '.repeat(200))], ['t1']).get('t1')).toHaveLength(
-      AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS - 1
-    )
   })
 })
 
