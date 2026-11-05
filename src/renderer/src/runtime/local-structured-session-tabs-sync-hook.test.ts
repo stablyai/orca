@@ -3,7 +3,7 @@
 import '../../../shared/native-chat/every-agent-chat.test-fixture'
 import type * as LocalSubscription from './local-structured-session-tabs-sync/subscription'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   resetLocalStructuredSessionVersionForTests,
@@ -134,13 +134,17 @@ it.each([100, 1000])('bounds root preference work for %i choices', async (size) 
   expect(mocks.start).toHaveBeenCalledOnce()
 })
 
+let actualSubscription: typeof LocalSubscription
+beforeAll(async () => {
+  actualSubscription = await vi.importActual<typeof LocalSubscription>(
+    './local-structured-session-tabs-sync/subscription'
+  )
+})
+
 it('recovers failed capability and stale initial inventory with owned timers while ready and inUse stay true', async () => {
   vi.useFakeTimers()
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  const actual = await vi.importActual<typeof LocalSubscription>(
-    './local-structured-session-tabs-sync/subscription'
-  )
-  mocks.start.mockImplementation(actual.startLocalStructuredSessionTabsSync)
+  mocks.start.mockImplementation(actualSubscription.startLocalStructuredSessionTabsSync)
   const snapshot = {
     worktree: 'repo-1::worktree-1',
     publicationEpoch: 'E2',
@@ -244,10 +248,7 @@ it('recovers failed capability and stale initial inventory with owned timers whi
 it('drops a pending startup retry when its generation becomes obsolete', async () => {
   vi.useFakeTimers()
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  const actual = await vi.importActual<typeof LocalSubscription>(
-    './local-structured-session-tabs-sync/subscription'
-  )
-  mocks.start.mockImplementation(actual.startLocalStructuredSessionTabsSync)
+  mocks.start.mockImplementation(actualSubscription.startLocalStructuredSessionTabsSync)
   const getStatus = vi.fn().mockRejectedValue(new Error('host unavailable'))
   const subscribe = vi.fn()
   Object.assign(window.api, { runtime: { getStatus, subscribe } })

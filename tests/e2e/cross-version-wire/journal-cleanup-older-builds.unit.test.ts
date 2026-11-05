@@ -216,6 +216,7 @@ async function refusedBy(build: OlderBuild): Promise<void> {
 }
 
 describe('a format-1 chat the format-1 build keeps writing around this build', () => {
+  // Each case extracts and cold-imports real older release sources, which takes minutes on CI runners.
   it(
     'survives cleanup, cold reads, the older writer continuing and two successive rewinds, then is refused once mixed',
     async () => {
@@ -318,6 +319,7 @@ describe('a format-1 chat the format-1 build keeps writing around this build', (
     SUITE_TIMEOUT_MS
   )
 
+  // Each case extracts and cold-imports real older release sources, which takes minutes on CI runners.
   it(
     'refuses a chat this build started, as a newer Orca’s, leaving every byte',
     async () => {

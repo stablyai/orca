@@ -221,14 +221,12 @@
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-managed-tunnel-local-port.test.ts
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-stdio-bridge-provider.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-accept-then-deliver.test.ts
-1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-echo-working.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-owed-work-release.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-queued-quit.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-queued-refused-card.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-cap.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-offer-withdrawal.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-ownership.test.ts
-1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-start-admission.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-stop-aborts-start.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-target-reconcile.test.ts
 1 test-no-real-time-wait:src/main/native-chat/transcript-opencode2-sqlite.test.ts
@@ -472,7 +470,6 @@
 1 test-no-wall-clock:src/main/managed-server/host-state/orcad-state-mutation-fence-heartbeat.test.ts
 1 test-no-wall-clock:src/main/managed-server/host-state/orcad-windows-host-state-ops.test.ts
 1 test-no-wall-clock:src/main/managed-server/install/remote-install-lock-exited-owner.test.ts
-1 test-no-wall-clock:src/main/native-chat/agent-session-attachments/agent-session-attachment-sweep.test.ts
 1 test-no-wall-clock:src/main/native-chat/agent-session-wire/structured-agent-session-close-verdict.test.ts
 1 test-no-wall-clock:src/main/native-chat/structured-chat-naming.test.ts
 1 test-no-wall-clock:src/main/native-chat/transcript-watch-inplace-drain-race.test.ts
