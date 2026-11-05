@@ -67,8 +67,12 @@ export function useMobileNativeChatComposerGoalMode(
       : undefined,
     // A host goal is no message, so it neither queues nor steers.
     sendFollowUp: (followUp) => (active && hostSetsGoals ? null : followUp),
+    // Each goal opens collapsed, so a tap meant for a new goal never lands on the last one's controls.
     strip: threadGoal
-      ? createElement(MobileNativeChatThreadGoalStrip, { key: threadGoal.sessionKey, threadGoal })
+      ? createElement(MobileNativeChatThreadGoalStrip, {
+          key: `${threadGoal.sessionKey}:${threadGoal.goal?.createdAt ?? ''}`,
+          threadGoal
+        })
       : null,
     chip: active ? createElement(MobileNativeChatComposerGoalChip, { onExit: exit }) : null
   }
