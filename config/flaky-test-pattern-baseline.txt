@@ -917,7 +917,6 @@
 2 test-no-real-time-wait:src/main/startup/windows-install-dir-acl-recovery.test.ts
 2 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/native-chat/use-native-chat-find.test.tsx
-2 test-no-real-time-wait:src/renderer/src/components/settings/mobile/MobilePane.test.tsx
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-exit-record.test.ts
 2 test-no-real-time-wait:src/renderer/src/lib/execute-open-editor-path-move.test.ts
@@ -1211,7 +1210,6 @@
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-status.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/settings/accounts/usage/ZcodePlanAccountsSection.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts
