@@ -44,6 +44,18 @@ export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): str
     .join(delimiter)
 }
 
+const CWD_RELATIVE = /(^|=)\.\.?([\\/]|$)/
+
+/** Whether a command line names files relative to where it runs, so it means something else
+ *  from another working directory. */
+export function invocationDependsOnCwd(command: string, args: readonly string[]): boolean {
+  return (
+    CWD_RELATIVE.test(command) ||
+    (!isAbsolute(command) && /[\\/]/.test(command)) ||
+    args.some((arg) => CWD_RELATIVE.test(arg))
+  )
+}
+
 /** The environment for a child that runs elsewhere but must find what it would from `cwd`. */
 export function envWithPathRelativeTo<T extends Record<string, string | undefined>>(
   env: T,

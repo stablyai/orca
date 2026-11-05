@@ -239,11 +239,9 @@ describe('completed account discovery in a repo that sets its own effort', () =>
       await chatAtRest({ configured: true, complete: true })
       const reply = await readOptions(client)
       expect(reply).toMatchObject({ ok: true, result: { current: { model: 'gpt-5.5' } } })
-      const row = (reply as { result: { models: { id: string }[] } }).result.models.find(
-        (model) => model.id === 'gpt-5.5'
-      )
-      expect(row).not.toHaveProperty('declaredDefaultEffort')
-      expect(row).not.toHaveProperty('defaultEffort')
+      expect(reply).toHaveProperty('result.models.0.id', 'gpt-5.5')
+      expect(reply).not.toHaveProperty('result.models.0.declaredDefaultEffort')
+      expect(reply).not.toHaveProperty('result.models.0.defaultEffort')
       expect(reply).not.toHaveProperty('result.current.effort')
       expect(rig.adapter.acquire).not.toHaveBeenCalled()
     }

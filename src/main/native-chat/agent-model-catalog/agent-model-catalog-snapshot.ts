@@ -2,7 +2,6 @@ import {
   agentModelCatalogReadRecords,
   agentModelCatalogScopedRecord
 } from './agent-model-catalog-read-scope'
-import { onLiveAccount } from './agent-model-catalog-running-account'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -292,24 +291,5 @@ export function retireAgentModelCatalogRequests(
       bound.cancel()
       bindings.delete(key)
     }
-  }
-}
-
-export function agentModelCatalogSessionPeek(
-  deps: AgentModelCatalogServiceDeps,
-  binding: (params: AgentModelCatalogReadParams) => AgentModelCatalogBinding | undefined
-) {
-  return (sessionId: string, verifiedOnly?: boolean) => {
-    const record = deps.getConversation(sessionId)
-    const bound =
-      record &&
-      binding({
-        agent: record.provider,
-        sessionId,
-        inSessionWorkspace: true,
-        records: { record, scoped: onLiveAccount(deps, record), savedOnly: false }
-      })
-    const entry = bound ? deps.store.observation(bound.fingerprint) : null
-    return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
   }
 }

@@ -3,7 +3,10 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
-import { envWithPathRelativeTo } from '../../../../shared/node-cli-command-resolution'
+import {
+  envWithPathRelativeTo,
+  invocationDependsOnCwd
+} from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
@@ -74,6 +77,9 @@ export function createCodexModelCatalogProbe(
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
     ]
     assertStructuredAgentResolutionCurrent(operation)
+    // A command line naming files relative to the chat's folder means the same thing only there.
+    const listIn =
+      cwd && launchDirectory && invocationDependsOnCwd(command, args) ? launchDirectory : cwd
     // The listing runs from the account folder; relative PATH entries still mean the chat's folder.
     const env = {
       ...(launchDirectory
@@ -82,7 +88,7 @@ export function createCodexModelCatalogProbe(
       CODEX_HOME: accountHomePath
     }
     return {
-      identity: { command, args, cwd, overlay: Object.entries(overlay).sort() },
+      identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
         assertStructuredAgentResolutionCurrent(operation)
         signal?.throwIfAborted()
@@ -92,7 +98,7 @@ export function createCodexModelCatalogProbe(
           {
             command,
             args,
-            ...(cwd ? { cwd } : {}),
+            ...(listIn ? { cwd: listIn } : {}),
             cliPath: command,
             env,
             timeoutMs: AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS,
@@ -101,7 +107,11 @@ export function createCodexModelCatalogProbe(
           async (rpc) => {
             assertStructuredAgentResolutionCurrent(operation)
             // Overlap model and account reads to avoid serial probe latency.
-            const listed = fetchCodexModelCatalogListing({ connection: rpc, cwd, operation })
+            const listed = fetchCodexModelCatalogListing({
+              connection: rpc,
+              cwd: listIn,
+              operation
+            })
             void listed.catch(() => {})
             assertStructuredAgentResolutionCurrent(operation)
             const response: unknown = await rpc
@@ -141,14 +151,14 @@ export function createCodexModelCatalogProbe(
           throw new Error('codex app-server listed no models')
         }
         return {
-          models: cwd
+          models: listIn
             ? listing.models
             : applyCodexConfiguredLaunchDefaults(listing.models, {
                 model: listing.configured?.model ?? null,
                 effort: listing.configured?.effort ?? null
               }),
           complete: listing.complete !== false,
-          ...(cwd && listing.configured ? { configured: listing.configured } : {}),
+          ...(listIn && listing.configured ? { configured: listing.configured } : {}),
           origin: 'probe',
           ...(unavailable ? { unavailable } : {})
         }

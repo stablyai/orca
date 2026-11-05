@@ -649,3 +649,59 @@ it.each(['pi', 'grok'])(
     await vi.waitFor(() => expect(store.hasActiveFailure(fingerprint)).toBe(false))
   }
 )
+
+it('answers a folder-scoped agent for the folder a selector names now, even while the old folder still lists', async () => {
+  // The floating workspace moved from /a to /b; the /a listing finishes late.
+  const late = Promise.withResolvers<AgentModelCatalogSuccess>()
+  const probe = vi.fn((_home: AgentSessionAccountHome, options?: { workspacePath?: string }) =>
+    options?.workspacePath === '/a' ? late.promise : Promise.resolve(listing('b-model'))
+  )
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getConversation: () => undefined,
+    getRecord: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ variable: 'HOME', path: '/account' }),
+    listsInChatFolder: new Set(['opencode']),
+    probes: { opencode: probe }
+  })
+  onTestFinished(() => service.stop())
+  void service.demand({ agent: 'opencode', workspacePath: '/a' })
+  await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
+  const moved = { agent: 'opencode', workspacePath: '/b', waitForListing: true }
+  expect(await service.read(moved)).toMatchObject({ models: [{ id: 'b-model' }] })
+  late.resolve(listing('a-model'))
+  await vi.waitFor(async () =>
+    expect(await service.read({ agent: 'opencode', workspacePath: '/a' })).toMatchObject({
+      models: [{ id: 'a-model' }]
+    })
+  )
+  expect(await service.read(moved)).toMatchObject({ models: [{ id: 'b-model' }] })
+})
+
+it('lets another folder sharing the account listing finish it after the first reader gives up', async () => {
+  const abandoned = Promise.withResolvers<AgentModelCatalogSuccess>()
+  const run = vi
+    .fn<() => Promise<AgentModelCatalogSuccess>>()
+    .mockReturnValueOnce(abandoned.promise)
+    .mockResolvedValue({ ...listing('shared'), complete: true, configured: {} })
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getConversation: () => undefined,
+    getRecord: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
+    probes: { codex: Object.assign(run, { resolve: async () => ({ identity: 'codex', run }) }) }
+  })
+  onTestFinished(() => {
+    abandoned.resolve(listing('late'))
+    return service.stop()
+  })
+  void service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 50 })
+  await vi.waitFor(() => expect(run).toHaveBeenCalledOnce())
+  await new Promise((resolve) => setTimeout(resolve, 80))
+  expect(
+    await service.read({ agent: 'codex', workspacePath: '/b', waitForListing: true })
+  ).toMatchObject({ models: [{ id: 'shared' }] })
+  expect(run).toHaveBeenCalledTimes(2)
+})

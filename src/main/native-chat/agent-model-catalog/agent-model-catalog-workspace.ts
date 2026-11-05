@@ -11,6 +11,7 @@ import type {
   AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
+import type { ProjectModelOverride } from './agent-project-model-override'
 
 export type AgentModelCatalogRecord = Pick<
   AgentSessionRecord,
@@ -23,37 +24,40 @@ export type AgentModelCatalogWorkspaceDeps = {
   listsInChatFolder?: ReadonlySet<string>
   recordWorkspacePath?: (record: AgentModelCatalogRecord) => Promise<string | null>
   /** Account-home config is already covered by discovery; only workspace layers can override it. */
+  /** A boolean answers both: whether the project may pick the model, and the effort. */
   workspaceMayOverrideDefaultModel?: (input: {
     agent: string
     workspacePath: string
     accountHomePath: string | null
-    /** Ignore settings that can change only the effort. */
-    modelOnly?: boolean
-  }) => Promise<boolean>
+  }) => Promise<boolean | ProjectModelOverride>
 }
 
-export async function workspaceKeepsListedDefault(
+async function workspaceOverride(
+  deps: AgentModelCatalogWorkspaceDeps,
+  input: { agent: string; workspacePath: string; accountHomePath: string | null }
+): Promise<ProjectModelOverride> {
+  const found = await deps.workspaceMayOverrideDefaultModel?.(input)
+  return typeof found === 'object' ? found : { model: found ?? true, effort: found ?? true }
+}
+
+/** Whether the account's default model and effort hold in this workspace. */
+export async function workspaceKeepsListedDefaults(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
   workspacePath: string | null | undefined,
-  accountHomePath: string | null,
-  modelOnly = false
-): Promise<boolean> {
+  accountHomePath: string | null
+): Promise<{ model: boolean; effort: boolean }> {
   if (workspacePath === undefined) {
-    return true
+    return { model: true, effort: true }
   }
   if (workspacePath === null || !deps.workspaceMayOverrideDefaultModel) {
-    return false
+    return { model: false, effort: false }
   }
   try {
-    return !(await deps.workspaceMayOverrideDefaultModel({
-      agent,
-      workspacePath,
-      accountHomePath,
-      ...(modelOnly ? { modelOnly } : {})
-    }))
+    const found = await workspaceOverride(deps, { agent, workspacePath, accountHomePath })
+    return { model: !found.model, effort: !found.effort }
   } catch {
-    return false
+    return { model: false, effort: false }
   }
 }
 
@@ -103,11 +107,13 @@ export async function recordConfiguredDefault(
   const workspacePath = await sessionWorkspacePath(deps, record)
   if (
     !workspacePath ||
-    (await deps.workspaceMayOverrideDefaultModel({
-      agent: record.provider,
-      workspacePath,
-      accountHomePath: isLegacyAgentSessionAccountHome(accountHome) ? accountHome.path : null
-    }))
+    (
+      await workspaceOverride(deps, {
+        agent: record.provider,
+        workspacePath,
+        accountHomePath: isLegacyAgentSessionAccountHome(accountHome) ? accountHome.path : null
+      })
+    ).effort
   ) {
     return
   }
@@ -131,15 +137,15 @@ export async function projectAgentModelCatalogDefault(
   try {
     // One listing serves every folder on the account; the project decides only its own defaults,
     // and settings that change only the effort leave the account's model standing.
-    const [keepEffort, keepDefault] = await Promise.all([
-      workspaceKeepsListedDefault(deps, agent, bound.workspacePath, accountHomePath),
-      independentAgentModelCatalog(agent)
-        ? workspaceKeepsListedDefault(deps, agent, bound.workspacePath, accountHomePath, true)
-        : undefined
-    ])
+    const keeps = await workspaceKeepsListedDefaults(
+      deps,
+      agent,
+      bound.workspacePath,
+      accountHomePath
+    )
     if (current()) {
-      bound.keepDefault = keepDefault ?? keepEffort
-      bound.keepEffort = keepEffort
+      bound.keepDefault = independentAgentModelCatalog(agent) ? keeps.model : keeps.effort
+      bound.keepEffort = keeps.effort
     }
   } catch {
     /* A failed provenance read leaves the binding's conservative projection. */

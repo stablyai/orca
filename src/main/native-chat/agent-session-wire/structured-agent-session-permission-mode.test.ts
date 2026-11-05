@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import type { StructuredAgentSessionRuntimeDeps } from '../../runtime/agent-session/installation/structured-agent-session-runtime-contract'
 import { admitStructuredAgentSessionInput } from './structured-agent-session-input-admission'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -83,7 +83,7 @@ describe('a chat permission mode', () => {
       const home = { variable: 'CLAUDE_CONFIG_DIR', path: '/saved-auto-account' }
       const key = agentModelCatalogScopeFingerprint(
         agentModelCatalogFingerprint({ agent: 'claude', accountHome: home, wslDistro: null }),
-        homedir(),
+        resolveHiddenProbeCwd(),
         'saved-launch'
       )
       const seed = new AgentModelCatalogStore()
@@ -207,7 +207,7 @@ describe('a chat permission mode', () => {
     const home = { variable: 'CLAUDE_CONFIG_DIR', path: '/saved-auto-account' }
     const key = agentModelCatalogScopeFingerprint(
       agentModelCatalogFingerprint({ agent: 'claude', accountHome: home, wslDistro: null }),
-      homedir(),
+      resolveHiddenProbeCwd(),
       'saved-launch'
     )
     const seed = new AgentModelCatalogStore()
@@ -276,7 +276,7 @@ describe('a chat permission mode', () => {
       await catalog.prepareSaved({ agent: 'claude', sessionId: SESSION, inSessionWorkspace: true })
       expect(resolve).toHaveBeenCalledWith(
         home,
-        homedir(),
+        resolveHiddenProbeCwd(),
         'saved',
         expect.objectContaining({
           deadline: expect.any(Number),

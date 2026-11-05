@@ -9,6 +9,7 @@ import {
 } from './agent-model-catalog-lookup'
 import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
 import { prewarmAgentModelCatalog } from './agent-model-catalog-prewarm'
+import { agentModelCatalogSessionPeek } from './agent-model-catalog-session-peek'
 
 import type {
   AgentModelCatalogServiceDeps,
@@ -23,7 +24,6 @@ import {
   agentModelCatalogScopeIdentity,
   retireAgentModelCatalogRequests,
   agentModelCatalogMemoryBinding,
-  agentModelCatalogSessionPeek,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'

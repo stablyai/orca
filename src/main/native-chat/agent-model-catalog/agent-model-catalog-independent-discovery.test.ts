@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -120,7 +120,7 @@ describe('independent installed CLI discovery', () => {
     expect(h.run).toHaveBeenCalledTimes(1)
     expect(h.resolve).toHaveBeenCalledWith(
       HOME,
-      homedir(),
+      resolveHiddenProbeCwd(),
       'snapshot',
       expect.objectContaining({
         deadline: expect.any(Number),
@@ -236,7 +236,7 @@ it('prepares hydrated catalog evidence independently of launch permission and sh
   }
   const key = agentModelCatalogScopeFingerprint(
     agentModelCatalogFingerprintForRecord(first),
-    homedir(),
+    resolveHiddenProbeCwd(),
     'saved-launch'
   )
   const saved = seed.recordSuccess(
@@ -274,7 +274,7 @@ it('prepares hydrated catalog evidence independently of launch permission and sh
   })
   expect(probe.resolve).toHaveBeenCalledWith(
     HOME,
-    homedir(),
+    resolveHiddenProbeCwd(),
     'saved',
     expect.objectContaining({
       current: expect.any(Function),

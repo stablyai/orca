@@ -3,6 +3,7 @@ import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../sha
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../core'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import {
   requireInstalledStructuredHost,
   requireStructuredAgentAudience
@@ -21,6 +22,8 @@ import {
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
+
+const CATALOG_WORKSPACE_RESOLUTION_MS = 2_000
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -104,8 +107,13 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
             : worktree === undefined
               ? {}
               : {
-                  workspacePath:
-                    await ctx.runtime.resolveStructuredAgentCatalogWorkspacePath(worktree)
+                  // Only a floating folder touches the filesystem here; a stalled mount must not
+                  // hold the picker, so past the budget it reads as a workspace this host can't inspect.
+                  workspacePath: await withTimeout(
+                    ctx.runtime.resolveStructuredAgentCatalogWorkspacePath(worktree),
+                    CATALOG_WORKSPACE_RESOLUTION_MS,
+                    null
+                  )
                 })
         }
         if (host) {

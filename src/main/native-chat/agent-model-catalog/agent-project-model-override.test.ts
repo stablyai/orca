@@ -11,12 +11,12 @@ function write(path: string, content = ''): void {
   writeFileSync(path, content)
 }
 
-function mayOverride(
+async function mayOverride(
   agent: string,
   workspacePath: string,
   accountHomePath: string | null = '/homes/a'
 ) {
-  return workspaceMayOverrideDefaultModel({ agent, workspacePath, accountHomePath })
+  return (await workspaceMayOverrideDefaultModel({ agent, workspacePath, accountHomePath })).effort
 }
 
 describe('workspaceMayOverrideDefaultModel', () => {
@@ -71,7 +71,19 @@ describe('workspaceMayOverrideDefaultModel', () => {
     expect(await mayOverride('claude', worktree)).toBe(true)
     rmSync(join(worktree, '.claude', 'settings.json'))
     write(join(worktree, '.claude', 'settings.local.json'), '{"effortLevel":"low"}')
-    expect(await mayOverride('claude', worktree)).toBe(true)
+    // Effort-only settings, top-level or per model, leave the account's model standing.
+    const picks = () =>
+      workspaceMayOverrideDefaultModel({
+        agent: 'claude',
+        workspacePath: worktree,
+        accountHomePath: '/homes/a'
+      })
+    expect(await picks()).toEqual({ model: false, effort: true })
+    write(
+      join(worktree, '.claude', 'settings.local.json'),
+      '{"modelSettings":{"claude-opus-5-5":{"effortLevel":"high"}}}'
+    )
+    expect(await picks()).toEqual({ model: false, effort: true })
   })
 
   it('ignores Claude project settings that pick no model or effort', async () => {

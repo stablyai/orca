@@ -1,3 +1,4 @@
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -69,7 +70,7 @@ function harness(
 ) {
   const full = ['gpt-a', 'gpt-b', 'gpt-c']
   const byFolder: Record<string, AgentModelCatalogSuccess> = {
-    [homedir()]: listing(full),
+    [resolveHiddenProbeCwd()]: listing(full),
     '/project-a': listing(full, 'gpt-b'),
     '/project-b': listing(full, 'gpt-c'),
     '/restricted': listing(['local-only'], 'local-only')
@@ -101,7 +102,10 @@ function harness(
     }
   }
   const resolve = vi.fn(resolveScope)
-  const probe: AgentModelCatalogProbe = Object.assign(async () => byFolder[homedir()], { resolve })
+  const probe: AgentModelCatalogProbe = Object.assign(
+    async () => byFolder[resolveHiddenProbeCwd()],
+    { resolve }
+  )
   const store = overrides.store ?? new AgentModelCatalogStore({ now: () => 1000 })
   const resolveAccountHome = vi.fn<AgentModelCatalogServiceDeps['resolveAccountHome']>(
     async () => HOME
@@ -136,8 +140,8 @@ function harness(
     byFolder,
     canonicalFingerprint: agentModelCatalogScopeFingerprint(
       agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null }),
-      homedir(),
-      { command: agent, cwd: homedir() }
+      resolveHiddenProbeCwd(),
+      { command: agent, cwd: resolveHiddenProbeCwd() }
     ),
     resolve,
     resolveScope,
@@ -165,7 +169,7 @@ describe('one account listing for every folder', () => {
     expect(ids(plain)).toEqual(h.full)
     expect(project.origin !== 'unknown' && project.models.some((m) => m.isDefault)).toBe(false)
     expect(plain.origin !== 'unknown' && plain.models.find((m) => m.isDefault)?.id).toBe('gpt-a')
-    expect(h.runs).toEqual([homedir()])
+    expect(h.runs).toEqual([resolveHiddenProbeCwd()])
   })
 
   it('lists a folder whose CLI resolves elsewhere on its own and never seeds other folders from it', async () => {
@@ -173,7 +177,7 @@ describe('one account listing for every folder', () => {
     await h.read('r', { waitForListing: true })
     expect(h.runs).toEqual(['/restricted'])
     expect(ids(await h.read('r'))).toEqual(['local-only'])
-    const release = h.hold(homedir())
+    const release = h.hold(resolveHiddenProbeCwd())
     void h.service.demand({ agent: 'codex', sessionId: 'b' })
     expect(ids(await h.read('b'))).toBeNull()
     release()
@@ -188,9 +192,9 @@ for (const agent of ['claude', 'codex'] as const) {
       'publishes only on canonical %s reuse of explicit home discovery',
       async (order) => {
         const h = harness(agent)
-        const release = h.hold(homedir())
+        const release = h.hold(resolveHiddenProbeCwd())
         const explicit = h.service.demand({ agent, workspacePath: homedir() })
-        await vi.waitFor(() => expect(h.runs).toEqual([homedir()]))
+        await vi.waitFor(() => expect(h.runs).toEqual([resolveHiddenProbeCwd()]))
         if (order === 'cache') {
           release()
           await explicit
@@ -204,7 +208,7 @@ for (const agent of ['claude', 'codex'] as const) {
         await Promise.all([explicit, canonical])
         expect(ids(await h.read('a'))).toEqual(h.full)
         expect(ids(await h.service.read({ agent, workspacePath: '/new-folder' }))).toEqual(h.full)
-        expect(h.runs).toEqual([homedir()])
+        expect(h.runs).toEqual([resolveHiddenProbeCwd()])
       }
     )
 
@@ -253,7 +257,7 @@ for (const agent of ['claude', 'codex'] as const) {
         })
         const save = vi.fn()
         await h.store.attachPersistence({ load: async () => [], save, flush: async () => {} })
-        h.byFolder[homedir()] = listing(h.full, h.full[1])
+        h.byFolder[resolveHiddenProbeCwd()] = listing(h.full, h.full[1])
         await h.service.demand({ agent })
         const accepted = await h.service.read({ agent })
         const seed = getAgentSessionOptionCatalog(agent)
@@ -284,7 +288,7 @@ for (const agent of ['claude', 'codex'] as const) {
             structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'model')
           ).toMatchObject({ kind: { currentValue: h.full[1] }, valueSource: 'default' })
           expect(h.activity()).toEqual(calls)
-          expect(h.runs).toEqual([homedir()])
+          expect(h.runs).toEqual([resolveHiddenProbeCwd()])
           expect(save).not.toHaveBeenCalled()
         }
         const entered = Promise.withResolvers<void>()
@@ -319,9 +323,9 @@ for (const agent of ['claude', 'codex'] as const) {
         // A later legitimate owner progresses before the obsolete resolver is released.
         h.resolve.mockImplementation(async (...args) => ({
           ...(await h.resolveScope(...args)),
-          identity: { revision: 2, command: agent, cwd: homedir() }
+          identity: { revision: 2, command: agent, cwd: resolveHiddenProbeCwd() }
         }))
-        h.byFolder[homedir()] = listing(['next-model'], 'next-model')
+        h.byFolder[resolveHiddenProbeCwd()] = listing(['next-model'], 'next-model')
         await h.service.demand({ agent })
         const next = await h.service.read({ agent })
         expect(next).toMatchObject({ models: [{ id: 'next-model', isDefault: true }] })
@@ -371,7 +375,7 @@ for (const agent of ['claude', 'codex'] as const) {
         expect(await h.service.read({ agent })).toEqual({ origin: 'unknown' })
         expect(ids(await h.service.read({ agent, workspacePath: '/late' }))).toBeNull()
         expect(ids(await h.read('a'))).toEqual(action === 'stop' ? null : h.full)
-        expect(h.runs).toEqual([homedir()])
+        expect(h.runs).toEqual([resolveHiddenProbeCwd()])
         h.service.stop()
         expect(await h.read('a')).toEqual({ origin: 'unknown' })
         expect(await h.service.read({ agent, workspacePath: '/late' })).toEqual({
@@ -406,7 +410,7 @@ for (const agent of ['claude', 'codex'] as const) {
       expect(h.activity()).toEqual(calls)
       expect(publish).not.toHaveBeenCalled()
       h.resolve.mockImplementation(h.resolveScope)
-      h.byFolder[homedir()] = listing(['other-account'], 'other-account')
+      h.byFolder[resolveHiddenProbeCwd()] = listing(['other-account'], 'other-account')
       await h.service.demand({ agent })
       expect(await h.service.read({ agent })).toMatchObject({
         models: [{ id: 'other-account', isDefault: true }]
@@ -444,7 +448,7 @@ for (const agent of ['claude', 'codex'] as const) {
       await old
       expect(await h.service.read({ agent })).toEqual(saved)
       expect(publish).not.toHaveBeenCalled()
-      expect(h.runs).toEqual([homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
     })
 
     it.each(['stale', 'missing', 'retired'] as const)(
@@ -452,7 +456,7 @@ for (const agent of ['claude', 'codex'] as const) {
       async (state) => {
         let now = 1000
         const h = harness(agent, { store: new AgentModelCatalogStore({ now: () => now }) })
-        h.byFolder[homedir()] = listing(h.full, h.full[1])
+        h.byFolder[resolveHiddenProbeCwd()] = listing(h.full, h.full[1])
         const publish = vi.spyOn(h.store, 'recordSuccess')
         await h.service.demand({ agent })
         const exact = h.canonicalFingerprint
@@ -486,14 +490,14 @@ for (const agent of ['claude', 'codex'] as const) {
     it('does not publish incomplete or retired canonical discoveries', async () => {
       const h = harness(agent)
       const publish = vi.spyOn(h.store, 'recordSuccess')
-      h.byFolder[homedir()] = { ...listing(h.full), complete: false }
+      h.byFolder[resolveHiddenProbeCwd()] = { ...listing(h.full), complete: false }
       await h.service.read({ agent, waitForListing: true })
       expect(publish).not.toHaveBeenCalled()
       expect(ids(await h.read('a'))).toBeNull()
       h.store.expireAgent(agent)
       h.service.retireContext()
-      h.byFolder[homedir()] = listing(h.full)
-      const release = h.hold(homedir())
+      h.byFolder[resolveHiddenProbeCwd()] = listing(h.full)
+      const release = h.hold(resolveHiddenProbeCwd())
       const late = h.service.demand({ agent })
       await vi.waitFor(() => expect(h.runs).toHaveLength(2))
       h.service.stop()
@@ -617,15 +621,17 @@ for (const agent of ['claude', 'codex'] as const) {
       expect(h.resolveAccountHome).toHaveBeenCalledTimes(1)
       release()
       await prewarm
-      expect(h.runs).toEqual([homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
       await store.flushPersistence()
     })
 
     it('withholds the account’s configured model and effort where project settings may pick them, and preserves an unlisted pick', async () => {
       const h = harness(agent, {
         // '/project-a' may pick the model; '/project-effort' only the effort.
-        workspaceMayOverrideDefaultModel: async ({ workspacePath, modelOnly }) =>
-          workspacePath === '/project-a' || (workspacePath === '/project-effort' && !modelOnly)
+        workspaceMayOverrideDefaultModel: async ({ workspacePath }) => ({
+          model: workspacePath === '/project-a',
+          effort: workspacePath === '/project-a' || workspacePath === '/project-effort'
+        })
       })
       const efforts = ['low', 'medium', 'high'].map((value) => ({ value, label: value }))
       const raw = [
@@ -638,7 +644,7 @@ for (const agent of ['claude', 'codex'] as const) {
           declaredDefaultEffort: 'medium'
         }
       ]
-      h.byFolder[homedir()] = {
+      h.byFolder[resolveHiddenProbeCwd()] = {
         origin: 'probe',
         complete: true,
         configured: { model: h.full[0], effort: 'high' },
@@ -650,19 +656,19 @@ for (const agent of ['claude', 'codex'] as const) {
         result.origin === 'unknown' ? null : result.models[0]
       const expectDefaults = (result: AgentSessionModelCatalogResult, model: boolean) => {
         expect(row(result)).toMatchObject({ isDefault: model })
-        expect(row(result)).not.toHaveProperty('defaultEffort')
-        expect(row(result)).not.toHaveProperty('declaredDefaultEffort')
+        expect(Object.keys(row(result) ?? {}).filter((key) => key.endsWith('Effort'))).toEqual([])
       }
       const project = await h.read('a', { waitForListing: true })
       expectDefaults(project, false)
-      expect(project).toMatchObject({ listingNamesConfiguredModel: false })
-      expect(row(await h.read('b', { waitForListing: true }))).toMatchObject({
-        isDefault: true,
-        defaultEffort: 'high'
-      })
+      const plain = row(await h.read('b', { waitForListing: true }))
+      expect(plain).toMatchObject({ isDefault: true, defaultEffort: 'high' })
       expectDefaults(await h.read('e', { waitForListing: true }), true)
-      // A named workspace this host cannot inspect (remote, WSL, ambiguous) may pick its own too,
-      // for older clients as well.
+      expect(h.service.peek('a')).toMatchObject({
+        configured: null,
+        models: [{ isDefault: false }]
+      })
+      expect(h.service.peek('b')?.configured).not.toBeNull()
+      // A named workspace this host cannot inspect (remote, WSL, ambiguous) may pick its own too.
       for (const legacy of [false, true]) {
         const read = { agent, workspacePath: null, legacy, waitForListing: true }
         expectDefaults(await h.service.read(read), false)
@@ -695,7 +701,7 @@ for (const agent of ['claude', 'codex'] as const) {
       expect(picked.catalog?.models.map((model) => model.id)).toEqual([h.full[0]])
       expect(picked.record.values.model).toEqual({ value: 'retired-custom', source: 'dispatched' })
       expect(picked.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
-      expect(h.runs).toEqual([homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
     })
   })
 }
@@ -731,7 +737,7 @@ it.each(['claude', 'codex'] as const)(
           return row.id
         }
       }))
-      h.byFolder[homedir()] = account
+      h.byFolder[resolveHiddenProbeCwd()] = account
       const publish = vi.spyOn(store, 'recordSuccess')
       const observed = vi.spyOn(store, 'observation')
       let comparisons = 0
@@ -758,7 +764,7 @@ it.each(['claude', 'codex'] as const)(
       await h.service.prewarm()
       const initialComparisons = comparisons
       const initialInputVisits = inputVisits
-      expect(h.runs).toEqual([homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
       expect(publish).toHaveBeenCalledTimes(1)
       expect(publish.mock.calls[0]?.[0]).toBe(
         agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null })
@@ -785,23 +791,23 @@ it.each(['claude', 'codex'] as const)(
       expect(comparisons).toBe(readComparisons)
       expect(h.resolveAccountHome).toHaveBeenCalledTimes(resolverCalls)
       expect(h.resolve).toHaveBeenCalledTimes(scopeCalls)
-      expect(h.runs).toEqual([homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
       expect(publish).not.toHaveBeenCalled()
       expect(save).not.toHaveBeenCalled()
       expect(observed.mock.calls.every(([key]) => !key.startsWith('unrelated-'))).toBe(true)
       await h.service.prewarm()
-      expect(h.runs).toEqual([homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
       expect(publish).not.toHaveBeenCalled()
       expect(comparisons).toBe(readComparisons)
       expect(save).not.toHaveBeenCalled()
       now += AGENT_MODEL_CATALOG_FRESH_MS + 1
       await h.service.prewarm()
-      expect(h.runs).toEqual([homedir(), homedir()])
+      expect(h.runs).toEqual([resolveHiddenProbeCwd(), resolveHiddenProbeCwd()])
       expect(save).not.toHaveBeenCalled()
       await store.flushPersistence()
       expect(materializations).toBe(1)
       now += AGENT_MODEL_CATALOG_FRESH_MS + 1
-      h.byFolder[homedir()] = listing([
+      h.byFolder[resolveHiddenProbeCwd()] = listing([
         ...account.models.map((row) => row.id).slice(0, -1),
         'scale-changed'
       ])

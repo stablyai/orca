@@ -51,10 +51,25 @@ export function claudeSettingsMayPickModel(text: string, modelOnly = false): boo
     return true
   }
   const keys = modelOnly
-    ? CLAUDE_MODEL_SETTINGS.filter((key) => !CLAUDE_EFFORT_SETTINGS.includes(key))
+    ? CLAUDE_MODEL_SETTINGS.filter(
+        (key) => !CLAUDE_EFFORT_SETTINGS.includes(key) && key !== 'modelSettings'
+      )
     : CLAUDE_MODEL_SETTINGS
   if (setsAny(settings, keys)) {
     return true
+  }
+  // Per-model settings that only set an effort leave the model itself to the account.
+  if (modelOnly && settings.modelSettings !== undefined) {
+    const perModel = record(settings.modelSettings)
+    if (
+      !perModel ||
+      Object.values(perModel).some((entry) => {
+        const table = record(entry)
+        return !table || Object.keys(table).some((key) => !CLAUDE_EFFORT_SETTINGS.includes(key))
+      })
+    ) {
+      return true
+    }
   }
   const env = record(settings.env)
   return (

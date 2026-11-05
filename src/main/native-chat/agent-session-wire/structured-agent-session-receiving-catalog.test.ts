@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import {
   type AgentModelCatalogSuccess,
   AgentModelCatalogStore
@@ -29,7 +29,7 @@ function catalog(f: Awaited<ReturnType<typeof createReceivingCallerFixture>>) {
     store.recordSuccess(
       agentModelCatalogScopeFingerprint(
         agentModelCatalogFingerprint({ agent: 'claude', accountHome: home, wslDistro: null }),
-        homedir()
+        resolveHiddenProbeCwd()
       ),
       'claude',
       {
@@ -140,7 +140,7 @@ it('keeps newer public intent while discovery waits and reports a failed listing
       c.store.failureDetail(
         agentModelCatalogScopeFingerprint(
           agentModelCatalogFingerprint({ agent: 'claude', accountHome: f.homeB, wslDistro: null }),
-          homedir()
+          resolveHiddenProbeCwd()
         )
       )
     ).toContain('model/list unavailable')

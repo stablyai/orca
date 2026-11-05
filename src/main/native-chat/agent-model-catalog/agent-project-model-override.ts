@@ -117,19 +117,27 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-/** Unreadable files may override defaults; absent files cannot. */
+/** What a project's own settings may pick: `model`, or anything including effort (`effort`). */
+export type ProjectModelOverride = { model: boolean; effort: boolean }
+
+const both = (value: boolean): ProjectModelOverride => ({ model: value, effort: value })
+const either = (found: ProjectModelOverride[]): ProjectModelOverride => ({
+  model: found.some((entry) => entry.model),
+  effort: found.some((entry) => entry.effort)
+})
+
+/** Unreadable files may override defaults; absent files cannot. One read answers both questions. */
 async function fileMayPickModel(
   path: string,
-  mayPickModel: ProjectModelFile['mayPickModel'],
-  modelOnly = false
-): Promise<boolean> {
+  mayPickModel: ProjectModelFile['mayPickModel']
+): Promise<ProjectModelOverride> {
   let text: string
   try {
     text = await readFile(path, 'utf8')
   } catch (error) {
-    return !isMissing(error)
+    return both(!isMissing(error))
   }
-  return mayPickModel(text, modelOnly)
+  return { model: mayPickModel(text, true), effort: mayPickModel(text) }
 }
 
 // Bound reads; catalogs over the cap remain conservatively capable of overriding defaults.
@@ -151,7 +159,7 @@ async function agentFolderMayPickModel(folder: string, recursive: boolean): Prom
       fileMayPickModel(join(entry.parentPath, entry.name), openCodeAgentFileMayPickModel)
     )
   )
-  return found.some(Boolean)
+  return found.some((entry) => entry.effort)
 }
 
 /** Non-dotfile extension content can change models arbitrarily. */
@@ -167,22 +175,21 @@ async function codeFolderMayPickModel(folder: string): Promise<boolean> {
 async function directoryMayOverride(
   dir: string,
   layers: ProjectModelLayers,
-  accountHomePath: string | null,
-  modelOnly: boolean
-): Promise<boolean> {
+  accountHomePath: string | null
+): Promise<ProjectModelOverride> {
   const home = accountHomePath === null ? null : resolve(accountHomePath)
   const found = await Promise.all([
     ...layers.files
       .filter((file) => dirname(join(dir, file.path)) !== home)
-      .map((file) => fileMayPickModel(join(dir, file.path), file.mayPickModel, modelOnly)),
-    ...(layers.agentFolders ?? []).map((folder) =>
-      agentFolderMayPickModel(join(dir, folder.path), folder.recursive)
+      .map((file) => fileMayPickModel(join(dir, file.path), file.mayPickModel)),
+    ...(layers.agentFolders ?? []).map(async (folder) =>
+      both(await agentFolderMayPickModel(join(dir, folder.path), folder.recursive))
     ),
     ...(layers.codeFolders ?? [])
       .filter((folder) => dirname(join(dir, folder)) !== home)
-      .map((folder) => codeFolderMayPickModel(join(dir, folder)))
+      .map(async (folder) => both(await codeFolderMayPickModel(join(dir, folder))))
   ])
-  return found.some(Boolean)
+  return either(found)
 }
 
 function ancestry(cwd: string): string[] {
@@ -200,28 +207,23 @@ export function agentReadsProjectModelConfig(agent: string): boolean {
   return agent !== 'grok'
 }
 
-/** `modelOnly` asks whether the project may pick the model itself, ignoring effort-only settings. */
 export async function workspaceMayOverrideDefaultModel(input: {
   agent: string
   workspacePath: string
   accountHomePath: string | null
-  modelOnly?: boolean
-}): Promise<boolean> {
+}): Promise<ProjectModelOverride> {
   if (!agentReadsProjectModelConfig(input.agent)) {
-    return false
+    return both(false)
   }
   // Unknown project layers may override defaults anywhere.
   const layers = PROJECT_MODEL_LAYERS[input.agent]
   if (!layers) {
-    return true
+    return both(true)
   }
   const dirs = layers.wholeAncestry
     ? ancestry(input.workspacePath)
     : await projectConfigDirectories(input.workspacePath)
-  const results = await Promise.all(
-    dirs.map((dir) =>
-      directoryMayOverride(dir, layers, input.accountHomePath, input.modelOnly === true)
-    )
+  return either(
+    await Promise.all(dirs.map((dir) => directoryMayOverride(dir, layers, input.accountHomePath)))
   )
-  return results.some(Boolean)
 }

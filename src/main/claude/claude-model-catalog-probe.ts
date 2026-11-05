@@ -23,7 +23,10 @@ import { readClaudeControlResponses } from './claude-control-responses'
 import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
-import { envWithPathRelativeTo } from '../../shared/node-cli-command-resolution'
+import {
+  envWithPathRelativeTo,
+  invocationDependsOnCwd
+} from '../../shared/node-cli-command-resolution'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
@@ -155,12 +158,17 @@ export function createClaudeModelCatalogProbe(
       sources
     )
     assertStructuredAgentResolutionCurrent(operation)
+    // A command line naming files relative to the chat's folder means the same thing only there.
+    const listIn =
+      cwd && launchDirectory && invocationDependsOnCwd(command, [...prefixArgs, ...userArgs])
+        ? launchDirectory
+        : cwd
     return {
       identity: {
         command,
         prefixArgs,
         args,
-        cwd,
+        cwd: listIn,
         overlay: Object.entries(sources.overlay ?? {}).sort()
       },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
@@ -175,7 +183,7 @@ export function createClaudeModelCatalogProbe(
               {
                 command,
                 args: [...prefixArgs, ...argsFor(strictMcp)],
-                ...(cwd ? { cwd } : {}),
+                ...(listIn ? { cwd: listIn } : {}),
                 stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n${JSON.stringify({ type: 'control_request', request_id: 'orca-signin-discovery', request: { subtype: 'initialize' } })}\n`
               },
               {

@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -169,7 +169,10 @@ function restingRecord(
 }
 
 function exactKey(record: AgentSessionRecord): string {
-  return agentModelCatalogScopeFingerprint(agentModelCatalogFingerprintForRecord(record), homedir())
+  return agentModelCatalogScopeFingerprint(
+    agentModelCatalogFingerprintForRecord(record),
+    resolveHiddenProbeCwd()
+  )
 }
 
 function catalogDefault(store: AgentModelCatalogStore, model: string): string | undefined {

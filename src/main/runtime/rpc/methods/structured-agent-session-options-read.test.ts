@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
@@ -85,7 +85,7 @@ describe('agentSession.modelCatalog', () => {
       listed(invocation)
       expect(invocation).toMatchObject({
         command: '/installed/codex',
-        cwd: homedir(),
+        cwd: resolveHiddenProbeCwd(),
         env: { CODEX_HOME: '/account/work' }
       })
       expect(invocation.args).toEqual(expect.arrayContaining(['-c', 'model_provider="work"']))
@@ -197,6 +197,23 @@ describe('agentSession.modelCatalog', () => {
     expect(read).toHaveBeenCalledWith({ agent: 'codex', workspacePath: null })
   })
 
+  it('answers for a workspace it cannot inspect when the selected folder hangs', async () => {
+    vi.useFakeTimers()
+    try {
+      const reply = call(
+        'agentSession.modelCatalog',
+        { agent: 'codex', worktree: 'id:floating-workspace' },
+        STRUCTURED_CLIENT,
+        { resolveStructuredAgentCatalogWorkspacePath: () => new Promise<string>(() => {}) }
+      )
+      await vi.advanceTimersByTimeAsync(2_000)
+      await reply
+      expect(read).toHaveBeenCalledWith({ agent: 'codex', workspacePath: null })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reads as before when no worktree is named', async () => {
     await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)
     expect(read).toHaveBeenCalledWith({ agent: 'claude' })
@@ -220,7 +237,7 @@ describe('agentSession.modelCatalog', () => {
     const pinned = { ...agentSessionRecordFixture(), provider: 'claude' }
     const key = agentModelCatalogScopeFingerprint(
       agentModelCatalogFingerprintForRecord(pinned),
-      homedir(),
+      resolveHiddenProbeCwd(),
       'saved-launch'
     )
     const seed = new AgentModelCatalogStore()

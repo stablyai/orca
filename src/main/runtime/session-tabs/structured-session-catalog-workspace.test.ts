@@ -96,10 +96,11 @@ function rig(worktrees: number) {
   runtime.resolveFolderWorkspaceSelector = () => null
   // Every fleet-wide path the old identity walked; the picker must reach none of them.
   const fleet = {
-    listResolvedWorktrees: vi.spyOn(runtime as never, 'listResolvedWorktrees' as never),
-    matchWorktreeSelector: vi.spyOn(runtime as never, 'matchWorktreeSelector' as never),
-    joinResolvedWorktreeScans: vi.spyOn(runtime as never, 'joinResolvedWorktreeScans' as never)
+    listResolvedWorktrees: vi.fn(),
+    matchWorktreeSelector: vi.fn(),
+    joinResolvedWorktreeScans: vi.fn()
   }
+  Object.assign(runtime, fleet)
   const defaultCheck = vi.fn(async () => false)
   const listing = vi.fn(async () => ({
     origin: 'probe' as const,
@@ -169,8 +170,8 @@ it.each([
       }
     }
     expect(runs[1]).toEqual(runs[0])
-    // The project check runs for the one selected folder only: once for the model, once for effort.
-    expect(runs[0][2]).toBe(2)
+    // The project check runs once, for the one selected folder.
+    expect(runs[0][2]).toBe(1)
   }
 )
 

@@ -1,9 +1,10 @@
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import { resolveAgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router'
@@ -522,7 +523,7 @@ describe('one account, one catalog key', () => {
         expect.objectContaining({
           signal: expect.any(AbortSignal),
           // The account's listing runs from its own folder, whichever workspace asked.
-          workspacePath: homedir(),
+          workspacePath: resolveHiddenProbeCwd(),
           operation: expect.objectContaining({
             current: expect.any(Function),
             deadline: expect.any(Number),

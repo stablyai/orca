@@ -1,5 +1,6 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
@@ -69,9 +70,15 @@ export async function resolveAgentModelCatalogScope(
     return { base, fingerprint: base, exact: false }
   }
   // The list belongs to the account and the CLI a chat here would launch, not to this folder:
-  // resolve the executable where the chat runs, but list from the account's own folder so every
-  // workspace sharing that invocation shares one listing and its account default.
-  const listIn = homedir()
+  // resolve the executable where the chat runs, but list from an empty Orca-owned folder so the
+  // listing reads only account settings (a home folder can hold another account's settings as
+  // project settings) and every workspace sharing that invocation shares one listing.
+  let listIn: string
+  try {
+    listIn = resolveHiddenProbeCwd()
+  } catch {
+    return { base, fingerprint: base, exact: false }
+  }
   const resolve = (lookup: AgentModelCatalogLookup) =>
     probe?.resolve?.(home, listIn, lookup, operation, cwd).catch(() => null)
   const scopeKey = (resolved: AgentModelCatalogResolvedProbe | null | undefined) =>
