@@ -5,7 +5,7 @@ import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
-import { RuntimeJiraCommands } from './runtime-jira-commands'
+import { RuntimeJiraCommands } from './integrations/jira/runtime-jira-commands'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 type PublicMethods<T> = Pick<T, keyof T>

@@ -1,6 +1,6 @@
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import { getBranchConflictKind } from '../git/repo'
-import { getSelectedReviewBranch } from './selected-review-branch'
+import { getSelectedReviewBranch } from './integrations/reviews/selected-review-branch'
 import { resolveCreateBranchName } from './runtime-worktree-create-git'
 
 export async function resolveLegacyRemoteBranch(args: {
