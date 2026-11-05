@@ -93,7 +93,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
-      {activeView === 'home' ? <HomePage /> : null}
+      {activeView === 'home' ? hasProjects ? <HomePage /> : <Landing /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}
       {activeView === 'tasks' ? <TaskPage /> : null}
