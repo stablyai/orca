@@ -1864,6 +1864,7 @@
       "countWorkflows_one": "{{count}} flux de travail",
       "countWorkflows_other": "{{count}} flux de travail",
       "detailsUnavailable": "Les détails des tâches ne sont pas disponibles pour cette session.",
+      "outputFile": "Sortie : {{value0}}",
       "groupAgents": "Agents",
       "groupMonitors": "Moniteurs",
       "groupShell": "Shell",

@@ -2177,6 +2177,7 @@
       "monitor": "Background monitor",
       "task": "Background task",
       "detailsUnavailable": "Task details are unavailable for this session.",
+      "outputFile": "Output: {{value0}}",
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agents",
       "countShell_one": "{{count}} shell",

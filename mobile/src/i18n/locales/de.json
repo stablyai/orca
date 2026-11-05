@@ -1806,6 +1806,7 @@
       "countWorkflows_one": "{{count}} Arbeitsablauf",
       "countWorkflows_other": "{{count}} Arbeitsabläufe",
       "detailsUnavailable": "Aufgabendetails sind für diese Sitzung nicht verfügbar.",
+      "outputFile": "Ausgabe: {{value0}}",
       "groupAgents": "Agenten",
       "groupMonitors": "Überwachungen",
       "groupShell": "Shell",

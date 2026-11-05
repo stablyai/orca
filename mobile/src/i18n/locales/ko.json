@@ -1802,6 +1802,7 @@
       "countWorkflows_one": "워크플로 {{count}}개",
       "countWorkflows_other": "워크플로 {{count}}개",
       "detailsUnavailable": "이 세션에서는 작업 세부정보를 사용할 수 없습니다.",
+      "outputFile": "출력: {{value0}}",
       "groupAgents": "에이전트",
       "groupMonitors": "모니터",
       "groupShell": "셸",
