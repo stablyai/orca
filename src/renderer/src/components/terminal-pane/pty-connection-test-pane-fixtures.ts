@@ -251,7 +251,6 @@ export type MockPaneSummary = { id: number; leafId: string }
 export type MockPaneManager = {
   setPaneGpuRendering: Mock
   markPaneHasComplexScriptOutput: Mock
-  rebuildPaneWebgl: Mock
   hasWebglRenderer: Mock<() => boolean>
   getPanes: Mock<() => MockPaneSummary[]>
   closePane: Mock
@@ -273,7 +272,6 @@ export function createManager(
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),

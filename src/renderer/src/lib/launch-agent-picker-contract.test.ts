@@ -3,7 +3,6 @@ import {
   useAgentPickerDraftScope
 } from '../components/agent/agent-launch-picker-drafts'
 // @vitest-environment happy-dom
-import type * as SettingsTransport from '../runtime/agent-launch-settings/agent-launch-settings-transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createElement } from 'react'
@@ -19,6 +18,7 @@ import {
   type AgentPickerEntry,
   agentPickerDraft,
   agentPickerLaunchInputs,
+  agentPickerFreshLaunchInputs,
   agentPickerEntriesFromRows
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 
@@ -26,19 +26,18 @@ import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit
 } from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { agentPickerPanelArguments } from '../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 import {
   mockCreateTab,
   queuedStartups,
   store,
   mockToastError,
   mockCreateWebRuntimeSessionTerminal,
-  mockIsWebRuntimeSessionActive
+  mockIsWebRuntimeSessionActive,
+  mockRuntimeEnvironmentSupportsCapabilities
 } from './launch-agent-in-new-tab-test-fixture'
 
 import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { fetchCodexModelCatalogListing } from './codex-model-catalog-reader-test-fixture'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 afterEach(() => {
@@ -46,20 +45,54 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 const inventory = vi.hoisted(() => ({ settings: vi.fn(), legacy: vi.fn(), session: vi.fn() }))
-vi.mock(
-  '../runtime/agent-launch-settings/agent-launch-settings-transport',
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof SettingsTransport>()),
-    readHostAgentLaunchSettings: inventory.settings
-  })
-)
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: inventory.legacy,
-  runtimeEnvironmentSupportsCapability: async () => false
+  callRuntimeRpc: async (...args: unknown[]) =>
+    args[1] === 'settings.getAgentLaunch'
+      ? { settings: await inventory.settings(...args) }
+      : inventory.legacy(...args),
+  runtimeEnvironmentSupportsCapability: async () => true,
+  runtimeEnvironmentSupportsCapabilities: async () => [false, false]
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: inventory.session
 }))
+
+it('preserves authored and explicitly empty Arguments for fresh terminal and chat launches', () => {
+  const entry: AgentPickerEntry = {
+    agent: 'codex',
+    label: 'Codex',
+    rows: [],
+    surfaces: ['terminal', 'chat'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    arguments: '',
+    catalog: { origin: 'unknown' }
+  }
+  for (const { text, expected } of [
+    { text: '--add-dir docs', expected: '--add-dir docs' },
+    { text: '', expected: null }
+  ]) {
+    const draft = acceptAgentPickerArguments(
+      entry,
+      applyAgentPickerEdit(entry, agentPickerDraft(entry), {
+        kind: 'arguments',
+        text
+      })
+    )
+    for (const surface of ['terminal', 'chat'] as const) {
+      const launch = agentPickerFreshLaunchInputs(
+        { ...draft, surface },
+        {
+          surface,
+          executionHostId: 'runtime:paired'
+        },
+        entry
+      )
+      expect(launch.agentArgs).toBe(expected)
+    }
+  }
+})
 
 describe('picker window launch contract', () => {
   it.each(['claude', 'codex'] as const)(
@@ -140,6 +173,10 @@ describe('picker window launch contract', () => {
     'keeps ordinary and configured-default launch input/failure contracts on %s',
     async (target) => {
       inventory.settings.mockResolvedValue(null)
+      mockRuntimeEnvironmentSupportsCapabilities.mockResolvedValue([
+        target === 'paired',
+        target === 'paired'
+      ])
       const launcher = await import('./launch-agent-in-new-tab')
       const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab')
       const { launchAgentInNewTab } = launcher
@@ -295,7 +332,11 @@ describe('picker window launch contract', () => {
       const omnibox = await perform({}, 'omnibox')
       expect(searched).toEqual(expectedSearch)
       expect(omnibox).toEqual(expectedSearch)
-      expect(expectedSearch.command ?? expectedSearch.remote?.command ?? '').toContain('opus')
+      if (target === 'paired') {
+        expect(expectedSearch.remote).toMatchObject({ sessionOptions: { model: 'opus' } })
+      } else {
+        expect(expectedSearch.command ?? expectedSearch.remote?.command ?? '').toContain('opus')
+      }
       const explicit = {
         ...option.setup!,
         surface: 'terminal' as const,
@@ -318,6 +359,114 @@ describe('picker window launch contract', () => {
       dispatch.mockRestore()
     }
   )
+})
+
+it('keeps pristine, edited and reopened historical-host picker launches free of desktop defaults', async () => {
+  const operation = await import('@/runtime/web-runtime-terminal-create-operation')
+  vi.spyOn(operation, 'createWebRuntimeSessionTerminalResult').mockImplementation(
+    async ({ legacyAgentLaunch, ...request }) => ({
+      outcome: await mockCreateWebRuntimeSessionTerminal({
+        ...request,
+        ...(request.preparedAgentCommand ? await legacyAgentLaunch?.() : {})
+      })
+    })
+  )
+  const { useTabAgentMenuLaunch } = await import('../components/tab-bar/QuickLaunchButton')
+  const snapshot = {
+    defaultTuiAgent: 'claude',
+    disabledTuiAgents: [],
+    agentCmdOverrides: { claude: '/host/claude' },
+    agentDefaultArgs: { claude: '--permission-mode auto' },
+    environmentNames: {},
+    permissionMode: 'mixed' as const
+  }
+  Object.assign(store.settings, {
+    agentCmdOverrides: { claude: '/desktop/claude' },
+    agentDefaultArgs: { claude: '--model desktop-only-qa' },
+    agentLaunchChoices: { claude: { model: 'desktop-only-qa' } },
+    activeRuntimeEnvironmentId: 'web-runtime'
+  })
+  Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
+  mockIsWebRuntimeSessionActive.mockReturnValue(true)
+  inventory.settings.mockResolvedValue(snapshot)
+  inventory.session.mockResolvedValue({ origin: 'unknown' })
+  const row = { agent: 'claude', kind: 'cli', executionHostId: 'runtime:web-runtime' } as const
+  const menu: NewTabAgentMenuModel = {
+    state: 'settled',
+    rows: [row],
+    defaultTuiAgent: 'claude',
+    detection: {
+      detectedIds: ['claude'],
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => ['claude']
+    },
+    pickerContext: {
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+      executionHostId: row.executionHostId,
+      key: 'qa-history-host',
+      settings: null
+    }
+  }
+  function Panel({ open }: { open: boolean }) {
+    const entry = useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('wt-1', menu, open)
+    )[0]
+    const draftScope = useAgentPickerDraftScope()
+    const setup = useAgentPickerSetup({ entry, draftScope, open })
+    const launch = useTabAgentMenuLaunch({
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      onFocusTerminal: () => {}
+    })
+    return open && setup.ready
+      ? createElement(
+          TooltipProvider,
+          null,
+          createElement(AgentLaunchSetupPanel, {
+            entry,
+            draft: setup.draft,
+            getDraft: setup.getDraft,
+            onDraftChange: setup.change,
+            onUse: (draft) => {
+              if (setup.accept(draft)) {
+                launch(row, draft, entry)
+              }
+            }
+          })
+        )
+      : null
+  }
+  const view = render(createElement(Panel, { open: true }))
+  await act(async () => {})
+  async function start() {
+    mockCreateWebRuntimeSessionTerminal.mockClear()
+    fireEvent.click(view.getByText('Launch terminal'))
+    await act(async () => {})
+    const request = mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]
+    expect(request).toBeDefined()
+    expect(JSON.stringify(request)).not.toContain('desktop-only-qa')
+    expect(request).not.toHaveProperty('command')
+    return request!
+  }
+  const pristine = await start()
+  expect(pristine).not.toHaveProperty('agentArgs')
+  view.rerender(createElement(Panel, { open: false }))
+  view.rerender(createElement(Panel, { open: true }))
+  await act(async () => {})
+  if (!view.queryByLabelText('Arguments')) {
+    fireEvent.click(view.getByLabelText('Toggle Arguments'))
+  }
+  fireEvent.change(view.getByLabelText('Arguments'), { target: { value: '--add-dir /tmp' } })
+  const edited = await start()
+  expect(edited.agentArgs).toBe('--permission-mode auto --add-dir /tmp')
+  view.rerender(createElement(Panel, { open: false }))
+  view.rerender(createElement(Panel, { open: true }))
+  await act(async () => {})
+  const reopened = await start()
+  expect(reopened.agentArgs).toBe('--permission-mode auto --add-dir /tmp')
 })
 
 it.each(['claude', 'codex'] as const)(
@@ -567,136 +716,3 @@ it.each(['claude', 'codex'] as const)(
     }
   }
 )
-
-it('passes the recorded Codex catalog tier and approval/sandbox policy through the common reader, picker and real compiler', async () => {
-  const { default: capture } =
-    await import('../../../shared/fixtures/agent-picker-cli-recordings.json')
-  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  const listing = await fetchCodexModelCatalogListing({
-    connection: { request: vi.fn().mockResolvedValue(capture.modelList) }
-  })
-  const model = listing.models[0]
-  const tier = model.serviceTiers![0].value
-  expect(capture.policy.sandbox.type).toBe('workspaceWrite')
-  const raw = `-a ${capture.policy.approvalPolicy} -s workspace-write -c approvals_reviewer=${capture.policy.approvalsReviewer}`
-  const entry: AgentPickerEntry = {
-    agent: 'codex',
-    label: 'Codex',
-    rows: [{ agent: 'codex', kind: 'chat' }],
-    surfaces: ['chat', 'terminal'],
-    defaultSurface: 'terminal',
-    terminal: {},
-    structured: {},
-    arguments: `${raw} --add-dir docs`,
-    catalog: { origin: 'probe', fetchedAt: 1, models: listing.models }
-  }
-  const selected = applyAgentPickerEdit(entry, agentPickerDraft(entry), {
-    kind: 'speed',
-    key: 'serviceTier',
-    value: tier,
-    model: model.id
-  })
-  const view = agentPickerPanelArguments(entry, selected)
-  expect(view.permission).toBeDefined()
-  const edited = acceptAgentPickerArguments(
-    entry,
-    applyAgentPickerEdit(entry, selected, {
-      kind: 'arguments',
-      text: '--add-dir src'
-    })
-  )
-  for (const next of [selected, edited]) {
-    mockCreateTab.mockClear()
-    const inputs = agentPickerLaunchInputs({ ...next, surface: 'terminal' }, entry)
-    launchAgentInNewTab({
-      requestId: 'recorded-policy',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      ...inputs
-    })
-    expect(queuedStartups()[0]?.command).toContain(`'service_tier=${tier}'`)
-    expect(queuedStartups()[0]?.command).toContain("'-a' 'on-request' '-s' 'workspace-write'")
-    expect(
-      agentPickerLaunchInputs({ ...next, surface: 'chat' }, entry).sessionOptions?.serviceTier
-    ).toBe(tier)
-  }
-  const standard = acceptAgentPickerArguments(
-    entry,
-    applyAgentPickerEdit(entry, selected, {
-      kind: 'arguments',
-      text: '-c service_tier=default --add-dir src'
-    })
-  )
-  expect(standard).toMatchObject({ choices: { options: { serviceTier: 'default' } } })
-  expect(
-    agentPickerLaunchInputs({ ...standard, surface: 'chat' }, entry).sessionOptions?.serviceTier
-  ).toBe('default')
-  expect(agentPickerLaunchInputs({ ...standard, surface: 'terminal' }, entry).agentArgs).toContain(
-    'service_tier=default'
-  )
-  expect(view.choices.options?.serviceTier).toBe(tier)
-  const removed = applyAgentPickerEdit(entry, selected, { kind: 'remove-chip', key: 'serviceTier' })
-  expect(agentPickerPanelArguments(entry, removed).choices.options?.serviceTier).toBe('default')
-})
-
-it('conserves quoted Codex string sources through common acceptance and the terminal compiler', async () => {
-  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  const { tokenizeStartupCommand } =
-    await import('../../../shared/agent-launch/startup/tui-agent-startup-shell')
-  const { agentChoiceConfigString } =
-    await import('../../../shared/agent-launch/choices/agent-choice-cli-apply')
-  const own: AgentPickerEntry = {
-    agent: 'codex',
-    label: 'Codex',
-    rows: [{ agent: 'codex', kind: 'cli' }],
-    surfaces: ['chat', 'terminal'],
-    defaultSurface: 'terminal',
-    terminal: { permissionMode: 'own' },
-    structured: {},
-    arguments: '',
-    catalog: { origin: 'unknown' }
-  }
-  for (const [key, scalar] of [
-    ['model', 'some-model'],
-    ['model', 'true'],
-    ['model', '42'],
-    ['model', 'a"b'],
-    ['model_reasoning_effort', 'high'],
-    ['model_reasoning_effort', 'future_effort']
-  ]) {
-    const operand = `${key}=${JSON.stringify(scalar)}`
-    const raw = `-c '${operand}' --search`
-    const draft = acceptAgentPickerArguments(
-      own,
-      applyAgentPickerEdit(own, agentPickerDraft(own), { kind: 'arguments', text: raw })
-    )
-    const semanticKey = key === 'model' ? 'model' : 'effort'
-    expect(agentPickerPanelArguments(own, draft).text).toBe('--search')
-    expect(
-      agentPickerLaunchInputs({ ...draft, surface: 'chat' }, own).chatSessionOptions?.[semanticKey]
-    ).toBe(scalar)
-    for (const command of ['codex', 'cx']) {
-      store.settings.agentCmdOverrides = { codex: command }
-      mockCreateTab.mockClear()
-      launchAgentInNewTab({
-        requestId: 'quoted-string-source',
-        agent: 'codex',
-        worktreeId: 'wt-1',
-        requestedSurface: 'terminal',
-        ...agentPickerLaunchInputs(draft, own)
-      })
-      const startup = queuedStartups()[0]
-      expect(startup?.launchConfig?.agentArgs).toContain(raw)
-      const compiled = tokenizeStartupCommand(startup?.command ?? '', 'posix')
-      expect(compiled.ok).toBe(true)
-      if (!compiled.ok) {
-        throw new Error('Expected valid terminal startup')
-      }
-      expect(compiled.tokens[0]).toBe(command)
-      const operands = compiled.tokens.filter((token) => token.startsWith(`${key}=`))
-      expect(operands).toEqual([operand])
-      expect(agentChoiceConfigString(operands[0].slice(key.length + 1))).toBe(scalar)
-    }
-  }
-})

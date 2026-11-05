@@ -40,6 +40,7 @@ import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-ef
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
+import { AddToChatPointMenuHost } from './components/native-chat/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
 
 function App(): React.JSX.Element {
@@ -104,6 +105,7 @@ function App(): React.JSX.Element {
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
           <BrowserPagePrompts />
+          <AddToChatPointMenuHost />
           <LinkRoutingPreferenceDialogProvider>
             <AppBackgroundServices />
             <SpaceWindowStatePublisher />

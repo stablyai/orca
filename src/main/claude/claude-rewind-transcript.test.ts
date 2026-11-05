@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AgentSessionRewindRecordSchema } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createClaudeStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { resolveClaudeRewindFork } from './claude-rewind-fork'
 import { claudeSessionIdForRewind } from './structured/claude-structured-session-id'
 

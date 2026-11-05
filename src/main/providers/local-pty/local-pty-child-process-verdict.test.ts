@@ -31,7 +31,7 @@ import { isRetiredPtyMaster } from '../../pty/process-retirement/node-pty-master
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from '../pty-process-inspection'
-import { readLaunchedAgentForeground } from '../../runtime/launched-agent-foreground'
+import { readLaunchedAgentForeground } from '../../runtime/terminal/wait/launched-agent-foreground'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 
 // Match the recorded basename so only the retired descriptor distinguishes the pane from idle.

@@ -3,7 +3,7 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 import {
   summarizeContextUsage,
   type NativeChatContextUsageSummary
-} from './native-chat-context-usage-summary'
+} from '../../../../shared/native-chat/native-chat-context-usage-summary'
 
 /** The ring's input. A terminal-backed chat has no structured journal, so it shows no ring. */
 export function useNativeChatContextUsageSummary(

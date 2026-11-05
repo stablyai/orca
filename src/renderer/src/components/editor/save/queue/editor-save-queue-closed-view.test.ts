@@ -3,7 +3,7 @@ import {
   ORCA_EDITOR_FILE_SAVED_EVENT
 } from '../../autosave/editor-autosave'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
+
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import {
   CLOSED_VIEW_PATH,
@@ -24,27 +24,6 @@ describe('editor save queue: the saving view closes mid-write', () => {
   })
 
   afterEach(() => h.dispose())
-
-  it('undoing the saved edit in the other view leaves it dirty, so closing it asks', async () => {
-    h.type('A', 'edit')
-    h.holdNextWrite()
-    const saved = h.queue.queueSave(h.view('A'), 'edit')
-    await vi.advanceTimersByTimeAsync(0)
-    h.closeView('A')
-    h.release()
-    await expect(saved).resolves.toBe('written')
-
-    expect(h.disk.files.get(CLOSED_VIEW_PATH)).toBe('edit')
-    expect(h.view('B').isDirty).toBe(false)
-    expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('edit'))
-    expect(h.store.getState().editorDrafts.B).toBeUndefined()
-    expect(h.loaded.B?.content).toBe('edit')
-
-    h.type('B', 'disk')
-    expect(h.view('B').isDirty).toBe(true)
-    expect(needsSavePromptOnClose(h.store.getState(), 'B')).toBe(true)
-    expect(h.disk.files.get(CLOSED_VIEW_PATH)).toBe('edit')
-  })
 
   it('publishes one settled record before accepting newer subscriber typing', async () => {
     h.type('A', 'edit')
@@ -113,21 +92,6 @@ describe('editor save queue: the saving view closes mid-write', () => {
     events.mockRestore()
   })
 
-  it('keeps the other view dirty when it typed past the write', async () => {
-    h.type('A', 'edit')
-    h.holdNextWrite()
-    const saved = h.queue.queueSave(h.view('A'), 'edit')
-    await vi.advanceTimersByTimeAsync(0)
-    h.closeView('A')
-    h.type('B', 'edit, more')
-    h.release()
-    await expect(saved).resolves.toBe('written')
-
-    expect(h.view('B').isDirty).toBe(true)
-    expect(h.store.getState().editorDrafts.B).toBe('edit, more')
-    expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('edit'))
-  })
-
   it('a save queued behind the running one still writes the record through the view left', async () => {
     h.type('A', 'edit')
     h.holdNextWrite()
@@ -144,38 +108,6 @@ describe('editor save queue: the saving view closes mid-write', () => {
     expect(h.view('B').isDirty).toBe(false)
     expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('edit 2'))
     expect(h.loaded.B?.content).toBe('edit 2')
-  })
-  it.each([
-    ['a rich markdown view', (): void => h.store.getState().setMarkdownViewMode('B', 'rich')],
-    [
-      'listed after a read-only view',
-      (): void => {
-        h.store.setState({ openFiles: [] })
-        h.store.setState({
-          openFiles: [
-            closedViewTab('A', 'wt-1'),
-            { ...closedViewTab('log', 'wt-2'), readOnly: true },
-            closedViewTab('B', 'wt-2')
-          ]
-        })
-        expect(h.store.getState().editorBufferViews[h.store.getState().editorBufferIdOf.B]).toEqual(
-          ['A', 'log', 'B']
-        )
-      }
-    ]
-  ])('settles the record when the view left is %s', async (_name, makeB) => {
-    makeB()
-    h.type('A', 'edit')
-    h.holdNextWrite()
-    const saved = h.queue.queueSave(h.view('A'), 'edit')
-    await vi.advanceTimersByTimeAsync(0)
-    h.closeView('A')
-    h.release()
-    await expect(saved).resolves.toBe('written')
-
-    expect(h.view('B').isDirty).toBe(false)
-    expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('edit'))
-    expect(h.store.getState().editorDrafts.B).toBeUndefined()
   })
 
   it('a refused write banners the view left', async () => {

@@ -15,7 +15,7 @@ import { createRetiredNameLookup } from '../../../shared/worktree/retired-name-r
 import type { SshTarget } from '../../../shared/ssh-types'
 import { MAX_RETIREMENT_NAMESPACES } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import { getRuntimeOwnedSshTargetId } from '../../ssh/connection/ssh-connection-store'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
 let hasCreatedStoreInCase = false

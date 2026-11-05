@@ -21,6 +21,7 @@ import { readActiveManagedOrcadReadiness } from './orcad-managed-bound-port'
 import { OrcadManagedIdentityError } from './orcad-managed-tunnel-identity'
 import { OrcadManagedPairingRepairFailedError } from './orcad-managed-pairing-repair-failure'
 import { notifyManagedOrcadPairingRepaired } from './orcad-managed-pairing-repaired-listener'
+import { ManagedOrcadEventWindow } from './orcad-managed-event-window'
 
 // Cap servers that keep refusing fresh pairing offers to avoid endless repair.
 export const MAX_PAIRING_REPAIRS_PER_WINDOW = 3
@@ -88,12 +89,14 @@ export class ManagedOrcadPairingRepairs<
   Access extends ManagedOrcadHostAccess = ManagedOrcadHostAccess
 > {
   private readonly inFlight = new Map<string, Promise<KnownRuntimeEnvironment>>()
-  private readonly attemptedAt = new Map<string, number[]>()
+  private readonly attempts: ManagedOrcadEventWindow
   private readonly standing = new Map<string, StandingFailure>()
   // In-flight repairs must not undo an explicit user reset.
   private readonly resets = new Map<string, number>()
 
-  constructor(private readonly deps: ManagedOrcadPairingRepairDeps<Access>) {}
+  constructor(private readonly deps: ManagedOrcadPairingRepairDeps<Access>) {
+    this.attempts = new ManagedOrcadEventWindow(PAIRING_REPAIR_WINDOW_MS, () => deps.now())
+  }
 
   /** Check before building to avoid SSH, forwarding and handshake work for a known refusal. */
   standingFailure(environmentId: string, revision: number): Error | null {
@@ -128,7 +131,7 @@ export class ManagedOrcadPairingRepairs<
   /** Explicit connects clear both cached failure and attempt cap. */
   forgetFailures(environmentId: string): void {
     this.standing.delete(environmentId)
-    this.attemptedAt.delete(environmentId)
+    this.attempts.forget(environmentId)
     this.resets.set(environmentId, this.resetsOf(environmentId) + 1)
   }
 
@@ -146,7 +149,7 @@ export class ManagedOrcadPairingRepairs<
     if (standing) {
       throw standing
     }
-    const recent = this.recentAttempts(environmentId)
+    const recent = this.attempts.recent(environmentId)
     if (recent.length >= MAX_PAIRING_REPAIRS_PER_WINDOW) {
       throw fail(capSpentError(recent.length))
     }
@@ -163,7 +166,7 @@ export class ManagedOrcadPairingRepairs<
       return current
     }
     if (this.resetsOf(environmentId) === epoch) {
-      this.attemptedAt.set(environmentId, [...this.recentAttempts(environmentId), this.deps.now()])
+      this.attempts.record(environmentId)
     }
     const pairingCode = publishedPairingCode(readiness, deployment.localPort, fail)
     const offer = parsePairingCode(pairingCode)
@@ -195,13 +198,6 @@ export class ManagedOrcadPairingRepairs<
     return repaired
   }
 
-  private recentAttempts(environmentId: string): number[] {
-    const now = this.deps.now()
-    return (this.attemptedAt.get(environmentId) ?? []).filter(
-      (at) => now - at < PAIRING_REPAIR_WINDOW_MS
-    )
-  }
-
   /** Prevent pre-Connect failures from surviving the user's reset. */
   resetEpoch(environmentId: string): number {
     return this.resetsOf(environmentId)
@@ -216,7 +212,7 @@ export class ManagedOrcadPairingRepairs<
     if (this.resetsOf(environmentId) !== epoch) {
       return error
     }
-    const recent = this.recentAttempts(environmentId)
+    const recent = this.attempts.recent(environmentId)
     const capSpent = recent.length >= MAX_PAIRING_REPAIRS_PER_WINDOW
     this.standing.set(environmentId, {
       // Later callers need the cap reason until repair becomes possible again.

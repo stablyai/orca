@@ -11,14 +11,14 @@ const ptyJob = vi.hoisted(() => ({
 }))
 vi.mock('../../windows/windows-pty-job', () => ptyJob)
 
-import '../mock-descendant-sweep'
-import { TerminalHost } from '../terminal-host'
-import { TerminalSpawnGate } from '../terminal-spawn-gate'
-import { TerminalCreationWork } from '../terminal-creation-work'
-import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../immediate-kill-reply-budget'
+import './testing/mock-descendant-sweep'
+import { TerminalHost } from '../terminal-host/terminal-host'
+import { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
+import { TerminalCreationWork } from '../terminal-host/terminal-creation-work'
+import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../sessions/immediate-kill-reply-budget'
 import { createDaemonPtySubprocessHandle } from './subprocess-handle'
 import { spawnNativeDaemonPty } from './native-pty-spawn'
-import { Session } from '../session'
+import { Session } from '../sessions/session'
 import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {

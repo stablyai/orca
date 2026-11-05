@@ -18,10 +18,10 @@ import { pruneMetadataMissingFromAuthoritativeLocalScan } from '../../ipc/worktr
 import { listFolderWorkspaces } from '../../ipc/worktrees/listing/folder-workspace-catalog'
 import { getFolderWorkspaceRootId } from '../../ipc/worktrees/folder-workspace-model'
 import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
-import { listRuntimeFolderWorkspaces } from '../../runtime/runtime-worktree-filesystem'
-import { getRuntimeFolderWorkspaceRootId } from '../../runtime/runtime-folder-workspace'
-import { RuntimeWorktreeLineageController } from '../../runtime/runtime-worktree-lineage-controller'
-import type { ResolvedWorktree } from '../../runtime/runtime-worktree-path-identity'
+import { listRuntimeFolderWorkspaces } from '../../runtime/workspaces/catalog/runtime-worktree-filesystem'
+import { getRuntimeFolderWorkspaceRootId } from '../../runtime/workspaces/catalog/runtime-folder-workspace'
+import { RuntimeWorktreeLineageController } from '../../runtime/workspaces/lineage/runtime-worktree-lineage-controller'
+import type { ResolvedWorktree } from '../../runtime/workspaces/catalog/runtime-worktree-path-identity'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

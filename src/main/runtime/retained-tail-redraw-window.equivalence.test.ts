@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from '../../shared/agent-tui-ansi-fuzz-stream'
-import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
+import { appendNormalizedToTailBuffer } from './terminal/output/tail/terminal-tail-buffer'
+import { MAX_TAIL_PARTIAL_CHARS } from './terminal/output/tail/terminal-tail-limits'
 import {
   appendNormalizedToMultilineTailBufferUnwindowed,
   type RetainedTailRedrawCursor
-} from './terminal-tail-redraw-buffer'
+} from './terminal/output/tail/terminal-tail-redraw-buffer'
 
 // Fuzz the windowed redraw path against the byte-identical full-tail reference to guard hot-path optimization.
 

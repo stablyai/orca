@@ -71,6 +71,8 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
+  /** Present only where the host can read this chat's Codex account usage. */
+  accountUsage?: { open: () => void }
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void
   /** A local send: brings the latest into view at the press, not when the host answers. */
   onSubmitted?: () => void
@@ -175,7 +177,7 @@ export type NativeChatComposerHandle = {
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
-  /** Append deduplicated text after a blank line and place the caret at its end. */
+  /** Append text after a blank line and place the caret at its end; repeated additions stay separate. */
   appendText: (text: string) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {

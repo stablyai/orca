@@ -29,7 +29,6 @@ function state(overrides: Partial<Parameters<typeof nativeChatComposerSendState>
     disabled: false,
     structuredTransport: transport,
     editSession: undefined,
-    goalActive: false,
     isWorking: false,
     canStop: true,
     setDraft: vi.fn(),
@@ -48,7 +47,7 @@ describe('native chat composer prompt suggestion', () => {
       { pastedTextSaving: true },
       { imageAttachments: [{ id: 'image', path: '/tmp/shot.png' }] },
       { editSession: { canSave: true } },
-      { goalActive: true }
+      { goalMode: true }
     ]) {
       expect(state(blocked).promptSuggestion).toBeNull()
     }

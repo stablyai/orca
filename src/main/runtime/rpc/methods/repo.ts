@@ -11,7 +11,7 @@ import {
   RepoSelector,
   RepoShow
 } from '../../../../shared/rpc-contract/github-repo-target-params'
-import { hostQualifiedRepoSelector } from '../../runtime-repo-selector'
+import { hostQualifiedRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
 import { repoHooksCheckIsBackground } from '../../../../shared/repo-hooks-check-wake'
 import {
   projectRepoResultVisibilityForClient,

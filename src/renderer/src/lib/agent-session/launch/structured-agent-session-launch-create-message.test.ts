@@ -142,7 +142,7 @@ describe('the first message owned by create', () => {
     expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
   })
 
-  it('freezes a learned configured model without promoting its effort recommendation', async () => {
+  it('leaves a learned configured model and its effort to the agent', async () => {
     mocks.exactSupport.mockResolvedValue(true)
     recordHostModelCatalogSnapshot(target, 'claude', null, {
       origin: 'probe',
@@ -170,9 +170,8 @@ describe('the first message owned by create', () => {
       prompt: 'opening text'
     })
     await launch.launchResult
-    expect(createParams().options).toMatchObject({ model: 'opus' })
-    expect(createParams().options).not.toHaveProperty('effort')
-    expect(createParams().firstMessage?.selection).toEqual({ model: 'opus' })
+    expect(createParams().options).toBeUndefined()
+    expect(createParams().firstMessage?.selection).toEqual({})
     expect(createParams().envelope.payloadFingerprint).toBe(
       structuredAgentSessionCreateFingerprint({ sessionId: launch.sessionId, ...createParams() })
     )

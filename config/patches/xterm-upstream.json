@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Consumed by config/scripts/regenerate-xterm-patches.mjs. See docs/reference/xterm-patch-regeneration.md.",
+  "$schemaNote": "Consumed by config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs. See docs/reference/xterm-patch-regeneration.md.",
   "upstream": {
     "repository": "https://github.com/xtermjs/xterm.js.git",
     "commit": "08829c7eb6279dda2a9e86df901353a1a89858ca",

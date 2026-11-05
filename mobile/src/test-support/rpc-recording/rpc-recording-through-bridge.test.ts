@@ -2,6 +2,7 @@ import type * as BridgePortPairModule from '../../mobile-web-shell/bridge/bridge
 import { resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import { legacyShellStatusFixture } from './legacy-shell-status-fixture'
 import { recordingStep } from './recording-step'
 import { materializeScenario } from './scenario-execution-mode'
 import {
@@ -531,3 +532,21 @@ it('declared bridge-only probes preserve exact outcomes and never hide later dif
     })
   }
 }, 120_000)
+
+it('uses the actual page init cached-null status as the ordinary legacy recording input', async () => {
+  const transport = new ScriptedRpcTransport()
+  const native = legacyShellStatusFixture(transport.client)
+  const pair = createBridgePortPair({ rpc: transport.client })
+  try {
+    await pair.flush()
+    expect(native.getShellHostStatus?.()).toBeNull()
+    const init = pair.toPage.map((json) => JSON.parse(json)).find((frame) => frame.type === 'init')
+    expect(init).toMatchObject({ type: 'init' })
+    expect(init).not.toHaveProperty('hostStatus')
+    expect(pair.client.getShellHostStatus()).toBeNull()
+    expect(legacyShellStatusFixture(pair.client)).toBe(pair.client)
+  } finally {
+    await disposeBridgePortPair(pair)
+    await transport.dispose()
+  }
+})

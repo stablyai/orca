@@ -11,9 +11,9 @@ import {
   WorkingDirectoryValidationAbortedError
 } from '../../providers/working-directory-validation'
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
-import { TerminalAttachCanceledError } from '../daemon-errors'
-import { DaemonProtocolError } from '../types'
-import { checkDaemonAsyncIo } from '../daemon-async-io-probe'
+import { TerminalAttachCanceledError, DaemonProtocolError } from '../protocol/daemon-errors'
+
+import { checkDaemonAsyncIo } from '../health/daemon-async-io-probe'
 
 export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 

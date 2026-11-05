@@ -189,6 +189,11 @@
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
+    "contextUsage": {
+      "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+      "title": "上下文",
+      "estimated": "根據上一次回應的估算值。"
+    },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
       "file": "檔案",
@@ -375,7 +380,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "預設",
-      "notReportedMarker": "未回報"
+      "notReportedMarker": "未回報",
+      "moreModels": "更多模型",
+      "fewerModels": "較少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認"
@@ -774,7 +781,9 @@
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
-      "openImage": "開啟圖片"
+      "openImage": "開啟圖片",
+      "wrapLines": "自動換行",
+      "disableLineWrap": "停用自動換行"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "關閉抽屜面板"
@@ -1203,6 +1212,10 @@
       "previewFile": "預覽檔案 {{name}}",
       "retryLoading": "重新嘗試載入 {{path}}",
       "unavailable": "行動版無法使用"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "複製名稱",
+      "copyRelativePath": "複製相對路徑"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
@@ -1765,13 +1778,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "來自 {{sender}}",
-      "fromMore": "來自 {{sender}} +{{count}}",
-      "fromUnnamed": "來自代理程式",
-      "messageFrom": "來自 {{sender}} 的訊息",
-      "messageFromMore": "來自 {{sender}} +{{count}} 的訊息",
-      "messageFromUnnamed": "來自代理程式的訊息",
-      "unnamedSender": "一個代理程式"
+      "unnamedSender": "一個代理程式",
+      "fromSender": "來自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "無法建立終端機",
@@ -1796,6 +1804,7 @@
       "countWorkflows_one": "{{count}} 個工作流程",
       "countWorkflows_other": "{{count}} 個工作流程",
       "detailsUnavailable": "無法取得此工作階段的任務詳細資訊。",
+      "outputFile": "輸出：{{value0}}",
       "groupAgents": "代理程式",
       "groupMonitors": "監控項目",
       "groupShell": "Shell 命令",
@@ -2139,8 +2148,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "無法將命令儲存在排隊中的訊息內。",
-      "editing": "正在編輯訊息",
-      "editingAttributed": "正在編輯訊息 · {{attribution}}"
+      "editing": "正在編輯訊息"
     },
     "quickCommandEditorForm": {
       "action": "操作",
