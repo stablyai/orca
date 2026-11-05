@@ -34,7 +34,7 @@ export const styles = themedStyleSheet(() => ({
   meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   sender: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  queuedSenders: { flexWrap: 'nowrap', alignItems: 'center' },
+  queuedSenders: { flexWrap: 'nowrap', alignItems: 'center', maxWidth: '100%' },
   queuedSender: { minWidth: 0, flexShrink: 1 },
   queuedLead: { flexShrink: 0 },
   queuedComma: { flexShrink: 0, marginLeft: -spacing.xs },
