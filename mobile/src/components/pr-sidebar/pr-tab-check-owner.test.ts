@@ -38,7 +38,7 @@ it.each(['en', 'es'] as const)(
     )
     expect(
       buildPrGateRows({ pr: owner, details: null, checks, checksError: null })[0]
-    ).toMatchObject({ key: 'checks', tone: 'blocking' })
+    ).toMatchObject({ key: 'checks', tone: 'blocking', subtitle: null })
     expect(
       buildPrGateRows({ pr: owner, details: null, checks, checksError: 'Rows unavailable' })[0].tone
     ).toBe('blocking')

@@ -71,7 +71,7 @@ function checksGate(checks: PRCheckDetail[], checksError: string | null, pr: PRI
           : translate('pullRequest.gates.checksFailing_other', '{{count}} checks failing', {
               count: brokenCount
             }),
-      subtitle: broken.map((check) => check.name).join(', ')
+      subtitle: broken.length > 0 ? broken.map((check) => check.name).join(', ') : null
     }
   }
   const rowSummary = summarizePRChecks(checks)
