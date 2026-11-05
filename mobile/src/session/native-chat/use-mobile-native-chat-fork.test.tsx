@@ -13,12 +13,14 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** A connection whose first agent-list reads fail, as when the socket drops mid-request. */
-function connection(failures: number) {
+/** A connection whose agent-list reads fail as scripted (true = fails), as when the socket drops. */
+function connection(failures: number | readonly boolean[]) {
   const listeners = new Set<(state: 'connected' | 'reconnecting') => void>()
-  let left = failures
+  const script =
+    typeof failures === 'number' ? Array.from({ length: failures }, () => true) : [...failures]
+  let generation = 1
   const sendRequest = vi.fn(async () => {
-    if (left-- > 0) {
+    if (script.shift() === true) {
       throw new Error('Connection interrupted')
     }
     return {
@@ -29,14 +31,18 @@ function connection(failures: number) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only sendRequest, onStateChange and getGeneration from its client.
   const client = {
     sendRequest,
-    getGeneration: () => 1,
+    getGeneration: () => generation,
     onStateChange: (listener: (state: 'connected' | 'reconnecting') => void) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
     }
   } as unknown as RpcClient
   const reconnect = () => listeners.forEach((listener) => listener('connected'))
-  return { client, sendRequest, reconnect }
+  const migrate = () => {
+    generation++
+    reconnect()
+  }
+  return { client, sendRequest, reconnect, migrate }
 }
 
 function Probe({ client }: { client: RpcClient }): null {
@@ -92,5 +98,37 @@ it('asks again after a failed read, then again once the connection recovers', as
   expect(sendRequest).toHaveBeenCalledTimes(6)
   act(() => reconnect())
   await settle()
+  expect(sendRequest).toHaveBeenCalledTimes(6)
+})
+
+it('gives a new connection its own retries after an earlier one used them up', async () => {
+  vi.useFakeTimers()
+  const { client, sendRequest, migrate } = connection([true, true, true, false, true, false])
+  act(() => {
+    renderer = create(createElement(Probe, { client }))
+  })
+  await settle()
+  for (const wait of [2_000, 8_000, 30_000]) {
+    await act(async () => {
+      vi.advanceTimersByTime(wait)
+    })
+    await settle()
+  }
+  // Learned on the fourth read, after three failures.
+  expect(sendRequest).toHaveBeenCalledTimes(4)
+
+  // The transport moves while learned: no listener is installed to see its connected event.
+  act(() => migrate())
+  act(() => renderer!.update(createElement(Probe, { client })))
+  await settle()
+  expect(sendRequest).toHaveBeenCalledTimes(5)
+  await act(async () => {
+    vi.advanceTimersByTime(2_000)
+  })
+  await settle()
+  expect(sendRequest).toHaveBeenCalledTimes(6)
+  await act(async () => {
+    vi.advanceTimersByTime(120_000)
+  })
   expect(sendRequest).toHaveBeenCalledTimes(6)
 })

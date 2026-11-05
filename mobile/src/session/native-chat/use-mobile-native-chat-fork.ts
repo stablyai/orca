@@ -47,6 +47,23 @@ export const MobileNativeChatForkContext = createContext<MobileNativeChatFork | 
 
 const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]
 
+type ReadAttempt = {
+  client: RpcClient | null
+  generation: number | undefined
+  count: number
+  failures: number
+}
+
+function ofConnection(
+  attempt: ReadAttempt,
+  client: RpcClient | null,
+  generation: number | undefined
+): ReadAttempt {
+  return attempt.client === client && attempt.generation === generation
+    ? attempt
+    : { client, generation, count: 0, failures: 0 }
+}
+
 /** The host's agents, read once per connection, only from a host that can fork. */
 function useRegisteredAgent(
   client: RpcClient | null,
@@ -61,8 +78,19 @@ function useRegisteredAgent(
   const generation = client?.getGeneration?.()
   const learned = agents?.client === client && agents?.generation === generation
   const wanted = !!client && host === 'supported' && !learned
-  // Each attempt is one read; a failed read counts toward a few spaced retries.
-  const [attempt, setAttempt] = useState({ count: 0, failures: 0 })
+  // Each attempt is one read; a failed read counts toward a few spaced retries. Both belong to
+  // one connection: a new client or generation starts again from zero.
+  const [stored, setStored] = useState<ReadAttempt>({ client, generation, count: 0, failures: 0 })
+  const attempt = ofConnection(stored, client, generation)
+  const bump = useCallback(
+    (next: (current: ReadAttempt) => Pick<ReadAttempt, 'count' | 'failures'>) =>
+      setStored((current) => ({
+        client,
+        generation,
+        ...next(ofConnection(current, client, generation))
+      })),
+    [client, generation]
+  )
   useEffect(() => {
     if (!client || !wanted) {
       return
@@ -79,13 +107,13 @@ function useRegisteredAgent(
         if (rows) {
           setAgents({ client, generation, rows })
         } else {
-          setAttempt((current) => ({ ...current, failures: current.failures + 1 }))
+          bump((current) => ({ count: current.count, failures: current.failures + 1 }))
         }
       })
     return () => {
       cancelled = true
     }
-  }, [client, generation, wanted, attempt.count])
+  }, [bump, client, generation, wanted, attempt.count])
   // The action stays disabled while unread: a few spaced retries, then the next reconnect.
   const retryMs = wanted ? AGENTS_READ_RETRIES_MS[attempt.failures - 1] : undefined
   useEffect(() => {
@@ -93,22 +121,22 @@ function useRegisteredAgent(
       return
     }
     const timer = setTimeout(
-      () => setAttempt((current) => ({ ...current, count: current.count + 1 })),
+      () => bump((current) => ({ count: current.count + 1, failures: current.failures })),
       retryMs
     )
     return () => clearTimeout(timer)
-    // Armed once per failure: a retry's own read must not arm another timer.
-  }, [retryMs])
+    // One timer per failure of this connection; a retry's own read must not arm another.
+  }, [bump, retryMs, attempt.failures])
   useEffect(() => {
     if (!client || !wanted) {
       return
     }
     return client.onStateChange((state) => {
       if (state === 'connected') {
-        setAttempt((current) => ({ count: current.count + 1, failures: 0 }))
+        bump((current) => ({ count: current.count + 1, failures: 0 }))
       }
     })
-  }, [client, wanted])
+  }, [bump, client, wanted])
   return learned ? agents.rows.find((row) => row.agent === agent) : undefined
 }
 
