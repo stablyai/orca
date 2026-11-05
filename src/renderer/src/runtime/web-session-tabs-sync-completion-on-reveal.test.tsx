@@ -34,7 +34,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabActivityStatus } from '../components/tab-bar/terminal-tab-activity-status'
 import {
   BG_MIRROR_TAB_ID,

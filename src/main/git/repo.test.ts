@@ -11,10 +11,10 @@ import {
   getBranchConflictKind,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
-  resolveDefaultBaseRefViaExec,
   searchBaseRefDetails,
   searchBaseRefs
 } from './repo'
+import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
 import {
   REPO_SEARCH_REFS_MAX_LIMIT,
   REPO_SEARCH_REFS_MAX_SCAN_LIMIT

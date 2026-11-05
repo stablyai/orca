@@ -11,11 +11,11 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test, type forwardElectronProcessLogs } from './helpers/orca-app'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
-import { encodePairingOffer } from '../../src/shared/pairing'
+import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
 import {
   addWslHostEnvironment,
   findWslHostDeployment
-} from '../../src/shared/runtime-environment-wsl-host-store'
+} from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'

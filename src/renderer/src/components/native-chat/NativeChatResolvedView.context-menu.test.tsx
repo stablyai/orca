@@ -63,7 +63,7 @@ vi.mock('./NativeChatComposer', () => ({
     </>
   )
 }))
-vi.mock('@/components/editor/useLocalImageSrc', () => ({
+vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: () => 'blob:original'
 }))
 vi.mock('@/lib/image-blob-png', async (importOriginal) => ({

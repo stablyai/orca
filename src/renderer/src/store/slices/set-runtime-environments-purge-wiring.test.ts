@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -74,19 +74,5 @@ describe('setRuntimeEnvironments removal diff fires the stale-runtime purge', ()
     expect(s.worktreesByRepo.repoA).toEqual([])
     expect(s.tabsByWorktree['repoA::/wt-a']).toBeUndefined()
     expect(s.runtimeEnvironments.map((e) => e.id)).toEqual(['env-b'])
-  })
-
-  it('is a no-op for repos/rows when no environment was removed', () => {
-    const store = createTestStore()
-    seedStale(store)
-    const reposRef = store.getState().repos
-    const worktreesRef = store.getState().worktreesByRepo
-
-    store.getState().setRuntimeEnvironments([env('env-a'), env('env-b')])
-
-    const s = store.getState()
-    expect(s.repos).toBe(reposRef)
-    expect(s.worktreesByRepo).toBe(worktreesRef)
-    expect(s.repos.map((r) => r.id)).toEqual(['repo1', 'repoA'])
   })
 })

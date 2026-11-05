@@ -4,6 +4,7 @@ import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-f
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
 import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
 import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
+import { NO_WORKTREE_HOST_CONTEXT } from '../../../mobile/src/worktree/worktree-host-context-labels'
 import {
   readHostSidebarFeed,
   type HostSidebarFeedRead
@@ -162,6 +163,7 @@ export async function openPhoneFeedList(
       rows: built.sectionRows,
       lastVisited,
       liveRows: [],
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       repoHostIdByRepoId: new Map(),
       search: ''
     })
@@ -171,7 +173,9 @@ export async function openPhoneFeedList(
     (await sections())?.flatMap((section) => [
       // Titles only: the desktop draws a header's count on hover, not in its text.
       `HEADER ${section.title}`,
-      ...section.data.map((row) => `ITEM ${row.sectionListKey}${row.isActive ? ' ACTIVE' : ''}`)
+      ...section.data.map(
+        ({ row, view }) => `ITEM ${view.sectionListKey}${row.isActive ? ' ACTIVE' : ''}`
+      )
     ]) ?? [readHostSidebarFeed(read).kind]
 
   return {

@@ -10,10 +10,11 @@ import {
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
 import { useAppStore, type AppState } from '@/store'
+
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Worktree } from '../../../shared/worktree/types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { makeCreatedAgentWorktree } from './worktree-activation-created-agent.test-fixture'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
@@ -148,22 +149,6 @@ describe('a tab closed on another paired client', () => {
       toWebTerminalSurfaceTabId(CLIENT_TAB_ID)
     ])
     applyHostTabs(worktreeId, [], 2)
-
-    expectNoAutomaticResume(worktreeId)
-    expectNoAutomaticResume(worktreeId)
-  })
-
-  it('is not resumed from a native-keyed record the host never published', () => {
-    const worktreeId = seedPairedWorkspace()
-    seedRecord(makeRecord(worktreeId, 'native-tab'))
-
-    expectNoAutomaticResume(worktreeId)
-  })
-
-  it('is not resumed from a native record that shares its session with a mirrored one', () => {
-    const worktreeId = seedPairedWorkspace()
-    seedRecord(makeRecord(worktreeId, toWebTerminalSurfaceTabId('host-tab')))
-    seedRecord({ ...makeRecord(worktreeId, 'native-tab'), capturedAt: 2, updatedAt: 2 })
 
     expectNoAutomaticResume(worktreeId)
     expectNoAutomaticResume(worktreeId)

@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setImmediate as waitForPoll } from 'node:timers/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as SystemPowerLifecycle from '../../system-power-lifecycle'
-import { publishSystemResume, publishSystemSuspend } from '../../system-power-lifecycle'
+import type * as SystemPowerLifecycle from '../../power/system-power-lifecycle'
+import { publishSystemResume, publishSystemSuspend } from '../../power/system-power-lifecycle'
 import type * as WriterDiagnostics from './profile-state-writer-diagnostics'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 
 const power = vi.hoisted(() => ({ subscriptions: 0 }))
-vi.mock('../../system-power-lifecycle', async (importOriginal) => {
+vi.mock('../../power/system-power-lifecycle', async (importOriginal) => {
   const actual = await importOriginal<typeof SystemPowerLifecycle>()
   return {
     ...actual,

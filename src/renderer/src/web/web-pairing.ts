@@ -1,9 +1,9 @@
 import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
-} from '../../../shared/runtime-host-descriptor'
-import { normalizePairingBase64 } from '../../../shared/mobile-pairing-base64'
-import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
+} from '../../../shared/remote-runtime/host-status/runtime-host-descriptor'
+import { normalizePairingBase64 } from '../../../shared/remote-runtime/pairing/mobile-pairing-base64'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 import type { DeviceScope } from '../../../shared/runtime-types'
 
 const PAIRING_OFFER_VERSION = 2

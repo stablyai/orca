@@ -1,7 +1,7 @@
 import {
   requestDesktopBrowserBridgeReconcile,
   resetDesktopBrowserBridgeEnvironment
-} from '../desktop-browser-bridge-reconcile'
+} from '../browser/desktop-browser-bridge-reconcile'
 
 const manuallyDisconnectedEnvironmentIds = new Set<string>()
 

@@ -7,8 +7,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { holdPhysicalCloseTasks } from '../orchestration-crew/crew-menu.test-fixture'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
-import { useAppStore } from '@/store'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -26,6 +24,10 @@ vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
+// Exercise dormant panel interactions independently of the suspension gate.
+vi.mock('../orchestration-crew/use-orchestration-panel-enabled', () => ({
+  useOrchestrationPanelEnabled: () => true
+}))
 const crew = vi.hoisted(() => {
   const snapshot: OrchestrationCrewSnapshot = {
     status: 'ok',
@@ -61,53 +63,15 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 const first = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
 const second = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
-const initialSettings = useAppStore.getState().settings
-function setOrchestrationPanel(enabled: boolean) {
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/home/test'), experimentalOrchestrationPanel: enabled }
-  })
-}
 beforeEach(() => {
   resetStructuredSessionMocks()
   crew.subscribe.mockClear()
   crew.release.mockClear()
-  setOrchestrationPanel(true)
 })
 afterEach(() => {
   cleanup()
   localStorage.clear()
-  useAppStore.setState({ settings: initialSettings })
   vi.restoreAllMocks()
-})
-
-it('mounts the panel only while the experimental setting is on, live and without remounting the transcript', () => {
-  setOrchestrationPanel(false)
-  const view = render(
-    <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="crew-first"
-        sessionId={first}
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    </TooltipProvider>
-  )
-  const transcript = view.container.querySelector('[data-clearing]')
-  expect(transcript).not.toBeNull()
-  expect(view.container.querySelector('[data-orchestration-crew]')).toBeNull()
-  expect(crew.subscribe).not.toHaveBeenCalled()
-
-  act(() => setOrchestrationPanel(true))
-  expect(screen.getByRole('button', { name: /^Show orchestration: 1 worker,/ })).toBeInTheDocument()
-  expect(crew.subscribe).toHaveBeenCalledOnce()
-  expect(view.container.querySelector('[data-clearing]')).toBe(transcript)
-
-  act(() => setOrchestrationPanel(false))
-  expect(view.container.querySelector('[data-orchestration-crew]')).toBeNull()
-  expect(crew.release).toHaveBeenCalledOnce()
-  expect(view.container.querySelector('[data-clearing]')).toBe(transcript)
 })
 
 it('handles sibling-composer Escape at the actual native pane boundary and keeps other panes and nested menus independent', async () => {
@@ -174,7 +138,7 @@ it('handles sibling-composer Escape at the actual native pane boundary and keeps
   expect(mocks.stop).not.toHaveBeenCalled()
 })
 
-it('ends only the native menu lifetime on hide, retaining disclosure and the subscribed Crew owner', async () => {
+it('ends the native menu lifetime and releases the hidden Crew owner on hide, restoring disclosure on reshow', async () => {
   const tasks = holdPhysicalCloseTasks()
   const user = userEvent.setup()
   const content = (isVisible: boolean) => (
@@ -205,12 +169,17 @@ it('ends only the native menu lifetime on hide, retaining disclosure and the sub
   expect(firstPopup.isConnected).toBe(false)
   expect(oldMore.isConnected).toBe(false)
   expect(tasks).toHaveLength(1)
-  expect(screen.getByRole('complementary', { name: 'Orchestration' })).toBe(panel)
-  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.queryByRole('complementary', { name: 'Orchestration' })).not.toBeInTheDocument()
   expect(crew.subscribe).toHaveBeenCalledOnce()
-  expect(crew.release).not.toHaveBeenCalled()
+  expect(crew.release).toHaveBeenCalledOnce()
 
   view.rerender(content(true))
+  expect(crew.subscribe).toHaveBeenCalledTimes(2)
+  expect(screen.getByRole('complementary', { name: 'Orchestration' })).not.toBe(panel)
+  const reshownDisclosure = screen.getByRole('button', {
+    name: "Show Worker's task and latest message"
+  })
+  expect(reshownDisclosure).toHaveAttribute('aria-expanded', 'true')
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   const more = screen.getByRole('button', { name: 'More for Worker' })
   expect(more).toHaveAttribute('aria-expanded', 'false')
@@ -231,11 +200,11 @@ it('ends only the native menu lifetime on hide, retaining disclosure and the sub
   act(tasks[1])
   expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
   expect(more).toHaveFocus()
-  expect(disclosure).toHaveAttribute('aria-expanded', 'true')
-  expect(crew.subscribe).toHaveBeenCalledOnce()
-  expect(crew.release).not.toHaveBeenCalled()
+  expect(reshownDisclosure).toHaveAttribute('aria-expanded', 'true')
+  expect(crew.subscribe).toHaveBeenCalledTimes(2)
+  expect(crew.release).toHaveBeenCalledOnce()
   expect(mocks.send).not.toHaveBeenCalled()
   expect(mocks.stop).not.toHaveBeenCalled()
   view.unmount()
-  expect(crew.release).toHaveBeenCalledOnce()
+  expect(crew.release).toHaveBeenCalledTimes(2)
 })

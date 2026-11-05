@@ -1,11 +1,14 @@
-import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
-import { isGitWorktreeMutationInFlight } from '../git/git-worktree-mutation-state'
+import type {
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../shared/git/history/git-history-types'
+import type { GitMutationInFlight } from '../../shared/git/commands/git-mutation-in-flight'
+import { isGitWorktreeMutationInFlight } from '../git/command-runner/git-worktree-mutation-state'
 import type {
   GitConflictOperation,
   GitStagingArea,
   GitStatusResult
-} from '../../shared/git-status-types'
+} from '../../shared/git/status/git-status-types'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import type { GitProviderStatusOptions } from '../providers/git-provider-contract'
 import {

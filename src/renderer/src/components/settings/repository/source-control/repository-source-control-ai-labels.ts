@@ -1,25 +1,25 @@
 import {
   lowerActionArgumentChoices,
   demoteActionArgumentChoices
-} from '../../../../../../shared/source-control-action-argument-document'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import {
   sourceControlActionSelectedPreferences,
   sourceControlActionExecutionArgs
-} from '../../../../../../shared/source-control-action-launch-preferences'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { readActionModelSelection } from '../../../../../../shared/source-control-action-model-selection'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { readActionModelSelection } from '../../../../../../shared/source-control/ai/recipes/source-control-action-model-selection'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   resolveSourceControlActionCommandTemplate,
   type SourceControlActionId,
   type SourceControlActionRecipe
-} from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
-import type { CustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
-import { isCustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import type { CustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 export const ACTION_MODE_INHERIT = 'inherit'
 export const ACTION_MODE_OVERRIDE = 'override'

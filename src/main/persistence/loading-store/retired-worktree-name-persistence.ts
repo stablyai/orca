@@ -1,5 +1,5 @@
-import { normalizeRetirableGeneratedName } from '../../worktree-name-retirement'
-import { recordRetirementNamespaceRegistry } from '../../worktree-retirement-namespace'
+import { normalizeRetirableGeneratedName } from '../../workspaces/removal/retirement/worktree-name-retirement'
+import { recordRetirementNamespaceRegistry } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   addRetiredNames,
   EMPTY_RETIRED_NAME_REGISTRY,

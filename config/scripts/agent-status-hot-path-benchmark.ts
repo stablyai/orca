@@ -16,7 +16,7 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/store-test-helpers'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../src/shared/constants'
 import {
   createAgentStatusPaneRoutingIndex,

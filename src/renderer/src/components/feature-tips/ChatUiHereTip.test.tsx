@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useCallback, useRef, useState, type ReactNode } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_TIPS } from '../../../../shared/feature-tips'
@@ -10,19 +10,12 @@ import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useSettingsPageEffects } from '../settings/use-settings-page-effects'
-import { resolveSettingsHostScope } from '../settings/settings-host-scope'
-import { renderAgentsSettingsSection } from '../settings/settings-capability-section-renderers'
-import { ActiveSettingsSectionProvider } from '../settings/SettingsSection'
-import type { SettingsRenderContext } from '../settings/settings-render-context'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
 import { chatDemoRevealTokens, getChatDemoCopy } from './chat-ui-here-feature-tip-demo'
 import { FeatureTipActions } from './FeatureTipActions'
 import FeatureTipsModal from './FeatureTipsModal'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('../settings/AgentsPane', () => ({ AgentsPane: () => <p>Per-agent controls</p> }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() } }))
+vi.mock('../settings/agents/AgentsPane', () => ({ AgentsPane: () => <p>Per-agent controls</p> }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -91,89 +84,19 @@ function footerButtons(): HTMLButtonElement[] {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('footer button'))
 }
 
-// Exercise the production target-consumption effect, including a retained host selection.
-function SettingsOwner({ retained }: { retained: boolean }): React.JSX.Element {
-  const settings = useAppStore((state) => state.settings)!
-  const settingsNavigationTarget = useAppStore((state) => state.settingsNavigationTarget)
-  const [choice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(
-    retained ? { kind: 'environment', environmentId: 'paired' } : null
-  )
-  const consumeSettingsNavigation = useCallback<
-    Parameters<typeof useSettingsPageEffects>[0]['consumeSettingsNavigation']
-  >((target) => {
-    setSettingsHostChoice((previous) => target.hostScope ?? previous)
-  }, [])
-  const pendingScrollTargetRef = useRef<string | null>(null)
-  const scope = resolveSettingsHostScope({
-    choice,
-    defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
-    savedEnvironmentIds: ['paired'],
-    catalogHydrated: true
-  })
-  useSettingsPageEffects(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all fields read by page effects are supplied; unrelated model fields are unused.
-    {
-      settings,
-      settingsNavigationTarget,
-      consumeSettingsNavigation,
-      clearSettingsTarget: useAppStore.getState().clearSettingsTarget,
-      fetchSettings: vi.fn(),
-      fetchKeybindings: vi.fn(),
-      keybindings: null,
-      activeSectionId: 'agents',
-      showDesktopOnlySettings: false,
-      setVoiceModelStatesLoading: vi.fn(),
-      repoIdToHostSelection: new Map(),
-      repoIdToRepresentative: new Map(),
-      settingsProjectList: [],
-      setHighlightedSettingsTargetId: vi.fn(),
-      setMountedSectionIds: vi.fn(),
-      setPendingNavRequestTick: vi.fn()
-    } as unknown as Parameters<typeof useSettingsPageEffects>[0],
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refs/callbacks cover every active page effect; no source-control edit or key event is generated.
-    {
-      pendingNavSectionRef: useRef(null),
-      pendingScrollTargetRef,
-      shortcutsEscapeConfirmUntilRef: useRef(0),
-      searchInputRef: useRef(null),
-      hasUnsavedSourceControlAiPromptChangesRef: useRef(false),
-      closeSettingsPageWithPromptGuard: vi.fn(),
-      promptDiscardSourceControlAiPromptChanges: vi.fn()
-    } as unknown as Parameters<typeof useSettingsPageEffects>[1]
-  )
-  return (
-    <>
-      <output>{pendingScrollTargetRef.current}</output>
-      <ActiveSettingsSectionProvider value="agents">
-        {renderAgentsSettingsSection(
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every field read by the Agents section renderer; unrelated Settings sections never run.
-          {
-            model: { settings, settingsHostScope: scope, updateSettings },
-            navigation: { getSectionSearchEntries: () => [] },
-            terminal: { localWindowsRuntimeCapabilities: {} },
-            view: { isSectionMounted: () => true }
-          } as unknown as SettingsRenderContext
-        )}
-      </ActiveSettingsSectionProvider>
-    </>
-  )
-}
-
 describe('Chat UI is here tip', () => {
-  it.each([
-    ['chat-ui-off', false],
-    ['chat-ui-on', true]
-  ] as const)(
-    'opens the local default tiles from %s with a paired Settings host',
-    (variant, retained) => {
+  it.each(['chat-ui-off', 'chat-ui-on'] as const)(
+    'opens the Chat UI settings switch from %s',
+    (variant) => {
       openTip(variant)
       const settingsLink = container.querySelector<HTMLButtonElement>('button.inline')
       expect(settingsLink).toBeDefined()
       act(() => settingsLink?.click())
       expect(useAppStore.getState().activeModal).toBe('none')
-      act(() => root.render(<SettingsOwner retained={retained} />))
-      expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(2)
-      expect(container.querySelector('output')?.textContent).toBe(AGENT_DEFAULT_SURFACE_SECTION_ID)
+      expect(useAppStore.getState().settingsNavigationTarget).toMatchObject({
+        pane: 'chat',
+        sectionId: 'chat-launch-default'
+      })
       expect(updateSettingsOrThrow).not.toHaveBeenCalled()
     }
   )
@@ -187,7 +110,7 @@ describe('Chat UI is here tip', () => {
       'chat-ui-here'
     ])
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
-      'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
+      'Could not turn on Chat UI. Turn it on in Settings → Chat UI.'
     )
     expect(track).not.toHaveBeenCalledWith(
       'chat_ui_feature_tip_action',
@@ -218,6 +141,7 @@ describe('Chat UI is here tip', () => {
       )
       expect(useAppStore.getState().activeModal).toBe('none')
       expect(track).toHaveBeenLastCalledWith('chat_ui_feature_tip_action', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         action: 'stay_in_terminal'
       })
@@ -233,6 +157,7 @@ describe('Chat UI is here tip', () => {
       expect(updateSettingsOrThrow).toHaveBeenCalledExactlyOnceWith({ agentDefaultSurface: 'chat' })
       expect(updateSettings).not.toHaveBeenCalled()
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_off',
         action: 'use_chat_ui'
       })
@@ -280,6 +205,7 @@ describe('Chat UI is here tip', () => {
         agentDefaultSurface: 'terminal'
       })
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_action', {
+        launch_tip_experiment_version: 'corner-card-v2',
         variant: 'chat_ui_on',
         action: 'switch_to_terminal'
       })
@@ -301,7 +227,7 @@ describe('Chat UI is here tip', () => {
         ?.click()
     )
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
-      'Could not switch to terminal. Choose Terminal in Settings → Agents.'
+      'Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.'
     )
     expect(track).not.toHaveBeenCalledWith(
       'chat_ui_feature_tip_action',

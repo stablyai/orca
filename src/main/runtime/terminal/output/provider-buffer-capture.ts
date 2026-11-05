@@ -4,7 +4,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { RuntimeTerminalRead } from '../../../../shared/runtime-types'
 import type { RuntimeProviderSnapshotReadOptions } from '../../runtime-terminal-contracts'
 import {

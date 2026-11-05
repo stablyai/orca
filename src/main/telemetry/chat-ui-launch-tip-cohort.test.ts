@@ -66,9 +66,9 @@ describe('ensureChatUiLaunchTipCohort', () => {
     { draw: 4, cohort: 'control' },
     { draw: 5, cohort: 'control' },
     { draw: 6, cohort: 'control' },
-    { draw: 7, cohort: 'treatment-center' },
+    { draw: 7, cohort: 'treatment' },
     { draw: 8, cohort: 'treatment' },
-    { draw: 9, cohort: 'treatment-live-switch' }
+    { draw: 9, cohort: 'treatment' }
   ])('assigns draw $draw to $cohort and keeps the frozen cohort', ({ draw, cohort }) => {
     vi.mocked(crypto.randomInt).mockImplementationOnce(() => draw)
     const store = makeStore({})
@@ -86,7 +86,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
       .mockImplementationOnce(() => 0)
       .mockImplementationOnce(() => draw)
     const store = makeStore({})
-    expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment-center')
+    expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
     expect(store.getSettings().telemetry?.chatUiLaunchTipButtonEmphasis).toBe(
       draw === 0 ? 'normal' : 'swapped'
     )
@@ -163,9 +163,9 @@ describe('ensureChatUiLaunchTipCohort', () => {
   })
 
   it.each([
-    { draw: 7, cohort: 'treatment-center' },
+    { draw: 7, cohort: 'treatment' },
     { draw: 8, cohort: 'treatment' },
-    { draw: 9, cohort: 'treatment-live-switch' }
+    { draw: 9, cohort: 'treatment' }
   ])(
     'emits schema-valid targeting props immediately after $cohort enrollment',
     ({ draw, cohort }) => {
@@ -201,12 +201,7 @@ describe('ensureChatUiLaunchTipCohort', () => {
     // Acknowledging the banner persists optedIn=true; the next launch enrolls the still-unseen tip.
     pending.getSettings().telemetry!.optedIn = true
     const cohort = ensureChatUiLaunchTipCohort(pending)
-    expect([
-      'control',
-      'treatment',
-      'treatment-live-switch',
-      'treatment-swapped-buttons'
-    ]).toContain(cohort)
+    expect(['control', 'treatment']).toContain(cohort)
     expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
     expect(pending.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
   })

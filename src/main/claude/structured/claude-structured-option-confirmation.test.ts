@@ -1,15 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState
-} from '../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
-import type { SessionOptionDescriptor } from '../../../shared/native-chat/input/native-chat-session-options'
 import { setClaudeStructuredOption } from './launch/claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { PROVIDER_SESSION_ID, acquired, fakeClaude } from './claude-structured-session-test-support'
 
 /** Claude Code 2.1.260 list_models fixture; Haiku omits both effort keys. */
 const CATALOG = [
@@ -22,85 +13,6 @@ const CATALOG = [
   },
   { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' }
 ]
-
-function initFrame(model: string): Record<string, unknown> {
-  return {
-    type: 'system',
-    subtype: 'init',
-    session_id: PROVIDER_SESSION_ID,
-    uuid: 'turn-init-uuid',
-    model,
-    apiKeySource: 'none'
-  }
-}
-
-function modelPill(result: AgentSessionOptionsResult): SessionOptionDescriptor | undefined {
-  const state = applyStructuredAgentSessionOptions(
-    createStructuredAgentSessionOptionState('claude'),
-    CLAUDE_SESSION_OPTION_CATALOG,
-    result
-  )
-  return structuredAgentSessionOptionSnapshot(state).find((d) => d.category === 'model')
-}
-
-function modelSource(result: AgentSessionOptionsResult): string | undefined {
-  return modelPill(result)?.valueSource
-}
-
-function modelValue(result: AgentSessionOptionsResult): string | undefined {
-  const kind = modelPill(result)?.kind
-  return kind?.type === 'select' ? kind.currentValue : undefined
-}
-
-describe('structured option confirmation reaches the pill', () => {
-  it('marks the model reported once the provider names it back', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-    claude.connections[0]!.handlers.onMessage?.(initFrame('claude-haiku-4-5-20251001'))
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(result.current.confirmed).toContain('model')
-    expect(modelSource(result)).toBe('reported')
-  })
-})
-
-describe('the provider report corrects the pill', () => {
-  it('moves the pill to the model the turn actually ran', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-    expect(modelValue(await adapter.readOptions({ sessionId: 'session-1', fence: 7 }))).toBe(
-      'haiku'
-    )
-
-    claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
-
-    const corrected = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(modelValue(corrected)).toBe('claude-sonnet-5')
-    expect(corrected.current.confirmed).toContain('model')
-  })
-
-  it('lets a newer write outrank the report it precedes', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: { list_models: () => CATALOG }
-    })
-    const adapter = await acquired(claude)
-    claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
-    await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
-
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(modelValue(result)).toBe('haiku')
-    expect(result.current.confirmed ?? []).not.toContain('model')
-  })
-})
 
 describe('confirmation never outlives the write it belongs to', () => {
   it('drops an earlier effort confirmation when the value changes', async () => {

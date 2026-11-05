@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
-import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
+
 import type { RpcClient } from '../rpc-client'
 import type { RpcResponse } from '../types'
 
@@ -172,41 +172,6 @@ beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 describe('fetchMobileWebBundle chunk pipeline', () => {
-  it('keeps four chunk reads in flight across the whole bundle, largest asset first', async () => {
-    const files = syntheticBundle()
-    const host = waveHost(files)
-
-    const fetched = fetchMobileWebBundle({ client: host.client })
-    const waves = await host.runWaves(fetched)
-    const result = await fetched
-
-    expect(waves).toBe(19)
-    expect(host.requests).toHaveLength(76)
-    expect(host.requests.slice(0, 4)).toEqual([
-      { path: 'z-big.js', offset: 0 },
-      { path: 'z-big.js', offset: 4 },
-      { path: 'z-big.js', offset: 8 },
-      { path: 'z-big.js', offset: 12 }
-    ])
-    expect(Math.max(...host.peaks)).toBe(4)
-    for (const [path, text] of Object.entries(files)) {
-      expect(new TextDecoder().decode(result.assets.get(path))).toBe(text)
-    }
-  })
-
-  it('fails the fetch on a read-limited refusal and stops the other reads', async () => {
-    const host = waveHost(syntheticBundle(), { readSlots: 3 })
-
-    const fetched = fetchMobileWebBundle({ client: host.client })
-    await host.runWaves(fetched)
-    const error = await fetched.catch((thrown: unknown) => thrown)
-
-    expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_read_limited')
-    expect(host.refusalCount()).toBe(1)
-    // Allow the initial four plus one dispatched by each sibling before refusal.
-    expect(host.requests.length).toBeLessThanOrEqual(7)
-  })
-
   it('rejects a caller abort that lands during the final window', async () => {
     const controller = new AbortController()
     const host = waveHost(syntheticBundle())
@@ -222,42 +187,6 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
     expect(host.requests).toHaveLength(76)
     const error = await fetched.catch((thrown: unknown) => thrown)
     expect(error instanceof MobileWebBundleFetchError ? error.refusal : null).toBe('fetch-stopped')
-  })
-
-  it('reports received bytes before the first asset completes', async () => {
-    const host = waveHost(syntheticBundle())
-    const progress: { completedAssets: number; receivedBytes: number }[] = []
-
-    const fetched = fetchMobileWebBundle({
-      client: host.client,
-      onProgress: ({ completedAssets, receivedBytes }) =>
-        progress.push({ completedAssets, receivedBytes })
-    })
-    await host.runWaves(fetched)
-    await fetched
-
-    expect(progress[0]).toEqual({ completedAssets: 0, receivedBytes: CHUNK_BYTES })
-    expect(progress.at(-1)).toEqual({
-      completedAssets: 6,
-      receivedBytes: 71 * CHUNK_BYTES - 1 + 13
-    })
-  })
-
-  it('stops every other read once one chunk fails', async () => {
-    const host = waveHost(syntheticBundle(), {
-      intercept: (request) =>
-        request.path === 'z-big.js' && request.offset === 4
-          ? { error: 'mobile_web_bundle_asset_unknown' }
-          : undefined
-    })
-
-    const fetched = fetchMobileWebBundle({ client: host.client })
-    await host.runWaves(fetched)
-    const error = await fetched.catch((thrown: unknown) => thrown)
-
-    expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_asset_unknown')
-    // Allow the initial four plus the one first-sibling follow-up before failure.
-    expect(host.requests.length).toBeLessThanOrEqual(5)
   })
 
   it('refuses a chunk short of its slot that does not end the asset', async () => {

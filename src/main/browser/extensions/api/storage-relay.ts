@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 
 /**
  * Electron never fires chrome.storage.onChanged in extension service workers, so extension pages

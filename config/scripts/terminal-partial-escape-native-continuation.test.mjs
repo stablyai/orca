@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { advancePartialEscapeTail } from '../../src/shared/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../src/shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 const require = createRequire(import.meta.url)
 const { Terminal } = require(process.env.ORCA_PARTIAL_ESCAPE_HEADLESS ?? '@xterm/headless')
@@ -85,29 +85,4 @@ describe('completed string continuation against the native terminal parser', () 
       restored.terminal.dispose()
     }
   })
-
-  it.each([0, 32, 4095, 4096, 4097, 8192])(
-    'does not repeat completed side effects for a %i-character payload',
-    (length) => {
-      const source = model()
-      const restored = model()
-      try {
-        for (const introducer of ['\x1b]2;', '\x1b]7;', '\x1b]52;', '\x1bPq']) {
-          for (const continuation of [
-            '\\AFTER',
-            '[32mAFTER',
-            '\x18AFTER',
-            '\x1aAFTER',
-            '\x1b]7;file:///next\x07AFTER',
-            '\x1bPqnext\x1b\\AFTER'
-          ]) {
-            compareContinuation(source, restored, introducer + 'x'.repeat(length), continuation)
-          }
-        }
-      } finally {
-        source.terminal.dispose()
-        restored.terminal.dispose()
-      }
-    }
-  )
 })

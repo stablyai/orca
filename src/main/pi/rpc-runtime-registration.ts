@@ -21,7 +21,7 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       composeStructuredLaunch(
         PI_RPC_AGENT,
         structuredAgentLaunchSources(context),
-        piRpcLaunchPart({})
+        piRpcLaunchPart({ logger: deps.logger })
       ),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

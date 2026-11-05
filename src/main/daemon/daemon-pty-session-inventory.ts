@@ -11,7 +11,7 @@ import { recordAuthenticatedInventory } from './daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from './daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
-import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { ListSessionsResult, SessionInfo } from './types'
 import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 import type { PtyProcessInfo } from '../providers/pty-provider-contract'
@@ -63,6 +63,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
                 ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
                 ...(session.paneKey ? { paneKey: session.paneKey } : {}),
                 ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+                ...(session.wslGuestRoot ? { wslGuestRoot: session.wslGuestRoot } : {}),
                 ...(session.state === 'exiting' ? { exiting: true as const } : {}),
                 ...this.validatedAgentSessionOwners(session.agentSessionOwners)
               })

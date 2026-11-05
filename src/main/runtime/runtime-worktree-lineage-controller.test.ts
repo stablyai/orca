@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ALL_TUI_AGENTS } from '../../shared/tui-agent-display-names'
+import { ALL_TUI_AGENTS } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { CliWorktreeBuilder } from './rpc/methods/agent-launch-cwd-cli.test-fixture'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { WorktreeCreate } from '../../shared/rpc-contract/worktree-create-params'
