@@ -10,9 +10,9 @@ import type { RelayAssignmentStore } from '../assignment/assignment-store.js'
 import type { RelayConfig } from '../config.js'
 import { RelayStoreError, type RelayCredentialStore } from '../credentials/credential-store.js'
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../control-leases/control-renewal-batch.js'
-import {
-  type ControlRenewalOutcome,
-  type ControlRenewalRequest
+import type {
+  ControlRenewalOutcome,
+  ControlRenewalRequest
 } from '../control-leases/control-renewal-statement.js'
 import {
   HostSessionRegistry,

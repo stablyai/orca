@@ -1,6 +1,6 @@
 import { AssignmentRequestSchema, ResolveRequestSchema } from '@orca-cloud/relay-contract/director-messages'
 import { IdleRegionalRehomeRequestSchema, type IdleRegionalRehomeRequest, type IdleRegionalRehomeResult } from '@orca-cloud/relay-contract/idle-regional-rehome'
-import { type RegionCorrectionResponse } from '@orca-cloud/relay-contract/region-correction'
+import type { RegionCorrectionResponse } from '@orca-cloud/relay-contract/region-correction'
 import { isRelayCellConnectionHardCap, RELAY_ADMISSION_BUDGETS, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, cellPlacementCeiling, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
 import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'

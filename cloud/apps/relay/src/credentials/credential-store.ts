@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { decideResumeCommit } from '@orca-cloud/relay-contract/persistence-invariants'
 import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
-import { type DeviceCredentialInstalled, type DeviceResumeConfirmed } from '@orca-cloud/relay-contract/credential-messages'
+import type { DeviceCredentialInstalled, DeviceResumeConfirmed } from '@orca-cloud/relay-contract/credential-messages'
 import type { RelayDatabase, SqlRow } from '../database/database.js'
 import { changes, HeapWindowReaper } from './heap-window-reaper.js'
 import { ResumeConfirmedAuditBuffer } from './resume-confirmed-audit-buffer.js'

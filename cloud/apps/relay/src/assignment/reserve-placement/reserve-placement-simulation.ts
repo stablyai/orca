@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
-import { type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
+import type { RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import { CellReserveBook } from '../../cell/reservations/cell-reserve-book.js'
 import { CELL_INTAKE_BURST, CELL_RESERVE_TTL_MS, type ReserveOutcome } from '../../cell/reservations/cell-reserve-contract.js'
 import {

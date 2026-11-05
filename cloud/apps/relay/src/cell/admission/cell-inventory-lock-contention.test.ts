@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RelayDatabase } from '../../database/database.js'
 
 const fakes = vi.hoisted(() => ({
   statements: [] as string[],
@@ -32,8 +33,6 @@ vi.mock('pg', () => ({
 }))
 
 const { openRelayDatabase } = await import('../../database/database.js')
-
-type RelayDatabase = import('../../database/database.js').RelayDatabase
 
 const CELL_INVENTORY_SQL = 'SELECT * FROM relay_cells ORDER BY cell_id ASC'
 
