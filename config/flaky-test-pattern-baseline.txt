@@ -999,7 +999,6 @@
 2 test-no-wall-clock:src/main/rate-limits/claude-profile-usage.test.ts
 2 test-no-wall-clock:src/main/rate-limits/service-cursor-usage.test.ts
 2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts
-2 test-no-wall-clock:src/main/runtime/terminal/surface/orca-runtime-terminal-close-records.test.ts
 2 test-no-wall-clock:src/main/runtime/orchestration-codex-real-pty.integration.test.ts
 2 test-no-wall-clock:src/main/runtime/orchestration/worker-output-archive.test.ts
 2 test-no-wall-clock:src/main/runtime/remote-runtime-request-connection.integration.test.ts

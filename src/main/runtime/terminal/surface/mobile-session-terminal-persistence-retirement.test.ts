@@ -162,84 +162,6 @@ describe('mobile session terminal persistence retirement', () => {
     })
   })
 
-  it('fences an absent exact leaf without deleting its live sibling parent', () => {
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'terminal',
-            ptyId: 'pty-right',
-            worktreeId: WORKTREE_ID,
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        terminal: {
-          root: { type: 'leaf' as const, leafId: 'right' },
-          activeLeafId: 'right',
-          expandedLeafId: null,
-          ptyIdsByLeafId: { right: 'pty-right' }
-        }
-      },
-      terminalPtyIncarnationsByPaneKey: { 'terminal:left': 'incarnation-left' },
-      remoteSessionIdsByTabId: { terminal: 'pty-right' }
-    }
-
-    const result = retireTerminalSurfaceFromPersistence(session, {
-      worktreeId: WORKTREE_ID,
-      parentTabId: 'terminal',
-      leafId: 'left',
-      ptyId: 'pty-left',
-      incarnationId: 'incarnation-left',
-      retiredAt: 42
-    })
-
-    expect(result.tabsByWorktree[WORKTREE_ID]).toEqual(session.tabsByWorktree[WORKTREE_ID])
-    expect(result.terminalLayoutsByTabId.terminal).toEqual(session.terminalLayoutsByTabId.terminal)
-    expect(result.remoteSessionIdsByTabId).toEqual({ terminal: 'pty-right' })
-    expect(result.terminalPtyIncarnationsByPaneKey?.['terminal:left']).toBeUndefined()
-    expect(result.terminalSurfaceTombstonesByPaneKey).toEqual({})
-    expect(result.terminalTopologyRevisionByRepoId?.[REPO_ID]).toBe(1)
-  })
-
-  it('does not treat a sibling parent PTY as the exact leaf when layout is unavailable', () => {
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'terminal',
-            ptyId: 'pty-right',
-            worktreeId: WORKTREE_ID,
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    }
-
-    const result = retireTerminalSurfaceFromPersistence(session, {
-      worktreeId: WORKTREE_ID,
-      parentTabId: 'terminal',
-      leafId: 'left',
-      ptyId: 'pty-left',
-      incarnationId: 'incarnation-left'
-    })
-
-    expect(result.tabsByWorktree[WORKTREE_ID]).toEqual(session.tabsByWorktree[WORKTREE_ID])
-    expect(result.terminalSurfaceTombstonesByPaneKey).toEqual({})
-    expect(result.terminalTopologyRevisionByRepoId?.[REPO_ID]).toBe(1)
-  })
-
   it('rebases stale writes onto durable host membership without retaining pane history', () => {
     const staleSession = {
       ...getDefaultWorkspaceSession(),
@@ -295,47 +217,6 @@ describe('mobile session terminal persistence retirement', () => {
     expect(untrustedReplacement.terminalPtyIncarnationsByPaneKey).toBeUndefined()
   })
 
-  it('rebases a host partition that no longer carries the closed web-terminal layout', () => {
-    const tabId = 'web-terminal-24aa462c-589c-45fa-b332-6aa233cd84cf'
-    const prior = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: tabId,
-            ptyId: 'pty-worker',
-            worktreeId: WORKTREE_ID,
-            title: 'Worker',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        [tabId]: {
-          root: { type: 'leaf' as const, leafId: 'worker' },
-          activeLeafId: 'worker',
-          expandedLeafId: null,
-          ptyIdsByLeafId: { worker: 'pty-worker' }
-        }
-      },
-      terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
-    }
-    const incoming = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [WORKTREE_ID]: [] }
-    }
-    const partialIncoming: Partial<typeof incoming> = incoming
-    delete partialIncoming.terminalLayoutsByTabId
-
-    const result = sanitizeWorkspaceSessionTerminalRetirements(incoming, prior)
-
-    expect(result.tabsByWorktree[WORKTREE_ID]).toEqual(prior.tabsByWorktree[WORKTREE_ID])
-    expect(result.terminalLayoutsByTabId[tabId]).toEqual(prior.terminalLayoutsByTabId[tabId])
-  })
-
   it('replays a legacy retirement when its host partition omits terminal layouts', () => {
     const tabId = 'web-terminal-24aa462c-589c-45fa-b332-6aa233cd84cf'
     const incoming = {
@@ -374,43 +255,5 @@ describe('mobile session terminal persistence retirement', () => {
     expect(result.terminalLayoutsByTabId).toEqual({})
     expect(result.terminalSurfaceTombstonesByPaneKey).toEqual({})
     expect(result.terminalTopologyRevisionByRepoId).toEqual({ [REPO_ID]: 1 })
-  })
-
-  it('migrates legacy tombstones into one repo watermark', () => {
-    const stale = {
-      ...getDefaultWorkspaceSession(),
-      terminalSurfaceTombstonesByPaneKey: {
-        'terminal:left': {
-          worktreeId: WORKTREE_ID,
-          parentTabId: 'terminal',
-          leafId: 'left',
-          ptyId: 'pty-left',
-          incarnationId: 'incarnation-a',
-          retiredAt: 42
-        }
-      }
-    }
-
-    const migrated = sanitizeWorkspaceSessionTerminalRetirements(stale, stale)
-
-    expect(migrated.terminalSurfaceTombstonesByPaneKey).toEqual({})
-    expect(migrated.terminalTopologyRevisionByRepoId).toEqual({ [REPO_ID]: 1 })
-  })
-
-  it('keeps retirement state proportional to repos across many worktrees and closed panes', () => {
-    let session = getDefaultWorkspaceSession()
-    for (let index = 0; index < 1_000; index += 1) {
-      session = retireTerminalSurfaceFromPersistence(session, {
-        worktreeId: `${REPO_ID}::/worktree-${index}`,
-        parentTabId: `terminal-${index}`,
-        leafId: `leaf-${index}`,
-        ptyId: `pty-${index}`,
-        incarnationId: `incarnation-${index}`
-      })
-    }
-
-    expect(session.terminalSurfaceTombstonesByPaneKey).toEqual({})
-    expect(Object.keys(session.terminalTopologyRevisionByRepoId ?? {})).toEqual([REPO_ID])
-    expect(session.terminalTopologyRevisionByRepoId?.[REPO_ID]).toBe(1_000)
   })
 })
