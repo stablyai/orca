@@ -935,6 +935,7 @@
         "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
         "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
+        "gigaamV3Ru": "Yalnızca Rusça. Sber'in GigaAM v3 modeli. Noktalama ve büyük/küçük harf kullanımı.",
         "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
         "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
         "gpt4oMiniTranscribe": "Yüksek doğruluk ve düşük maliyetle bulut transkripsiyonu. OpenAI API anahtarı gerektirir.",

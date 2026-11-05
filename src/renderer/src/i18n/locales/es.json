@@ -509,6 +509,7 @@
         "zipformerStreamingZh": "Solo chino. Modelo ultraligero de 14 millones de parámetros, ideal para dispositivos con pocos recursos.",
         "zipformerStreamingKo": "Solo coreano. Streaming en tiempo real de baja latencia.",
         "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
+        "gigaamV3Ru": "Solo ruso. GigaAM v3 de Sber. Puntuación y mayúsculas y minúsculas.",
         "whisperTiny": "Más de 90 idiomas. Menor precisión que Parakeet, pero con la mayor cobertura de idiomas.",
         "senseVoice": "Chino, inglés, japonés, coreano y cantonés con detección automática de idioma.",
         "gpt4oMiniTranscribe": "Transcripción en la nube con alta precisión y bajo coste. Requiere una clave API de OpenAI.",

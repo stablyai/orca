@@ -503,6 +503,7 @@
         "zipformerStreamingZh": "仅限中文。1400 万参数的超轻量模型，适合资源有限的设备。",
         "zipformerStreamingKo": "仅限韩语。低延迟实时流式处理。",
         "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
+        "gigaamV3Ru": "仅限俄语。Sber 的 GigaAM v3。支持标点和大小写。",
         "whisperTiny": "支持 90 多种语言。准确度低于 Parakeet，但语言覆盖最广。",
         "senseVoice": "支持中文、英语、日语、韩语和粤语，并自动检测语言。",
         "gpt4oMiniTranscribe": "准确度高、成本低的云端转录。需要 OpenAI API 密钥。",

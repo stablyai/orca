@@ -42,6 +42,11 @@ const DESCRIPTIONS: Record<string, () => string> = {
       'settings.voice.modelDescriptions.parakeetJa',
       'Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.'
     ),
+  'gigaam-v3-ctc-punct-ru-int8': () =>
+    translate(
+      'settings.voice.modelDescriptions.gigaamV3Ru',
+      'Russian only. GigaAM v3 by Sber. Punctuation and capitalization.'
+    ),
   'whisper-tiny': () =>
     translate(
       'settings.voice.modelDescriptions.whisperTiny',
