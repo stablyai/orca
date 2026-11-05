@@ -357,6 +357,8 @@ describe('a send to a finished structured worker', () => {
   })
 
   it('that it never read before reporting becomes its follow-up', async () => {
+    // At cap 1 the brief has no sub-dispatch section, whose helper-mail line names `check`.
+    vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
     const { identity, firstDispatchId } = await finishedStructuredWorker(taskId, 'none')

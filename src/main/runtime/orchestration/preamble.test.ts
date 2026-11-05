@@ -72,7 +72,7 @@ describe('buildDispatchPreamble', () => {
     expect(codeBlocks).toHaveLength(2)
     expect(codeBlocks[1]).toMatchObject({ lang: 'sh' })
     expect(codeBlocks[1].value).toContain('orchestration worker-start --from')
-    expect(result).toContain('that failed.\n\n---')
+    expect(result).toContain('helpers of their own.\n\n---')
     expect(result).toContain('before starting.\n\n---')
   })
 
