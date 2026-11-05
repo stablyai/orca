@@ -4,6 +4,7 @@ import type {
   AiVaultScanIssue
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
+  aiVaultScanIssueKey,
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptIssues
@@ -36,11 +37,10 @@ export function AiVaultScanIssueBanners({
 }): React.JSX.Element {
   const blocking = blockingAiVaultScanIssue(scanResult)
   const skipped = skippedAiVaultTranscriptIssues(scanResult)
-  const skippedTranscriptCount = skipped.length
 
   const notices = aiVaultScanNoticeIssues(scanResult)
   const reasons = skippedTranscriptReasons(skipped)
-  const hasNoticeRows = notices.length > 0 || skippedTranscriptCount > 0 || reasons.length > 0
+  const hasNoticeRows = notices.length > 0 || skipped.length > 0
 
   return (
     <>
@@ -57,8 +57,7 @@ export function AiVaultScanIssueBanners({
         >
           {notices.map((issue) => (
             <div
-              // Include message identity: one host may report multiple notices for the same path.
-              key={`${issue.executionHostId ?? 'local'}:${issue.kind}:${issue.agent}:${issue.path}:${issue.message}`}
+              key={aiVaultScanIssueKey(issue)}
               className={`border-b border-sidebar-border px-3 py-1.5 text-[11px] ${
                 issue.kind === 'host' ? 'text-destructive' : 'text-muted-foreground'
               }`}
@@ -66,12 +65,12 @@ export function AiVaultScanIssueBanners({
               {aiVaultScanIssueDisplayText(issue)}
             </div>
           ))}
-          {skippedTranscriptCount > 0 ? (
+          {skipped.length > 0 ? (
             <div className="border-b border-sidebar-border px-3 py-1.5 text-[11px] text-muted-foreground">
               {translate(
                 'auto.components.right.sidebar.AiVaultPanel.transcriptsSkippedCount',
                 '{{count}} transcripts skipped',
-                { count: skippedTranscriptCount, defaultValue_one: '{{count}} transcript skipped' }
+                { count: skipped.length, defaultValue_one: '{{count}} transcript skipped' }
               )}
             </div>
           ) : null}

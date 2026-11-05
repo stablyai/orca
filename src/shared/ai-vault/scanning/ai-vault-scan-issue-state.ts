@@ -22,6 +22,11 @@ export function aiVaultScanNoticeIssues(result: AiVaultScanIssueView): AiVaultSc
   return result.issues.filter((issue) => Boolean(issue.kind) && issue !== blocking)
 }
 
+// Include message identity: one host may report multiple notices for the same path.
+export function aiVaultScanIssueKey(issue: AiVaultScanIssue): string {
+  return `${issue.executionHostId ?? 'local'}:${issue.kind}:${issue.agent}:${issue.path}:${issue.message}`
+}
+
 /** Only kind-less issues are individual transcripts the scan skipped. */
 export function skippedAiVaultTranscriptIssues(result: AiVaultScanIssueView): AiVaultScanIssue[] {
   return result ? result.issues.filter((issue) => !issue.kind) : []

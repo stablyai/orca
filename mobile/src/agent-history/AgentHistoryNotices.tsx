@@ -9,19 +9,14 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AutoHeight } from '../components/AutoHeight'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
+  aiVaultScanIssueKey,
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptIssues
 } from '../../../src/shared/ai-vault/scanning/ai-vault-scan-issue-state'
 
-type TranscriptIssue = { path: string; message: string }
-
 // Many skipped transcripts scroll inside the notice instead of pushing the list off screen.
 const ISSUE_LIST_MAX_HEIGHT = 160
-
-function scanIssueKey(issue: AiVaultScanIssue): string {
-  return `${issue.executionHostId ?? 'local'}:${issue.kind}:${issue.agent}:${issue.path}:${issue.message}`
-}
 
 /** Splits scan issues like desktop History: host/scope/notice rows keep their own text; only kind-less ones count as skipped. */
 export function AgentHistoryScanNotices({
@@ -49,7 +44,7 @@ export function AgentHistoryScanNotices({
             <ScrollView contentContainerStyle={styles.noticeList} nestedScrollEnabled>
               {notices.map((issue) => (
                 <Text
-                  key={scanIssueKey(issue)}
+                  key={aiVaultScanIssueKey(issue)}
                   style={issue.kind === 'host' ? styles.hostIssueText : styles.noticeText}
                 >
                   {issue.message}
@@ -65,7 +60,7 @@ export function AgentHistoryScanNotices({
 }
 
 /** Says how many transcripts the scan skipped, with the paths and reasons one tap away. */
-function AgentHistorySkippedNotice({ issues }: { issues: readonly TranscriptIssue[] }) {
+function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIssue[] }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [shown, setShown] = useState(false)
@@ -97,7 +92,7 @@ function AgentHistorySkippedNotice({ issues }: { issues: readonly TranscriptIssu
         {shown ? (
           <ScrollView contentContainerStyle={styles.issueList} nestedScrollEnabled>
             {issues.map((issue) => (
-              <View key={`${issue.path}\n${issue.message}`} style={styles.issue}>
+              <View key={aiVaultScanIssueKey(issue)} style={styles.issue}>
                 <Text style={styles.issuePath} numberOfLines={2}>
                   {issue.path}
                 </Text>
