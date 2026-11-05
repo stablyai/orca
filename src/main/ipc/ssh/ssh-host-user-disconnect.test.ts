@@ -17,10 +17,13 @@ vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnection
 vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  listEnvironments: () => runtime.environments
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    listEnvironments: () => runtime.environments
+  })
+)
 vi.mock(
   '../runtime-environments/runtime-environment-request-connections',
   async (importOriginal) => ({

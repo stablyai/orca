@@ -8,12 +8,12 @@ import {
 import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import type { BrowserHostLease } from '../../browser-host/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
+import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
   browserNetworkExecutionHostKey,
   type BrowserNetworkExecutionRoute,
   type BrowserNetworkExecutionRouteResolver
-} from '../../../browser/browser-network-execution-route'
+} from '../../../browser/network/execution-routes/browser-network-execution-route'
 import { RpcDispatcher } from '../dispatcher'
 import {
   BROWSER_NETWORK_TUNNEL_METHODS,

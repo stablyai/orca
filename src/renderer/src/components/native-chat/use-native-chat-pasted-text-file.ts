@@ -1,4 +1,6 @@
 import { createUuidV4 } from '../../../../shared/uuid-v4'
+import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { stageNativeChatDraftFile } from './native-chat-draft-attachment-staging'
 import {
   nativeChatPastedTextLabel,
   nativeChatPastedTextOperations,
@@ -102,9 +104,18 @@ export function useNativeChatPastedTextFile(args: {
         })
         .then(
           (path) => {
+            const destinationScope = nativeChatPastedTextOperations.get(id)?.scopeKey
             if (nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())) {
-              settleNativeChatPastedText(id, path)
+              const retained = settleNativeChatPastedText(id, path)
+              if (owner.kind === 'local' && owner.stagingScope) {
+                if (retained && destinationScope) {
+                  stageNativeChatDraftFile(destinationScope, path)
+                } else {
+                  releaseBrowserAttachmentFiles([path])
+                }
+              }
             } else {
+              releaseBrowserAttachmentFiles([path])
               fail(nativeChatAttachmentOwnerChangedNotice())
             }
           },

@@ -12,7 +12,7 @@ import { getDaemonSocketPath } from './daemon-spawner'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { HostTerminalPolicy } from './host-terminal-policy'
 import { SystemPtyLimit } from './system-pty-limit'
-import type { TerminalLimitStatus } from '../../shared/terminal-limit-policy'
+import type { TerminalLimitStatus } from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FileSystem>()

@@ -1,7 +1,7 @@
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { SessionMeta } from './terminal-history-metadata'
 import type { TerminalModes } from './types'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 export type ColdRestoreInfo = {
   snapshotAnsi: string

@@ -9,6 +9,7 @@ export type MobileNativeChatComposerFieldProps = Omit<
 > & {
   value: string
   skillToken: string | null
+  onKeyboardSubmit?: () => void
   // Dictation heard so far, shown between the draft's halves without becoming part of its value.
   dictationPreview?: { before: string; text: string; after: string } | null
   ref?: RefObject<TextInput | null>

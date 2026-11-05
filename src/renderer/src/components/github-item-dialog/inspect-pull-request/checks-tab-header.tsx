@@ -118,7 +118,7 @@ export function ChecksTabActions({
             onSelect={() => void onRerun(true)}
           >
             <RefreshCw className="size-4" />
-            {translate('auto.components.GitHubItemDialog.e31651a224', 'Rerun failed checks')}
+            {translate('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void onRerun(false)}>
             <RefreshCw className="size-4" />

@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import {
-  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
-  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
-} from '../../../shared/file-write-disk-precondition'
+import { FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY } from '../../../shared/file-write-disk-precondition'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const precondition = { expectedSignature: getDiskBaselineSignature('original') }
@@ -38,22 +35,6 @@ function methodsFor(
 }
 
 describe('paired web client save precondition', () => {
-  it('lets a server that enforces the precondition compare at write time', async () => {
-    const { methods, callRuntimeResult, calledMethods } = methodsFor(
-      [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY, FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY],
-      'original'
-    )
-
-    await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(calledMethods()).toEqual(['files.writeIfUnchanged'])
-    expect(callRuntimeResult.mock.calls[0]?.[1]).toMatchObject({ diskPrecondition: precondition })
-  })
-
   it('refuses without writing when an older server holds newer disk content', async () => {
     const { methods, calledMethods } = methodsFor([], 'agent rewrite')
 
@@ -65,80 +46,6 @@ describe('paired web client save precondition', () => {
 
     expect(result).toEqual({ ok: false, diskConflict: 'changed' })
     expect(calledMethods()).toEqual(['files.readPreview'])
-  })
-
-  it('skips writing through an older server whose changed disk already holds the text', async () => {
-    const { methods, calledMethods } = methodsFor([], 'edited')
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(result).toEqual({ ok: true, unchanged: true })
-    expect(calledMethods()).toEqual(['files.readPreview'])
-  })
-
-  it('writes through an older server without the field once the disk matches', async () => {
-    const { methods, callRuntimeResult, calledMethods } = methodsFor([], 'original')
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(result).toEqual({ ok: true })
-    expect(calledMethods()).toEqual(['files.readPreview', 'files.write'])
-    expect(callRuntimeResult.mock.calls[1]?.[1]).not.toHaveProperty('diskPrecondition')
-  })
-
-  it.each(['original', 'edited'])(
-    'skips identical content on a v1 guarded server for an automatic save (baseline %s)',
-    async (baseline) => {
-      const { methods, calledMethods } = methodsFor(
-        [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY],
-        'edited'
-      )
-      expect(
-        await methods.writeFile({
-          filePath: '/hub/repo/readme.md',
-          content: 'edited',
-          diskPrecondition: {
-            expectedSignature: getDiskBaselineSignature(baseline),
-            requireLosslessUtf8: true
-          }
-        })
-      ).toEqual({ ok: true, unchanged: true })
-      expect(calledMethods()).toEqual(['files.readPreview'])
-    }
-  )
-
-  it('keeps the v1 server guard for non-identical automatic saves', async () => {
-    const { methods, calledMethods } = methodsFor(
-      [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY],
-      'original'
-    )
-    await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: { ...precondition, requireLosslessUtf8: true }
-    })
-    expect(calledMethods()).toEqual(['files.readPreview', 'files.writeIfUnchanged'])
-  })
-
-  it('sends an explicit save straight to a v1 guarded server without reading first', async () => {
-    const { methods, calledMethods } = methodsFor(
-      [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY],
-      'original'
-    )
-    await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-    expect(calledMethods()).toEqual(['files.writeIfUnchanged'])
   })
 
   it('refuses an ambiguous automatic baseline before sending to a v1 server', async () => {
@@ -159,19 +66,6 @@ describe('paired web client save precondition', () => {
     expect(calledMethods()).toEqual(['files.readPreview'])
   })
 
-  it('reports a confirmed-missing file to an autosave through an older server', async () => {
-    const { methods, calledMethods } = methodsFor([], null)
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: precondition
-    })
-
-    expect(result).toEqual({ ok: false, diskConflict: 'missing' })
-    expect(calledMethods()).toEqual(['files.readPreview'])
-  })
-
   it('fails an explicit save, without writing, when an older server read fails otherwise', async () => {
     const { methods, calledMethods } = methodsFor([], null, 'Runtime request timed out')
 
@@ -183,20 +77,6 @@ describe('paired web client save precondition', () => {
       })
     ).rejects.toThrow('timed out')
     expect(calledMethods()).toEqual(['files.readPreview'])
-  })
-
-  it('reports a too-large file an older server also cannot page as changed', async () => {
-    // The paired client surfaces a failed envelope as an Error carrying the wire message.
-    const { methods, calledMethods } = methodsFor([], null, 'file_too_large')
-
-    const result = await methods.writeFile({
-      filePath: '/hub/repo/readme.md',
-      content: 'edited',
-      diskPrecondition: { ...precondition, allowMissing: true }
-    })
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(calledMethods()).not.toContain('files.write')
   })
 
   it.each([

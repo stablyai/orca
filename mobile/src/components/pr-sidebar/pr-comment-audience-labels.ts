@@ -1,4 +1,4 @@
-import type { PRCommentAudienceFilter } from '../../../../src/shared/pr-comment-audience'
+import type { PRCommentAudienceFilter } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import { translate } from '../../i18n/mobile-i18n'
 
 export const PR_COMMENT_AUDIENCE_FILTERS = [

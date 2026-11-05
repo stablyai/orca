@@ -8,7 +8,7 @@ import { SystemPtyLimit, parseLinuxPtyLimit } from './system-pty-limit'
 import * as deadlines from './daemon-request-deadline'
 import { HostTerminalLedger } from './host-terminal-ledger'
 import { TerminalSpawnGate } from './terminal-spawn-gate'
-import { isConfiguredTerminalLimit } from '../../shared/terminal-limit-policy'
+import { isConfiguredTerminalLimit } from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 import {
   DEFAULT_SPAWN_ADMISSION_LIMITS,
   type SpawnRequestFacts

@@ -42,13 +42,6 @@ function delegatedRegistry() {
 }
 
 describe('delegated phone auth follows its parent desktop', () => {
-  it('accepts a delegated phone while its desktop is paired', () => {
-    const { registry, child, principal } = delegatedRegistry()
-
-    expect(registry.validateToken(child.token)?.deviceId).toBe(child.deviceId)
-    expect(registry.resolveAuthenticatedPrincipal(principal)?.deviceId).toBe(child.deviceId)
-  })
-
   it('refuses it once an admin removes the desktop on disk', () => {
     const { registry, desktop, child, principal } = delegatedRegistry()
 
@@ -75,4 +68,44 @@ describe('delegated phone auth follows its parent desktop', () => {
 
     expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
   })
+
+  it.each(['mobile', 'runtime'] as const)(
+    'refuses a %s fork and its delegated phones after the bearer parent disappears on disk',
+    (scope) => {
+      const registry = new DeviceRegistry(dir)
+      const parent = registry.addDevice('Parent', scope)
+      registry.updateLastSeen(parent.deviceId)
+      const fork = registry.forkDeviceKey(
+        parent.deviceId,
+        Buffer.alloc(32, 1).toString('base64'),
+        'Migrated installation'
+      )
+      const children =
+        scope === 'runtime'
+          ? registry.upsertDelegatedMobileDevices(fork, [{ phoneKey: 'phone', name: 'Pixel' }])
+          : []
+      const principal = { deviceId: fork.deviceId, credentialRevision: 0 }
+      expect(registry.lookupDeviceKey(fork.deviceId)).toMatchObject({ kind: 'found' })
+      expect(registry.resolveAuthenticatedPrincipal(principal)?.deviceId).toBe(fork.deviceId)
+      for (const child of children) {
+        expect(registry.validateToken(child.token)?.deviceId).toBe(child.deviceId)
+      }
+
+      removeOnDisk(parent.deviceId)
+
+      expect(registry.lookupDeviceKey(fork.deviceId)).toEqual({ kind: 'refused' })
+      expect(registry.resolveAuthenticatedPrincipal(principal)).toBeNull()
+      for (const child of children) {
+        expect(registry.validateToken(child.token)).toBeNull()
+        expect(
+          registry.resolveAuthenticatedPrincipal({
+            deviceId: child.deviceId,
+            credentialRevision: 0,
+            deviceToken: child.token
+          })
+        ).toBeNull()
+      }
+      expect(registry.getDevice(fork.deviceId)).not.toBeNull()
+    }
+  )
 })

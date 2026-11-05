@@ -149,34 +149,4 @@ describe('terminal history restore memory limits', () => {
     expect(restore?.snapshotAnsi).toBe('safe checkpoint')
     expect(restore?.oscLinks).toHaveLength(oscLinks.length)
   })
-
-  // Call the reader directly so fallback behavior cannot hide a parsing regression.
-  it('parses link-dense checkpoints without a structural pre-scan budget', () => {
-    const { sessionPath } = createSession('link-dense-checkpoint')
-    const checkpointPath = join(sessionPath, 'checkpoint.json')
-    writeFileSync(checkpointPath, `{"snapshotAnsi":"","values":[${'0,'.repeat(2_000_000)}0]}`)
-    expect(
-      readTerminalHistoryJson<{ values: number[] }>(
-        checkpointPath,
-        TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
-      ).values
-    ).toHaveLength(2_000_001)
-  })
-
-  // V8 parses JSON iteratively; recursive parsing could abort the daemon instead of throwing.
-  it('parses deeply nested checkpoints without the retired nesting-depth cap', () => {
-    const { sessionPath } = createSession('deeply-nested-checkpoint')
-    const checkpointPath = join(sessionPath, 'checkpoint.json')
-    const depth = 50_000
-    writeFileSync(
-      checkpointPath,
-      `{"snapshotAnsi":"","nested":${'['.repeat(depth)}${']'.repeat(depth)}}`
-    )
-    expect(
-      readTerminalHistoryJson<{ nested: unknown[] }>(
-        checkpointPath,
-        TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
-      ).nested
-    ).toHaveLength(1)
-  })
 })

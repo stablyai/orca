@@ -7,6 +7,7 @@ function sectionLabel(domain: string, translate: ProfileStateSectionLabelTransla
     case 'repos':
     case 'projects':
     case 'projectHostSetups':
+    case 'hostRepoCatalogSnapshots':
       return translate('profileState.section.projects', 'Projects')
     case 'projectGroups':
       return translate('profileState.section.projectGroups', 'Project groups')

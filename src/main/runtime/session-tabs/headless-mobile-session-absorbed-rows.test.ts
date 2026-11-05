@@ -9,7 +9,7 @@ import {
   type PhoneLayoutView
 } from '../../../shared/workspace-layout/headless-phone-layout.test-fixture'
 import { leaf } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { deriveHeadlessLegacyTerminalLeafId } from '../mobile-session-layout-projection'
 import { OrcaRuntimeService } from '../orca-runtime'
 

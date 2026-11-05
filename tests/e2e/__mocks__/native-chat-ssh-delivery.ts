@@ -9,7 +9,7 @@ import {
   WRITE_ACCEPTED,
   writeUnverifiable,
   type WriteSettlement
-} from '../../../src/shared/pty-write-settlement'
+} from '../../../src/shared/terminal/pty/lifecycle/pty-write-settlement'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { createPtyWriteInput } from '../../../src/main/ipc/pty/ipc/write-input'
 import type { IPtyProvider } from '../../../src/main/providers/pty-provider-contract'

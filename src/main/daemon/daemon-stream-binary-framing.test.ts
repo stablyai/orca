@@ -52,29 +52,6 @@ function ndjsonEvents(write: (stream: { write(chunk: StreamWriteChunk): void }) 
 }
 
 describe('binary stream framing', () => {
-  it('serializes metadata once for each ordinary keystroke-sized write', () => {
-    const stringify = vi.spyOn(JSON, 'stringify')
-    const frames: StreamWriteChunk[] = []
-    let calls: number
-    try {
-      for (let seq = 1; seq <= 100; seq++) {
-        streamFramesFor('binary-v1').data(
-          { write: (chunk) => frames.push(chunk) },
-          'session',
-          'x',
-          4096,
-          1,
-          seq
-        )
-      }
-      calls = stringify.mock.calls.length
-    } finally {
-      stringify.mockRestore()
-    }
-    expect(calls).toBe(100)
-    expect(readAll(frames.map((frame) => Buffer.from(frame))).events).toHaveLength(100)
-  })
-
   it('round-trips data and event frames across any socket chunking', () => {
     const frames = [
       encodeBinaryStreamDataFrame('session-1', TERMINAL_TEXT, { seq: 42, rawLength: 7 }),

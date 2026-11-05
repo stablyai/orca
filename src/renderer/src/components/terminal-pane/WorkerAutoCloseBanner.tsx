@@ -7,7 +7,7 @@ import {
   workerAutoCloseStripText,
   workerKeepOpenLabel
 } from '@/lib/worker-auto-close'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { PaneTopWarningBanner } from './PaneTopWarningBanner'
 
 /** Across a temporary orchestration worker's pane: when it closes, and Keep open. */

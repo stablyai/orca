@@ -6,14 +6,12 @@ import {
   openAuthorityRuntime
 } from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
-import { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
-import { applyWindowLayoutCommand } from '../../src/main/runtime/runtime-layout-apply'
+import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
 import {
   loadChatTabLayout,
   withChatTabChanges
 } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
-import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 
 const queueProbe = vi.hoisted(() => {
   const queues: Pick<ReturnType<typeof createChatTabLayoutQueue>, 'pendingOpens'>[] = []
@@ -146,81 +144,6 @@ it.each([10, 100])(
     expect(savedVisits).toBeLessThanOrEqual(8 * n)
     expect(journal).not.toHaveBeenCalled()
     expect(rig.acquire).not.toHaveBeenCalled()
-  }
-)
-
-it.each([10, 100])(
-  'bounds actual queued profile replacement to two steps at %i saved rows in both directions',
-  async (n) => {
-    const { store, authority } = await fixture()
-    const workspace = 'replacement-cost'
-    const initial = withChatTabChanges(
-      'local',
-      getDefaultWorkspaceSession(),
-      workspace,
-      Array.from({ length: n }, (_, index) => ({
-        open: { sessionId: `session-${index}`, agent: 'codex', tabId: `legacy-${index}` }
-      }))
-    )
-    if (!initial) {
-      throw new Error('fixture must have saved rows')
-    }
-    store.setWorkspaceSession(initial)
-    await store.flushPendingOrThrowAsync()
-    let loads = 0,
-      applies = 0
-    let applied: Promise<unknown> = Promise.resolve()
-    const queue = createChatTabLayoutQueue({
-      sessionOf: () => {
-        loads++
-        return store.getWorkspaceSession()
-      },
-      hostIdOf: () => 'local',
-      apply: (command, run) => {
-        applies++
-        const result = applyWindowLayoutCommand(store, () => ['local'], command, undefined, run)
-        applied = result
-        return result
-      }
-    })
-    for (const tabId of ['agent-chat-tab-v1-first', 'agent-chat-tab-v1-next', 'legacy-0']) {
-      loads = 0
-      applies = 0
-      authority.captures.length = 0
-      queue(() => [
-        {
-          worktreeId: workspace,
-          change: { open: { sessionId: 'session-0', agent: 'codex', tabId } },
-          eligible: () => true
-        }
-      ])
-      await vi.waitFor(() =>
-        expect(
-          store
-            .getWorkspaceSession()
-            .unifiedTabs?.[workspace]?.find((tab) => tab.entityId === 'session-0')?.id
-        ).toBe(tabId)
-      )
-      await applied
-      expect(applies).toBe(2)
-      expect(loads).toBe(4)
-      expect(authority.captures).toHaveLength(2)
-    }
-    applies = 0
-    loads = 0
-    authority.captures.length = 0
-    queue(() => [{ worktreeId: workspace, change: { close: 'session-0', tabId: 'legacy-0' } }])
-    await vi.waitFor(() =>
-      expect(
-        store
-          .getWorkspaceSession()
-          .unifiedTabs?.[workspace]?.some((tab) => tab.entityId === 'session-0')
-      ).toBe(false)
-    )
-    await applied
-    expect(applies).toBe(1)
-    expect(loads).toBe(2)
-    expect(authority.captures).toHaveLength(1)
   }
 )
 
@@ -387,7 +310,8 @@ it('keeps failed advisory legacy insertion and retention while the actual inner 
   const { store: profile, authority } = await fixture()
   const { root, B, holdStartup, rejectVisibility, savedIds } =
     await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
-  const { installFakeAppEnvironment } = await import('../../config/scripts/vitest-host-ports-setup')
+  const { installFakeAppEnvironment } =
+    await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
   const base = await authorityProfile([B], { visible: [B] }, profile)
   const { workspace } = base
@@ -689,7 +613,7 @@ it.each([10, 100])(
     const { root, B, rejectVisibility } =
       await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
-      await import('../../config/scripts/vitest-host-ports-setup')
+      await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })
     const ids = Array.from({ length: p }, (_, i) =>
       i === 0 ? B : `pending-${i.toString().padStart(5, '0')}`

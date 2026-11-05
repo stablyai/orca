@@ -4,7 +4,7 @@ import { getBaseRefDefault, getRecentDriftSubjects, getRemoteDrift } from '../gi
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'

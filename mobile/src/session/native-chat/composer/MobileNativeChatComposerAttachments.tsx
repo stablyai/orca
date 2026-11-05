@@ -39,12 +39,14 @@ export function MobileNativeChatComposerAttachments({
   images,
   files,
   onRemoveImage,
-  onRemoveFile
+  onRemoveFile,
+  onOpenFile
 }: {
   images: readonly PendingNativeChatImage[]
   files: readonly PendingNativeChatFile[]
   onRemoveImage?: (id: string) => void
   onRemoveFile?: (id: string) => void
+  onOpenFile?: (path: string) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -92,14 +94,19 @@ export function MobileNativeChatComposerAttachments({
           <View style={styles.fileIcon}>
             <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
           </View>
-          <View style={styles.fileText}>
+          <Pressable
+            style={styles.fileText}
+            disabled={!file.path || !onOpenFile}
+            accessibilityRole="button"
+            onPress={() => file.path && onOpenFile?.(file.path)}
+          >
             <Text style={styles.fileName} numberOfLines={1}>
               {file.name}
             </Text>
             <Text style={styles.fileMeta} numberOfLines={1}>
               {composerFileMeta(file, t)}
             </Text>
-          </View>
+          </Pressable>
           {file.path === null ? (
             <View
               style={styles.uploading}

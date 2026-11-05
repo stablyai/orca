@@ -14,7 +14,7 @@ import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { bindPaneFirst } from '../bind-first-pane.test-fixture'
 
 const WORKER_HANDLE = 'term_pre_update_worker'

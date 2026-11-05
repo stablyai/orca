@@ -118,7 +118,7 @@ export function buildChecksToolbar({
             onSelect={() => onRerun(true)}
           >
             <RefreshCw className="size-4" />
-            {translate('auto.components.PullRequestPage.68605516dd', 'Rerun failed checks')}
+            {translate('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => onRerun(false)}>
             <RefreshCw className="size-4" />

@@ -1,6 +1,9 @@
-import { parseTerminalStartFailure, terminalStartError } from '../../shared/terminal-start-failure'
-import { DaemonConnectionLostError, DaemonProtocolError } from './types'
-import type { RpcResponse } from './types'
+import {
+  parseTerminalStartFailure,
+  terminalStartError
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import { DaemonConnectionLostError, DaemonProtocolError, type RpcResponse } from './types'
+
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
 import { decodeDaemonResponseError } from './daemon-errors'
 

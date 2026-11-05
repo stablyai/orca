@@ -174,15 +174,15 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     ).resolves.toMatchObject({ ok: true })
     await ready(host)
     expect(record(host)?.options).toEqual({ model: 'sonnet' })
-    // Saved model is offered before provider confirmation.
-    expect(await picker(host)).toEqual({ model: 'sonnet', effort: 'high', confirmed: ['effort'] })
+    // Legacy effective-only settings describe a default, not an accepted effort input.
+    expect(await picker(host)).toEqual({ model: 'sonnet', effort: 'high', confirmed: undefined })
 
     // Turn reports must not replace the next send's saved choice.
     turnReportsModel('claude-sonnet-5')
     expect(await picker(host)).toEqual({
       model: 'sonnet',
       effort: 'high',
-      confirmed: ['effort']
+      confirmed: []
     })
     expect(record(host)?.options).toEqual({ model: 'sonnet' })
 

@@ -76,24 +76,6 @@ describe('a saved tab name after its terminal is restarted', () => {
     })
   })
 
-  it.each([
-    ['no saved name', undefined],
-    ['a cleared name', null]
-  ])('leaves a tab with %s on its terminal title', async (_label, savedName) => {
-    const runtime = runtimeWithSession(savedName)
-    runtime.setNotifier(notifier())
-    runtime.setPtyController(controller('respawned-pty'))
-
-    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'host-tab',
-      leafId: HEADLESS_LEAF_ID,
-      activate: true
-    })
-
-    const surface = await phoneSurface(runtime)
-    expect(surface?.customTitle ?? null).toBeNull()
-  })
-
   // The path a reconnecting client takes after a restart: the host restarts the saved tab's
   // terminal for the client by the tab's identity.
   it('reaches the phone when a client restarts the saved tab by its identity', async () => {

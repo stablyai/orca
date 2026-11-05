@@ -3,7 +3,7 @@ import {
   type InternalCreateOrAttachOptions
 } from './terminal-host-agent-session-claim'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
-import { readTerminalStartFailure } from '../../shared/terminal-start-failure'
+import { readTerminalStartFailure } from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

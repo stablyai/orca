@@ -1,4 +1,4 @@
-import type { PtyCreationDisposition } from '../../../shared/claimed-agent-pty-owner'
+import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { TerminalCreationWork } from '../terminal-creation-work'
 import { createDaemonPtyPhysicalOwner, type DaemonPtyPhysicalOwner } from './subprocess-handle'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'

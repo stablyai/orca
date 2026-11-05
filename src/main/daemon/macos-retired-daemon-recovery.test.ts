@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import type { RetiredMacDaemonJob } from './macos-retired-daemon-jobs'
 import type { ProcessIdentity } from './daemon-process-identity-query'
 import type { SocketProbeOutcome } from './daemon-endpoint-probe'
@@ -20,7 +20,9 @@ vi.mock('node:fs/promises', () => ({ lstat: mocks.stat }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ isPackaged: () => mocks.packaged, getPath: () => '/profile' })
 }))
-vi.mock('../pty-descendant-termination', () => ({ captureDescendantSnapshot: mocks.capture }))
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  captureDescendantSnapshot: mocks.capture
+}))
 vi.mock('./macos-retired-daemon-jobs', () => ({
   listMacDaemonJobVersions: mocks.versions,
   readMacDaemonRecoveryJob: mocks.job

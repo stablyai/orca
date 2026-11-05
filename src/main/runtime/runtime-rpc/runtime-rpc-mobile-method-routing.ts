@@ -159,6 +159,7 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.unsubscribe',
   // Sender cards resolve on the host that owns the orchestration records.
   'orchestration.partyLocation',
+  'orchestration.partyOpen',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',
@@ -212,6 +213,7 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.isRunningAgent',
   'terminal.list',
   'terminal.multiplex',
+  'terminal.openInputSession',
   'terminal.read',
   'terminal.rename',
   'terminal.send',

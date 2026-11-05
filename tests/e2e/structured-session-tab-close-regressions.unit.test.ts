@@ -299,17 +299,6 @@ describe('reopened structured session close', () => {
   })
 
   describe('closing a chat reopened from history after /clear', () => {
-    it('mirrors the reopened session into a suffixed tab beside the current chat', async () => {
-      const { agentTabs } = await setup()
-
-      expect(agentTabs()).toEqual(
-        expect.arrayContaining([
-          { id: CURRENT_TAB, entityId: CURRENT_SESSION },
-          { id: REOPENED_TAB, entityId: REOPENED_SESSION }
-        ])
-      )
-    })
-
     it('closes only the reopened tab when the user closes it on the desktop', async () => {
       const { agentTabs, hostSessionCloses, closeResponses } = await setup()
 

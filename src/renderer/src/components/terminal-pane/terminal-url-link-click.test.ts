@@ -2,11 +2,11 @@ import type { IBufferLine, Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import {
-  installHttpLinkClickFallback,
-  TERMINAL_HTTP_URL_MAX_LENGTH
-} from './terminal-url-link-hit-testing'
-import { TERMINAL_HTTP_URL_MAX_LENGTH as maximumHttpUrlLength } from '../../../../shared/terminal-http-link-limits'
+  TERMINAL_HTTP_URL_MAX_LENGTH,
+  TERMINAL_HTTP_URL_MAX_LENGTH as maximumHttpUrlLength
+} from '../../../../shared/terminal/links/terminal-http-link-limits'
 
 const COLS = 157
 const ROWS = 59

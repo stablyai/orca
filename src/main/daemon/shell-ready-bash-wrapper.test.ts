@@ -10,7 +10,7 @@ import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import {
   OVERLAY_ONLY_FEATURES,
   STARTUP_COMMAND_FEATURES
-} from '../shell-startup-launch-intent-fixtures'
+} from '../pty/shell-startup/shell-startup-launch-intent-fixtures'
 import {
   expectBashOsc133Lifecycle,
   runInteractiveBashRcfile

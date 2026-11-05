@@ -1,6 +1,6 @@
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
@@ -25,6 +25,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../../workspace-creator-context'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
@@ -32,7 +33,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
     requires: ['accounts'],
     permission: 'workspace',
     params: FederationAttachStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (params, context) => {
+      const { runtime, orchestrationMutation } = context
       if (!orchestrationMutation) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -102,7 +104,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             params,
             agent,
             launchPreferences: launch.preferences,
-            ...(existing ? { worktree: existing } : {}),
+            ...(existing
+              ? { worktree: existing }
+              : { creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context) }),
             setupSource,
             effects,
             onSetup: (created) => {

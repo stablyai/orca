@@ -26,6 +26,8 @@ export type StructuredAgentSessionHistoryJournal = Pick<
   | 'item'
   | 'receiptFor'
   | 'submissions'
+  | 'currentRead'
+  | 'inputOrder'
   | 'historyOrigin'
 >
 

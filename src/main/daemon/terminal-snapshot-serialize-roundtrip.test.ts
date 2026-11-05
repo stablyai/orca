@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { HeadlessEmulator } from './headless-emulator'
-import { serializeWithAbsoluteCursor } from '../../shared/terminal-serialize-absolute-cursor'
+import { serializeWithAbsoluteCursor } from '../../shared/terminal/replay/terminal-serialize-absolute-cursor'
 
 type TerminalHarness = { terminal: Terminal; addon: SerializeAddon }
 

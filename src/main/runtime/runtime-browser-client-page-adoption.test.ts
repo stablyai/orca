@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent
-} from '../../shared/browser-client-host-protocol'
+} from '../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import {

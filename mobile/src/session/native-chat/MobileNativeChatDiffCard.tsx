@@ -130,19 +130,21 @@ export function MobileNativeChatDiffCard({
   fontScale,
   disclosureKey,
   rootIdentity,
+  initialOpen = false,
   onOpenFile
 }: {
   file: NativeChatEditFile
   fontScale: number
   disclosureKey?: string
   rootIdentity?: string
+  initialOpen?: boolean
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const copy = nativeChatDiffCardCopy(t)
   const verbs = nativeChatToolRowVerbCopy(t)
-  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
+  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, initialOpen)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const type = toolType(fontScale)

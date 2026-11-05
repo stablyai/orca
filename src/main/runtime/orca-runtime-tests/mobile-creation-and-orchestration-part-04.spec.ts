@@ -401,6 +401,7 @@ describe('OrcaRuntimeService', () => {
         })
       }
       const staleScan = deferred<typeof MOCK_GIT_WORKTREES>()
+      const scansBefore = vi.mocked(listWorktrees).mock.calls.length
       vi.mocked(listWorktrees)
         .mockImplementationOnce(() => staleScan.promise)
         .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
@@ -409,9 +410,11 @@ describe('OrcaRuntimeService', () => {
       const stalePoll = runtime.getWorktreePs()
       runtimePreference = { kind: 'windows-host' }
       runtime.notifyBranchRenamed(TEST_REPO_ID)
-      const freshPoll = await runtime.getWorktreePs()
+      const freshPolling = runtime.getWorktreePs()
       staleScan.resolve(MOCK_GIT_WORKTREES)
-      const staleResult = await stalePoll
+      const [staleResult, freshPoll] = await Promise.all([stalePoll, freshPolling])
+      // Both generations scanned; neither poll fell back to stored rows at the scan timeout.
+      expect(vi.mocked(listWorktrees).mock.calls.length - scansBefore).toBe(2)
 
       // Concurrent scans retain the platform map from their own generation even when they finish out of order.
       expect(staleResult.worktrees[0]).toMatchObject({ terminalPlatform: 'linux' })

@@ -2,7 +2,7 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_MAX_ACTIVE_DOWNLOADS,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES,
   decodeBrowserClientFileChannelChunk
-} from '../../shared/browser-client-file-channel-protocol'
+} from '../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import {
   buildBrowserDownloadCollisionCandidate,
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,

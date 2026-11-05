@@ -726,7 +726,7 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
     const adapter = await acquired(claude, {}, events)
     const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' },
-      suggestions: [{ type: 'addRules' }]
+      suggestions: [{ type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }]
     })
     expect(events.at(-1)).toMatchObject({
       type: 'prompt',
@@ -745,7 +745,9 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
     await expect(answered.promise).resolves.toEqual({
       behavior: 'allow',
       updatedInput: { command: 'git status' },
-      updatedPermissions: [{ type: 'addRules' }],
+      updatedPermissions: [
+        { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
+      ],
       toolUseID: 'tool-1'
     })
   })

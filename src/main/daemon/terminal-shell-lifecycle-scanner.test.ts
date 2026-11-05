@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 
 const ENTER_ALT = '\x1b[?1049h'

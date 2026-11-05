@@ -6,9 +6,9 @@
 import {
   isWslDistroRunningForBackgroundWork,
   noteWslDistroMayHaveStopped
-} from '../wsl-background-distro-gate'
-import { onRunningWslDistrosStopped } from '../wsl-running-distro-cache'
-import { readWslDistroBootId } from '../wsl/wsl-distro-boot-id'
+} from '../wsl/discovery/wsl-background-distro-gate'
+import { onRunningWslDistrosStopped } from '../wsl/discovery/wsl-running-distro-cache'
+import { readWslDistroBootId } from '../wsl/discovery/wsl-distro-boot-id'
 
 export type WslBridgeBootIdentityDeps = {
   isRunning: (distro: string) => Promise<boolean>

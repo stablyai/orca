@@ -5,7 +5,7 @@ import { resolvePendingSidebarReveal } from '../navigation/pending-reveal-inputs
 import {
   getScrollTopToRevealBounds,
   WORKTREE_SIDEBAR_REVEAL_TOP_INSET
-} from '../../worktree-sidebar-reveal'
+} from '../navigation/worktree-sidebar-reveal'
 import {
   extractWorktreeVirtualRowIndexes,
   estimateRenderRowSize,

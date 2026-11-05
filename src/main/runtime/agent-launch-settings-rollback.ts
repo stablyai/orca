@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import type { AgentLaunchSettingsSource } from '../../shared/agent-launch-settings'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { AgentLaunchSettingsSource } from '../../shared/agent-launch/choices/agent-launch-settings'
 
 export function agentLaunchSettingsRollbackUpdates(
   before: AgentLaunchSettingsSource,

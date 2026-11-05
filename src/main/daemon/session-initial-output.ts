@@ -1,7 +1,7 @@
 import {
   resolveUnreportedExitCause,
   type TerminalExitCause
-} from '../../shared/terminal-exit-cause'
+} from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { SessionOptions } from './session-options'
 
 export function createSessionInitialOutput({

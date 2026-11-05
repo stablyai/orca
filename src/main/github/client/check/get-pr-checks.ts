@@ -3,7 +3,7 @@ import {
   githubRepoContext,
   ghRepoExecOptions
 } from '../../github-repository-identity'
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'

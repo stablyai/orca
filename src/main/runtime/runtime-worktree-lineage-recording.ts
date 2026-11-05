@@ -1,11 +1,12 @@
-import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+
 import type { Worktree } from '../../shared/worktree/types'
 import type {
   WorktreeLineage,
   WorktreeLineageWarning,
   WorkspaceLineage
 } from '../../shared/worktree/lineage-types'
-import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { type WorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
 import { worktreeRowTarget } from '../persistence/host-qualified-worktree-meta'
 

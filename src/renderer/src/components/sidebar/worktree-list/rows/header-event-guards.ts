@@ -1,5 +1,6 @@
 import type React from 'react'
-import { isRepoHeaderActionTarget } from '../../project-header-drag'
+import '../drag/project-header-drag'
+import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
 
 export function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
   if (event.key === 'Enter' || event.key === ' ') {

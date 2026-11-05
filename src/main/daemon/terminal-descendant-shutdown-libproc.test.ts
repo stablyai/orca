@@ -16,7 +16,8 @@ vi.mock('node:child_process', () => ({ execFile }))
 
 import { setLibprocAddonForTests } from '../../shared/libproc-addon'
 import { resetNativeReadsForTests } from '../../shared/libproc-native-reads'
-import { collectDescendantRows, parseProcessTable } from '../pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
+import { parseProcessTable } from '../pty/process-retirement/pty-process-table-parser'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 
 const STARTED = 'Mon Jul 13 12:54:47 2026'

@@ -1,15 +1,17 @@
 import { OrcaRuntimeWithOnClientDisconnected } from '../layout/terminal-client-disconnect'
-import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
-import type { TerminalExitCause } from '../../../../shared/terminal-exit-cause'
+import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
+
 import {
+  type TerminalExitCause,
   OPERATOR_CLOSE_EXIT_CAUSE,
   resolveUnreportedExitCause
-} from '../../../../shared/terminal-exit-cause'
-import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/pty-liveness-verdict'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RetiredTerminalSurface } from '../../mobile-session-terminal-retirement'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'

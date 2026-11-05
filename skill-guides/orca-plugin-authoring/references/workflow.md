@@ -86,7 +86,8 @@ input in the editor's own CSS pixels: `[{"click":[200,150]},{"drag":[[200,150],[
 painted before the next; it needs the window hidden or minimized. A shot never changes your file:
 `--act` runs on a copy in a temporary folder workspace that is removed afterwards (`--in-place`
 acts on the file itself and keeps its tab open), and a shot without acts closes the tab it
-opened. Before each `key` Orca focuses the editor's guest, so a canvas keeps getting keys. It exits 1 and lists `errors` when the editor threw, was blocked by its
+opened. Edits only mark the tab dirty, as typing does: to write them to disk, end an `--in-place`
+`--act` with `{"key":"s","modifiers":["meta"]}` (`"control"` on Linux and Windows). Before each `key` Orca focuses the editor's guest, so a canvas keeps getting keys. It exits 1 and lists `errors` when the editor threw, was blocked by its
 content policy, or never asked for its document within 5s; the PNG is written anyway. The theme
 and size are put back. Default file `.orca/shots/<plugin-key>-<editor>.png`.
 
@@ -97,6 +98,10 @@ status bar items draw, and `--window` the whole window, both from the hidden win
 - Both need the desktop app with a workspace. With none showing, a shot selects one of this
   machine's workspaces in the hidden window. A shot never changes the view: it fails with
   `no_workspace` while Orca shows Settings or another full page. Without them, use `plugin check`.
+- From an Orca source checkout, `ORCA` is `node config/scripts/orca-dev.mjs` after
+  `pnpm run build:cli` and `pnpm run build:electron-vite`; `ORCA open` starts that checkout's dev
+  app (`ORCA_BACKGROUND_LAUNCH=1` keeps its window hidden). The CLI has no quit command: stop a
+  hidden dev app by ending the Electron process whose arguments name the checkout.
 
 ## Events
 

@@ -321,7 +321,7 @@ describe('terminal file link actions', () => {
   })
 })
 
-describe('open in this group', () => {
+describe('open in new tab', () => {
   function seedGroups(groupIds: string[]): void {
     const tabs = groupIds.map((groupId) => ({
       id: `${groupId}-tab`,
@@ -369,8 +369,8 @@ describe('open in this group', () => {
       )
 
       const rows = request.mock.calls[0][0].secondaryActions
-      expect(rowLabels(request)).toContain('Open in this group')
-      rows.find((row: { label: string }) => row.label === 'Open in this group').run()
+      expect(rowLabels(request)).toContain('Open in new tab')
+      rows.find((row: { label: string }) => row.label === 'Open in new tab').run()
       expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/src/main.ts', 3, null, {
         ...sourceDeps,
         openInSourceGroupSurface: 'internal'
@@ -382,7 +382,7 @@ describe('open in this group', () => {
     seedGroups(['A', 'B'])
     const unknown = vi.fn()
     handleTerminalFileLink('/repo/a.ts', null, null, plainEvent(), deps, context(unknown))
-    expect(rowLabels(unknown)).not.toContain('Open in this group')
+    expect(rowLabels(unknown)).not.toContain('Open in new tab')
 
     mocks.worktreeRoot = true
     const root = vi.fn()
@@ -394,6 +394,6 @@ describe('open in this group', () => {
       { ...deps, sourceTabId: 'A-terminal' },
       context(root)
     )
-    expect(rowLabels(root)).not.toContain('Open in this group')
+    expect(rowLabels(root)).not.toContain('Open in new tab')
   })
 })

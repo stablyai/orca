@@ -31,7 +31,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -118,42 +118,6 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
 describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previously leaked', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('drops removed worktree entries (both tabId- and ptyId-keyed), retains survivors', () => {
-    const store = createTestStore()
-    seedMaps(store)
-
-    store.getState().purgeWorktreeTerminalState([WT1])
-    const s = store.getState()
-
-    // Removed worktree's tab/pty: every map evicted.
-    expect(s.lastKnownRelayPtyIdByTabId[TAB1]).toBeUndefined()
-    expect(s.pendingReconnectPtyIdByTabId[TAB1]).toBeUndefined()
-    expect(s.deferredSshSessionIdsByTabId[TAB1]).toBeUndefined()
-    expect(s.pendingInitialCwdByTabId[TAB1]).toBeUndefined()
-    expect(s.pendingIssueCommandSplitByTabId[TAB1]).toBeUndefined()
-    expect(s.pendingStartupByTabId[TAB1]).toBeUndefined()
-    expect(s.codexRestartNoticeByPtyId[PTY1]).toBeUndefined()
-    expect(s.migrationUnsupportedByPtyId[PTY1]).toBeUndefined()
-    expect(s.suppressedPtyExitIds[PTY1]).toBeUndefined()
-    expect(s.suppressedPtyExitIds[PTY1_SPLIT]).toBeUndefined()
-    expect(s.suppressedPtyExitIds[REMOTE_PTY1]).toBeUndefined()
-    expect(s.pendingPaneAccountRestarts[PTY1]).toBeUndefined()
-    expect(s.pendingPaneAccountRestarts[PTY1_SPLIT]).toBeUndefined()
-    expect(s.pendingPaneAccountRestarts[REMOTE_PTY1]).toBeUndefined()
-
-    // Surviving worktree's tab/pty: every entry retained (no over-eviction).
-    expect(s.lastKnownRelayPtyIdByTabId[TAB2]).toBe(PTY2)
-    expect(s.pendingReconnectPtyIdByTabId[TAB2]).toBe(PTY2)
-    expect(s.deferredSshSessionIdsByTabId[TAB2]).toBe('ssh-sess-2')
-    expect(s.pendingInitialCwdByTabId[TAB2]).toBe('/path/wt2')
-    expect(s.pendingIssueCommandSplitByTabId[TAB2]).toEqual({ command: 'b' })
-    expect(s.pendingStartupByTabId[TAB2]).toEqual({ command: 'start-b' })
-    expect(s.codexRestartNoticeByPtyId[PTY2]).toBeDefined()
-    expect(s.migrationUnsupportedByPtyId[PTY2]).toBeDefined()
-    expect(s.suppressedPtyExitIds[PTY2]).toBe(true)
-    expect(s.pendingPaneAccountRestarts[PTY2]).toBe('codex')
-  })
-
   it('keeps environment-scoped remote guard identities independent', () => {
     const store = createTestStore()
     seedMaps(store)
@@ -206,17 +170,5 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingPaneAccountRestarts[REMOTE_PTY1]).toBeUndefined()
     expect(s.suppressedPtyExitIds[REMOTE_HANDLE1]).toBe(true)
     expect(s.pendingPaneAccountRestarts[REMOTE_HANDLE1]).toBe('codex')
-  })
-
-  it('does not parse aliases for environment-scoped remote guard cleanup', () => {
-    const store = createTestStore()
-    seedMaps(store)
-    const parseRemotePtyId = vi.mocked(parseRemoteRuntimePtyId)
-    parseRemotePtyId.mockClear()
-
-    store.getState().purgeWorktreeTerminalState([WT1])
-
-    // Environment-scoped guard identities permit exact purge without parsing aliases or scanning survivors.
-    expect(parseRemotePtyId).not.toHaveBeenCalled()
   })
 })

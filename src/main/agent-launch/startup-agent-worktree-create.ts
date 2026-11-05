@@ -1,8 +1,8 @@
 /** Preserve worktree.create’s terminal startup and prompt delivery through the shared executor. */
 
-import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
+import type { AgentLaunchPrompt } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime/runtime-managed-worktree-create-types'

@@ -3,19 +3,19 @@ import { Terminal } from '@xterm/headless'
 import { createRequire } from 'node:module'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal/appearance/terminal-unicode-provider'
 import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
-} from '../../shared/terminal-serialize-absolute-cursor'
+} from '../../shared/terminal/replay/terminal-serialize-absolute-cursor'
 import type { SerializeFuzzCase } from './serialize-grid-fuzz-stream'
 import {
   serializedNormalStart,
   variantOverlong,
   variantTrailingBackgroundRows
 } from './serialize-grid-variant-scope'
-import type { GridDiff } from './serialize-grid-cell-descriptors'
-import { compareBufferRows } from './serialize-grid-cell-descriptors'
+
+import { type GridDiff, compareBufferRows } from './serialize-grid-cell-descriptors'
 
 export type NamedSerializer = { name: string; create: () => SerializeAddon }
 

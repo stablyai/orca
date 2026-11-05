@@ -1,10 +1,13 @@
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
+import {
+  BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+  type BrowserClientAutomationResult as BrowserClientHostCommandResult
+} from '../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
+} from '../../shared/browser/client-hosting/browser-client-host-protocol'
+
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'

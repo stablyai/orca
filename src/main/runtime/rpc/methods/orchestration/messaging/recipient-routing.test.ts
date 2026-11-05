@@ -9,7 +9,10 @@ import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import {
+  createRootDispatch,
+  reattachDispatchConsumer
+} from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 type SendWarning = { code: string; recipient: string; message: string }
 type SendResult = {
@@ -289,6 +292,50 @@ describe('orchestration recipient routing oracle', () => {
       ctx
     )) as { messages: { id: string }[] }
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
+  })
+
+  it('reaches a terminal still bound to an older Run through its Dispatch in the named Run', async () => {
+    setup()
+    const pane = 'tab_former:leaf_former'
+    const olderRun = db.createRun({
+      objective: 'Older Run this terminal coordinated',
+      coordinatorHandle: 'term_former',
+      coordinatorPaneKey: pane
+    })
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'now a worker', runId: senderRunId }).id,
+      'term_former',
+      pane
+    )
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord' ? harness.coordinatorPaneKey : handle === 'term_former' ? pane : null
+    )
+
+    const sent = await call({
+      from: 'term_coord',
+      to: 'term_former',
+      run: senderRunId,
+      subject: 'instructions'
+    })
+
+    expect(sent).toMatchObject({
+      message: { run_id: olderRun.id, to_handle: `run:${olderRun.id}` },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
+    expect(
+      await harness.call('orchestration.check', { terminal: 'term_former', peek: true }, ctx)
+    ).toMatchObject({ messages: [{ subject: 'instructions' }] })
+
+    // A replaced process no longer holds that Dispatch, so nothing would read the mail.
+    reattachDispatchConsumer(db, {
+      dispatchId: dispatch.id,
+      paneKey: pane,
+      processIncarnation: 'replaced:pty:1'
+    })
+    await expect(
+      call({ from: 'term_coord', to: 'term_former', run: senderRunId, subject: 'lost' })
+    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
   })
 
   it('keeps same-Run historical coordinator routing from the canonical mailbox change', async () => {

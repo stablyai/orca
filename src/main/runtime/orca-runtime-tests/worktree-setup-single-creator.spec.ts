@@ -12,9 +12,9 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import { makeRuntimeStoreWithWorkspaceSession, store } from '../orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 import { ProvisioningRuntime } from '../orca-runtime-layout-owner-start-fixture'
 
 const WORKTREE_PATH = '/tmp/workspaces/runtime-setup-all'

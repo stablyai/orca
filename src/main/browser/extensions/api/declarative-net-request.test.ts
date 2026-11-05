@@ -11,10 +11,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() },
   webFrameMain: { fromId: vi.fn() }
 }))
-vi.mock('../browser-extension-permission-prompt', () => ({
+vi.mock('../permissions/browser-extension-permission-prompt', () => ({
   askToGrantBrowserExtensionPermissions: async () => true
 }))
-vi.mock('../browser-extension-tab-model', () => ({
+vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
   resolveBrowserExtensionTab: (id: number) =>
     mocks.tabs.has(id) ? { contents: { id, session: currentSession } } : null
 }))
@@ -22,19 +22,21 @@ vi.mock('../browser-extension-tab-model', () => ({
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-dnr-api-'))
 let currentSession: Electron.Session | null = null
 
-const registry = await import('../browser-extension-namespace-registry')
+const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { registerDeclarativeNetRequestNamespace } = await import('./declarative-net-request')
 const { attachBrowserExtensionDnr, getDnrSessionRuntime } =
-  await import('../browser-extension-dnr-session')
+  await import('../declarative-net-request/session/browser-extension-dnr-session')
 const { browserExtensionDnrRequestDecider: decider } =
-  await import('../browser-extension-dnr-requests')
-const { DNR_API_CONSTANTS } = await import('../browser-extension-dnr-limits')
+  await import('../declarative-net-request/session/browser-extension-dnr-requests')
+const { DNR_API_CONSTANTS } =
+  await import('../declarative-net-request/session/browser-extension-dnr-limits')
 const { BROWSER_EXTENSION_API_SURFACE } =
   await import('../../../../preload/browser-extension-api-surface')
 
 const { registerPermissionsNamespace } = await import('./permissions')
-const { ensureHostSessionState } = await import('../browser-extension-contexts')
-const { getBrowserExtensionInstallStore } = await import('../browser-extension-install-store')
+const { ensureHostSessionState } = await import('../api-runtime/browser-extension-contexts')
+const { getBrowserExtensionInstallStore } =
+  await import('../installation/browser-extension-install-store')
 registerPermissionsNamespace()
 registerDeclarativeNetRequestNamespace()
 

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserClientHostCommandResult,
-  BrowserClientHostLeaseAuthority
-} from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserHostCommandLedger } from './browser-host-command-ledger'
 
 const authority: BrowserClientHostLeaseAuthority = {

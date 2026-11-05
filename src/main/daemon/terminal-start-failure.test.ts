@@ -16,12 +16,12 @@ import { BackgroundTransientFactRelay } from './daemon-background-transient-fact
 import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import { createNoopDaemonFileLog } from './daemon-file-log'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   formatTerminalStartFailure,
   readTerminalStartFailure,
   terminalStartError
-} from '../../shared/terminal-start-failure'
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { mapRuntimeError } from '../runtime/rpc/errors'
 
 const MARKER = 'too many consoles in use, max consoles is 128'

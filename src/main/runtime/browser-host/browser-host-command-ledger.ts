@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import {
   BrowserClientHostPageCommand,
   type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult,
   type BrowserClientHostLeaseAuthority
-} from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   assertBrowserHostCommandResultAuthority,
   assertBrowserHostCommandOrder,

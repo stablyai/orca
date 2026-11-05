@@ -249,6 +249,7 @@ export async function readPullRequestSidebarQuery(
     baseRefOid: pr.baseRefOid ?? undefined,
     headRefOid: pr.headRefOid ?? undefined,
     statusCheckRollup,
+    checksUnavailable: false,
     stackMetadataChecked,
     stack:
       stackMetadataChecked && validStack

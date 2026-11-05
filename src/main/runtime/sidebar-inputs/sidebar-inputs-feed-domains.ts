@@ -2,7 +2,7 @@ import {
   getRegisteredSshState,
   listRegisteredSshTargets
 } from '../../ssh/targets/ssh-target-registry'
-import { getWslHostService } from '../../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
 import type { RuntimeStore } from '../runtime-store-contract'

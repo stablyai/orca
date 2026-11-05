@@ -1,7 +1,8 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
 import type { Repo } from '../../shared/repo-types'
-import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
-import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
+import type { LocalProjectGhExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import {
   countWorkItems,
   getWorkItem,
@@ -105,10 +106,12 @@ export class RuntimeGitHubRepositoryQueryCommands {
     repoSelector: string,
     number: number,
     type?: 'issue' | 'pr',
-    ownerRepo?: GitHubOwnerRepo
+    ownerRepo?: GitHubOwnerRepo,
+    canonical?: boolean,
+    expectedGhAccount?: GhAccountBinding | null
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return getWorkItemDetails(
+    const args = [
       repo.path,
       number,
       type,
@@ -116,9 +119,11 @@ export class RuntimeGitHubRepositoryQueryCommands {
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference,
       ownerRepo,
-      // Ordinary remote loads never send ownerRepo; the optional field marks a capability-gated Refresh.
-      !!ownerRepo
-    )
+      canonical === true
+    ] as const
+    return expectedGhAccount === undefined
+      ? getWorkItemDetails(...args)
+      : getWorkItemDetails(...args, expectedGhAccount)
   }
 
   async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
@@ -132,26 +137,68 @@ export class RuntimeGitHubRepositoryQueryCommands {
     )
   }
 
-  async listRepoLabels(repoSelector: string): Promise<Awaited<ReturnType<typeof listLabels>>> {
+  async listRepoLabels(
+    repoSelector: string,
+    ownerRepo?: GitHubOwnerRepo,
+    expectedGhAccount?: GhAccountBinding | null
+  ): Promise<Awaited<ReturnType<typeof listLabels>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return listLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
-    )
+    if (expectedGhAccount !== undefined) {
+      return listLabels(
+        repo.path,
+        repo.issueSourcePreference,
+        getRepoRoutingConnectionId(repo),
+        this.deps.getLocalGitArgs(repo)[0] ?? {},
+        ownerRepo,
+        expectedGhAccount
+      )
+    }
+    return ownerRepo
+      ? listLabels(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          this.deps.getLocalGitArgs(repo)[0] ?? {},
+          ownerRepo
+        )
+      : listLabels(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          ...this.deps.getLocalGitArgs(repo)
+        )
   }
 
   async listRepoAssignableUsers(
-    repoSelector: string
+    repoSelector: string,
+    ownerRepo?: GitHubOwnerRepo,
+    expectedGhAccount?: GhAccountBinding | null
   ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return listAssignableUsers(
-      repo.path,
-      repo.issueSourcePreference,
-      getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
-    )
+    if (expectedGhAccount !== undefined) {
+      return listAssignableUsers(
+        repo.path,
+        repo.issueSourcePreference,
+        getRepoRoutingConnectionId(repo),
+        this.deps.getLocalGitArgs(repo)[0] ?? {},
+        ownerRepo,
+        expectedGhAccount
+      )
+    }
+    return ownerRepo
+      ? listAssignableUsers(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          this.deps.getLocalGitArgs(repo)[0] ?? {},
+          ownerRepo
+        )
+      : listAssignableUsers(
+          repo.path,
+          repo.issueSourcePreference,
+          getRepoRoutingConnectionId(repo),
+          ...this.deps.getLocalGitArgs(repo)
+        )
   }
 
   getGitHubRateLimit(options?: {

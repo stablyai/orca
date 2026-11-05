@@ -1,8 +1,8 @@
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import { groupPRComments } from '../../../../src/shared/pr-comment-groups'
-import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
+import { groupPRComments } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
+import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import { translate } from '../../i18n/mobile-i18n'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import { checkOutcome, summarizePRChecks } from './pr-checks-presentation'
@@ -86,6 +86,14 @@ function checksGate(checks: PRCheckDetail[], checksError: string | null): PrGate
               count: summary.passed
             })
           : null
+    }
+  }
+  if (summary.outcome === 'cancelled') {
+    return {
+      ...base,
+      tone: 'idle',
+      title: translate('pullRequest.checkStatus.cancelled', 'Cancelled'),
+      subtitle: summary.label
     }
   }
   if (summary.total === 0) {

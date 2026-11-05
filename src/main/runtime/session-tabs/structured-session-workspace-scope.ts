@@ -8,7 +8,7 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
 } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
@@ -22,6 +22,8 @@ import type { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { RuntimeWorkspaceCatalog } from '../workspaces/workspace-catalog'
 import type { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
 
 export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStructuredSessionAccountHome {
   protected abstract resolveFolderWorkspaceSelector(
@@ -48,6 +50,17 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return prepareStructuredWorkspaceAuthority(this.requireStore(), location, (repo) =>
       this.listRepoWorktreesForResolution(repo)
     )
+  }
+
+  async prepareWorkspaceAttentionAcknowledgement(
+    worktreeSelector: string
+  ): Promise<NotificationAttentionAcknowledgement> {
+    const worktree = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+    const host = getStructuredAgentSessionHost()
+    const reads = host
+      ? await host.attentionReads.workspace(worktree)
+      : (await this.openAgentSessionRecordStore()).workspaceAttentionReads(worktree)
+    return { worktree, reads }
   }
 
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {

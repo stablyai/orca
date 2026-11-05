@@ -10,7 +10,7 @@ export {
   ownerSurfacing,
   resolveTerminalPresentation
 } from './orca-runtime-core'
-export { makePaneKey } from '../../shared/stable-pane-id'
+import '../../shared/workspace-layout/stable-pane-id'
 export { randomUUID } from 'node:crypto'
 export {
   admitStablePaneAdoption,

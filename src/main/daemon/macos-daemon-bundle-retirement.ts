@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { rm } from '../asar-transparent-fs'
+import { rm } from '../filesystem/asar-transparent-fs'
 import { macDaemonCopyBundlePath } from './macos-daemon-bundle'
 
 const LSREGISTER =

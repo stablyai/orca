@@ -20,11 +20,11 @@ import {
   _settlePendingWorktreeRemovalsForTests,
   loadWorktreeRemovalRecords,
   retryFailedWorktreeRemoval
-} from '../../worktree-background-removal'
+} from '../../workspaces/removal/worktree-background-removal'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords
-} from '../../worktree-removal-records'
+} from '../../workspaces/removal/worktree-removal-records'
 
 const FAILURE = "error: failed to delete 'node_modules/a/LICENSE': Operation not permitted"
 const FOLLOW_UP_DELETE_FAILURE = "EPERM: operation not permitted, unlink 'node_modules/a/LICENSE'"

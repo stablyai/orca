@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getEnabledExtensionIds: () => [],
     updateEnabledExtensionIds: vi.fn(),
@@ -24,13 +24,13 @@ vi.mock('../browser-session-registry', () => ({
   }
 }))
 vi.mock('./api/runtime', () => ({ openBrowserExtensionOptionsPage: vi.fn() }))
-vi.mock('./browser-extension-install-store', () => ({
+vi.mock('./installation/browser-extension-install-store', () => ({
   getBrowserExtensionInstallStore: () => mocks.store
 }))
-vi.mock('./browser-extension-profile-reload', () => ({
+vi.mock('./profile-sessions/browser-extension-profile-reload', () => ({
   reloadBrowserExtensionWhereEnabled: vi.fn()
 }))
-vi.mock('./browser-extension-manifest', () => ({
+vi.mock('./installation/browser-extension-manifest', () => ({
   readBrowserExtensionIconDataUrl: async () => null,
   readBrowserExtensionManifest: async () => ({
     name: 'Dev copy',
@@ -41,7 +41,7 @@ vi.mock('./browser-extension-manifest', () => ({
     optionsPage: null
   })
 }))
-vi.mock('./browser-extension-session-loader', () => ({
+vi.mock('./profile-sessions/browser-extension-session-loader', () => ({
   getBrowserExtensionSessionForProfile: vi.fn(),
   listBrowserExtensionSessions: () => mocks.sessions,
   loadBrowserExtensionFolderIntoProfile: vi.fn(async () => ({ id: ID, version: '1.0' })),
@@ -49,39 +49,43 @@ vi.mock('./browser-extension-session-loader', () => ({
   unloadBrowserExtensionEverywhere: vi.fn(),
   unloadBrowserExtensionFromProfile: vi.fn()
 }))
-vi.mock('./browser-extension-data-removal', () => ({
+vi.mock('./profile-storage/browser-extension-data-removal', () => ({
   clearBrowserExtensionSessionData: vi.fn(async () => {})
 }))
-vi.mock('./browser-extension-load-directory', () => ({
+vi.mock('./installation/browser-extension-load-directory', () => ({
   browserExtensionIdForUnpackedFolder: async () => ID
 }))
-vi.mock('./browser-extension-webstore-updater', () => ({
+vi.mock('./web-store/browser-extension-webstore-updater', () => ({
   reviewHeldBrowserExtensionUpdate: vi.fn()
 }))
 vi.mock('./browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
-vi.mock('./browser-extension-toolbar-pins', () => ({ forgetPinnedBrowserExtension: vi.fn() }))
-vi.mock('./browser-extension-profile-state-store', () => ({
+vi.mock('./actions/browser-extension-toolbar-pins', () => ({
+  forgetPinnedBrowserExtension: vi.fn()
+}))
+vi.mock('./profile-storage/browser-extension-profile-state-store', () => ({
   getBrowserExtensionProfileStateStore: () => ({ forgetExtension: vi.fn() })
 }))
-vi.mock('./browser-extension-sync-storage-store', () => ({
+vi.mock('./profile-storage/browser-extension-sync-storage-store', () => ({
   getBrowserExtensionSyncStorageStore: () => ({ forgetExtension: vi.fn() })
 }))
-vi.mock('./browser-extension-dnr-store', () => ({
+vi.mock('./declarative-net-request/session/browser-extension-dnr-store', () => ({
   getBrowserExtensionDnrStore: () => ({ forgetExtension: mocks.forgetDnrState })
 }))
-vi.mock('./browser-extension-webstore-events', () => ({
+vi.mock('./web-store/browser-extension-webstore-events', () => ({
   notifyChromeWebStoreUninstalled: vi.fn()
 }))
 
-const loader = await import('./browser-extension-session-loader')
-const { clearBrowserExtensionSessionData } = await import('./browser-extension-data-removal')
+const loader = await import('./profile-sessions/browser-extension-session-loader')
+const { clearBrowserExtensionSessionData } =
+  await import('./profile-storage/browser-extension-data-removal')
 const {
   addUnpackedBrowserExtension,
   reloadUnpackedBrowserExtension,
   removeBrowserExtension,
   setBrowserExtensionEnabled
 } = await import('./browser-extension-management')
-const { withBrowserExtensionLock } = await import('./browser-extension-webstore-install')
+const { withBrowserExtensionLock } =
+  await import('./installation/browser-extension-webstore-install')
 
 beforeEach(() => {
   vi.clearAllMocks()

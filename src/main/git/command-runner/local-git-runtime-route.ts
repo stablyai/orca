@@ -4,7 +4,7 @@
  * two on one checkout is what lets one Git prune the other's worktrees (risk R36). A UNC cwd already
  * names its distro; a caller that must run the host's Git anyway says so with `hostGit: true`.
  */
-import { isWslDistroNotFoundFailure } from '../../wsl/wsl-distro-unsupported'
+import { isWslDistroNotFoundFailure } from '../../wsl/discovery/wsl-distro-unsupported'
 import type { GitAdmissionTier } from './git-exec-options'
 
 type RoutableGitOptions = {

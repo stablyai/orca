@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import {
   createTestStore,

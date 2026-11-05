@@ -3,13 +3,13 @@ import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-termin
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../pty-recorded-surface-topology'
 import { withSelectedTabs } from '../headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { isValidHostTerminalTabId } from '../../../shared/terminal-tab-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { isValidHostTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
-} from '../../../shared/terminal-leaf-move'
+} from '../../../shared/workspace-layout/terminal-leaf-move'
 
 /** Where the client dropped the new tab, in the host's group ids. */
 export type MovedPanePlacement = { targetGroupId: string; index?: number }

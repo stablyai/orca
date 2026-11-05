@@ -66,7 +66,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     })
   }
   seedOutcomeRows(database, rows)
-  const journal = await journals.open({ identity, stateDirectory: root })
+  let journal = await journals.open({ identity, stateDirectory: root })
   const before = { epoch, sequence: 1 }
   const old = journal.readSince(before)
   if (!old.ok) {
@@ -88,7 +88,19 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
   expect(
     projectJournalBatch({ rows: sparse, snapshot: journal.snapshot(), afterSequence: 1 })
   ).toEqual(expected)
+  const snapshot = journal.snapshot()
   const cursor = journal.cursor()
+  await journals.closeAll()
+  journal = await journals.open({ identity, stateDirectory: root })
+  expect(journal.snapshot()).toEqual(snapshot)
+  expect(journal.cursor()).toEqual(cursor)
+  const reopened = journal.readSince(before)
+  if (!reopened.ok) {
+    throw new Error('sparse read after reopen failed')
+  }
+  expect(
+    projectJournalBatch({ rows: reopened.rows, snapshot: journal.snapshot(), afterSequence: 1 })
+  ).toEqual(expected)
   await journal.appendLifecycleBatch({
     settlementId: 'whole-group',
     fence: 1,
@@ -143,6 +155,12 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     { reader: { budgetBytes: 1, form: (value) => ({ item: value, bytes: 100 }) } }
   )
   expect(bounded).toMatchObject({ ok: false, reset: 'cursor_compacted' })
+  const continued = journal.snapshot()
+  const continuedCursor = journal.cursor()
+  await journals.closeAll()
+  journal = await journals.open({ identity, stateDirectory: root })
+  expect(journal.snapshot()).toEqual(continued)
+  expect(journal.cursor()).toEqual(continuedCursor)
 })
 
 it('moves subscribers and prompt reuse to the newest write when that write saved nothing', async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { makeWorktree } from './worktrees-slice-test-fixtures'

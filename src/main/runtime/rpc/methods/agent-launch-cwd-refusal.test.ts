@@ -1,3 +1,4 @@
+import type * as RuntimeEnvironmentStore from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,10 +35,17 @@ vi.mock('../../../../cli/runtime-client', async () => {
 
 vi.mock('../../../../cli/runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
 }))
+
+vi.mock(
+  '../../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: listEnvironmentsMock
+  })
+)
 
 import { createConnection } from 'node:net'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -57,7 +65,7 @@ import { RuntimeRpcFailureError } from '../../../../cli/runtime/types'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITIES,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { RpcDispatcher } from '../dispatcher'
 import { UnixSocketTransport } from '../unix-socket-transport'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
@@ -86,7 +94,7 @@ import * as createdWorkspaceLaunch from '../../../agent-launch/agent-launch-crea
 import { formatAmbiguousCwdParentMessage } from '../../runtime-worktree-lineage-resolution'
 import { managedCwdMobileFixture } from './managed-cwd-mobile.test-fixture'
 import { managedCwdLaunchFixture } from './managed-cwd-launch.test-fixture'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
 import { AgentLaunchReplay } from '../../../../shared/rpc-contract/agent-launch-params'
 
 configureWorktreeAwarenessEnvironment({

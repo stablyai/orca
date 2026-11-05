@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,
+  nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
@@ -40,7 +41,12 @@ export function MobileNativeChatResolutionReceipt({
     ) : null
   }
   const { resolution } = body
-  const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
+  const device = nativeChatReceiptDevice(resolution, {
+    current: t('chat.receipt.thisPhone', 'this phone'),
+    computer: t('chat.receipt.computer', 'the computer'),
+    unknown: t('chat.receipt.otherDevice', 'another device')
+  })
+  const copy = nativeChatReceiptCopy(t, device)
   const cancelled = resolution.state === 'cancelled'
   const answers = nativeChatReceiptAnswers(body)
   const outcome = [

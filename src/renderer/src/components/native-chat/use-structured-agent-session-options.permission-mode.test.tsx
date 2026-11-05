@@ -138,7 +138,7 @@ describe('the permission mode another device picks', () => {
     unmount()
   })
 
-  it('waits for the new child’s report after an own-settings chat restarts', async () => {
+  it('keeps Own distinct from the running report across a restart', async () => {
     optionsAnswering('own')
     const read = mocks.call.getMockImplementation()!
     mocks.call.mockImplementation(async (...args) => {
@@ -151,13 +151,15 @@ describe('the permission mode another device picks', () => {
       committed.push(`${entry?.description}/${entry?.settable}`)
     })
     const row = () => result.current.optionSnapshot.find((entry) => entry.id === 'permissionMode')
-    await waitFor(() => expect(row()).toMatchObject({ description: 'Full access', settable: true }))
+    await waitFor(() =>
+      expect(row()).toMatchObject({ description: "Agent's own settings", settable: true })
+    )
     mocks.call.mockImplementation(() => new Promise(() => {}))
     committed.length = 0
     rerender({ fence: 2, stamp: 'model-a|own' })
     // Every frame of the new process, including the one before its read lease attaches.
-    expect([...new Set(committed)]).toEqual(['Permissions/false'])
-    expect(row()).toMatchObject({ description: 'Permissions', settable: false })
+    expect([...new Set(committed)]).toEqual(["Agent's own settings/true"])
+    expect(row()).toMatchObject({ description: "Agent's own settings", settable: true })
     unmount()
   })
 
@@ -204,7 +206,7 @@ describe('a permission pick on this device', () => {
     )
     vi.mocked(enqueueSessionOptionSettingsWrite).mockClear()
     const { result, unmount } = renderReopened(1)
-    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('full-access'))
+    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('own'))
     await act(async () => {
       expect(await result.current.setStructuredOption('permissionMode', 'full-access')).toBe(true)
     })
@@ -217,6 +219,47 @@ describe('a permission pick on this device', () => {
     )
     expect(mutate).not.toHaveBeenCalled()
     expect(enqueueSessionOptionSettingsWrite).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('keeps a Codex permission pick through refresh while the agent reports the previous turn', async () => {
+    let selected = 'full-access'
+    mocks.call.mockImplementation((_target, method, params) => {
+      if (method === 'agentSession.setOption') {
+        return mocks.write(params)
+      }
+      if (method !== 'agentSession.options') {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({
+        models: [{ id: 'model-a', label: 'Model A', isDefault: true, efforts: [] }],
+        current: {
+          model: 'model-a',
+          permissionMode: selected,
+          reportedPermissionMode: 'full-access'
+        }
+      })
+    })
+    const reply = Promise.withResolvers<AgentSessionMutationResult<AgentSessionOptionResult>>()
+    mocks.write.mockReturnValueOnce(reply.promise)
+    const { result, rerender, unmount } = renderReopened(1, 'codex')
+    await waitFor(() => expect(permission(result.current.optionSnapshot)).toBe('full-access'))
+    let picking!: Promise<boolean>
+    act(() => {
+      picking = result.current.setStructuredOption('permissionMode', 'ask')
+    })
+    expect(permission(result.current.optionSnapshot)).toBe('ask')
+    selected = 'ask'
+    await act(async () => {
+      reply.resolve(acceptedReply('permissionMode', selected))
+      await picking
+    })
+    rerender({ fence: 1, stamp: 'model-a|ask' })
+    await waitFor(() => expect(optionReads()).toBeGreaterThan(1))
+    expect(permission(result.current.optionSnapshot)).toBe('ask')
+    expect(result.current.optionSnapshot.find((row) => row.id === 'permissionMode')?.settable).toBe(
+      true
+    )
     unmount()
   })
 

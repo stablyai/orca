@@ -1,3 +1,4 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   MOCK_GIT_WORKTREES,
@@ -7,7 +8,6 @@ import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   getEffectiveHooks,
-  gitRunner,
   join,
   listWorktrees,
   listWorktreesStrict,
@@ -333,7 +333,7 @@ describe('OrcaRuntimeService', () => {
         stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
       })
     )
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
@@ -418,7 +418,7 @@ describe('OrcaRuntimeService', () => {
     const removePathSpy = vi
       .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
       .mockRejectedValue(new Error('injected removal failure'))
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
@@ -452,7 +452,7 @@ describe('OrcaRuntimeService', () => {
       })
     )
     const gitSpy = vi
-      .spyOn(gitRunner, 'gitExecFileAsync')
+      .spyOn(gitExecFile, 'gitExecFileAsync')
       .mockResolvedValue({ stdout: '', stderr: '' })
     onTestFinished(() => gitSpy.mockRestore())
 

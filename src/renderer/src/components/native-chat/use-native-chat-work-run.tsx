@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-work-run'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
-import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 export type NativeChatWorkRun = {
   /** Every member's tool blocks, in order: the run's one block list. */

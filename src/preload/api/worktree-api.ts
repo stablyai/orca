@@ -15,8 +15,8 @@ import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-reg
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent

@@ -1,12 +1,15 @@
-import { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
+import { BrowserClientAutomationMethod } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { browserExpectedUrlMismatchError } from '../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { isAgentRpcCaller, type RpcCallerIdentity } from './rpc/rpc-caller-identity'
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }
 
 export async function routeRuntimeBrowserClientAutomation(options: {
   method: string
   params: unknown
+  caller: RpcCallerIdentity | undefined
   pages: RuntimeBrowserPageRegistry
   leases: BrowserHostLeaseRegistry
   resolveWorkspace(selector: string): Promise<{ id: string }>
@@ -31,12 +34,16 @@ export async function routeRuntimeBrowserClientAutomation(options: {
     {
       type: 'automation',
       method: method.data,
-      params: options.params
+      params: options.params,
+      // A person's link or relayed input must not light the desktop page as agent-driven.
+      agent: isAgentRpcCaller(options.caller)
     }
   )
   const result = await issued.result
   if (result.status === 'failed') {
-    throw new Error(result.errorCode)
+    throw result.expectedUrlMismatch
+      ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
+      : new Error(result.errorCode)
   }
   return { handled: true, result: result.value }
 }

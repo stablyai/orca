@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   PtyFencedTerminationOutcome,
   PtyFencedTerminationRequest
-} from '../../../../shared/pty-fenced-termination'
+} from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ResourcePtyPanel } from './ResourcePtyPanel'
 import { useResourcePtyActions } from './use-resource-pty-actions'

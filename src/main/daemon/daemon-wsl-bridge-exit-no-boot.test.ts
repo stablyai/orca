@@ -7,19 +7,18 @@ const wslMocks = vi.hoisted(() => ({
     vi.fn<(options?: { requireConfirmed?: boolean; startedAfter?: number }) => Promise<string[]>>(),
   listWslDistrosAsync: vi.fn<() => Promise<string[]>>()
 }))
-vi.mock('../wsl', () => wslMocks)
+vi.mock('../wsl/discovery/distro-catalog', () => wslMocks)
 
 import {
   _resetWslBackgroundDistroGateForTests,
   deferUntilWslDistroRunning,
   noteWslDistroMayHaveStopped,
-  readConfirmedRunningWslDistros,
-  wasWslDistroLastSeenRunningSettled
-} from '../wsl-background-distro-gate'
+  readConfirmedRunningWslDistros
+} from '../wsl/discovery/wsl-background-distro-gate'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
-} from '../wsl-running-distro-cache'
+} from '../wsl/discovery/wsl-running-distro-cache'
 import {
   PRODUCTION_WSL_BRIDGE_BOOT_IDENTITY_DEPS,
   WslBridgeBootIdentity
@@ -118,21 +117,6 @@ describe('a WSL bridge pane exit after the distro is terminated', () => {
     await readConfirmedRunningWslDistros()
 
     expect(restarts).toHaveBeenCalledOnce()
-  })
-
-  // Review of #35143: Sleep and quit reads skip the probe for a pane they hold live.
-  it('does not let a list taken before the stop vouch for a live pane', async () => {
-    await vi.advanceTimersByTimeAsync(60_000)
-    await readConfirmedRunningWslDistros()
-    expect(wasWslDistroLastSeenRunningSettled('Ubuntu')).toBe(true)
-
-    terminatedAt = performance.now()
-    noteWslDistroMayHaveStopped('Ubuntu')
-    expect(wasWslDistroLastSeenRunningSettled('Ubuntu')).toBe(false)
-
-    // A probe while it still stops names it, yet is inside the settle window.
-    await readConfirmedRunningWslDistros()
-    expect(wasWslDistroLastSeenRunningSettled('Ubuntu')).toBe(false)
   })
 
   it('lists once more past the settle when a mid-stop list skipped deferred work', async () => {

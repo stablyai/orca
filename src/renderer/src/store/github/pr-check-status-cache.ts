@@ -1,7 +1,7 @@
 import type { AppState } from '../types'
 import type { GitHubPRRefreshAlias } from '../../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
-import { deriveCheckStatusFromChecks } from '../slices/github-checks'
+import { derivePRCheckStatus as deriveCheckStatusFromChecks } from '../../../../shared/source-control/checks/pr-check-status'
 import {
   getPRChecksCacheTtl,
   prChecksCacheSuffix,
@@ -76,7 +76,8 @@ export function applyCachedChecksStatus(
     checksEntry.headSha === pr.headSha &&
     fetchedAt - checksEntry.fetchedAt < getPRChecksCacheTtl(checksEntry)
   ) {
-    return { ...pr, checksStatus: deriveCheckStatusFromChecks(checksEntry.data) }
+    const checksStatus = deriveCheckStatusFromChecks(checksEntry.data)
+    return checksStatus === pr.checksStatus ? pr : { ...pr, checksStatus, checksSummary: undefined }
   }
   return pr
 }

@@ -595,7 +595,7 @@ it('launches searched defaults on Enter and reaches the alternate only through C
   expect(launched).not.toHaveBeenCalled()
   act(() =>
     [...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent === 'Launch terminal')
+      .find((button) => button.getAttribute('aria-label') === 'Launch terminal')
       ?.click()
   )
   expect(launched).toHaveBeenCalledOnce()

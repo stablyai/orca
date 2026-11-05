@@ -1,7 +1,7 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { requireRepoLocalGitRoute } from '../repo-execution-host'
+import { requireRepoLocalGitRoute } from '../workspaces/execution-host/repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../git/runner'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
@@ -10,8 +10,8 @@ import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
-import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/project-runtime-git-options'
+import type { ProjectRuntimeResolutionStore } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveRuntimeGitLabForkMrBase } from './runtime-gitlab-fork-mr-base'
 import { resolveRuntimeGitLabIssueSourceRemote } from './runtime-gitlab-issue-source-remote'
 import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'

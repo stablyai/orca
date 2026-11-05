@@ -16,10 +16,10 @@ vi.mock('./pty-subprocess/foreground-process-tracker', () => ({
     getForegroundProcess: () => null
   })
 }))
-vi.mock('../pty/posix-pty-process-groups', () => ({
+vi.mock('../pty/process-retirement/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: async (_pid: number, fallback: () => void) => fallback()
 }))
-vi.mock('../pty-descendant-termination', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: async (_pid: number, killRoot: () => void) => killRoot()
 }))
 

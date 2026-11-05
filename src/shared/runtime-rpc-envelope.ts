@@ -81,6 +81,11 @@ export type RuntimeOrchestrationEnvelope = {
 }
 
 /** Which runtime a request is meant for; a host that is not that runtime refuses it before any handler. */
+export const ExpectedRuntimeSourceSchema = z.object({
+  sourceId: z.string().min(1).max(4_096),
+  runtimeId: z.string().min(1).max(4_096)
+})
+
 export type ExpectedRuntimeSource = {
   /** The launching profile's installation id. */
   sourceId: string

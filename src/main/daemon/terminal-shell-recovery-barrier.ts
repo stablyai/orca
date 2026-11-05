@@ -1,7 +1,7 @@
 import { TerminalShellCleanExitConfirmation } from './terminal-shell-clean-exit-confirmation'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
-import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { PtyIngressEmission } from '../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 // Bound proof latency and queued output; timeout or overflow releases the original stream.
 const MAX_QUEUED_BYTES = 262_144

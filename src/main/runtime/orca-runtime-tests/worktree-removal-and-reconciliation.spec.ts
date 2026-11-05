@@ -1,3 +1,4 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -13,7 +14,6 @@ import {
   getBranchConflictKind,
   getEffectiveHooks,
   getPRForBranchMock,
-  gitRunner,
   invalidateAuthorizedRootsCacheMock,
   listWorktrees,
   loadHooks,
@@ -35,7 +35,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
-import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
@@ -330,7 +330,7 @@ describe('OrcaRuntimeService', () => {
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(describeCreatedWorktree).mockResolvedValue(createdWorktree)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
         return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
       }

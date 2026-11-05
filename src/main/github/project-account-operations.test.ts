@@ -17,7 +17,7 @@ vi.mock('./github-api-repository-remote-probe', () => ({
   getOriginGitHubApiRepository: remote,
   getGitHubApiRepositoryForRemote: remote
 }))
-vi.mock('../git/remote-name-listing', () => ({ shouldProbeGitRemote: async () => false }))
+vi.mock('../git/remotes/remote-name-listing', () => ({ shouldProbeGitRemote: async () => false }))
 vi.mock('./rate-limit', () => ({
   repositoryRateLimitGuard: () => ({ blocked: false }),
   noteRepositoryRateLimitSpend: () => {},

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { ACCOUNT_METHODS } from './accounts'
+import { RateLimitService } from '../../../rate-limits/service'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import type {
   HostAccountSignInChannel,
@@ -335,6 +336,62 @@ describe('account RPC methods', () => {
     controller.abort()
     await running
   })
+})
+
+// #37256: a paired client's stream keeps a windowless host polling; the host's own renderer follows window focus.
+it.each([
+  { caller: { kind: 'paired-device', deviceId: 'phone-1' } as const, holds: true },
+  { caller: { kind: 'desktop' } as const, holds: false }
+])('holds a usage viewer for a $caller.kind stream: $holds', async ({ caller, holds }) => {
+  const rateLimits = new RateLimitService()
+  const releaseViewer = vi.fn()
+  const addUsageViewer = vi.spyOn(rateLimits, 'addUsageViewer').mockReturnValue(releaseViewer)
+  let cleanup: (() => void) | undefined
+  const runtime: Pick<
+    OrcaRuntimeService,
+    | 'getAccountsStreamSnapshot'
+    | 'getUsageRateLimits'
+    | 'onAccountsChanged'
+    | 'registerSubscriptionCleanup'
+    | 'cleanupSubscription'
+    | 'refreshAccountsForMobileSubscriber'
+  > = {
+    getAccountsStreamSnapshot: vi.fn(() => ({
+      claude: { accounts: [], activeAccountId: null },
+      codex: { accounts: [], activeAccountId: null },
+      rateLimits: createEmptyRateLimitState()
+    })),
+    getUsageRateLimits: () => rateLimits,
+    onAccountsChanged: vi.fn(() => vi.fn()),
+    registerSubscriptionCleanup: vi.fn((_id: string, next: () => void) => {
+      cleanup = next
+    }),
+    cleanupSubscription: vi.fn(() => {
+      const release = cleanup
+      cleanup = undefined
+      release?.()
+    }),
+    refreshAccountsForMobileSubscriber: vi.fn().mockResolvedValue(undefined)
+  }
+  const subscribe = method('accounts.subscribe')
+  if (!isStreamingMethod(subscribe)) {
+    throw new Error('accounts.subscribe must be a streaming method')
+  }
+  const stream: {
+    handler(
+      params: unknown,
+      context: { runtime: typeof runtime; caller?: RpcContext['caller']; signal?: AbortSignal },
+      emit: (frame: unknown) => void
+    ): Promise<void>
+  } = subscribe
+  const controller = new AbortController()
+  const running = stream.handler(undefined, { runtime, caller, signal: controller.signal }, vi.fn())
+  await vi.waitFor(() => expect(runtime.refreshAccountsForMobileSubscriber).toHaveBeenCalled())
+
+  expect(addUsageViewer).toHaveBeenCalledTimes(holds ? 1 : 0)
+  controller.abort()
+  await running
+  expect(releaseViewer).toHaveBeenCalledTimes(holds ? 1 : 0)
 })
 
 it('rejects the retired Claude import even for a local socket, before touching its supplied path', async () => {

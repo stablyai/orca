@@ -16,7 +16,7 @@ import {
   isQuietReadyScreenBody
 } from './terminal-wait-detection'
 import { waitForLaunchedAgentComposer } from './launched-agent-composer-readiness'
-import { clearWorkingIndicators } from '../../shared/agent-title-status'
+import { clearWorkingIndicators } from '../../shared/agent-status/title/agent-title-working-indicators'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

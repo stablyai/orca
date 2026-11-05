@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildProcessBoundaryGround,
   PROCESS_BOUNDARY_GROUND
-} from '../../shared/terminal-mode-reset-profiles'
+} from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Session } from './session'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 import type { SubprocessHandle } from './session-subprocess-handle'

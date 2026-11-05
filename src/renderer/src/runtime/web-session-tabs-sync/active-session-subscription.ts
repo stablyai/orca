@@ -11,10 +11,7 @@ import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking
 } from '../window-visibility-subscription-parking'
-import {
-  recordReceivedWebSessionTabsSnapshot,
-  shouldApplyRecoveredWebSessionTabsSnapshot
-} from './tracking'
+import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import {
   decideWebSessionTabsSnapshot,
   shouldRespawnWebRuntimeTerminalAfterWake,
@@ -28,6 +25,7 @@ import {
   acceptSessionTabsRuntimeId,
   getSessionTabsRuntimeIdFromResponse
 } from './publisher-identity-fences'
+import { recordReceivedSessionTabsStreamFrame } from './received-agent-sender-publications'
 import { createWebSessionTabsSnapshotPatch } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import {
@@ -256,12 +254,7 @@ export function installActiveSessionTabsSubscription({
               if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
                 return
               }
-              const frame = recordReceivedWebSessionTabsSnapshot(
-                environmentId,
-                event,
-                undefined,
-                runtimeId
-              )
+              const frame = recordReceivedSessionTabsStreamFrame(environmentId, event, runtimeId)
               visibilitySnapshotReceipt.current(environmentId, event, frame, runtimeId)
               void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
                 .catch((error) => {

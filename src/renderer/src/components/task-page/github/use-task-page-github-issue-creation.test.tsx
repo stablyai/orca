@@ -1,8 +1,18 @@
 // @vitest-environment happy-dom
 import { act, useRef } from 'react'
-import { cleanup, renderHook } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { cleanup, renderHook, render, screen, fireEvent, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
+import { toast } from 'sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { TaskPageGitHubIssueDialog } from './IssueDialog'
+import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
+import { buildTaskPageRepoSourceState } from '../task-page-cache-selectors'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { createGitHubSlice } from '@/store/slices/github'
+import { createRepoUpdateActions } from '@/store/repos/repo-update'
+import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import { createUIStore } from '@/store/slices/ui-slice-test-harness'
 import { useTaskPageGitHubDetail } from '@/components/task-page/github/use-task-page-github-detail'
 import { useTaskPageGitHubIssueCreation } from '@/components/task-page/github/use-task-page-github-issue-creation'
@@ -14,7 +24,7 @@ import type { AppState } from '@/store/types'
 import type { StoreApi } from 'zustand/vanilla'
 
 const holders = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
-const mocks = vi.hoisted(() => ({ createIssue: vi.fn(), workItem: vi.fn() }))
+const mocks = vi.hoisted(() => ({ createIssue: vi.fn(), workItem: vi.fn(), updateRepo: vi.fn() }))
 vi.mock('@/store/index', async () => {
   const { useStore } = await import('zustand')
   return {
@@ -25,6 +35,9 @@ vi.mock('@/store/index', async () => {
   }
 })
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/components/github/GitHubMarkdownComposer', () => ({
+  GitHubMarkdownComposer: () => null
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
 function item(number: number): GitHubWorkItem {
@@ -48,11 +61,21 @@ function setup() {
   holders.store = store
   const repo: Repo = {
     id: 'repo-1',
+    executionHostId: 'local',
     path: '/repo',
     displayName: 'Repo',
     badgeColor: '',
     addedAt: 1
   }
+  store.setState({
+    ...createGitHubSlice(store.setState, store.getState, store),
+    ...createRepoUpdateActions(store.setState, store.getState),
+    repos: [repo],
+    projects: [],
+    projectHostSetups: [],
+    settings: createGlobalSettingsFixture(),
+    fetchReposForAllHosts: vi.fn().mockResolvedValue(undefined)
+  })
   const setter = vi.fn()
   const rendered = renderHook(() => {
     const detail = useTaskPageGitHubDetail({
@@ -101,7 +124,7 @@ function setup() {
       newIssueRuntimeTarget: null
     })
   })
-  return { ...rendered, store }
+  return { ...rendered, store, repo, setter }
 }
 
 beforeEach(() => {
@@ -110,7 +133,10 @@ beforeEach(() => {
   mocks.createIssue.mockResolvedValue({ ok: true, number: 1, url: item(1).url })
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { gh: { createIssue: mocks.createIssue, workItem: mocks.workItem } }
+    value: {
+      gh: { createIssue: mocks.createIssue, workItem: mocks.workItem },
+      repos: { update: mocks.updateRepo }
+    }
   })
 })
 afterEach(() => {
@@ -173,5 +199,144 @@ describe('created issue hydration ownership', () => {
     await resolveDetail(item(1))
     expect(store.getState().activeModal).toBe('new-workspace-composer')
     expect(store.getState().githubTaskDrawerWorkItem).toBeNull()
+  })
+})
+
+describe('New Issue source-save dependency', () => {
+  it.each([true, false])(
+    'waits for the latest source save before creating (saved=%s)',
+    async (saved) => {
+      const { store, repo, result, setter } = setup()
+      const held = Promise.withResolvers<Repo>()
+      mocks.updateRepo.mockReturnValueOnce(held.promise)
+      let save!: Promise<void>, submit!: Promise<void>
+      await act(async () => {
+        save = store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+        submit = result.current.handleCreateNewIssue()
+        await Promise.resolve()
+      })
+      const callsWhileHeld = mocks.createIssue.mock.calls.length
+      await act(async () => {
+        if (saved) {
+          held.resolve({ ...repo, issueSourcePreference: 'origin' })
+        } else {
+          held.reject(new Error('save failed'))
+        }
+        await save
+        await submit
+      })
+      expect(callsWhileHeld).toBe(0)
+      expect(mocks.createIssue).toHaveBeenCalledTimes(saved ? 1 : 0)
+      if (!saved) {
+        expect(setter).not.toHaveBeenCalledWith('')
+        expect(setter).toHaveBeenLastCalledWith(false)
+        expect(toast.error).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+  it('reports a later unverifiable Submit once as a create failure, then creates once after readback', async () => {
+    const { store, repo, result, setter } = setup()
+    mocks.workItem.mockResolvedValue(null)
+    mocks.updateRepo.mockRejectedValueOnce(new Error('lost acknowledgement'))
+    const recover = vi.fn().mockRejectedValue(new Error('readback failed'))
+    store.setState({ fetchReposForAllHosts: recover })
+    await act(async () => {
+      const save = store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+      const submit = result.current.handleCreateNewIssue()
+      await save
+      await submit
+    })
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.error).not.toHaveBeenCalledWith('Failed to create issue.')
+    vi.mocked(toast.error).mockClear()
+    await act(() => result.current.handleCreateNewIssue())
+    expect(mocks.createIssue).not.toHaveBeenCalled()
+    expect(vi.mocked(toast.error).mock.calls).toEqual([['Failed to create issue.']])
+    expect(setter).not.toHaveBeenCalledWith('')
+    const owner = store.getState().githubSourceCollections
+    recover.mockImplementation(async () => {
+      const started = owner.catalogSnapshot()
+      store.setState((s) => ({ repos: s.repos.map((row) => owner.adopt({ ...row }, started)) }))
+    })
+    vi.mocked(toast.error).mockClear()
+    await act(() => result.current.handleCreateNewIssue())
+    expect(mocks.createIssue).toHaveBeenCalledTimes(1)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('rechecks the target owner immediately before create even with no pending save', async () => {
+    const { store, result, setter } = setup()
+    await act(async () => {
+      const creating = result.current.handleCreateNewIssue()
+      store.setState({ repos: [] })
+      await creating
+    })
+    expect(mocks.createIssue).not.toHaveBeenCalled()
+    expect(setter).not.toHaveBeenCalledWith('')
+    expect(setter).toHaveBeenLastCalledWith(false)
+  })
+
+  it('keeps the mounted New Issue selector and draft across a held source save', async () => {
+    const { store, repo, result } = setup()
+    const origin = { owner: 'fork', repo: 'project' }
+    const upstream = { owner: 'parent', repo: 'project' }
+    Object.assign(window.api.gh, {
+      listWorkItems: vi.fn().mockResolvedValue({
+        items: [],
+        sources: {
+          issues: upstream,
+          prs: upstream,
+          originCandidate: origin,
+          upstreamCandidate: upstream
+        }
+      })
+    })
+    await act(async () => {
+      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+    })
+    function Composer() {
+      const repos = useStore(store, (s) => s.repos)
+      const selected = useTaskPageWorkItemsCacheSelection(repos, 20, '')
+      const fields = {
+        ...result.current,
+        selectedRepos: repos,
+        newIssueTargetRepo: repos[0],
+        githubSourceDisplayState: buildTaskPageRepoSourceState(
+          repos,
+          selected.sourceDisplayWorkItemsCacheEntries
+        ),
+        newIssueOpen: true,
+        setIssueSourcePreference: store.getState().setIssueSourcePreference,
+        submitShortcutLabel: 'Ctrl+Enter',
+        newIssueRepoId: repo.id,
+        setNewIssueRepoId: vi.fn(),
+        newIssueRepoLabels: { data: [], loading: false, error: null },
+        newIssueRepoAssignees: { data: [], loading: false, error: null }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these fields cover every IssueDialog input; later provider/composer stages add no fields read by this dialog.
+      const model = fields as unknown as TaskPageComposerActionsModel
+      return (
+        <TooltipProvider>
+          <TaskPageGitHubIssueDialog model={model} />
+        </TooltipProvider>
+      )
+    }
+    render(<Composer />)
+    const dialog = within(screen.getByRole('dialog'))
+    const picker = dialog.getByRole('group', { name: 'Issue source' })
+    const title = dialog.getByDisplayValue('Created issue')
+    const held = Promise.withResolvers<Repo>()
+    mocks.updateRepo.mockReturnValueOnce(held.promise)
+    await act(async () => {
+      fireEvent.click(dialog.getByRole('button', { name: 'Origin' }))
+      await Promise.resolve()
+    })
+    expect(dialog.getByRole('group', { name: 'Issue source' })).toBe(picker)
+    expect(dialog.getByDisplayValue('Created issue')).toBe(title)
+    expect(dialog.getByRole('button', { name: 'Origin' })).toHaveAttribute('aria-pressed', 'true')
+    await act(async () => {
+      held.resolve({ ...repo, issueSourcePreference: 'origin' })
+      await held.promise
+    })
   })
 })

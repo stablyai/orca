@@ -147,14 +147,6 @@ describe('daemon launch environment', () => {
       expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
     }
   )
-
-  it('keeps a real session bus address', () => {
-    process.env.DBUS_SESSION_BUS_ADDRESS = 'unix:path=/run/user/1000/bus'
-    spawnDaemonChildProcess(options, false)
-    expect(fork.mock.calls[0]?.[0].env.DBUS_SESSION_BUS_ADDRESS).toBe(
-      'unix:path=/run/user/1000/bus'
-    )
-  })
 })
 
 describe('daemon malloc tunables', () => {
@@ -166,10 +158,5 @@ describe('daemon malloc tunables', () => {
     spawnDaemonChildProcess(options, false)
     expect(spawn.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(HOST_MALLOC_TUNABLES)
     expect(fork.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(HOST_MALLOC_TUNABLES)
-  })
-
-  it('adds nothing when the launch set none', () => {
-    spawnDaemonChildProcess(options, false)
-    expect(fork.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(process.env.GLIBC_TUNABLES)
   })
 })

@@ -2,14 +2,14 @@ import {
   isExpectedAgentProcess,
   isNodeInterpreterOfAgent,
   recognizeAgentProcess
-} from '../../shared/agent-process-recognition'
+} from '../../shared/agent-status/process/agent-process-recognition'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../shared/process-table-snapshot'
-import { isShellProcess } from '../../shared/shell-process-detection'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { isShellProcess } from '../../shared/agent-status/process/shell-process-detection'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
-import { isTerminalForegroundObservation } from '../../shared/terminal-foreground-observation'
+import { isTerminalForegroundObservation } from '../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */

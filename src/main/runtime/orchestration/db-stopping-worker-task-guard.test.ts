@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
-import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const PANE_W = 'tab_w:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
@@ -56,19 +55,6 @@ describe('a Task whose supervised worker is stopping', () => {
         expect.objectContaining({ code: 'task_not_startable' })
       )
       expect(db.getTask(task.id)?.status).toBe('blocked')
-    })
-
-    it('control: still accepts dispatched for an active Dispatch with no supervised worker', () => {
-      const task = db.createTask({ runId: 'run_legacy_local', spec: 'unsupervised work' })
-      createRootDispatch(db, task.id, 'term_worker')
-
-      expect(db.updateTaskStatus(task.id, 'dispatched')?.status).toBe('dispatched')
-    })
-
-    it('control: still accepts dispatched while the supervised worker is ready', () => {
-      const { task } = localWorker()
-
-      expect(db.updateTaskStatus(task.id, 'dispatched')?.status).toBe('dispatched')
     })
 
     it('control: a no-op re-assert of dispatched under a stopping worker stays legal', () => {

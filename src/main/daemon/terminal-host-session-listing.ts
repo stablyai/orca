@@ -1,6 +1,7 @@
 import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 import type { Session } from './session'
 import type { SessionInfo } from './types'
+import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 
 // Why a side table: only the listing reads it, and Session is at its max-lines cap.
 const spawnPaneKeys = new WeakMap<Session, string>()
@@ -10,6 +11,13 @@ export function recordSessionSpawnPaneKey(session: Session, paneKey: string | un
   if (paneKey) {
     spawnPaneKeys.set(session, paneKey)
   }
+}
+
+const wslGuestRoots = new WeakMap<Session, WslGuestRoot>()
+
+/** A WSL session's guest root shell, as its own launch output reported it. */
+export function recordSessionWslGuestRoot(session: Session, root: WslGuestRoot): void {
+  wslGuestRoots.set(session, root)
 }
 
 export function listLiveTerminalHostSessions(
@@ -23,6 +31,7 @@ export function listLiveTerminalHostSessions(
     }
     const size = session.getAppliedSize()
     const paneKey = spawnPaneKeys.get(session)
+    const wslGuestRoot = wslGuestRoots.get(session)
     const foregroundProcess = session.getForegroundProcess({ cachedOnly: true })
     result.push({
       sessionId: session.sessionId,
@@ -35,6 +44,7 @@ export function listLiveTerminalHostSessions(
       ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
       ...(paneKey ? { paneKey } : {}),
       wslDistro: session.wslDistro,
+      ...(wslGuestRoot ? { wslGuestRoot } : {}),
       pid: session.pid,
       cwd: session.getCwd(),
       cols: size?.cols ?? 0,

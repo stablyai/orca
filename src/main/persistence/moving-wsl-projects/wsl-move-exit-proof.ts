@@ -1,5 +1,8 @@
 // Require a complete daemon census under the move fence; unavailable evidence cannot prove exit.
-import { parsePtySessionId, WORKTREE_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
+import {
+  parsePtySessionId,
+  WORKTREE_ID_SEPARATOR
+} from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { comparableWslPath, isAtOrUnder, isLinuxSpelled } from './wsl-move-comparable-path'
 import type { SessionInfo } from '../../daemon/types'
 

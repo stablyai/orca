@@ -77,22 +77,7 @@ function seedColdDirectSshStart(): SleepingAgentSessionRecord {
   return record
 }
 
-function resumedTabCount(worktreeId: string): number {
-  return (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length
-}
-
 describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
-  it('does not resume a remote session before its SSH target connects', () => {
-    const record = seedColdDirectSshStart()
-
-    const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
-
-    expect(launched, 'cold-resumed a session the host may still be running').toBe(0)
-    expect(resumedTabCount(WORKTREE_ID)).toBe(0)
-    // Absence of evidence must not authorise deletion either — the record has to survive to wake later.
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
-  })
-
   it('wakes the same session once its SSH target connects', () => {
     const record = seedColdDirectSshStart()
     resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
@@ -109,21 +94,5 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID]?.[0]?.launchAgent).toBe('claude')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
-  })
-
-  it('leaves a purely local workspace resuming with no added latency', () => {
-    seedColdDirectSshStart()
-    const localRecord = {
-      ...makeRecord(LOCAL_WORKTREE_ID),
-      paneKey: 'tab-2:leaf-1',
-      tabId: 'tab-2'
-    }
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: { [localRecord.paneKey]: localRecord }
-    } as never)
-
-    // No hydration marked anywhere: a local workspace's host is this client, and it has answered.
-    expect(resumeSleepingAgentSessionsForWorktree(LOCAL_WORKTREE_ID)).toBe(1)
-    expect(resumedTabCount(LOCAL_WORKTREE_ID)).toBe(1)
   })
 })

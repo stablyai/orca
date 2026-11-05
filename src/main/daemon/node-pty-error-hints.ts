@@ -3,7 +3,7 @@ import {
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
   PTY_ALLOCATION_HINT,
   TERMINAL_PROCESS_LIMIT_HINT
-} from '../../shared/terminal-spawn-error-copy'
+} from '../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 
 export type NodePtyDiagnostic = {
   step: string

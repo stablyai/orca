@@ -10,7 +10,10 @@ import {
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
-import { PtyExitProof, type PtyRetirementEvidence } from '../../../pty-exit-proof'
+import {
+  PtyExitProof,
+  type PtyRetirementEvidence
+} from '../../../pty/process-retirement/pty-exit-proof'
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)

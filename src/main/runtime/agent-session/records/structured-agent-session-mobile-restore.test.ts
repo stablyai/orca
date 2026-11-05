@@ -117,7 +117,9 @@ describe('prompt delivery after host recovery', () => {
       ])
       await restarted.flushDismissals()
       expect(
-        new MobileNotificationDismissalStore(h.root).liveDeliveries(identity.notificationId)
+        new MobileNotificationDismissalStore(h.root)
+          .liveDeliveries()
+          .filter((delivery) => delivery.notificationId === identity.notificationId)
       ).toEqual([])
       expect(restarted.reconcileDismissedPushes([identity])).toEqual([identity])
       await openTestChats(host)

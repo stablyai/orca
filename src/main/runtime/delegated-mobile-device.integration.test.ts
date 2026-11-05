@@ -1,4 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +10,8 @@ import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
@@ -25,10 +28,30 @@ import {
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 type DelegatedDevice = DelegatedMobileDeviceSyncResult['devices'][number]
 
@@ -304,26 +327,43 @@ describe('pairing.delegatedMobileDevice.sync', () => {
     expect(registry.listDelegatedMobileDevices(desktop.pairedDeviceId!)).toHaveLength(1)
   })
 
-  it('keeps the parent when a child cleanup cannot be saved', async () => {
-    const { server, registry } = await startServer()
-    const desktop = pairDesktop(server)
-    const [child] = await sync(desktop, [{ phoneKey: 'p', name: 'p' }])
-    expect(
-      server.setMobileRelayBinding(child!.deviceId, {
-        relayHostId: 'host',
-        relayDeviceId: child!.deviceId,
-        ownerIdentityKey: 'owner'
+  it.each(['bearer', 'fork'] as const)(
+    'keeps the ancestors when a %s child cleanup cannot be saved',
+    async (kind) => {
+      const { server, registry } = await startServer()
+      const desktop = pairDesktop(server)
+      const parent =
+        kind === 'fork'
+          ? registry.forkDeviceKey(
+              desktop.pairedDeviceId!,
+              Buffer.alloc(32, 7).toString('base64'),
+              'Fork'
+            )
+          : registry.getDevice(desktop.pairedDeviceId!)!
+      const [child] = registry.upsertDelegatedMobileDevices(parent, [{ phoneKey: 'p', name: 'p' }])
+      expect(
+        server.setMobileRelayBinding(child!.deviceId, {
+          relayHostId: 'host',
+          relayDeviceId: child!.deviceId,
+          ownerIdentityKey: 'owner'
+        })
+      ).toBe(true)
+      const enqueue = vi.spyOn(server.getRelayRevokeOutbox(), 'enqueue').mockImplementation(() => {
+        throw new Error('disk full')
       })
-    ).toBe(true)
-    const enqueue = vi.spyOn(server.getRelayRevokeOutbox(), 'enqueue').mockImplementation(() => {
-      throw new Error('disk full')
-    })
-    cleanups.push(() => enqueue.mockRestore())
+      cleanups.push(() => enqueue.mockRestore())
 
-    expect(server.revokeRuntimeAccess(desktop.pairedDeviceId!)).toBe(false)
-    expect(registry.getDevice(desktop.pairedDeviceId!)).not.toBeNull()
-    expect(registry.getDevice(child!.deviceId)).not.toBeNull()
-  })
+      expect(server.revokeRuntimeAccess(desktop.pairedDeviceId!)).toBe(false)
+      expect(registry.getDevice(desktop.pairedDeviceId!)).not.toBeNull()
+      expect(registry.getDevice(parent.deviceId)).not.toBeNull()
+      expect(registry.getDevice(child!.deviceId)).not.toBeNull()
+
+      enqueue.mockRestore()
+      expect(server.revokeRuntimeAccess(desktop.pairedDeviceId!)).toBe(true)
+      expect(registry.getDevice(parent.deviceId)).toBeNull()
+      expect(registry.getDevice(child!.deviceId)).toBeNull()
+    }
+  )
 
   it('fails a sync whose dropped child cannot be revoked, keeping that child', async () => {
     const { server, registry } = await startServer()

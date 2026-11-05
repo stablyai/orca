@@ -13,7 +13,7 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from '../codex/codex-structured-session-adapter-fixture'
+} from '../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { agentSessionRecordFixture } from './agent-session-record-test-fixture'
 import {
   createNativeChatVisualsDelivery,

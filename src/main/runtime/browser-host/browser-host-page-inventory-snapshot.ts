@@ -1,7 +1,7 @@
 import {
   BrowserClientHostedPageInventoryList,
   type BrowserClientHostedPageInventory
-} from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 export function snapshotBrowserHostPageInventory(input: {
   browserHostClientId: string

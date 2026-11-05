@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +19,7 @@ vi.mock('../provider-process/managed-provider-process', () => ({
     throw new Error('no spawn in this test')
   }
 }))
-vi.mock('../agent-cli-version-probe', async (importOriginal) => ({
+vi.mock('../agent-launch/preflight/agent-cli-version-probe', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   checkAgentCliVersion: async (input: { program: string }) => {
     spawned.commands.push(input.program)
@@ -30,16 +31,17 @@ function context(): StructuredAgentModelCatalogContext {
   const unused = async (): Promise<never> => {
     throw new Error('building a probe resolves nothing')
   }
+  const deps: StructuredAgentSessionRuntimeDeps = {
+    stateDirectory: '/state',
+    hostId: 'local',
+    claimKeyId: 'catalog-test',
+    resolveWorkspacePath: unused,
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+    logger: { warn: vi.fn(), error: vi.fn() }
+  }
   return {
-    deps: {
-      stateDirectory: '/state',
-      hostId: 'local',
-      claimKeyId: 'catalog-test',
-      resolveWorkspacePath: unused,
-      resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-      logger: { warn: vi.fn(), error: vi.fn() }
-    },
+    deps,
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,

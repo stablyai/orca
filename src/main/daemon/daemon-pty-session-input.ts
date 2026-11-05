@@ -1,6 +1,9 @@
 import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
-import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
+import {
+  writeRefused,
+  type WriteSettlement
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
   getPtyAvailability(id: string): boolean | null {

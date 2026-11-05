@@ -27,7 +27,7 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../pwsh', () => ({
+vi.mock('../pty/shell-startup/pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
@@ -80,7 +80,7 @@ import { createPtySubprocess } from './pty-subprocess'
 import {
   LEGACY_TERMINAL_SHIM_ENV_KEYS,
   stripLegacyTerminalShimEnv
-} from '../pty/legacy-terminal-shim-dir'
+} from '../pty/shell-startup/legacy-terminal-shim-dir'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 import {
   claimHostMallocTunables,

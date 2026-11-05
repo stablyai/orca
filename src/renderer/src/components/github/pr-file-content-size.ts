@@ -1,4 +1,4 @@
-import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '@/components/editor/large-diff-render-limit'
+import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../../../../shared/large-diff-render-limit'
 import type {
   GitHubPRFile,
   GitHubPRFileContents

@@ -23,7 +23,7 @@ import type {
   RuntimeWorktreeCreateResult
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { getDefaultRepoHookSettings } from '../../src/shared/constants'
 import {
   buildFakeAgentCommandOverride,

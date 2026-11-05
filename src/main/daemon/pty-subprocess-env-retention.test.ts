@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
 
-vi.mock('../pty/posix-pty-process-groups', () => ({
+vi.mock('../pty/process-retirement/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: () => {
     throw new Error('Unexpected native termination')
   }
 }))
-vi.mock('../pty/posix-pty-foreground-group', () => ({
+vi.mock('../pty/process-retirement/posix-pty-foreground-group', () => ({
   signalPosixPtyForegroundGroup: () => {
     throw new Error('Unexpected native signal')
   }

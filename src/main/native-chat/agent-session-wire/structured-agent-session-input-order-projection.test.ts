@@ -23,8 +23,10 @@ import {
 } from './structured-agent-session-host-test-data'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import './structured-agent-session-terminal-queue-membership.spec'
 
-it.each([10, 100])(
+// Counts are exact or log-bounded formulas in n, so 3x already exposes superlinear work.
+it.each([10, 30])(
   'bounds actual edit/growth, replay, replacement and complete recovery N=%i',
   async (n) => {
     type Counts = {
@@ -463,8 +465,8 @@ it.each([10, 100])(
         await serialize(SESSION, () =>
           journal.replaceEpochItems('unreconcilable_prefix', 1, []).then(() => {})
         )
-        expect(metric().rows).toBe(2 * (3 * n + 3)) // Builder and isolated publication each fold the same actual cohort.
-        expect(metric().receipts).toBe(n)
+        expect(metric().rows).toBe(pass === 0 ? 3 : 1) // Logical boundary removes the two foreground rows once; queued admissions are retained.
+        expect(metric().receipts).toBe(0) // No physical restatement or new original-acceptance lookup.
         expect(
           [...journal.queuedMessages.displayState().inputCards.values()].filter(
             (card) => card.baseline !== undefined
@@ -544,7 +546,9 @@ it.each([10, 100])(
       expect(actual).toEqual(expected)
       expect(new Set(actual).size).toBe(expected.length)
       expect(reopened.queuedMessages.list().filter((card) => card.state === 'waiting')).toEqual([])
-      expect(reopened.inputOrder.unsettledSubmissions()).toEqual([])
+      expect(reopened.inputOrder.unsettledSubmissions()).toEqual([
+        expect.objectContaining({ clientMessageId: w, dispatchState: 'unknown' })
+      ])
       expect(
         rig.dispatch.mock.calls.slice(base).some(([input]) => input.clientMessageId === w)
       ).toBe(false)
@@ -561,22 +565,19 @@ it.each([10, 100])(
       expect(phases['original-replay'].sets).toBeLessThanOrEqual(6 * n + 16)
       for (let pass = 0; pass < 2; pass++) {
         for (const name of [`replacement-${pass}`, `output-replay-${pass}`]) {
-          // The builder and isolated publisher each initialize two trees from K cards;
-          // their first card also takes the ordinary affected-ID update. Keyed replay builds once.
-          expect(phases[name].sets, name).toBe(
-            name.startsWith('replacement') ? 4 * (2 * n + 3) : 2 * (2 * n + 2)
-          )
+          // Logical replacement keeps the indexes; keyed replay rebuilds the two current trees.
+          expect(phases[name].sets, name).toBe(name.startsWith('replacement') ? 0 : 2 * (2 * n + 2))
           // One fold query per admitted input; each actual consumer boundary call adds one point query.
           expect(phases[name].queries, name).toBeLessThanOrEqual(n + (boundaryCalls[name] ?? 0))
-          expect(phases[name].lineage, name).toBe(
-            name.startsWith('replacement') ? 2 * (2 * n + 2) : 0
-          )
+          expect(phases[name].lineage, name).toBe(0)
         }
       }
       // Per row, at most two affected-card refreshes of two indexes; two effective-pause passes may rebuild K.
       expect(phases.recovery.rows).toBeLessThanOrEqual(8 * n + 12)
       expect(phases.recovery.sets).toBeLessThanOrEqual(4 * phases.recovery.rows + 4 * (2 * n + 2))
-      expect(phases.recovery.queries).toBe(n) // One predecessor query per pending input; keyed restore does not readmit it.
+      // Keyed restore does not readmit inputs; only actual selection boundaries query the index.
+      expect(phases.recovery.queries).toBe(boundaryCalls.recovery)
+      expect(phases.recovery.queries).toBeLessThanOrEqual(n + 2)
       expect(phases.delivery.sets).toBeLessThanOrEqual(32 * n + 8)
       expect(phases.delivery.queries).toBe(0)
       console.info('current-consumer-evidence', JSON.stringify({ n, phases, consumers, upstream }))

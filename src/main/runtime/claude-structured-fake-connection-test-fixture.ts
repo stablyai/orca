@@ -1,3 +1,5 @@
+import { expect, vi } from 'vitest'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   type claudeInitialization,
   claudeInitializationScope
@@ -126,4 +128,47 @@ export function fakeClaude(providerSession: string) {
       contextUsage = answer
     }
   }
+}
+
+export function leaseOf(sessionId: string): {
+  claimStatus: string
+  runtimeFence: number
+  handoffStage: string | null
+  deathEvidence: { kind: string; detail: string } | null
+} {
+  const host = getStructuredAgentSessionHost() as unknown as {
+    deps: { store: { getRecord: (id: string) => { lease: ReturnType<typeof leaseOf> } } }
+  }
+  return host.deps.store.getRecord(sessionId).lease
+}
+
+export async function startingConnection(claude: ReturnType<typeof fakeClaude>, sessionId: string) {
+  const connection = claude.live()
+  await vi.waitFor(() => {
+    expect(getStructuredAgentSessionHost()?.['sessions'].get(sessionId)?.child).toMatchObject({
+      phase: 'starting',
+      generation: expect.any(String),
+      fence: leaseOf(sessionId).runtimeFence
+    })
+    expect(getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null,
+      ownerProcess: { pid: connection.pid }
+    })
+  })
+  return connection
+}
+
+export function failStarting(
+  claude: ReturnType<typeof fakeClaude>,
+  connection: ReturnType<typeof claude.live>,
+  tree: 'unverifiable' | 'live' | 'exited'
+) {
+  connection.exitVerdict = { root: 'exited', tree }
+  connection.closeProven = tree === 'exited'
+  connection.handlers.onExit?.(
+    new Error('claude stream-json exited (code 1): claude: not signed in')
+  )
+  connection.initialization.reject(new Error('Query closed before response received'))
+  claude.setInitializeHeld(false)
 }

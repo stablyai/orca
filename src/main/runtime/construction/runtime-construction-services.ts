@@ -8,9 +8,9 @@ import type {
   RuntimeVisibleTerminalState,
   RuntimeLeafRecord
 } from '../runtime-terminal-state-records'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
-import type { AgentStatus } from '../../../shared/agent-detection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TuiIdleHookTurn } from '../tui-idle-hook-lane'
 import type { RuledScreen } from '../screen-input-veto'
 import type {
@@ -33,15 +33,15 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
-import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'
-import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/structured-mailbox-pointer-delivery'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../runtime-repo-selector'
@@ -49,6 +49,7 @@ import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
 export abstract class RuntimeConstructionServices {
   abstract getOrchestrationDb(): OrchestrationDb
+  abstract getExistingOrchestrationDb(): OrchestrationDb | null
   abstract listRepos(): Repo[]
   abstract invalidateResolvedWorktreeCache(): void
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void

@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
   listEnvironments
-} from '../../shared/runtime-environment-store'
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import { DeviceRegistry } from './device-registry'
 import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
 import {

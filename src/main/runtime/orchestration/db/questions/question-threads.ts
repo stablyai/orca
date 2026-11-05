@@ -19,15 +19,12 @@ export function createQuestion(
   this.db.exec('BEGIN IMMEDIATE')
   try {
     this.requireRun(params.runId)
+    // A finished Dispatch still asks: its worker keeps talking to the coordinator after reporting.
     const dispatch = this.getDispatchContextById(params.dispatchId)
-    if (
-      !dispatch ||
-      dispatch.run_id !== params.runId ||
-      (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')
-    ) {
+    if (!dispatch || dispatch.run_id !== params.runId) {
       throw new OrchestrationError(
         'dispatch_inactive',
-        `Dispatch ${params.dispatchId} is not active in Run ${params.runId}.`
+        `Dispatch ${params.dispatchId} is not in Run ${params.runId}.`
       )
     }
     const message = this.insertMessage({

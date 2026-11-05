@@ -6,7 +6,6 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import type { ProviderTimelineHold } from './provider-timeline-budget'
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import {
@@ -61,7 +60,6 @@ export type ProviderTimelineItemWrite = {
 
 export type ProviderTimelineDecision = {
   dropped?: ProviderTimelineDropRule
-  hold?: ProviderTimelineHold
   /** Apply state changes only after sink admission. */
   commit?: (state: ProviderTimelineState) => void
   /** Resolve settlement from the journal at execution. */

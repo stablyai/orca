@@ -1,10 +1,8 @@
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
-import type {
-  AgentStatusIpcPayload,
-  ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
-import type { AgentMainAgentStatus } from '../../shared/main-agent-status'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
+import type { AgentMainAgentStatus } from '../../shared/agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 
 export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'> & {

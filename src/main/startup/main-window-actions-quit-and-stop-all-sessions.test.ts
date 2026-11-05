@@ -30,7 +30,10 @@ vi.mock('../daemon/daemon-provider-state', () => ({ getDaemonProvider: daemon.pr
 vi.mock('../ipc/pty/pty-management', () => ({
   confirmNoDaemonSessionsRemain: daemon.noSessionsRemain
 }))
-vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
+vi.mock('../updater/updater-service', () => ({
+  checkForUpdatesFromMenu: vi.fn(),
+  isQuittingForUpdate: vi.fn()
+}))
 vi.mock('../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
   setMacMenuBarIconVisible: vi.fn()
@@ -49,9 +52,10 @@ vi.mock('./windows-install-dir-acl-recovery', () => ({
 vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 vi.mock('../window/renderer-launch-failure-probe', () => ({ probeRendererLaunchCapacity: vi.fn() }))
 
-import { safelyRevealWindow } from '../window/focus-existing-window'
+import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import {
   consumeQuitAndStopAllSessionsRequest,
+  focusExistingWindow,
   getAppMenuQuitHandlers,
   getSystemTrayOptions,
   quitAfterRendererStoppedAllSessions,
@@ -60,6 +64,7 @@ import {
   setMainWindowOpener
 } from './main-window-actions'
 import { mainProcessState as state } from './main-process-state'
+import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 
 const MAIN_WEB_CONTENTS_ID = 7
 
@@ -95,6 +100,19 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  quitTeardownStartGate.resetForTests()
+})
+
+describe('focusExistingWindow', () => {
+  it('stops relaunch activation from opening a window once quit teardown has started', () => {
+    focusExistingWindow()
+    const canOpenWindow = vi.mocked(focusExistingMainWindow).mock.lastCall?.[0].canOpenWindow
+    expect(canOpenWindow?.()).toBe(true)
+
+    quitTeardownStartGate.tryStart({ preventDefault: vi.fn() })
+
+    expect(canOpenWindow?.()).toBe(false)
+  })
 })
 
 describe('quitAndStopAllSessionsFromUserCommand', () => {

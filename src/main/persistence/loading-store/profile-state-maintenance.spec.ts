@@ -1,7 +1,10 @@
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { ActiveViewPreference, getActiveViewPreferenceFile } from '../../active-view-preference'
+import {
+  ActiveViewPreference,
+  getActiveViewPreferenceFile
+} from '../preferences/active-view-preference'
 import * as backupWorker from '../profile-state/profile-state-backup-worker'
 import { profileStateDatabaseBackups } from '../profile-state/profile-state-backup-path'
 import { profileStateJsonExportPaths } from '../profile-state/legacy-json/profile-state-export-path'

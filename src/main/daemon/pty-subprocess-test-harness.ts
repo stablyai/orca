@@ -86,6 +86,8 @@ export function createPtyProcessEventEmitter(): Pick<
 }
 
 const CONPTY_MOCK_PRELUDE = '\x1b[c'
+// Captured before tests fake timers; spawn awaits the prelude, so it must always fire.
+const realSetImmediate = globalThis.setImmediate
 
 /** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
 export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
@@ -95,7 +97,8 @@ export function createConptyPreludeSender(): (cb: (data: string) => void) => voi
     if (process.platform === 'win32' && !sent) {
       listeners.add(cb)
       if (listeners.size === 1) {
-        queueMicrotask(() => {
+        // A macrotask, like real ConPTY output, reaches every listener subscribed during spawn.
+        realSetImmediate(() => {
           sent = true
           for (const listener of listeners) {
             listener(CONPTY_MOCK_PRELUDE)

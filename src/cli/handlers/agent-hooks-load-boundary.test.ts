@@ -18,7 +18,7 @@ vi.mock('../../main/persistence/profile-state/profile-state-access', () => {
 vi.mock('../profile-state-location', () => {
   throw new Error('Profile location loaded during online preparation')
 })
-vi.mock('../../main/codex/codex-hook-local-install', () => {
+vi.mock('../../main/codex/hooks/installation/codex-hook-local-install', () => {
   throw new Error('The Codex installer loaded in the pane CLI')
 })
 

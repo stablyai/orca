@@ -2,7 +2,7 @@ import type { GitHubCreateIssueFields, GitHubIssueUpdate } from '../../shared/is
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPRReviewCommentInput } from '../../shared/github/comment-types'
 import type { Repo } from '../../shared/repo-types'
-import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
+import type { LocalProjectGhExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import {
   addIssueComment,
   addPRReviewComment,
@@ -43,7 +43,8 @@ export class RuntimeGitHubIssueCommentCommands {
   async updateRepoIssue(
     repoSelector: string,
     number: number,
-    updates: GitHubIssueUpdate
+    updates: GitHubIssueUpdate,
+    ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return updateIssue(
@@ -52,7 +53,8 @@ export class RuntimeGitHubIssueCommentCommands {
       updates,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0],
-      repo.issueSourcePreference
+      repo.issueSourcePreference,
+      ...(ownerRepo ? ([ownerRepo] as const) : ([] as const))
     )
   }
 

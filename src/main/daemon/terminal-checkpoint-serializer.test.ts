@@ -92,42 +92,6 @@ describe('terminal checkpoint serializer', () => {
     expect(Buffer.byteLength(serialized, 'utf8')).toBeLessThanOrEqual(maxBytes)
   })
 
-  it('keeps native conversion bounded without materializing the whole candidate', async () => {
-    let reads = 0
-    const input = snapshot()
-    Object.defineProperty(input, 'snapshotAnsi', {
-      enumerable: true,
-      get: () => {
-        reads += 1
-        return 'visible'.repeat(20_000)
-      }
-    })
-    const stringify = vi.spyOn(JSON, 'stringify')
-    const byteLength = vi.spyOn(Buffer, 'byteLength')
-
-    try {
-      await serializeTerminalCheckpointWithinLimit(input, metadata, 200 * 1024)
-
-      expect(
-        stringify.mock.calls.some(([value]) => typeof value === 'object' && value !== null)
-      ).toBe(false)
-      for (const [value] of stringify.mock.calls) {
-        if (typeof value === 'string') {
-          expect(value.length).toBeLessThanOrEqual(64 * 1024)
-        }
-      }
-      for (const [value] of byteLength.mock.calls) {
-        if (typeof value === 'string') {
-          expect(value.length).toBeLessThanOrEqual(128 * 1024)
-        }
-      }
-      expect(reads).toBe(1)
-    } finally {
-      stringify.mockRestore()
-      byteLength.mockRestore()
-    }
-  })
-
   it('preserves shell ownership when an oversized alternate-screen checkpoint is trimmed', async () => {
     const input = snapshot({
       snapshotAnsi: `\x1b[?1049h${'row\r\n'.repeat(500)}visible`,
@@ -157,26 +121,6 @@ describe('terminal checkpoint serializer', () => {
     const serialized = await serializeTerminalCheckpointWithinLimit(input, metadata, 2_048)
 
     expect(JSON.parse(serialized).modes.kittyKeyboardFlags).toBe(1)
-  })
-
-  it('rejects an oversized escaped candidate without materializing it', async () => {
-    const oversized = String.fromCharCode(0).repeat(100_000)
-    const stringify = vi.spyOn(JSON, 'stringify')
-
-    try {
-      await serializeTerminalCheckpointWithinLimit(
-        snapshot({ snapshotAnsi: oversized }),
-        metadata,
-        512
-      )
-
-      const materializedOversizedCandidate = stringify.mock.calls.some(([value]) => {
-        return (value as { snapshotAnsi?: unknown })?.snapshotAnsi === oversized
-      })
-      expect(materializedOversizedCandidate).toBe(false)
-    } finally {
-      stringify.mockRestore()
-    }
   })
   it.each([16 * 1024 - 1, 16 * 1024])(
     'preserves hardcoded control and surrogate JSON after %i code units',

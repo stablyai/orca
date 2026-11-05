@@ -16,7 +16,7 @@ vi.mock('./runtime-client', () => ({
 }))
 vi.mock('./runtime/environments', () => ({ resolveEnvironment: mocks.resolveEnvironment }))
 
-import type { TerminalPaneRevealTarget } from '../shared/terminal-pane-reveal'
+import type { TerminalPaneRevealTarget } from '../shared/workspace-layout/terminal-pane-reveal'
 import type { RuntimeClient } from './runtime-client'
 import { revealPairedTerminalOnLocalDesktop } from './paired-terminal-desktop-reveal'
 

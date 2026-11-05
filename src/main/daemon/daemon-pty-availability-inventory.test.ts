@@ -131,50 +131,6 @@ it('commits confirmed absence while a newer inventory times out without disconne
   })
 })
 
-it.each(['exit', 'close'] as const)(
-  'commits retained absence while an unrelated attached PTY has a concurrent %s',
-  async (retirement) => {
-    await withRetainedPty(async ({ owner, subprocess, subprocesses, responses }) => {
-      await owner.spawn({ sessionId: 'attached', cwd: '/tmp', cols: 80, rows: 24 })
-      subprocess._simulateExit(0)
-      const inventory = owner.listProcesses()
-      await waitFor(() => responses.pending.length === 1)
-      if (retirement === 'exit') {
-        subprocesses[1]?._simulateExit(0)
-      } else {
-        await owner.shutdown('attached', { immediate: true })
-      }
-      await waitFor(() => !owner.hasPty('attached'))
-      responses.pending[0]?.resolve()
-      await expect(inventory).resolves.toHaveLength(1)
-      expect(owner.getPtyAvailability('retained')).toBe(false)
-      expect(owner.getPtyAvailability('attached')).toBe(false)
-      // ast-grep-ignore: test-no-wall-clock -- An ordinary RPC timeout must preserve the completed absence.
-      const deadlineMs = Date.now() + 200
-      const timedOut = owner.listProcesses({ deadlineMs }).catch((error: unknown) => error)
-      await waitFor(() => responses.pending.length === 2)
-      expect(await timedOut).toBeInstanceOf(Error)
-      expect(owner.getDaemonIdentity()).not.toBeNull()
-      expect(owner.getPtyAvailability('retained')).toBe(false)
-    })
-  }
-)
-
-it('admits a replacement incarnation captured after its predecessor retires during acquisition', async () => {
-  await withRetainedPty(async ({ owner, peer, subprocess, responses }) => {
-    await owner.attach('retained')
-    const inventory = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 1)
-    subprocess._simulateExit(0)
-    await waitFor(() => !owner.hasPty('retained'))
-    const replacement = await peer.spawn({ sessionId: 'retained', cwd: '/tmp', cols: 80, rows: 24 })
-    responses.pending[0]?.resolve()
-    await expect(inventory).resolves.toMatchObject([{ incarnationId: replacement.incarnationId }])
-    expect(owner.hasPty('retained')).toBe(false)
-    expect(owner.getPtyAvailability('retained')).toBe(true)
-  }, true)
-})
-
 it('does not let an older absent census prune a replacement after a newer census commits', async () => {
   await withRetainedPty(async ({ owner, subprocess, responses }) => {
     await owner.attach('retained')

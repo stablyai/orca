@@ -1,10 +1,10 @@
 /** Census through the managed tunnel before lifecycle changes. Unknown counts never mean zero, so live/uncounted hosts defer update (D7). */
 import { getAppEnvironment } from '../../shared/app-environment'
-import { assertRuntimeEnvironmentNotReconciling } from '../../shared/runtime-environment-reconciliation-record'
+import { assertRuntimeEnvironmentNotReconciling } from '../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import {
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   OrcadManagedDeployResult,
   OrcadManagedPastLiveTerminals,

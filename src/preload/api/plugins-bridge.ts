@@ -50,8 +50,12 @@ export const pluginsApi = {
   }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readCustomEditorEntry', args),
   readNewFileTemplate: (args: { pluginKey: string; newFileId: string }): Promise<string | null> =>
     ipcRenderer.invoke('plugins:readNewFileTemplate', args),
-  invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
-    ipcRenderer.invoke('plugins:invokeCommand', args),
+  invokeCommand: (args: {
+    pluginKey: string
+    commandId: string
+    args?: unknown
+    timeoutMs?: number
+  }) => ipcRenderer.invoke('plugins:invokeCommand', args),
   panelAction: (args: {
     sessionToken: string
     action: string
@@ -113,6 +117,7 @@ export const pluginsApi = {
     }
   },
   statusBarState: () => ipcRenderer.invoke('plugins:statusBarState'),
+  editorSaveHook: (event) => ipcRenderer.invoke('plugins:editorSaveHook', event),
   onStatusBarChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, overrides: PluginStatusBarOverrides) =>
       callback(overrides)

@@ -14,7 +14,7 @@ import {
 } from '../../../shared/constants'
 import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
 
 const repo: Repo = {

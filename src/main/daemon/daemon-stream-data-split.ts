@@ -1,4 +1,4 @@
-import { resolveSynchronizedOutputSafeSplit } from '../../shared/terminal-synchronized-output-scan'
+import { resolveSynchronizedOutputSafeSplit } from '../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import {
   BINARY_STREAM_FRAMING,
   binaryStreamDataFrameOverheadBytes,

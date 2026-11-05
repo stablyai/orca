@@ -1,5 +1,5 @@
 import type { BrowserActionEffects } from '../../../shared/runtime-browser-contracts'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 // Results travel to remote clients with a 768 KB budget; agents read them in their context.
 const PAGE_CHARS = 6_000

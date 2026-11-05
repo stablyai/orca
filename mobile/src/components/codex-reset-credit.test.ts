@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const uuid = vi.hoisted(() => ({ next: vi.fn<() => string>() }))
 vi.mock('../platform/random-v4-uuid', () => ({ randomV4Uuid: uuid.next }))
 
-import type { AccountsSnapshot, ProviderRateLimits } from './accounts-snapshot'
+import type { AccountProviderRateLimits, AccountsSnapshot } from './accounts-snapshot'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditOutcomeCopy,
@@ -14,7 +14,10 @@ import {
 
 const UUID = '11111111-1111-4111-8111-111111111111'
 
-function makeLimits(availableCount: number, nextExpiresAt: number | null): ProviderRateLimits {
+function makeLimits(
+  availableCount: number,
+  nextExpiresAt: number | null
+): AccountProviderRateLimits {
   return {
     provider: 'codex',
     session: null,

@@ -2,14 +2,14 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
-  listEnvironments,
   removeEnvironment,
   resolveEnvironmentPairingOffer
 } from './environments'
+import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const roots: string[] = []
 

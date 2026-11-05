@@ -3,7 +3,7 @@ import type { Repo } from '../../shared/repo-types'
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import { getDefaultSettings } from '../../shared/constants'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
 
 const mocks = vi.hoisted(() => ({
   detectInstalledAgentsWithShellPathHydration: vi.fn()
@@ -299,12 +299,16 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
       name: 'Review',
       startupAgent: 'claude',
       startupPrompt: 'go',
-      startupExtraAgentArgs: '--effort high'
+      startupExtraAgentArgs: '--effort high',
+      startupAgentArgs: null,
+      startupSessionOptions: { fastMode: 'true' }
     }
     resolveWorktreeCreateAgentStartup(createArgs, build)
 
     expect(build).toHaveBeenCalledWith('claude', 'go', undefined, {
-      extraAgentArgs: '--effort high'
+      extraAgentArgs: '--effort high',
+      agentArgs: null,
+      sessionOptions: { fastMode: 'true' }
     })
   })
 

@@ -14,9 +14,12 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
+import { ClaudePromptRegistry } from './claude-prompt-registry'
+import { claudeLaunchPermissions } from './structured/claude-structured-inbound-control'
+import { claudeStructuredPermissionOptions } from './structured/launch/claude-structured-launch-resolution'
 
 // Exercise the real SDK against a scripted CLI to detect protocol and spawn-contract drift.
 
@@ -79,7 +82,8 @@ afterEach(() => {
 
 function scriptScenario(
   steps: ScenarioStep[],
-  controlResponses: Record<string, unknown> = {}
+  controlResponses: Record<string, unknown> = {},
+  extra: Record<string, unknown> = {}
 ): {
   scenarioPath: string
   reportPath: string
@@ -90,7 +94,7 @@ function scriptScenario(
   scratchDirs.push(dir)
   const scenarioPath = join(dir, 'scenario.json')
   const reportPath = join(dir, 'report.json')
-  writeFileSync(scenarioPath, JSON.stringify({ steps, controlResponses }))
+  writeFileSync(scenarioPath, JSON.stringify({ steps, controlResponses, ...extra }))
   return {
     scenarioPath,
     reportPath,
@@ -482,6 +486,143 @@ describe('Claude Agent SDK contract pins', () => {
       .controlResponses.find((frame) => frame.response.request_id === 'perm-421')
     expect(settled?.response.response?.behavior).toBe('deny')
     expect(spawns).toHaveLength(1)
+  })
+
+  describe("Full access decisions keep each request's place in one stdout chunk", () => {
+    const status = (permissionMode: string) => ({
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      permissionMode,
+      session_id: SESSION_ID
+    })
+    const ask = (id: string, extra: Record<string, unknown> = {}) => ({
+      type: 'control_request',
+      request_id: id,
+      request: {
+        subtype: 'can_use_tool',
+        tool_name: 'Bash',
+        input: { command: 'echo harmless' },
+        tool_use_id: `tool-${id}`,
+        ...extra
+      }
+    })
+    const cancel = (id: string) => ({ type: 'control_cancel_request', request_id: id })
+    type WireFrame = ReturnType<typeof status> | ReturnType<typeof ask> | ReturnType<typeof cancel>
+    const isAsk = (frame: WireFrame): frame is ReturnType<typeof ask> => 'request' in frame
+    const many = (prefix: string) =>
+      Array.from({ length: 300 }, (_, index) => ask(`${prefix}${index}`))
+    const asked = (ids: string[], allowed: boolean) =>
+      ids.map((requestId) => ({ requestId, allowed }))
+    const manyIds = (prefix: string) => many(prefix).map((frame) => frame.request_id)
+
+    it.each([
+      {
+        label: 'plan, then bypass, with the interaction flag',
+        frames: [
+          status('plan'),
+          ask('A'),
+          status('bypassPermissions'),
+          ask('B'),
+          ask('flagged', { tool_name: 'mcp__forms__confirm', requires_user_interaction: true })
+        ],
+        seen: [...asked(['A'], false), ...asked(['B'], true), ...asked(['flagged'], false)],
+        interaction: [true],
+        pending: []
+      },
+      {
+        label: 'a request initialize resends, then plan',
+        frames: [status('plan'), ask('A')],
+        seen: [...asked(['resent'], true), ...asked(['A'], false)],
+        interaction: [],
+        pending: [ask('resent')]
+      },
+      {
+        label: 'a cancel in the same chunk',
+        frames: [status('plan'), ask('A'), cancel('A'), status('bypassPermissions'), ask('B')],
+        seen: [...asked(['A'], false), ...asked(['B'], true)],
+        interaction: [],
+        pending: []
+      },
+      {
+        label: 'a duplicate id after bypass',
+        frames: [status('plan'), ask('A'), status('bypassPermissions'), ask('A'), ask('B')],
+        seen: [...asked(['A', 'A'], false), ...asked(['B'], true)],
+        interaction: [],
+        pending: []
+      },
+      {
+        label: 'more than 256 unread requests in plan',
+        frames: [status('plan'), ...many('p'), status('bypassPermissions'), ask('B')],
+        seen: [...asked(manyIds('p'), false), ...asked(['B'], true)],
+        interaction: [],
+        pending: []
+      },
+      {
+        label: 'more than 256 unread requests in Full access',
+        frames: [status('bypassPermissions'), ...many('f'), status('plan'), ask('C')],
+        seen: [...asked(manyIds('f'), true), ...asked(['C'], false)],
+        interaction: [],
+        pending: []
+      }
+    ])('$label', async ({ frames, seen: expected, interaction: flags, pending }) => {
+      const requestIds = [
+        ...new Set([...pending, ...frames].filter(isAsk).map((frame) => frame.request_id))
+      ]
+      const scenario = scriptScenario(
+        [
+          { awaitUserMessage: true },
+          { emitTogether: frames },
+          ...requestIds.map((id) => ({ awaitControlResponse: id })),
+          { emit: RESULT_FRAME }
+        ],
+        {},
+        { pendingPermissionRequests: { initialize: pending } }
+      )
+      const prompts = new ClaudePromptRegistry()
+      const permissions = claudeLaunchPermissions(
+        { sessionId: 'session-1', prompts, emit: () => {} },
+        {
+          providerSessionId: SESSION_ID,
+          options: claudeStructuredPermissionOptions('full-access')
+        }
+      )
+      const seen: { requestId: string; allowed: boolean }[] = []
+      const interaction: unknown[] = []
+      const canUseTool: CanUseTool = async (toolName, input, options) => {
+        if ('requiresUserInteraction' in options) {
+          interaction.push(options.requiresUserInteraction)
+        }
+        const answer = permissions.handlers.canUseTool!(toolName, input, options)
+        // Answer any card at once so the scripted turn can finish.
+        prompts.find(options.requestId)?.prompt.settle({
+          behavior: 'deny',
+          message: 'asked',
+          toolUseID: options.toolUseID
+        })
+        const decision = { requestId: options.requestId, allowed: false }
+        seen.push(decision)
+        const result = await answer
+        decision.allowed = result?.behavior === 'allow'
+        return result ?? { behavior: 'deny', message: 'cancelled', toolUseID: options.toolUseID }
+      }
+      const spawner = createClaudeCodeProcessSpawn(
+        spawnProcess,
+        process.platform,
+        { pathToClaudeCodeExecutable: FAKE_CLI },
+        permissions.handlers.onStdout
+      )
+      await drainQuery({
+        pathToClaudeCodeExecutable: FAKE_CLI,
+        cwd: scenario.cwd,
+        env: scenarioEnv(scenario),
+        canUseTool,
+        spawnClaudeCodeProcess: spawner.spawn
+      })
+
+      expect(seen).toEqual(expected)
+      expect(interaction).toEqual(flags)
+    })
   })
 
   it('runs the executable given via pathToClaudeCodeExecutable under the default spawner', async () => {

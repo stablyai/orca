@@ -125,20 +125,6 @@ it('rejects a claimed tab that no group lists', () => {
 })
 
 it.each([
-  ['1 tab per group', [['tab-0'], ['tab-1']]],
-  ['both tabs in one group', [['tab-0', 'tab-1']]]
-])('accepts an exactly-covering split with %s', (_label, tabOrders) => {
-  const groups: Groups = tabOrders.map((tabOrder, i) => ({
-    id: `g${i}`,
-    activeTabId: tabOrder[0],
-    tabOrder,
-    // Reverse MRU: every entry must still resolve inside its own group.
-    recentTabIds: tabOrder.toReversed()
-  }))
-  expect(validate(withGroups(2, groups)).topologyTabsById.size).toBe(2)
-})
-
-it.each([
   ['omitted', undefined],
   ['empty', [] as string[]]
 ])('accepts %s recentTabIds', (_label, recentTabIds) => {

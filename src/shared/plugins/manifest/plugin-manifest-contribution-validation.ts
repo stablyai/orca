@@ -15,7 +15,11 @@ type ContributionValidationManifest = {
   main?: string
   contributes: {
     panels: IdentifiedContribution[]
-    commands: (IdentifiedContribution & { action?: string; when?: 'global' | 'workspace' })[]
+    commands: (IdentifiedContribution & {
+      action?: string
+      replaces?: string
+      when?: 'global' | 'workspace'
+    })[]
     events: { on: PluginEventName }[]
     hooks: { event: string }[]
     languagePacks: { locale: string }[]
@@ -163,6 +167,7 @@ export function validatePluginManifestContributions(
       })
     }
   }
+  validateCommandReplacements(manifest.contributes.commands, ctx)
   for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
     const command = commands.get(keybinding.command)
     if (!command) {
@@ -223,5 +228,39 @@ export function validatePluginManifestContributions(
         message: `${subscription.on} requires the ${required} capability`
       })
     }
+  }
+}
+
+/** A replacement runs worker code in place of a built-in, so it cannot also be a built-in alias. */
+function validateCommandReplacements(
+  commands: readonly { replaces?: string; action?: string }[],
+  ctx: RefinementCtx
+): void {
+  const replaced = new Set<string>()
+  for (const [index, command] of commands.entries()) {
+    if (command.replaces === undefined) {
+      continue
+    }
+    const path = ['contributes', 'commands', index, 'replaces']
+    if (!isPluginCommandAliasActionId(command.replaces)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: `unknown built-in action: ${command.replaces}`
+      })
+    } else if (command.action !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: 'a replacing command runs the worker; drop action'
+      })
+    } else if (replaced.has(command.replaces)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: `another command already replaces ${command.replaces}`
+      })
+    }
+    replaced.add(command.replaces)
   }
 }

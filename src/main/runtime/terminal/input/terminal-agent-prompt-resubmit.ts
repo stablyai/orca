@@ -3,13 +3,13 @@ import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-cont
 import {
   AGENT_PROMPT_SUBMIT,
   isHeldAgentPromptDraft
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity

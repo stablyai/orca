@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
-import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
+import type { MergeContext } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 function emptyAppMemory() {
   return {

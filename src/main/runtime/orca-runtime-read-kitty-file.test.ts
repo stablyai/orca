@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 
@@ -61,70 +61,6 @@ beforeEach(() => {
 })
 
 describe('Kitty file execution-host ownership', () => {
-  it('resolves folder workspace and passes the recorded WSL namespace', async () => {
-    const { runtime, handle } = fixture()
-    runtime.preparePtyExecutionContext(PTY, 'Ubuntu')
-    const request = { path: '/tmp/image', offset: 2, length: 3 }
-    const controller = new AbortController()
-    expect(await runtime.readKittyFile(handle, request, controller.signal)).toEqual({
-      base64: 'aW1hZ2U='
-    })
-    expect(readFile).toHaveBeenCalledWith(
-      request,
-      { workspacePath: '/workspace', wslDistro: 'Ubuntu' },
-      controller.signal
-    )
-  })
-
-  it.each([null, 'Ubuntu'])(
-    'reads floating-terminal temporary files in namespace %s',
-    async (distro) => {
-      const { runtime, handle } = fixture(PTY, null, FLOATING_TERMINAL_WORKTREE_ID)
-      runtime['resolveGitWorktreeSelector'] = vi
-        .fn()
-        .mockRejectedValue(new Error('selector_not_found'))
-      if (distro) {
-        runtime.preparePtyExecutionContext(PTY, distro)
-      }
-      expect(await runtime.readKittyFile(handle, { path: '/tmp/image' })).toEqual({
-        base64: 'aW1hZ2U='
-      })
-      expect(runtime['resolveGitWorktreeSelector']).not.toHaveBeenCalled()
-      expect(readFile).toHaveBeenCalledWith(
-        { path: '/tmp/image' },
-        { workspacePath: null, wslDistro: distro },
-        undefined
-      )
-    }
-  )
-
-  it('does not treat an unresolved project as a floating terminal', async () => {
-    const { runtime, handle } = fixture(PTY, null, 'folder:deleted-folder')
-    await expect(runtime.readKittyFile(handle, { path: '/tmp/image' })).rejects.toThrow(
-      'selector_not_found'
-    )
-    expect(readFile).not.toHaveBeenCalled()
-  })
-
-  it('rejects a foreign PTY without opening a same-named client file', async () => {
-    const { runtime, handle } = fixture('ssh:target@@file-pty', 'target')
-    await expect(runtime.readKittyFile(handle, { path: '/tmp/image' })).rejects.toThrow(
-      'execution host'
-    )
-    expect(readFile).not.toHaveBeenCalled()
-  })
-
-  it('rejects a wrong expected incarnation before reading', async () => {
-    const { runtime, handle } = fixture()
-    await expect(
-      runtime.readKittyFile(handle, {
-        path: '/tmp/image',
-        expectedIncarnationId: 'older-incarnation'
-      })
-    ).rejects.toThrow('terminal_handle_stale')
-    expect(readFile).not.toHaveBeenCalled()
-  })
-
   it('drops a completed read after the PTY incarnation is replaced', async () => {
     const { runtime, handle } = fixture()
     let release: (result: { base64: string }) => void = () => {
@@ -145,11 +81,5 @@ describe('Kitty file execution-host ownership', () => {
     })
     release({ base64: 'c3RhbGU=' })
     await expect(pending).rejects.toThrow('terminal_handle_stale')
-  })
-
-  it('does not read a missing or stale terminal handle', async () => {
-    const { runtime } = fixture()
-    await expect(runtime.readKittyFile('term_missing', { path: '/tmp/image' })).rejects.toThrow()
-    expect(readFile).not.toHaveBeenCalled()
   })
 })

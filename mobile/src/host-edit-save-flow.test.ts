@@ -14,6 +14,7 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -34,6 +35,8 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
+  ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft'
 }))
 
@@ -42,7 +45,14 @@ vi.mock('./transport/host-store', () => ({
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
+vi.mock('./components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+
+vi.mock('./transport/host-removal-lifecycle', () => ({
+  removeHostAndCloseClient: vi.fn()
+}))
+
 vi.mock('./transport/host-client-hooks', () => ({
+  useForgetHostClient: () => () => {},
   usePrimeHosts: () => dependencies.primeHosts,
   useRefreshHostClient: () => dependencies.refreshHostClient
 }))

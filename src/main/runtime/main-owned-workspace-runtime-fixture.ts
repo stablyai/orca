@@ -1,7 +1,7 @@
 // Windowless main-owned layout fixture: apply in memory and notify writes so terminal listings refresh.
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'

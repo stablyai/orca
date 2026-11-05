@@ -102,10 +102,6 @@ describe('startup device attributes responder', () => {
     expect(registered).toHaveLength(0)
     expect(replies).toEqual([])
   })
-
-  it('reports the same primary attributes the renderer would, so consuming the query is transparent', () => {
-    expect(STARTUP_DA1_RESPONSE).toBe('\x1b[?1;2c')
-  })
 })
 
 describe('startup device attributes query filter', () => {

@@ -1,4 +1,4 @@
-import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
+import type { SourceControlLaunchActionId } from '../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   launchAgentInExistingWorkspace,
@@ -9,7 +9,7 @@ import {
   loadMobileAgentLaunchContext
 } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
-import { projectSourceControlActionLaunch } from '../../../src/shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { translate } from '../i18n/mobile-i18n'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.

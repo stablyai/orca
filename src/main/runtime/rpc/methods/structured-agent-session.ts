@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
@@ -5,16 +6,10 @@ import {
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
 import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
-// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
-
 import {
   projectBackgroundTaskEvent,
   projectBackgroundTaskHistory
 } from './structured-agent-session-background-task-capability'
-import {
-  projectQueuedImageCardPublication,
-  projectQueuedImageCardHistory
-} from './structured-agent-session-queued-image-capability'
 import {
   projectTurnItemEvent,
   projectTurnItemHistory
@@ -71,6 +66,11 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
+import * as queuedImages from './structured-agent-session-queued-image-capability'
+import {
+  projectReceiptDeviceEvent,
+  projectReceiptDeviceHistory
+} from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -105,6 +105,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         params.worktree,
         params.agent
       )
+      if (support.supported && params.resumeFrom) {
+        // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
+        await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+          params.agent,
+          params.resumeFrom.providerSessionId,
+          params.resumeFrom.closingPaneKeys
+        )
+      }
       // Optional: older clients ignore it, and a client seeds its picker with what create will use.
       const seedOptions = support.supported
         ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
@@ -197,20 +205,24 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectTurnItemHistory(
-        projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(
-            await host.history(
-              params,
-              undefined,
-              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+      return projectReceiptDeviceHistory(
+        projectTurnItemHistory(
+          queuedImages.projectQueuedImageCardHistory(
+            projectBackgroundTaskHistory(
+              await host.history(
+                params,
+                undefined,
+                queuedImages.queuedImageHistoryReader(ctx),
+                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+              ),
+              ctx
             ),
             ctx
           ),
-          ctx
+          ctx,
+          host.sessionAgent(params.sessionId)
         ),
-        ctx,
-        host.sessionAgent(params.sessionId)
+        ctx
       )
     }
   }),
@@ -233,14 +245,18 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
+        ...queuedImages.queuedImageSubscriber(ctx),
         projectQueuePublication: (publication) =>
-          projectQueuedImageCardPublication(publication, ctx),
+          queuedImages.projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
-            projectTurnItemEvent(
-              projectBackgroundTaskEvent(event, ctx),
-              ctx,
-              host.sessionAgent(params.sessionId)
+            projectReceiptDeviceEvent(
+              projectTurnItemEvent(
+                projectBackgroundTaskEvent(event, ctx),
+                ctx,
+                host.sessionAgent(params.sessionId)
+              ),
+              ctx
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),
@@ -274,6 +290,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
   ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,

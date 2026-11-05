@@ -1,5 +1,5 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -53,6 +53,7 @@ const NO_FILES: PendingNativeChatFile[] = []
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void
+  onOpenFile?: (path: string) => void
   onSlashMenuDemand?: (open: boolean) => void
   onAttachFiles?: () => void
   // An uploading attachment must hold Send.
@@ -229,7 +230,10 @@ export function MobileNativeChatComposer({
     }
   }, [])
 
-  const handleSend = async (intent?: MobileNativeChatSendIntent): Promise<void> => {
+  const handleSend = async (
+    intent?: MobileNativeChatSendIntent,
+    keepFocus = false
+  ): Promise<void> => {
     if (!canSend || sendingRef.current) {
       return
     }
@@ -252,7 +256,7 @@ export function MobileNativeChatComposer({
         menu.resetCursor()
         // Why: the turn is now the agent's — the keyboard would cover the reply.
         // A rejected send keeps it up so the handed-back draft stays editable.
-        if (!editSession) {
+        if (!editSession && !keepFocus) {
           Keyboard.dismiss()
         }
       }
@@ -284,12 +288,21 @@ export function MobileNativeChatComposer({
             files={files}
             onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
             onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
+            onOpenFile={structured?.onOpenFile}
           />
           <MobileNativeChatComposerField
             ref={fieldRef}
             value={value}
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
+            onKeyboardSubmit={() => {
+              const first = menu.rows[0]
+              if (first) {
+                menu.pick(first)
+                return
+              }
+              void handleSend(editSession ? undefined : { alternate: true }, true)
+            }}
             onFocus={() => {
               setFocused(true)
               if (draftScopeKey) {

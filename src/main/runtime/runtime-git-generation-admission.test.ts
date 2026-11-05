@@ -16,8 +16,13 @@ const mocks = vi.hoisted(() => ({
 
 const linkedLookup = vi.hoisted(() => ({ run: (): Promise<null> => Promise.resolve(null) }))
 
-vi.mock('../git/status', () => ({ getStagedCommitContext: mocks.getStagedCommitContext }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
+vi.mock('../git/source-control/staged-commit-context', () => ({
+  getStagedCommitContext: mocks.getStagedCommitContext
+}))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.gitExecFileAsync
+}))
 vi.mock('../text-generation/pull-request-context', () => ({
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))

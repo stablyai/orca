@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { applyRemoteViewerClipboardEnv } from '../ipc/pty/host-env/remote-viewer-clipboard-env'
 import { applyClaudeTerminalImageViewerEnv } from './terminal-image-viewer-env'
 

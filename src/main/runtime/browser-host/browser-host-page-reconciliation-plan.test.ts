@@ -3,7 +3,7 @@ import {
   planBrowserHostPageReconciliation,
   type BrowserHostRuntimePageIntent
 } from './browser-host-page-reconciliation-plan'
-import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 const inventorySource = { inventoryPairedDeviceId: 'device-a' }
 

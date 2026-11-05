@@ -8,12 +8,12 @@ import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
-} from './session-parse-cache-persistence'
-import { resetSessionParseCacheForTests } from './session-parse-cache-store'
+} from './parse-cache/session-parse-cache-persistence'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import { scanAiVaultSessions } from './session-scanner'
 import SyncDatabase from '../sqlite/sync-database'
-import { SessionParseCacheDatabase } from './session-parse-cache-database'
-import { parseAgentSessionFileCached } from './session-scanner-parse-cache'
+import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
+import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 const reads = vi.hoisted((): string[] => [])

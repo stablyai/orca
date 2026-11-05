@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslModule from '../wsl'
+import type * as WslModule from '../wsl/discovery/distro-catalog'
 import {
   _resetWslBackgroundDistroGateForTests,
   noteWslDistroMayHaveStopped
-} from '../wsl-background-distro-gate'
+} from '../wsl/discovery/wsl-background-distro-gate'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
-} from '../wsl-running-distro-cache'
+} from '../wsl/discovery/wsl-running-distro-cache'
 import { parseWslDistroHold } from '../../shared/wsl-distro-stopped-hold'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
@@ -20,7 +20,7 @@ const running = vi.hoisted(() => {
   return value
 })
 const probe = vi.hoisted(() => vi.fn(async () => [...running.distros]))
-vi.mock('../wsl', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   listRunningWslDistrosAsync: (options: Parameters<typeof resolveRunningWslDistros>[1]) =>
     resolveRunningWslDistros(probe, options)

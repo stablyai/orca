@@ -2,7 +2,7 @@
 
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { SourceControlAiActionDefaults } from '../../shared/source-control-ai-actions'
+import type { SourceControlAiActionDefaults } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export type RuntimeClientSettings = Pick<
   GlobalSettings,
@@ -34,6 +34,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'nativeChatAutoContinueAfterUsageLimit'
   | 'nativeChatQueueFollowUps'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
@@ -76,4 +77,5 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'worktreeVisibilityDefaults'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'nativeChatAutoContinueAfterUsageLimit'
 >

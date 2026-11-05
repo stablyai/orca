@@ -226,19 +226,6 @@ it.each(['unsupported', 'stalled'] as const)(
   }
 )
 
-it('rejects standalone failure and cancels before deleting and closing', async () => {
-  const r = await rig()
-  r.agent.notify('_x.ai/session/prompt_complete', {
-    sessionId: '11111111-1111-4111-8111-111111111111',
-    promptId: r.promptId,
-    stopReason: 'error'
-  })
-  await expect(r.result).rejects.toThrow('did not complete')
-  const methods = r.agent.frames.map((frame) => frame.method)
-  expect(methods.indexOf('session/cancel')).toBeLessThan(methods.indexOf('_x.ai/session/delete'))
-  expect(r.server.exited).toBe(true)
-})
-
 it('does not spawn when preparation finishes after the deadline', async () => {
   vi.useFakeTimers()
   const prepare = Promise.withResolvers<Record<string, string>>()

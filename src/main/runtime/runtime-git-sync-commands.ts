@@ -1,5 +1,8 @@
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
-import type { GitUpstreamStatus } from '../../shared/git-status-types'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../shared/git/remotes/git-fork-sync'
+import type { GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { materializeWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'

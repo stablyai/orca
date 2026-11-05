@@ -166,6 +166,10 @@ export function applyGitHubPRResultToCaches(
     current?.fetchedAt === args.fetchedAt &&
     (current.data?.number ?? null) === prNumber &&
     current.data?.url === args.pr?.url &&
+    current.data?.checksStatus === args.pr?.checksStatus &&
+    JSON.stringify(current.data?.checksSummary) === JSON.stringify(args.pr?.checksSummary) &&
+    JSON.stringify(hostedReviewEntry?.data?.checksSummary) ===
+      JSON.stringify(args.pr?.checksSummary) &&
     hostedReviewEntry?.data?.url === args.pr?.url &&
     (hostedReviewEntry?.data?.provider === 'github' ? hostedReviewEntry.data.number : null) ===
       prNumber

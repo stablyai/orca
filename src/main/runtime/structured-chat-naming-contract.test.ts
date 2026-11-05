@@ -4,14 +4,14 @@ import { dirname } from 'node:path'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { getCommitMessageAgentSpec } from '../../shared/commit-message-agent-spec'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { getCommitMessageAgentSpec } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
   savedChatNamingCatalog,
   observeChatNamingCatalogWork
 } from '../../shared/chat-naming-catalog-work.test-fixture'
-import type { SourceControlActionRecipe } from '../../shared/source-control-ai-actions'
+import type { SourceControlActionRecipe } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SpawnSourceControlAgent } from '../text-generation/source-control-text-generation-types'
 import { createMockDiscoveryChild } from '../text-generation/commit-message-text-generation-test-harness'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'

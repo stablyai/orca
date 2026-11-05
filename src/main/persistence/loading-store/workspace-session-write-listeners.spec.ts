@@ -1,7 +1,7 @@
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import { collectLayoutEvents } from '../../runtime/workspace-layout-stream-events.test-fixture'

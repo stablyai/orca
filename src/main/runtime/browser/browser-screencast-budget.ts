@@ -2,11 +2,11 @@ import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastSession,
   BrowserScreencastViewport
-} from '../../browser/browser-screencast-stream-types'
+} from '../../browser/cdp/screencast/browser-screencast-stream-types'
 import {
   browserScreencastFrameBudgetsEqual,
   mergeBrowserScreencastFrameBudgets
-} from '../../browser/browser-screencast-frame-budget'
+} from '../../browser/cdp/screencast/browser-screencast-frame-budget'
 import type {
   BrowserScreencastParams,
   ActiveBrowserScreencastPage

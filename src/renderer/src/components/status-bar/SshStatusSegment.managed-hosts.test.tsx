@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { SshStatusSegment } from './SshStatusSegment'
 
@@ -43,7 +43,7 @@ vi.mock('../../store', () => {
 vi.mock('./runtime-environment-explicit-connect', () => ({
   connectRuntimeHostAndReloadProjects: mocks.connectRuntime
 }))
-vi.mock('../settings/RuntimeRepairDialog', () => ({
+vi.mock('../runtime-access/RuntimeRepairDialog', () => ({
   RuntimeRepairDialog: ({ environmentId, name }: { environmentId: string; name: string }) => (
     <div role="dialog">{`Re-pair ${name} (${environmentId})`}</div>
   )

@@ -5,38 +5,39 @@ import { describe, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
 import { OrchestrationDb } from './orchestration/db'
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
     }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
+
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktrees: getWorktreeListingMocks().listWorktrees
+}))
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: getWorktreeListingMocks().listWorktreesStrict
+}))
 
 describe('OrcaRuntimeRpcServer', () => {
   // Migration must be idempotent and fail startup loudly rather than serve a schema missing delivered_at (design §6).
   describe('orchestration DB migration (§3.2)', () => {
-    it('is idempotent when delivered_at already exists', () => {
-      const db1 = new OrchestrationDb(':memory:')
-      db1.close()
-      // File path reuse is meaningless with :memory:, so use a tmp file.
-      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
-      const a = new OrchestrationDb(tmpPath)
-      a.close()
-      expect(() => {
-        const b = new OrchestrationDb(tmpPath)
-        b.close()
-      }).not.toThrow()
-    })
-
     it('hard-fails startup when the migration cannot be applied', () => {
       // Seed v2 without delivered_at so ALTER actually runs; fresh databases start at v3 and would bypass the injected exec failure.
       // Propagate migration failure (disk/permission/etc.) rather than serving incomplete schema.

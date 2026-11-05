@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { useAppStore } from '@/store'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
-import { reportPluginPanelDraw } from '../../right-sidebar/plugin-panel-draw-status'
+import { reportPluginPanelDraw } from '../../right-sidebar/plugin-panels/health/plugin-panel-draw-status'
 import { handlePluginViewRequest } from './plugin-view-request-handler'
 
 const KEY = 'acme.todos'

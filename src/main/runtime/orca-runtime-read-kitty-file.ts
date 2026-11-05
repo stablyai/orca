@@ -5,7 +5,7 @@ import { readTerminalKittyFile } from './terminal-kitty-file-read'
 import type {
   TerminalKittyFileRequest,
   TerminalKittyFileResult
-} from '../../shared/terminal-kitty-file'
+} from '../../shared/terminal/images/terminal-kitty-file'
 
 export abstract class OrcaRuntimeWithReadKittyFile extends RuntimeWorkspaceSelectors {
   async readKittyFile(

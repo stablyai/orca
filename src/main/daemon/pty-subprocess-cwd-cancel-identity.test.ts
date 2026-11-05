@@ -20,7 +20,7 @@ const {
 }))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
-vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('../pty/shell-startup/pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
 
 vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()

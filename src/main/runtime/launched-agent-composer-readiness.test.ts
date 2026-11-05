@@ -5,8 +5,8 @@ import {
   createDraftPasteReadyScanner,
   resolvePasteReadySignal
 } from '../../shared/draft-paste-ready-scanner'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import { GROK_STARTUP_PTY_TRACE } from '../../shared/__fixtures__/grok-startup-pty-trace'
 import type { GrokStartupTraceChunk } from '../../shared/__fixtures__/grok-startup-pty-trace'

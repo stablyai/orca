@@ -1,9 +1,9 @@
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { detectAgentStatusFromTitle as detectAgentStatusFromTitleDefault } from '../../../../../shared/agent-status/title/agent-title-status'
 import { useAppStore } from '@/store'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { createAgentInterruptInference } from '../agent-interrupt-inference'
 import { createAgentQuestionAnsweredInference } from '../agent-question-answered-inference'
-import type { AgentInterruptInputIntent } from '../../../../../shared/agent-interrupt-intent'
+import type { AgentInterruptInputIntent } from '../../../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import { markTerminalBracketedPasteInterrupted } from '../terminal-bracketed-paste'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
@@ -16,6 +16,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { installPaneAgentIdentity } from './pane-agent-identity'
 
 export function installInterruptInputIntent(session: ConnectPanePtySession): void {
+  const detectAgentStatusFromTitle =
+    session.deps.detectAgentStatusFromTitle ?? detectAgentStatusFromTitleDefault
   session.scheduleReattachIdleAgentCursorReset = (): void => {
     const status = detectAgentStatusFromTitle(session.getCurrentTerminalTitle() ?? '')
     if (status !== 'idle' && status !== 'permission') {

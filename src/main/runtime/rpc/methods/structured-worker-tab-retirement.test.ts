@@ -331,8 +331,7 @@ describe('structured worker discard retires the chat tab', () => {
         runtime,
         worktreeId: WORKTREE,
         agent: 'claude',
-        dispatchId: 'd_discard',
-        onJournalActivity: () => {}
+        dispatchId: 'd_discard'
       })
     ).rejects.toThrow(/was refused/)
 

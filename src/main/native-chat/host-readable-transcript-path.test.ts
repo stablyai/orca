@@ -11,18 +11,20 @@ const wslMocks = vi.hoisted(() => ({
 vi.mock('./wsl-transcript-running-admission', () => ({
   admitWslTranscriptPath: wslMocks.admitWslTranscriptPath
 }))
-vi.mock('../wsl/wsl-home-unless-stopped', async () => {
-  const wsl = await import('../wsl')
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl/discovery/distro-catalog')
   return {
     wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
     listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
   }
 })
-vi.mock('../wsl', () => ({
-  listRunningWslHomeDirsAsync: wslMocks.listRunningWslHomeDirsAsync,
+vi.mock('../wsl/discovery/distro-catalog', () => ({
+  listRunningWslHomeDirsAsync: wslMocks.listRunningWslHomeDirsAsync
+}))
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
   resolveWslGuestRealDirAsync: wslMocks.resolveWslGuestRealDirAsync
 }))
-vi.mock('../wsl-running-path-filter', () => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: wslMocks.filterPathsToRunningWslDistrosAsync
 }))
 

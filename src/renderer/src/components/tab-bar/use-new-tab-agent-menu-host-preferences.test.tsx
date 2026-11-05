@@ -14,19 +14,20 @@ import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { expectSettingsWorkScale } from '../../../../shared/global-settings-test-fixture'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   makeFolderWorkspace,
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
-import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
+import { mutateHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree,
   readAgentLaunchPreferencesForWorkspace
-} from '../settings/use-host-agent-launch-preferences'
+} from '../../runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
+  useAgentLaunchPickerInventory,
   useAgentLaunchPickerInventorySource,
   useAgentPickerInventoryEntries
 } from '../agent/use-agent-launch-picker-inventory'
@@ -198,7 +199,6 @@ it('keeps this runtime’s last preferences through a failed reconnect refresh',
     })
   )
   await act(async () => {})
-  expect(rpc.call).toHaveBeenCalledTimes(2)
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'codex'
   )
@@ -226,7 +226,7 @@ it('reopens a freshly mounted menu with the last host answer, then revalidates',
   )
 })
 
-it('keeps desktop preferences for a host that predates host launch settings', async () => {
+it('reads legacy host preferences when the host predates narrow launch settings', async () => {
   rpc.supports.mockResolvedValue(false)
   const hook = renderHook(() =>
     useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
@@ -234,11 +234,19 @@ it('keeps desktop preferences for a host that predates host launch settings', as
   await act(async () => {})
   expect(
     hook.result.current.state === 'settled' && hook.result.current.rows.map((row) => row.agent)
-  ).toEqual(['opencode', 'claude'])
-  expect(rpc.call).not.toHaveBeenCalled()
+  ).toEqual(['codex', 'claude'])
+  expect(rpc.call).toHaveBeenCalledWith(
+    expect.anything(),
+    'settings.get',
+    undefined,
+    expect.objectContaining({
+      expectedEnvironmentPairingRevision: 7,
+      expectedEnvironmentRuntimeId: 'runtime-1'
+    })
+  )
 })
 
-it('falls back to desktop preferences when the first read fails', async () => {
+it('uses neutral inherited preferences when both host reads fail', async () => {
   rpc.call.mockRejectedValue(new Error('offline'))
   const hook = renderHook(() =>
     useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
@@ -246,7 +254,7 @@ it('falls back to desktop preferences when the first read fails', async () => {
   await act(async () => {})
   expect(
     hook.result.current.state === 'settled' && hook.result.current.rows.map((row) => row.agent)
-  ).toEqual(['opencode', 'claude'])
+  ).toEqual(['claude', 'codex', 'opencode'])
 })
 
 it('stops waiting on a stalled host, then applies its late answer', async () => {
@@ -260,7 +268,7 @@ it('stops waiting on a stalled host, then applies its late answer', async () => 
     expect(hook.result.current.state).toBe('loading')
     await act(async () => vi.advanceTimersByTime(3_000))
     expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
-      'opencode'
+      'claude'
     )
     await act(async () => stalled.resolve({ settings: server }))
     expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
@@ -272,10 +280,12 @@ it('stops waiting on a stalled host, then applies its late answer', async () => 
 })
 
 it('gives the new-agent shortcut and badge the default the host menu applied', async () => {
-  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toEqual({
-    defaultTuiAgent: 'opencode',
-    disabledTuiAgents: ['codex'],
-    agentLaunchChoices: {}
+  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toMatchObject({
+    defaultTuiAgent: null,
+    disabledTuiAgents: [],
+    agentLaunchChoices: {},
+    agentDefaultArgs: {},
+    agentPermissionDefault: 'own'
   })
   const hook = renderHook(() =>
     useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
@@ -284,7 +294,7 @@ it('gives the new-agent shortcut and badge the default the host menu applied', a
   expect(hook.result.current.state === 'settled' && hook.result.current.defaultTuiAgent).toBe(
     'codex'
   )
-  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toEqual({
+  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toMatchObject({
     defaultTuiAgent: 'codex',
     disabledTuiAgents: ['opencode'],
     agentLaunchChoices: server.agentChoices?.defaults
@@ -327,7 +337,6 @@ it('shares cold reads with independent cancelled waiters and retains mutation an
         worktreeId: 'wt'
       })
     ).resolves.toMatchObject({ defaultTuiAgent: 'codex' })
-    expect(rpc.call).toHaveBeenCalledTimes(3)
     const late = Promise.withResolvers<{ settings: typeof server }>()
     rpc.call.mockReturnValueOnce(late.promise)
     act(() =>
@@ -386,7 +395,7 @@ it.each(['pairing', 'runtime'] as const)(
   }
 )
 
-it('updates actual inventory for native presentation and local permission changes', async () => {
+it('keeps paired inventory independent of desktop permission while local inventory updates', async () => {
   const hook = renderHook(() => {
     const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
     const entries = useAgentPickerInventoryEntries(
@@ -405,7 +414,7 @@ it('updates actual inventory for native presentation and local permission change
       }
     }))
   })
-  expect(hook.result.current.entries).not.toBe(before)
+  expect(hook.result.current.entries).toBe(before)
   expect(hook.result.current.menu.state).toBe('settled')
   useAppStore.setState({
     folderWorkspaces: [makeFolderWorkspace({ id: 'local', executionHostId: 'local' })]
@@ -428,70 +437,77 @@ it('updates actual inventory for native presentation and local permission change
 })
 
 it.each([30, 300])(
-  'skips all fallback route/worktree work for a supplied context host across %i worktrees',
+  'indexes %i worktrees once and skips supplied-host fallback and subsequent query reads',
   async (count) => {
     const route = await import('@/lib/agent-launch-route-input')
     const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
-    let visited = 0
-    const worktrees = Array.from({ length: count }, (_, i) => {
-      const worktree = makeWorktree({
-        id: `scale-${i}`,
-        repoId: TEST_REPO.id,
-        hostId: 'runtime:alpha'
+    try {
+      let visited = 0
+      const worktrees = Array.from({ length: count }, (_, i) => {
+        const worktree = makeWorktree({
+          id: `scale-${i}`,
+          repoId: TEST_REPO.id,
+          hostId: 'runtime:alpha'
+        })
+        Object.defineProperty(worktree, 'id', {
+          get: () => {
+            visited++
+            return `scale-${i}`
+          },
+          enumerable: true
+        })
+        return worktree
       })
-      Object.defineProperty(worktree, 'id', {
-        get: () => {
-          visited++
-          return `scale-${i}`
+      useAppStore.setState({ worktreesByRepo: { [TEST_REPO.id]: worktrees } })
+      visited = 0
+      const id = `scale-${count - 1}`
+      const model = {
+        state: 'settled' as const,
+        rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
+        detection: {
+          detectedIds: ['claude' as const],
+          isLoading: false,
+          isRefreshing: false,
+          detectionFailed: false,
+          needsServerUpdate: false,
+          refresh: async () => ['claude' as const]
         },
-        enumerable: true
-      })
-      return worktree
-    })
-    useAppStore.setState({ worktreesByRepo: { [TEST_REPO.id]: worktrees } })
-    visited = 0
-    const id = `scale-${count - 1}`
-    const model = {
-      state: 'settled' as const,
-      rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
-      detection: {
-        detectedIds: ['claude' as const],
-        isLoading: false,
-        isRefreshing: false,
-        detectionFailed: false,
-        needsServerUpdate: false,
-        refresh: async () => ['claude' as const]
-      },
-      pickerContext: {
-        workspace: { kind: 'git-worktree' as const, worktreeId: id },
-        executionHostId: 'runtime:alpha',
-        settings: null,
-        key: `route-${count}`
+        pickerContext: {
+          workspace: { kind: 'git-worktree' as const, worktreeId: id },
+          executionHostId: 'runtime:alpha',
+          settings: null,
+          key: `route-${count}`
+        }
       }
-    }
-    const hook = renderHook(
-      ({ supplied, query }) => {
-        void query
-        return useAgentPickerInventoryEntries(
-          useAgentLaunchPickerInventorySource(
+      const hook = renderHook(
+        ({ supplied, query }) => {
+          void query
+          return useAgentLaunchPickerInventory(
             id,
             supplied ? model : { ...model, pickerContext: undefined },
             false
           )
-        )
-      },
-      { initialProps: { supplied: true, query: '' } }
-    )
-    for (const query of ['c', 'cl', 'cla', 'claude']) {
-      await act(async () => hook.rerender({ supplied: true, query }))
+        },
+        { initialProps: { supplied: true, query: '' } }
+      )
+      await act(async () => {})
+      expect(builder).not.toHaveBeenCalled()
+      expect(visited).toBe(count)
+      const coldReads = visited
+      for (const query of ['c', 'cl', 'cla', 'claude']) {
+        await act(async () => hook.rerender({ supplied: true, query }))
+        expect(visited - coldReads).toBe(0)
+        expect(builder).not.toHaveBeenCalled()
+      }
+      expect(builder).not.toHaveBeenCalled()
+      expect(visited - coldReads).toBe(0)
+      await act(async () => hook.rerender({ supplied: false, query: 'fallback' }))
+      expect(builder).toHaveBeenCalledOnce()
+      expect(builder.mock.results[0].value.executionHostId).toBe('runtime:alpha')
+      expect(visited).toBeGreaterThanOrEqual(count)
+    } finally {
+      builder.mockRestore()
     }
-    expect(builder).not.toHaveBeenCalled()
-    expect(visited).toBe(0)
-    await act(async () => hook.rerender({ supplied: false, query: 'fallback' }))
-    expect(builder).toHaveBeenCalledOnce()
-    expect(builder.mock.results[0].value.executionHostId).toBe('runtime:alpha')
-    expect(visited).toBeGreaterThanOrEqual(count)
-    builder.mockRestore()
   }
 )
 
@@ -514,19 +530,19 @@ it.each([false, true])(
         readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt'),
         readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'folder:f1')
       ].map((preferences) => preferences.defaultTuiAgent)
-    expect(read()).toEqual(Array(4).fill('opencode'))
+    expect(read()).toEqual(Array(4).fill(null))
     expect(rpc.call).not.toHaveBeenCalled()
     await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
-    expect(read()).toEqual(Array(4).fill(supported ? 'codex' : 'opencode'))
+    expect(read()).toEqual(Array(4).fill('codex'))
     if (supported) {
       useAppStore.setState({
         runtimeStatusByEnvironmentId: new Map([['alpha', status('replacement')]])
       })
-      expect(read()).toEqual(Array(4).fill('opencode'))
+      expect(read()).toEqual(Array(4).fill(null))
       await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
       expect(read()).toEqual(Array(4).fill('codex'))
       replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
-      expect(read()).toEqual(Array(4).fill('opencode'))
+      expect(read()).toEqual(Array(4).fill(null))
     }
   }
 )
@@ -638,59 +654,120 @@ it('invalidates mounted picker seeds only for their effective authored-default s
 it('reprojects a supplied local authored map once without host acquisition', async () => {
   const route = await import('@/lib/agent-launch-route-input')
   const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
-  const model = {
-    state: 'settled' as const,
-    rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
-    detection: {
-      detectedIds: ['claude' as const],
-      isLoading: false,
-      isRefreshing: false,
-      detectionFailed: false,
-      needsServerUpdate: false,
-      refresh: async () => ['claude' as const]
-    },
-    pickerContext: {
-      workspace: { kind: 'floating' as const },
-      executionHostId: 'local',
-      key: 'bounded-local',
-      settings: {
-        ...getDefaultSettings('/home/me'),
-        agentLaunchChoices: { claude: { model: 'opus' } }
-      }
-    }
-  }
-  const profiles = vi.spyOn(
-    await import('../../../../shared/agent-launch-profile'),
-    'projectAgentLaunchProfile'
-  )
-  const before = compositions.mock.calls.length
-  const profileBefore = profiles.mock.calls.length
-  const hook = renderHook(
-    ({ supplied }) =>
-      useAgentPickerInventoryEntries(
-        useAgentLaunchPickerInventorySource(undefined, supplied, false)
-      ),
-    { initialProps: { supplied: model } }
-  )
-  await act(async () => {})
-  await act(async () =>
-    hook.rerender({
-      supplied: {
-        ...model,
-        pickerContext: {
-          ...model.pickerContext,
-          settings: {
-            ...model.pickerContext.settings,
-            agentLaunchChoices: { claude: { model: 'sonnet' } }
-          }
+  try {
+    const model = {
+      state: 'settled' as const,
+      rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
+      detection: {
+        detectedIds: ['claude' as const],
+        isLoading: false,
+        isRefreshing: false,
+        detectionFailed: false,
+        needsServerUpdate: false,
+        refresh: async () => ['claude' as const]
+      },
+      pickerContext: {
+        workspace: { kind: 'floating' as const },
+        executionHostId: 'local',
+        key: 'bounded-local',
+        settings: {
+          ...getDefaultSettings('/home/me'),
+          agentLaunchChoices: { claude: { model: 'opus' } }
         }
       }
-    })
-  )
-  expect(hook.result.current[0]?.terminal.model).toBe('sonnet')
-  expect(builder).not.toHaveBeenCalled()
-  expect(compositions.mock.calls.length - before).toBe(0)
-  expect(profiles.mock.calls.length - profileBefore).toBe(2)
-  profiles.mockRestore()
-  builder.mockRestore()
+    }
+    const profiles = vi.spyOn(
+      await import('../../../../shared/agent-launch/choices/agent-launch-profile'),
+      'projectAgentLaunchProfile'
+    )
+    try {
+      const before = compositions.mock.calls.length
+      const profileBefore = profiles.mock.calls.length
+      const hook = renderHook(
+        ({ supplied }) => useAgentLaunchPickerInventory(undefined, supplied, false),
+        { initialProps: { supplied: model } }
+      )
+      await act(async () => {})
+      await act(async () =>
+        hook.rerender({
+          supplied: {
+            ...model,
+            pickerContext: {
+              ...model.pickerContext,
+              settings: {
+                ...model.pickerContext.settings,
+                agentLaunchChoices: { claude: { model: 'sonnet' } }
+              }
+            }
+          }
+        })
+      )
+      expect(hook.result.current[0]?.terminal.model).toBe('sonnet')
+      expect(builder).not.toHaveBeenCalled()
+      expect(compositions.mock.calls.length - before).toBe(0)
+      expect(profiles.mock.calls.length - profileBefore).toBe(2)
+    } finally {
+      profiles.mockRestore()
+    }
+  } finally {
+    builder.mockRestore()
+  }
 })
+
+it.each(['snapshot', 'legacy', 'unavailable'] as const)(
+  'keeps v1.4.239 picker defaults on their host through %s reads',
+  async (source) => {
+    useAppStore.setState((state) => ({
+      settings: {
+        ...state.settings!,
+        agentDefaultArgs: { claude: '--model desktop-only-qa' },
+        agentLaunchChoices: { claude: { model: 'desktop-only-qa' } },
+        agentPermissionDefault: 'full-access'
+      }
+    }))
+    const snapshot = {
+      defaultTuiAgent: 'claude',
+      disabledTuiAgents: [],
+      agentCmdOverrides: {},
+      agentDefaultArgs: { claude: '--permission-mode auto' },
+      environmentNames: {},
+      permissionMode: 'mixed'
+    }
+    rpc.supports.mockImplementation((_id, capability) =>
+      Promise.resolve(source === 'snapshot' && capability === 'settings.agent-launch.v1')
+    )
+    rpc.call.mockImplementation((_target, method) => {
+      if (source === 'unavailable') {
+        throw new Error('offline')
+      }
+      return {
+        settings:
+          method === 'settings.getAgentLaunch'
+            ? snapshot
+            : {
+                defaultTuiAgent: 'claude',
+                disabledTuiAgents: [],
+                agentCmdOverrides: {},
+                agentDefaultArgs: { claude: '--permission-mode auto' },
+                agentDefaultEnv: {}
+              }
+      }
+    })
+    const hook = renderHook(() => {
+      const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
+      return useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
+    })
+    await act(async () => {})
+    const entry = hook.result.current.find((entry) => entry.agent === 'claude')!
+    expect(entry.terminal.model).toBeUndefined()
+    expect(entry.arguments ?? '').toBe('')
+    expect(entry.terminal.permissionMode).toBe(source === 'unavailable' ? undefined : 'auto')
+    if (source === 'unavailable') {
+      expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toMatchObject({
+        agentLaunchChoices: {},
+        agentDefaultArgs: {},
+        agentPermissionDefault: 'own'
+      })
+    }
+  }
+)

@@ -1,13 +1,13 @@
 import { pbkdf2Sync } from 'node:crypto'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const { runProcessSyncMock } = vi.hoisted(() => ({ runProcessSyncMock: vi.fn() }))
-vi.mock('@orca/process-host', () => ({ runProcessSync: runProcessSyncMock }))
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import { getLinuxEncryptionKey } from './browser-cookie-key'
 
 beforeEach(() => {
-  runProcessSyncMock.mockReset()
+  runProcessMock.mockReset()
 })
 
 it.each([
@@ -18,28 +18,31 @@ it.each([
   { stderr: 'Prompt was dismissed', failure: 'keyring-locked' },
   { stderr: '', failure: 'key-unavailable' },
   { stderr: 'Service is not available', failure: 'key-unavailable' }
-])('retains the Linux lookup cause: $failure ($code / $stderr)', ({ code, stderr, failure }) => {
-  runProcessSyncMock.mockImplementation(() => {
-    if (code) {
-      throw Object.assign(new Error('spawn failed'), { code })
-    }
-    return { code: stderr ? 1 : 0, timedOut: false, stdout: '', stderr }
-  })
+])(
+  'retains the Linux lookup cause: $failure ($code / $stderr)',
+  async ({ code, stderr, failure }) => {
+    runProcessMock.mockImplementation(async () => {
+      if (code) {
+        throw Object.assign(new Error('spawn failed'), { code })
+      }
+      return { code: stderr ? 1 : 0, timedOut: false, stdout: '', stderr }
+    })
 
-  expect(getLinuxEncryptionKey('Chrome Safe Storage', 'Chrome')).toEqual({
-    mode: 'aes-128-cbc',
-    keysByVersion: { v10: pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1') },
-    keyringUnavailable: true,
-    keyringFailure: failure
-  })
-})
+    expect(await getLinuxEncryptionKey('Chrome Safe Storage', 'Chrome')).toEqual({
+      mode: 'aes-128-cbc',
+      keysByVersion: { v10: pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1') },
+      keyringUnavailable: true,
+      keyringFailure: failure
+    })
+  }
+)
 
-it('retains a v11 key from the application fallback after the first lookup fails', () => {
-  runProcessSyncMock
-    .mockReturnValueOnce({ code: 1, timedOut: false, stdout: '', stderr: '' })
-    .mockReturnValueOnce({ code: 0, timedOut: false, stdout: 'fixture-secret\n', stderr: '' })
+it('retains a v11 key from the application fallback after the first lookup fails', async () => {
+  runProcessMock
+    .mockResolvedValueOnce({ code: 1, timedOut: false, stdout: '', stderr: '' })
+    .mockResolvedValueOnce({ code: 0, timedOut: false, stdout: 'fixture-secret\n', stderr: '' })
 
-  expect(getLinuxEncryptionKey('Chrome Safe Storage', 'Chrome')).toEqual({
+  expect(await getLinuxEncryptionKey('Chrome Safe Storage', 'Chrome')).toEqual({
     mode: 'aes-128-cbc',
     keysByVersion: {
       v10: pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1'),

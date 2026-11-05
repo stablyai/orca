@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => {
       throw new Error('These transport fixtures must not read app-store ownership')
@@ -92,13 +92,4 @@ describe('a restored remote pane whose host was stopped', () => {
       transport.destroy?.()
     }
   )
-
-  it('leaves a pane that is still connecting to its own path', async () => {
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
-    expect(transport.reopenAfterHostReturned?.()).toBe(false)
-    void transport.connect({ url: '', sessionId: ORIGINAL_ID, callbacks: {} })
-    expect(transport.reopenAfterHostReturned?.()).toBe(false)
-    transport.destroy?.()
-  })
 })

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
-import { fileStatSignature } from '../file-stat-signature'
+import { fileStatSignature } from '../filesystem/file-stat-signature'
 
-export { fileStatSignature as daemonHostFileStatSignature } from '../file-stat-signature'
+export { fileStatSignature as daemonHostFileStatSignature } from '../filesystem/file-stat-signature'
 
 // Metadata validation avoids rereading unchanged daemon code on the main thread.
 const cachedHashes = new Map<string, { signature: string; sha256: string }>()

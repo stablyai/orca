@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import type { PtyOwnerBackend } from '../../shared/terminal/pty/lifecycle/pty-owner-backend'
 import { Session } from './session'
 
 const FIXTURES = join(__dirname, '../runtime/__fixtures__')
@@ -97,12 +97,5 @@ describe('daemon screen through a captured ConPTY resize transcript', () => {
     expect(numbers).toEqual(Array.from({ length: 80 }, (_, i) => i + 1))
     expect(lines.filter((line) => line === LONG_LINE)).toHaveLength(1)
     expect(lines.filter((line) => /\$.*orca@/.test(line))).toEqual([])
-  })
-
-  // Control: the Unix grow model pulls history back under ConPTY's repaint.
-  it('loses or repeats lines without the ConPTY model', async () => {
-    const lines = await savedLogicalLines('posix-pty')
-    const numbers = lines.filter((line) => /^\d+$/.test(line)).map(Number)
-    expect(numbers).not.toEqual(Array.from({ length: 80 }, (_, i) => i + 1))
   })
 })

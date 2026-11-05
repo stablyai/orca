@@ -1,8 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import type { ProviderTimelineHold } from './provider-timeline-budget'
-import { PROVIDER_TIMELINE_OVER_BUDGET } from './provider-timeline-budget'
 import type { ProviderTimelineDropRule } from './provider-timeline-decision'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
@@ -21,7 +19,6 @@ export type ProviderTimelineTextHost = {
   state: ProviderTimelineState
   streams: ProviderTimelineTextStreams
   journal: StructuredAgentSessionTransitionJournal | null
-  admits(hold: ProviderTimelineHold): boolean
 }
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
@@ -63,9 +60,6 @@ export function applyProviderTimelineTextDelta(
       state,
       serial: serials.next()
     })
-    if (!host.admits({ key: stream.key, bytes: stream.bytes })) {
-      return { admission: PROVIDER_TIMELINE_OVER_BUDGET }
-    }
     plan.onAdmitted(serials.commit)
   }
   streams.planAppend(plan, stream, event.text)
@@ -73,7 +67,7 @@ export function applyProviderTimelineTextDelta(
 }
 
 function settledNamedItem(host: ProviderTimelineTextHost, key: string): boolean {
-  if (host.state.items.get(key)?.closed) {
+  if (host.state.closedItems.has(key)) {
     return true
   }
   const held = host.journal?.item(key)

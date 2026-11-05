@@ -1,5 +1,5 @@
 import type { ManagedPane } from './pane-manager-types'
-import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { forceFullViewportPresent } from './terminal-render-pause-release'
 import { isWebglCanvasBackingReleased } from './terminal-webgl-hidden-canvas-release'
 

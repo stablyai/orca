@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from '../../build-mobile-web-app-bundle.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../../mobile-web-page-routes.mjs'
+import { mobileWebAppRouteClosure } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from '../../build/mobile-web-app/mobile-web-page-routes.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   PAGE_ROUTE_MODULES,

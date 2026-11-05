@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import type {
   MobileProjectSectionCatalog,
   MobileProjectSectionsResult
@@ -6,8 +7,11 @@ import type {
 // Retain the last catalog after window close; stale grouping is better than none.
 let latestCatalog: MobileProjectSectionCatalog | null = null
 
-export function publishMobileProjectSections(catalog: MobileProjectSectionCatalog): void {
+/** Returns whether paired clients would now read a different catalog. */
+export function publishMobileProjectSections(catalog: MobileProjectSectionCatalog): boolean {
+  const changed = !isDeepStrictEqual(catalog, latestCatalog)
   latestCatalog = catalog
+  return changed
 }
 
 export function readMobileProjectSections(): MobileProjectSectionsResult {

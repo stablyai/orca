@@ -15,14 +15,14 @@ const mocks = vi.hoisted(() => ({
   stat: vi.fn()
 }))
 
-vi.mock('../wsl-running-path-filter', () => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: mocks.filterRunning
 }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat
 }))
-vi.mock('./transcript-native-watcher', () => ({
+vi.mock('../../shared/transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: mocks.bind,
     dispose: mocks.dispose,

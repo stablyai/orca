@@ -3,7 +3,7 @@ import { ArrowUp, RefreshCw, Settings2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
 export type BranchCompareStatusHeadSnapshot = {
   baseRef: string

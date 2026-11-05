@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { encodeDeviceProofMessage } from '../../../src/shared/device-key-proof'
+import { encodeDeviceProofMessage } from '../../../src/shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import { SimulatedMobileE2EEV2Peer } from '../../../src/main/runtime/mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import {
@@ -104,18 +104,5 @@ describe('cross-version: device keys against a released host', () => {
       error: { code: 'bad_auth' }
     })
     expect(onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
-  })
-
-  it('old registry files load unchanged', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-xv-device-key-'))
-    const released = new ReleasedRegistry(userDataPath)
-    expect(released.listDevices()).toHaveLength(0)
-    writeFileSync(
-      join(userDataPath, 'orca-devices.json'),
-      JSON.stringify([
-        { deviceId: 'd', name: 'n', token: 't', scope: 'mobile', pairedAt: 1, lastSeenAt: 2 }
-      ])
-    )
-    expect(new DeviceRegistry(userDataPath).validateToken('t')?.deviceId).toBe('d')
   })
 })

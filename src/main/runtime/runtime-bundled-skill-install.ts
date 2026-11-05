@@ -1,9 +1,9 @@
 import type {
   BundledSkillAutoUpdateRequest,
   BundledSkillInstallResult,
-  BundledSkillExecuteRequest,
+  LocalBundledSkillExecuteRequest,
   BundledSkillPlan,
-  BundledSkillPlanRequest
+  LocalBundledSkillPlanRequest
 } from '../../shared/bundled-skill-plan'
 import {
   localBundledSkillInput,
@@ -21,7 +21,7 @@ import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import { createSkillInstallAuthority } from './runtime-skill-install-authority'
 
 /** Named skills are an install for the host's agents; otherwise update what is installed. */
-function bundledSkillSelection(request: BundledSkillPlanRequest): BundledSkillSelection {
+function bundledSkillSelection(request: LocalBundledSkillPlanRequest): BundledSkillSelection {
   return {
     ...(request.names ? { names: request.names } : { installedOnly: true }),
     ...(request.force ? { force: request.force } : {})
@@ -31,7 +31,7 @@ function bundledSkillSelection(request: BundledSkillPlanRequest): BundledSkillSe
 // Install globally for the user's agents; Update skills without names never adds uninstalled skills. Remote hosts plan via their own RPC.
 async function appInput(
   host: RuntimeSkillCommandHost,
-  request: BundledSkillPlanRequest
+  request: LocalBundledSkillPlanRequest
 ): Promise<BundledSkillServiceInput> {
   const destination = await resolveSkillInstallDestination(
     { scope: 'global' },
@@ -42,6 +42,7 @@ async function appInput(
   return localBundledSkillInput({
     userDataPath: host.getUserDataPath(),
     destination,
+    ...(request.agent ? { agents: [request.agent] } : {}),
     claudeConfigDirectory: host.getClaudeConfigDirectory?.({ runtime: 'host' }),
     selection: bundledSkillSelection(request)
   })
@@ -49,14 +50,14 @@ async function appInput(
 
 export async function planLocalBundledSkills(
   host: RuntimeSkillCommandHost,
-  request: BundledSkillPlanRequest
+  request: LocalBundledSkillPlanRequest
 ): Promise<BundledSkillPlan> {
   return previewBundledSkillInstall(await appInput(host, request))
 }
 
 export async function executeLocalBundledSkills(
   host: RuntimeSkillCommandHost,
-  { planDigest, request }: BundledSkillExecuteRequest
+  { planDigest, request }: LocalBundledSkillExecuteRequest
 ): Promise<BundledSkillInstallResult> {
   const result = await installBundledSkills(await appInput(host, request), planDigest)
   // Discovery would otherwise serve its pre-install answer from cache.

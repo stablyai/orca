@@ -131,7 +131,7 @@ export async function runOracleScenario(
         )
         if (!options.quitWithoutSettling) {
           run.oracle.compareRestart(coldDaemon ? 'cold relaunch' : 'relaunch', after, {
-            maskPtyIds: coldDaemon
+            maskPtyIds: restartsTerminals
           })
         }
       }

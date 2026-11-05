@@ -253,8 +253,8 @@ describe('status bar Codex sign-in action', () => {
 
       await renderSwitcherAndOpenAccounts()
       const detail = workspaceLabel ? `${workspaceLabel} · ` : ''
-      expect(screen.getByText(`same@example.com (${detail}account-1)`)).toBeTruthy()
-      fireEvent.click(screen.getByText(`same@example.com (${detail}account-2)`))
+      expect(screen.getByText(`${detail}account-1`)).toBeTruthy()
+      fireEvent.click(screen.getByText(`${detail}account-2`))
 
       await waitFor(() =>
         expect(selectCodexProviderAccount).toHaveBeenCalledWith(

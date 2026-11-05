@@ -1,10 +1,10 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
-import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { killWithDescendantSweep } from '../pty/process-retirement/pty-descendant-termination'
 
 // Prevent fake PIDs from reaching real process-table probes.
-vi.mock('../pty-descendant-termination', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: vi.fn()
 }))
 

@@ -6,7 +6,7 @@ import {
   createCodexCapacityNoticeTracker
 } from '../../shared/codex-native-notice'
 import { observeCodexCapacityTerminalStatus } from './codex-notice-terminal-status'
-import * as agentProcessRecognition from '../../shared/agent-process-recognition'
+import * as agentProcessRecognition from '../../shared/agent-status/process/agent-process-recognition'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
 const transcript = readFileSync(

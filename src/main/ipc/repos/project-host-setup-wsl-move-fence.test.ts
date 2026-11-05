@@ -16,7 +16,7 @@ import {
 import { RuntimeProjectHostSetupController } from '../../runtime/runtime-project-host-setup-controller'
 import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
 import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
-import * as issueCommandFile from '../../issue-command-file'
+import * as issueCommandFile from '../../workspace-hooks/issue-command-file'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
 
 const { handlers } = vi.hoisted(() => ({

@@ -55,7 +55,8 @@ it.each([
       ['pty-a', 'pty-b', 'pty-new'].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'sh' }))
   })
 
-  const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone')
+  const unsubscribe = runtime.onMobileSessionTabsChanged(() => {}, 'phone', 'mobile')
+  const before = runtime['agentProjections'].senders.workForTest()
   const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
     activate: false,
     select: false,
@@ -63,6 +64,7 @@ it.each([
     clientNavigationId: 'phone'
   })
 
+  expect(runtime['agentProjections'].senders.workForTest()).toEqual(before)
   unsubscribe()
   expect(created.tab).toMatchObject({
     status: 'ready',

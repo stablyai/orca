@@ -2,7 +2,7 @@ import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-
 // Publish main-owned workspace panes from Store layout changes, even without a window graph.
 
 import type { PaneStartFactOf } from '../../pane-start-statuses'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { MainPaneBinding } from './main-pane-verdict'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

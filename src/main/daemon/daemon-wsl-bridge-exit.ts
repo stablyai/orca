@@ -9,7 +9,7 @@ import {
   readConfirmedRunningWslDistros,
   settledWslRunningReadAnchor,
   type WslRunningDistrosRead
-} from '../wsl-background-distro-gate'
+} from '../wsl/discovery/wsl-background-distro-gate'
 
 /** The code a synthetic host-loss exit carries, as after a daemon crash. */
 export const WSL_DISTRO_LOSS_EXIT_CODE = -1

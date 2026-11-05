@@ -11,7 +11,8 @@ export const PLUGIN_HOOK_NAMES = [
   'agent.launch.before',
   'agent.prompt.before',
   'agent.tool.before',
-  'agent.tool.after'
+  'agent.tool.after',
+  'editor.save.before'
 ] as const
 export const PLUGIN_HOOK_LIMIT = PLUGIN_HOOK_NAMES.length
 
@@ -25,7 +26,8 @@ export const PLUGIN_HOOK_SINCE: Record<PluginHookName, string> = {
   'agent.launch.before': PLUGIN_HOOKS_SINCE,
   'agent.prompt.before': PLUGIN_HOOKS_SINCE,
   'agent.tool.before': PLUGIN_HOOKS_SINCE,
-  'agent.tool.after': PLUGIN_HOOKS_SINCE
+  'agent.tool.after': PLUGIN_HOOKS_SINCE,
+  'editor.save.before': PLUGIN_HOOKS_SINCE
 }
 
 /** RPC error code for an action a plugin hook refused; `data` names the plugin and its reason. */

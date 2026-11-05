@@ -1,12 +1,12 @@
 import * as mocks from './orca-runtime-test-mocks.spec'
 import type { MockInstance } from 'vitest'
-import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
+import * as worktreeChangeInvalidators from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
 import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
-} from '../worktree-background-removal'
+} from '../workspaces/removal/worktree-background-removal'
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
 
 const { MOCK_GIT_WORKTREES, RuntimeBrowserCommands, _resetTerminalViewAttributesForTest } = mocks

@@ -91,15 +91,22 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
 
   async assertStructuredAdoptionTerminalWritersExited(
     agent: StructuredAgentId,
-    providerSessionId: string
+    providerSessionId: string,
+    closingPaneKeys?: readonly string[]
   ): Promise<void> {
     await assertCliConversationWritersExited(
       {
         rows: () => this.getAgentProviderSessionRows(),
-        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null
+        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null,
+        ptyResolver: () => {
+          // One identity read for every key, rather than a scan of all terminals per key.
+          const context = this.createTerminalIdentityReadContext()
+          return (paneKey) => this.getPtyRecordForPaneKey(paneKey, context)?.ptyId ?? null
+        }
       },
       agent,
-      providerSessionId
+      providerSessionId,
+      closingPaneKeys
     )
   }
 }

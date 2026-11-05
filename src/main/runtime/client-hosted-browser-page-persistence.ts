@@ -3,9 +3,9 @@ import {
   CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS,
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../../shared/client-hosted-browser-page-record'
+} from '../../shared/workspace-session/client-hosted-browser-page-record'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type {
   RuntimeBrowserClientPage,
   RuntimeBrowserPageRegistry

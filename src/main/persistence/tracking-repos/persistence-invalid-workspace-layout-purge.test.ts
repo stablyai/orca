@@ -15,13 +15,13 @@ import {
   getDefaultWorkspaceSession
 } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
 import { collectLayoutEvents } from '../../runtime/workspace-layout-stream-events.test-fixture'
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeCatalogVersion
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropWorkspacesTheListingInvalidates } from '../restoring-sessions/invalid-workspace-layout-purge'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import { windowViewSaveForMain } from '../window-save-view'

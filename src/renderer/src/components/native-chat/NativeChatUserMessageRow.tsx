@@ -1,3 +1,4 @@
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -70,6 +71,7 @@ export function NativeChatUserMessageRow({
   onLinkClick,
   allowFileUriLinks,
   runtimeContext,
+  structuredAttachments = false,
   rewind,
   deliveryNotice
 }: {
@@ -80,6 +82,7 @@ export function NativeChatUserMessageRow({
   onRefolded: () => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   rewind?: NativeChatRewindSurface
   deliveryNotice?: NativeChatDeliveryNotice
@@ -99,6 +102,7 @@ export function NativeChatUserMessageRow({
         <NativeChatAgentMessageCard
           message={message}
           from={from}
+          textAttachmentContent={structuredAttachments ? markdown : undefined}
           runtimeContext={runtimeContext}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
@@ -117,15 +121,24 @@ export function NativeChatUserMessageRow({
                 messageId={message.id}
                 markdown={markdown}
                 onRefolded={onRefolded}
+                // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
+                className="-mx-3.5 px-3.5"
               >
-                <NativeChatMarkdown
-                  rowKey={message.id}
+                <NativeChatTextAttachments
                   content={markdown}
-                  variant="document"
-                  className="text-sm"
-                  renderCodeBlock={NativeChatCodeBlock}
-                  onLinkClick={onLinkClick}
-                  allowFileUriLinks={allowFileUriLinks}
+                  structured={structuredAttachments}
+                  runtimeContext={runtimeContext}
+                  renderText={(text) => (
+                    <NativeChatMarkdown
+                      rowKey={message.id}
+                      content={text}
+                      variant="document"
+                      className="text-sm"
+                      renderCodeBlock={NativeChatCodeBlock}
+                      onLinkClick={onLinkClick}
+                      allowFileUriLinks={allowFileUriLinks}
+                    />
+                  )}
                 />
               </NativeChatUserMessageFold>
             </>
@@ -155,6 +168,16 @@ export function NativeChatUserMessageRow({
       {deliveryNotice?.text !== undefined ? (
         <div className="flex max-w-[85%] items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+          {deliveryNotice.onSend ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
+              {translate('components.native-chat.queuedMessages.send', 'Send')}
+            </Button>
+          ) : null}
+          {deliveryNotice.onEdit ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
+              {translate('components.native-chat.editDeliveryNotice', 'Edit')}
+            </Button>
+          ) : null}
           {deliveryNotice.onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
               {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}

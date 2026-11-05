@@ -3,9 +3,9 @@
   "execution": "sandboxed-ui",
   "id": "components-gallery",
   "name": "Components Gallery",
-  "version": "1.0.0",
-  "description": "Every components panel component in one build-less TSX panel: forms, layout, a paged Table, a lazy Tree, Markdown, code and images.",
-  "engines": { "orca": ">=1.4.247" },
+  "version": "1.1.0",
+  "description": "Every components panel component in one build-less TSX panel: forms, layout with Box, a paged Table, a lazy Tree, Markdown, code and images.",
+  "engines": { "orca": ">=1.4.248" },
   "pluginApi": 1,
   "contributes": {
     "panels": [

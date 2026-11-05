@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../wsl/filesystem/wsl-unc-access-gate'
 
 /**
  * Paired phone, web and CLI clients poll Git followers no user is looking at; a stopped distro

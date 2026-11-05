@@ -27,7 +27,7 @@ export function settledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   itemId: string
 ): { item: AgentJournalRenderItem; prompt: PendingPromptBody } | null {
-  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === itemId)
+  const item = ctx.journal.itemsRead().items.find((entry) => entry.itemId === itemId)
   const prompt = item?.body.kind === 'approval' || item?.body.kind === 'question' ? item.body : null
   return item && prompt && prompt.resolution.state !== 'pending' ? { item, prompt } : null
 }
@@ -54,7 +54,7 @@ export function validatePendingPrompt(
     kind?: 'approval' | 'question'
   }
 ): PendingPromptValidation {
-  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === input.itemId)
+  const item = ctx.journal.itemsRead().items.find((entry) => entry.itemId === input.itemId)
   if (!item) {
     return promptGone(`No item ${input.itemId} in session ${ctx.sessionId}.`)
   }

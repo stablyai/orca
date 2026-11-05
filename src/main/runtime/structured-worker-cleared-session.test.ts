@@ -212,7 +212,7 @@ function installHost(): void {
       present: tabIndexPresent,
       sessionIds: visibleTabs
     }),
-    journalSnapshot: async (id: string) => {
+    journalCurrentRead: async (id: string) => {
       journalAsked.push(id)
       if (!records.has(id)) {
         throw new Error(AGENT_SESSION_NOT_ATTACHED.code)

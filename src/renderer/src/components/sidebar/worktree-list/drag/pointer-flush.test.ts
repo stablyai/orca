@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushWorktreePointerDragFrame, type WorktreePointerDragFrameArgs } from './pointer-flush'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, WORKTREE_ROW_DRAG_INITIAL_STATE } from './row-state'
 
-vi.mock('../../workspace-kanban-sidebar-drop', () => ({
+vi.mock('../../workspace-board/drag/workspace-kanban-sidebar-drop', () => ({
   clearWorkspaceKanbanSidebarDropTargetVisual: vi.fn(),
   hasWorkspaceKanbanSidebarDropBoard: () => true,
   isWorkspaceKanbanSidebarDropPointInBoard: () => false,

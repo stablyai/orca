@@ -1,5 +1,5 @@
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
-import type { TerminalForegroundSample } from '../../shared/terminal-foreground-observation'
+import type { TerminalForegroundSample } from '../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 
 export class SessionProcessInspection {
   constructor(protected readonly subprocess: SubprocessHandle) {}

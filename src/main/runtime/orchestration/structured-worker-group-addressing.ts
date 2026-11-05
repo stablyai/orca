@@ -1,6 +1,6 @@
 /** Enumerate structured group recipients separately: terminal.list is a paired-client wire shape with PTY/writability assumptions. */
 
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import {
   holdStructuredWorker,
   resolveStructuredWorkerAuthority,

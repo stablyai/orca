@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
-import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 
 const CLEAN_EXIT = '\x1b[?1049hTUI\x1b[?1049l\x1b]133;D;0\x07'
 

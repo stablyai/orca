@@ -5,7 +5,10 @@ import type { RuntimeStore } from './runtime-store-contract'
 const PARENT = '/work/platform'
 const CHILD = '/work/platform/api'
 
-vi.mock('../git/runner', () => ({ awaitWindowsHostGitEnvironmentReady: vi.fn(async () => {}) }))
+vi.mock('../git/command-runner/windows-host-git-environment', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  awaitWindowsHostGitEnvironmentReady: vi.fn(async () => {})
+}))
 vi.mock('../git/repo', () => ({
   isGitRepoAsync: vi.fn(async () => true),
   getRepoName: (path: string) => path.split('/').pop()

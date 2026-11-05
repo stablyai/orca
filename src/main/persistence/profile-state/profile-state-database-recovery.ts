@@ -1,7 +1,7 @@
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 import { existsSync, lstatSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { durableWriteTempPath, renameDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, renameDurableSync } from '../../filesystem/durable-file-write'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'

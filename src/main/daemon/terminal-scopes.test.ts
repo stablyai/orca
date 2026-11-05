@@ -14,7 +14,7 @@ import {
   confirmPtyProcessCeiling,
   describePtyProcessCeiling,
   parsePtyProcessCeilingState
-} from '../../shared/pty-process-ceiling-state'
+} from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import {
   parseMemorySize,

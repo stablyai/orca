@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as repoWorktreeAdminFingerprint from '../repo-worktree-admin-fingerprint'
-import * as wslUncAccessGate from '../../wsl/wsl-unc-access-gate'
+import * as wslUncAccessGate from '../../wsl/filesystem/wsl-unc-access-gate'
 import { OrcaRuntimeService, listWorktrees } from '../orca-runtime-test-mocks.spec'
 import { makeWorktreeInfo, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
 

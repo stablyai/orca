@@ -1,8 +1,8 @@
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath
-} from '../../../local-worktree-filesystem'
-import { isWorktreePathMissing } from '../../../worktree-removal-safety'
+} from '../../../workspaces/removal/local-worktree-filesystem'
+import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 
 export async function isAlreadyRemovedWorktreePath(
   worktreePath: string,

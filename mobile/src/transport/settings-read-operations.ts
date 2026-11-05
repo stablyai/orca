@@ -1,6 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import type { RpcCompatibleReader } from './rpc-operation-contract'
-import { normalizeSourceControlGroupOrder } from '../../../src/shared/source-control-group-order'
+import { normalizeSourceControlGroupOrder } from '../../../src/shared/source-control/listing/source-control-group-order'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
 
 function settingsMember(raw: unknown): unknown {

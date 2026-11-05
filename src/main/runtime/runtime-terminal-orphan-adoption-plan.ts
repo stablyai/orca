@@ -3,9 +3,9 @@ import type {
   RuntimeTerminalOrphanAdoptionRequest
 } from '../../shared/runtime-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { terminalOrphanExecutionOwnersEqual } from './terminal-orphan-owner'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'

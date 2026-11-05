@@ -1,5 +1,5 @@
-import type { AgentStatus } from './agent-status'
-import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
+import { isOpenCodeNativeTitle } from '../../../shared/agent-status/title/providers/opencode-terminal-title'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i

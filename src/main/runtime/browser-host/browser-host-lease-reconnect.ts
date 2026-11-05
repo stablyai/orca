@@ -1,11 +1,11 @@
-import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type {
   BrowserHostLeaseHandle,
   BrowserHostLeaseState,
   BrowserHostRouteState
 } from './browser-host-lease-records'
-import type { BrowserHostFenceReason } from './browser-host-lease-fence'
-import { createBrowserHostFence } from './browser-host-lease-fence'
+
+import { type BrowserHostFenceReason, createBrowserHostFence } from './browser-host-lease-fence'
 
 type BrowserHostReconnectAttach = {
   connectionId: string

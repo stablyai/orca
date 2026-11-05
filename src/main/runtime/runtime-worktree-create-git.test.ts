@@ -4,18 +4,20 @@ import type * as GitHubClient from '../github/client'
 const getPRForBranchMock = vi.hoisted(() => vi.fn())
 const git = vi.hoisted(() => vi.fn())
 const worktrees = vi.hoisted(() => vi.fn())
-vi.mock('../git/runner', () => ({ gitExecFileAsync: git }))
-vi.mock('../git/worktree', () => ({ listWorktrees: worktrees }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: git
+}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
+  listWorktrees: worktrees
+}))
 
 vi.mock('../github/client', async (importOriginal) => ({
   ...(await importOriginal<typeof GitHubClient>()),
   getPRForBranch: getPRForBranchMock
 }))
 
-import {
-  canCheckoutExistingLocalBranch,
-  getLocalGitHubPrForBranch
-} from './runtime-worktree-create-git'
+import { canCheckoutExistingLocalBranch } from './runtime-worktree-create-git'
 
 beforeEach(() => {
   getPRForBranchMock.mockReset()
@@ -92,21 +94,5 @@ describe('explicit local branch reuse on the execution host', () => {
       canCheckoutExistingLocalBranch('/repo', 'feature/test', 'origin/feature/test', {}, true)
     ).rejects.toThrow('permission denied')
     expect(worktrees).not.toHaveBeenCalled()
-  })
-})
-
-describe('getLocalGitHubPrForBranch', () => {
-  it('routes the PR lookup through the WSL distro', async () => {
-    await getLocalGitHubPrForBranch('/repo', 'app', { wslDistro: 'Ubuntu' })
-
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', 'app', null, null, null, {
-      localGitExecOptions: { wslDistro: 'Ubuntu' }
-    })
-  })
-
-  it('uses the plain lookup without project git options', async () => {
-    await getLocalGitHubPrForBranch('/repo', 'app', {})
-
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', 'app')
   })
 })

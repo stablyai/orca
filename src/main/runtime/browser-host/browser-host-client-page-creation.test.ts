@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserClientHostCommandEvent } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 
 const authorityRuntimeId = 'runtime-a'

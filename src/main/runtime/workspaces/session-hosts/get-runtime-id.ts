@@ -6,8 +6,9 @@ import type {
   OrchestrationWorkerServer
 } from '../../orchestration/environment-transport'
 import type { RuntimeOrchestrationEnvelope } from '../../../../shared/runtime-rpc-envelope'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -16,7 +17,7 @@ import {
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
   getRuntimeId(): string {

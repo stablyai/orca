@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
-import { collectDescendantRows, type ProcessTableCapture } from '../pty-descendant-termination'
-import type * as DescendantTermination from '../pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
+import type { ProcessTableCapture } from '../pty/process-retirement/pty-descendant-fresh-table'
+import type * as DescendantTermination from '../pty/process-retirement/pty-descendant-termination'
 
 const readProcessTable = vi.hoisted(() => vi.fn<() => Promise<ProcessTableCapture>>())
-vi.mock('../pty-descendant-termination', async (importOriginal) => {
+vi.mock('../pty/process-retirement/pty-descendant-termination', async (importOriginal) => {
   const actual = await importOriginal<typeof DescendantTermination>()
   return { ...actual, readProcessTable, sendDescendantSignal: vi.fn() }
 })

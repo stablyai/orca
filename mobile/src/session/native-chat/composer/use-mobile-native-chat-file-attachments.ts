@@ -1,4 +1,4 @@
-import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../src/shared/non-secure-context-uuid'
 import {
   useMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs,
@@ -36,7 +36,7 @@ export function useMobileNativeChatFileAttachments(args: {
   const { client, sessionId, scopeKey, enabled, showToast } = args
 
   const picker = useMediaPicker()
-  const files = useMobileNativeChatDraftInputs(scopeKey).files
+  const files = useMobileNativeChatDraftInputs(scopeKey, 'files')
 
   const updateScope = useCallback(
     (

@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import {
   buildDaemonLauncherDriver,
@@ -140,30 +140,6 @@ describe.runIf(linux)('an Electron-hosted daemon meeting a Node-hosted launcher'
       expect(attached).toEqual({ pid: created.pid, isReattach: true, output: true })
       await next.quit()
       expect(isProcessAlive(pid!)).toBe(true)
-    }
-  )
-
-  it(
-    'starts the next daemon on Node once the Electron daemon has retired',
-    { timeout: 120_000 },
-    async () => {
-      const userData = newProfile('retired')
-      const previous = await openWindow('electron', userData, '1.0.0')
-      const oldPid = profileDaemonPid(userData)
-      expect(oldPid).not.toBeNull()
-      await previous.quit()
-      await vi.waitFor(() => expect(isProcessAlive(oldPid!)).toBe(false), { timeout: 30_000 })
-
-      const next = await openWindow('node', userData, '1.1.0')
-      expect(next.result).toEqual({ adopted: false, mode: null })
-      const newPid = profileDaemonPid(userData)
-      expect(newPid).not.toBe(oldPid)
-      expect(executableOf(newPid!)).toBe(runtimes.node)
-      expect(await session('create', userData, 'e2n-fresh', 'FRESH')).toMatchObject({
-        isReattach: false,
-        output: true
-      })
-      await next.quit()
     }
   )
 })

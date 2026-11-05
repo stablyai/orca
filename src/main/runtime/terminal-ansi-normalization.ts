@@ -2,7 +2,7 @@ import { MAX_TAIL_PENDING_ANSI_CHARS } from './terminal-tail-limits'
 import {
   classifyTerminalEscapeIntroducer,
   type TerminalEscapeIntroducer
-} from '../../shared/terminal-escape-introducer'
+} from '../../shared/terminal/protocol/escape/terminal-escape-introducer'
 import { ownRetainedString } from '../../shared/own-retained-string'
 
 export function parseAnsiControlSequence(

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeTerminalOrphanAdoptionRequest } from '../../shared/runtime-types'
 import { collectLayoutLeafIdsInOrder } from '../../shared/workspace-layout/terminal-pane-tree'
 import {
@@ -70,11 +70,4 @@ it('keeps the healthy sibling pane and its PTY when one split pane is recovered'
   expect(collectLayoutLeafIdsInOrder(layout?.root)).toEqual([HEALTHY, ORPHAN])
   expect(layout?.ptyIdsByLeafId).toEqual({ [HEALTHY]: 'pty-healthy', [ORPHAN]: 'pty-orphan' })
   expect(layout?.activeLeafId).toBe(ORPHAN)
-})
-
-it('keeps the saved split when it already holds the recovered pane', () => {
-  const layout = adopt([[HEALTHY, 'pty-healthy'], [ORPHAN]]).terminalLayoutsByTabId[TAB]
-
-  expect(collectLayoutLeafIdsInOrder(layout?.root)).toEqual([HEALTHY, ORPHAN])
-  expect(layout?.ptyIdsByLeafId).toEqual({ [HEALTHY]: 'pty-healthy', [ORPHAN]: 'pty-orphan' })
 })

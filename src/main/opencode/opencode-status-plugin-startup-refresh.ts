@@ -1,4 +1,4 @@
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { ManagedHookDetectionSettings } from '../agent-hooks/managed-hook-detection-commands'
 import { openCode2HookService, openCodeHookService } from './hook-service'
 

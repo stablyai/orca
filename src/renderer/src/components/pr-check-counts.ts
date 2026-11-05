@@ -1,10 +1,11 @@
 import { translate } from '../i18n/i18n'
-import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 export type PRCheckCounts = {
   passing: number
   failing: number
+  cancelled: number
   needsAction: number
   pending: number
   neutral: number
@@ -26,7 +27,8 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
   ).length
   return {
     passing: summary.passed,
-    failing: summary.failed - needsAction,
+    failing: summary.failed - needsAction - (summary.cancelled ?? 0),
+    cancelled: summary.cancelled ?? 0,
     needsAction,
     pending: summary.pending,
     neutral: summary.neutral
@@ -35,7 +37,7 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
 
 /** `tone` keys the caller's `CHECK_COLOR`/`CHECK_ICON` maps so styling stays with the surface. */
 export type PRCheckCountChip = {
-  tone: 'success' | 'failure' | 'action_required' | 'pending' | 'neutral'
+  tone: 'success' | 'failure' | 'cancelled' | 'action_required' | 'pending' | 'neutral'
   label: string
 }
 
@@ -56,6 +58,12 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       label: translate('auto.components.pr-check-counts.failingChip', '{{value0}} failing', {
         value0: counts.failing
       })
+    })
+  }
+  if (counts.cancelled > 0) {
+    chips.push({
+      tone: 'cancelled',
+      label: `${counts.cancelled} ${translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
     })
   }
   if (counts.needsAction > 0) {
@@ -111,6 +119,9 @@ export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string 
       count: counts.pending,
       defaultValue_one: '{{count}} check pending'
     })
+  }
+  if (counts.cancelled > 0) {
+    return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
   }
   if (counts.passing === checks.length) {
     return translate('auto.components.prCheckCounts.allChecksPassing', 'All checks passing')

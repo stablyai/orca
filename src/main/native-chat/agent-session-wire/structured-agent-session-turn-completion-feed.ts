@@ -13,11 +13,11 @@ import type {
 import {
   foldAgentLeadStatus,
   heldTurnCountsAsFinished
-} from '../../../shared/agent-lead-status-fold'
+} from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import {
   agentChildWorkLiveness,
   type AgentChildWorkLivenessCandidate
-} from '../../../shared/agent-status-child-work-liveness'
+} from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import type { StructuredAgentSessionLatestRequest } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-feed'

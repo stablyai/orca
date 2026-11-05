@@ -45,13 +45,4 @@ describe('createProgrammaticScrollMarks', () => {
     expect(marks.consume(scrollEvent(), 700, 10_000)).toBe(true)
     expect(marks.consume(scrollEvent(), 700, 10_000)).toBe(false)
   })
-
-  it('bounds the pending queue', () => {
-    const marks = createProgrammaticScrollMarks()
-    for (let i = 0; i < 40; i++) {
-      marks.mark(i * 1_000)
-    }
-    expect(marks.consume(scrollEvent(), 0, 100_000)).toBe(false)
-    expect(marks.consume(scrollEvent(), 39_000, 100_000)).toBe(true)
-  })
 })

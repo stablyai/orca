@@ -1,5 +1,8 @@
 import { defineMethod } from '../core'
-import { BrowserTarget } from '../../../../shared/rpc-contract/rpc-param-primitives'
+import {
+  BrowserTarget,
+  ExpectUrlBrowserTarget
+} from '../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   Check,
   Drag,
@@ -75,13 +78,13 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.back',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserBack(params)
   }),
   defineMethod({
     name: 'browser.reload',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserReload(params)
   }),
   defineMethod({
@@ -217,7 +220,7 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.forward',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: ExpectUrlBrowserTarget,
     handler: async (params, { runtime }) => runtime.browserForward(params)
   }),
   defineMethod({

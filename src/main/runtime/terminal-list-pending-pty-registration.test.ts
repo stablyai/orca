@@ -1,7 +1,7 @@
 import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure
-} from '../../shared/terminal-start-failure'
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import {

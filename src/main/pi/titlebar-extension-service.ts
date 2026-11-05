@@ -1,4 +1,4 @@
-import { materializeOmpFreshConfig } from '../../shared/omp-fresh-config'
+import { materializeOmpFreshConfig } from '../../shared/agent-launch/startup/omp-fresh-config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -16,7 +16,7 @@ import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   safeRemoveOverlay
-} from '../pty/overlay-mirror'
+} from '../pty/scrollback/overlay-mirror'
 import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 

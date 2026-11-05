@@ -10,7 +10,7 @@ import { CodexAppServerRequestError } from '../codex/app-server/codex-app-server
 import {
   CODEX_SCRIPTED_THREAD as THREAD,
   codexScriptedChild
-} from '../codex/codex-scripted-child.test-fixture'
+} from '../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams

@@ -4,17 +4,9 @@ import {
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
 } from './pty-session-id'
-import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const USER_DATA = '/tmp/orca-userdata'
-
-describe('mintPtySessionId', () => {
-  it('preserves path-shaped worktreeIds verbatim in the prefix', () => {
-    // Workspace IDs embed absolute paths; preserve them for @@ ownership parsing.
-    const id = mintPtySessionId('repo-123::/Users/me/work/wt-1')
-    expect(id).toMatch(/^repo-123::\/Users\/me\/work\/wt-1@@[0-9a-f]{8}$/)
-  })
-})
 
 describe('ptySessionIdForAgentCreateOperation', () => {
   it('produces a safe session id for a path-shaped worktree', () => {

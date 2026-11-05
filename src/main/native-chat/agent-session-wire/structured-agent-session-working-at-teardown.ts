@@ -24,8 +24,8 @@ import {
   type AgentSessionRestartPrompt,
   type AgentSessionRestartTask
 } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
-import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { isLiveChildWork } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
@@ -175,7 +175,21 @@ export function structuredAgentSessionWorkingAtStop(input: {
   if (!session?.child) {
     return null
   }
-  const snapshot = session.journal.snapshot()
+  const statusRead = session.journal.statusRead()
+  const inputs = new Map(statusRead.submissions.map((send) => [send.clientMessageId, send]))
+  for (const send of session.journal.inputOrder.recoverableSubmissions()) {
+    inputs.set(send.clientMessageId, send)
+  }
+  const snapshot = {
+    ...statusRead,
+    cursor: session.journal.cursor(),
+    submissions: [...inputs.values()].sort(
+      (a, b) =>
+        a.submittedAt - b.submittedAt ||
+        session.journal.inputOrder.inputOrdinal(a.clientMessageId) -
+          session.journal.inputOrder.inputOrdinal(b.clientMessageId)
+    )
+  }
   const current = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   // Queued/unanswered-start sends never reached an agent; reopen/exit keeps them as unsent.
   const unanswered = session.child.phase === 'starting'

@@ -102,6 +102,7 @@ export function useNativeChatComposerPaste({
       ready?: () => void
     ): Promise<boolean> => {
       const saved = await saveNativeChatPastedClipboardImage(owner, {
+        pendingId,
         besideText,
         ready,
         canNotify: canComplete,

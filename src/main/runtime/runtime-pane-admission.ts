@@ -4,7 +4,7 @@ import {
   normalizeExecutionHostId,
   toSshExecutionHostId
 } from '../../shared/execution-host'
-import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../shared/workspace-layout/terminal-pane-layout-tree'
 import type {
   TerminalPaneAdmission,
   TerminalPaneAdmissionOutcome

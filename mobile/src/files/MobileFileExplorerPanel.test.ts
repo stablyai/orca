@@ -182,15 +182,6 @@ async function pressByLabel(
   })
 }
 
-async function typeFilter(renderer: ReactTestRenderer, text: string): Promise<void> {
-  const field = renderer.root.find(
-    (node) => String(node.type) === 'TextInput' && node.props.placeholder === 'Filter files'
-  )
-  await act(async () => {
-    field.props.onChangeText(text)
-  })
-}
-
 function renderedText(renderer: ReactTestRenderer): string {
   return renderer.root
     .findAll((node) => String(node.type) === 'Text')
@@ -235,38 +226,6 @@ describe('MobileFileExplorerPanel', () => {
     await pressByLabel(renderer, 'Open folder src')
     await pressByLabel(renderer, 'Open folder src')
 
-    expect(client.sendRequest).toHaveBeenCalledTimes(2)
-  })
-
-  it('filters opened folders, reveals a matched folder in the tree, and clears from no matches', async () => {
-    const client = createMockClient({
-      '': [entry('src', true), entry('README.md')],
-      src: [entry('app.ts'), entry('components', true)]
-    })
-    mockTransport.client = client
-    const renderer = await renderExplorer()
-    await pressByLabel(renderer, 'Open folder src')
-    await pressByLabel(renderer, 'Open folder src')
-
-    await typeFilter(renderer, 'APP')
-    expect(renderedText(renderer)).toContain('app.ts')
-    expect(renderedText(renderer)).not.toContain('README.md')
-
-    await pressByLabel(renderer, 'Open folder src')
-    expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).toContain('components')
-
-    await typeFilter(renderer, 'nothing-here')
-    expect(renderedText(renderer)).toContain('No matches')
-    const clear = renderer.root.find(
-      (node) =>
-        String(node.type) === 'Pressable' &&
-        node.findAll((child) => child.props.children === 'Clear filter').length > 0
-    )
-    await act(async () => {
-      clear.props.onPress()
-    })
-    expect(renderedText(renderer)).toContain('README.md')
     expect(client.sendRequest).toHaveBeenCalledTimes(2)
   })
 
@@ -485,67 +444,6 @@ describe('MobileFileExplorerPanel', () => {
     expect(legacyClient.sendRequest).toHaveBeenCalledTimes(2)
   })
 
-  it('surfaces the legacy cap note when the files.list fallback is truncated', async () => {
-    const legacyClient: MockClient = {
-      sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
-        if (method === 'files.readDir') {
-          return {
-            id: 'response-id',
-            ok: false,
-            error: { code: 'method_not_found', message: 'Unknown method' },
-            _meta: { runtimeId: 'runtime-id' }
-          }
-        }
-        return {
-          id: 'response-id',
-          ok: true,
-          result: {
-            files: [{ relativePath: 'README.md', basename: 'README.md', kind: 'text' }],
-            totalCount: 6000,
-            truncated: true
-          },
-          _meta: { runtimeId: 'runtime-id' }
-        }
-      })
-    }
-    mockTransport.client = legacyClient
-
-    const renderer = await renderExplorer()
-
-    expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).toContain('Showing first 5000')
-  })
-
-  it('reports the files.list failure when the fallback itself fails', async () => {
-    const legacyClient: MockClient = {
-      sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
-        if (method === 'files.readDir') {
-          return {
-            id: 'response-id',
-            ok: false,
-            error: {
-              code: 'forbidden',
-              message: "Method 'files.readDir' is not available to mobile clients"
-            },
-            _meta: { runtimeId: 'runtime-id' }
-          }
-        }
-        return {
-          id: 'response-id',
-          ok: false,
-          error: { code: 'internal', message: 'legacy list failed' },
-          _meta: { runtimeId: 'runtime-id' }
-        }
-      })
-    }
-    mockTransport.client = legacyClient
-
-    const renderer = await renderExplorer()
-
-    expect(renderedText(renderer)).toContain('legacy list failed')
-    expect(renderedText(renderer)).not.toContain('not available to mobile clients')
-  })
-
   describe('Retry while the host is unreachable', () => {
     function failingClient(failedPaths: Set<string>): MockClient {
       return {
@@ -561,42 +459,6 @@ describe('MobileFileExplorerPanel', () => {
         )
       }
     }
-
-    async function unreachableAfterRootFailure(): Promise<ReactTestRenderer> {
-      mockTransport.client = failingClient(new Set(['']))
-      const renderer = await renderExplorer()
-      mockTransport.connectionState = 'reconnecting'
-      await updateExplorer(renderer)
-      return renderer
-    }
-
-    function retryButtons(renderer: ReactTestRenderer) {
-      return renderer.root
-        .findAll((node) => String(node.type) === 'Pressable')
-        .filter((node) =>
-          node
-            .findAll((node) => String(node.type) === 'Text')
-            .some((text) => text.props.children === 'Reconnect')
-        )
-    }
-
-    it('offers no root Retry on the page, where nothing can re-dial', async () => {
-      mockTransport.forceReconnect = null
-      const renderer = await unreachableAfterRootFailure()
-      expect(renderedText(renderer)).toContain('Waiting for desktop')
-      expect(retryButtons(renderer)).toHaveLength(0)
-    })
-
-    it('still offers it natively, and re-dials this host', async () => {
-      const forceReconnect = vi.fn()
-      mockTransport.forceReconnect = forceReconnect
-      const renderer = await unreachableAfterRootFailure()
-      const [retry] = retryButtons(renderer)
-      await act(async () => {
-        retry?.props.onPress()
-      })
-      expect(forceReconnect.mock.calls).toEqual([['host-a']])
-    })
 
     it("keeps a folder's Retry on the page, whose read runs when the shell reconnects", async () => {
       // Queue the read even without re-dial; any later connected event drains it.

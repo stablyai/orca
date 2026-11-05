@@ -18,7 +18,7 @@ import {
   resolveRuntimeGitLabWorktreeBase,
   type RuntimeGitLabWorktreeBaseArgs
 } from '../runtime-gitlab-worktree-base'
-import { listWorktreesStrict } from '../../git/worktree-listing'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import {
   adoptRuntimeProvisionedRoot,
   readLocalSparseCheckoutEnabled,

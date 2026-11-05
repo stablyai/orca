@@ -13,7 +13,7 @@ import {
 } from './helpers/terminal'
 import { dismissSetupScriptPrompts } from './helpers/sidebar-setup-prompt'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
-import { readAgentProcess } from '../../src/shared/agent-process-presence-probe'
+import { readAgentProcess } from '../../src/shared/agent-status/process/agent-process-presence-probe'
 import { retentionFixtureCommand } from './helpers/host-created-terminal-retention-oracle'
 
 const SESSION = '11111111-2222-4333-8444-555555555555'

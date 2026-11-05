@@ -1,13 +1,13 @@
 import type {
   GitStageWorktreeScope,
   GitStageWorktreeScopeReceipt
-} from '../../shared/git-stage-worktree-scope'
+} from '../../shared/git/paths/git-stage-worktree-scope'
 import {
   normalizeRuntimeGitRelativePath,
   requireRuntimeGitProvider,
   type RuntimeGitCommandHost
 } from './runtime-git-command-target'
-import type { ConflictResolution } from '../../shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 
 export class RuntimeGitStagingCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}

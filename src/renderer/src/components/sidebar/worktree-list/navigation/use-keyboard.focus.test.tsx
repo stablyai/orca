@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 

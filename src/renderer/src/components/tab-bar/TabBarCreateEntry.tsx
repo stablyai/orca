@@ -197,7 +197,7 @@ function TabBarCreateEntrySession({
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
-      return
+      return false
     }
     const selectedOption = option ?? selectedActiveOption ?? null
     if (!selectedOption) {
@@ -238,15 +238,15 @@ function TabBarCreateEntrySession({
     }
     if (selectedOption.kind === 'agent') {
       if (selectedOption.option.disabled) {
-        return
+        return false
       }
-      if (onLaunchAgentOption) {
-        onLaunchAgentOption(selectedOption.option)
-      } else {
-        onLaunchAgent?.(selectedOption.option.agent)
+      const accepted = onLaunchAgentOption
+        ? onLaunchAgentOption(selectedOption.option)
+        : onLaunchAgent?.(selectedOption.option.agent)
+      if (accepted !== false) {
+        onDidOpenEntry?.()
       }
-      onDidOpenEntry?.()
-      return
+      return accepted
     }
     // Route history through typed-URL navigation to preserve workspace targeting and SSH resolution.
     const classification: TabEntryActionClassification =

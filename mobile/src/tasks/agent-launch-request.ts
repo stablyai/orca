@@ -6,12 +6,12 @@ import {
   type AgentLaunchPlacement,
   type AgentLaunchPrompt,
   type AgentLaunchResult
-} from '../../../src/shared/agent-launch-intent'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-launch-runtime-capability'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
@@ -112,5 +112,3 @@ export function isAgentLaunchUnsupportedRefusal(error: {
   }
   return (error.message ?? '').includes('agent_launch_unsupported')
 }
-
-export { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch-replay-refusal'

@@ -3,7 +3,7 @@ import { userManagerEnv } from './daemon-cgroup-scope'
 import { warnWhenRealtimeTimeoutIsZero } from './daemon-rttime-limit'
 import { setPtyActiveProcessLimit } from '../windows/windows-pty-job'
 import { resolveTerminalScopes, type TerminalScopeRuntime } from './terminal-scopes'
-import type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
+import type { PtyProcessCeilingState } from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 
 type DaemonLog = (event: string, details?: Record<string, unknown>) => void
 

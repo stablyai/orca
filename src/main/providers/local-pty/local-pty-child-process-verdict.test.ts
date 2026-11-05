@@ -1,6 +1,6 @@
 import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as PtyMasterForegroundObservation from '../../pty/pty-master-foreground-observation'
+import type * as PtyMasterForegroundObservation from '../../pty/process-retirement/pty-master-foreground-observation'
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
 const jobMembers = vi.hoisted(() => vi.fn())
@@ -19,17 +19,20 @@ vi.mock('../agent-foreground-process', () => ({
 }))
 
 const observeForegroundMock = vi.hoisted(() => vi.fn())
-vi.mock('../../pty/pty-master-foreground-observation', async (importOriginal) => ({
-  ...(await importOriginal<typeof PtyMasterForegroundObservation>()),
-  observePtyForeground: observeForegroundMock
-}))
-import { isRetiredPtyMaster } from '../../pty/node-pty-master-fd-retirement'
+vi.mock(
+  '../../pty/process-retirement/pty-master-foreground-observation',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof PtyMasterForegroundObservation>()),
+    observePtyForeground: observeForegroundMock
+  })
+)
+import { isRetiredPtyMaster } from '../../pty/process-retirement/node-pty-master-fd-retirement'
 
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from '../pty-process-inspection'
 import { readLaunchedAgentForeground } from '../../runtime/launched-agent-foreground'
-import type { TerminalForegroundSample } from '../../../shared/terminal-foreground-observation'
+import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 
 // Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'

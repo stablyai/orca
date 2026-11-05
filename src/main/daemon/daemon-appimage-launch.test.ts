@@ -6,7 +6,9 @@ import { runProcessSync } from '@orca/process-host'
 import { buildAppImageDaemonCommand, resolveAppImageDaemonLaunch } from './daemon-appimage-launch'
 
 const { resolveIdentity } = vi.hoisted(() => ({ resolveIdentity: vi.fn() }))
-vi.mock('../appimage-runtime-identity', () => ({ resolveAppImageRuntimeIdentity: resolveIdentity }))
+vi.mock('../updater/linux-package/appimage-runtime-identity', () => ({
+  resolveAppImageRuntimeIdentity: resolveIdentity
+}))
 
 const APPDIR = '/tmp/.mount_orcaAbC'
 const FUSE_MOUNTINFO = `953 65 0:108 / ${APPDIR} ro,nosuid,nodev,relatime shared:1 - fuse.Orca.AppImage Orca.AppImage ro,user_id=1000`

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslGuestProcessRow } from '../wsl/wsl-guest-pane-processes'
-import type * as GuestProcessesModule from '../wsl/wsl-guest-pane-processes'
+import type { WslGuestProcessRow } from '../wsl/execution/wsl-guest-pane-processes'
+import type * as GuestProcessesModule from '../wsl/execution/wsl-guest-pane-processes'
 
 const readRows = vi.hoisted(() =>
   vi.fn(async (_distro: string, _timeoutMs: number): Promise<WslGuestProcessRow[] | null> => null)
 )
-vi.mock('../wsl/wsl-guest-pane-processes', async (importOriginal) => ({
+vi.mock('../wsl/execution/wsl-guest-pane-processes', async (importOriginal) => ({
   ...(await importOriginal<typeof GuestProcessesModule>()),
   readWslGuestPaneProcesses: readRows
 }))

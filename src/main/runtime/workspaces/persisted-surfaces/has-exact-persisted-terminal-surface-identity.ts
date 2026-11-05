@@ -8,8 +8,8 @@ import type {
 
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { layoutContainsLeafId } from '../../../persistence/restoring-sessions/terminal-layout-normalization'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'

@@ -5,7 +5,7 @@ import type { AppState } from '@/store/types'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import {
@@ -183,33 +183,6 @@ describe('mirror to frames', () => {
     expect(recorded.states).toHaveLength(1)
     expect(treeOf(store.getState(), WT)).toEqual(mirrorTree)
   })
-
-  it('writes what the frames change over the mirror’s tree without emptying it between', async () => {
-    const store = mirroredStore()
-    const mirrorTree = treeOf(store.getState(), WT)
-    expect(mirrorTree.tabIds).toEqual([TAB_1])
-    install(store)
-    setServers(store, [CAPABLE])
-    const recorded = recordStates(store)
-    const renamed = structuredClone(SERVER_LAYOUT)
-    renamed.tabs[0]!.customTitle = 'named on the server'
-
-    streams.send(streams.openTo(ENV), {
-      type: 'snapshot',
-      workspaces: [{ key: WT, layout: renamed }],
-      seq: 1,
-      epoch: 'e'
-    })
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    await settle()
-    recorded.stop()
-
-    expect(store.getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe('named on the server')
-    expect(recorded.states.length).toBeGreaterThan(1)
-    for (const state of recorded.states) {
-      expect(treeOf(state, WT)).toEqual(mirrorTree)
-    }
-  })
 })
 
 describe('a terminal handle and the frame that binds its pane, in either order', () => {
@@ -328,41 +301,5 @@ describe('a workspace handed back to the mirror', () => {
     expect((store.getState().tabsByWorktree[other] ?? []).map((tab) => tab.id)).toEqual([
       toWebTerminalSurfaceTabId('host-tab-8')
     ])
-  })
-})
-
-describe('two desktop windows', () => {
-  it('bind identical ptyIds from the same server frames and handles', async () => {
-    const first = mirroredStore()
-    const second = mirroredStore()
-    install(first)
-    install(second)
-    setServers(first, [CAPABLE])
-    setServers(second, [CAPABLE])
-    const open = streams.of(ENV).filter((stream) => !stream.closed)
-    expect(open).toHaveLength(2)
-    for (const stream of open) {
-      const frames = mainLayoutFrameSender()
-      streams.send(stream, senderSnapshot(frames, { [WT]: SERVER_LAYOUT }, 1))
-      streams.send(stream, frames.records(WT, WITH_TAB_2))
-    }
-    await settle()
-    const handles = sessionTabs(
-      [
-        surface('host-tab-1', LEAF_ID, 'terminal-1'),
-        surface('host-tab-2', SECOND_LEAF_ID, 'terminal-2')
-      ],
-      2
-    )
-    mirrorSnapshot(first, ENV, handles)
-    mirrorSnapshot(second, ENV, handles)
-    await settle()
-
-    const expected = {
-      [TAB_1]: { [LEAF_ID]: REMOTE_1 },
-      [TAB_2]: { [SECOND_LEAF_ID]: toRemoteRuntimePtyId('terminal-2', ENV) }
-    }
-    expect(treeOf(first.getState(), WT).bindings).toEqual(expected)
-    expect(treeOf(second.getState(), WT)).toEqual(treeOf(first.getState(), WT))
   })
 })

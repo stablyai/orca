@@ -1,6 +1,6 @@
-import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 export function shouldRenderCommitArea(
   unresolvedConflictCount: number,

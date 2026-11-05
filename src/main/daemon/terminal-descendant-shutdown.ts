@@ -1,9 +1,10 @@
-import * as descendantTermination from '../pty-descendant-termination'
-import type { ProcessTableReader, DescendantSnapshot } from '../pty-descendant-termination'
+import * as descendantTermination from '../pty/process-retirement/pty-descendant-termination'
+import type { ProcessTableReader } from '../pty/process-retirement/pty-descendant-fresh-table'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
-} from '../pty-descendant-exit-verification'
+} from '../pty/process-retirement/pty-descendant-exit-verification'
 import {
   SHUTDOWN_DESCENDANT_TABLE_TIMEOUT_MS,
   SHUTDOWN_DESCENDANT_VERIFY_MS

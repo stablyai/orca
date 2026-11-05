@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs'
-import { isTerminalOscLinkRanges } from '../../shared/terminal-osc-link-ranges'
+import { isTerminalOscLinkRanges } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import { readTerminalHistoryJsonAsync } from './terminal-history-file-reader'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
-import { parseTerminalOwner } from '../../shared/terminal-owner'
+import { parseTerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 
 export type TerminalHistoryCheckpointRead =
   | { status: 'missing' }

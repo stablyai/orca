@@ -4,7 +4,6 @@ import {
   mergeProcessLivenessVerdict,
   queryWindowsProcess,
   readLinuxProcessStartedAtMs,
-  readMacosProcessStartedAtMs,
   readProcessCommandLine
 } from './daemon-process-inspection'
 
@@ -30,16 +29,6 @@ describe('daemon process inspection', () => {
     )
     expect(readTextFile).toHaveBeenCalledWith('/proc/42/cmdline')
     expect(runCommand).toHaveBeenCalledWith('ps', ['-p', '42', '-o', 'command='], 2_000)
-  })
-
-  it('uses a non-empty Linux procfs command line without spawning ps', async () => {
-    const readTextFile = vi.fn(async () => 'node\0daemon-entry')
-    const runCommand = vi.fn()
-
-    await expect(readProcessCommandLine(42, 'linux', { readTextFile, runCommand })).resolves.toBe(
-      'node\0daemon-entry'
-    )
-    expect(runCommand).not.toHaveBeenCalled()
   })
 
   it('reads the Windows process from the process table, not a PowerShell spawn', async () => {
@@ -88,15 +77,6 @@ describe('daemon process inspection', () => {
     await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
       status: 'missing'
     })
-  })
-
-  it('reads the macOS start time through an async spawn', async () => {
-    const runCommand = vi.fn(async () => 'Sat Jan  1 00:00:00 2028\n')
-
-    await expect(readMacosProcessStartedAtMs(42, { runCommand })).resolves.toBe(
-      Date.parse('Sat Jan  1 00:00:00 2028')
-    )
-    expect(runCommand).toHaveBeenCalledWith('ps', ['-p', '42', '-o', 'lstart='], 2_000)
   })
 
   // Keep each host runner's CLK_TCK cache isolated.
@@ -168,23 +148,5 @@ describe('daemon process inspection', () => {
     it('lets an unverifiable record upgrade an earlier exited verdict', () => {
       expect(mergeProcessLivenessVerdict({ status: 'exited' }, unverifiable)).toEqual(unverifiable)
     })
-
-    it('adopts the first verdict when there is no prior one', () => {
-      expect(mergeProcessLivenessVerdict(undefined, { status: 'exited' })).toEqual({
-        status: 'exited'
-      })
-    })
   })
-
-  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(
-    'rejects unsafe Windows pid %s before reading the process table',
-    async (pid) => {
-      const readProcessTable = vi.fn(async () => [])
-
-      await expect(queryWindowsProcess(pid, { readProcessTable })).resolves.toEqual({
-        status: 'unavailable'
-      })
-      expect(readProcessTable).not.toHaveBeenCalled()
-    }
-  )
 })

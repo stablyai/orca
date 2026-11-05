@@ -1,6 +1,6 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { ZodError, type ZodType } from 'zod'
-import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
@@ -8,12 +8,12 @@ import type {
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult
-} from '../../../shared/mobile-relay-hosts-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
@@ -28,7 +28,7 @@ import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
-} from '../../../shared/device-key-registration-contract'
+} from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
 
 // Bind key rotation to the authenticated socket so callers can re-key only themselves.
 export type DeviceSelfRpcContext = {

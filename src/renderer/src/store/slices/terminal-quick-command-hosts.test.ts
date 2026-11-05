@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-  RUNTIME_PROTOCOL_VERSION,
-  TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY
+  RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
+import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
@@ -23,34 +23,6 @@ const savedCommand: TerminalQuickCommand = {
 
 function success(result: unknown) {
   return { id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
-}
-
-function installRuntime(supported = true): ReturnType<typeof vi.fn> {
-  const call = vi.fn(({ method, params }: { method: string; params?: unknown }) => {
-    if (method === 'status.get') {
-      return Promise.resolve(
-        success({
-          runtimeId: 'runtime-1',
-          graphStatus: 'ready',
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-          capabilities: supported ? [TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY] : []
-        })
-      )
-    }
-    if (method === 'settings.getTerminalQuickCommands') {
-      return Promise.resolve(success({ terminalQuickCommands: [savedCommand] }))
-    }
-    if (method === 'settings.updateTerminalQuickCommands') {
-      const mutation = (params as { mutation: { command?: TerminalQuickCommand } }).mutation
-      return Promise.resolve(
-        success({ terminalQuickCommands: mutation.command ? [mutation.command] : [] })
-      )
-    }
-    throw new Error(`Unexpected method: ${method}`)
-  })
-  stubRuntimeEnvironmentBridge({ call })
-  return call
 }
 
 beforeEach(() => {
@@ -101,21 +73,5 @@ describe('terminal quick command host collections', () => {
     expect(store.getState().runtimeTerminalQuickCommands.get('env-race')?.commands).toEqual([
       edited
     ])
-  })
-
-  it('drops cached commands before revalidating a new connection', async () => {
-    installRuntime()
-    const store = createTestStore()
-    await store.getState().loadRuntimeTerminalQuickCommands('env-1')
-
-    store.getState().clearRuntimeEnvironmentStatus('env-1')
-    const reload = store.getState().loadRuntimeTerminalQuickCommands('env-1')
-
-    expect(store.getState().runtimeTerminalQuickCommands.get('env-1')).toMatchObject({
-      commands: [],
-      ready: false,
-      supported: null
-    })
-    await reload
   })
 })

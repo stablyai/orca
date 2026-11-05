@@ -1,5 +1,5 @@
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
+import { getMacosFullDiskAccessStatus } from '../macos-permissions/macos-full-disk-access-status'
 import { ptySpawnHealthPlatformCoverage } from './daemon-health-identity'
 import { checkDaemonAsyncIo } from './daemon-async-io-probe'
 import type { DaemonFileLog } from './daemon-file-log'

@@ -8,7 +8,7 @@ import {
 } from '../../shared/repo-search-limits'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../git/repo'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type RuntimeRepositoryRefQueryDependencies = {
   resolveRepo: (selector: string) => Promise<Repo>

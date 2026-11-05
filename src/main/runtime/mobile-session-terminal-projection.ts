@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import {
   readCanonicalPtyOwners,

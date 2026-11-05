@@ -1,5 +1,8 @@
-import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
-import { isAgentStatusFresh } from '../../shared/agent-status-freshness'
+import {
+  isFreshNonDoneAgentStatus,
+  isAgentStatusFresh
+} from '../../shared/agent-status/contracts/agent-status-freshness'
+
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import {

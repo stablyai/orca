@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import * as gitExecFile from '../../../git/command-runner/git-exec-file'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -11,8 +12,7 @@ import {
   addWorktree,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  listWorktrees,
-  gitRunner
+  listWorktrees
 } from '../../orca-runtime-test-mocks.spec'
 import { store, makeWorktreeMeta } from '../../orca-runtime-test-fixtures.spec'
 import { registerLivePty } from '../../bind-first-pane.test-fixture'
@@ -133,7 +133,7 @@ export function managedCwdLaunchFixture(
   const showRepo = vi.spyOn(runtime, 'showRepo')
   const showTerminal = vi.spyOn(runtime, 'showTerminal')
   const catalog = vi.spyOn(runtime, 'listManagedWorktrees')
-  const git = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => ({
+  const git = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => ({
     stdout: args[0] === 'rev-parse' && args.includes('--verify') ? `${'a'.repeat(40)}\n` : '',
     stderr: ''
   }))

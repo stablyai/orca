@@ -1,4 +1,4 @@
-import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserHostLease } from './browser-host/browser-host-lease-records'
 import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import {

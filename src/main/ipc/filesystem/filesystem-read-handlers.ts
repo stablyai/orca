@@ -10,14 +10,14 @@ import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../shared/file-name-sort'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,
   resolveLocalListRequestPath
-} from '../local-file-access-resolution'
-import { isPathAbsentError } from './filesystem-path-containment'
+} from './access/local-file-access-resolution'
+import { isPathAbsentError } from './access/filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
@@ -26,8 +26,11 @@ import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import { grantRemoteFilePreview, readLocalFilePreview } from '../../media/media-preview-protocol'
 import { readPreviewGrantRange } from '../../media/preview-grant-range-read'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
-import { assertWslUncPathRunning, guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import {
+  assertWslUncPathRunning,
+  guardWslUncPathAccess
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { parseRemoteFilePreviewAddress } from '../../../shared/remote-file-preview-address'
 import {
   readLocalFileContent,

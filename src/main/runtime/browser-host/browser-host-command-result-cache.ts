@@ -1,4 +1,4 @@
-import { browserCommandCacheBytes } from '../../browser/browser-command-cache-bytes'
+import { browserCommandCacheBytes } from '../../browser/client-hosts/commands/browser-command-cache-bytes'
 import type {
   resolveBrowserHostCommandCacheLimits,
   BrowserHostCommandPageState,

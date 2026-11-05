@@ -12,7 +12,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { HistoryManager } from './history-manager'
-import * as hostTreeRemoval from '../host-tree-removal'
+import * as hostTreeRemoval from '../filesystem/host-tree-removal'
 import { flushPendingSessionTreeRemovals } from './terminal-history-session-tombstone'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'

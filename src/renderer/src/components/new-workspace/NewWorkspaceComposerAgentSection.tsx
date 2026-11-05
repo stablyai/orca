@@ -1,21 +1,25 @@
 import React from 'react'
-import { ChevronDown, Settings2 } from 'lucide-react'
-import AgentCombobox from '@/components/agent/AgentCombobox'
+import { ChevronDown, Settings2, Terminal } from 'lucide-react'
+import type AgentCombobox from '@/components/agent/AgentCombobox'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 
 type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
   | 'agentSurfaceRows'
+  | 'agentPickerDraft'
+  | 'agentSetupDisabled'
+  | 'selectedRepoIsGit'
+  | 'selectedProjectId'
+  | 'projectOptions'
   | 'onQuickAgentChange'
   | 'agentRows'
-  | 'quickSetupOnly'
-  | 'onQuickSetupOnlySelect'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -33,35 +37,19 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   agentSurfaceRows,
+  agentPickerDraft,
+  agentSetupDisabled,
+  selectedRepoIsGit,
+  selectedProjectId,
+  projectOptions,
   onQuickAgentChange,
-  quickSetupOnly = false,
-  onQuickSetupOnlySelect,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
   advancedOpen,
   advancedLocked = false,
-  onToggleAdvanced,
-  visibleQuickAgents,
-  defaultTuiAgent,
-  handleSetDefaultAgent
+  onToggleAdvanced
 }: NewWorkspaceComposerAgentSectionProps): React.JSX.Element {
-  const comboboxProps = {
-    agents: visibleQuickAgents,
-    value: quickAgent,
-    onValueChange: (agent: TuiAgent | null) => onQuickAgentChange(agent),
-    allowBlankTerminal: true as const,
-    onOpenManageAgents: onOpenAgentSettings,
-    defaultAgent: defaultTuiAgent,
-    onSetDefault: handleSetDefaultAgent,
-    clearSelection: onQuickSetupOnlySelect
-      ? { cleared: quickSetupOnly, onClear: onQuickSetupOnlySelect }
-      : undefined,
-    allowNarrowTrigger: true,
-    triggerClassName:
-      'h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50',
-    onTriggerEnter: createDisabled ? undefined : onCreate
-  }
   return (
     <>
       <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
@@ -75,7 +63,7 @@ export function NewWorkspaceComposerAgentSection({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                onClick={onOpenAgentSettings}
+                onClick={(event) => onOpenAgentSettings(event.currentTarget)}
                 tabIndex={-1}
                 className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                 aria-label={translate(
@@ -91,7 +79,28 @@ export function NewWorkspaceComposerAgentSection({
             </TooltipContent>
           </Tooltip>
         </div>
-        <AgentCombobox {...comboboxProps} surfaceRows={agentSurfaceRows} />
+        <AgentLaunchPicker
+          model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
+          agent={quickAgent}
+          value={agentPickerDraft}
+          cli={agentSurfaceRows?.selection.cli === true}
+          setupDisabled={agentSetupDisabled}
+          matchTriggerWidth={
+            selectedRepoIsGit &&
+            projectOptions?.find((option) => option.id === selectedProjectId)?.kind !==
+              'project-group'
+          }
+          onOpenAgentSettings={onOpenAgentSettings}
+          onTriggerEnter={createDisabled ? undefined : onCreate}
+          emptyLabel={translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+          onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
+        >
+          <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
+            <Terminal className="size-3.5" />
+            {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </AgentLaunchPicker>
       </div>
 
       <div className="!mb-2">

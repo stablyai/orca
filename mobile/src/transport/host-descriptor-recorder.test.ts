@@ -24,17 +24,41 @@ describe('recordHostDescriptorFromStatus', () => {
   it('writes the normalized descriptor to both the live store and the durable one', () => {
     recordHostDescriptorFromStatus(
       'host-1',
-      hostStatusSchema.parse({ machineName: ' m4airs-Air ', hostPlatform: 'darwin' })
+      hostStatusSchema.parse({
+        machineName: ' m4airs-Air ',
+        hostPlatform: 'darwin',
+        hostMachine: { kind: 'laptop', model: ' MacBook Pro ' }
+      })
     )
-    const descriptor = { machineName: 'm4airs-Air', platform: 'darwin' }
+    const descriptor = {
+      machineName: 'm4airs-Air',
+      platform: 'darwin',
+      machine: { kind: 'laptop', model: 'MacBook Pro' }
+    }
     expect(recordHostDescriptorMock).toHaveBeenCalledWith('host-1', descriptor)
     expect(updateHostDescriptorMock).toHaveBeenCalledWith('host-1', descriptor)
   })
 
-  it('records an answered status that carried neither field as nulls', () => {
+  it('records an answered status that carried no fields as nulls', () => {
     recordHostDescriptorFromStatus('host-1', hostStatusSchema.parse({ machineName: '  ' }))
-    const descriptor = { machineName: null, platform: null }
+    const descriptor = { machineName: null, platform: null, machine: null }
     expect(recordHostDescriptorMock).toHaveBeenCalledWith('host-1', descriptor)
     expect(updateHostDescriptorMock).toHaveBeenCalledWith('host-1', descriptor)
+  })
+
+  it('drops machine info a newer desktop sends in an unknown shape without losing the rest', () => {
+    recordHostDescriptorFromStatus(
+      'host-1',
+      hostStatusSchema.parse({
+        machineName: 'Desk',
+        hostPlatform: 'linux',
+        hostMachine: { kind: 'tablet', model: 'Pad' }
+      })
+    )
+    expect(recordHostDescriptorMock).toHaveBeenCalledWith('host-1', {
+      machineName: 'Desk',
+      platform: 'linux',
+      machine: null
+    })
   })
 })

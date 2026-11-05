@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from './provider-timeline-budget'
 import {
   closeProviderTimelineRigs,
   messageText,
@@ -170,22 +169,22 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     expect(rig.assembler.openTurnId).toBe(providerTurnId('t2'))
   })
 
-  it("counts a stopped turn's running tools against the budget until the provider ends it", async () => {
+  it("retains a stopped turn's running tools until the provider ends it", async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
-    for (let n = 1; n <= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES; n += 1) {
+    for (let n = 1; n <= 128; n += 1) {
       rig.assembler.apply({ type: 'item.open', item: `call-${n}`, body: runningTool('read') })
     }
     await stop(rig, 't1')
     const extra = { type: 'item.open', item: 'extra', body: runningTool('read') } as const
-    expect(rig.assembler.apply(extra).admission).toEqual({ accepted: false, reason: 'failed' })
+    expect(rig.assembler.apply(extra).admission).toEqual({ accepted: true })
     rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_100, state: 'interrupted' })
     expect(rig.assembler.apply(extra).admission).toEqual({ accepted: true })
   })
 
-  it('never fills the open budget with the streams of turns a person stopped', async () => {
+  it('releases streams across many turns a person stopped', async () => {
     const rig = await openProviderTimelineRig()
-    for (let n = 1; n <= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES + 12; n += 1) {
+    for (let n = 1; n <= 128 + 12; n += 1) {
       const turn = `t${n}`
       rig.assembler.apply({ type: 'turn.open', turn, at: n * 10 })
       // Simulate providers that never explicitly close named text.
@@ -204,12 +203,12 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     expect(messageText((await rig.row(providerItemId('item', 'msg-140')))?.body)).toBe('reply 140')
   })
 
-  it('frees a stream whose turn another writer settled before refusing for the budget', async () => {
+  it('accepts current work after another writer settled an older turn', async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
     rig.assembler.apply({ type: 'turn.open', turn: 't2', at: 1_100 })
     // Streams from a non-open turn cannot be freed by this run’s turn end.
-    for (let n = 1; n < MAX_PROVIDER_TIMELINE_OPEN_ENTRIES; n += 1) {
+    for (let n = 1; n < 128; n += 1) {
       rig.assembler.apply({
         type: 'text.delta',
         item: { id: `old-${n}` },
@@ -231,6 +230,32 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
 })
 
 describe('text after a person stopped its turn never lands outside that turn', () => {
+  it('drops late unjournaled blocks after Stop even when more than 128 were open', async () => {
+    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    for (let index = 0; index < 160; index += 1) {
+      expect(
+        rig.assembler.apply({
+          type: 'text.delta',
+          item: { id: `message:g:1:${index}:assistant` },
+          channel: 'assistant',
+          text: ' '
+        }).admission
+      ).toEqual({ accepted: true })
+    }
+    await stop(rig, 't1')
+    expect(
+      rig.assembler.apply({
+        type: 'text.delta',
+        item: { id: 'message:g:1:0:assistant' },
+        channel: 'assistant',
+        text: 'must not escape'
+      }).dropped
+    ).toBe('turn-settled')
+    rig.assembler.flush()
+    expect(await rig.row(providerItemId('item', 'message:g:1:0:assistant'))).toBeUndefined()
+  })
+
   it('drops the rest of an anonymous stream', async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })

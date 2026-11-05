@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
@@ -22,7 +22,7 @@ import {
   isUnavailableInactiveUsage
 } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
-import { AccountSwitchList } from './AccountSwitchList'
+import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 
@@ -66,6 +66,72 @@ export function CodexSwitcherMenu({
     skipFutureResetConfirm,
     switchGroups
   } = useCodexSwitcherController(codex)
+
+  const isBusy = isSwitching || reauthenticatingAccountId !== null
+  const rows = (selectedGroup?.targets ?? []).map((target) => {
+    const inactiveUsage = target.id
+      ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+      : null
+    // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
+    const showSignInAction =
+      !hasActiveRuntimeEnvironment &&
+      !target.active &&
+      target.id !== null &&
+      isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+    return { target, inactiveUsage, showSignInAction }
+  })
+  const unavailableUsageRows = rows.filter((row) => row.showSignInAction)
+  const renderRow = ({
+    target,
+    inactiveUsage,
+    showSignInAction
+  }: (typeof rows)[number]): React.JSX.Element => (
+    <AccountSwitchRowItem
+      label={target.name}
+      detail={target.detail}
+      active={target.active}
+      key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
+      onSelect={(event) => {
+        // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
+        event.preventDefault()
+        if (!target.active) {
+          void handleSelectAccount(target.id, target.runtimeTarget)
+        }
+      }}
+      disabled={isBusy || target.active}
+      action={
+        showSignInAction ? (
+          <InlineUsageSignInAction
+            accountLabel={target.label}
+            isSigningIn={reauthenticatingAccountId === target.id}
+            disabled={isBusy}
+            onSignIn={() => {
+              if (target.id !== null) {
+                void handleSignInAccount(target.id, target.runtimeTarget)
+              }
+            }}
+          />
+        ) : undefined
+      }
+    >
+      {showSignInAction ? null : renderUsage(target.active, inactiveUsage)}
+    </AccountSwitchRowItem>
+  )
+  function renderUsage(
+    active: boolean,
+    inactiveUsage: (typeof rows)[number]['inactiveUsage']
+  ): React.ReactNode {
+    // Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row.
+    if (active && !hasActiveRuntimeEnvironment) {
+      return <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
+    }
+    if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
+      return <InlineUsageSkeleton />
+    }
+    return inactiveUsage?.rateLimits ? (
+      <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+    ) : null
+  }
 
   return (
     <ProviderDetailsMenu
@@ -173,77 +239,11 @@ export function CodexSwitcherMenu({
         </DialogContent>
       </Dialog>
       {open ? <CodexRestartStatusPrompt /> : null}
-      <AccountSwitchList
+      <AccountSwitchSection
         heading={translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
-      >
-        {selectedGroup ? (
-          <>
-            {selectedGroup.targets.map((target) => {
-              const inactiveUsage = target.id
-                ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
-                : null
-              // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
-              const showSignInAction =
-                !hasActiveRuntimeEnvironment &&
-                !target.active &&
-                target.id !== null &&
-                isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
-              const isSigningIn = reauthenticatingAccountId === target.id
-              const isBusy = isSwitching || reauthenticatingAccountId !== null
-
-              return (
-                <AccountSwitchRowItem
-                  label={target.label}
-                  active={target.active}
-                  key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  onSelect={(event) => {
-                    // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
-                    event.preventDefault()
-                    if (!target.active) {
-                      void handleSelectAccount(target.id, target.runtimeTarget)
-                    }
-                  }}
-                  disabled={isBusy || target.active}
-                  action={
-                    showSignInAction ? (
-                      <InlineUsageSignInAction
-                        accountLabel={target.label}
-                        isFetching={inactiveUsage?.isFetching ?? false}
-                        isSigningIn={isSigningIn}
-                        disabled={isBusy}
-                        onSignIn={() => {
-                          if (target.id !== null) {
-                            void handleSignInAccount(target.id, target.runtimeTarget)
-                          }
-                        }}
-                      />
-                    ) : undefined
-                  }
-                >
-                  {!showSignInAction ? (
-                    <div className="flex w-full min-w-0 flex-col gap-0.5">
-                      {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
-                      {target.active && !hasActiveRuntimeEnvironment ? (
-                        <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
-                      ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                        <InlineUsageSkeleton />
-                      ) : inactiveUsage?.rateLimits ? (
-                        <InlineUsageBars
-                          limits={inactiveUsage.rateLimits}
-                          isFetching={inactiveUsage.isFetching}
-                        />
-                      ) : null}
-                    </div>
-                  ) : null}
-                </AccountSwitchRowItem>
-              )
-            })}
-          </>
-        ) : null}
-      </AccountSwitchList>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onSelect={() => {
+        targets={selectedGroup?.targets ?? []}
+        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',
             repoId: null,
@@ -252,8 +252,16 @@ export function CodexSwitcherMenu({
           openSettingsPage()
         }}
       >
-        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
-      </DropdownMenuItem>
+        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+        {unavailableUsageRows.length > 0 ? (
+          <>
+            <DropdownMenuLabel className="mt-1">
+              {translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+            </DropdownMenuLabel>
+            {unavailableUsageRows.map(renderRow)}
+          </>
+        ) : null}
+      </AccountSwitchSection>
     </ProviderDetailsMenu>
   )
 }

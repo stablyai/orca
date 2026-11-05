@@ -1,7 +1,7 @@
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 /** Centralize narrow wait-path fixtures and checked field contracts; wide unused runtime members stay confined to these doubles. */
 

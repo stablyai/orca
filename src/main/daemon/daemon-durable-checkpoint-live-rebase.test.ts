@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { boundSnapshot, buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
-import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
 import { HeadlessEmulator } from './headless-emulator'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'

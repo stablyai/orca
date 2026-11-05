@@ -1,11 +1,11 @@
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { isFreshNonDoneAgentStatus } from '../../shared/agent-status/contracts/agent-status-freshness'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

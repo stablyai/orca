@@ -30,7 +30,7 @@ vi.mock('../skills/skill-runtime-capability', () => ({
   supportsSkillRuntimeManagement: supportsManagementMock
 }))
 
-vi.mock('../wsl', () => ({ listWslDistrosAsync: vi.fn(async () => []) }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ listWslDistrosAsync: vi.fn(async () => []) }))
 
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 

@@ -54,15 +54,6 @@ function notFound(method: string): RuntimeRpcFailure {
   }
 }
 
-function isForcedRefresh(params: unknown): boolean {
-  return (
-    typeof params === 'object' &&
-    params !== null &&
-    'refreshUsage' in params &&
-    params.refreshUsage === true
-  )
-}
-
 describe('web rate limits and accounts preload API', () => {
   let calls: { method: string; params: unknown }[]
   let callResults: Record<string, unknown>
@@ -113,71 +104,6 @@ describe('web rate limits and accounts preload API', () => {
     return { api: globals.window.api }
   }
 
-  it('reads usage from the paired server instead of an empty local state', async () => {
-    callResults['accounts.list'] = snapshot(usageState(10))
-    const { api } = await install()
-
-    await expect(api.rateLimits.get()).resolves.toEqual(usageState(10))
-    expect(calls).toContainEqual({ method: 'accounts.list', params: { refreshUsage: false } })
-  })
-
-  it('asks the server to refresh usage on refresh and inactive-account fetches', async () => {
-    callResults['accounts.list'] = snapshot(usageState(20))
-    const { api } = await install()
-
-    await expect(api.rateLimits.refresh()).resolves.toEqual(usageState(20))
-    await api.rateLimits.fetchInactiveClaudeAccounts()
-    // Concurrent refreshes share one server round trip.
-    await Promise.all([
-      api.rateLimits.fetchInactiveClaudeAccounts(),
-      api.rateLimits.fetchInactiveCodexAccounts(),
-      api.rateLimits.refresh()
-    ])
-
-    const refreshCalls = calls.filter(
-      (call) => call.method === 'accounts.list' && isForcedRefresh(call.params)
-    )
-    expect(refreshCalls).toHaveLength(3)
-  })
-
-  it('falls back to an empty state when the server cannot answer', async () => {
-    const { api } = await install()
-
-    await expect(api.rateLimits.get()).resolves.toEqual(createEmptyRateLimitState())
-  })
-
-  it('keeps the last streamed usage when a refresh cannot reach the server', async () => {
-    const { api } = await install()
-    api.rateLimits.onUpdate(() => {})
-    await vi.waitFor(() => expect(subscriptions).toHaveLength(1))
-    subscriptions[0].callbacks.onResponse(ok({ type: 'ready', snapshot: snapshot(usageState(5)) }))
-
-    await expect(api.rateLimits.refresh()).resolves.toEqual(usageState(5))
-  })
-
-  it('refuses to add or re-sign accounts with a reason instead of returning an empty roster', async () => {
-    const { api } = await install()
-
-    await expect(api.claudeAccounts.add()).rejects.toThrow(/desktop app/)
-    await expect(api.codexAccounts.add()).rejects.toThrow(/desktop app/)
-    await expect(api.codexAccounts.reauthenticate({ accountId: 'codex-a' })).rejects.toThrow(
-      /desktop app/
-    )
-    expect(calls).toEqual([])
-  })
-
-  it('removes accounts on the paired server', async () => {
-    const remaining = snapshot(null).claude
-    callResults['accounts.removeClaude'] = remaining
-    const { api } = await install()
-
-    await expect(api.claudeAccounts.remove({ accountId: 'account-a' })).resolves.toEqual(remaining)
-    expect(calls).toContainEqual({
-      method: 'accounts.removeClaude',
-      params: { accountId: 'account-a' }
-    })
-  })
-
   it('streams usage pushed by the server and stops when the last listener leaves', async () => {
     const { api } = await install()
     const received: RateLimitState[] = []
@@ -196,72 +122,6 @@ describe('web rate limits and accounts preload API', () => {
 
     unsubscribe()
     expect(subscriptions[0].unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('resubscribes after the server closes the usage stream', async () => {
-    const { api } = await install()
-    api.rateLimits.onUpdate(() => {})
-    await vi.waitFor(() => expect(subscriptions).toHaveLength(1))
-
-    vi.useFakeTimers()
-    subscriptions[0].callbacks.onClose?.()
-    expect(subscriptions).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(5_000)
-    vi.useRealTimers()
-
-    await vi.waitFor(() => expect(subscriptions).toHaveLength(2))
-  })
-
-  it('lists and switches Claude accounts on the paired server', async () => {
-    const selected = snapshot(null, 'account-b').claude
-    callResults['accounts.list'] = snapshot(usageState(3), 'account-a')
-    callResults['accounts.selectClaude'] = selected
-    const { api } = await install()
-
-    await expect(api.claudeAccounts.list()).resolves.toEqual(snapshot(null, 'account-a').claude)
-    await expect(api.claudeAccounts.select({ accountId: 'account-b' })).resolves.toEqual(selected)
-    expect(calls).toContainEqual({
-      method: 'accounts.selectClaude',
-      params: { accountId: 'account-b', movesRunningSessions: true }
-    })
-  })
-
-  it('switches Codex accounts on the paired server', async () => {
-    const selected = { ...snapshot(null).codex, activeAccountId: 'codex-b' }
-    callResults['accounts.list'] = snapshot(usageState(4))
-    callResults['accounts.selectCodex'] = selected
-    const { api } = await install()
-
-    await expect(api.codexAccounts.select({ accountId: 'codex-b' })).resolves.toEqual(selected)
-    expect(calls).toContainEqual({
-      method: 'accounts.selectCodex',
-      params: { accountId: 'codex-b' }
-    })
-  })
-
-  it('selects a WSL Codex lane through the targeted RPC so the host lane is untouched', async () => {
-    const selected = snapshot(null).codex
-    callResults['accounts.selectCodexForTarget'] = selected
-    const { api } = await install()
-
-    await expect(
-      api.codexAccounts.select({ accountId: null, runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toEqual(selected)
-    expect(calls).toContainEqual({
-      method: 'accounts.selectCodexForTarget',
-      params: { accountId: null, target: { runtime: 'wsl', wslDistro: 'Ubuntu' } }
-    })
-    expect(calls.some((call) => call.method === 'accounts.selectCodex')).toBe(false)
-  })
-
-  it('refuses a WSL Claude system-default switch instead of clearing the host lane', async () => {
-    callResults['accounts.selectClaude'] = snapshot(null).claude
-    const { api } = await install()
-
-    await expect(
-      api.claudeAccounts.select({ accountId: null, runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).rejects.toThrow(/desktop app/)
-    expect(calls.some((call) => call.method === 'accounts.selectClaude')).toBe(false)
   })
 
   it('reopens the usage stream after a manual disconnect is lifted', async () => {

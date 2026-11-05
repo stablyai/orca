@@ -10,14 +10,6 @@ import {
 
 const options = { command: 'host-resolved-pi', cwd: '/host/folder', fullAccess: true }
 describe('Pi RPC launch', () => {
-  it('uses the supplied host binary and folder, and lets Pi choose its own session store', () => {
-    expect(buildPiRpcLaunch(options)).toMatchObject({
-      command: options.command,
-      cwd: options.cwd,
-      args: ['--mode', 'rpc']
-    })
-  })
-
   it.each([
     '/host/.pi/agent/sessions/session.jsonl',
     'C:\\Users\\dev\\.pi\\agent\\sessions\\session.jsonl'

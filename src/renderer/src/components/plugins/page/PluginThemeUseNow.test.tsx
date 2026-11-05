@@ -11,7 +11,7 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   resolveConfiguredTerminalColors,
   selectTerminalTheme
-} from '../../../../../shared/terminal-theme-selection'
+} from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import { useAppStore } from '@/store'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveMobileTerminalTheme } from '@/runtime/sync-runtime-graph/mobile-terminal-theme'

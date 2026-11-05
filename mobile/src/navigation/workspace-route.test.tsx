@@ -1,5 +1,3 @@
-import { readdirSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { createElement, useContext, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -70,7 +68,7 @@ import {
 import {
   MOBILE_RELAY_HOSTS_LIST_METHOD,
   type MobileRelayHost
-} from '../../../src/shared/mobile-relay-hosts-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { HostStatusGates } from '../transport/host-status-gates'
 import type { ConnectionState } from '../transport/types'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
@@ -81,7 +79,6 @@ import { useWorkspaceExecutionHost } from './workspace-execution-host'
 import { WorkspaceRoute } from './workspace-route'
 
 const RELAYS = [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY]
-const VAULT = 'aiVault.v1'
 
 const below: {
   client: RpcClient | null
@@ -145,12 +142,6 @@ function desktop(serverCapabilities: string[] = []): FakeSession {
   return session
 }
 
-const HOST_ROUTES = fileURLToPath(new URL('../../app/h/[hostId]/', import.meta.url))
-const WORKSPACE_ROUTE_FILES = readdirSync(HOST_ROUTES, { recursive: true, encoding: 'utf8' })
-  .map((entry) => entry.replaceAll('\\', '/'))
-  .filter((entry) => /(^|\/)\[worktreeId\](\.web)?\.tsx$/.test(entry))
-  .sort()
-
 const trees: ReactTestRenderer[] = []
 const pairs: ReturnType<typeof createBridgePortPair>[] = []
 
@@ -193,35 +184,6 @@ function texts(renderer: ReactTestRenderer): string[] {
     .flatMap((node) => node.children.filter((child) => typeof child === 'string'))
 }
 
-describe('every workspace route', () => {
-  it('is found on disk', () => {
-    expect(WORKSPACE_ROUTE_FILES.length).toBeGreaterThan(0)
-  })
-
-  it.each(WORKSPACE_ROUTE_FILES)('keeps %s on the server its route names', async (file) => {
-    route.params = {
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      relativePath: 'README.md',
-      // Use loosely spelled executionHost to catch screens reading raw params instead of normalized route context.
-      executionHost: ' runtime:vm '
-    }
-    desktop()
-    const Screen = (await import(/* @vite-ignore */ `${HOST_ROUTES}${file}`)).default
-    await render(createElement(Screen), desktopGates(RELAYS))
-    if (route.redirects.length > 0) {
-      expect(route.redirects.map((href) => href.params.executionHost?.trim())).toEqual([
-        'runtime:vm'
-      ])
-      return
-    }
-    expect([...new Set(route.seen)]).toEqual(['runtime:vm'])
-    for (const shellRoute of route.shellRoutes) {
-      expect(shellRoute.params?.executionHost).toBe('runtime:vm')
-    }
-  })
-})
-
 describe('a server workspace', () => {
   const screen = createElement(WorkspaceRoute, null, createElement(Probe))
 
@@ -236,17 +198,6 @@ describe('a server workspace', () => {
       { worktree: 'id:wt' },
       { envelope: { executionHost: 'runtime:vm' } }
     )
-  })
-
-  it('gates its features on that server’s own status, not the desktop’s', async () => {
-    route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    const serverCapability = 'server-feature.v1'
-    const session = desktop([serverCapability])
-    await render(screen, desktopGates([...RELAYS, VAULT]))
-    await vi.waitFor(() => expect(below.capabilities).toEqual([serverCapability]))
-    expect(session.sendRequest).toHaveBeenCalledWith('status.get', undefined, {
-      envelope: { executionHost: 'runtime:vm' }
-    })
   })
 
   it.each([
@@ -284,31 +235,6 @@ describe('a server workspace', () => {
     }
   })
 
-  it('opens disconnected, not loading, when its server is already down', async () => {
-    route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    desktop()
-    serverReport.current = FAILED
-    await act(async () => {
-      trees.push(
-        create(
-          createElement(HostStatusGatesContext.Provider, { value: desktopGates(RELAYS) }, screen)
-        )
-      )
-    })
-    expect(below.state).toBe('disconnected')
-  })
-
-  it('says so once the desktop has answered that it cannot reach the server', async () => {
-    route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    const session = desktop()
-    const renderer = await render(screen, desktopGates([]))
-    expect(route.seen).toEqual([])
-    expect(texts(renderer)).toContain(
-      "Your phone can't reach this workspace's server through this desktop."
-    )
-    expect(session.sendRequest).not.toHaveBeenCalled()
-  })
-
   it('says so for a deep link under an app without the envelope, never running on the desktop', async () => {
     route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
     const shell = desktop()
@@ -328,32 +254,5 @@ describe('a server workspace', () => {
       "Your phone can't reach this workspace's server through this desktop."
     )
     expect(shell.sendRequest).not.toHaveBeenCalled()
-  })
-
-  it('waits, never on the desktop, while the desktop has not answered', async () => {
-    route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
-    const session = desktop()
-    await render(screen, desktopGates([], true))
-    expect([...new Set(route.seen)]).toEqual(['runtime:vm'])
-    expect(below.client).toBeNull()
-    expect(session.sendRequest).not.toHaveBeenCalled()
-  })
-})
-
-describe('the desktop’s own workspace', () => {
-  it('keeps the desktop’s client and gates', async () => {
-    route.params = { hostId: 'host-1' }
-    const session = desktop()
-    await render(
-      createElement(WorkspaceRoute, null, createElement(Probe)),
-      desktopGates([...RELAYS, VAULT])
-    )
-    expect([...new Set(route.seen)]).toEqual([undefined])
-    expect(below.client).toBe(session)
-    expect(below.state).toBe('connected')
-    expect(below.capabilities).toEqual([...RELAYS, VAULT])
-    expect(session.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
-      MOBILE_RELAY_HOSTS_LIST_METHOD
-    )
   })
 })

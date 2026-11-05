@@ -4,7 +4,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Project } from '../../shared/project-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 
 type RuntimeSettings = ReturnType<RuntimeStore['getSettings']>
 

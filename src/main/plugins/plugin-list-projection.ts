@@ -8,6 +8,7 @@ import {
   type PluginHostImages
 } from '../../shared/plugins/images/plugin-image-url'
 import { pluginInstalledHostImages } from './plugin-manifest-images'
+import { markCommandReplacementOwners } from './plugin-command-replacement-owners'
 import type { PluginService } from './plugin-service'
 import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import {
@@ -75,7 +76,7 @@ export async function buildPluginList(
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
-  return mapWithConcurrency(
+  const entries = await mapWithConcurrency(
     discovered,
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
     async (plugin, index): Promise<PluginHostListEntry> => {
@@ -200,9 +201,11 @@ export async function buildPluginList(
           title: command.title,
           context: command.context,
           handler: command.handler,
-          keybindings: command.keybindings
+          keybindings: command.keybindings,
+          ...(command.replaces ? { replaces: command.replaces } : {})
         })),
         statusBarItems: plugin.manifest.contributes.statusBarItems,
+        hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
@@ -222,5 +225,8 @@ export async function buildPluginList(
         ...lockEntrySource(lockEntry)
       }
     }
+  )
+  return markCommandReplacementOwners(entries, lock, (pluginKey, line) =>
+    service.captureLog(pluginKey)('warn', line)
   )
 }

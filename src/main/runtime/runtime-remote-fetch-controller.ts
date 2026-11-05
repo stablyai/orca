@@ -1,12 +1,12 @@
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { GitExecOptions } from '../git/command-runner/git-exec-options'
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
-import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
+import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git/fetch/git-fetch-auto-maintenance'
 import { getCanonicalRepoKey, type CanonicalRepoKeyOptions } from '../git/canonical-repo-key'
 import {
   armLocalRepoRefMaintenance,
   setRepoRefMaintenanceBusyProbe
-} from '../git/local-repo-ref-maintenance'
+} from '../git/refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../git/runner'
 import { setBoundedMapEntry } from './runtime-async-boundaries'
 

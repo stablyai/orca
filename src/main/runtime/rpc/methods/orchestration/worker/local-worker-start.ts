@@ -3,7 +3,7 @@ import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-p
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
 import type {
@@ -11,10 +11,8 @@ import type {
   OrchestrationSessionCaller
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import {
-  resolveWorkerStartModeOnHost,
-  type WorkerStartModeReceipt
-} from '../../orchestration-worker-start-mode'
+import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
@@ -250,7 +248,7 @@ export async function startLocalWorker(args: {
       terminalOwnership: external ? 'external' : 'created'
     })
     if (workerChat) {
-      rebindReusedStructuredWorker(runtime, terminalHandle, db)
+      rebindReusedStructuredWorker(terminalHandle, db)
     }
 
     result = await deliverAndSettleWorkerStartReadiness({

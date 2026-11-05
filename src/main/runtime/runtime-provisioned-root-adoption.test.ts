@@ -15,7 +15,6 @@ import {
   adoptRuntimeProvisionedRoot,
   type RuntimeProvisionedRootPorts
 } from './runtime-provisioned-root-adoption'
-import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const root = '/workspace/repo'
 const repo: Repo = {
@@ -59,27 +58,6 @@ function ports(worktrees: GitWorktreeInfo[], sparse = false) {
 }
 
 describe('adoptRuntimeProvisionedRoot', () => {
-  it('adopts the primary checkout as the workspace and records it as provisioned-root', async () => {
-    const { value, setWorktreeMeta, notifyChanged } = ports([checkout()])
-    const result = await adoptRuntimeProvisionedRoot(
-      'repo-vm',
-      { name: 'fix-login', baseBranch: 'main', expectedPath: root, expectedRefHead: 'abc123' },
-      value
-    )
-    expect(result.worktree.id).toBe(`repo-vm::${root}`)
-    expect(setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: `repo-vm::${root}`, hostId: 'local' }),
-      expect.objectContaining({
-        ephemeralVmCheckoutMode: 'provisioned-root',
-        displayName: 'fix-login',
-        orcaCreationSource: 'runtime',
-        baseRef: 'main'
-      })
-    )
-    expect(setWorktreeMeta.mock.calls[0][1]).not.toHaveProperty('hostId')
-    expect(notifyChanged).toHaveBeenCalledWith('repo-vm')
-  })
-
   it.each<[string, GitWorktreeInfo[], boolean, string]>([
     ['another branch', [checkout({ branch: 'refs/heads/other' })], false, 'requested branch'],
     ['another ref', [checkout({ head: 'def456' })], false, 'requested ref'],

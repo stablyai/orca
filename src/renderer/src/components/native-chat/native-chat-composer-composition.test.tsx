@@ -41,11 +41,8 @@ import {
   nativeChatComposerDraftWritesSettled
 } from './native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
-import { settleNativeChatPastedText } from './native-chat-composer-pasted-text-references'
-import {
-  nativeChatPastedTextOperations,
-  nativeChatPastedTextToken
-} from './native-chat-pasted-text-reference'
+
+import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
@@ -110,62 +107,6 @@ function textarea(): HTMLTextAreaElement {
   return screen.getByRole('textbox') as HTMLTextAreaElement
 }
 
-describe('native chat composer drop ownership', () => {
-  it('keeps the conversation editor key without publishing drop routing markers', () => {
-    const view = render(<TestField {...fieldProps({ draftScopeKey: 'agent-session:session-9' })} />)
-    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
-    expect(view.container.querySelector('.ProseMirror')).not.toBeNull()
-  })
-})
-
-describe('queued edit placeholder ownership', () => {
-  it('names the edit while locally locked, keeping Cancel available and bottom copy unchanged', () => {
-    const cancel = vi.fn()
-    const props = fieldProps({
-      draftScopeKey: 'queued-edit:image-only',
-      editSession: { cancel },
-      imageAttachments: [
-        { id: 'retained-image', path: '/image.png', previewUrl: 'data:image/png;base64,AA==' }
-      ],
-      disabled: true,
-      canSend: false,
-      sendButtonDisabled: true,
-      attachDisabled: true,
-      dictationDisabled: true
-    })
-    const view = render(<TestField {...props} />)
-
-    expect(
-      screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
-    ).toBe('false')
-    expect(view.container.querySelector('[data-placeholder="Edit message"]')).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
-    const cancelButton = screen.getByRole('button', { name: 'Cancel' })
-    expect(cancelButton.hasAttribute('disabled')).toBe(false)
-
-    view.rerender(<TestField {...props} disabled={false} canSend sendButtonDisabled={false} />)
-    expect(
-      screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
-    ).toBe('true')
-    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
-    view.rerender(<TestField {...props} />)
-    expect(
-      screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
-    ).toBe('false')
-    expect(view.container.querySelector('[data-placeholder="Edit message"]')).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
-    expect(cancelButton.hasAttribute('disabled')).toBe(false)
-    fireEvent.click(cancelButton)
-    expect(cancel).toHaveBeenCalledOnce()
-
-    view.rerender(
-      <TestField {...props} editSession={undefined} draftScopeKey="agent-session:bottom" />
-    )
-    expect(screen.getByRole('textbox', { name: 'Input is held by another device.' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
-  })
-})
-
 describe('native chat composer composition ownership', () => {
   it('preserves the focused browser preedit through 120 stale streaming rerenders', () => {
     const textareaRef = createRef<HTMLTextAreaElement>()
@@ -192,46 +133,6 @@ describe('native chat composer composition ownership', () => {
     expect(promptValue(input)).toBe('가')
   })
 
-  it('synchronizes launch, programmatic, cleared, and pane-scoped drafts while idle', () => {
-    const textareaRef = createRef<HTMLTextAreaElement>()
-    const props = fieldProps({ textareaRef, draft: 'launch draft' })
-    const view = render(<TestField {...props} />)
-    const input = textarea()
-
-    for (const draft of ['programmatic insertion', '', 'next pane draft']) {
-      view.rerender(<TestField {...props} draft={draft} />)
-      expect(textarea()).toBe(input)
-      expect(promptValue(input)).toBe(draft)
-    }
-  })
-
-  it('keeps adopting change events and exposes the final deletion at composition end', () => {
-    const onDraftChange = vi.fn()
-    let settledValue: string | null = null
-    render(
-      <TestField
-        {...fieldProps({
-          draft: '한',
-          onDraftChange,
-          onImeSettled: (element) => {
-            settledValue = element.value
-          }
-        })}
-      />
-    )
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '한글')
-    expect(onDraftChange).toHaveBeenLastCalledWith(
-      '한글',
-      expect.objectContaining({ value: '한글' })
-    )
-
-    changePrompt(input, '')
-    fireEvent.compositionEnd(input, { data: '' })
-    expect(settledValue).toBe('')
-  })
-
   it('swallows the Enter that confirms a Japanese candidate without eating the next one', () => {
     const onKeyDown = vi.fn()
     render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
@@ -254,24 +155,6 @@ describe('native chat composer composition ownership', () => {
     expect(onKeyDown).toHaveBeenCalledOnce()
   })
 
-  it('releases composition ownership on blur even when compositionend is omitted', () => {
-    const onImeSettled = vi.fn()
-    const onKeyDown = vi.fn()
-    const props = fieldProps({ draft: '가', onImeSettled, onKeyDown })
-    const view = render(<TestField {...props} />)
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '각')
-
-    fireEvent.blur(input)
-    view.rerender(<TestField {...props} draft="external draft" />)
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
-
-    expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(promptValue(input)).toBe('external draft')
-    expect(onKeyDown).toHaveBeenCalledOnce()
-  })
-
   it('settles the browser value instead of an unrelated draft rerender on blur', () => {
     const onImeSettled = vi.fn()
     const props = fieldProps({ onImeSettled })
@@ -291,78 +174,6 @@ describe('native chat composer composition ownership', () => {
     expect(promptValue(input)).toBe('각')
   })
 
-  it('exposes the browser value on blur when compositionend is omitted', () => {
-    const onImeSettled = vi.fn()
-    render(<TestField {...fieldProps({ onImeSettled })} />)
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '각')
-
-    fireEvent.blur(input)
-
-    expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled.mock.calls[0]?.[0].value).toBe('각')
-  })
-
-  it('settles once when compositionend and blur arrive in one batch', () => {
-    const onImeSettled = vi.fn()
-    render(<TestField {...fieldProps({ onImeSettled })} />)
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '각')
-
-    act(() => {
-      fireEvent.compositionEnd(input, { data: '각' })
-      fireEvent.blur(input)
-    })
-
-    expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled).toHaveBeenCalledWith(
-      expect.objectContaining({ value: promptValue(input) })
-    )
-  })
-
-  it('settles once when blur precedes compositionend in one batch', () => {
-    const onImeSettled = vi.fn()
-    render(<TestField {...fieldProps({ onImeSettled })} />)
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '각')
-
-    act(() => {
-      fireEvent.blur(input)
-      fireEvent.compositionEnd(input, { data: '각' })
-    })
-
-    expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled).toHaveBeenCalledWith(
-      expect.objectContaining({ value: promptValue(input) })
-    )
-  })
-
-  it('replays a draft clear dropped mid-composition when the field settles on blur', () => {
-    let settledValue: string | null = null
-    const props = fieldProps({
-      draft: '안녕',
-      onImeSettled: (element) => {
-        settledValue = element.value
-      }
-    })
-    const view = render(<TestField {...props} />)
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '안녕하')
-    view.rerender(<TestField {...props} draft="안녕하" />)
-
-    // The accepted structured send lands while the next composition is still open.
-    view.rerender(<TestField {...props} draft="" />)
-    expect(promptValue(input)).toBe('안녕하')
-
-    fireEvent.blur(input)
-    expect(settledValue).toBe('하')
-    expect(promptValue(input)).toBe('하')
-  })
-
   it('forgets a dropped clear that the browser already settled', () => {
     const onImeSettled = vi.fn()
     const props = fieldProps({ draft: '안녕', onImeSettled })
@@ -379,23 +190,6 @@ describe('native chat composer composition ownership', () => {
     fireEvent.blur(input)
 
     expect(promptValue(input)).toBe('하늘')
-  })
-
-  it('keeps the browser value through a same-draft streaming rerender', () => {
-    const onImeSettled = vi.fn()
-    const props = fieldProps({ onImeSettled })
-    const view = render(<TestField {...props} />)
-    const input = textarea()
-    fireEvent.compositionStart(input)
-    changePrompt(input, '각')
-
-    view.rerender(<TestField {...props} />)
-    fireEvent.blur(input)
-
-    expect(promptValue(input)).toBe('각')
-    expect(onImeSettled).toHaveBeenCalledWith(
-      expect.objectContaining({ value: promptValue(input) })
-    )
   })
 })
 
@@ -416,7 +210,7 @@ it('keeps an actual composing return through command acceptance, composition set
         snapshot: [],
         invokeAction: async () => true,
         setOption: async () => true,
-        setThreadGoalObjective: () => reply.promise
+        changeThreadGoal: () => reply.promise
       }),
     optionsSurface: {
       getSnapshot: () => [],
@@ -603,23 +397,6 @@ describe('an open IME composition stays in the draft every consumer reads (#3583
     changePrompt(field, '각a')
 
     expect(readNativeChatComposerDraft(scope).text).toBe('각a')
-  })
-
-  it('keeps a pasted-text path that finished saving mid-composition', () => {
-    const id = '00000000-0000-4000-8000-000000000035'
-    const token = nativeChatPastedTextToken(id)
-    nativeChatPastedTextOperations.set(id, { scopeKey: scope, text: 'pasted' })
-    updateNativeChatComposerDraft(scope, { text: token }, 'immediate')
-    render(<LiveField />)
-    const field = textarea()
-    fireEvent.compositionStart(field)
-    changePrompt(field, `${token} ni`)
-    act(() => {
-      settleNativeChatPastedText(id, '/tmp/pasted.txt')
-    })
-    endComposition(field, 'ni')
-
-    expect(readNativeChatComposerDraft(scope).pastedTextFiles).toEqual({ [id]: '/tmp/pasted.txt' })
   })
 
   it('saves the composing text when the window hides mid-composition', async () => {

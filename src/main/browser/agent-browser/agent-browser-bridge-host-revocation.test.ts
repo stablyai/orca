@@ -36,7 +36,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   })
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
-vi.mock('../cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
@@ -46,7 +46,7 @@ import {
 import {
   assertRemoteCliPageAccess,
   runUnderRemoteCliPageAdmission
-} from '../remote-cli-page-admission'
+} from '../routing/input-ownership/remote-cli-page-admission'
 import {
   answerAgentBrowserCommands,
   createFakeAgentBrowserChild,

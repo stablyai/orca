@@ -4,12 +4,15 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import type { WebSocket } from 'ws'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeDeviceProofMessage, type DeviceProofPurpose } from '../../../shared/device-key-proof'
+import {
+  encodeDeviceProofMessage,
+  type DeviceProofPurpose
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../device-registry'
 import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../shared/e2ee-crypto'
+import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
@@ -138,6 +141,15 @@ describe('device-key authentication (host)', () => {
       deviceProofB64: sign(otherKey, 'register', other.transcriptHashB64)
     })
     expect(otherFork.deviceId).not.toBe(forked.deviceId)
+
+    registry.rotatePendingDevice('New QR', 'mobile')
+    expect(
+      connect((keyedHash) => ({
+        deviceId: forked.deviceId,
+        deviceProofB64: sign(key, 'auth', keyedHash)
+      })).reply
+    ).toMatchObject({ type: 'e2ee_authenticated' })
+    expect(registry.validateToken(legacy.token)?.deviceId).toBe(legacy.deviceId)
   })
 
   it('refuses a keyed row presented with a token, a replayed proof and a wrong-purpose proof', () => {
@@ -204,6 +216,14 @@ describe('device-key authentication (host)', () => {
       type: 'e2ee_error',
       error: { code: 'unauthorized' }
     })
+
+    registry.removeDevice(legacy.deviceId)
+    for (const metadata of [undefined, relay(legacy.deviceId)]) {
+      expect(harness(registry, metadata).connect(keyAuth).reply).toEqual({
+        type: 'e2ee_error',
+        error: { code: 'unauthorized' }
+      })
+    }
   })
 
   it('answers registry_unavailable, never device_revoked, after loading a corrupt registry', () => {

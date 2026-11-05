@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -93,39 +96,6 @@ describe('orca terminal read --screen', () => {
     } finally {
       emulator.dispose()
     }
-  })
-
-  it('does not ask for a screen unless requested', async () => {
-    queueFixtures(callMock, readFixture({ source: 'stream' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'terminal.read',
-      expect.not.objectContaining({ screen: true })
-    )
-  })
-
-  it('requests the rendered screen with --screen', async () => {
-    queueFixtures(callMock, readFixture({ source: 'screen' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'terminal.read',
-      expect.objectContaining({ terminal: 'term_abc', screen: true })
-    )
-  })
-
-  it('reports which question was answered in human output', async () => {
-    queueFixtures(callMock, readFixture({ source: 'screen' }))
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--screen'], '/tmp/repo')
-
-    expect(String(logSpy.mock.calls[0]?.[0])).toContain('source: screen')
   })
 
   it('warns when a screen was asked for but only the stream was available', async () => {

@@ -13,11 +13,11 @@ import { iterateTerminalHistorySeedChunks } from './terminal-history-seed-chunks
 // Guard fresh-shell restoration against mouse modes persisted before an agent died without disarming.
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-import { POST_REPLAY_LIVE_AGENT_REATTACH_RESET } from '../../shared/terminal-mode-reset-profiles'
+import { POST_REPLAY_LIVE_AGENT_REATTACH_RESET } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 
 const ANY_MOTION_TRACKING_ON = '\x1b[?1003h'
 const SGR_ENCODING_ON = '\x1b[?1006h'

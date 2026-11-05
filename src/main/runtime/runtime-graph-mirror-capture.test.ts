@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { pickStoredFields } from '../../shared/workspace-layout/stored-record-fields'
-import { titleAfterConfirmedShell } from '../../shared/terminal-pane-title-reset'
+import { titleAfterConfirmedShell } from '../../shared/workspace-layout/terminal-pane-title-reset'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RUNTIME_LEAF_PTY_FACT_FIELDS } from './runtime-leaf-record-projection'
 import {

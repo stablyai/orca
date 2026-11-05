@@ -4,9 +4,9 @@ import {
   OrcaRuntimeService,
   electronMocks,
   waitForMobileSessionTabsEvents,
-  type RuntimeMobileSessionTabsResult,
-  type WorkspaceSessionState
+  type RuntimeMobileSessionTabsResult
 } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,

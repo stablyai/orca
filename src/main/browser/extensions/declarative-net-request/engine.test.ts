@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDnrRequestState, DnrEngine, type DnrEvaluateOptions } from './engine'
+import { createDnrRequestState } from './request-state'
+import { DnrEngine, type DnrEvaluateOptions } from './engine'
 import type { DnrRequestInfo } from './request-context'
 import type { DnrRule, DnrRulesetSource } from './rule-types'
 import { buildDnrRuleset } from './ruleset-builder'

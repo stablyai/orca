@@ -7,7 +7,7 @@ import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import {
   resolveTerminalStartupCwd,
   type TerminalStartupCwdMissingDirFallback
-} from '../../../shared/terminal-startup-cwd'
+} from '../../../shared/shell/launch/terminal-startup-cwd'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
 import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
@@ -15,16 +15,16 @@ import { resolveWslSessionContext } from '../../daemon/wsl-session-context'
 import {
   resolvePlainTerminalWorkspace,
   resolvePlainTerminalProjectRuntime,
-  resolveLocalPtyOptions,
   type LaunchScopeRuntimeStore
-} from '../../local-project-runtime-resolution'
+} from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { resolveLocalPtyOptions } from '../../workspaces/execution-host/local-project-runtime-pty-options'
 import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
   wslHoldReadAnchor as wslHoldReadAnchorNow
 } from '../../daemon/daemon-wsl-passive-restore-hold'
 import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
-import { wslUncDirectoryExistsAsync } from '../../wsl'
+import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
 import { probeLocalStartupCwdDirectory } from './host-env/startup-cwd-directory-exists'
 

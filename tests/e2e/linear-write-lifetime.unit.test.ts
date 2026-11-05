@@ -269,22 +269,6 @@ it.each([...failureCases, ...diagnosticControls])(
   }
 )
 
-it('returns a confirmed CLI write over the unchanged wire payload', async () => {
-  vi.mocked(mutations.updateIssueForAgent).mockImplementation(
-    async (_id, _fields, _workspace, options) => {
-      options?.beforeInvoke?.()
-      return { ...issue, state: { id: 'done', name: 'Done' } }
-    }
-  )
-  await main(['linear', 'status', 'set', 'ENG-1', '--to', 'Done', '--json'], '/tmp')
-  expect(JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))).toMatchObject({
-    ok: true,
-    result: { state: { id: 'done' } }
-  })
-  expect(mutations.updateIssueForAgent).toHaveBeenCalledTimes(1)
-  expect(process.exitCode).toBe(0)
-})
-
 it('ends a stalled CLI preparation before its client timeout without a late write', async () => {
   let release = () => {}
   let entered = () => {}

@@ -1,5 +1,5 @@
-import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
-import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
+import { createAiVaultAssociationObserver } from '../ai-vault/ai-vault-projection-dependency'
+import { invalidateAiVaultHostLegCache } from '../ai-vault/ai-vault-host-leg-cache'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -7,9 +7,10 @@ import {
 } from './runtime-environment-subscription-handlers'
 import { ipcMain } from 'electron'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
+import { recordHostRepoCatalogAnswer } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   registerRuntimeEnvironmentConnectivityHandlers,
@@ -40,14 +41,14 @@ import { clearPublishedManagedServer } from '../ssh/ssh-renderer-broadcast'
 import { clearManagedServerNotes } from './runtime-environment-managed-tunnel'
 import { reconcileOrphanedRuntimeSessions } from './runtime-environment-session-reconcile'
 import { registerRuntimeSshAccessHandlers } from '../runtime-ssh-access-handlers'
-import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/paired-runtime-browser-client-host-runtime'
+import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
-import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
+import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser-bridge-reconcile'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = getRuntimeEnvironmentRegistryRoot
@@ -153,7 +154,9 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
+  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath, (environment, method, response) =>
+    recordHostRepoCatalogAnswer(store, environment, method, response)
+  )
   setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
   setRefusedPairingHandlers({
     recover: (environmentId) => recoverRefusedManagedPairing(getUserDataPath(), environmentId),

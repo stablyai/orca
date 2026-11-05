@@ -8,12 +8,10 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
 }))
 
-import type * as GitStatusModule from '../git/status'
-
 const mocks = vi.hoisted(() => ({ getStatus: vi.fn() }))
 
-vi.mock('../git/status', async () => ({
-  ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
+vi.mock('../git/source-control/status-read', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getStatus: mocks.getStatus
 }))
 

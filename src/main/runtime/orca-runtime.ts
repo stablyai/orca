@@ -1,3 +1,4 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -14,12 +15,12 @@ import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type {
   AgentLaunchPaneAddress,
   AgentLaunchPaneVerdict
-} from '../../shared/agent-launch-pane-verdict'
-import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+} from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
@@ -226,10 +227,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Plan a pane spawn through the host launch planner, including runtime attribution. */
   async planAgentPaneLaunch(
     worktreeId: string,
-    opts: TerminalCreateOptions
+    opts: TerminalCreateOptions,
+    sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   ): Promise<TerminalCreateOptions> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-    return this.resolveAgentTerminalCreateOptions(workspace, opts)
+    return this.resolveAgentTerminalCreateOptions(workspace, opts, sessionOptions)
   }
 
   private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
@@ -313,11 +315,6 @@ export type {
   RuntimeAutomationUpdateInput
 } from './runtime-automation-controller'
 export type { SubscriptionRegistration } from './runtime-subscription-registry'
-export type {
-  OrchestrationCompatibilityCallerAuthority,
-  OrchestrationCompatibilityTerminalAuthority,
-  RuntimeTerminalAgentStatusEvent
-} from './runtime-terminal-contracts'
 export type { MessageWaitResult } from './runtime-message-waiters'
 export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
 export type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
@@ -334,6 +331,9 @@ export { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
 export { projectTerminalTailLines } from './orca-runtime-terminal-projection'
 export { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
 export type {
+  OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilityTerminalAuthority,
+  RuntimeTerminalAgentStatusEvent,
   RuntimeWorktreeLifecycleEvent,
   DriverState,
   PtyLayoutTarget,

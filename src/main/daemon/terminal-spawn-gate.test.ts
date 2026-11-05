@@ -4,7 +4,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 import { TerminalSpawnGate, type TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
 import type { HostPressureLevel, SpawnIntent } from '../../shared/host-spawn-admission'
-import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal-spawn-error-copy'
+import { TERMINAL_HOST_CAP_HINT } from '../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import { HostTerminalLedger } from './host-terminal-ledger'
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']

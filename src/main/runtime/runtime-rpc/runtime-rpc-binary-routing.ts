@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws'
-import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from '../device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from '../e2ee-keypair'
 import { RuntimeRpcState } from './runtime-rpc-state'

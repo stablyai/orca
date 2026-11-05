@@ -24,6 +24,7 @@ export type PullRequestLookupData = {
   state: string
   url: string
   statusCheckRollup: unknown[]
+  checksUnavailable?: boolean
   updatedAt: string
   isDraft?: boolean
   mergeable: string
@@ -131,6 +132,7 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
     state: pr.merged_at ? 'MERGED' : pr.state,
     url: pr.html_url ?? pr.url ?? '',
     statusCheckRollup: [],
+    checksUnavailable: true,
     updatedAt: pr.updated_at ?? '',
     isDraft: pr.draft,
     mergeable: mapRestPRMergeable(pr),

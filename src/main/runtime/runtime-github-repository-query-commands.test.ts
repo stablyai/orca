@@ -30,9 +30,23 @@ vi.mock('../github/account-binding-required-host', () => ({
 }))
 
 describe('registered direct details transport', () => {
-  it.each([undefined, { owner: 'fork', repo: 'widgets', host: 'github.enterprise.test' }])(
+  it.each([
+    { ownerRepo: undefined, canonical: undefined },
+    {
+      ownerRepo: { owner: 'fork', repo: 'widgets', host: 'github.enterprise.test' },
+      canonical: undefined
+    },
+    {
+      ownerRepo: { owner: 'fork', repo: 'widgets', host: 'github.enterprise.test' },
+      canonical: false
+    },
+    {
+      ownerRepo: { owner: 'fork', repo: 'widgets', host: 'github.enterprise.test' },
+      canonical: true
+    }
+  ])(
     'passes old and canonical payloads through the real schema, catalog, dispatcher and registered execution: %j',
-    async (ownerRepo) => {
+    async ({ ownerRepo, canonical }) => {
       read.mockClear()
       const repo: Repo = {
         id: 'registered',
@@ -63,7 +77,8 @@ describe('registered direct details transport', () => {
         repo: 'id:registered',
         number: 5,
         type: 'issue',
-        ...(ownerRepo ? { ownerRepo } : {})
+        ...(ownerRepo ? { ownerRepo } : {}),
+        ...(canonical !== undefined ? { canonical } : {})
       }
       expect(WorkItemDetails.parse(payload)).toEqual(payload)
       expect(RPC_PARAMS_BY_METHOD['github.workItemDetails'].parse(payload)).toEqual(payload)
@@ -84,7 +99,7 @@ describe('registered direct details transport', () => {
         options,
         'upstream',
         ownerRepo,
-        !!ownerRepo
+        canonical === true
       )
     }
   )

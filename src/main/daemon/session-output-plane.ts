@@ -1,11 +1,14 @@
-import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
+import {
+  resolveProcessExitCause,
+  type TerminalExitCause
+} from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { XtermConptyOptions } from '../../shared/xterm-conpty-options'
 import { HeadlessEmulator } from './headless-emulator'
 import { StartupDeviceAttributesQueryFilter } from './startup-device-attributes-responder'
 import { normalizePtySize } from './daemon-pty-size'
-import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } from './types'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
 

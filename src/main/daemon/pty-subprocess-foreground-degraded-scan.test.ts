@@ -18,7 +18,7 @@ const {
 }))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
-vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('../pty/shell-startup/pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
 
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'

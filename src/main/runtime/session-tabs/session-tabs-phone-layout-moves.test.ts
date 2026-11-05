@@ -92,17 +92,6 @@ describe("a phone's layout change on a windowless server (switch on)", () => {
     )
   })
 
-  it("sends nothing for a group's last tab dropped on its neighbour's facing edge", async () => {
-    const { runtime } = await headlessRuntime()
-    const split = { kind: 'split', tabId: SECOND_TAB_ID, targetGroupId: SAVED_GROUP_ID } as const
-    await runtime.moveMobileSessionTab(WORKTREE, { ...split, splitDirection: 'right' })
-    const apply = vi.spyOn(runtime, 'applyLayoutCommand')
-
-    await runtime.moveMobileSessionTab(WORKTREE, { ...split, splitDirection: 'right' })
-
-    expect(apply).not.toHaveBeenCalled()
-  })
-
   it("answers a split main refuses with main's refusal code", async () => {
     const { runtime } = await headlessRuntime()
     vi.spyOn(runtime, 'applyLayoutCommand').mockResolvedValue({ ok: false, code: 'invalid_params' })

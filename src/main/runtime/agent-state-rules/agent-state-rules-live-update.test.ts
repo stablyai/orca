@@ -2,6 +2,12 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  AGENT_STATE_RULES_ASSET,
+  buildAgentStateRulesBundle
+} from '../../../../config/scripts/release/agent-state-rules/agent-state-rules-bundle.mjs'
+import { agentStateRulesTag } from '../../../../config/scripts/release/versioning/release-tag-patterns.mjs'
+import { MAIN_RELEASE_REPO } from '../../../shared/release-channel'
 import { getTerminalTailSentinelMatches } from '../terminal-tail-sentinel-index'
 import {
   activateAgentStateRules,
@@ -125,11 +131,16 @@ describe('agent state rules channel and URL', () => {
     expect(agentStateRulesChannelForAppVersion(version)).toBe(channel)
   })
 
-  it('fetches the fixed release-download URL for the engine and channel', () => {
-    expect(agentStateRulesDownloadUrl('next')).toBe(
-      'https://github.com/stablyai/orca/releases/download/agent-state-rules-engine-1-next/agent-state-rules.json'
-    )
-  })
+  // A 404 is silent, so a tag or asset drift from the publisher would never surface on its own.
+  it.each(['next', 'stable'] as const)(
+    "fetches exactly where the publisher uploads this build's %s rules",
+    (channel) => {
+      const { engineVersion } = JSON.parse(buildAgentStateRulesBundle())
+      expect(agentStateRulesDownloadUrl(channel)).toBe(
+        `https://github.com/${MAIN_RELEASE_REPO}/releases/download/${agentStateRulesTag(engineVersion, channel)}/${AGENT_STATE_RULES_ASSET}`
+      )
+    }
+  )
 })
 
 describe('agent state rules live updates', () => {
@@ -138,7 +149,8 @@ describe('agent state rules live updates', () => {
     await h.updater.start()
     expect(h.fetch).toHaveBeenCalledWith(agentStateRulesDownloadUrl('stable'), expect.anything())
     expect(status()).toEqual({ version: BUNDLED_AGENT_STATE_RULES_VERSION, source: 'bundled' })
-    expect(warnings()).toEqual(['[agent-state-rules] download failed: HTTP 404'])
+    // Nothing published yet is the normal state, not a failure.
+    expect(warnings()).toEqual([])
     h.updater.stop()
   })
 

@@ -4,7 +4,10 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
-import type { JsonlRpcAgentConnectionOptions } from '../jsonl-rpc/agent-connection'
+import {
+  JsonlRpcAgentExitError,
+  type JsonlRpcAgentConnectionOptions
+} from '../jsonl-rpc/agent-connection'
 import { JsonlRpcResponseError, type JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
@@ -156,6 +159,16 @@ class ScriptedPiConnection implements PiRpcConnection {
     this.exit(error)
   }
 
+  exitHandshake(message: string): void {
+    // As the real connection: an exit fails the pending calls with its own exit error.
+    const error = withProviderDiagnostic(
+      new JsonlRpcAgentExitError(message),
+      providerDiagnostic(message, 'log')
+    )
+    this.handshake.reject(error)
+    this.exit(error)
+  }
+
   async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {
     if (!this.closed) {
       this.onClosed()
@@ -288,6 +301,7 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
     },
     releaseHandshake: () => children.at(-1)?.releaseHandshake(),
     failHandshake: (message) => children.at(-1)?.failHandshake(message),
+    exitHandshake: (message) => children.at(-1)?.exitHandshake(message),
     prompts: () => received,
     spawns: () => children.length,
     resumes: () => resumed,

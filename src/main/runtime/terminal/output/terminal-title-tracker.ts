@@ -1,11 +1,13 @@
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
 import { OrcaRuntimeWithEmitDaemonPtyTransientFact } from './terminal-transient-facts'
-import { getDecorativeTitleGateKey } from '../../../../shared/agent-decorative-title-signature'
+import { getDecorativeTitleGateKey } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { shouldEmitTitleFactForFrame } from '../../decorative-title-fact-emission'
 import type { RuntimePtyTitleTrackerEntry } from '../../runtime-terminal-state-records'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import {
+  type TerminalTitleFactMeta,
+  createTerminalTitleTracker
+} from '../../../../shared/terminal/output/terminal-output-side-effects'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import type { TerminalGitHubPRLink } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
   protected abstract recheckHookAgentPresenceForPty(

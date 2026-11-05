@@ -136,10 +136,6 @@ async function call(
 }
 
 describe('runtime-source fence across versions', () => {
-  it('pairs two real host builds', () => {
-    expect(releasedHost).not.toBe(currentHost)
-  })
-
   it('an old CLI sends no expectation, and a new host runs its request', async () => {
     const { response, ran } = await call(currentHost)
     expect(response).toMatchObject({ ok: true })

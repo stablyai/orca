@@ -3,7 +3,7 @@ import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress,
   WorkspaceSpaceWorktreeMeasurement
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../types'

@@ -2,7 +2,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'

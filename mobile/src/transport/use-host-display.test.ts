@@ -31,7 +31,7 @@ describe('useHostDisplay', () => {
   it('keeps a label that arrives without identity fields above the live machine name', () => {
     // The web page receives only the app's resolved `name`, which may be the user's rename.
     recordHostDescriptor('desk', { machineName: 'm4airs-Air', platform: 'darwin' })
-    expect(renderDisplay({ id: 'desk', name: 'Windows-Low Spec' })).toEqual({
+    expect(renderDisplay({ id: 'desk', name: 'Windows-Low Spec' })).toMatchObject({
       title: 'Windows-Low Spec',
       descriptorLine: 'macOS · m4airs-Air'
     })
@@ -51,6 +51,23 @@ describe('useHostDisplay', () => {
         lastKnownMachineName: 'm4airs-Air',
         lastKnownHostPlatform: 'darwin'
       })
-    ).toEqual({ title: 'Brennans-M4', descriptorLine: 'macOS' })
+    ).toMatchObject({ title: 'Brennans-M4', descriptorLine: 'macOS' })
+  })
+
+  it('shows the stored machine offline and lets a live reply without one clear it', () => {
+    const host: HostDisplaySource = {
+      id: 'desk',
+      name: 'Studio',
+      lastKnownHostPlatform: 'darwin',
+      lastKnownHostMachine: { kind: 'laptop', model: 'MacBook Pro' }
+    }
+    expect(renderDisplay(host)).toMatchObject({
+      machineKind: 'laptop',
+      machineLine: 'MacBook Pro · macOS'
+    })
+    act(() => renderer?.unmount())
+    // An older desktop's status omits hostMachine; the row falls back to the OS alone.
+    recordHostDescriptor('desk', { machineName: 'Studio', platform: 'darwin', machine: null })
+    expect(renderDisplay(host)).toMatchObject({ machineKind: null, machineLine: 'macOS' })
   })
 })

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserExtensionCaller } from '../browser-extension-namespace-registry'
+import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 const mocks = vi.hoisted(() => {
   const tabs: { windowId: number; active: boolean; contents: unknown }[] = []
@@ -20,25 +20,25 @@ vi.mock('../../browser-manager', () => ({
   browserManager: { holdPaintForCapture: mocks.holdPaint }
 }))
 
-vi.mock('../browser-extension-tab-model', () => ({
+vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
   listBrowserExtensionTabs: () => mocks.tabs,
   resolveCallerWindowId: () => 1
 }))
-vi.mock('../browser-extension-window-model', () => ({
+vi.mock('../tabs-and-windows/browser-extension-window-model', () => ({
   WINDOW_ID_CURRENT: -2,
   getBrowserExtensionWindow: (id: number) => (mocks.windows.has(id) ? {} : null)
 }))
 vi.mock('./permissions', () => ({
   browserExtensionHostPatternsInSession: () => mocks.hostPatterns
 }))
-vi.mock('../browser-extension-active-tab', () => ({
+vi.mock('../permissions/browser-extension-active-tab', () => ({
   hasBrowserExtensionActiveTab: (_extensionId: string, tabId: number) =>
     mocks.activeTabGrants.has(tabId)
 }))
 
 const { captureVisibleTabMethod } = await import('./tabs-capture')
 const { ensureHostSessionState, forgetExtensionContexts, forgetHostSession } =
-  await import('../browser-extension-contexts')
+  await import('../api-runtime/browser-extension-contexts')
 
 const EXTENSION_ID = 'a'.repeat(32)
 

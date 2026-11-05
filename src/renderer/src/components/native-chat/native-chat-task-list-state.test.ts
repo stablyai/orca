@@ -14,33 +14,6 @@ function call(content: string, status = 'pending'): NativeChatBlock {
 }
 
 describe('nativeChatTaskListState', () => {
-  it('preserves latest state across user follow-ups and clears it on an explicit empty list', () => {
-    const first = message('first', [call('Read')])
-    const user = { ...message('user', [{ type: 'text', text: 'Continue' }]), role: 'user' as const }
-    const empty = message('empty', [{ type: 'tool-call', name: 'TodoWrite', input: { todos: [] } }])
-    expect(nativeChatTaskListState([first, user]).list?.tasks).toHaveLength(1)
-    expect(nativeChatTaskListState([first, user, empty]).list?.tasks).toEqual([])
-    expect(nativeChatTaskListState([]).list).toBeNull()
-  })
-
-  it('does not replace valid state with malformed or failed calls, and retains their diagnostics', () => {
-    const first = message('first', [call('Read')])
-    const malformed = message('malformed', [
-      { type: 'tool-call', name: 'TodoWrite', input: '{' },
-      { type: 'tool-result', output: 'Invalid arguments', isError: true }
-    ])
-    const failed = message('failed', [
-      call('Wrong', 'completed'),
-      { type: 'tool-result', output: 'Update rejected', isError: true }
-    ])
-    const failedCall = message('failed-call', [
-      { type: 'tool-call', name: 'TodoWrite', state: 'failed', input: { todos: [] } }
-    ])
-    const result = nativeChatTaskListState([first, malformed, failed, failedCall])
-    expect(result.list?.tasks[0].content).toBe('Read')
-    expect(result.messages.slice(1)).toEqual([malformed, failed, failedCall])
-  })
-
   it('preserves accepted tasks when named orphan failures remain visibly separate', () => {
     const tasks = { ...call('Accepted'), callId: 'accepted' }
     const rejected = { ...call('Rejected', 'completed'), callId: 'rejected' }

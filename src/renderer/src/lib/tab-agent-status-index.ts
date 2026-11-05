@@ -1,8 +1,8 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import { agentTypeToIconAgent } from './agent-status'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 
 /** Index iconable panes once per status-map identity instead of scanning globally per mounted tab. Preserve insertion order: first-match resolution decides split-tab icons. */
 export type TabAgentPane = { readonly leafId: string; readonly agent: TerminalAgent }

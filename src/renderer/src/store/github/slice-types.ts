@@ -1,3 +1,4 @@
+import type { GitHubSourceCollections } from './source-collections'
 import type { GitHubTaskRecordCache } from './task-record-cache'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
@@ -44,6 +45,7 @@ import type {
 import type { PRRefreshState, PRRefreshStateClearToken } from './pr-refresh-state'
 
 export type GitHubSlice = {
+  githubSourceCollections: GitHubSourceCollections
   githubTaskCache: GitHubTaskRecordCache
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
@@ -187,7 +189,7 @@ export type GitHubSlice = {
     limit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<readonly GitHubWorkItem[]>
+  ) => Promise<readonly GitHubWorkItem[] | undefined>
   /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
   fetchWorkItemsAcrossRepos: (
     repos: {
@@ -200,12 +202,15 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<{
-    items: GitHubWorkItem[]
-    failedCount: number
-    githubUnavailable: boolean
-    requestFailureCount?: number
-  }>
+  ) => Promise<
+    | {
+        items: GitHubWorkItem[]
+        failedCount: number
+        githubUnavailable: boolean
+        requestFailureCount?: number
+      }
+    | undefined
+  >
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
@@ -219,11 +224,14 @@ export type GitHubSlice = {
     query: string,
     page: number,
     options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'wakeWslDistro'>
-  ) => Promise<{
-    items: GitHubWorkItem[]
-    failedCount: number
-    errorTypes: ClassifiedError['type'][]
-  }>
+  ) => Promise<
+    | {
+        items: GitHubWorkItem[]
+        failedCount: number
+        errorTypes: ClassifiedError['type'][]
+      }
+    | undefined
+  >
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
     repos: {
@@ -235,7 +243,7 @@ export type GitHubSlice = {
     query: string,
     perRepoLimit: number,
     options?: Pick<FetchOptions, 'wakeWslDistro'>
-  ) => Promise<{ totalCount: number; totalPages: number }>
+  ) => Promise<{ totalCount: number; totalPages: number } | undefined>
   /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
   prefetchWorkItems: (
     repoId: string,

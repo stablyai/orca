@@ -1,7 +1,7 @@
 // Join holder layout with PTY registry into mirror-shaped tab/leaf records (census U15).
 // Write mutations to fact owners—PTY connection/output/tail or title/status tracker—then reproject.
 
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { collectLayoutLeafIdsInOrder } from '../../shared/workspace-layout/terminal-pane-tree'

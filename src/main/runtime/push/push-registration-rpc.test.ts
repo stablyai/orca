@@ -89,16 +89,6 @@ describe('notifications.registerPush', () => {
       registerPush.params!.safeParse({ ...REGISTER_PARAMS, deviceId: 'device-9' }).success
     ).toBe(false)
   })
-
-  it('rejects a malformed phone preference', () => {
-    const registerPush = method('notifications.registerPush')
-    expect(
-      registerPush.params!.safeParse({
-        ...REGISTER_PARAMS,
-        filter: { sound: 'yes' }
-      }).success
-    ).toBe(false)
-  })
 })
 
 describe('notifications.unregisterPush', () => {

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { uptime } from 'node:os'
-import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../filesystem/durable-file-write'
 import type { AutomaticWorkMode } from '../../shared/host-spawn-admission'
 import {
   decideStartupAutomaticWorkMode,

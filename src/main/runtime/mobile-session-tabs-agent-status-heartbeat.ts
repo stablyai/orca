@@ -1,4 +1,4 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
 
 // Refresh halfway through the stale lease so a bounded global queue has ample drain time.
 export const SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS = AGENT_STATUS_STALE_AFTER_MS / 2

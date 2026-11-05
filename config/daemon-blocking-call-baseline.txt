@@ -9,4 +9,6 @@
 1 src/main/daemon/daemon-user-manager-lifetime.ts
 1 src/main/daemon/terminal-scopes.ts
 2 src/main/orcad/node-pty-precondition.ts
-1 src/main/pty/posix-pty-process-table.ts
+1 src/main/pty/process-retirement/posix-pty-process-table.ts
+1 src/main/pty/shell-startup/pwsh.ts
+2 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts

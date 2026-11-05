@@ -74,6 +74,7 @@
     "react-native-webview": "13.16.2",
     "react-native-worklets": "^0.8.3",
     "remend": "1.4.0",
+    "smol-toml": "1.9.1",
     "tweetnacl": "^1.0.3",
     "zod": "~4.6.7"
   },

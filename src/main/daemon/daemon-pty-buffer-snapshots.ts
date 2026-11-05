@@ -1,5 +1,5 @@
-import { normalizeDesktopTerminalSnapshotRows } from '../../shared/terminal-scrollback-policy'
-import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
+import { normalizeDesktopTerminalSnapshotRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
+import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from './daemon-pty-session-control'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'

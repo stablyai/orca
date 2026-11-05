@@ -1,4 +1,4 @@
-import type { ZshStartupHookSpec } from '../zsh-startup-wrapper-builder'
+import type { ZshStartupHookSpec } from '../pty/shell-startup/zsh-startup-wrapper-builder'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
 export function getDaemonZshWrapperSpec(): ZshStartupHookSpec {

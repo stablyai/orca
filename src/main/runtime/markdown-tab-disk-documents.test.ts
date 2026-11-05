@@ -10,7 +10,7 @@ import { compareDiskWritePrecondition } from '../../shared/file-write-disk-preco
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import {
   readMarkdownTabFromDisk,
   saveMarkdownTabToDisk,

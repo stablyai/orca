@@ -17,7 +17,7 @@ import type {
   AiVaultScanIssue,
   AiVaultScope,
   AiVaultSession
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   deriveMobileAiVaultScopePaths,

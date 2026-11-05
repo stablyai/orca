@@ -9,7 +9,10 @@ import {
   DaemonProtocolError,
   type DaemonEndpointIdentity
 } from './types'
-import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
+import {
+  writeRefused,
+  type WriteSettlement
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import {
   armDaemonSocketCloseHandlers,
   connectDaemonSocket,

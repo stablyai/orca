@@ -1,9 +1,12 @@
 import { OrcaRuntimeWithOnPtyExit } from '../lifecycle/pty-exit-lifecycle'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { DriverState } from '../../orca-runtime-core'
-import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
-import { isUntypedTerminalInput } from '../../../../shared/terminal-untyped-input'
-import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
+import {
+  isDrivingInputKind,
+  type TerminalInputKind
+} from '../../../../shared/terminal/input/terminal-input-kind'
+import { isUntypedTerminalInput } from '../../../../shared/terminal/input/terminal-untyped-input'
+import { clampTerminalViewport } from '../../../../shared/terminal/viewport/terminal-viewport'
 import { getPtyTerminalState, getTerminalState } from '../../terminal-wait-results'
 
 // Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.

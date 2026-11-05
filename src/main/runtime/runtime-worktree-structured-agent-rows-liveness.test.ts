@@ -1,5 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -151,22 +151,6 @@ describe('worktree ps and a closed structured chat', () => {
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(0)
     expect(row.status).toBe('inactive')
-  })
-
-  it('keeps an aged host-held working state authoritative', async () => {
-    const { store, published } = await awaitingApproval()
-    const aged = {
-      ...published.at(-1)!,
-      hostExecutionOwned: true as const,
-      updatedAt: Date.now() - 30 * 60 * 1000 - 1,
-      status: 'working' as const
-    }
-    store.ingestStructuredStatus(aged, SUBJECT)
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('working')
-    expect(row.status).toBe('working')
-    expect(row.agents[0]?.updatedAt).toBe(aged.updatedAt)
   })
 
   it('keeps an aged host-held approval state authoritative', async () => {

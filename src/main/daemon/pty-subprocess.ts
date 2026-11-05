@@ -1,4 +1,4 @@
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
+import type { PtyCreationDisposition } from '../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import { TerminalCreationWork } from './terminal-creation-work'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { normalizePtySize } from './daemon-pty-size'
@@ -13,8 +13,8 @@ import {
   runPtySpawnHealthProbe
 } from './pty-subprocess/spawn-preflight'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 

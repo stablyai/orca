@@ -7,7 +7,8 @@ import type {
   RelayRevokeOutbox
 } from '../mobile-cloud-relay/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../push/push-unregister-outbox'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
 import { resolveAdvertisedPairingEndpoint } from '../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
@@ -99,7 +100,17 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           listPhones: () => this.listRelayedPhones(),
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
-          nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent)
+          nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
+          prepareBrowserHost: async (host) => {
+            if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
+              const placement = await hosts.prepareBrowserHost?.(
+                host,
+                this.runtime.requireStore().getSettings().browserClientHostedRemoteEnabled !== false
+              )
+              return placement?.kind === 'client' ? placement.browserHostClientId : null
+            }
+            return null
+          }
         })
       : null
     const { pairedServerRows } = this.runtime

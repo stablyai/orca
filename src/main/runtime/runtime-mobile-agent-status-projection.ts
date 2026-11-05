@@ -1,12 +1,14 @@
 import {
   AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
-  agentStatusAuthorityObservedAt,
+  agentStatusAuthorityObservedAt
+} from '../../shared/agent-status/contracts/agent-status-freshness'
+import {
   pickHostTurnEnd,
   pickParsedAgentStatusPayload,
-  type AgentStatusEntry,
-  type AgentStatusIpcPayload
-} from '../../shared/agent-status-types'
+  type AgentStatusEntry
+} from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-status-projection'
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'

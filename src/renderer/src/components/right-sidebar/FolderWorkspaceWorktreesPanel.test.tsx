@@ -71,7 +71,7 @@ vi.mock('@/i18n/i18n', () => ({
     )
 }))
 
-vi.mock('@/components/sidebar/WorktreeCard', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/WorktreeCard', () => ({
   default: (props: MockCardProps) => {
     testState.cardProps.push(props)
     return (

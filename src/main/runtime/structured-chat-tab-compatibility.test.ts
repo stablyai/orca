@@ -299,7 +299,7 @@ it('captures an admitted but unsaved failed-SHOW open, then removes exactly that
     await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
   const { store: profile, authority } = await fixture()
   const { installFakeAppEnvironment } =
-    await import('../../../config/scripts/vitest-host-ports-setup')
+    await import('../../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   const { initOrcaProfilePaths } = await import('../orca-profiles/profile-storage-paths')
   installFakeAppEnvironment({ getPath: () => root })
   initOrcaProfilePaths()

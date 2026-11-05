@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../browser/cdp/screencast/browser-screencast-stream', () => ({ startBrowserScreencast }))
 
 function deferred() {
   let resolve!: () => void

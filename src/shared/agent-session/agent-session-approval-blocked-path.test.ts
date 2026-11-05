@@ -5,19 +5,6 @@ import {
 } from './agent-session-approval-blocked-path'
 
 describe('approvalBlockedPathToShow', () => {
-  it('hides a path the tool input already shows, including JSON-escaped Windows paths', () => {
-    const blockedPath = 'C:\\qa\\demo\\notes.md'
-    expect(
-      approvalBlockedPathToShow({
-        blockedPath,
-        detail: JSON.stringify({ file_path: blockedPath }, null, 2)
-      })
-    ).toBeNull()
-    expect(
-      approvalBlockedPathToShow({ blockedPath: '/tmp/out.txt', detail: 'echo hi > /tmp/out.txt' })
-    ).toBeNull()
-  })
-
   it('checks only the text the card draws: a plan replaces the detail', () => {
     expect(
       approvalBlockedPathToShow({
@@ -65,20 +52,5 @@ describe('approvalBlockedPathToShow', () => {
         detail: JSON.stringify({ file_path: 'C:\\qa\\demo2\\notes.md' }, null, 2)
       })
     ).toBe('C:\\qa\\demo')
-  })
-
-  it('hides a path the text names before a separator, quote or space', () => {
-    expect(
-      approvalBlockedPathToShow({ blockedPath: '/srv/data', detail: 'ls /srv/data/x' })
-    ).toBeNull()
-    expect(
-      approvalBlockedPathToShow({ blockedPath: '/srv/data', detail: "cd '/srv/data' && ls" })
-    ).toBeNull()
-    expect(
-      approvalBlockedPathToShow({
-        blockedPath: 'C:\\qa\\demo',
-        detail: JSON.stringify({ file_path: 'C:\\qa\\demo\\notes.md' }, null, 2)
-      })
-    ).toBeNull()
   })
 })

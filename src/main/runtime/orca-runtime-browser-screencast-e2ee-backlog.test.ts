@@ -13,7 +13,7 @@ import {
   deriveSharedKey,
   encrypt,
   generateKeyPair
-} from '../../shared/e2ee-crypto'
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../browser/cdp/screencast/browser-screencast-stream', () => ({ startBrowserScreencast }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 
 function connectLegacyChannel() {

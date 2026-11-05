@@ -42,7 +42,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
-vi.mock('../cdp-ws-proxy', () => ({
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
 

@@ -1,5 +1,5 @@
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
-import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { historyReplayWindowsPty } from './daemon-history-replay-pty'
 import {
   DurableHistoryReplayEmulator,
@@ -8,7 +8,7 @@ import {
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { replayTerminalSnapshot } from './terminal-checkpoint-serializer'
-import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
+import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 

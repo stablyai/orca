@@ -30,7 +30,7 @@ export type InflightComments = {
   postedComments: PRComment[]
 }
 export type InflightWorkItems = {
-  promise: Promise<readonly GitHubWorkItem[]>
+  promise: Promise<readonly GitHubWorkItem[] | undefined>
   requestId: number
   force: boolean
   noCache: boolean

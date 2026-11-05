@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: mocks.track, isTelemetryEnabled: () => true }))
-vi.mock('../git/create-event-repo-probe', () => ({ probeCreateEventRepoFacts: mocks.probe }))
+vi.mock('../git/worktrees/creation/create-event-repo-probe', () => ({
+  probeCreateEventRepoFacts: mocks.probe
+}))
 vi.mock('./runtime-local-worktree-create', () => ({
   createRuntimeLocalManagedWorktree: mocks.createLocal
 }))
@@ -36,10 +38,10 @@ vi.mock('./runtime-local-worktree-setup', () => ({
     didStartInProcessSetupHook: false
   }))
 }))
-vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
-vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 

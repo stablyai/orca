@@ -1,3 +1,4 @@
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
@@ -183,4 +184,14 @@ export function createQueuedRigProvider(
     finishCompact,
     providerEvents
   }
+}
+
+export function eventually(assertion: () => void | Promise<void>): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
+
+export type RigSendOptions = {
+  internal?: true
+  from?: AgentMessageSource
+  carried?: Readonly<Record<string, string>>
 }

@@ -1,6 +1,6 @@
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalGitHubPRLink } from '../../shared/terminal/links/terminal-github-pr-link-detector'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 export type DataEvent = {
   type: 'event'

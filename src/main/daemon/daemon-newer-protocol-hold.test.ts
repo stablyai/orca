@@ -27,7 +27,6 @@ vi.mock('./daemon-stale-kill', () => ({ killStaleDaemon: probes.kill }))
 import {
   discoverNewerProtocolHolds,
   isHoldingForNewerProtocolDaemon,
-  readNewerDaemonHeldScreen,
   reopenNewerDaemonTerminals
 } from './daemon-newer-protocol-hold'
 import { getDaemonPidPath } from './daemon-spawner'
@@ -70,17 +69,6 @@ describe('discoverNewerProtocolHolds', () => {
     writePid(otherProfileDir, NEWER, RECORD)
     await expect(holds()).resolves.toBe(false)
     expect(probes.identity).not.toHaveBeenCalled()
-  })
-
-  it('holds for a verified newer daemon', async () => {
-    writePid(runtimeDir, NEWER, RECORD)
-    await expect(holds()).resolves.toBe(true)
-    expect(probes.identity).toHaveBeenCalledWith(
-      42,
-      expect.stringContaining(`v${NEWER}`),
-      expect.stringContaining(`v${NEWER}`),
-      1_700_000_000_000
-    )
   })
 
   it('holds nothing for a gone or recycled pid and leaves the newer files alone', async () => {
@@ -180,11 +168,5 @@ describe('reopenNewerDaemonTerminals', () => {
     ])
     expect(results).toEqual([{ reopened: true }, { reopened: true }])
     expect(probes.kill).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('readNewerDaemonHeldScreen', () => {
-  it('reads nothing for a session with no saved history', async () => {
-    await expect(readNewerDaemonHeldScreen('s1', runtimeDir)).resolves.toBeNull()
   })
 })

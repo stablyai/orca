@@ -97,6 +97,7 @@ export async function getPRByNumber(
       {
         ...knownPullRequestData,
         ...exactData,
+        checksUnavailable: false,
         ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
       ghOptions,
@@ -169,8 +170,12 @@ export async function lookupPRByNumber(args: {
       ['pr', 'view', String(args.number), '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions
     )
+    const parsedData: PullRequestLookupData = JSON.parse(stdout)
     const lookup = {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
+      data: normalizePullRequestLookupData({
+        ...parsedData,
+        checksUnavailable: false
+      }),
       dataRepo: null
     }
     return !args.policy || (await args.policy.accepts(lookup.data, null))

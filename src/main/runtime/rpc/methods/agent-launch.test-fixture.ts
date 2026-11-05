@@ -1,10 +1,10 @@
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
-import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
+import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
@@ -12,7 +12,7 @@ import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-t
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../../../shared/agent-launch-tab-publication'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 
 /** Every agent set to chat, so default launches open chats. */
 export const STRUCTURED_PREFERENCE = {

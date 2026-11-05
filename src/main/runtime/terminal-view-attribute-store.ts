@@ -8,15 +8,15 @@ import {
   terminalViewColorQueryReplyColors,
   type TerminalViewAttributes,
   type TerminalViewRgb
-} from '../../shared/terminal-view-attributes'
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import {
   cssColorToOscRgb,
   type TerminalOscColorQueryReplyColors
-} from '../../shared/terminal-osc-color-reply'
+} from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   colorQueryReplyColorsEqual,
   normalizeColorQueryReplyColors
-} from '../../shared/pty-owner-color-query-colors'
+} from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 
 // IPC stores shared attributes; runtime emulators read them at reply time.
 let currentAttributes: TerminalViewAttributes | null = null

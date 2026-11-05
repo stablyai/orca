@@ -6,7 +6,7 @@ import type {
   AgentJournalTurnLifecycle,
   AgentJournalTurnLifecycleState
 } from '../journal/agent-session-journal-types'
-import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import {
@@ -40,7 +40,7 @@ export type StructuredAgentSessionLatestRequest = {
 /** Commands and steers have no independent request; their turns own any response. */
 export function isStructuredAgentSessionNonRequestRow(
   item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
-  commandTurnItemIds: ReadonlySet<string>
+  commandTurnItemIds: Pick<ReadonlySet<string>, 'has'>
 ): boolean {
   return (
     commandTurnItemIds.has(item.itemId) ||

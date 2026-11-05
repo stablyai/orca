@@ -2,7 +2,7 @@ import type { PRConflictSummary } from '../../shared/github/pull-request-types'
 import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
-} from '../../shared/git-merge-tree-capability'
+} from '../../shared/git/branches/git-merge-tree-capability'
 import { gitExecFileAsync } from '../git/runner'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
@@ -11,7 +11,7 @@ import { RuntimeRemoteFetchController } from '../runtime/runtime-remote-fetch-co
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
-} from '../git/git-capability-state'
+} from '../git/command-runner/git-capability-state'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,

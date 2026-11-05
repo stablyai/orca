@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/headless'
-import { readTerminalMouseEncoding } from '../../shared/terminal-mouse-encoding'
+import { readTerminalMouseEncoding } from '../../shared/terminal/protocol/input-modes/terminal-mouse-encoding'
 import type { TerminalModes } from './types'
 
 type TerminalWithKittyKeyboard = Terminal & {

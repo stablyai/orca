@@ -1,6 +1,6 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
+import type { applyStructuredCodexWorkspaceTrust } from '../agent-launch/trust/agent-workspace-trust-spawn'
 import type { StructuredAgentCliConversations } from '../native-chat/structured-agent-cli-conversations'
 import type {
   StructuredAgentSessionAdapter,
@@ -63,10 +63,27 @@ export type StructuredAgentAccountHomeServices = {
 }
 
 /** What a catalog probe is built from: the same runtime resolvers its sessions launch through. */
-export type StructuredAgentModelCatalogContext = Pick<
-  StructuredAgentAdapterContext,
-  'deps' | 'environment'
+export type StructuredAgentModelCatalogDeps = Pick<
+  StructuredAgentSessionRuntimeDeps,
+  | 'stateDirectory'
+  | 'resolveWorkspacePath'
+  | 'resolveAgentAccountHome'
+  | 'resolveLaunchArgs'
+  | 'resolveClaudeAuthPolicy'
+  | 'resolveClaudeCommand'
+  | 'resolveCodexCommand'
+  | 'resolveCodexAccountKind'
+  | 'runCodexCatalogSession'
+  | 'prepareCodexCatalogProbeHome'
+  | 'resolveAgentCommandSettings'
+  | 'resolveEnvironment'
+  | 'resolveShellEnvironmentPolicy'
+  | 'resolveAgentLaunchEnv'
 >
+export type StructuredAgentModelCatalogContext = {
+  deps: StructuredAgentModelCatalogDeps
+  environment: StructuredAgentAdapterContext['environment']
+}
 
 export type StructuredAgentLaunchCheck = {
   /** The binary and env a launch from `env` runs; throws the launch's own pre-spawn refusal. */

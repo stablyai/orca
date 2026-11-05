@@ -6,7 +6,7 @@ import type {
   RenameTabsCommand,
   UntitledTab
 } from '../../shared/workspace-layout/workspace-layout-command-types'
-import type { TerminalLeafMoveRequest } from '../../shared/terminal-leaf-move'
+import type { TerminalLeafMoveRequest } from '../../shared/workspace-layout/terminal-leaf-move'
 import { renameTabCommandsOf } from '../../shared/workspace-layout/workspace-layout-commands'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { isWslMoveWorkspaceSessionFrozen } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'

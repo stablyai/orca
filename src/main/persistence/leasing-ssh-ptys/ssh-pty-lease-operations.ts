@@ -1,8 +1,8 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { PtyRetirementEvidence } from '../../pty-exit-proof'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import type { PtyRetirementEvidence } from '../../pty/process-retirement/pty-exit-proof'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { pruneRetiredSshRemotePtyLeaseTombstones } from './ssh-pty-lease-tombstone-retention'
 
 // Only relay-era profiles contain leases; this build retires existing records without creating more.

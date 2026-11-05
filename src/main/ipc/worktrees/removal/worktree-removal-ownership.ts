@@ -6,7 +6,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../worktree-removal-repo-owner'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { removeWorktreeMetaRow } from '../../../persistence/host-qualified-worktree-meta'
@@ -14,7 +14,7 @@ import { pruneWorktreePRRefreshAliases } from '../../../github/pr-refresh-coordi
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots
-} from '../../../worktree-removal-process-cleanup'
+} from '../../../workspaces/removal/worktree-removal-process-cleanup'
 
 export async function stopPtysForDestructiveWorktreeRemoval(
   runtime: OrcaRuntimeService,

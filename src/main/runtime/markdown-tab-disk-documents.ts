@@ -18,7 +18,7 @@ import { getDiskBaselineSignature } from '../../shared/disk-baseline-signature'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import { findListedEditorFile } from './mobile-session-editor-projection'
 
 export type MarkdownDiskFile = { content: string; byteLength: number }

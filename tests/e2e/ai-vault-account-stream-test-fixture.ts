@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   RuntimeAccountController,
   type RuntimeAccountServices

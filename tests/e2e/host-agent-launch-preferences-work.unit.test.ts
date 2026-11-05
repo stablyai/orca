@@ -13,16 +13,16 @@ import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from '../../src/renderer/src/components/agent/use-agent-launch-picker-inventory'
-import type { AgentPickerEntry } from '../../src/shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../src/shared/agent-launch/picker/agent-launch-picker'
 import * as acquisitions from '../../src/renderer/src/components/agent/agent-launch-picker-acquisition'
 import * as routes from '@/lib/agent-launch-route-input'
-import * as profile from '../../src/shared/agent-launch-profile'
-import * as composition from '../../src/shared/tui-agent-launch-defaults'
+import * as profile from '../../src/shared/agent-launch/choices/agent-launch-profile'
+import * as composition from '../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
 import { RuntimeClientSettingsController } from '../../src/main/runtime/runtime-client-settings'
-import { mutateHostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agent-launch-settings-transport'
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
+import { mutateHostAgentLaunchSettings } from '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { structuredLaunchSeedOptions } from '../../src/shared/native-chat/input/native-chat-session-option-defaults'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 

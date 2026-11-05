@@ -1,10 +1,10 @@
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
 import { browserHostClientProfileFor } from './browser-host-client-profile-metadata'
-import type { BrowserClientHostCommandResult } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS,
   MAX_CLIENT_PAGE_CREATION_TIMEOUT_MS
-} from '../../../shared/browser-client-page-creation-timeouts'
+} from '../../../shared/browser/client-hosting/browser-client-page-creation-timeouts'
 import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
 import type { BrowserHostLease, BrowserHostLeaseState } from './browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'

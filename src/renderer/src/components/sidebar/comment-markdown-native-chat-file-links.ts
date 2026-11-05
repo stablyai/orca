@@ -5,13 +5,13 @@ import {
 import {
   formatFileLinkLocation,
   parseFileLinkLocation
-} from '../../../../shared/file-link-location'
+} from '../../../../shared/file-links/file-link-location'
 import {
   extractTerminalFileLinkReadings,
   extractTerminalFileLinks,
   type ParsedTerminalFileLink
-} from '../../../../shared/terminal-links'
-import { ROOTED_PATH_START_PATTERN } from '../../../../shared/terminal-file-link-detection-ranges'
+} from '../../../../shared/terminal/links/terminal-links'
+import { ROOTED_PATH_START_PATTERN } from '../../../../shared/terminal/links/terminal-file-link-detection-ranges'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 
 type MarkdownNode = {

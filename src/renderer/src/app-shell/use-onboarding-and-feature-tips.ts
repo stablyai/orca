@@ -162,11 +162,7 @@ export function useOnboardingAndFeatureTips() {
     }
     // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
-    if (
-      featureTipsDecision.tipId === 'chat-ui-here' &&
-      chatUiLaunchTipVariant === 'chat-ui-off' &&
-      settings?.telemetry?.chatUiLaunchTipCohort !== 'treatment-center'
-    ) {
+    if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant === 'chat-ui-off') {
       // Terminal-default profiles get the nonblocking card; chat users still acknowledge the modal.
       setChatUiHereCornerCardOpen(true)
       return

@@ -12,13 +12,13 @@ import {
 import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
-} from '../local-worktree-scan-generation'
+} from '../workspaces/catalog/local-worktree-scan-generation'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
-import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
@@ -27,27 +27,27 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree/ownership'
-import { projectWorktreeLineageWithHostPeers } from '../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../workspaces/catalog/worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../shared/worktree/visibility-sources'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
-import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
+import { pruneLineageForMissingRepoWorktrees } from '../workspaces/catalog/worktree-lineage-pruning'
 import {
   canPruneAuthoritativeLocalMetadata,
   pruneMetadataMissingFromAuthoritativeLocalScan
 } from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import type { RuntimeStore } from './runtime-store-contract'
-import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments/workspace-attachments'
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import {
   getRetiredNameRegistryForRepo,
   hasRetiredNameRegistryStore
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 
 export class RuntimeManagedWorktreeQueries {
   constructor(private readonly deps: RuntimeManagedWorktreeQueryDependencies) {}

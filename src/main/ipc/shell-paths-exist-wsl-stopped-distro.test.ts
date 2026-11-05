@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import type * as ShellOwnedPathTarget from './shell-owned-path-target'
 
 const mocks = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
   shell: {},
   dialog: {}
 }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))

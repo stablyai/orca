@@ -9,9 +9,9 @@ import { SessionTerminationController } from './session-termination-controller'
 import { SessionProcessInspection } from './session-process-inspection'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { PtyStartupIngress } from '../../shared/terminal/pty/ingress/pty-startup-ingress'
 
 import type {
   SessionState,
@@ -19,7 +19,7 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 export class Session extends SessionProcessInspection {
   readonly sessionId: string

@@ -1,4 +1,4 @@
-import type { OffscreenBrowserTabOpenRequest } from '../../browser/browser-manager-state'
+import type { OffscreenBrowserTabOpenRequest } from '../../browser/guest-lifecycle/manager/browser-manager-state'
 import type { RuntimeBrowserTabCreation } from './browser-tab-creation'
 
 /** Opens a windowless host's page link as a tab; only the client whose click opened it in front moves to it. */

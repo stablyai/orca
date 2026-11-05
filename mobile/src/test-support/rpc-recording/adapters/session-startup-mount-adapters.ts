@@ -70,10 +70,6 @@ export function sessionStartupMountAdapters(
             pendingBrowserFocusPageIdRef: { current: null },
             pendingTerminalActivationAttemptRef: { current: null },
             initialSessionAutoCreateRef: { current: null },
-            bufferedTerminalDraftState: {
-              resetDrafts: () => effect('reset-drafts', {}),
-              clearPendingRestorations: () => effect('clear-pending-restorations', {})
-            },
             clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
             clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
             showToast: (message: string, durationMs?: number) =>

@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RetiredTerminalSurface } from '../../runtime/mobile-session-terminal-retirement'
 
 /** Caller proves old ownership; restart removes the binding while retaining the pane. */

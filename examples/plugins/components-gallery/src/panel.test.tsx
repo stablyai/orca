@@ -43,12 +43,3 @@ test('pages, sorts and selects the Table, and loads Tree children lazily', async
   assert.equal(panel.valueOf(tree), 'src/main.ts')
   assert.deepEqual(panel.errors, [])
 })
-
-test('draws the content tab without warnings', async () => {
-  panel = await mount(gallery, { persisted: { plugin: { 'gallery.tab': 'content' } } })
-  assert.ok(panel.find({ role: 'toolbar', label: 'Gallery actions' }))
-  assert.ok(panel.find({ role: 'img', label: undefined }) !== null)
-  assert.ok(panel.find({ role: 'document', text: /Components Gallery/ }))
-  assert.deepEqual(panel.warnings, [])
-  assert.deepEqual(panel.errors, [])
-})

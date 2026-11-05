@@ -3,12 +3,15 @@ import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import {
   type RuntimeEnvironmentSetupFailure,
   runtimeEnvironmentSetupFailure
-} from '../../../shared/runtime-environment-subscription-setup'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
+import {
+  resolveEnvironment,
+  markEnvironmentUsed
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment,

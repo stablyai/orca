@@ -3,7 +3,7 @@ import type { WebContents } from 'electron'
 import type {
   BrowserScreencastOptions,
   BrowserScreencastSession
-} from '../../browser/browser-screencast-stream-types'
+} from '../../browser/cdp/screencast/browser-screencast-stream-types'
 import {
   createSinglePageBrowserCommandsHost,
   createStreamedGuest
@@ -22,7 +22,9 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../../browser/cdp/screencast/browser-screencast-stream', () => ({
+  startBrowserScreencast
+}))
 
 function createSession() {
   let close!: () => void

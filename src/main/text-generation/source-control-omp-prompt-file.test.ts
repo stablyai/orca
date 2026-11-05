@@ -1,6 +1,6 @@
 import { spawnProcess } from '@orca/process-host'
-import * as agentSpecs from '../../shared/commit-message-agent-spec'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import * as agentSpecs from '../../shared/source-control/ai/generation/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SpawnSourceControlAgent } from './source-control-text-generation-types'
 import {
   generateCommitMessage,
@@ -16,7 +16,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { cancelLocalGeneration } from './source-control-generation-lanes'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import { runLocalSourceControlPlan } from './source-control-local-process'
@@ -25,7 +25,7 @@ import {
   withPlatform
 } from './commit-message-text-generation-test-harness'
 
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: vi.fn(async () => true)
 }))
 

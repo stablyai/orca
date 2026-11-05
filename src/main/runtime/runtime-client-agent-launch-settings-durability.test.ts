@@ -7,16 +7,19 @@ import { applyClaudeMessageOptions } from '../claude/structured/launch/claude-st
 import { sessionFor } from '../claude/structured/claude-structured-dispatch-test-support'
 import { fakeClaude } from '../claude/structured/claude-structured-session-test-support'
 import { readAgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
-import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
-import { quoteStartupArg, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import { resolveAgentLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command'
+import {
+  quoteStartupArg,
+  tokenizeStartupCommand
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
-import { newChatPermissionModeForSettings } from '../../shared/agent-chat-permission-mode'
+} from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { newChatPermissionModeForSettings } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { describe, expect, it, vi } from 'vitest'
 import {
   deferred,
@@ -24,7 +27,7 @@ import {
   withReopenedProfileStore
 } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
-import { createCodexAtRestSkillCatalog } from '../codex/codex-at-rest-skills-probe'
+import { createCodexAtRestSkillCatalog } from '../codex/structured/catalog/codex-at-rest-skills-probe'
 import type { CodexAppServerInvocation } from '../codex/app-server/codex-app-server-session'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
