@@ -48,3 +48,18 @@ it.each([
     ).not.toBe('settled-permission')
   }
 )
+
+it('draws the forked-from row as a divider naming and linking its source', () => {
+  expect(
+    nativeChatNoticeLook({
+      type: 'text',
+      text: 'Forked from Fix the login flow',
+      presentation: 'forked-from',
+      forkedFrom: { sessionId: 'claude_source' }
+    })
+  ).toEqual({
+    kind: 'forked-from',
+    sourceSessionId: 'claude_source',
+    sourceName: 'Fix the login flow'
+  })
+})

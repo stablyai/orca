@@ -348,6 +348,7 @@ export function NativeChatMessageList({
     revealedDiff,
     taskListPredecessors,
     expandedTurnIds,
+    latestTurnKey: turnKeys.findLast((key) => key !== undefined),
     deliveryNotices,
     allowFileUriLinks,
     runtimeContext,
