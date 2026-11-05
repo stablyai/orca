@@ -43,6 +43,17 @@ type RpcOperationDefinitionInput =
 
 export function defineRpcOperation<
   Method extends RpcMethodName,
+  Acceptance extends 'require-result-or-throw' | 'success-result-or-throw',
+  Variant extends string,
+  Value,
+  Barrier extends RpcInterpretationBarrier
+>(
+  definition: RequireResultRpcDefinition<Method, Variant, Value, Barrier> & {
+    acceptance: Acceptance
+  }
+): RpcOperation<Method, Acceptance, Variant, Value, Barrier>
+export function defineRpcOperation<
+  Method extends RpcMethodName,
   Variant extends string,
   Value,
   Barrier extends RpcInterpretationBarrier
@@ -130,6 +141,7 @@ function interpretRpcOutcome(
       }
       return settled.value
     case 'require-result-or-throw':
+    case 'success-result-or-throw':
       if (settled.kind === 'outer-refused') {
         // Reuse acceptance’s coded refusal text.
         return requireRpcResultOrThrowCodedError(settled.raw)

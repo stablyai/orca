@@ -168,6 +168,7 @@ export const EXECUTION_HOST_METHODS = [
   'projectGroup.list',
   'project.list',
   'projectHostSetup.list',
+  'repo.add',
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',
