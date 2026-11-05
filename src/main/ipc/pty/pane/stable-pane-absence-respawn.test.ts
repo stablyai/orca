@@ -4,7 +4,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import {
   SessionNotFoundError,
   TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
+} from '../../../daemon/protocol/daemon-errors'
 import type { Store } from '../../../persistence/loading-store/store'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'

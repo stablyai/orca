@@ -5,9 +5,12 @@ import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-sessi
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import { getAllDaemonAdapters, type DaemonProvider } from '../daemon/daemon-provider-routing'
-import type { SessionInfo } from '../daemon/types'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
+import {
+  getAllDaemonAdapters,
+  type DaemonProvider
+} from '../daemon/providers/lifecycle/daemon-provider-routing'
+import type { SessionInfo } from '../daemon/protocol/daemon-session-info'
 import { isFolderRepoWorktreeIdForRepo } from '../ipc/worktrees/folder-workspace-model'
 import type { Store } from '../persistence/loading-store/store'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'

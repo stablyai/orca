@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
-import { activateBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-activate'
-import { closeBrowserTabInRenderer } from '../../../runtime/browser/browser-tab-renderer-close'
+import { activateBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-activate'
+import { closeBrowserTabInRenderer } from '../../../runtime/browser/tabs/browser-tab-renderer-close'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
 import {
   FIRST_DISCARDED_BROWSER_TAB_ID,

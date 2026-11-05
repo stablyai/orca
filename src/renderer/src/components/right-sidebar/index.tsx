@@ -30,6 +30,7 @@ import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/worktree-creation-surface'
 
 function RightSidebarInner(): React.JSX.Element {
   useUiLanguageRevision()
@@ -45,7 +46,11 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarWidth = captureWidth ?? userRightSidebarWidth
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
-  const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
+  // Creation keeps the prior worktree active until handoff, so its panels would show that worktree.
+  const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
+  const checksStatus = useAppStore((s) =>
+    s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
+  )
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
@@ -86,8 +91,17 @@ function RightSidebarInner(): React.JSX.Element {
 
   const panelContent = rightSidebarOpen ? (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
-      {/* Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes. */}
-      <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+      {creatingWorktree ? (
+        <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.right.sidebar.index.creatingWorkspace',
+            'Available when the workspace is ready'
+          )}
+        </div>
+      ) : (
+        // Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes.
+        <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+      )}
     </div>
   ) : null
 

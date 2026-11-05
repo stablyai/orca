@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { StrictMode } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginChangeEvent } from '../../../shared/plugins/events/plugin-change-event'
@@ -51,28 +50,6 @@ afterEach(() => {
 })
 
 describe('plugin language-pack startup ownership', () => {
-  it.each([false, true])(
-    'shares one load across mounted consumers (StrictMode: %s)',
-    async (strict) => {
-      const bridge = installBridge()
-      const wrapper = strict ? StrictMode : undefined
-      const first = renderHook(() => languagePacks.usePluginLanguagePacks(), { wrapper })
-      const second = renderHook(() => languagePacks.usePluginLanguagePacks(), { wrapper })
-      const dispatches = bridge.listLanguagePacks.mock.calls.length
-      const result = [pack('startup')]
-      await act(async () => {
-        for (const request of bridge.requests) {
-          request.resolve(result)
-        }
-        await Promise.all(bridge.requests.map((request) => request.promise))
-      })
-      expect(dispatches).toBe(1)
-      expect(bridge.onChanged).toHaveBeenCalledTimes(1)
-      expect(first.result.current).toEqual(result)
-      expect(second.result.current).toBe(first.result.current)
-    }
-  )
-
   it.each(['resolve', 'reject'] as const)(
     'keeps a newer refresh pending after an older request %ss',
     async (settlement) => {

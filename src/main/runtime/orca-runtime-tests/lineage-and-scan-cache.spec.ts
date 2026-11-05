@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  join,
-  listWorktrees,
-  lstat,
-  mkdir,
-  mkdtemp,
-  rm,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
-import { makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { lstat, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { makeWorktreeMeta, store } from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {

@@ -5,6 +5,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import { setSidebarLiveWidth } from './sidebar-live-width'
+import { SidebarSeamScrollbarStrip } from './SidebarSeamScrollbarStrip'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
@@ -54,13 +55,13 @@ const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSi
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
-// Why: sit mostly outside the seam so the list scrollbar under the sidebar's right edge stays grabbable.
+// Why: start past the seam scrollbar strip so the list scrollbar stays grabbable from both sides of the seam.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
-  'group absolute -right-2.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-start pl-0.5'
+  'peer absolute -right-3.5 top-0 z-10 h-full w-2.5 cursor-col-resize'
 // Why: an open drawer covers the outer side of the seam, so keep the inner overlap wide enough to grab.
-const WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME = '-right-1.5 justify-center pl-0'
+const WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME = '-right-1.5 w-3'
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
-  'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
+  'pointer-events-none absolute -right-px top-0 z-10 h-full w-px bg-transparent transition-colors peer-hover:bg-ring/50 peer-active:bg-ring'
 
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
@@ -161,6 +162,9 @@ function Sidebar({
     onDraftWidthChange: setSidebarLiveWidth
   })
 
+  const drawerCoversSeam =
+    workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
+
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
   // A collapsed sidebar takes no drops.
   const sidebarRef = React.useCallback(
@@ -255,23 +259,26 @@ function Sidebar({
         </div>
 
         {sidebarOpen && (
-          <div
-            data-sidebar-resize-handle=""
-            className={cn(
-              WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME,
-              (workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)) &&
-                WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME,
-              isResizing && 'bg-ring/10'
+          <>
+            {drawerCoversSeam ? null : (
+              <SidebarSeamScrollbarStrip sidebarRef={containerRef} onResizeStart={onResizeStart} />
             )}
-            onMouseDown={onResizeStart}
-          >
+            <div
+              data-sidebar-resize-handle=""
+              className={cn(
+                WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME,
+                drawerCoversSeam && WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME,
+                isResizing && 'bg-ring/10'
+              )}
+              onMouseDown={onResizeStart}
+            />
             <div
               className={cn(
                 WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME,
                 isResizing && 'bg-ring'
               )}
             />
-          </div>
+          </>
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
 import {
   HEADLESS_LEAF_ID,
@@ -6,9 +6,11 @@ import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
-import { electronMocks, OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { createMobileCreateTestNotifier } from './orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
 import {

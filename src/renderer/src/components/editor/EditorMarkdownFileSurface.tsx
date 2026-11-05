@@ -158,6 +158,7 @@ export function EditorMarkdownFileSurface({
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={`${editorViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}

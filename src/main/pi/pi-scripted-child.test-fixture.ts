@@ -10,7 +10,7 @@ import {
 } from '../jsonl-rpc/agent-connection'
 import { JsonlRpcResponseError, type JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from '../runtime/agent-session/installation/structured-agent-scripted-child.test-fixture'
 import type { PiRpcConnection } from './rpc-session'
 
 type PiScriptOptions = {

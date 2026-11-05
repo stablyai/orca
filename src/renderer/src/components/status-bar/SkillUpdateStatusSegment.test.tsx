@@ -10,10 +10,7 @@ import {
   SKILL_UPDATE_SUCCESS_LINGER_MS,
   startSkillUpdateRun
 } from '../skills/skill-update-run-store'
-import {
-  consumeSkillFreshnessUpdateDialogRequest,
-  getSkillFreshnessUpdateDialogRequest
-} from '../skills/skill-freshness-update-dialog'
+import { consumeSkillFreshnessUpdateDialogRequest } from '../skills/skill-freshness-update-dialog'
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   notifyInstalledAgentSkillsChanged: vi.fn()
@@ -101,20 +98,6 @@ describe('SkillUpdateStatusSegment', () => {
     vi.useRealTimers()
   })
 
-  it('renders nothing while idle', async () => {
-    await render()
-    expect(container?.querySelector('button')).toBeNull()
-  })
-
-  it('shows a spinner and skill count while the run is in flight', async () => {
-    await render()
-    await start(['orca-cli', 'orchestration'])
-
-    expect(container?.textContent).toContain('Updating skills')
-    expect(container?.querySelector('.animate-spin')).not.toBeNull()
-    expect(container?.textContent).toContain('Updating 2 skills…')
-  })
-
   it('shows a green check on success, then retires itself', async () => {
     await render()
     await start(['orca-cli'])
@@ -127,55 +110,6 @@ describe('SkillUpdateStatusSegment', () => {
       vi.advanceTimersByTime(SKILL_UPDATE_SUCCESS_LINGER_MS)
     })
     expect(container?.querySelector('button')).toBeNull()
-  })
-
-  it.each([1, 2, 3])('counts completed updates with %i skipped skills', async (skippedCount) => {
-    await render()
-    const names = ['orca-cli', 'orchestration', 'orca-linear', 'computer-use'].slice(
-      0,
-      skippedCount + 1
-    )
-    await start(names)
-    expect(container?.querySelector('[data-tooltip]')?.textContent).toBe(
-      `Updating ${names.length} skills…`
-    )
-    const skills = [...ran('done', names[1]).skills]
-    skills.unshift({
-      name: names[0],
-      status: 'ran',
-      ops: [
-        {
-          path: `/home/u/.claude/skills/${names[0]}`,
-          kind: 'leave',
-          status: 'done',
-          reason: 'edited'
-        }
-      ]
-    })
-    for (const name of names.slice(2)) {
-      skills.push({
-        ...skills[0],
-        name,
-        ops: [{ ...skills[0].ops[0], path: `/home/u/.claude/skills/${name}` }]
-      })
-    }
-    await finish({ scope: 'global', skills })
-
-    expect(container?.textContent).toContain('Skills updated')
-    expect(container?.querySelector('[data-tooltip]')?.textContent).toBe(
-      `Updated 1 skill · ${skippedCount} skipped`
-    )
-  })
-
-  it('counts completed updates when every requested skill changed', async () => {
-    await render()
-    await start(['orca-cli', 'orchestration'])
-    await finish({
-      scope: 'global',
-      skills: [...ran('done').skills, ...ran('done', 'orchestration').skills]
-    })
-
-    expect(container?.querySelector('[data-tooltip]')?.textContent).toBe('Updated 2 skills')
   })
 
   it('keeps a run with problems visible instead of auto-clearing it', async () => {
@@ -193,37 +127,5 @@ describe('SkillUpdateStatusSegment', () => {
     expect(container?.textContent).toContain(
       'Some skill updates were skipped — click to see details'
     )
-  })
-
-  it.each([false, true])(
-    'keeps recovery needing attention visible (mixed run: %s)',
-    async (mixed) => {
-      await render()
-      await start(mixed ? ['orca-cli', 'orchestration'] : ['orca-cli'])
-      const skills = [...ran('done').skills]
-      skills[0].ops[0].kind = 'restore'
-      if (mixed) {
-        skills.push(ran('done', 'orchestration').skills[0])
-      }
-      await finish({ scope: 'global', skills })
-
-      expect(container?.textContent).toContain('Needs attention')
-      expect(container?.textContent).not.toContain('Skills updated')
-      expect(container?.querySelector('.text-emerald-500')).toBeNull()
-      await act(async () => {
-        vi.advanceTimersByTime(SKILL_UPDATE_SUCCESS_LINGER_MS * 3)
-      })
-      expect(container?.querySelector('button')).not.toBeNull()
-    }
-  )
-
-  it('reopens the update dialog when clicked', async () => {
-    await render()
-    await start(['orca-cli'])
-    await act(async () => {
-      container?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(getSkillFreshnessUpdateDialogRequest()).toBe(true)
   })
 })

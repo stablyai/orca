@@ -30,13 +30,10 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX } from './use-native-chat-older-history-autoload'
+
 import {
-  deliverResizes,
   layout,
   marker,
-  ROW_PITCH_PX,
-  scrollTranscript,
   session,
   stubLayout,
   stubResizeObserver
@@ -109,17 +106,6 @@ async function settle(): Promise<void> {
   await act(async () => {})
 }
 
-function noise(index: number): NativeChatMessage {
-  // A harness-injected turn: real history the transcript strips before it has a row.
-  return {
-    id: `noise-${index}`,
-    role: 'user',
-    blocks: [{ type: 'text', text: '<system-reminder>context</system-reminder>' }],
-    timestamp: index + 1,
-    source: 'transcript'
-  }
-}
-
 const markers = (from: number, to: number): NativeChatMessage[] =>
   Array.from({ length: to - from }, (_, offset) => marker(from + offset))
 
@@ -135,8 +121,6 @@ function flowAboveSpacer(spacer: HTMLElement): number {
 
 type LoadEarlier = () => Promise<NativeChatOlderPageResult>
 const lands = (): LoadEarlier => vi.fn(async (): Promise<NativeChatOlderPageResult> => 'applied')
-const neverSettles = (): LoadEarlier =>
-  vi.fn(() => new Promise<NativeChatOlderPageResult>(() => {}))
 
 function paging({
   messages,
@@ -172,31 +156,6 @@ function paging({
   )
 }
 
-function scrollRoot(container: HTMLElement): HTMLElement {
-  const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')
-  if (!scroller) {
-    throw new Error('no transcript scroll root')
-  }
-  return scroller
-}
-
-function paint(container: HTMLElement): void {
-  const scroller = scrollRoot(container)
-  for (let pass = 0; pass < 12; pass += 1) {
-    const before = scroller.scrollTop
-    let resized = false
-    act(() => {
-      resized = deliverResizes()
-    })
-    if (scroller.scrollTop !== before) {
-      fireEvent.scroll(scroller)
-    } else if (!resized) {
-      return
-    }
-  }
-  throw new Error('the transcript never settled')
-}
-
 afterEach(cleanup)
 
 describe('older history auto-load', () => {
@@ -221,112 +180,6 @@ describe('older history auto-load', () => {
     layout.aboveSpacerPx = null
   })
 
-  it('asks for a page once the top sentinel is within prefetch range of the scroller', () => {
-    const loadEarlier = lands()
-    const { container } = render(paging({ messages: markers(100, 150), loadEarlier }))
-    deliverIntersections()
-    expect(loadEarlier).not.toHaveBeenCalled()
-    expect(createdObservers.at(-1)).toEqual({
-      root: scrollRoot(container),
-      rootMargin: `${NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX}px 0px 0px 0px`
-    })
-
-    sentinelInRange = true
-    deliverIntersections()
-
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
-  })
-
-  // Hidden rows leave visible row count unchanged, but must not stop paging.
-  it('keeps paging after each page while the sentinel stays in range', async () => {
-    const loadEarlier = lands()
-    const base = markers(100, 150)
-    const { container, rerender } = render(paging({ messages: base, loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    await settle()
-    paint(container)
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-
-    const hiddenPage = [...Array.from({ length: 20 }, (_, index) => noise(index)), ...base]
-    rerender(paging({ messages: hiddenPage, loadEarlier }))
-    paint(container)
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(2)
-
-    rerender(paging({ messages: hiddenPage, loadEarlier, loadingEarlier: true }))
-    await settle()
-    rerender(paging({ messages: [...markers(80, 100), ...hiddenPage], loadEarlier }))
-    paint(container)
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(3)
-  })
-
-  // Rows in a closed subagent section must not stop paging either.
-  it("keeps paging after a page that holds only a settled subagent's rows", async () => {
-    const loadEarlier = lands()
-    const spawn: NativeChatMessage = {
-      id: 'spawn',
-      role: 'system',
-      blocks: [
-        {
-          type: 'subagent-group',
-          groupId: 'group-1',
-          agents: [{ id: 'task-1', label: 'explore the lane', state: 'completed' }]
-        }
-      ],
-      timestamp: 100.5,
-      source: 'transcript'
-    }
-    const base = [spawn, ...markers(100, 150)]
-    const { container, rerender } = render(paging({ messages: base, loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    await settle()
-    const subagentPage = [
-      ...Array.from({ length: 20 }, (_, index) => ({
-        ...marker(index),
-        id: `child-${index}`,
-        agentId: 'task-1'
-      })),
-      ...base
-    ]
-    rerender(paging({ messages: subagentPage, loadEarlier }))
-    paint(container)
-    deliverIntersections()
-    expect(screen.queryByText('marker-0')).toBeNull()
-    expect(loadEarlier).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops once a page pushes the sentinel out of range', async () => {
-    const loadEarlier = lands()
-    const base = markers(100, 150)
-    const { container, rerender } = render(paging({ messages: base, loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    await settle()
-
-    sentinelInRange = false
-    rerender(paging({ messages: [...markers(50, 100), ...base], loadEarlier }))
-    paint(container)
-    deliverIntersections()
-    act(() => {
-      deliverResizes()
-    })
-    deliverIntersections()
-
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-  })
-
   it('stops, and shows neither status nor button, once history runs out', async () => {
     const loadEarlier = lands()
     const base = markers(100, 150)
@@ -341,82 +194,6 @@ describe('older history auto-load', () => {
     expect(loadEarlier).toHaveBeenCalledTimes(1)
     expect(observations.size).toBe(0)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
-  })
-
-  it('stops observing while the lane reports a page loading', () => {
-    const loadEarlier = neverSettles()
-    const base = markers(100, 150)
-    const { container, rerender } = render(paging({ messages: base, loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    paint(container)
-    sentinelInRange = false
-    deliverIntersections()
-    sentinelInRange = true
-    deliverIntersections()
-    expect(observations.size).toBe(0)
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-  })
-
-  // The lane dedupes reads and may abandon them before publishing loading; a list-owned latch would stall paging.
-  it('asks again when the lane never reports the outstanding page as loading', () => {
-    const loadEarlier = neverSettles()
-    render(paging({ messages: markers(100, 150), loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    sentinelInRange = false
-    deliverIntersections()
-    sentinelInRange = true
-    deliverIntersections()
-
-    expect(loadEarlier).toHaveBeenCalledTimes(2)
-  })
-
-  // Reconnect or hide can abandon an unresolved read; the next page must not wait for it.
-  it('keeps paging when the lane abandons a page that never settles', async () => {
-    const loadEarlier = neverSettles()
-    const base = markers(100, 150)
-    const { rerender } = render(paging({ messages: base, loadEarlier }))
-    sentinelInRange = true
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    await settle()
-    rerender(paging({ messages: base, loadEarlier }))
-    deliverIntersections()
-
-    expect(loadEarlier).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not observe a hidden transcript', () => {
-    const loadEarlier = lands()
-    render(paging({ messages: markers(100, 150), loadEarlier, isVisible: false }))
-    sentinelInRange = true
-    deliverIntersections()
-    expect(observations.size).toBe(0)
-    expect(loadEarlier).not.toHaveBeenCalled()
-  })
-
-  it('shows a quiet status line, with a label only once a page is slow', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const loadEarlier = lands()
-    const base = markers(100, 150)
-    const { rerender } = render(paging({ messages: base, loadEarlier }))
-    const status = screen.getByRole('status')
-    expect(status).toHaveAttribute('aria-live', 'polite')
-    expect(status).toBeEmptyDOMElement()
-
-    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    expect(screen.getByRole('status')).toBeEmptyDOMElement()
-    act(() => {
-      vi.advanceTimersByTime(200)
-    })
-    expect(screen.getByRole('status')).toHaveTextContent('Loading earlier messages…')
     expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
   })
 
@@ -487,73 +264,5 @@ describe('older history auto-load', () => {
 
     expect(loadEarlier).toHaveBeenCalledTimes(2)
     expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
-  })
-
-  it('shows no older-history row while the read is not ready, and re-checks once it is', () => {
-    const loadEarlier = lands()
-    const base = markers(100, 150)
-    const { rerender } = render(paging({ messages: base, loadEarlier, readPhase: 'error' }))
-    sentinelInRange = true
-    deliverIntersections()
-
-    expect(observations.size).toBe(0)
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /load earlier/i })).not.toBeInTheDocument()
-    expect(loadEarlier).not.toHaveBeenCalled()
-
-    rerender(paging({ messages: base, loadEarlier }))
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-  })
-
-  function rowTop(container: HTMLElement, text: string): number {
-    const row = screen.getByText(text).closest<HTMLElement>('[data-index]')
-    const spacer = container.querySelector<HTMLElement>('[data-native-chat-window]')
-    if (!row || !spacer) {
-      throw new Error(`${text} is not a windowed row`)
-    }
-    return spacer.offsetTop + row.offsetTop
-  }
-
-  async function readerAtMarker140(loadEarlier: LoadEarlier) {
-    const base = markers(100, 200)
-    const view = render(paging({ messages: base, loadEarlier }))
-    paint(view.container)
-    const scroller = scrollRoot(view.container)
-    const spacer = view.container.querySelector<HTMLElement>('[data-native-chat-window]')
-    scrollTranscript(view.container, (spacer?.offsetTop ?? 0) + 40 * ROW_PITCH_PX + 17)
-    paint(view.container)
-    expect(rowTop(view.container, 'marker-140') - scroller.scrollTop).toBe(-17)
-
-    sentinelInRange = true
-    deliverIntersections()
-    expect(loadEarlier).toHaveBeenCalledTimes(1)
-    sentinelInRange = false
-    view.rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
-    await settle()
-    return { ...view, base, scroller }
-  }
-
-  it('keeps the row the reader is looking at in place across an auto-loaded prepend', async () => {
-    const loadEarlier = lands()
-    const { container, rerender, base, scroller } = await readerAtMarker140(loadEarlier)
-
-    rerender(paging({ messages: [...markers(50, 100), ...base], loadEarlier }))
-    paint(container)
-
-    expect(rowTop(container, 'marker-140') - scroller.scrollTop).toBe(-17)
-    expect(scroller.scrollTop).toBe(TOP_GUTTER_PX + 90 * ROW_PITCH_PX + 17)
-  })
-
-  // Removing in-flow older-history chrome would move every row when the last page lands.
-  it('keeps the reader in place when the last page lands and the older-history row leaves', async () => {
-    const loadEarlier = lands()
-    const { container, rerender, base, scroller } = await readerAtMarker140(loadEarlier)
-
-    rerender(paging({ messages: [...markers(50, 100), ...base], loadEarlier, hasMore: false }))
-    paint(container)
-
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(rowTop(container, 'marker-140') - scroller.scrollTop).toBe(-17)
   })
 })

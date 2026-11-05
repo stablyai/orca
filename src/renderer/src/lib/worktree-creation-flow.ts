@@ -158,6 +158,13 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   if (!entry) {
     return
   }
+  if (entry.chatInputHandedOff && entry.worktreeId) {
+    store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    void retryCreatedWorktreeChat(creationId, entry.worktreeId, entry.request)
+    return
+  }
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
     loaderVisible: true,
@@ -173,4 +180,36 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
   startWorktreeCreation(creationId, entry.request)
+}
+
+async function retryCreatedWorktreeChat(
+  creationId: string,
+  worktreeId: string,
+  request: WorktreeCreationRequest
+): Promise<void> {
+  const { launchStructuredWorktreeSession } = await import('./worktree-creation-structured-session')
+  const result = await launchStructuredWorktreeSession({
+    creationId,
+    worktreeId,
+    request,
+    agentLaunchRoute: 'structured-native-chat',
+    shouldActivateOnCompletion: true,
+    activation: false,
+    primaryTabId: null
+  })
+  if (result.cancelled || result.retainedInput) {
+    return
+  }
+  const { completeWorktreeCreation } = await import('./worktree-creation-completion')
+  await completeWorktreeCreation({
+    creationId,
+    worktreeId,
+    request,
+    structuredLaunchAccepted: true,
+    activation: result.activation,
+    primaryTabId: result.primaryTabId,
+    backendSpawned: false,
+    hostPlannedStartup: false,
+    focusOnCompletion: false
+  })
 }

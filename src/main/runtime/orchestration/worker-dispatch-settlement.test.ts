@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { settleActiveDispatchesForTask } from './db/dispatch-context/dispatch-completion'
-import { mintStructuredWorkerHandle } from '../structured-worker-identity'
+import { mintStructuredWorkerHandle } from './terminal-authority/structured-sessions/structured-worker-identity'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 
 describe('settled assignment worker recovery', () => {

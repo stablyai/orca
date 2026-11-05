@@ -6,7 +6,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 export function registerHeadlessCloseKeepsPublicationEpochTests(): void {
   /** Closing is not publisher handover: retain the stored epoch.

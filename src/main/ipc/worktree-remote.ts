@@ -1,5 +1,5 @@
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
-import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
+import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
 import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'

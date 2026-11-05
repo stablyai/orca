@@ -105,7 +105,10 @@ jobs:
           fi
           node --input-type=module <<'NODE'
           import { appendFileSync, existsSync } from 'node:fs'
-          const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
+          const canonicalModulePath = './config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs'
+          const modulePath = existsSync(canonicalModulePath)
+            ? canonicalModulePath
+            : './config/scripts/ci-e2e-job-selection.mjs'
           const selection = existsSync(modulePath) ? await import(modulePath) : {}
           const shards = selection.generalE2eShards?.(process.env.TEST_FILES_JSON) ?? ['1/1']
           appendFileSync(process.env.GITHUB_OUTPUT, `shards=${JSON.stringify(shards)}\n`)
@@ -298,12 +301,16 @@ jobs:
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           ORCA_E2E_WEB_CLIENT: '1'
         run: |
+          E2E_SHARD_PLAN_SCRIPT=config/scripts/ci/e2e-selection/ci-e2e-shard-plan.mjs
+          if [ ! -f "$E2E_SHARD_PLAN_SCRIPT" ]; then
+            E2E_SHARD_PLAN_SCRIPT=config/scripts/ci-e2e-shard-plan.mjs
+          fi
           mkdir -p ci-shards
           pnpm exec playwright test --config tests/playwright.config.ts --project=electron-headless --list --reporter=json > ci-shards/discovery.json
           export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
-          node config/scripts/ci-e2e-shard-plan.mjs ci-shards/discovery.json '${{ matrix.shard }}' ci-shards
+          node "$E2E_SHARD_PLAN_SCRIPT" ci-shards/discovery.json '${{ matrix.shard }}' ci-shards
           pnpm exec playwright test --config tests/playwright.config.ts --project=electron-headless --test-list=ci-shards/selected.txt --list --reporter=json > ci-shards/selected-discovery.json
-          node config/scripts/ci-e2e-shard-plan.mjs --verify ci-shards/assignment.json ci-shards/selected-discovery.json
+          node "$E2E_SHARD_PLAN_SCRIPT" --verify ci-shards/assignment.json ci-shards/selected-discovery.json
 
       - name: Run E2E tests (${{ matrix.shard_name }})
         env:
@@ -313,7 +320,12 @@ jobs:
       - name: Summarize E2E failures
         if: always()
         continue-on-error: true
-        run: node config/scripts/ci-e2e-failure-summary.mjs ci-shards/results.json
+        run: |
+          E2E_FAILURE_SUMMARY_SCRIPT=config/scripts/ci/e2e-failures/ci-e2e-failure-summary.mjs
+          if [ ! -f "$E2E_FAILURE_SUMMARY_SCRIPT" ]; then
+            E2E_FAILURE_SUMMARY_SCRIPT=config/scripts/ci-e2e-failure-summary.mjs
+          fi
+          node "$E2E_FAILURE_SUMMARY_SCRIPT" ci-shards/results.json
 
       - name: Upload E2E shard assignment
         if: always()
@@ -380,8 +392,16 @@ jobs:
           SHARD: ${{ matrix.shard }}
           TEST_LEVEL_SHARDS: ${{ inputs.changed_e2e_test_shards != '' }}
         run: |
-          if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
-            printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
+          E2E_SELECTION_SCRIPT=config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs
+          if [ ! -f "$E2E_SELECTION_SCRIPT" ]; then
+            E2E_SELECTION_SCRIPT=config/scripts/ci-e2e-job-selection.mjs
+          fi
+          E2E_SHARD_PLAN_SCRIPT=config/scripts/ci/e2e-selection/ci-e2e-shard-plan.mjs
+          if [ ! -f "$E2E_SHARD_PLAN_SCRIPT" ]; then
+            E2E_SHARD_PLAN_SCRIPT=config/scripts/ci-e2e-shard-plan.mjs
+          fi
+          if [ -f "$E2E_SELECTION_SCRIPT" ]; then
+            printf '%s\n' "$TEST_FILES_JSON" | node "$E2E_SELECTION_SCRIPT" > "$RUNNER_TEMP/general-e2e-specs"
           else
             # Dispatching an older ref retains its existing dedicated-owner exclusions.
             jq -r '.[] | select(
@@ -418,13 +438,13 @@ jobs:
           if [ "$TEST_LEVEL_SHARDS" = true ]; then
             mkdir -p ci-shards-changed
             pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --shard="$SHARD" --list --reporter=json > ci-shards-changed/selected-discovery.json
-          elif [ -f config/scripts/ci-e2e-shard-plan.mjs ]; then
+          elif [ -f "$E2E_SHARD_PLAN_SCRIPT" ]; then
             mkdir -p ci-shards-changed
             pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --list --reporter=json > ci-shards-changed/discovery.json
             export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
-            node config/scripts/ci-e2e-shard-plan.mjs ci-shards-changed/discovery.json "$SHARD" ci-shards-changed
+            node "$E2E_SHARD_PLAN_SCRIPT" ci-shards-changed/discovery.json "$SHARD" ci-shards-changed
             pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --test-list=ci-shards-changed/selected.txt --list --reporter=json > ci-shards-changed/selected-discovery.json
-            node config/scripts/ci-e2e-shard-plan.mjs --verify ci-shards-changed/assignment.json ci-shards-changed/selected-discovery.json
+            node "$E2E_SHARD_PLAN_SCRIPT" --verify ci-shards-changed/assignment.json ci-shards-changed/selected-discovery.json
             E2E_SELECTION_ARGS=(--test-list=ci-shards-changed/selected.txt)
           fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
@@ -448,9 +468,13 @@ jobs:
           shopt -s nullglob
           runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
           for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
-            node config/scripts/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            node config/scripts/diagnostics/layout-save/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
             if [ -f "$run-results.json" ]; then
-              node config/scripts/ci-e2e-failure-summary.mjs "$run-results.json"
+              E2E_FAILURE_SUMMARY_SCRIPT=config/scripts/ci/e2e-failures/ci-e2e-failure-summary.mjs
+              if [ ! -f "$E2E_FAILURE_SUMMARY_SCRIPT" ]; then
+                E2E_FAILURE_SUMMARY_SCRIPT=config/scripts/ci-e2e-failure-summary.mjs
+              fi
+              node "$E2E_FAILURE_SUMMARY_SCRIPT" "$run-results.json"
             fi
           done
 
@@ -524,19 +548,19 @@ jobs:
         env:
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
-          slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          slot="$(node "$(if [ -f config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs; else printf %s config/scripts/build-orcad-prebuilds.mjs; fi)" --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
           # The orcad host and its materialized template must use the Electron host’s layout owner.
           if [ -n "$LAYOUT_OWNER" ]; then
             export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
             pnpm build:orcad
-            node config/scripts/build-orcad-template.mjs --targets "$slot" --dark-test-template
+            node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets "$slot" --dark-test-template
             test -f out/orcad/ORCA_LAYOUT_OWNER_MAIN
             test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
           else
             pnpm build:orcad
-            node config/scripts/build-orcad-template.mjs --targets "$slot"
+            node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets "$slot"
           fi
       - name: Switch serve hosts on one profile
         if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
@@ -634,10 +658,10 @@ jobs:
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
           if [ -n "$LAYOUT_OWNER" ]; then
-            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc --dark-test-template
+            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-x64-glibc --dark-test-template
             test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
           else
-            node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+            node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-x64-glibc
           fi
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
       # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
@@ -654,7 +678,10 @@ jobs:
         run: |
           node --input-type=module <<'NODE' > "$RUNNER_TEMP/managed-ssh-specs"
           import { existsSync } from 'node:fs'
-          const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
+          const canonicalModulePath = './config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs'
+          const modulePath = existsSync(canonicalModulePath)
+            ? canonicalModulePath
+            : './config/scripts/ci-e2e-job-selection.mjs'
           const selection = existsSync(modulePath) ? await import(modulePath) : {}
           // Older checkout refs retain their full-suite behavior.
           const specs = selection.selectManagedSshE2eSpecs
@@ -732,8 +759,8 @@ jobs:
           pnpm exec electron-vite build --mode e2e
           pnpm run build:cli
           pnpm build:orcad
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
-          node config/scripts/build-orcad-template.mjs --targets win32-x64
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-process-tree-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-process-tree-addon.mjs; else printf %s config/scripts/build-windows-process-tree-addon.mjs; fi)" --arch=x64 --reuse-prepared-runtime
+          node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets win32-x64
       # A profile-less Windows session has no roaming AppData; Electron 43 used to crash natively there.
       - name: Start serve with no AppData folder
         if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts')

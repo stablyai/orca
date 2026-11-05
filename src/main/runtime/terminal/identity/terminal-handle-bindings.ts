@@ -4,7 +4,7 @@ import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TerminalHandleAccess } from '../../runtime-agent-sender-associations'

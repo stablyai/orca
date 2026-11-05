@@ -35,6 +35,9 @@ const mocks = vi.hoisted(() => ({
   pick: vi.fn(),
   handlers: new Map<string, (event: { sender: unknown }, args: unknown) => unknown>()
 }))
+vi.mock('../../ipc/browser/browser-passwords-ipc', () => ({
+  registerBrowserPasswordsHandlers: vi.fn()
+}))
 vi.mock('electron', () => ({
   app: { getPath: () => mocks.root },
   BrowserWindow: { fromWebContents: () => null },
@@ -191,7 +194,7 @@ beforeEach(() => {
     }
   })
   setTrustedBrowserRendererWebContentsId(91)
-  registerBrowserHandlers()
+  registerBrowserHandlers({ getSettings: vi.fn() })
 })
 afterEach(() => {
   replaceRuntimeEnvironmentRevisions([])
@@ -319,8 +322,8 @@ it.each(['between selectors', 'queued profile'])(
   }
 )
 
-import { browserProfileRpcFixture } from '../../runtime/browser/browser-profile-rpc-test-fixture'
-import { RuntimeBrowserProfiles } from '../../runtime/browser/browser-profiles'
+import { browserProfileRpcFixture } from '../../runtime/browser/commands/browser-profile-rpc-test-fixture'
+import { RuntimeBrowserProfiles } from '../../runtime/browser/commands/browser-profiles'
 it('validates required executor params at the dispatcher before owner entry', async () => {
   const clear = vi.spyOn(RuntimeBrowserProfiles.prototype, 'browserProfileClearGoogleCookies')
   const { dispatcher } = browserProfileRpcFixture('S1')

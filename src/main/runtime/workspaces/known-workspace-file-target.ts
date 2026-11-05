@@ -1,6 +1,6 @@
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
-import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
+import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle } from '../terminal/identity/terminal-handle-bindings'
@@ -11,13 +11,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
+import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace-file-owner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import { forgetPtySurface } from '../pty-recorded-surface-topology'
+import { forgetPtySurface } from '../terminal/surface/pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
   protected abstract deliverPendingMessagesForPty(ptyId: string): void

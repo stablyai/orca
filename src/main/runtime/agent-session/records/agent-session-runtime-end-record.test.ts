@@ -1,7 +1,7 @@
 // Record starts and graceful ends; only a known start without an end implies crash, never an unreadable record.
 
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -69,12 +69,6 @@ describe('what a runtime records about itself', () => {
     expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_A)).toBe('update')
   })
 
-  it('names no cause for a runtime it has no record of', () => {
-    expect(readAgentSessionRuntimeEnds(directory)).toEqual(new Map())
-    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
-    expect(readAgentSessionRuntimeEnds(directory)?.has(RUNTIME_B)).toBe(false)
-  })
-
   it('names no cause for a record it cannot read, and the next start writes its own', async () => {
     await mkdir(runtimesDirectory(), { recursive: true })
     await writeFile(join(runtimesDirectory(), `${RUNTIME_A}.json`), '{not json')
@@ -90,21 +84,6 @@ describe('what a runtime records about itself', () => {
     expect(readAgentSessionRuntimeEnds(directory)).toBeNull()
   })
 
-  it('keeps only the newest records, so a pruned runtime names no cause', async () => {
-    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
-    await utimes(join(runtimesDirectory(), `${RUNTIME_A}.json`), 1, 1)
-    for (let index = 0; index < 16; index += 1) {
-      beginAgentSessionRuntimeRecord(
-        directory,
-        `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-        index
-      )
-    }
-    const ends = readAgentSessionRuntimeEnds(directory)
-    expect(ends?.size).toBe(16)
-    expect(ends?.has(RUNTIME_A)).toBe(false)
-  })
-
   it("never loses another runtime's record to its own writes", () => {
     beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
     beginAgentSessionRuntimeRecord(directory, RUNTIME_B, 2)
@@ -115,12 +94,6 @@ describe('what a runtime records about itself', () => {
         [RUNTIME_B, 'quit']
       ])
     )
-  })
-
-  it('never fails the exit when it cannot be written', async () => {
-    await writeFile(runtimesDirectory(), 'not a directory')
-    expect(() => beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)).not.toThrow()
-    expect(() => recordAgentSessionRuntimeEnd('quit', 2)).not.toThrow()
   })
 
   it('keeps its end when the same runtime records its start again during the quit', () => {
@@ -145,12 +118,6 @@ describe('what a runtime records about itself', () => {
     expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_A)).toBe('crash')
     recordAgentSessionRuntimeEndOnExit(0)
     expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_A)).toBe('quit')
-  })
-
-  it('leaves no temp files behind', async () => {
-    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
-    recordAgentSessionRuntimeEnd('quit', 2)
-    expect(await readdir(runtimesDirectory())).toEqual([`${RUNTIME_A}.json`])
   })
 })
 

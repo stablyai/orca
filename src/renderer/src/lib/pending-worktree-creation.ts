@@ -22,6 +22,8 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { AgentJournalSkillRef } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
 export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
@@ -144,6 +146,8 @@ export type PendingWorktreeCreation = {
   phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
   /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
   heldChatMessage?: string
+  heldChatAttachments?: readonly NativeChatComposerDraftImage[]
+  heldChatSkills?: readonly AgentJournalSkillRef[]
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
   request: WorktreeCreationRequest
@@ -164,7 +168,7 @@ export function pendingCreationChatDraftScopeKey(creationId: string): string {
 export function pendingCreationHeldChatMessage(
   entry: Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
 ): string | null {
-  if (entry.heldChatMessage) {
+  if (entry.heldChatMessage !== undefined) {
     return entry.heldChatMessage
   }
   const { quickPrompt, promptDelivery } = entry.request

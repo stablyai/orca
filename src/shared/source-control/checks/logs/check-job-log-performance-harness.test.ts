@@ -4,13 +4,13 @@ import {
   auditResults,
   prepareBenchmark,
   runDescriptor
-} from '../../../../../config/scripts/check-job-log-byte-cap-benchmark.mjs'
+} from '../../../../../config/scripts/performance/check-job-log/check-job-log-byte-cap-benchmark.mjs'
 import {
   BASELINE_REF,
   createManifest,
   selectRequiredDescriptors
-} from '../../../../../config/scripts/check-job-log-performance-cases.mjs'
-import { adverseCaseKey } from '../../../../../config/scripts/check-job-log-watchdog-protocol.mjs'
+} from '../../../../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
+import { adverseCaseKey } from '../../../../../config/scripts/performance/check-job-log/check-job-log-watchdog-protocol.mjs'
 
 const launcher = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: launcher }))

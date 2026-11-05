@@ -17,7 +17,16 @@ export function buildWindowsNativeHookExecutable(): string {
   if (!built) {
     const result = runProcessSync({
       program: process.execPath,
-      args: [join(REPO_ROOT, 'config', 'scripts', 'build-windows-agent-hook.mjs')],
+      args: [
+        join(
+          REPO_ROOT,
+          'config',
+          'scripts',
+          'native-build',
+          'windows',
+          'build-windows-agent-hook.mjs'
+        )
+      ],
       cwd: REPO_ROOT,
       timeoutMs: 300_000
     })

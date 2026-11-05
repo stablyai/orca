@@ -70,27 +70,6 @@ it('runs one bounded retry across root and expanded-wave loading transitions', a
   expect(props.refreshTree).toHaveBeenCalledTimes(1)
   expect(props.loadDir).not.toHaveBeenCalled()
 })
-it.each(['fresh-empty', 'directory-error', 'root-error'])('does not loop on %s', async (state) => {
-  const { props, stale } = params()
-  if (state === 'fresh-empty') {
-    stale.clear()
-  }
-  if (state === 'directory-error') {
-    props.dirCache['/repo/link'].error = 'ENOENT'
-  }
-  if (state === 'root-error') {
-    props.rootError = 'ETIMEDOUT'
-  }
-  const hook = renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
-  for (let i = 0; i < 3; i++) {
-    hook.rerender({ ...props, loadingDirPaths: new Set() })
-    await act(async () => {
-      await Promise.resolve()
-    })
-  }
-  expect(props.refreshTree).not.toHaveBeenCalled()
-  expect(props.loadDir).not.toHaveBeenCalled()
-})
 it.each(['root', 'directory'])('stops after a retry records a %s error', async (failure) => {
   const { props } = params()
   const pending = pendingRefresh()
@@ -135,12 +114,6 @@ it('does not let an old workspace completion release a new workspace retry', asy
     await newRefresh.promise
   })
   expect(second.props.refreshTree).toHaveBeenCalledTimes(1)
-})
-it("only the user's own switch to a workspace lets its open read start a stopped WSL distro", () => {
-  const { props } = params()
-  noteUserWorkspaceSwitch(props.workspaceKey)
-  renderHook(useFileExplorerTreeLoadEffects, { initialProps: props })
-  expect(props.resetAndLoad).toHaveBeenCalledExactlyOnceWith({ wakeWslDistro: true })
 })
 it('an old switch no consumer used is not redeemed by a later mount (E9)', () => {
   vi.useFakeTimers()

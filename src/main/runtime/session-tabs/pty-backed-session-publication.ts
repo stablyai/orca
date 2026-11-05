@@ -1,8 +1,8 @@
 import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../session-lifecycle/close/has-live-or-persisted-serve-or-ssh-owned-pty-binding'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../shared/agent-status/title/agent-title-owner'
-import { getLatestPtyTitle } from '../runtime-worktree-status-projection'
+import { getLatestPtyTitle } from '../workspaces/process-listing/runtime-worktree-status-projection'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../terminal/query/pty-terminal-summary'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -11,7 +11,7 @@ import type {
 import {
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
-} from '../mobile-session-layout-projection'
+} from '../terminal/surface/mobile-session-layout-projection'
 import {
   appendChatTabOrder,
   mergeMobileSessionSnapshotTabs,
