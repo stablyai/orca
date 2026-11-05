@@ -1,14 +1,14 @@
 import { GitBranch } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatForkSurface } from './use-native-chat-fork'
+import type { NativeChatForkRowAction } from './use-native-chat-fork'
 
 export function NativeChatForkAction({
   itemId,
   fork
 }: {
   itemId: string
-  fork: NativeChatForkSurface
+  fork: NativeChatForkRowAction
 }) {
   const label = translate('components.native-chat.fork.action', 'Fork from this response')
   // Drawn while support is still being learned, so the row does not shift when it lands.

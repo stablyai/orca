@@ -19,13 +19,19 @@ import {
 } from '../../../../shared/native-chat/native-chat-fork-offer'
 import { launchNativeChatFork, nativeChatForkSurfaceAddress } from './native-chat-fork-launch'
 
-export type NativeChatForkSurface = {
+/** What an offered row's button needs; the same object while support and pending hold. */
+export type NativeChatForkRowAction = {
   support: Exclude<NativeChatForkSupport, { kind: 'none' }>
-  contextFloorSequence: number
-  forkableItemIds: ReadonlySet<string>
   /** A fork is opening; every fork action in the chat waits for it. */
   pending: boolean
   request: (throughItemId: string) => void
+}
+
+export type NativeChatForkSurface = NativeChatForkRowAction & {
+  contextFloorSequence: number
+  forkableItemIds: ReadonlySet<string>
+  /** Handed to offered rows, so a change in which rows offer it re-renders only those rows. */
+  rowAction: NativeChatForkRowAction
 }
 
 /** The chat's "Fork from this response"; undefined where its agent or host can't fork. */
@@ -76,29 +82,34 @@ export function useNativeChatFork(input: {
     latestAgentSessionContextClearSequence(input.items),
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)
   )
-  const forkableItemIds = useMemo(() => nativeChatForkableItemIds(input.items), [input.items])
+  // Streaming replaces the items array on every commit; keep the set while its members hold, so the
+  // context and every offered row's `fork` stay the same objects.
+  const forkableRef = useRef<ReadonlySet<string>>(new Set())
+  const forkableItemIds = useMemo(() => {
+    const next = nativeChatForkableItemIds(input.items)
+    const previous = forkableRef.current
+    return next.size === previous.size && [...next].every((id) => previous.has(id))
+      ? previous
+      : next
+  }, [input.items])
+  useLayoutEffect(() => {
+    forkableRef.current = forkableItemIds
+  }, [forkableItemIds])
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
+  const rowAction = useMemo<NativeChatForkRowAction>(
+    () => ({
+      support: fork ? { kind: 'known', fork } : { kind: 'unknown' },
+      pending,
+      request
+    }),
+    [fork, pending, request]
+  )
   return useMemo(
     () =>
       supportKind === 'none' || !input.worktreeId || !isTuiAgent(input.agent)
         ? undefined
-        : {
-            support: fork ? { kind: 'known' as const, fork } : { kind: 'unknown' as const },
-            contextFloorSequence,
-            forkableItemIds,
-            pending,
-            request
-          },
-    [
-      contextFloorSequence,
-      fork,
-      forkableItemIds,
-      input.agent,
-      input.worktreeId,
-      pending,
-      request,
-      supportKind
-    ]
+        : { ...rowAction, contextFloorSequence, forkableItemIds, rowAction },
+    [contextFloorSequence, forkableItemIds, input.agent, input.worktreeId, rowAction, supportKind]
   )
 }

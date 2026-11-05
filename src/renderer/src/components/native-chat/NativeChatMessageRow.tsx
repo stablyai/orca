@@ -1,6 +1,6 @@
 import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import type { NativeChatForkSurface } from './use-native-chat-fork'
+import type { NativeChatForkRowAction } from './use-native-chat-fork'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
@@ -71,7 +71,7 @@ export type MessageRowProps = {
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
   /** On a finished response of the chat's own agent: forks the chat through its turn. */
-  fork?: NativeChatForkSurface
+  fork?: NativeChatForkRowAction
   /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
 }

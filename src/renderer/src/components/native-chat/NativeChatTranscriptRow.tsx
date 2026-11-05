@@ -153,7 +153,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               },
               fork
             )
-              ? fork
+              ? fork.rowAction
               : undefined
           }
           workRun={workRun}

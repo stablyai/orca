@@ -5,7 +5,7 @@ import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MessageRow, type MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatForkGutterContext } from './native-chat-fork-context'
-import type { NativeChatForkSurface } from './use-native-chat-fork'
+import type { NativeChatForkRowAction } from './use-native-chat-fork'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
@@ -14,10 +14,8 @@ vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
 
 afterEach(cleanup)
 
-const fork: NativeChatForkSurface = {
+const fork: NativeChatForkRowAction = {
   support: { kind: 'known', fork: 'checkpoint' },
-  contextFloorSequence: 0,
-  forkableItemIds: new Set(['reply']),
   pending: false,
   request: vi.fn()
 }
