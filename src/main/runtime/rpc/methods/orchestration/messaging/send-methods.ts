@@ -123,6 +123,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         })
       }
 
+      refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
@@ -134,9 +135,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         type: params.type
       })
       const finished = runGroup ? undefined : finishedWorkerSend(db, sender, routing, params)
-      if (finished) {
-        ;({ params, routing } = finished)
-      }
+      ;({ params, routing } = finished ?? { params, routing })
       if (
         params.type === 'worker_done' &&
         !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
@@ -166,7 +165,6 @@ export const ORCHESTRATION_SEND_METHODS = [
         to = reporting ? dispatchReportMailbox(db, reporting) : `run:${routing.run.id}`
       }
       if (!to) {
-        refuseFinishedRemoteWorker(db, senderPaneKey)
         throw new OrchestrationError(
           'run_required',
           'No recipient or active Dispatch Run could be resolved. No effects were applied.',
@@ -284,14 +282,15 @@ export const ORCHESTRATION_SEND_METHODS = [
           revalidateLegacyCoordinator,
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,
-          withSendWarnings
+          withSendWarnings: (sent) =>
+            finished?.receipt(withSendWarnings(sent)) ?? withSendWarnings(sent)
         })
         followThroughWorkerReport(
           runtime,
           db,
           params.type === 'worker_done' ? settledDispatchId(sent) : undefined
         )
-        return finished?.receipt(sent) ?? sent
+        return sent
       }
       return sendGroupMessage({
         params,

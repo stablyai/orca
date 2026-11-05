@@ -3,7 +3,7 @@ import type { OrchestrationCallerIdentity } from '../../../../orchestration/orch
 import type { DispatchContextRow } from '../../../../orchestration/types'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/worker-report-admission'
-import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
+import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isDispatchMutationMessageType } from '../schemas'
 import type { MessageRouting } from '../routing'
@@ -22,12 +22,12 @@ export function finishedWorkerDispatch(
   }
   const dispatch = routing.dispatchId
     ? routing.dispatch
-    : db.getLatestDispatchForIdentity(sender.address, sender.paneKey ?? undefined)
+    : db.getLatestDispatchForTerminal(sender.address, sender.paneKey ?? undefined)
   if (
     !dispatch ||
     dispatch.status === 'pending' ||
     dispatch.status === 'dispatched' ||
-    !wasAssignedTo(dispatch, sender) ||
+    !isDispatchAssignee(dispatch, sender.address, sender.paneKey) ||
     db.getFederatedDispatch(dispatch.id)
   ) {
     return undefined
@@ -36,30 +36,15 @@ export function finishedWorkerDispatch(
   return task && reportCorrectsUnobservedPrompt(dispatch, task) ? undefined : dispatch
 }
 
-// The sender test of isDispatchMessageSender, for a Dispatch that has settled.
-function wasAssignedTo(
-  dispatch: DispatchContextRow,
-  sender: Pick<OrchestrationCallerIdentity, 'address' | 'paneKey'>
-): boolean {
-  if (
-    sender.paneKey &&
-    dispatch.assignee_pane_key &&
-    isEquivalentPaneKey(dispatch.assignee_pane_key, sender.paneKey)
-  ) {
-    return true
-  }
-  return (
-    sender.address === dispatch.assignee_handle && (!sender.paneKey || !dispatch.assignee_pane_key)
-  )
-}
-
 /** Mail from a finished worker is ordinary mail to its coordinator, so no report or escalation reopens the Task. */
 export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   db: OrchestrationDb,
   sender: Pick<OrchestrationCallerIdentity, 'address' | 'paneKey'>,
   routing: MessageRouting,
   params: P
-): { params: P; routing: MessageRouting; receipt: (sent: unknown) => unknown } | undefined {
+):
+  | { params: P; routing: MessageRouting; receipt: <T extends object>(receipt: T) => T }
+  | undefined {
   const finished = finishedWorkerDispatch(db, sender, routing, params.type)
   if (!finished) {
     return undefined
@@ -73,24 +58,28 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
     },
     routing: { run: db.getRun(finished.run_id), dispatchId: undefined, dispatch: undefined },
     // Older CLIs confirm a worker_done only by a verdict; the Task's recorded one stands.
-    receipt: (sent) =>
-      params.type === 'worker_done' && sent && typeof sent === 'object'
+    receipt: (receipt) =>
+      params.type === 'worker_done'
         ? {
-            ...sent,
+            ...receipt,
             lifecycle: {
               action: 'settled',
               outcome: finished.status === 'completed' ? 'succeeded' : 'failed'
             },
             next: 'Delivered to your coordinator as a message; your finished task is unchanged. End your turn.'
           }
-        : sent
+        : receipt
   }
 }
 
 /** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
-export function refuseFinishedRemoteWorker(db: OrchestrationDb, paneKey: string | undefined): void {
+export function refuseFinishedRemoteWorker(
+  db: OrchestrationDb,
+  paneKey: string | undefined,
+  to: string | undefined
+): void {
   const attachment = paneKey ? db.findLatestRemoteAttachmentForPane(paneKey) : undefined
-  if (attachment) {
+  if (attachment && (!to || to === `dispatch:${attachment.dispatch_id}`)) {
     throw new OrchestrationError(
       'run_home_unreachable',
       `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`

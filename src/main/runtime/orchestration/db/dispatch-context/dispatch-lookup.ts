@@ -1,4 +1,5 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { DispatchContextRow } from '../../types'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
@@ -7,11 +8,27 @@ import {
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
-import { findDispatchForAssignee, LATEST_DISPATCH_BY_HANDLE_SQL } from './dispatch-assignee-lookup'
 import {
   activeDispatchMailboxBranch,
   equivalentDispatchMailboxOwners
 } from '../dispatch-mailbox-selection'
+
+// Hoist explicit projections so graph-publish queries hit the statement cache; newest first, since
+// one handle can hold several active Dispatches.
+const assigneeSql = (where: string, status: string) =>
+  `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+       WHERE ${where} ${status} ORDER BY rowid DESC LIMIT 1`
+const BY_PANE_SUFFIX = `assignee_pane_key IS NOT NULL AND instr(assignee_pane_key, ':') > 1
+         AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
+const assigneeLookups = (status: string) => ({
+  byHandle: assigneeSql('assignee_handle = ?', status),
+  byPaneKey: assigneeSql('assignee_pane_key = ?', status),
+  byPaneSuffix: assigneeSql(BY_PANE_SUFFIX, status)
+})
+const ASSIGNEE_SQL = {
+  active: assigneeLookups("AND status IN ('pending', 'dispatched')"),
+  latest: assigneeLookups('')
+}
 
 function presentationAddressKey(column: string, address: string | null): string {
   return `${column}:${address}`
@@ -216,16 +233,23 @@ export function isDispatchMessageSender(
   if (params.allowCanonicalDispatchHandle && params.handle === `dispatch:${dispatch.id}`) {
     return true
   }
+  return isDispatchAssignee(dispatch, params.handle, params.paneKey)
+}
+
+/** Whether this handle or pane was given the Dispatch, whatever its status. */
+export function isDispatchAssignee(
+  dispatch: Pick<DispatchContextRow, 'assignee_handle' | 'assignee_pane_key'>,
+  handle: string,
+  paneKey: string | null | undefined
+): boolean {
   if (
-    params.paneKey &&
+    paneKey &&
     dispatch.assignee_pane_key &&
-    isEquivalentPaneKey(dispatch.assignee_pane_key, params.paneKey)
+    isEquivalentPaneKey(dispatch.assignee_pane_key, paneKey)
   ) {
     return true
   }
-  return (
-    params.handle === dispatch.assignee_handle && (!params.paneKey || !dispatch.assignee_pane_key)
-  )
+  return handle === dispatch.assignee_handle && (!paneKey || !dispatch.assignee_pane_key)
 }
 
 export function findActiveDispatchForAssignee(
@@ -236,8 +260,8 @@ export function findActiveDispatchForAssignee(
   return findDispatchForAssignee(this, 'active', assigneeHandle, assigneePaneKey)
 }
 
-/** The newest Dispatch this identity was given, settled or not; a worker that finished still owns it. */
-export function getLatestDispatchForIdentity(
+/** The newest Dispatch, settled or not; with a pane, also after the handle was reminted. */
+export function getLatestDispatchForTerminal(
   this: OrchestrationDb,
   handle: string,
   paneKey?: string
@@ -245,13 +269,25 @@ export function getLatestDispatchForIdentity(
   return findDispatchForAssignee(this, 'latest', handle, paneKey)
 }
 
-export function getLatestDispatchForTerminal(
-  this: OrchestrationDb,
-  handle: string
+function findDispatchForAssignee(
+  db: OrchestrationDb,
+  kind: keyof typeof ASSIGNEE_SQL,
+  handle: string,
+  paneKey: string | undefined
 ): DispatchContextRow | undefined {
-  return this.db.prepare(LATEST_DISPATCH_BY_HANDLE_SQL).get(handle) as
-    | DispatchContextRow
-    | undefined
+  const sql = ASSIGNEE_SQL[kind]
+  const read = (statement: string, value: string) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each statement selects the schema-pinned Dispatch projection.
+    db.db.prepare(statement).get(value) as DispatchContextRow | undefined
+  const byHandle = read(sql.byHandle, handle)
+  if (byHandle || !paneKey) {
+    return byHandle
+  }
+  const exactPane = read(sql.byPaneKey, paneKey)
+  if (exactPane || !parsePaneKey(paneKey)) {
+    return exactPane
+  }
+  return read(sql.byPaneSuffix, paneKeyMatchSuffix(paneKey))
 }
 
 /** Helpers this Dispatch started that have not settled; their reports wake their creator. */
@@ -275,7 +311,6 @@ export type DispatchLookupMethods = {
   findActiveDispatchForAssignee: typeof findActiveDispatchForAssignee
   listSessionDispatchesForPresentation: typeof listSessionDispatchesForPresentation
   getLatestDispatchForTerminal: typeof getLatestDispatchForTerminal
-  getLatestDispatchForIdentity: typeof getLatestDispatchForIdentity
   hasOpenHelperDispatch: typeof hasOpenHelperDispatch
 }
 
@@ -288,7 +323,6 @@ export function attachDispatchLookup(ctor: { prototype: object }): void {
     isDispatchMessageSender,
     findActiveDispatchForAssignee,
     getLatestDispatchForTerminal,
-    getLatestDispatchForIdentity,
     hasOpenHelperDispatch,
     listSessionDispatchesForPresentation
   })

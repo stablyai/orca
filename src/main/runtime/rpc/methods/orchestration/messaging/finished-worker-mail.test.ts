@@ -101,6 +101,7 @@ describe('a worker after its worker_done', () => {
 
     for (const [method, params] of [
       ['orchestration.send', { subject: 'Later' }],
+      ['orchestration.send', { to: 'dispatch:ctx_remote', subject: 'To my own Dispatch' }],
       ['orchestration.ask', { question: 'Anything else?', wait: false }]
     ] as const) {
       await expect(
