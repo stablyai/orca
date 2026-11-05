@@ -103,6 +103,7 @@ describe('Claude model before the first turn', () => {
     const current = async () =>
       (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
     expect((await current()).effort).toBe('medium')
+    expect((await current()).confirmed ?? []).not.toContain('effort')
     const connection = claude.connections[0]!
     connection.getSettings = async () => ({
       effective: { effortLevel: 'high' },
@@ -116,6 +117,7 @@ describe('Claude model before the first turn', () => {
       is_error: false
     })
     await vi.waitFor(async () => expect((await current()).effort).toBe('low'))
+    expect((await current()).confirmed ?? []).not.toContain('effort')
     const started = await claudeOpened(adapter, 'session-1')
     expect(started.reportedOptions).not.toHaveProperty('effort')
     const reported = events.find((event) => event.type === 'options-reported')

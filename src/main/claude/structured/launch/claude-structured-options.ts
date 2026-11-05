@@ -218,18 +218,18 @@ async function confirmClaudeOption(
     return
   }
   observeClaudeSettingsApplied(session, settings)
-  const adopted =
-    input.key === 'fastMode'
-      ? readClaudeSettingsFastMode(settings)
-      : observeClaudeSettingsEffort(session, settings)
-  const decoded =
-    input.key === 'fastMode'
-      ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
-      : input.value
-  if (input.key === 'fastMode' && typeof adopted === 'boolean') {
-    session.reportedOptions.fastMode = adopted
-  }
-  if (adopted !== null && adopted === decoded) {
-    session.confirmedOptions.add(input.key)
+  if (input.key === 'effort') {
+    observeClaudeSettingsEffort(session, settings)
+  } else if (input.key === 'fastMode') {
+    const adopted = readClaudeSettingsFastMode(settings)
+    if (typeof adopted === 'boolean') {
+      session.reportedOptions.fastMode = adopted
+    }
+    if (
+      adopted !== null &&
+      adopted === decodeStructuredAgentSessionOptionValue('fastMode', input.value)
+    ) {
+      session.confirmedOptions.add('fastMode')
+    }
   }
 }

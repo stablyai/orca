@@ -53,6 +53,13 @@ export function observeClaudeSettingsEffort(
   } else if (effort !== undefined) {
     session.reportedOptions.effort = effort
   }
+  const held = session.options.get('effort')
+  // Native defaults stay observations; only a matching held input is corroborated.
+  if (held === undefined || (effort !== undefined && effort !== held)) {
+    session.confirmedOptions.delete('effort')
+  } else if (effort !== undefined) {
+    session.confirmedOptions.add('effort')
+  }
   return effort
 }
 

@@ -26,7 +26,6 @@ import {
 } from './launch/claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
-  claudeObservedEffort,
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
@@ -192,21 +191,9 @@ function applyClaudeSettingsFacts(
     return
   }
   observeClaudeSettingsApplied(session, settings)
-  const effort = observeClaudeSettingsEffort(session, settings)
+  observeClaudeSettingsEffort(session, settings)
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
-  if (effort && agrees('effort', effort)) {
-    session.confirmedOptions.add('effort')
-  }
-  // A launch `--effort` shows only in `applied`, never in `effective` (measured on 2.1.280).
-  const launchedEffort = session.options.get('effort')
-  if (
-    launchedEffort !== undefined &&
-    claudeObservedEffort(session.appliedOptions?.effort, session.appliedOptions?.ultracode) ===
-      launchedEffort
-  ) {
-    session.confirmedOptions.add('effort')
-  }
   if (published.fastMode !== null) {
     session.reportedOptions.fastMode = published.fastMode
     if (agrees('fastMode', String(published.fastMode))) {
