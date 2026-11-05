@@ -62,10 +62,10 @@ describe('migrateNestedWorkerMaxDepthDefault', () => {
 })
 
 describe('depth-exceeded message', () => {
-  it('names both depths, calls out a runaway loop, and says to finish here', () => {
+  it('names the cap and the refused depth, and says to finish here', () => {
     const message = nestedWorkerDepthExceededMessage(5, 4)
-    expect(message).toContain('depth 5 (max 4)')
-    expect(message).toContain('runaway loop of workers starting workers')
+    expect(message).toContain('at most 4 levels deep')
+    expect(message).toContain('(depth 5)')
     expect(message).toContain('Finish this task here')
   })
 })
