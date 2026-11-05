@@ -180,7 +180,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleZcode !== null &&
     statusBarItems.includes('zcode') &&
     (rateLimits.zcodePlanApiKeyConfigured || isStatusBarItemAvailable('zcode', detectedAgentIds))
-  // A saved Ollama cloud key establishes usage independently of CLI detection.
   const showOllama = visibleOllama !== null && statusBarItems.includes('ollama')
   // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
@@ -191,18 +190,19 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
-  const hasVisibleUsageMeters =
-    showClaude ||
-    showCodex ||
-    showGemini ||
-    showOpencodeGo ||
-    showKimi ||
-    showAntigravity ||
-    showMiniMax ||
-    showGrok ||
-    showCursor ||
-    showZcode ||
+  const hasVisibleUsageMeters = [
+    showClaude,
+    showCodex,
+    showGemini,
+    showOpencodeGo,
+    showKimi,
+    showAntigravity,
+    showMiniMax,
+    showGrok,
+    showCursor,
+    showZcode,
     showOllama
+  ].some(Boolean)
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.

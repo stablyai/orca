@@ -108,7 +108,7 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   }
   // 'ollama' is a cloud subscription (no TUI binary), not a TuiAgent; use its own glyph.
   if (tab === 'ollama') {
-    return <OllamaIcon size={14} className="text-muted-foreground" />
+    return <OllamaIcon size={14} />
   }
   return <AgentIcon agent={tab} size={14} />
 }
