@@ -252,9 +252,11 @@ export function useEditorPanelFileContentLoader({
         const servedGrantId = result.terminalArtifactGrantId
         const state = useAppStore.getState()
         const tabGrantId = state.openFiles.find((file) => file.id === id)?.terminalArtifactGrantId
-        // Why: the read renews a lapsed grant; keep the tab on it, as a save that renews one does.
+        // Why: the read renews a lapsed grant; keep the tab on it, as a save that renews one does. A
+        // read-only copy stays off the tab, as a read-only grant does, so the next read still says so.
         if (
           servedGrantId &&
+          !result.readOnly &&
           tabGrantId === readGrantId &&
           tabGrantId &&
           servedGrantId !== tabGrantId

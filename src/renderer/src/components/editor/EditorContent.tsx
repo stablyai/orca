@@ -250,9 +250,7 @@ export function EditorContent({
   if (activeFile.mode === 'edit') {
     return (
       <EditorEditFileSurface
-        activeFile={
-          fileContents[activeFile.id]?.readOnly ? { ...activeFile, readOnly: true } : activeFile
-        }
+        activeFile={activeFile}
         viewStateScopeId={viewStateScopeId}
         editorViewStateKey={editorViewStateKey}
         diffViewStateKey={diffViewStateKey}

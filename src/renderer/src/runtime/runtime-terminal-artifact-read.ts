@@ -77,7 +77,8 @@ export async function readRuntimeTerminalArtifactContent(
   if (!renewed) {
     throw new Error(`File not found on its host: ${args.absolutePath}`)
   }
-  return readThroughGrant({ ...args, grantId: renewed.grantId }, options)
+  const content = await readThroughGrant({ ...args, grantId: renewed.grantId }, options)
+  return renewed.readOnly ? { ...content, readOnly: true } : content
 }
 
 async function readThroughGrant(
