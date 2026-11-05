@@ -37,7 +37,9 @@ export function MobileAgentMessageSenders({
       style={[styles.senders, compact && styles.compactSenders, queued && styles.queuedSenders]}
     >
       {queued ? (
-        <Text style={styles.meta}>{t('session.agentMessageAttribution.fromSender', 'From')}</Text>
+        <Text style={[styles.meta, styles.queuedLead]}>
+          {t('session.agentMessageAttribution.fromSender', 'From')}
+        </Text>
       ) : null}
       {shown.length === 0 ? (
         <Text
