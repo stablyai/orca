@@ -1211,7 +1211,6 @@
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-status.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/settings/accounts/usage/ZcodePlanAccountsSection.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts
