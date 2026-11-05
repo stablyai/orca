@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { copyClaudeConversation } from './claude-conversation-copy'
 import { materializeClaudeRewindTranscript } from './claude-rewind-transcript'
 
-const accounts = vi.hoisted(() => ({ homes: [] as string[] }))
+const accounts = vi.hoisted((): { homes: string[] } => ({ homes: [] }))
 vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
   getClaudeProfileRouter: () => ({
     accountHomes: () => accounts.homes,
