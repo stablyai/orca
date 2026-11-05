@@ -80,8 +80,8 @@ function Top({
         <WorkspaceCleanupSortHeader
           sort={DEFAULT_WORKSPACE_CLEANUP_SORT}
           selectableCount={3}
+          selectedSelectableCount={selected}
           selectedCount={selected}
-          queuedCount={selected}
           deleteDisabled={false}
           onToggleSortField={noop}
           onToggleSelectAll={noop}

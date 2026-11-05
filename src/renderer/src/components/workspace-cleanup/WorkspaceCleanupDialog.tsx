@@ -341,8 +341,8 @@ function WorkspaceCleanupDialogContent({
               facetPanelOpen={facetPanelOpen}
               onFacetPanelOpenChange={setFacetPanelOpen}
               selectableCount={selectableIdentities.length}
-              selectedCount={selectedSelectableCount}
-              queuedCount={selectedCount}
+              selectedSelectableCount={selectedSelectableCount}
+              selectedCount={selectedCount}
               deleteDisabled={
                 selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
               }

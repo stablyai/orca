@@ -14,8 +14,8 @@ export function WorkspaceCleanupBrowseToolbar({
   facetPanelOpen,
   onFacetPanelOpenChange,
   selectableCount,
+  selectedSelectableCount,
   selectedCount,
-  queuedCount,
   deleteDisabled,
   spaceScanning,
   spaceProgress,
@@ -30,8 +30,8 @@ export function WorkspaceCleanupBrowseToolbar({
   facetPanelOpen: boolean
   onFacetPanelOpenChange: (open: boolean) => void
   selectableCount: number
+  selectedSelectableCount: number
   selectedCount: number
-  queuedCount: number
   deleteDisabled: boolean
   spaceScanning: boolean
   spaceProgress: WorkspaceSpaceScanProgress | null
@@ -80,8 +80,8 @@ export function WorkspaceCleanupBrowseToolbar({
       <WorkspaceCleanupSortHeader
         sort={browse.sort}
         selectableCount={selectableCount}
+        selectedSelectableCount={selectedSelectableCount}
         selectedCount={selectedCount}
-        queuedCount={queuedCount}
         deleteDisabled={deleteDisabled}
         onToggleSortField={browse.toggleSortField}
         onToggleSelectAll={onToggleSelectAll}

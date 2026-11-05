@@ -2,7 +2,6 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
-  applyWorkspaceCleanupPolicy,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissal,
   type WorkspaceCleanupScanArgs,
@@ -109,32 +108,17 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       classifierVersion: WORKSPACE_CLEANUP_CLASSIFIER_VERSION
     }))
     set((state) => {
-      const nextDismissals = { ...state.workspaceCleanupDismissals }
+      const next = { ...state.workspaceCleanupDismissals }
       for (const dismissal of dismissals) {
-        nextDismissals[
-          getWorkspaceCleanupCandidateIdentity({
-            worktreeId: dismissal.worktreeId,
-            executionHostId: dismissal.executionHostId
-          })
-        ] = dismissal
+        next[getWorkspaceCleanupCandidateIdentity(dismissal)] = dismissal
       }
-      return {
-        workspaceCleanupDismissals: nextDismissals,
-        workspaceCleanupScan: state.workspaceCleanupScan
-          ? {
-              ...state.workspaceCleanupScan,
-              candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
-                applyWorkspaceCleanupDismissal(candidate, nextDismissals)
-              )
-            }
-          : state.workspaceCleanupScan
-      }
+      return withWorkspaceCleanupDismissals(state, next)
     })
     await window.api.workspaceCleanup.dismiss({ dismissals })
   },
   restoreWorkspaceCleanupCandidates: async (candidates) => {
     // Legacy dismissals are keyed by bare worktree id; drop that key too or the row stays ignored.
-    const keys = [
+    const restoredDismissalKeys = [
       ...new Set(
         candidates.flatMap((candidate) => [
           getWorkspaceCleanupCandidateIdentity(candidate),
@@ -142,48 +126,17 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
         ])
       )
     ]
-    const restored = new Set(
-      candidates.map((candidate) => getWorkspaceCleanupCandidateIdentity(candidate))
-    )
     set((state) => {
-      const nextDismissals = { ...state.workspaceCleanupDismissals }
-      for (const key of keys) {
-        delete nextDismissals[key]
+      const next = { ...state.workspaceCleanupDismissals }
+      for (const key of restoredDismissalKeys) {
+        delete next[key]
       }
-      return {
-        workspaceCleanupDismissals: nextDismissals,
-        workspaceCleanupScan: state.workspaceCleanupScan
-          ? {
-              ...state.workspaceCleanupScan,
-              candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
-                restored.has(getWorkspaceCleanupCandidateIdentity(candidate))
-                  ? applyWorkspaceCleanupPolicy({
-                      ...candidate,
-                      blockers: candidate.blockers.filter((blocker) => blocker !== 'dismissed')
-                    })
-                  : candidate
-              )
-            }
-          : state.workspaceCleanupScan
-      }
+      return withWorkspaceCleanupDismissals(state, next)
     })
-    await window.api.workspaceCleanup.dismiss({ dismissals: [], restoredDismissalKeys: keys })
+    await window.api.workspaceCleanup.dismiss({ dismissals: [], restoredDismissalKeys })
   },
   resetWorkspaceCleanupDismissals: async () => {
-    set((state) => ({
-      workspaceCleanupDismissals: {},
-      workspaceCleanupScan: state.workspaceCleanupScan
-        ? {
-            ...state.workspaceCleanupScan,
-            candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
-              applyWorkspaceCleanupPolicy({
-                ...candidate,
-                blockers: candidate.blockers.filter((blocker) => blocker !== 'dismissed')
-              })
-            )
-          }
-        : state.workspaceCleanupScan
-    }))
+    set((state) => withWorkspaceCleanupDismissals(state, {}))
     await window.api.workspaceCleanup.clearDismissals()
   },
   beginUnverifiedRemovalConsent: (identity) => {
@@ -212,3 +165,20 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       }
     })
 })
+
+function withWorkspaceCleanupDismissals(
+  state: AppState,
+  dismissals: Record<string, WorkspaceCleanupDismissal>
+): Pick<AppState, 'workspaceCleanupDismissals' | 'workspaceCleanupScan'> {
+  return {
+    workspaceCleanupDismissals: dismissals,
+    workspaceCleanupScan: state.workspaceCleanupScan
+      ? {
+          ...state.workspaceCleanupScan,
+          candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
+            applyWorkspaceCleanupDismissal(candidate, dismissals)
+          )
+        }
+      : state.workspaceCleanupScan
+  }
+}

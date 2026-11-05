@@ -30,11 +30,10 @@ import {
   formatBranchSafetyDetails,
   formatContextDetails,
   formatGitStatus,
-  getCandidateRowSignals,
+  getCandidateFactStatuses,
   getContextCount,
   getDirtyGitLabel,
-  getWorkspaceCleanupBlockerLabels,
-  shouldShowGitMetadataChip
+  getWorkspaceCleanupBlockerLabels
 } from './workspace-cleanup-candidate-row-data'
 import {
   getReviewStateIcon,
@@ -125,17 +124,19 @@ export const CandidateRow = React.memo(function CandidateRow({
   useUiLanguageRevision()
   const deleting = deletionPhase !== undefined
   // Queued/deleting state must disable row actions even when removing was omitted.
-  const selectable = canQueueWorkspaceCleanupCandidate(candidate) && !removing && !deleting
+  const queueable = canQueueWorkspaceCleanupCandidate(candidate)
+  const selectable = queueable && !removing && !deleting
   const ignored = candidate.blockers.includes('dismissed')
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const { gitStatuses, flags } = getCandidateRowSignals(candidate)
-  // Main/folder/disconnected rows can never be queued, and git is not read for them, so "unknown" would be a false alarm.
-  const protectedRow = !canQueueWorkspaceCleanupCandidate(candidate)
+  const facts = getCandidateFactStatuses(candidate)
+  const gitStatuses = facts.filter((fact) => fact.git)
+  const flags = facts.filter((fact) => !fact.git).map((fact) => fact.label)
+  // Main/folder/disconnected rows are never queued and git is not read for them; "unknown" would be a false alarm.
+  const showGitChip = queueable && gitStatuses.length === 0
   const dirtyLabel = getDirtyGitLabel(candidate)
   const gitState = getWorkspaceCleanupGitState(candidate)
-  const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
   const contextCount = getContextCount(candidate)
   const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
   const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
@@ -179,7 +180,7 @@ export const CandidateRow = React.memo(function CandidateRow({
             </button>
           ) : deleting ? (
             <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-          ) : protectedRow ? (
+          ) : !queueable ? (
             <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
               <Lock className="size-3.5 text-muted-foreground/70" />
             </span>
@@ -255,7 +256,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   'Checking git status'
                 )}
               </span>
-            ) : protectedRow || !showGitMetadataChip ? null : dirtyLabel ? (
+            ) : !showGitChip ? null : dirtyLabel ? (
               <WorkspaceCleanupMetadataChip
                 icon={FileWarning}
                 label={dirtyLabel}
@@ -342,7 +343,7 @@ export const CandidateRow = React.memo(function CandidateRow({
               candidate={candidate}
               contextDetails={contextDetails}
               expanded={expanded}
-              gitChecked={!protectedRow}
+              gitChecked={queueable}
             />
           ) : null}
         </div>

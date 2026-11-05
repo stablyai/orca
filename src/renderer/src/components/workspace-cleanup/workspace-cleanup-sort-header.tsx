@@ -19,8 +19,8 @@ import { getWorkspaceCleanupSortFieldLabel } from './workspace-cleanup-facet-lab
 export function WorkspaceCleanupSortHeader({
   sort,
   selectableCount,
+  selectedSelectableCount,
   selectedCount,
-  queuedCount,
   deleteDisabled,
   onToggleSortField,
   onToggleSelectAll,
@@ -29,16 +29,16 @@ export function WorkspaceCleanupSortHeader({
   sort: WorkspaceCleanupSortState
   selectableCount: number
   /** Visible selected rows; drives the select-all checkbox state. */
-  selectedCount: number
+  selectedSelectableCount: number
   /** Every selected row, including ones hidden by filters; what Delete acts on. */
-  queuedCount: number
+  selectedCount: number
   deleteDisabled: boolean
   onToggleSortField: (field: WorkspaceCleanupSortField) => void
   onToggleSelectAll: (selectAll: boolean) => void
   onDeleteSelected: () => void
 }): React.JSX.Element {
-  const allSelected = selectableCount > 0 && selectedCount >= selectableCount
-  const someSelected = selectableCount > 0 && selectedCount > 0 && !allSelected
+  const allSelected = selectableCount > 0 && selectedSelectableCount >= selectableCount
+  const someSelected = selectableCount > 0 && selectedSelectableCount > 0 && !allSelected
   const selectAllLabel = translate(
     'components.workspace.cleanup.browse.selectAllSafetyChecked',
     'Select all {{count}} safety-checked workspaces',
@@ -62,12 +62,16 @@ export function WorkspaceCleanupSortHeader({
         ) : null}
       </button>
       {/* Bulk action sits beside the selection it acts on; it appears once something is selected. */}
-      {queuedCount > 0 ? (
+      {selectedCount > 0 ? (
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="truncate text-xs font-medium text-foreground">
-            {translate('components.workspace.cleanup.browse.selectedCount', '{{value0}} selected', {
-              value0: queuedCount
-            })}
+            {translate(
+              'components.workspace.cleanup.browse.selectedSelectableCount',
+              '{{value0}} selected',
+              {
+                value0: selectedCount
+              }
+            )}
           </span>
           <Button
             variant="destructive"

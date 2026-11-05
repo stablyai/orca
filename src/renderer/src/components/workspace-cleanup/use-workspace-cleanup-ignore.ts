@@ -22,6 +22,9 @@ export function useWorkspaceCleanupIgnore(setSelectedIds: Dispatch<SetStateActio
   const restoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       void restoreCandidates([candidate]).catch((err: unknown) => {
+        if (!mountedRef.current) {
+          return
+        }
         toast.error(
           translate(
             'components.workspace.cleanup.browse.restoreFailed',
@@ -32,7 +35,7 @@ export function useWorkspaceCleanupIgnore(setSelectedIds: Dispatch<SetStateActio
         )
       })
     },
-    [restoreCandidates]
+    [mountedRef, restoreCandidates]
   )
 
   const ignoreCandidate = useCallback(
