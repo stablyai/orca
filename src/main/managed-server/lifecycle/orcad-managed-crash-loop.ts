@@ -108,11 +108,12 @@ export function wakeManagedOrcadUnlessCrashLooping(
   slot: ManagedOrcadSlot,
   onStarting?: () => void
 ): Promise<BrakedWake> {
-  // Queued wakes must see the failure an earlier wake just recorded.
+  // Queued wakes must see the failure an earlier wake just recorded; the epoch is the caller's.
+  const epoch = brake.resetEpoch(environmentId)
   const prior = wakes.get(environmentId)
   const wake = (async () => {
     await prior?.catch(() => {})
-    return wakeUnlessEngaged(environmentId, hostLabel, slot, onStarting)
+    return wakeUnlessEngaged(environmentId, epoch, hostLabel, slot, onStarting)
   })()
   wakes.set(environmentId, wake)
   void wake
@@ -127,6 +128,7 @@ export function wakeManagedOrcadUnlessCrashLooping(
 
 async function wakeUnlessEngaged(
   environmentId: string,
+  epoch: number,
   hostLabel: string,
   slot: ManagedOrcadSlot,
   onStarting?: () => void
@@ -134,7 +136,6 @@ async function wakeUnlessEngaged(
   if (brake.engaged(environmentId)) {
     return { outcome: 'crash-loop', detail: await crashLoopDetail(environmentId, hostLabel, slot) }
   }
-  const epoch = brake.resetEpoch(environmentId)
   try {
     const wake = await wakeStoppedManagedOrcad(slot, onStarting)
     if (wake.outcome === 'started') {
