@@ -89,7 +89,7 @@
       "invariant": "The relocated Windows daemon must retain the registry package root JS and native binary independently of its install tree, reject incomplete source or mirror files, and preserve an existing mirror while repairing it.",
       "oracle": "Run the real package JS from the relocated entry after deleting the install tree, reach its native loader, refuse each missing source file before staging, and replace each incomplete mirror without deleting its sentinel. Pin the real package name against the Windows packaging allowlist. On Windows, read ProductName through the built native addon from the mirror.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-host-process-package.test.ts",
@@ -112,6 +112,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/pr-code-change-scope.test.mjs config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-host-process-package.test.ts src/main/daemon/daemon-host-file-hash-cache.test.ts config/scripts/workflow/source-routing/pr-code-change-scope.test.mjs config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 1.1,
           "summary": "Gate files and packaging scope contracts: 76 tests passed in four files, one Windows native-read test skipped. Full daemon-host suite also passed 94 tests in eight files. Original implementation fails seven new registry regressions."
@@ -568,26 +569,23 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally reduces src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts: Loses configured retry gap and single-Enter agent selection alarms alongside forbidden timer-count checks. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1383 changes referenced sources; no new execution result validates reduced selectors. Retained unchanged receipts apply only to unchanged commands. Historical coverage: Audits1340 and1348 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1316 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Production mobile controller, parser, presentation, overlay, view, question, permission and composer run with native surfaces mocked on macOS. Desktop selector groups traverse the real observed-write queue, verified helper, IPC chunker, SSH provider and transport callbacks; paired sends traverse the real dispatcher and runtime writer into that provider. Local/daemon contracts and released-version terminal codecs are covered. Provider labels describe contracts, not physical deployments; physical WSL/Linux/Windows remain gaps. Audit885 removes the isolated observed-send mock-call suite; no replacement-equivalence claim is made. Audit1107 removes the small healthy ordinary SSH-send byte/callback sample. Its exact clear/body/Enter sample alarm is lost; retained slow-answer, cancellation and simulated older-host sequence checks are not claimed as equivalent replacement coverage. The SSH delivery fixture uses controlled fake provider settlement, and its paired path uses the real runtime/dispatcher without a physical SSH or paired wire transport. Audit1278 removes the mobile Stop display/disabled/placeholder suite; its local Stop presentation, repeat-stop and dispatch-visibility alarms are intentionally lost. No equivalent replacement or runtime stopping proof is claimed. Audit1292: The blind OpenCode readiness warning and late launch success/failure content-plus-submit write samples are removed. Their mocked readiness/inspection/delivery alarms are lost; no real PTY delivery or equivalent replacement coverage is claimed. Audit1294 removes mobile/src/session/native-chat/input/mobile-native-chat-permission-send.test.ts. Its mock-only request/capability/private-state/copy alarms are intentionally lost. Remaining tests are not equivalent replacement coverage. Narrowed commands require fresh parent-owned validation; no new runtime, platform or physical mobile evidence is claimed. Audit1302: src/main/ipc/pty/ipc/write-input-acceptance.test.ts: Provider registry and write acceptance/refusal/unverifiable receipts are supplied by fixture; local/daemon/WSL/SSH labels use the same fake provider. Chunking/settlement/remount cases inspect delegated calls or canned receipts without actual provider acceptance/acknowledgement. Lose chunk/refusal/pending/remount and raw-pane routing alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/session/native-chat/input/use-mobile-native-chat-ask-dismiss.test.ts, mobile/src/session/native-chat/input/MobileNativeChatPromptCard.test.tsx. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1310 removes the supplied-geometry/direct-callback chat history-paging suite. Its prepend/scroll-position examples are intentionally lost; no real rendered anchoring, equivalent replacement or physical phone proof is claimed. Narrowed commands need fresh validation. Audit1315 removes/narrows mobile/src/session/native-chat/MobileNativeChatView.composer-lock.test.ts, mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1316: src/renderer/src/lib/agent-followup-delivery.test.ts removed. Interpreter wrapper/live child/shell readiness and final readiness recheck delivery mock samples lose alarms. No equivalent replacement coverage is claimed. Audit1322 removes/narrows mobile/src/session/native-chat/MobileNativeChatView.tail-follow.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1334 removes/narrows mobile/src/session/native-chat/mobile-native-chat-send.test.ts, mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts, mobile/src/session/mobile-prompt-controller.test.ts, mobile/src/session/native-chat/input/use-mobile-native-chat-answer-send.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1340: src/main/daemon/daemon-pty-write-settlement-recovery.test.ts removed. Ambiguous handoff settlement remains unverifiable when listener throws. No equivalent replacement coverage is claimed. Audit1348: src/main/ipc/pty/ipc/write-input-chunk-yield.test.ts removed. Check-phase yielding and no-yield single-chunk scheduling work. No equivalent replacement coverage is claimed. Audit1352: focused Linux unit selections validated on source head b638e07d395b76af3ba6b03761a1a0fe7e5e026e. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1360: focused Linux unit selections validated on source head 415c9cffc2d10024131ec4b6721767a22195de6d. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1383: src/main/ipc/pty/ipc/write-input-user-input.test.ts reduced. Lose admission provenance spy, direct local Escape write outcome matrix and separate client-side SSH no-evidence control. Provider writes mocked; retained tests protect observation order/facts only. No equivalent replacement coverage is claimed. Audit1401: src/main/ipc/pty/ipc/write-input-user-input.test.ts reduced. Loses local-only post-accept observation and refused/unverifiable settlement delivery alarms. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1402: src/renderer/src/components/native-chat/native-chat-runtime-send-launch-draft.test.ts removed. Intentionally loses clear-confirmation/body/submit and maximal-clear ordering, queued text/image send ordering, ordinary cursor-spanning draft replacement and oversized refusal/queue settlement alarms. No equivalent replacement or real terminal delivery claim. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1426 removes NativeChatComposer.test.tsx. Local pane-remount, draft/cancel/confirmation sequencing and manual IME callback alarms are lost. No equivalent replacement coverage or provider delivery is claimed; historical receipts retain their original scope and the reduced selector has no new execution result.",
+      "coverageNotes": "Audit1471 removes the entire interactive-send hook suite. Its mock-writer routing, cancellation-handle, option-digit, interrupt, supplied settlement and inference-argument alarms are retired. No actual PTY bytes, replacement question lifetime or agent delivery were exercised. No equivalent replacement or fresh execution of the reduced reliability selector is claimed; historical receipts retain their original scope. Audit1468 removes the entire runtime-send suite. Its mock PTY clear/body/Enter byte-order, nominal timing, queue cancellation/serialization, attachment escaping, key-group pacing and deferred acceptance callback alarms are intentionally retired. No actual receiving agent or physical terminal delivery was exercised. No equivalent replacement or fresh execution of the reduced reliability selector is claimed; historical receipts retain their original scope. Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally reduces src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts: Loses configured retry gap and single-Enter agent selection alarms alongside forbidden timer-count checks. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1383 changes referenced sources; no new execution result validates reduced selectors. Retained unchanged receipts apply only to unchanged commands. Historical coverage: Audits1340 and1348 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Audit1316 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Production mobile controller, parser, presentation, overlay, view, question, permission and composer run with native surfaces mocked on macOS. Desktop selector groups traverse the real observed-write queue, verified helper, IPC chunker, SSH provider and transport callbacks; paired sends traverse the real dispatcher and runtime writer into that provider. Local/daemon contracts and released-version terminal codecs are covered. Provider labels describe contracts, not physical deployments; physical WSL/Linux/Windows remain gaps. Audit885 removes the isolated observed-send mock-call suite; no replacement-equivalence claim is made. Audit1107 removes the small healthy ordinary SSH-send byte/callback sample. Its exact clear/body/Enter sample alarm is lost; retained slow-answer, cancellation and simulated older-host sequence checks are not claimed as equivalent replacement coverage. The SSH delivery fixture uses controlled fake provider settlement, and its paired path uses the real runtime/dispatcher without a physical SSH or paired wire transport. Audit1278 removes the mobile Stop display/disabled/placeholder suite; its local Stop presentation, repeat-stop and dispatch-visibility alarms are intentionally lost. No equivalent replacement or runtime stopping proof is claimed. Audit1292: The blind OpenCode readiness warning and late launch success/failure content-plus-submit write samples are removed. Their mocked readiness/inspection/delivery alarms are lost; no real PTY delivery or equivalent replacement coverage is claimed. Audit1294 removes mobile/src/session/native-chat/input/mobile-native-chat-permission-send.test.ts. Its mock-only request/capability/private-state/copy alarms are intentionally lost. Remaining tests are not equivalent replacement coverage. Narrowed commands require fresh parent-owned validation; no new runtime, platform or physical mobile evidence is claimed. Audit1302: src/main/ipc/pty/ipc/write-input-acceptance.test.ts: Provider registry and write acceptance/refusal/unverifiable receipts are supplied by fixture; local/daemon/WSL/SSH labels use the same fake provider. Chunking/settlement/remount cases inspect delegated calls or canned receipts without actual provider acceptance/acknowledgement. Lose chunk/refusal/pending/remount and raw-pane routing alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/session/native-chat/input/use-mobile-native-chat-ask-dismiss.test.ts, mobile/src/session/native-chat/input/MobileNativeChatPromptCard.test.tsx. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1310 removes the supplied-geometry/direct-callback chat history-paging suite. Its prepend/scroll-position examples are intentionally lost; no real rendered anchoring, equivalent replacement or physical phone proof is claimed. Narrowed commands need fresh validation. Audit1315 removes/narrows mobile/src/session/native-chat/MobileNativeChatView.composer-lock.test.ts, mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1316: src/renderer/src/lib/agent-followup-delivery.test.ts removed. Interpreter wrapper/live child/shell readiness and final readiness recheck delivery mock samples lose alarms. No equivalent replacement coverage is claimed. Audit1322 removes/narrows mobile/src/session/native-chat/MobileNativeChatView.tail-follow.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1334 removes/narrows mobile/src/session/native-chat/mobile-native-chat-send.test.ts, mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts, mobile/src/session/mobile-prompt-controller.test.ts, mobile/src/session/native-chat/input/use-mobile-native-chat-answer-send.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1340: src/main/daemon/daemon-pty-write-settlement-recovery.test.ts removed. Ambiguous handoff settlement remains unverifiable when listener throws. No equivalent replacement coverage is claimed. Audit1348: src/main/ipc/pty/ipc/write-input-chunk-yield.test.ts removed. Check-phase yielding and no-yield single-chunk scheduling work. No equivalent replacement coverage is claimed. Audit1352: focused Linux unit selections validated on source head b638e07d395b76af3ba6b03761a1a0fe7e5e026e. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1360: focused Linux unit selections validated on source head 415c9cffc2d10024131ec4b6721767a22195de6d. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1383: src/main/ipc/pty/ipc/write-input-user-input.test.ts reduced. Lose admission provenance spy, direct local Escape write outcome matrix and separate client-side SSH no-evidence control. Provider writes mocked; retained tests protect observation order/facts only. No equivalent replacement coverage is claimed. Audit1401: src/main/ipc/pty/ipc/write-input-user-input.test.ts reduced. Loses local-only post-accept observation and refused/unverifiable settlement delivery alarms. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1402: src/renderer/src/components/native-chat/native-chat-runtime-send-launch-draft.test.ts removed. Intentionally loses clear-confirmation/body/submit and maximal-clear ordering, queued text/image send ordering, ordinary cursor-spanning draft replacement and oversized refusal/queue settlement alarms. No equivalent replacement or real terminal delivery claim. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result. Audit1426 removes NativeChatComposer.test.tsx. Local pane-remount, draft/cancel/confirmation sequencing and manual IME callback alarms are lost. No equivalent replacement coverage or provider delivery is claimed; historical receipts retain their original scope and the reduced selector has no new execution result.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/25761"],
       "invariant": "A prompt occurrence leaves the input region only when an accepted reply answers it (a current host's provider acknowledgment, or an older host's whole-write acceptance as before) or the user collapses it to a strip above the composer, which writes nothing and keeps the card mounted with its partial answer; status-backed occurrences are told apart by the host wait's start, so view toggles and remounts preserve them while real clear/replacement supersedes them, and a transcript-only one is dropped when the view stops observing it; obsolete results cannot change replacements; selector groups wait for complete writes before pacing; refusal or unknown handoff never causes replay; a card retires an unsubmitted composer send without writing under it or losing its text, and the hidden composer cannot send or interrupt; Collapse or Escape folds a card without writing, never during an in-flight answer, and a new occurrence shows expanded again; the phone blocks only Send while a card is expanded and shows one card per occurrence; cancellation stops unsent groups and active dictation can stop.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Retained unchanged-selector receipts are the only current execution evidence. Reduced-source assertions await validation. Historical prior oracle: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): After acknowledged phone replies with stale host status, the exact card disappears and Send is enabled; unknown, refused or unverifiable-settlement replies retain enabled choices, while an older host's accepted reply dismisses like an acknowledged one; a same-occurrence view toggle retains pending acknowledgment and real replacements discard it. A slow 32 KiB SSH answer completes all chunks before Enter; cancellation preserves issued bytes but omits remaining groups. Paired settlement invokes the actual provider and lost callbacks remain unknown; older hosts deliver ordinary messages, launch and selector groups once and their accepted answers dismiss as before. An answered card stays hidden across a view remount; a collapsed card is a strip that frees the composer and expands back; an identical question in a new wait shows again; a composer send caught by a new card keeps its bubble without submitting or clearing the line under it.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx src/renderer/src/components/native-chat/native-chat-runtime-send.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-composer.test.tsx src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts src/main/runtime/runtime-terminal-writer.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts tests/e2e/native-chat-ssh-delivery.unit.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-composer.test.tsx src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts src/main/runtime/runtime-terminal-writer.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts tests/e2e/native-chat-ssh-delivery.unit.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts mobile/src/session/native-chat/MobileNativeChatView.failure-banner.test.ts mobile/src/session/mobile-prompt-controller.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-cancel-ask.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-answer-send.test.ts mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts --maxWorkers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx src/renderer/src/components/native-chat/native-chat-runtime-send.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts mobile/src/session/native-chat/MobileNativeChatView.failure-banner.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx",
-        "src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx",
-        "src/renderer/src/components/native-chat/native-chat-runtime-send.test.ts",
         "src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx",
         "src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-composer.test.tsx",
         "src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts",
         "src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx",
-        "src/renderer/src/components/native-chat/NativeChatApprovalCard.test.tsx",
         "src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts",
         "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
         "src/renderer/src/lib/agent-paste-draft.test.ts",
@@ -710,6 +708,9 @@
         "evidence": "Historical prior-selector budget; changed selectors have no fresh measurement. Historical account for the pre-audit test set; removed work-count alarms and changed selectors have no fresh measurement. Historical account for the pre-audit test set; removed work-count alarms and changed selectors have no fresh measurement. No polling, subprocess, startup await, new status producer or dismissal timer. Reuses the existing bounded per-tab committed observation and per-PTY queue; waits for each group before its existing pacing timer. Duplicate-cancel and yielding chunk tests bound writes. Optional paired proof reuses provider settlement only for requesting clients; legacy requests keep their raw path."
       },
       "knownGaps": [
+        "Audit1471 removes the entire interactive-send hook suite. Its mock-writer routing, cancellation-handle, option-digit, interrupt, supplied settlement and inference-argument alarms are retired. No actual PTY bytes, replacement question lifetime or agent delivery were exercised. No equivalent replacement or fresh execution of the reduced reliability selector is claimed; historical receipts retain their original scope.",
+        "Audit1468 removes the entire runtime-send suite. Its mock PTY clear/body/Enter byte-order, nominal timing, queue cancellation/serialization, attachment escaping, key-group pacing and deferred acceptance callback alarms are intentionally retired. No actual receiving agent or physical terminal delivery was exercised. No equivalent replacement or fresh execution of the reduced reliability selector is claimed; historical receipts retain their original scope.",
+        "Audit1458 removes NativeChatApprovalCard.test.tsx. Its supplied subject/button/callback, text inventory and happy-dom focus/containment alarms are intentionally lost. No equivalent replacement coverage or native focus/provider acknowledgment proof is claimed. Historical execution receipts retain their original commands and scope; reduced commands have no fresh execution result.",
         "Historical receipt before suite removal; its original command and results are preserved without assigning them to remaining tests: {\"date\":\"2026-10-05\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/use-mobile-native-chat-controller.test.ts mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/MobileNativeChatView.stop.test.ts mobile/src/session/MobileNativeChatView.failure-banner.test.ts mobile/src/session/MobileNativeChatView.rows.test.ts mobile/src/session/MobileNativeChatView.composer-lock.test.ts mobile/src/session/MobileNativeChatView.tail-follow.test.ts mobile/src/session/MobileNativeChatView.history-paging.test.ts --maxWorkers=2\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/native-chat/MobileNativeChatView.stop.test.ts mobile/src/session/native-chat/MobileNativeChatView.failure-banner.test.ts mobile/src/session/native-chat/MobileNativeChatView.rows.test.ts mobile/src/session/native-chat/MobileNativeChatView.composer-lock.test.ts mobile/src/session/native-chat/MobileNativeChatView.tail-follow.test.ts mobile/src/session/native-chat/MobileNativeChatView.history-paging.test.ts --maxWorkers=2\",\"result\":\"passed\",\"durationSeconds\":10.32,\"summary\":\"73 tests passed across four explicit files after the controller extraction, covering the production view/card/composer, occurrence dismissal, controller session scoping, unknown/refused replies and stopping active dictation.\"}",
         "Historical receipt before suite removal; its original command and results are preserved without assigning them to remaining tests: {\"date\":\"2026-10-06\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/use-mobile-native-chat-controller.test.ts mobile/src/session/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/MobileNativeChatView.stop.test.ts mobile/src/session/MobileNativeChatView.failure-banner.test.ts mobile/src/session/MobileNativeChatView.rows.test.ts mobile/src/session/MobileNativeChatView.composer-lock.test.ts mobile/src/session/MobileNativeChatView.tail-follow.test.ts mobile/src/session/MobileNativeChatView.history-paging.test.ts mobile/src/session/mobile-prompt-controller.test.ts mobile/src/session/mobile-native-chat-permission-send.test.ts mobile/src/session/use-mobile-native-chat-cancel-ask.test.ts mobile/src/session/use-mobile-native-chat-answer-send.test.ts mobile/src/session/use-mobile-native-chat-message-send.test.ts mobile/src/session/mobile-native-chat-send.test.ts mobile/src/session/MobileNativeChatCardHeaderAction.test.tsx mobile/src/session/MobileNativeChatPromptCard.test.tsx --maxWorkers=2\",\"result\":\"passed\",\"durationSeconds\":1.19,\"summary\":\"186 tests passed across 12 explicit files after the round-3 review fixes, including older-host answers dismissing like acknowledged ones, collapse that keeps the card mounted, one card per occurrence, wait-start question identity and only Send blocked.\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-ask-dismiss.test.ts mobile/src/session/native-chat/MobileNativeChatView.stop.test.ts mobile/src/session/native-chat/MobileNativeChatView.failure-banner.test.ts mobile/src/session/native-chat/MobileNativeChatView.rows.test.ts mobile/src/session/native-chat/MobileNativeChatView.composer-lock.test.ts mobile/src/session/native-chat/MobileNativeChatView.tail-follow.test.ts mobile/src/session/native-chat/MobileNativeChatView.history-paging.test.ts mobile/src/session/mobile-prompt-controller.test.ts mobile/src/session/native-chat/input/mobile-native-chat-permission-send.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-cancel-ask.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-answer-send.test.ts mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts mobile/src/session/native-chat/mobile-native-chat-send.test.ts mobile/src/session/native-chat/MobileNativeChatCardHeaderAction.test.tsx mobile/src/session/native-chat/input/MobileNativeChatPromptCard.test.tsx --maxWorkers=2\"}",
         "Provider acknowledgment proves handoff, not agent consumption or prompt closure; a host prompt gate remains deferred pending captured closing lifecycles.",
@@ -1743,12 +1744,12 @@
       "providers": ["local", "ssh", "remote-runtime", "mobile"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["local", "mobile"],
-      "coverageNotes": "Audit1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic host and direct/Relay transport tests cover per-operation duplicate protection, caller changes, missing host journal rows, acknowledgement loss, and expiry. Mobile tests cover new-action identity, remount, storage refusal, current attachment paths, and capability changes; renderer tests cover one request per send and the bounded hand-back. Live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised. The test-value audit removes the mock send-bridge suite: skills/options/attachment forwarding and accepted/unknown/queued/rejected callback policy no longer have that isolated alarm. Remaining send/draft tests are not claimed as equivalent coverage. Historical run commands and counts are preserved as historical records; a narrowed selector is not a new passed run. Audit1294 removes mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx. Its mock-only request/capability/private-state/copy alarms are intentionally lost. Remaining tests are not equivalent replacement coverage. Narrowed commands require fresh parent-owned validation; no new runtime, platform or physical mobile evidence is claimed. Audit1302: src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts: Direct performSend composition seeds real journal outcomes but adapter dispatch is never reachable from performSend at all (owner lines90–159: delivery runs separately). Thus both never-redispatch claims are unexercised; caller ledgers are not constructed and supplied acceptance callbacks never execute. Remaining assertions copy seeded unknown state or count one queued row. Lose isolated submission replay/dedup characterization; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/session/mobile-structured-send-delivery.test.ts, mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1308: src/renderer/src/lib/launch-structured-agent-session.test.ts removed. Unresolvable probe retries, exhausted selector refusal and unknown-outcome create-envelope mock alarms disappear. No equivalent replacement coverage is claimed. Audit1315 removes/narrows mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1334 removes/narrows mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts, mobile/src/session/use-mobile-structured-agent-session-send.test.tsx, mobile/src/session/use-mobile-structured-agent-session.test.tsx, mobile/src/transport/mobile-relay-rpc-session.test.ts, mobile/src/transport/stable-logical-rpc-client.test.ts, mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx, mobile/src/mobile-web-shell/bridge-host-init.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands.",
+      "coverageNotes": "Audit1474 removes the full renderer session-hook suite. Supplied-state projection, mock transport/settings forwarding and assembled shared-owner policy alarms are retired; no equivalent replacement coverage is claimed. The option admission assertion reference was already stale. Reduced selectors have no fresh focused run; historical execution evidence retains its original scope. Audit1308 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic host and direct/Relay transport tests cover per-operation duplicate protection, caller changes, missing host journal rows, acknowledgement loss, and expiry. Mobile tests cover new-action identity, remount, storage refusal, current attachment paths, and capability changes; renderer tests cover one request per send and the bounded hand-back. Live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised. The test-value audit removes the mock send-bridge suite: skills/options/attachment forwarding and accepted/unknown/queued/rejected callback policy no longer have that isolated alarm. Remaining send/draft tests are not claimed as equivalent coverage. Historical run commands and counts are preserved as historical records; a narrowed selector is not a new passed run. Audit1294 removes mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx. Its mock-only request/capability/private-state/copy alarms are intentionally lost. Remaining tests are not equivalent replacement coverage. Narrowed commands require fresh parent-owned validation; no new runtime, platform or physical mobile evidence is claimed. Audit1302: src/main/native-chat/agent-session-wire/structured-agent-session-send-idempotency.test.ts: Direct performSend composition seeds real journal outcomes but adapter dispatch is never reachable from performSend at all (owner lines90\u2013159: delivery runs separately). Thus both never-redispatch claims are unexercised; caller ledgers are not constructed and supplied acceptance callbacks never execute. Remaining assertions copy seeded unknown state or count one queued row. Lose isolated submission replay/dedup characterization; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/session/mobile-structured-send-delivery.test.ts, mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1308: src/renderer/src/lib/launch-structured-agent-session.test.ts removed. Unresolvable probe retries, exhausted selector refusal and unknown-outcome create-envelope mock alarms disappear. No equivalent replacement coverage is claimed. Audit1315 removes/narrows mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1334 removes/narrows mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts, mobile/src/session/use-mobile-structured-agent-session-send.test.tsx, mobile/src/session/use-mobile-structured-agent-session.test.tsx, mobile/src/transport/mobile-relay-rpc-session.test.ts, mobile/src/transport/stable-logical-rpc-client.test.ts, mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx, mobile/src/mobile-web-shell/bridge-host-init.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/20133"],
       "invariant": "One structured-send operation id causes at most one provider dispatch. Each user Send on phone or desktop is a new action with a fresh id and one request; neither automatically resends an ambiguous action. The host retains the original action's outcome, and a later phone Send remains possible with equal text, after remount, or when phone storage fails. Repeated transmission of the same operation remains protected by host deduplication.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
       ],
       "testFiles": [
@@ -1759,7 +1760,6 @@
         "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
         "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
         "src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
-        "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
         "mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.test.ts",
         "mobile/src/session/native-chat/composer/use-mobile-native-chat-image-attachments.test.ts",
         "mobile/src/session/mobile-structured-send-new-action.test.ts",
@@ -1803,10 +1803,6 @@
             "a later Send is independent after a %s refusal",
             "a new Send goes through after a stale-fence refusal"
           ]
-        },
-        {
-          "file": "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
-          "assertions": ["reuses an option operation after a pending admission refusal"]
         },
         {
           "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
@@ -1873,14 +1869,14 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-11-04",
+          "date": "2026-11-05",
           "runner": "local",
           "platform": "linux",
           "result": "passed",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --config.verifyDepsBeforeRun=false test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
-          "durationSeconds": 11.53,
-          "summary": "Test Files  8 passed (8); Tests  142 passed (142). Focused unit selector; native adapters remain mocked where present. Single local execution, not a p95 or cross-platform measurement. Source head 574edb34b8e5448541e7a69aac098958d91ffb06."
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts",
+          "durationSeconds": 9.682,
+          "summary": "97 focused tests passed on isolated Xvfb. Deterministic fixtures; no live provider, physical mobile, mixed-version deployment or cross-platform claim. Audit1474 reduced selector."
         }
       ],
       "runtimeBudget": {
@@ -1904,6 +1900,8 @@
         "Add live physical-mobile and remote-runtime interruption evidence before claiming full provider coverage."
       ],
       "knownGaps": [
+        "Audit1474 retired complete execution receipt; original fields unchanged: {\"date\":\"2026-11-04\",\"runner\":\"local\",\"platform\":\"linux\",\"result\":\"passed\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm --config.verifyDepsBeforeRun=false test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx --maxWorkers=2\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session/lifecycle/agent-session-operation-ledger.test.ts src/shared/agent-session/requests/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session/ownership/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx\",\"durationSeconds\":11.53,\"summary\":\"Test Files  8 passed (8); Tests  142 passed (142). Focused unit selector; native adapters remain mocked where present. Single local execution, not a p95 or cross-platform measurement. Source head 574edb34b8e5448541e7a69aac098958d91ffb06.\"}",
+        "Audit1474 removes the full renderer session-hook suite. Supplied-state projection, mock transport/settings forwarding and assembled shared-owner policy alarms are retired; no equivalent replacement coverage is claimed. The option admission assertion reference was already stale. Reduced selectors have no fresh focused run; historical execution evidence retains its original scope.",
         "Phone composer drafts remain in memory: killing the app between Send and host recording loses that text, as before.",
         "A later intentional Send can deliver another copy of text from an earlier unknown action; the original action stays unresolved until the host can establish its outcome.",
         "A host crash after recording the operation unknown but before journal append or provider dispatch can conservatively suppress an attempt that never reached the provider.",
@@ -3192,7 +3190,7 @@
       "providers": ["orca-server", "direct-ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["orca-server", "direct-ssh"],
-      "coverageNotes": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts: Loses wrapper-level host rebinding, incompatible provisioned-root refusal and best-effort cleanup-call alarms; all are mock-only orchestration projections. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): A pinned exact-source harness runs the pre-#14352 reader and lifecycle service against baseline, affected-main, candidate, and fix-reverted stores. Platform-neutral tests cover store compatibility, user-cancellable cleanup, branch/ref adoption; audit885 removes the direct resume ownership predicate alarms. The direct-SSH provisioned-root Electron journey remains the live transport and destroy proof; this desktop sidecar is not mobile-facing and changes no RPC or remote wire payload. The test-value audit removed the renderer provisioned-root create-options suite. Its two incomplete-identity rejection assertions are lost: one omitted workspaceRunContext and other identity fields, and one supplied the context but omitted ephemeralVmExpectedRefHead. The suite did not test successful option mapping. Retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage. Audit1342: src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts removed. Runtime/SSH ownership, encoded target, retry/failure/listing-error cleanup projection samples disappear. No equivalent replacement coverage is claimed.",
+      "coverageNotes": "Audit1441 removes the complete renderer VM-runtime settings suite: display filter/status/SSH-retry flags, cleanup and stop RPC-to-toast/dialog plumbing, manual-copy plumbing and polling toast silence. The suite did not execute provider teardown or process cancellation. Its rendered stop/retry and hidden-SSH display alarms are intentionally retired; no equivalent replacement or fresh reduced-selector runtime result is claimed. Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Audit1417 intentionally deletes src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts: Loses wrapper-level host rebinding, incompatible provisioned-root refusal and best-effort cleanup-call alarms; all are mock-only orchestration projections. No equivalent replacement coverage or fresh result is claimed. Historical coverage account: Audit1342 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): A pinned exact-source harness runs the pre-#14352 reader and lifecycle service against baseline, affected-main, candidate, and fix-reverted stores. Platform-neutral tests cover store compatibility, user-cancellable cleanup, branch/ref adoption; audit885 removes the direct resume ownership predicate alarms. The direct-SSH provisioned-root Electron journey remains the live transport and destroy proof; this desktop sidecar is not mobile-facing and changes no RPC or remote wire payload. The test-value audit removed the renderer provisioned-root create-options suite. Its two incomplete-identity rejection assertions are lost: one omitted workspaceRunContext and other identity fields, and one supplied the context but omitted ephemeralVmExpectedRefHead. The suite did not test successful option mapping. Retained source-ref and lifecycle suites do not establish equivalent renderer guard coverage. Audit1342: src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts removed. Runtime/SSH ownership, encoded target, retry/failure/listing-error cleanup projection samples disappear. No equivalent replacement coverage is claimed.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4274",
         "https://github.com/stablyai/orca/pull/14352",
@@ -3201,13 +3199,13 @@
       "invariant": "A sidecar written by the new build cannot make the previous production build lose otherwise compatible VM runtimes. Downgrade lifecycle writes remain authoritative after re-upgrade, provisioned-root metadata remains recoverable, and corrupt or future feature metadata is preserved without poisoning the rollback-readable v1 store. Destroy attempts have no automatic wall-clock cutoff; a user stop terminates the process tree, retains cleanup ownership, and permits a fresh retry. Provider failure retains the SSH/project context needed for safe cleanup. Unrecoverable recipe context releases only the hidden SSH registration while preserving lifecycle/provider metadata. Provisioned-root create receives the source ref's pinned commit, adoption verifies the requested branch/ref, and resume preserves the connection mode plus stable SSH ownership identity while allowing endpoint rotation.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
-        "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/renderer/src/components/settings/virtual-machines/runtimes/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "node config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs",
+        "config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts",
+        "config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs",
         "src/shared/ephemeral-vm-runtime-store-rollback.test.ts",
         "src/shared/ephemeral-vm-runtime-store.test.ts",
         "src/shared/ephemeral-vm-recipe-process.test.ts",
@@ -3218,14 +3216,13 @@
         "src/main/ipc/ephemeral-vm-provision-cancel.test.ts",
         "src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts",
         "src/main/ipc/ephemeral-vm.test.ts",
-        "src/renderer/src/components/settings/virtual-machines/runtimes/EphemeralVmRuntimesSection.test.tsx",
         "src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts",
         "src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "tests/e2e/ephemeral-vm-cleanup-retry.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
+          "file": "config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts",
           "assertions": [
             "the exact rollback reader accepts both projected records",
             "the rollback lifecycle service destroys the provisioned resource using schema-v1 provider data",
@@ -3254,12 +3251,6 @@
           "assertions": [
             "recipe commands have no implicit wall-clock deadline",
             "a stopped process that ignores graceful termination is force-killed and settled"
-          ]
-        },
-        {
-          "file": "src/renderer/src/components/settings/virtual-machines/runtimes/EphemeralVmRuntimesSection.test.tsx",
-          "assertions": [
-            "a running cleanup exposes a persistent Stop cleanup action and becomes retryable after stopping"
           ]
         },
         {
@@ -3298,6 +3289,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
+          "currentCommand": "node config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts",
           "result": "passed",
           "durationSeconds": 11,
           "summary": "The pinned baseline and affected-main oracles passed, candidate downgrade ran the exact old destroy service, candidate re-upgrade retained lifecycle state, and both affected-main and fix-reverted bytes failed the old reader as expected."
@@ -3326,6 +3318,7 @@
         "Collect soak history without unexplained lifecycle or sidecar flakes."
       ],
       "knownGaps": [
+        "Audit1441 removes the complete renderer VM-runtime settings suite: display filter/status/SSH-retry flags, cleanup and stop RPC-to-toast/dialog plumbing, manual-copy plumbing and polling toast silence. The suite did not execute provider teardown or process cancellation. Its rendered stop/retry and hidden-SSH display alarms are intentionally retired; no equivalent replacement or fresh reduced-selector runtime result is claimed.",
         "No packaged-build downgrade installer journey; the exact released source reader and service are executed in-process.",
         "The obsolete provisioned-root SSH adoption unit suite was retired; it no longer supplies branch/ref adoption evidence. Historical run commands and counts are preserved, and no replacement equivalence is claimed.",
         "Live Docker SSH evidence runs locally on macOS and in the changed-file PR E2E lane on Ubuntu; Windows desktop behavior is covered by the platform-neutral filesystem codec and package job.",
@@ -3787,7 +3780,7 @@
       "invariant": "A first-install relay transfer must complete in an attempt-owned fixed staging slot before acquiring the shared version install lock. Reservation, promotion, confirmed cleanup, and stale recovery must reject path replacement, persisted-identity mismatch, POSIX symlinks, and Windows reparse points. A newly acquired install lock atomically records the execution host's boot identity; only a verified identity change or the existing stale-age proof may replace it, while legacy, missing, malformed, and unreadable identity state must retain the conservative stale fallback. Recovery examines only eight fixed slot/claim/delete names and removes at most one stale valid stage per call; eight unclaimable states fail with an explicit manual-recovery message. Split-SFTP hosts must prove the stage identity on the exact transfer session, only payload contents may be promoted under the shared lock, and cancellation must boundedly join SFTP, stream, local file-handle, and transfer settlement.",
       "oracle": "Pause a real ssh2 SFTP relay.js write after one remotely acknowledged chunk, prove the remote file is partial, abort the live transfer, and require no shared .install-lock, leaked local descriptor, or foreign-process termination. Separately inject two unconfirmed cancellations, require an independent deployment to install, launch, answer relay RPC, and read a real repository HEAD. Keep a fresh install lock on the current POSIX or Windows boot and require takeover to fail; replace its bounded identity with a prior-boot value and race concurrent recoverers, requiring exactly one atomic winner, a current successor identity, and no tombstone residue; omit the marker and require the legacy lock to remain fenced. Replace one retained fixed slot with an old-mtime same-owner directory while preserving the original, add a fixed-slot POSIX symlink, and require installed-path recovery to skip both while reclaiming a valid stale slot behind them. Add 15,197 unrelated relay-shaped names and run the real version GC, requiring bounded stdout and no removal. Unit and wire contracts cover exact POSIX and native PowerShell 0/1/7/8/9+ quota behavior, no-follow identity fencing, payload symlink/reparse rejection, one-item repeated draining, zero lock acquisition before upload settlement, joined transfer/channel teardown including never-settling failures, SFTP redirection, package.json namespace ownership, promotion only after the lock, cross-version isolation, and system-SSH behavior.",
       "commands": [
-        "node config/scripts/run-ssh-staged-upload-reliability.mjs --powershell <PowerShell-7.6.4-executable> src/main/ssh/sftp-upload.test.ts src/main/ssh/ssh-file-transfer-abort.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/connection/ssh-connection-sftp-wire.test.ts src/main/ssh/ssh-remote-commands.test.ts"
+        "node config/scripts/runtime-verification/desktop-transport/run-ssh-staged-upload-reliability.mjs --powershell <PowerShell-7.6.4-executable> src/main/ssh/sftp-upload.test.ts src/main/ssh/ssh-file-transfer-abort.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/connection/ssh-connection-sftp-wire.test.ts src/main/ssh/ssh-remote-commands.test.ts"
       ],
       "testFiles": [
         "src/main/ssh/sftp-upload.test.ts",
@@ -3824,6 +3817,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/run-ssh-staged-upload-reliability.mjs --powershell <PowerShell-7.6.4-executable> src/main/ssh/sftp-upload.test.ts src/main/ssh/ssh-file-transfer-abort.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/connection/ssh-connection-sftp-wire.test.ts src/main/ssh/ssh-remote-commands.test.ts",
+          "currentCommand": "node config/scripts/runtime-verification/desktop-transport/run-ssh-staged-upload-reliability.mjs --powershell <PowerShell-7.6.4-executable> src/main/ssh/sftp-upload.test.ts src/main/ssh/ssh-file-transfer-abort.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/connection/ssh-connection-sftp-wire.test.ts src/main/ssh/ssh-remote-commands.test.ts",
           "result": "passed",
           "durationSeconds": 57.9,
           "summary": "Eleven focused files passed 152 tests with 3 platform skips using exact POSIX sh, native ARM macOS PowerShell 7.6.4, real ssh2 split-SFTP wire sessions, fixed-slot identity races, bounded recovery, joined cancellation teardown, and cross-version isolation."
@@ -7529,16 +7523,15 @@
       "coverageNotes": "Focused tests and real-Monaco 9/50 MiB performance and undo-retention benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/8432"],
       "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; read-only live tails do not create undo history, while editable external updates remain undoable and arbitrary rewrites continue to replace the model content.",
-      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, full replacement for non-appends, and real-Monaco undo behavior for read-only live tails versus editable files. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, then compare exact Monaco undo-service and ArrayBuffer retention after five 10 MiB appends. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, non-undoability, renderer survival, and forced-GC heap/native-memory budgets.",
+      "oracle": "Focused tests assert one post-mount content owner and actual lifecycle remount ordering across retained path models. Real-Monaco tests cover undo behavior for read-only live tails versus editable files. With Node forced GC, benchmarks compare suffix/replacement timing and undo retention at 9 and 50 MiB. The Electron scenario compares legacy setValue with watcher appends, checking visible ranges, selection, Find state, scroll offset, non-undoability, renderer survival and memory budgets. Mock-only edit-shape assertions were retired during test-value audit.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.bench.ts --pool=threads",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts --pool=threads",
         "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/editor/monaco-content-sync.test.ts",
         "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
         "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
@@ -7547,15 +7540,6 @@
         "tests/e2e/agent-session-log-tail-stability.spec.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "src/renderer/src/components/editor/monaco-content-sync.test.ts",
-          "assertions": [
-            "append-only drift reads the current model once and inserts only at the previous model end",
-            "identical content emits no edit and non-append drift retains full replacement plus undo stops",
-            "read-only live-tail appends, replacements, truncations, and stale retained-model remounts use non-undoing edits",
-            "a stale retained target model reconciles on mount without explicit undo stops while prior-path content and undo history remain isolated"
-          ]
-        },
         {
           "file": "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
           "assertions": [
@@ -7601,6 +7585,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "Focused editor ownership, edit-shape, mount reconciliation, lifecycle-key, and actual same-pane retained-model remount tests passed."
@@ -9550,8 +9535,8 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/agent-session.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/claimed-agent-pty-owner.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime-agent-session-operation.test.ts src/main/runtime/remote-agent-session-host-authority.integration.test.ts src/main/runtime/orca-runtime-terminal-retirement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
-        "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
-        "node --check config/scripts/remote-agent-session-process-cleanup.mjs && node config/scripts/remote-agent-session-authority-repro.mjs",
+        "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/diagnostics/remote-agent-authority/remote-agent-session-authority-repro.mjs",
+        "node --check config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs && node config/scripts/diagnostics/remote-agent-authority/remote-agent-session-authority-repro.mjs",
         "pnpm exec electron-vite build --mode e2e",
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -9582,8 +9567,8 @@
         "src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "tests/e2e/remote-agent-session-focus-authority.spec.ts",
-        "config/scripts/remote-agent-session-authority-repro.mjs",
-        "config/scripts/remote-agent-session-process-cleanup.mjs",
+        "config/scripts/diagnostics/remote-agent-authority/remote-agent-session-authority-repro.mjs",
+        "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal-orphan-owner.test.ts",
@@ -9671,7 +9656,7 @@
           ]
         },
         {
-          "file": "config/scripts/remote-agent-session-authority-repro.mjs",
+          "file": "config/scripts/diagnostics/remote-agent-authority/remote-agent-session-authority-repro.mjs",
           "assertions": [
             "headless focused fresh/resume requests create background host surfaces without a renderer window",
             "dropped committed responses replay the same operation identity without another tokened agent spawn",
@@ -9679,7 +9664,7 @@
           ]
         },
         {
-          "file": "config/scripts/remote-agent-session-process-cleanup.mjs",
+          "file": "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
           "assertions": [
             "isolated daemon roots and captured descendants are verified dead before profile PID records are removed"
           ]
@@ -10642,16 +10627,16 @@
       "invariant": "On packaged Windows, abrupt death of Orca's Electron main process must not terminate or replace the userData-scoped terminal daemon or its live ConPTY shell, and a relaunch must adopt that exact daemon and route terminal input to that exact surviving shell without a PowerShell 0xE9 FailFast.",
       "oracle": "Resolve the launched instance's real main PID from inside Electron, force-kill only that PID, require it to die, require one command-line-scoped daemon PID and the stamped interactive shell PID to remain live, relaunch with persisted state, require the daemon PID to remain identical, read the exact shell PID and a per-shell environment sentinel back through the exact restored tab, then require a successful Windows Application event-log query with zero matching pwsh FailFast events across the full crash-to-input window.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/win-crash-survival-e2e.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/runtime-verification/crash-survival/win-crash-survival-e2e.test.mjs",
         "node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
       ],
       "testFiles": [
-        "config/scripts/win-crash-survival-e2e.test.mjs",
+        "config/scripts/runtime-verification/crash-survival/win-crash-survival-e2e.test.mjs",
         "tests/tools/win-crash-survival-e2e/run.mjs"
       ],
       "assertionRefs": [
         {
-          "file": "config/scripts/win-crash-survival-e2e.test.mjs",
+          "file": "config/scripts/runtime-verification/crash-survival/win-crash-survival-e2e.test.mjs",
           "assertions": [
             "survival requires the crash antecedent, daemon and shell liveness, unchanged daemon identity, zero FailFast events, and same-shell reattach",
             "event-log query failure cannot be converted into zero FailFast events",
@@ -10742,14 +10727,14 @@
       "oracle": "The issue #8048 slice asserts one node-pty ConPTY close for a graceful-then-force sequence, atomically seeds recovered history before fresh shell output and re-anchoring, preserves recovery after seed failure plus adapter restart, and runs 25 built-daemon close races while checking victim session/PID reaping, a stable daemon PID, and a live witness PTY. The EAGAIN slice emits an error from one real patched node-pty Windows input socket, requires its terminal to become unwritable and run the normal per-PTY kill path, then writes through an unrelated PTY without an uncaught exception. A broader Windows live gate still needs shell input, resize, cursor, and CJK/wide-glyph pixel evidence.",
       "commands": [
         "pnpm vitest run src/main/daemon/pty-subprocess.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/node-pty-windows-input-error.win32.test.ts",
-        "pnpm build:electron-vite && node config/scripts/windows-daemon-workspace-close-repro.mjs",
-        "node config/scripts/windows-daemon-workspace-close-repro.mjs"
+        "pnpm build:electron-vite && node config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs",
+        "node config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs"
       ],
       "testFiles": [
         "src/main/daemon/pty-subprocess.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts",
         "src/main/daemon/node-pty-windows-input-error.win32.test.ts",
-        "config/scripts/windows-daemon-workspace-close-repro.mjs"
+        "config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs"
       ],
       "assertionRefs": [
         {
@@ -10772,7 +10757,7 @@
           ]
         },
         {
-          "file": "config/scripts/windows-daemon-workspace-close-repro.mjs",
+          "file": "config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs",
           "assertions": [
             "all 25 victim sessions and OS PIDs are reaped while the built daemon PID and an unrelated witness PowerShell remain alive"
           ]
@@ -10784,6 +10769,7 @@
           "runner": "local",
           "platform": "windows",
           "command": "node config/scripts/windows-daemon-workspace-close-repro.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs",
           "result": "passed",
           "durationSeconds": 7.6,
           "summary": "All 25 victim sessions and OS PIDs were reaped while the built daemon and witness PTY survived the real ConPTY workspace-close races. The double-close, history ordering, and seed-failure restart regressions produced intentional red failures before their fixes and passed afterward."
@@ -16242,11 +16228,11 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-process.test.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-disconnect-termination.test.ts src/main/ipc/filesystem/watcher-process/runtime-watcher-process-pool.test.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.test.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem/watchers/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/workspaces/removal/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client-watch.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty/pty-listener-teardown-and-orphans.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-process.test.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-disconnect-termination.test.ts src/main/ipc/filesystem/watcher-process/runtime-watcher-process-pool.test.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.test.ts src/main/ipc/filesystem/watcher-process/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem/watchers/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/workspaces/removal/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client-watch.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts",
         "pnpm run build:electron-vite",
-        "node config/scripts/runtime-file-watcher-resource-probe.mjs",
-        "node config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs"
+        "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
+        "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
+        "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -16289,10 +16275,10 @@
         "src/shared/cross-platform-path.test.ts",
         "src/shared/physical-exit-tracker.test.ts",
         "src/shared/promise-settlement-waiters.test.ts",
-        "config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "config/scripts/runtime-file-watcher-resource-probe.mjs",
+        "config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
+        "config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
         "src/main/managed-server/install/remote-versioned-install.test.ts",
-        "config/scripts/package-electron-runtime-contract.test.mjs"
+        "config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -16592,11 +16578,11 @@
           ]
         },
         {
-          "file": "config/scripts/package-electron-runtime-contract.test.mjs",
+          "file": "config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs",
           "assertions": ["every release platform packages and gates the hashed watcher child"]
         },
         {
-          "file": "config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "file": "config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
           "assertions": [
             "five healthy roots share one exact watcher PID within the per-child RSS budget",
             "four quarantine roots use exactly four child PIDs and remain within the global eight-child reservation cap",
@@ -16605,7 +16591,7 @@
           ]
         },
         {
-          "file": "config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "file": "config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "assertions": [
             "the built watcher entry delivers an event before fault injection",
             "the harness parent survives watcher-child SIGSEGV",
@@ -16619,6 +16605,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
           "result": "passed",
           "durationSeconds": 0.58,
           "summary": "Five healthy roots shared one child at 50,688 KiB RSS and 4.9% sampled CPU; four quarantine children totaled 202,368 KiB RSS and 29.5% sampled CPU, all budgets and the eight-child cap passed, and exact-PID cleanup was true."
@@ -16628,6 +16615,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
           "result": "passed",
           "durationSeconds": 0.56,
           "summary": "Five healthy roots shared one child at 50,176 KiB RSS and 6.0% sampled CPU; four quarantine children totaled 200,112 KiB RSS and 18.0% sampled CPU. The global eight-child cap and all per-child/aggregate budgets passed, and exact-PID cleanup was true."
@@ -16637,6 +16625,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 10.01,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests."
@@ -16655,6 +16644,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 0.1,
           "summary": "The Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -16664,6 +16654,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 0.46,
           "summary": "The Electron-as-Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -16673,6 +16664,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
           "result": "passed",
           "durationSeconds": 0.56,
           "summary": "Five healthy roots shared one child at 50,096 KiB RSS and 3.4% sampled CPU; four quarantine children totaled 200,576 KiB RSS and 25.0% sampled CPU. The eight-child physical cap and every per-child/aggregate CPU and RSS budget passed, and exact-PID cleanup was true."
@@ -16682,6 +16674,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 10.69,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests, including watcher/PTY removal fencing and recursive deletion failure behavior."
@@ -16700,6 +16693,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 0.01,
           "summary": "The Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -16709,6 +16703,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 0.46,
           "summary": "The Electron-as-Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -16718,6 +16713,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-resource-probe.mjs",
           "result": "passed",
           "durationSeconds": 0.55,
           "summary": "Five healthy roots shared one child at 50,160 KiB RSS and 5.6% sampled CPU; four quarantine children totaled 199,968 KiB RSS and 16.7% sampled CPU, hard per-child and aggregate RSS/CPU budgets passed, the eight-child reservation cap rejected the next launch, and every exact PID exited during cleanup."
@@ -16727,6 +16723,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/managed-server/install/remote-versioned-install.test.ts config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 9.79,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 225 tests, including terminal removal notification and recursive deletion fencing."
@@ -16736,6 +16733,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "All 26 built-entry SIGSEGV injections preserved the parent, replaced and resubscribed the child, and delivered a post-crash event; watcher-canary temp-directory count remained 6 before and after the final five-run leak check."
@@ -16745,6 +16743,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 0.3,
           "summary": "The source-bundled real supervisor delivered through the built child before and after SIGSEGV; the parent survived and automatic resubscription used a replacement PID."
@@ -16754,6 +16753,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "currentCommand": "node config/scripts/diagnostics/runtime-watchers/runtime-file-watcher-fault-harness.mjs",
           "result": "passed",
           "durationSeconds": 2.2,
           "summary": "Ten consecutive invocations survived, automatically replaced and resubscribed the child, and delivered a post-crash event. The watcher-canary temp-directory count remained 8 before and after the loop."
@@ -17142,13 +17142,13 @@
       "commands": [
         "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
         "shellcheck config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh",
-        "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
-        "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+        "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage",
+        "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "src/main/startup/ensure-virtual-display.test.ts",
-        "config/scripts/run-headless-serve-shutdown-docker.mjs",
+        "config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs",
         "config/docker/headless-serve-shutdown/run-signal-case.sh",
         "config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh"
       ],
@@ -17164,7 +17164,7 @@
           ]
         },
         {
-          "file": "config/scripts/run-headless-serve-shutdown-docker.mjs",
+          "file": "config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs",
           "assertions": [
             "the original AppImage startup runs through dbus-run-session and xvfb-run with a bounded diagnostics marker",
             "SIGINT and SIGTERM run in separate disposable containers",
@@ -17197,6 +17197,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "currentCommand": "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
           "result": "passed",
           "durationSeconds": 48,
           "summary": "The extracted candidate AppRun passed process-group SIGINT and systemd-mixed main-PID SIGTERM under Ubuntu 26.04 amd64 emulation with status zero, no fatal evidence, full listener/Xvfb/tree cleanup, and an unchanged canary identity."
@@ -17206,6 +17207,7 @@
           "runner": "ci",
           "platform": "linux",
           "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "currentCommand": "node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
           "result": "passed",
           "durationSeconds": 1336,
           "summary": "Native-amd64 PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 built AppImage SHA-256 999d43bfe123e87a77fe917a5f46be1efd5c45a5205f99f02998a75136d8a793 and ran the restricted original-AppImage startup oracle before each of the three signal matrices. Each startup reached the exact updater-setup-done marker with stable launcher/Xvfb PID-start-tick identities and bounded TERM/KILL cleanup; SIGINT and SIGTERM then returned wait status 0 with no fatal evidence, listener, descendant, Xvfb, or canary residue. This is CI evidence only; no fresh local Docker oracle is claimed."
@@ -17265,16 +17267,16 @@
       "invariant": "On a host without FUSE and without unprivileged user namespaces, every packaged CLI entrypoint either completes its command or reports a diagnosis, and never terminates on a signal.",
       "oracle": "Build the image, stage the AppImage payload, and run each case in the restricted container. Assert the preconditions first: unshare -Ur must fail and /dev/fuse must be absent, so a relaxed runner fails the job rather than silently skipping. For each case require the exact expected exit status and an expected substring of the command's own output, with the harness RESULT/CRASHED/PRECONDITION_FAILED control lines excluded so a case name can never satisfy its own assertion. Any status of 128 or above is a crash and fails immediately. The per-case timeout is a failure deadline, never a success condition.",
       "commands": [
-        "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+        "node config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
         "shellcheck config/docker/cli-launch-contract/run-cli-case.sh"
       ],
       "testFiles": [
-        "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+        "config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract-docker.mjs",
         "config/docker/cli-launch-contract/run-cli-case.sh"
       ],
       "assertionRefs": [
         {
-          "file": "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+          "file": "config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract-docker.mjs",
           "assertions": [
             "the bundled launcher serves --help, --version, status, skills --help, and worktree list without Chromium",
             "a direct binary launch reaching JavaScript runs the command instead of booting a GUI",
@@ -17297,6 +17299,7 @@
           "runner": "ci",
           "platform": "linux",
           "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "currentCommand": "node config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
           "result": "passed",
           "durationSeconds": 40,
           "summary": "PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 ran all eight cases to ok on ubuntu-latest. The unshare and /dev/fuse preconditions held under moby's default seccomp profile rather than tripping."
@@ -17306,6 +17309,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "currentCommand": "node config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
           "result": "passed",
           "durationSeconds": 60,
           "summary": "All eight cases passed on Ubuntu 24.04 amd64 hardware against an AppImage built from the stack tip, invoked against a copy of that artifact outside dist/."
@@ -18195,14 +18199,14 @@
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/wsl-e2e-lane-contract.test.mjs",
-        "config/scripts/verify-wsl-e2e-participation.test.mjs"
+        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
+        "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -18217,7 +18221,7 @@
           ]
         },
         {
-          "file": "config/scripts/verify-wsl-e2e-participation.test.mjs",
+          "file": "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
           "assertions": ["rejects skipped, missing, substituted and retried scenarios"]
         }
       ],
@@ -18280,11 +18284,11 @@
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
         "gh run view 34069063016 --log",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/verify-packaged-browser-participation.test.mjs"
+        "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -18295,7 +18299,7 @@
           ]
         },
         {
-          "file": "config/scripts/verify-packaged-browser-participation.test.mjs",
+          "file": "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs",
           "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],
@@ -18417,22 +18421,22 @@
       "coveredProviders": ["relay"],
       "coverageNotes": "Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/host-session-registry.ts"
+        "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/connections/host-session-registry.ts"
       ],
       "invariant": "A closed queued transport starts no durable activation; an already-started activation retains cleanup, and a live successor becomes the indexed control without concurrent same-host activation.",
       "oracle": "Queue a closed control before a live retry behind stalled persistence. With controlled 4s store calls, require two total activations, one release for the already-started closed control, and live readiness at 4s. Existing tests retain cleanup when closure happens during I/O.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/connections/host-session-registry.test.ts ../../../cloud/apps/relay/src/connections/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts --silent=false"
       ],
       "testFiles": [
-        "cloud/apps/relay/src/host-session-registry.test.ts",
-        "cloud/apps/relay/src/host-session-client-accept.test.ts",
-        "cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts",
-        "cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts"
+        "cloud/apps/relay/src/connections/host-session-registry.test.ts",
+        "cloud/apps/relay/src/connections/host-session-client-accept.test.ts",
+        "cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts",
+        "cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "cloud/apps/relay/src/host-session-registry.test.ts",
+          "file": "cloud/apps/relay/src/connections/host-session-registry.test.ts",
           "assertions": [
             "skips a closed queued control so its live retry avoids abandoned database work",
             "does not publish a control that closes during activation",
@@ -18447,6 +18451,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/connections/host-session-registry.test.ts ../../../cloud/apps/relay/src/connections/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts --silent=false",
           "result": "passed",
           "durationSeconds": 0.407,
           "summary": "88 tests across four files passed; relay typecheck passed separately."
@@ -18494,15 +18499,15 @@
       "invariant": "A single-cell capacity check reads only that cell while retaining snapshot freshness, incarnation, outstanding reservation and missing-limit policy; new placement retains the full fleet inventory.",
       "oracle": "With 32 capped cells, an existing active host stays on its pinned cell and reads one headroom row; new placement reads all 32. Missing, expired or prior-incarnation snapshots, capacity exhaustion and outstanding debt still refuse the active pinned host; an uncapped cell remains admissible.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell/admission/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --silent=false"
       ],
       "testFiles": [
         "cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts",
         "cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts",
         "cloud/apps/relay/src/assignment/assignment-store.test.ts",
-        "cloud/apps/relay/src/cell-inventory-lock-contention.test.ts",
+        "cloud/apps/relay/src/cell/admission/cell-inventory-lock-contention.test.ts",
         "cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts",
-        "cloud/apps/relay/src/regional-rehome-target-selection.test.ts"
+        "cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts"
       ],
       "assertionRefs": [
         {
@@ -18522,7 +18527,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay test src/assignment/assignment-headroom-scope.test.ts src/assignment/assignment-connection-headroom.test.ts src/assignment/assignment-store.test.ts src/cell-inventory-lock-contention.test.ts src/assignment/assignment-isolated-cell-replacement.test.ts src/regional-rehome-target-selection.test.ts --silent=false --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell/admission/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --silent=false",
           "result": "passed",
           "durationSeconds": 2.22,
           "summary": "164 tests passed across the six remaining headroom fixture suites on Linux through the relay package runner, including its schema/contract build hooks. This executes the current selector with two workers. It does not establish native PostgreSQL contention or transaction recovery coverage."
@@ -18859,7 +18864,7 @@
       "invariant": "A packaged macOS daemon runs from the verified signed helper copy for its build, which the updater never touches, and never beside a job that may own the endpoint; the fork fallback still fits the startup gate. A copy is deleted only when lsof proves it unused.",
       "oracle": "Deterministic launch, fallback-deadline, per-build copy, retirement and status tests, plus the signed launcher validation recorded in #25848.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/desktop-distribution/macos/macos-folder-usage-descriptions.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/macos-daemon-bundle.test.ts",
@@ -18867,7 +18872,7 @@
         "src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts",
         "src/main/daemon/macos-daemon-job-state.test.ts",
         "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
-        "config/scripts/macos-folder-usage-descriptions.test.mjs"
+        "config/scripts/desktop-distribution/macos/macos-folder-usage-descriptions.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -18899,7 +18904,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --config.verifyDepsBeforeRun=false test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/desktop-distribution/macos/macos-folder-usage-descriptions.test.mjs",
           "result": "passed",
           "durationSeconds": 3.14,
           "summary": "67 focused tests passed across six suites on Linux. The same current test selector was executed with pnpm dependency verification disabled in the isolated validation checkout. These deterministic fixtures do not validate native macOS TCC, codesigning or signed-helper launch."

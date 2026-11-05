@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { contentTypeForExtension } from '../../mobile-web-bundle-manifest.mjs'
+import { contentTypeForExtension } from '../../build/mobile-web-app/mobile-web-bundle-manifest.mjs'
 import { fileURLToPath } from 'node:url'
 
 export const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
