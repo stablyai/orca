@@ -4147,6 +4147,7 @@
             "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
+            "downloadedNoDefaultApp": "Saved '{{value0}}', but no app opened it.",
             "openInNewTab": "Open in new tab",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
           },

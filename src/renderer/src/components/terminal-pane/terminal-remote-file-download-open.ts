@@ -28,7 +28,20 @@ export async function downloadAndOpenRemoteTerminalFile(
     if (isRequestCurrent && !isRequestCurrent()) {
       return
     }
-    await window.api.shell.openFilePath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
+    const opened = await window.api.shell.openFilePath(
+      result.destinationPath,
+      LOCAL_EXECUTION_HOST_ID
+    )
+    // Why: the copy is saved where the user chose, so say where when no app took it.
+    if (!opened && (!isRequestCurrent || isRequestCurrent())) {
+      toast.error(
+        translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.downloadedNoDefaultApp',
+          "Saved '{{value0}}', but no app opened it.",
+          { value0: result.destinationPath }
+        )
+      )
+    }
   } catch (error) {
     toast.error(
       extractIpcErrorMessage(
