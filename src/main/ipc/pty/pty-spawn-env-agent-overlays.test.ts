@@ -183,7 +183,10 @@ describe('registerPtyHandlers', () => {
         `repo-id::${workspacePath}`
       )
 
-      expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
+      expect(resolveHome.mock.calls[0]?.[0]).toEqual({
+        runtime: 'host',
+        worktreeId: `repo-id::${workspacePath}`
+      })
       expect(resolveHome.mock.invocationCallOrder[0]).toBeLessThan(
         spawnMock.mock.invocationCallOrder[0]!
       )

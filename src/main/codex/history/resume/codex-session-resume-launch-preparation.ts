@@ -66,7 +66,10 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const systemHomePath = getSystemCodexHomePath()
     const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
     // Refuse unreadable selections before provenance matching can choose another account.
-    const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
+    // A pinned project resumes and restarts onto its own account, never the selection.
+    const selectedAccountCodexHome =
+      runtimeHome.resolveProjectPinnedHostCodexHomePathForResume(args.target.worktreeId) ??
+      runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath: args.providerSession.transcriptPath,

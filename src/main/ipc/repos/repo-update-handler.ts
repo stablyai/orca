@@ -9,6 +9,10 @@ import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../share
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
+import {
+  normalizeRepoAgentAccountId,
+  REPO_AGENT_ACCOUNT_FIELDS
+} from '../../../shared/repo-agent-account'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
@@ -63,6 +67,8 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
           ghAccount?: GhAccountBinding | null
+          claudeAccountId?: string | null
+          codexAccountId?: string | null
         }
       }
     ): Promise<Repo | null> => {
@@ -99,6 +105,16 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             delete updates.ghAccount
           } else {
             updates.ghAccount = normalized
+          }
+        }
+      }
+      for (const field of REPO_AGENT_ACCOUNT_FIELDS) {
+        if (field in updates) {
+          const id = normalizeRepoAgentAccountId(updates[field])
+          if (id === undefined) {
+            delete updates[field]
+          } else {
+            updates[field] = id
           }
         }
       }

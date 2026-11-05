@@ -191,6 +191,8 @@ export class RepoLifecycleOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
+      claudeAccountId?: string | null
+      codexAccountId?: string | null
     }
   ): Repo | null {
     return getRepoUpdateOperations(this).updateRepo(target, updates)

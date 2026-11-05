@@ -1,4 +1,5 @@
 import { join, win32 as pathWin32 } from 'node:path'
+import { projectPinnedCodexAccount } from './codex-project-pin'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import {
   getCodexSelectionLaneKey,
@@ -37,6 +38,18 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     const pathTarget: CodexAccountSelectionTarget = options.pinnedWslDistro
       ? { runtime: 'wsl', wslDistro: options.pinnedWslDistro }
       : this.resolveWslDefaultTarget(target)
+    // A project pinned to an account of this distro launches in its home, whatever is selected.
+    const projectAccount = projectPinnedCodexAccount(
+      this.store,
+      target.worktreeId,
+      target.projectAccountId
+    )
+    const projectHome = projectAccount
+      ? this.getWslLaunchCodexHomePath(projectAccount, pathTarget.wslDistro?.trim())
+      : null
+    if (projectHome) {
+      return projectHome
+    }
     // A pin names the distro, so the account is that distro's lane, exactly as launch reads it.
     const account = this.getActiveAccount(
       settings.codexManagedAccounts,
@@ -175,6 +188,7 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
       return target
     }
     const defaultDistro = getDefaultWslDistro()
-    return defaultDistro ? { runtime: 'wsl', wslDistro: defaultDistro } : target
+    // Keep the launch's workspace and pin; only the distro is filled in.
+    return defaultDistro ? { ...target, runtime: 'wsl', wslDistro: defaultDistro } : target
   }
 }

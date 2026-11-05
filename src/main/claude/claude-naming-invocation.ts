@@ -41,7 +41,7 @@ export function claudeNamingInvocation(
       ? Promise.resolve(pinned)
       : sources.resolveWorkspacePath(record.location.workspaceId)
     const router = getClaudeProfileRouter()
-    const policy = router?.preparation()
+    const policy = router?.preparation(router.projectAccountId(record.location.workspaceId))
     const systemHome = router?.systemDefaultHome()
     const savedHome = requireLegacyAgentSessionAccountHome(record.accountHome).path
     return (async () => {

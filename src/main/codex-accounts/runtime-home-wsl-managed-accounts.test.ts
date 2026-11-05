@@ -114,6 +114,76 @@ describe('CodexRuntimeHomeService', () => {
     }
   })
 
+  it("refuses a WSL launch whose project pins this distro's account but has no home for it", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
+    }))
+    const selectedHome = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"account":"wsl"}\n'
+    )
+    const saved = {
+      email: 'user@example.com',
+      managedHomeRuntime: 'wsl' as const,
+      wslDistro: 'Ubuntu',
+      providerAccountId: null,
+      workspaceLabel: null,
+      workspaceAccountId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    }
+    const store = {
+      ...createStore(
+        createSettings({
+          codexManagedAccounts: [
+            {
+              ...saved,
+              id: 'account-1',
+              managedHomePath: selectedHome,
+              wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home'
+            },
+            // Saved without a guest home, so it has nowhere to launch.
+            { ...saved, id: 'account-2', managedHomePath: '' }
+          ],
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
+        })
+      ),
+      getRepo: (id: string) => (id === 'work' ? { codexAccountId: 'account-2' } : undefined)
+    }
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const launch = (worktreeId: string) =>
+        service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu', worktreeId })
+
+      expect(() => launch('work::/home/alice/app')).toThrow(
+        "This project's Codex account folder can't be used"
+      )
+      await expect(
+        service.prepareForCodexLaunchAsync({
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu',
+          worktreeId: 'work::/home/alice/app'
+        })
+      ).rejects.toThrow("This project's Codex account folder can't be used")
+      // A project without a pin still launches on the distro's selection.
+      expect(launch('personal::/home/alice/app')).toBe(selectedHome)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
   it('keeps a selected WSL managed home when auth.json is temporarily missing', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

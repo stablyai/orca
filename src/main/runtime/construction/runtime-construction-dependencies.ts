@@ -1,3 +1,4 @@
+import type { StructuredCodexLaunchHomeInput } from '../agent-session/environment/structured-agent-account-home'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -63,12 +64,12 @@ export type RuntimeConstructionDependencies = {
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
-  prepareCodexStructuredLaunch?: (input: {
-    launchEnv: NodeJS.ProcessEnv
-  }) => string | null | Promise<string | null>
-  resolveCodexStructuredLaunchHome?: (input: {
-    launchEnv: NodeJS.ProcessEnv
-  }) => string | null | Promise<string | null>
+  prepareCodexStructuredLaunch?: (
+    input: StructuredCodexLaunchHomeInput
+  ) => string | null | Promise<string | null>
+  resolveCodexStructuredLaunchHome?: (
+    input: StructuredCodexLaunchHomeInput
+  ) => string | null | Promise<string | null>
   prepareCodexCatalogProbeHome?: (homePath: string) => void
   buildAgentHookPtyEnv?: () => Record<string, string>
   getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus

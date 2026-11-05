@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../shared/constants'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 
 // Why: these cases model a switch made on the focused host, as the status bar does.
@@ -526,6 +527,50 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     })
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
+  })
+
+  it("spares a pinned project's panes only in the pin's own lane", async () => {
+    const seedPinnedProject = (): void => {
+      seedPanes([{ ptyId: 'pty-1' }, { ptyId: 'pty-wsl', worktreeId: 'wt2' }], {
+        wt2: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca'
+      })
+      const hostAccount = {
+        id: 'acct-host',
+        email: 'host@example.com',
+        managedHomePath: '/Users/dev/.orca/acct-host',
+        providerAccountId: null,
+        workspaceLabel: null,
+        workspaceAccountId: null,
+        createdAt: 1,
+        updatedAt: 1,
+        lastAuthenticatedAt: 1
+      }
+      const pinnedRepo = (id: string) => ({
+        id,
+        path: `/repos/${id}`,
+        displayName: id,
+        badgeColor: '#000',
+        addedAt: 1,
+        codexAccountId: 'acct-host'
+      })
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/Users/dev'), codexManagedAccounts: [hostAccount] },
+        repos: [pinnedRepo('wt1'), pinnedRepo('wt2')]
+      })
+    }
+    const labels = { previousAccountLabel: ACCOUNT_A, nextAccountLabel: ACCOUNT_B }
+    try {
+      // The host pane relaunches on the pinned host account, so a host switch leaves it.
+      seedPinnedProject()
+      await markForFocusedHost({ ...labels, target: { runtime: 'host' } })
+      expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
+      // The pin is not a WSL account, so the project's Ubuntu pane follows that distro's switch.
+      seedPinnedProject()
+      await markForFocusedHost({ ...labels, target: { runtime: 'wsl', wslDistro: 'Ubuntu' } })
+      expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({ 'pty-wsl': labels })
+    } finally {
+      useAppStore.setState({ repos: [] })
+    }
   })
 
   it('leaves the local host pane alone when the switch was made on a runtime environment', async () => {

@@ -65,7 +65,9 @@ export function localAgentRuntimeTargetForTarget(
   target: RuntimeGitTarget
 ): CommitMessageAgentRuntimeTarget {
   const wslDistro = localGitOptionsForTarget(target).wslDistro
-  return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
+  return wslDistro
+    ? { runtime: 'wsl', wslDistro, worktreeId: target.worktree.id }
+    : { runtime: 'host', worktreeId: target.worktree.id }
 }
 
 export function localTextGenerationTargetForTarget(

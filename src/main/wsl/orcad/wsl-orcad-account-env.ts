@@ -8,6 +8,9 @@ import {
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { normalizeRepoAgentAccountId } from '../../../shared/repo-agent-account'
+import { CLAUDE_PROFILE_POINTER_ENV } from '../../../shared/claude-profile-routing'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
 import {
@@ -15,13 +18,18 @@ import {
   type WslOrcadHostCapabilityVerdict
 } from './wsl-orcad-host-environments'
 
-export type WslAccountTarget = { runtime: 'wsl'; wslDistro: string }
+export type WslAccountTarget = { runtime: 'wsl'; wslDistro: string; projectAccountId?: string }
+
+/** The accounts a WSL host's project pins; its repo lives on that host, not this desktop. */
+export type WslProjectPins = { claude?: string; codex?: string }
 
 export type WslOrcadAccountEnvDependencies = {
   /** `ClaudeRuntimeAuthService.prepareForClaudeLaunch`: waits for a first account setup. */
   prepareClaudeLaunch(target: WslAccountTarget): Promise<ClaudeRuntimeAuthPreparation>
   /** The pointer-only env a non-Claude pane gets, so a typed `claude` still follows the account. */
   claudeTerminalEnv(target: WslAccountTarget): Record<string, string>
+  /** A pinned project's guest pointer, written before its pane starts; null keeps the selection's. */
+  claudeProjectPointer?(target: WslAccountTarget): Promise<string | null>
   /** The selected Codex account's home (a UNC or guest path); null on System default. */
   prepareCodexHome(target: WslAccountTarget): Promise<string | null>
   /** Whether an Orca-managed Claude or Codex account is selected for the distro. */
@@ -81,20 +89,35 @@ export function guestCodexHomePath(home: string, distro: string): string | null 
 export async function prepareWslOrcadAccountEnv(
   distro: string,
   agent: TuiAgent | null,
-  dependencies: WslOrcadAccountEnvDependencies
+  dependencies: WslOrcadAccountEnvDependencies,
+  pins: WslProjectPins = {}
 ): Promise<Record<string, string>> {
   const target = distroTarget(distro)
+  const claudeTarget = pins.claude ? { ...target, projectAccountId: pins.claude } : target
   const env: Record<string, string> = {}
   if (agent === 'claude') {
-    const preparation = await dependencies.prepareClaudeLaunch(target)
+    const preparation = await dependencies.prepareClaudeLaunch(claudeTarget)
     // Off-Windows account services route WSL targets to the host; accept patches only from the matching distro.
     if (preparation.runtime === 'wsl' && sameDistro(preparation.wslDistro, distro)) {
       Object.assign(env, accountKeysOf(preparation.envPatch))
     }
   } else {
     Object.assign(env, accountKeysOf(dependencies.claudeTerminalEnv(target)))
+    // A pane that is not Claude only needs the pointer if the user types `claude`; launch anyway.
+    const pointer =
+      pins.claude && dependencies.claudeProjectPointer
+        ? await dependencies.claudeProjectPointer(claudeTarget).catch((error: unknown) => {
+            console.warn('[claude-profile] Could not pin the WSL project account:', error)
+            return null
+          })
+        : null
+    if (pointer) {
+      env[CLAUDE_PROFILE_POINTER_ENV] = pointer
+    }
   }
-  const codexHome = await dependencies.prepareCodexHome(target)
+  const codexHome = await dependencies.prepareCodexHome(
+    pins.codex ? { ...target, projectAccountId: pins.codex } : target
+  )
   const guestHome = codexHome ? guestCodexHomePath(codexHome, distro) : null
   if (guestHome) {
     // Do not mark ORCA_CODEX_HOME: orcad strips CODEX_HOME when they match.
@@ -170,6 +193,66 @@ export type WslOrcadAccountEnvCall = {
   params: unknown
   /** Whether the host behind `environmentId` advertises `capability`. */
   hostSupports: (capability: string) => Promise<WslOrcadHostCapabilityVerdict>
+  /** The pins the host's project records for `repoId`; omitted, no pin applies. */
+  readProjectPins?: (repoId: string) => Promise<WslProjectPins>
+  /** The project of a `path:`, `name:` or `branch:` worktree selector, as the host resolves it. */
+  resolveWorktreeRepoId?: (selector: string) => Promise<string | null>
+}
+
+/** The pins in a WSL host's `repo.show` reply; anything malformed pins nothing. */
+export async function readWslHostProjectPins(
+  showRepo: () => Promise<unknown>
+): Promise<WslProjectPins> {
+  const reply = await showRepo()
+  const result = isRecord(reply) && reply.ok === true && isRecord(reply.result) ? reply.result : {}
+  const repo = isRecord(result.repo) ? result.repo : {}
+  const claude = normalizeRepoAgentAccountId(repo.claudeAccountId)
+  const codex = normalizeRepoAgentAccountId(repo.codexAccountId)
+  return { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) }
+}
+
+/** The project in a `worktree.show` reply from the host; anything malformed names none. */
+export async function readWslHostWorktreeRepoId(
+  showWorktree: () => Promise<unknown>
+): Promise<string | null> {
+  const reply = await showWorktree()
+  const result = isRecord(reply) && reply.ok === true && isRecord(reply.result) ? reply.result : {}
+  const worktree = isRecord(result.worktree) ? result.worktree : {}
+  return typeof worktree.repoId === 'string' && worktree.repoId.length > 0 ? worktree.repoId : null
+}
+
+/** Reads a WSL host's project pins over `call`, resolving non-id worktree selectors there first. */
+export function wslHostProjectReaders(
+  call: (method: string, params: unknown) => Promise<unknown>
+): Pick<WslOrcadAccountEnvCall, 'readProjectPins' | 'resolveWorktreeRepoId'> {
+  return {
+    readProjectPins: (repoId) => readWslHostProjectPins(() => call('repo.show', { repo: repoId })),
+    resolveWorktreeRepoId: (selector) =>
+      readWslHostWorktreeRepoId(() => call('worktree.show', { worktree: selector }))
+  }
+}
+
+/** The project a launch's worktree selector belongs to. An id carries it; other selectors ask the host. */
+async function launchRepoId(
+  params: Record<string, unknown>,
+  call: WslOrcadAccountEnvCall
+): Promise<string | null> {
+  const target = isRecord(params.target) ? params.target : {}
+  const selector = [params.worktree, params.worktreeId, target.worktree].find(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  )
+  if (!selector) {
+    return null
+  }
+  if (selector.startsWith('id:')) {
+    return getRepoIdFromWorktreeId(selector.slice(3))
+  }
+  if (/^(path|name|branch):/.test(selector)) {
+    return call.resolveWorktreeRepoId
+      ? await call.resolveWorktreeRepoId(selector).catch(() => null)
+      : null
+  }
+  return getRepoIdFromWorktreeId(selector)
 }
 
 /** `params` with the account env of the WSL distro behind `environmentId`; as is for any other. */
@@ -196,7 +279,10 @@ export async function withWslOrcadAccountEnv(
   }
   let env: Record<string, string>
   try {
-    env = await prepareWslOrcadAccountEnv(distro, plan.agent, dependencies)
+    const repoId = call.readProjectPins ? await launchRepoId(params, call) : null
+    const pins =
+      repoId && call.readProjectPins ? await call.readProjectPins(repoId).catch(() => ({})) : {}
+    env = await prepareWslOrcadAccountEnv(distro, plan.agent, dependencies, pins)
   } catch (error) {
     // Preparation failure must refuse launch or it would silently use another account.
     return { ok: false, message: errorMessage(error) }

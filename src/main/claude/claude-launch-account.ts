@@ -3,16 +3,18 @@ import type { ClaudeProfileRouter } from '../claude-accounts/claude-profile-rout
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveStructuredClaudeAccountHomePath } from '../runtime/agent-session/environment/structured-agent-account-home'
 
-/** The account a launch runs under is the current selection; the receipt records what it used. */
+/** The account a launch runs under is the project's pin, else the current selection; the receipt
+ *  records what it used. */
 export async function prepareClaudeLaunchAccount(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string
+  recordHome: string,
+  worktreeId?: string
 ): Promise<ClaudeAccountRecipe> {
   if (!router) {
     return { route: 'system', home: recordHome, configDir: env.CLAUDE_CONFIG_DIR ?? null }
   }
-  const preparation = await router.prepareLaunch()
+  const preparation = await router.prepareLaunch(worktreeId)
   const home =
     preparation.provenance === 'system'
       ? await resolveStructuredClaudeAccountHomePath({

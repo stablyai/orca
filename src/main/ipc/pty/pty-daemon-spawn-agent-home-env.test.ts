@@ -193,7 +193,10 @@ describe('registerPtyHandlers', () => {
           launchAgent: 'codex'
         })
 
-        expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
+        expect(resolveHome.mock.calls[0]?.[0]).toEqual({
+          runtime: 'host',
+          worktreeId: `repo-id::${workspacePath}`
+        })
       })
       it('injects explicit proxy settings on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, () => ({

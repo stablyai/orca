@@ -177,6 +177,50 @@ describe('findMovableClaudeSessions', () => {
     expect(await movable(null)).toEqual([ptyId(3)])
   })
 
+  it('leaves a project pinned to a saved account out of a switch, since it relaunches on that account', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A },
+      { n: 2, agentType: 'claude', configDir: FOLDER_A }
+    ])
+    laneByPtyId[ptyId(2)] = 'wsl:Ubuntu'
+    const repo = { id: 'wt1', path: '/repo', displayName: 'repo', badgeColor: '#000', addedAt: 1 }
+    try {
+      useAppStore.setState({ repos: [{ ...repo, claudeAccountId: 'acct-a' }] })
+      expect(await movable('acct-a')).toEqual([])
+      // The pin is a host account, so the project's WSL pane follows its distro's switch.
+      expect(await movable('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual([ptyId(2)])
+      // A pin naming a removed account no longer holds the project.
+      useAppStore.setState({ repos: [{ ...repo, claudeAccountId: 'acct-gone' }] })
+      expect(await movable('acct-a')).toEqual([ptyId(1)])
+    } finally {
+      useAppStore.setState({ repos: [] })
+    }
+  })
+
+  it("spares a pane in its pin's distro even when the names differ in case", async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: FOLDER_A }])
+    laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
+    const settings = useAppStore.getState().settings!
+    const wslPin = {
+      ...account('acct-w', FOLDER_B),
+      managedAuthRuntime: 'wsl' as const,
+      wslDistro: 'ubuntu'
+    }
+    const repo = { id: 'wt1', path: '/repo', displayName: 'repo', badgeColor: '#000', addedAt: 1 }
+    try {
+      useAppStore.setState({
+        settings: {
+          ...settings,
+          claudeManagedAccounts: [...settings.claudeManagedAccounts, wslPin]
+        },
+        repos: [{ ...repo, claudeAccountId: 'acct-w' }]
+      })
+      expect(await movable('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual([])
+    } finally {
+      useAppStore.setState({ repos: [] })
+    }
+  })
+
   it('keeps every live pane of a shared session running, even one already on the new account', async () => {
     seedPanes([
       { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },

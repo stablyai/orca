@@ -366,7 +366,8 @@ describe('RuntimeGitCommands', () => {
     })
     expect(prepareForCodexLaunch).toHaveBeenCalledWith({
       runtime: 'wsl',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      worktreeId: 'wt-1'
     })
     expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
       context,

@@ -27,9 +27,11 @@ export function resolveCodexPaneLaunchAccount(args: {
   settings: CodexPaneLaunchAccountSettings
   target: CodexAccountSelectionTarget
 }): CodexPaneAccountRecord | null {
-  const accountId = args.pinnedByResume
-    ? resolveCodexHomeOwnerAccountId(args)
-    : getSelectedCodexAccountIdForTarget(args.settings, args.target)
+  const selected = getSelectedCodexAccountIdForTarget(args.settings, args.target)
+  const owner = resolveCodexHomeOwnerAccountId(args)
+  // A pinned project launches in its own account's home; record that account, not the selection.
+  const accountId =
+    args.pinnedByResume || (typeof owner === 'string' && owner !== selected) ? owner : selected
   if (accountId === undefined) {
     return null
   }

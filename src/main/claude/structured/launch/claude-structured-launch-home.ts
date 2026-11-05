@@ -8,9 +8,10 @@ import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 export async function resolveClaudeStructuredLaunchHome(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string
+  recordHome: string,
+  worktreeId?: string
 ): Promise<string> {
-  return (await prepareClaudeLaunchAccount(router, env, recordHome)).home
+  return (await prepareClaudeLaunchAccount(router, env, recordHome, worktreeId)).home
 }
 
 async function claudeTranscriptExists(input: {

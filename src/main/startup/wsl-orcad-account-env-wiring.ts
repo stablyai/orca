@@ -47,9 +47,15 @@ export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): v
       return auth.prepareForClaudeLaunch(target)
     },
     claudeTerminalEnv: (target) => withClaudeProfileTerminalEnv({}, target),
+    claudeProjectPointer: async (target) =>
+      (await state.claudeRuntimeAuth?.publishWslProjectPointer(target)) ?? null,
     prepareCodexHome: async (target) => {
       const runtimeHome = state.codexRuntimeHome
-      if (!runtimeHome || !getSelectedCodexAccountIdForTarget(store.getSettings(), target)) {
+      // A pinned project needs its account's home even while the distro follows System default.
+      const routed =
+        target.projectAccountId !== undefined ||
+        getSelectedCodexAccountIdForTarget(store.getSettings(), target)
+      if (!runtimeHome || !routed) {
         return null
       }
       // Do not install desktop relay hooks: WSL agent status belongs to that host's orcad.

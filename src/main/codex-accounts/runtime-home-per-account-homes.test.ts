@@ -145,6 +145,53 @@ describe('CodexRuntimeHomeService', () => {
     }
   )
 
+  it("launches a pinned project's sessions in its account home without moving the selection", async () => {
+    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+    const home1 = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('one@example.com', 'acct-1', 'one')
+    )
+    const home2 = createManagedAuth(
+      testState.userDataDir,
+      'account-2',
+      createCodexAuthJson('two@example.com', 'acct-2', 'two')
+    )
+    const saved = (id: string, email: string, managedHomePath: string) => ({
+      id,
+      email,
+      managedHomePath,
+      providerAccountId: null,
+      workspaceLabel: null,
+      workspaceAccountId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    })
+    const settings = createSettings({
+      realHomeRoutable: true,
+      codexManagedAccounts: [
+        saved('account-1', 'one@example.com', home1),
+        saved('account-2', 'two@example.com', home2)
+      ],
+      activeCodexManagedAccountId: 'account-1',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    })
+    const store = {
+      ...createStore(settings),
+      getRepo: (id: string) => (id === 'work' ? { codexAccountId: 'account-2' } : undefined)
+    }
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.prepareForCodexLaunch({ worktreeId: 'work::/repo' })).toBe(home2)
+    expect(service.resolveHostCodexHomePathForLaunchReadOnly(undefined, 'work::/repo')).toBe(home2)
+    expect(service.resolveProjectPinnedHostCodexHomePathForResume('work::/repo')).toBe(home2)
+    expect(service.prepareForCodexLaunch({ worktreeId: 'personal::/repo' })).toBe(home1)
+    expect(service.resolveProjectPinnedHostCodexHomePathForResume('personal::/repo')).toBeNull()
+    expect(store.updateSettings).not.toHaveBeenCalled()
+  })
+
   it('materializes resources and config into the per-account home on launch', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
     mkdirSync(join(getSystemCodexHomePath(), 'skills', 'review'), { recursive: true })

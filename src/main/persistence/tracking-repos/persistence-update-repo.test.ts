@@ -88,6 +88,18 @@ describe('Store', () => {
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
   })
 
+  it('keeps an account pin through an undefined update and clears it on null', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.updateRepo({ id: 'r1' }, { claudeAccountId: 'acct-a' })
+
+    store.updateRepo({ id: 'r1' }, { claudeAccountId: undefined, displayName: 'renamed' })
+    expect(store.getRepo('r1')).toMatchObject({ displayName: 'renamed', claudeAccountId: 'acct-a' })
+
+    store.updateRepo({ id: 'r1' }, { claudeAccountId: null })
+    expect(store.getRepo('r1')).not.toHaveProperty('claudeAccountId')
+  })
+
   it('persists opt-in editor save settings and the project command across reloads', async () => {
     const store = createStore()
     store.addRepo(makeRepo())

@@ -3,6 +3,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime
 import {
   guestCodexHomePath,
   prepareWslOrcadAccountEnv,
+  readWslHostProjectPins,
   withWslOrcadAccountEnv,
   type WslOrcadAccountEnvDependencies
 } from './wsl-orcad-account-env'
@@ -44,6 +45,20 @@ function dependencies(
 }
 
 describe('prepareWslOrcadAccountEnv', () => {
+  it("still launches a pane that is not Claude when its project's Claude pointer can't be written", async () => {
+    const deps = dependencies({
+      claudeProjectPointer: async () => {
+        throw new Error('guest write failed')
+      }
+    })
+    await expect(
+      prepareWslOrcadAccountEnv('Ubuntu', 'codex', deps, { claude: 'acct-w' })
+    ).resolves.toEqual({
+      ORCA_CLAUDE_PROFILE_POINTER: POINTER,
+      CODEX_HOME: '/home/u/.orca/codex-b'
+    })
+  })
+
   it('gives every other process only the Claude pointer, never waiting on Claude setup', async () => {
     const deps = dependencies()
     await expect(prepareWslOrcadAccountEnv('Ubuntu', 'codex', deps)).resolves.toEqual({
@@ -102,6 +117,66 @@ describe('withWslOrcadAccountEnv', () => {
     expect(created).toMatchObject({
       params: { env: { KEEP: '1', CLAUDE_CONFIG_DIR: CLAUDE_HOME } }
     })
+  })
+
+  it("launches a WSL host project's sessions on the accounts its repo pins", async () => {
+    // Each fake answers for the account it is handed, so the env shows which pin reached it.
+    const deps = dependencies({
+      claudeProjectPointer: async (target) =>
+        target.projectAccountId ? `~/pointers/${target.projectAccountId}` : null,
+      prepareCodexHome: async (target) =>
+        `\\\\wsl.localhost\\Ubuntu\\home\\u\\.orca\\${target.projectAccountId ?? 'selected'}`
+    })
+    const launch = (worktree: string) =>
+      withWslOrcadAccountEnv(
+        {
+          environmentId: 'wsl:ubuntu',
+          method: 'terminal.create',
+          params: { worktree },
+          hostSupports: async () => 'supported',
+          // The host resolves a path selector to the project it belongs to.
+          resolveWorktreeRepoId: async (selector) =>
+            selector === 'path:/home/u/app' ? 'repo-1' : null,
+          // Only this host's repo-1 pins accounts.
+          readProjectPins: (repoId) =>
+            readWslHostProjectPins(async () => ({
+              ok: true,
+              result: {
+                repo:
+                  repoId === 'repo-1'
+                    ? { claudeAccountId: 'acct-w', codexAccountId: 'codex-w' }
+                    : {}
+              }
+            }))
+        },
+        deps,
+        wsl
+      )
+
+    await expect(launch('id:repo-1::/home/u/app')).resolves.toMatchObject({
+      params: {
+        env: {
+          ORCA_CLAUDE_PROFILE_POINTER: '~/pointers/acct-w',
+          CODEX_HOME: '/home/u/.orca/codex-w'
+        }
+      }
+    })
+    await expect(launch('path:/home/u/app')).resolves.toMatchObject({
+      params: { env: { ORCA_CLAUDE_PROFILE_POINTER: '~/pointers/acct-w' } }
+    })
+    // Another project on the same host keeps the distro's selection.
+    await expect(launch('id:repo-2::/home/u/other')).resolves.toMatchObject({
+      params: {
+        env: { ORCA_CLAUDE_PROFILE_POINTER: POINTER, CODEX_HOME: '/home/u/.orca/selected' }
+      }
+    })
+    // A malformed pin is not a pin.
+    await expect(
+      readWslHostProjectPins(async () => ({
+        ok: true,
+        result: { repo: { claudeAccountId: '../x' } }
+      }))
+    ).resolves.toEqual({})
   })
 
   it('never turns a bare command or agent preset into a caller-built launch', async () => {

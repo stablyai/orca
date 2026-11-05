@@ -1,3 +1,4 @@
+import { REPO_AGENT_ACCOUNT_FIELDS } from '../../../shared/repo-agent-account'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -119,6 +120,8 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
+      claudeAccountId?: string | null
+      codexAccountId?: string | null
     }
   ): Repo | null {
     const repo = findRepoRowForHostScopedWrite(
@@ -190,6 +193,15 @@ export class RepoUpdatePersistenceOperations {
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
+    }
+    // Null clears a pin; undefined leaves it, so it must not reach the assign below either.
+    for (const field of REPO_AGENT_ACCOUNT_FIELDS) {
+      if (field in sanitizedUpdates && sanitizedUpdates[field] == null) {
+        if (sanitizedUpdates[field] === null) {
+          delete repo[field]
+        }
+        delete sanitizedUpdates[field]
+      }
     }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath

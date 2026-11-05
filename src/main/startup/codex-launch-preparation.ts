@@ -1,3 +1,4 @@
+import type { StructuredCodexLaunchHomeInput } from '../runtime/agent-session/environment/structured-agent-account-home'
 import { createCodexRuntimeHomeLaunchPreparation } from '../codex/configuration/homes/codex-runtime-home-launch-preparation'
 import { mainProcessState as state } from './main-process-state'
 
@@ -8,14 +9,14 @@ export const prepareCodexRuntimeHomeForLaunch = createCodexRuntimeHomeLaunchPrep
 
 /** Launch preparation and side-effect-free catalog reads must resolve one account-home key. */
 export const codexStructuredLaunchHomeResolvers = {
-  prepareCodexStructuredLaunch: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) =>
-    prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
+  prepareCodexStructuredLaunch: ({ launchEnv, worktreeId }: StructuredCodexLaunchHomeInput) =>
+    prepareCodexRuntimeHomeForLaunch(worktreeId ? { worktreeId } : undefined, launchEnv),
   // Throw like preparation: null would silently key the catalog to the system home instead of the account.
-  resolveCodexStructuredLaunchHome: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) => {
+  resolveCodexStructuredLaunchHome: ({ launchEnv, worktreeId }: StructuredCodexLaunchHomeInput) => {
     const runtimeHome = state.codexRuntimeHome
     if (!runtimeHome) {
       throw new Error('Codex runtime home service is not initialized')
     }
-    return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
+    return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv, worktreeId)
   }
 }

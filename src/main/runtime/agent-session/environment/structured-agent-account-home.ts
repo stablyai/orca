@@ -19,6 +19,8 @@ export type StructuredClaudeAccountHomeDeps = {
   wslDistro: string | null
   /** `identity` names the selected account before its folder exists; the default checks availability. */
   purpose?: 'identity'
+  /** The chat's workspace; its project may pin an account over the selection. */
+  worktreeId?: string
   getClaudeConfigDirectory: (
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => string | null | undefined
@@ -30,7 +32,11 @@ export async function resolveStructuredClaudeAccountHomePath(
   // Why only an account: System default keeps the launch-env and configured homes below.
   const router = deps.wslDistro ? undefined : getClaudeProfileRouter()
   const accountHome = router
-    ? await claudeRoutedHomeAsync(router, deps.purpose === 'identity' ? 'identity' : 'checked')
+    ? await claudeRoutedHomeAsync(
+        router,
+        deps.purpose === 'identity' ? 'identity' : 'checked',
+        router.projectAccountId(deps.worktreeId)
+      )
     : null
   if (accountHome) {
     return accountHome
@@ -46,11 +52,15 @@ export async function resolveStructuredClaudeAccountHomePath(
   )
 }
 
+/** A Codex chat home lookup; the workspace lets a project pin its account. */
+export type StructuredCodexLaunchHomeInput = { launchEnv: NodeJS.ProcessEnv; worktreeId?: string }
+
 export type StructuredCodexAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
+  worktreeId?: string
   /** Resolve create-prepared or side-effect-free read homes identically; null selects env/system defaults. Reads must not sync homes or clear selections. */
   resolveLaunchHome:
-    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
+    | ((input: StructuredCodexLaunchHomeInput) => string | null | Promise<string | null>)
     | null
 }
 
@@ -58,7 +68,10 @@ export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
+  const resolvedHome = await deps.resolveLaunchHome?.({
+    launchEnv: deps.launchEnv,
+    ...(deps.worktreeId ? { worktreeId: deps.worktreeId } : {})
+  })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||

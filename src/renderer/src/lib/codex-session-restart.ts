@@ -25,6 +25,7 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import { isPinLane, projectAccountPin } from './project-agent-account-pin'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
@@ -102,7 +103,9 @@ async function scanCodexPanes(
         ptyId,
         recordedLaneKey: recordedLanes[ptyId]
       })
-      if (!args.isLaneInScope(lane.laneKey)) {
+      // A pane in its project's pinned lane relaunches on that account, so a switch never stales it.
+      const pin = projectAccountPin(state, 'codex', tab.worktreeId)
+      if (!args.isLaneInScope(lane.laneKey) || isPinLane(pin, lane.laneKey)) {
         // Spawn lane is immutable; an out-of-lane answer is final and must not consume another retry.
         return {
           ptyId,

@@ -21,6 +21,9 @@ export type HostCodexManagedHomeVerdict =
 export class UntrustedManagedCodexHomeError extends Error {}
 
 /** Refuse the operation while preserving selection, credentials and home directories. */
+export const PINNED_CODEX_HOME_UNUSABLE_MESSAGE =
+  "This project's Codex account folder can't be used. Choose another account for the project."
+
 export class ManagedCodexHomeTemporarilyUnavailableError extends Error {
   constructor(
     message = 'Codex account files are temporarily locked. Retry in a moment.',

@@ -1,6 +1,10 @@
 export type CodexAccountSelectionTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+  /** A launch's workspace, whose project may pin a host account; lane keys ignore it. */
+  worktreeId?: string
+  /** The project's pin when this process cannot read the project, such as a WSL host's. */
+  projectAccountId?: string
 }
 
 export type NormalizedCodexAccountSelectionTarget = {
