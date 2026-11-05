@@ -18,7 +18,10 @@ import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
 } from './agent-session-model-efforts'
-import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
+import {
+  structuredAgentSessionDescribedModel,
+  structuredAgentSessionShownModel
+} from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
   AgentSessionAcceptedInputSources,
@@ -292,6 +295,7 @@ export type StructuredSessionOptionPick = {
   modelId: string
   optionId: string
   value: SessionOptionValue
+  adoptModelAsLaunchDefault?: false
 }
 
 /** Persist only reseedable IDs, using provider-committed values after reconciliation. Effort-only picks adopt their controls’ model
@@ -304,13 +308,20 @@ export function structuredAgentSessionOptionPicks(
     return []
   }
   const committedModel = committed.model
-  const modelId =
+  const controlsModelId =
     typeof committedModel === 'string' && committedModel.trim()
       ? committedModel
       : structuredAgentSessionControlsModelId(state)
-  if (!modelId) {
+  if (!controlsModelId) {
     return []
   }
+  // A chat on the resolved id it ran keeps the new-chat model; its picks join the listed row that runs it.
+  const listed = committedModel
+    ? undefined
+    : structuredAgentSessionDescribedModel(state, controlsModelId)
+  const modelId = listed?.id ?? controlsModelId
+  const adoption =
+    listed && listed.id !== controlsModelId ? { adoptModelAsLaunchDefault: false as const } : {}
   return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
     const value = committed[optionId]
     if (value === undefined) {
@@ -321,6 +332,6 @@ export function structuredAgentSessionOptionPicks(
       (typeof decoded === 'string' && !decoded.trim()) ||
       encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
       ? []
-      : [{ modelId, optionId, value: decoded }]
+      : [{ modelId, optionId, value: decoded, ...adoption }]
   })
 }

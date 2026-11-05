@@ -129,15 +129,22 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
         return held !== null
       }
       const presents = context.capturePresentation?.()
-      const model = structuredAgentSessionOptionPicks(view, { [id]: encoded })[0]?.modelId ?? null
-      const operation = controller.issue(id, encoded, model, undefined, (operation) => {
-        receipt = {
-          operation,
-          controller,
-          record: context.record,
-          providerStarting: context.providerStarting
-        }
-      })
+      const pick = structuredAgentSessionOptionPicks(view, { [id]: encoded })[0]
+      const operation = controller.issue(
+        id,
+        encoded,
+        pick?.modelId ?? null,
+        undefined,
+        (operation) => {
+          receipt = {
+            operation,
+            controller,
+            record: context.record,
+            providerStarting: context.providerStarting
+          }
+        },
+        pick?.adoptModelAsLaunchDefault
+      )
       context.flush(isCurrent)
       const outcome = await operation.result
       settled(outcome, presents?.() ?? true)

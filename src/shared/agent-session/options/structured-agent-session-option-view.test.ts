@@ -5,6 +5,19 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import {
+  acceptedStructuredSessionSelectionOutcome,
+  createStructuredAgentSessionOptionsWriteOwner
+} from './structured-agent-session-options-write-owner'
+import { createStructuredSessionSelectionController } from './structured-agent-session-selection-operations'
+import {
+  applyNativeChatSessionOptionPicks,
+  resolveNativeChatSessionOptionDefaults
+} from '../../native-chat/input/native-chat-session-option-defaults'
+
+type RememberedPicks = Parameters<
+  Parameters<typeof createStructuredSessionSelectionController>[0]
+>[0][number][]
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import {
@@ -215,6 +228,52 @@ describe('a Claude chat saved on the model id its listing names by alias', () =>
         kind: { choices: levels('low', 'max') }
       }
     )
+  })
+
+  it('remembers an after-reply effort for new chats without changing their model', async () => {
+    const state = coherent(answer('claude-opus-5-5', LISTING, null, 'medium'))
+    const remembered: RememberedPicks = []
+    const controller = createStructuredSessionSelectionController((picks) => {
+      remembered.push(...picks)
+    })
+    const writer = createStructuredAgentSessionOptionsWriteOwner(() => {
+      const view = structuredAgentSessionOptionView(state, undefined, controller.overlay())
+      return {
+        controller,
+        record: state.record,
+        view,
+        snapshot: structuredAgentSessionShownSnapshot(view),
+        ready: true,
+        providerStarting: false,
+        isCurrentContext: () => true,
+        flush: () =>
+          controller.flush(async (pick) => acceptedStructuredSessionSelectionOutcome(pick)),
+        revalidate: () => {},
+        revalidateOn: 'refused-current'
+      }
+    })
+    expect(await writer.setOption('effort', 'high')).toBe(true)
+    // The listed row that runs the chat's model holds the effort; the new-chat model stays as it was.
+    expect(remembered).toEqual([
+      { modelId: 'opus', optionId: 'effort', value: 'high', adoptModelAsLaunchDefault: false }
+    ])
+    for (const [persisted, launches] of [
+      [{ claude: { model: 'opus', valuesByModel: { opus: { effort: 'low' } } } }, 'high'],
+      [{ claude: { model: 'sonnet', valuesByModel: {} } }, undefined],
+      [{}, undefined]
+    ] as const) {
+      const next = applyNativeChatSessionOptionPicks({
+        persisted,
+        agent: 'claude',
+        picks: remembered
+      })
+      expect(next.claude?.model).toBe(persisted.claude?.model)
+      expect(resolveNativeChatSessionOptionDefaults(next, 'claude')?.effort).toBe(launches)
+    }
+    expect(carried(state, undefined, controller.overlay())).toEqual({
+      model: 'claude-opus-5-5',
+      effort: 'high'
+    })
   })
 
   // The next two guard the lookup's fallbacks: neither changes with the fix.
