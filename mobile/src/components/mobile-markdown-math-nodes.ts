@@ -69,13 +69,21 @@ export function displayFormulas(parent: Parent, paragraph: Paragraph): void {
   }
 }
 
-/** KaTeX's enlarging size commands; smaller ones only leave a column a little wide. */
+/** github.com draws `\Huge` at `\Large` (1.44em), so the PR line-count table's +/− glyphs sit
+ *  inline at text height; the larger sizes are capped the same way here. */
+export const GITHUB_MATH_SIZE_MACROS: Readonly<Record<string, string>> = {
+  '\\LARGE': '\\Large',
+  '\\huge': '\\Large',
+  '\\Huge': '\\Large'
+}
+
+/** The enlarging size commands as drawn; smaller ones only leave a column a little wide. */
 const TEX_SIZES: Record<string, number> = {
   large: 1.2,
   Large: 1.44,
-  LARGE: 1.73,
-  huge: 2.07,
-  Huge: 2.49
+  LARGE: 1.44,
+  huge: 1.44,
+  Huge: 1.44
 }
 
 /** About as many characters as a formula draws wide, for sizing table columns: commands,
@@ -93,7 +101,6 @@ export function mobileMathMeasureText(value: string): string {
 }
 
 declare module 'mdast' {
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface InlineMath extends Literal {
     type: 'inlineMath'
     /** `$$` or `\[`: shown as a display formula when it stands alone in its paragraph. */
@@ -101,21 +108,17 @@ declare module 'mdast' {
     /** The authored text, delimiters included, for copying and fallbacks. */
     source: string
   }
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface Math extends Literal {
     type: 'math'
     source: string
   }
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface PhrasingContentMap {
     inlineMath: InlineMath
   }
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface RootContentMap {
     inlineMath: InlineMath
     math: Math
   }
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface BlockContentMap {
     math: Math
   }

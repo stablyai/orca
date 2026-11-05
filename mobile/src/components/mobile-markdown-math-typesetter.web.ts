@@ -1,5 +1,6 @@
 import { MARKDOWN_MATH_KATEX_SETTINGS } from '../../../src/shared/markdown-math-rules'
 import { KATEX_PAGE_STYLE } from './katex-page-style.generated'
+import { GITHUB_MATH_SIZE_MACROS } from './mobile-markdown-math-nodes'
 import type { MobileMathTypesetter } from './mobile-markdown-math-typesetter'
 
 // Streaming replies re-render every formula above the growing tail; typeset each once.
@@ -10,7 +11,9 @@ const results = new Map<string, string | null>()
 export async function loadMobileMathTypesetter(): Promise<MobileMathTypesetter | null> {
   const { default: katex } = await import('katex')
   const style = document.createElement('style')
-  style.textContent = KATEX_PAGE_STYLE
+  // Inline math takes its height from KaTeX's struts alone, so a size command (the PR line-count
+  // table's glyphs) keeps its line at text height and on the text's baseline, as on GitHub.
+  style.textContent = `${KATEX_PAGE_STYLE}:not(.katex-display)>.katex{line-height:0}`
   document.head.append(style)
   return (value, display) => {
     const key = `${display ? 'display' : 'inline'}:${value}`
@@ -22,6 +25,8 @@ export async function loadMobileMathTypesetter(): Promise<MobileMathTypesetter |
     try {
       html = katex.renderToString(value, {
         ...MARKDOWN_MATH_KATEX_SETTINGS,
+        // A copy: KaTeX writes \gdef definitions into the object it is given.
+        macros: { ...GITHUB_MATH_SIZE_MACROS },
         displayMode: display,
         throwOnError: true
       })
