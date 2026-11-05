@@ -1,9 +1,10 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   WORKTREE_ID,
   FOCUS_LEAF_ID,
   ENVIRONMENT_ID,
+  makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
@@ -76,7 +77,6 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
-import { beforeEach } from 'vitest'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -86,7 +86,6 @@ import { projectSourceControlActionLaunch } from '../../../shared/source-control
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import * as preferences from './agent-launch-settings/use-host-agent-launch-preferences'
 import * as settingsTransport from './agent-launch-settings/agent-launch-settings-transport'
-import { makeSnapshot } from './web-runtime-session-test-harness'
 
 let capabilities: string[]
 let refusal: string | undefined
