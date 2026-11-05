@@ -16,7 +16,7 @@ export function useMobileNativeChatComposerGoalMode(
   sendSurfaceId: string
 ): {
   /** Picking `/goal` from the menu enters goal mode. */
-  menu: { hostSetsGoals: boolean; enter: () => void } | undefined
+  menu: { hostSetsGoals: boolean; enter?: () => void } | undefined
   /** A bare /goal enters goal mode and clears the draft; even there it never becomes an objective. */
   consumeBareGoal: (draft: string, clearDraft: () => void) => boolean
   /** Sends the draft; in goal mode as the objective, leaving goal mode once it is set. */
@@ -37,7 +37,13 @@ export function useMobileNativeChatComposerGoalMode(
   const enter = (): void => setEntered({ surface: sendSurfaceId, entry: (entries.current += 1) })
   const exit = (): void => setEntered(null)
   return {
-    menu: structured && !editing ? { hostSetsGoals, enter } : undefined,
+    // A queued edit has no goal mode, but still refuses /goal where the host sets goals.
+    menu: structured
+      ? {
+          hostSetsGoals: structured.threadGoal?.changes === 'host',
+          ...(editing ? {} : { enter })
+        }
+      : undefined,
     consumeBareGoal: (draft, clearDraft) => {
       if (!hostSetsGoals || !isBareStructuredAgentSessionGoalCommand(draft)) {
         return false

@@ -17,6 +17,8 @@ import type { MobileStructuredAgentSessionArgs } from './mobile-structured-agent
 import { mobileStructuredHostClockOffsetMs } from './mobile-structured-host-clock-offset'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
+import { AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { useRouteRelaysCapability } from '../transport/workspace-server-context'
 
 export type MobileStructuredThreadGoal = {
   /** Scopes the strip's expansion to the conversation. */
@@ -77,11 +79,12 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
     () => agentSessionThreadGoalReport({ journalItems, support, reported, journalEpoch }),
     [journalItems, support, reported, journalEpoch]
   )
+  const relayed = useRouteRelaysCapability(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY)
   const changes: MobileStructuredThreadGoal['changes'] = !report
     ? null
     : !report.hostChanges
       ? 'agent'
-      : session.hostSupport?.phoneThreadGoal === true
+      : session.hostSupport?.phoneThreadGoal === true && relayed
         ? 'host'
         : null
   const change = useCallback(
