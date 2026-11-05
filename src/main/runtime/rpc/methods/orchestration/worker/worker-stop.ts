@@ -75,18 +75,17 @@ async function stopHelpers(
           dispatchId,
           helperMutation(mutation, dispatchId)
         )
-        const outcome = receipt.alreadySettled
-          ? 'already_finished'
-          : receipt.state === 'stopped'
-            ? 'stopped'
-            : 'unconfirmed'
+        // A helper whose host could not stop its own helpers is not done, settled or not.
+        const outcome = receipt.helperStopError
+          ? 'unconfirmed'
+          : receipt.alreadySettled
+            ? 'already_finished'
+            : receipt.state === 'stopped'
+              ? 'stopped'
+              : 'unconfirmed'
+        const lastError = receipt.helperStopError ?? receipt.lastError
         return [
-          {
-            ...helper,
-            outcome,
-            state: receipt.state,
-            ...(receipt.lastError ? { lastError: receipt.lastError } : {})
-          },
+          { ...helper, outcome, state: receipt.state, ...(lastError ? { lastError } : {}) },
           ...(receipt.helpers ?? [])
         ]
       } catch (error) {

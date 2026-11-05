@@ -300,39 +300,58 @@ describe('federated transport safety', () => {
 })
 
 describe('worker-stop of a remote worker already settled at home', () => {
-  it('fails the stop when its host cannot be reached to stop its helpers', async () => {
+  async function stopSettledRemote(helpers: Record<string, string[]>) {
     const db = {
       getFederatedDispatch: () => federatedDispatch(),
       beginWorkerStop: () => ({ disposition: 'already_settled', worker: { state: 'succeeded' } }),
-      listHelperDispatchIds: () => []
+      getWorkerDispatch: () => ({ state: 'succeeded' }),
+      listHelperDispatchIds: (id: string) => helpers[id] ?? []
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop reads only these runtime members.
     const runtime = {
       getOrchestrationDb: () => db,
       getRuntimeId: () => 'runtime-home',
       resolveOrchestrationWorkerServer: () => server,
-      callOrchestrationWorkerServer: vi.fn(async (_selector, method: string) => {
+      callOrchestrationWorkerServer: vi.fn(async (_selector, method: string, params) => {
         if (method === 'status.get') {
           return runtimeStatus(['orchestration.worker-stop-helpers.v1'])
         }
         if (method === 'orchestration.federationStop') {
+          if (params.dispatchId === 'dispatch-worker' && helpers['dispatch-worker']) {
+            return { state: 'succeeded', alreadySettled: true, processAction: 'none' }
+          }
           throw new Error('timed out')
         }
         return { keptOpen: false }
       })
     } as unknown as OrcaRuntimeService
     const method = ORCHESTRATION_WORKER_STOP_METHODS[0]!
-
-    const receipt = await method.handler(method.params!.parse({ dispatch: 'dispatch-worker' }), {
+    return method.handler(method.params!.parse({ dispatch: 'dispatch-worker' }), {
       runtime,
       orchestrationMutation: { requestId: 'request-stop' }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime and orchestrationMutation.
     } as never)
+  }
 
-    expect(receipt).toMatchObject({
+  it('fails the stop when its host cannot be reached to stop its helpers', async () => {
+    await expect(stopSettledRemote({})).resolves.toMatchObject({
       state: 'succeeded',
       alreadySettled: true,
       helperStopError: expect.stringContaining('timed out')
+    })
+  })
+
+  it('reports a settled helper whose host could not stop its helpers as unconfirmed', async () => {
+    await expect(
+      stopSettledRemote({ 'dispatch-worker': ['dispatch-helper'] })
+    ).resolves.toMatchObject({
+      helpers: [
+        {
+          dispatchId: 'dispatch-helper',
+          outcome: 'unconfirmed',
+          lastError: expect.stringContaining('timed out')
+        }
+      ]
     })
   })
 })
