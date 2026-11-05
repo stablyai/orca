@@ -1,3 +1,4 @@
+import { saveNativeChatClipboardImage } from './native-chat-clipboard-image-save'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, useEffect, useRef, useState } from 'react'
@@ -243,5 +244,24 @@ describe('clipboard image paste into a remote terminal-backed chat', () => {
     act(() => latest().attachments.attachResolvedPaths(['/Users/me/local.png'], null))
     expect(latest().attachments.imageAttachments).toHaveLength(0)
     expect(latest().notice).toBe('Local attachments are not available for remote sessions.')
+  })
+})
+
+it('preserves an explicitly empty image payload so the save bridge rejects it', async () => {
+  mocks.saveClipboardImageAsTempFile.mockImplementation(async (args) => {
+    if (args.imageDataUrl !== undefined) {
+      throw new Error('Expected a PNG data URL')
+    }
+    return '/tmp/unrelated-clipboard-image.png'
+  })
+  const notice = vi.fn()
+  const result = await saveNativeChatClipboardImage(SERVER_OWNER, {
+    imageDataUrl: '',
+    setNotice: notice
+  })
+  expect(result).toEqual({ status: 'failed' })
+  expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+    runtimeEnvironmentId: 'env-1',
+    imageDataUrl: ''
   })
 })

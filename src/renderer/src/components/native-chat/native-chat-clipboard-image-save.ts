@@ -81,7 +81,7 @@ export async function saveNativeChatClipboardImage(
     report.ready?.()
     const tempPath = await window.api.ui.saveClipboardImageAsTempFile({
       ...target.args,
-      ...(report.imageDataUrl ? { imageDataUrl: report.imageDataUrl } : {})
+      ...(report.imageDataUrl !== undefined ? { imageDataUrl: report.imageDataUrl } : {})
     })
     return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
   } catch (error) {
