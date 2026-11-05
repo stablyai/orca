@@ -127,7 +127,8 @@ describe('orca file CLI handlers', () => {
     ['--line='],
     ['--line'],
     ['--line', '2', '--column='],
-    ['--line', '2', '--column', '0']
+    ['--line', '2', '--column', '0'],
+    ['--preview', '--line', '2']
   ])('rejects invalid positioning %j before resolving a workspace', async (...flags) => {
     await main(['file', 'open', 'a.ts', ...flags], '/tmp/repo')
     expect(process.exitCode).toBe(1)
