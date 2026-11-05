@@ -5,8 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalRenderItem
+  type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
@@ -109,16 +108,14 @@ async function measure(turns: number, withCommand: boolean) {
     const read = statusRead()
     return {
       ...read,
-      items: read.items.map(
-        (item) =>
-          new Proxy(item, {
-            get: (target, key, receiver) => {
-              if (key === 'body') {
-                bodyReads += 1
-              }
-              return Reflect.get(target, key, receiver)
-            }
-          })
+      items: read.items.map((item) =>
+        Object.defineProperty({ ...item }, 'body', {
+          enumerable: true,
+          get: () => {
+            bodyReads += 1
+            return item.body
+          }
+        })
       )
     }
   })
@@ -131,8 +128,7 @@ async function measure(turns: number, withCommand: boolean) {
     indexedReads: statusItem.mock.calls.length,
     rows: snapshot.items.length,
     state: projection.state,
-    scanned: projectStructuredAgentSessionStatusState(snapshot.items, snapshot.submissions, 7),
-    items: snapshot.items as readonly AgentJournalRenderItem[]
+    scanned: projectStructuredAgentSessionStatusState(snapshot.items, snapshot.submissions, 7)
   }
 }
 
