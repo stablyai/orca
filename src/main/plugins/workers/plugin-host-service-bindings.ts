@@ -12,7 +12,7 @@ import {
 import { pluginSettingDefaults } from '../../../shared/plugins/contributions/plugin-settings-values'
 import { PluginSecretsStore, pluginSecretsProtection } from '../plugin-secrets-store'
 import { PluginKvStore } from '../plugin-storage-store'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
 
 export type PluginRuntimeDelegate = {

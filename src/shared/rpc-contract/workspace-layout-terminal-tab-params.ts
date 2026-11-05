@@ -1,8 +1,8 @@
 import { z } from 'zod'
-import { isTerminalLeafId } from '../stable-pane-id'
-import { isValidHostTerminalTabId } from '../terminal-tab-id'
-import type { TuiAgent } from '../tui-agent'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
+import { isValidHostTerminalTabId } from '../workspace-layout/terminal-tab-id'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 
 const workspace = z.string().min(1)
 

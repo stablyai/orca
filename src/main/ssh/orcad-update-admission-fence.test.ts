@@ -9,7 +9,9 @@ vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../shared/shell-argument-quoting', () => ({ quotePosixShell: (s: string) => `'${s}'` }))
+vi.mock('../../shared/shell/launch/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('../managed-server/install/remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
   acquireInstallLock: vi.fn()
@@ -39,9 +41,10 @@ import { deployOrcad } from './orcad-remote-deploy'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import {
   ORCAD_UPDATE_ADMISSION_FENCE_MS,
-  ORCAD_UPDATE_ADMISSION_STOP_BY_MS
+  ORCAD_UPDATE_ADMISSION_STOP_BY_MS,
+  type OrcadTerminalCensus
 } from '../../shared/orcad-terminal-census'
-import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+
 import {
   TerminalUpdateAdmission,
   TerminalUpdateAdmissionClosedError

@@ -1,5 +1,5 @@
 import { defineConfig } from '@stablyai/playwright-test'
-import { resolveBuildSourceCommit } from '../config/scripts/build-source-commit.mjs'
+import { resolveBuildSourceCommit } from '../config/scripts/build-identity/build-source-commit.mjs'
 
 // Run ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e to build/run; SKIP_BUILD=1 reuses the current E2E build.
 // Headful pointer-capture runs require an isolated display. Global setup/teardown own the seeded repo; fixtures launch Electron.

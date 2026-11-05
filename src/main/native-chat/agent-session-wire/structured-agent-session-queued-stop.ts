@@ -41,15 +41,8 @@ export function stopReachesUnrecordedWork(
 
 /** Include nonrefused later sends even if unknown; missing sequence is legacy data. */
 export function sentSinceStop(
-  journal: Pick<AgentSessionJournal, 'submissions'>,
+  journal: Pick<AgentSessionJournal, 'inputOrder'>,
   inForce: { sequence: number }
 ): boolean {
-  return journal
-    .submissions()
-    .some(
-      (entry) =>
-        entry.dispatchState !== 'rejected' &&
-        entry.acceptedSequence !== undefined &&
-        entry.acceptedSequence > inForce.sequence
-    )
+  return journal.inputOrder.sentAfter(inForce.sequence)
 }

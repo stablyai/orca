@@ -1,17 +1,17 @@
 import {
   getWindowsInputRecordPasteBurstMs,
   resolveAgentPromptSubmitDelayForAgent
-} from '../../shared/agent-prompt-injection'
-import type { TerminalAgent } from '../../shared/terminal-agent'
-import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
+import type { TerminalAgent } from '../../shared/agent-status/identity/terminal-agent'
+import { iterateTerminalInputChunks } from '../../shared/terminal/input/terminal-input'
 import type { TerminalInputSource } from './terminal-input-admission'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import {
   WRITE_ACCEPTED,
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
-} from '../../shared/pty-write-settlement'
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export type RuntimeTerminalWriteOptions = {
   inputSource?: TerminalInputSource

@@ -4,7 +4,7 @@ import {
   TERMINAL_VIEWPORT_MAX_ROWS,
   TERMINAL_VIEWPORT_MIN_COLS,
   TERMINAL_VIEWPORT_MIN_ROWS
-} from '../terminal-viewport'
+} from '../terminal/viewport/terminal-viewport'
 import { requiredString } from './rpc-param-primitives'
 
 export const TerminalHandle = z.object({ terminal: requiredString('Missing terminal handle') })

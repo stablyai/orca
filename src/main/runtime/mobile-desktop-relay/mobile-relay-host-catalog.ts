@@ -7,13 +7,13 @@ import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult,
   MobileRelayServerWorktreeRow
-} from '../../../shared/mobile-relay-hosts-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../shared/workspace-creator-visibility'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session-tab-activity'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'

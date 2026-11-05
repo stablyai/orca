@@ -1,4 +1,4 @@
-import { countAgentTuiInputLines } from '../../agent-tui-input-clear'
+import { countAgentTuiInputLines } from '../../agent-launch/startup/agent-tui-input-clear'
 
 /** Longest draft mirrored into chat; a send past the 15-line clear burst relies on the desktop's confirmed second burst. */
 const LAUNCH_DRAFT_MIRROR_MAX_LINES = 40

@@ -17,7 +17,7 @@ import {
 } from '../native-chat/native-chat-composer-draft-store'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 const NO_OPTIONS_SURFACE: SessionOptionsSurface = {
   getSnapshot: () => [],

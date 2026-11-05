@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { createCmdJTaskSearchRequests } from '../cmd-j/task-search-requests'
 import { jiraTaskResult } from '../cmd-j/task-search.test-fixture'
@@ -201,3 +201,81 @@ it('filters to open after pending edits apply: a pending reopen shows and a fail
   expect(numbers()).toEqual([43])
   useAppStore.setState({ repos: [] })
 })
+
+let actualCreateRequests: typeof createCmdJTaskSearchRequests
+beforeAll(async () => {
+  const actual = await vi.importActual<{
+    createCmdJTaskSearchRequests: typeof createCmdJTaskSearchRequests
+  }>('../cmd-j/task-search-requests')
+  actualCreateRequests = actual.createCmdJTaskSearchRequests
+})
+it.each([false, true])(
+  'answers a GitHub search held by a source save once it settles, or reads nothing once closed (closed=%s)',
+  async (closed) => {
+    vi.mocked(createCmdJTaskSearchRequests).mockImplementation(actualCreateRequests)
+    const repo: Repo = {
+      id: 'held-repo',
+      path: '/held-repo',
+      displayName: 'Held',
+      badgeColor: '',
+      addedAt: 1,
+      executionHostId: 'local'
+    }
+    const fork = { owner: 'fork', repo: 'project' }
+    const listWorkItems = vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: 'issue:12',
+          repoId: repo.id,
+          type: 'issue',
+          number: 12,
+          title: 'login redirect',
+          state: 'open',
+          labels: [],
+          assignees: [],
+          url: 'https://github.com/fork/project/issues/12',
+          author: null,
+          updatedAt: '2026-11-01T00:00:00Z'
+        }
+      ],
+      sources: { issues: fork, prs: fork, originCandidate: fork, upstreamCandidate: null }
+    })
+    const save = Promise.withResolvers<Repo>()
+    const apiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { repos: { update: vi.fn(() => save.promise) }, gh: { listWorkItems } }
+    })
+    useAppStore.setState({ repos: [repo], preflightStatusChecked: false, workItemsCache: {} })
+    try {
+      const saving = useAppStore
+        .getState()
+        .setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+      const props = {
+        ...input,
+        settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
+        repos: useAppStore.getState().repos
+      }
+      const { result, rerender } = renderHook(useWorktreeJumpPaletteTaskSearch, {
+        initialProps: props
+      })
+      await act(async () => vi.advanceTimersByTimeAsync(900))
+      expect(listWorkItems).not.toHaveBeenCalled()
+      if (closed) {
+        rerender({ ...props, visible: false })
+      }
+      await act(async () => {
+        save.resolve({ ...repo, issueSourcePreference: 'origin' })
+        await saving
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      expect(listWorkItems).toHaveBeenCalledTimes(closed ? 0 : 1)
+      expect(result.current.taskItems).toHaveLength(closed ? 0 : 1)
+    } finally {
+      useAppStore.setState({ repos: [], workItemsCache: {} })
+      if (apiDescriptor) {
+        Object.defineProperty(window, 'api', apiDescriptor)
+      }
+    }
+  }
+)

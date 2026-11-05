@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
-import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { RpcClient } from '../transport/rpc-client'
 import { relayHostsListRead } from './server-workspace-operations'
 

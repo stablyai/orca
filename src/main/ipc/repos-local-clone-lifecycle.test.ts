@@ -2,7 +2,7 @@ import type * as RepoDetectionModule from '../git/repo-detection'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as GitRunner from '../git/runner'
@@ -39,7 +39,10 @@ vi.mock('../git/repo', async (importOriginal) =>
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
-vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: reposMocks.listWorktreeGraphMock
+}))
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
@@ -48,11 +51,11 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
 )
 
 import { registerRepoHandlers } from './repos'
-import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../git/command-runner/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { isGitRepoAsync } from '../git/repo'
-import { listSubmodulePaths } from '../git/status'
+import { listSubmodulePaths } from '../git/source-control/submodule-paths'
 import {
   createMockCloneProcess,
   createRepoHandlerHarness,
@@ -107,7 +110,8 @@ describe('repos:add + repos:clone', () => {
   const tempRoots: string[] = []
 
   const createTempRoot = async (): Promise<string> => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-repos-clone-'))
+    // Clone registers the resolved destination (macOS tmpdir is a /var symlink).
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-repos-clone-')))
     tempRoots.push(root)
     return root
   }
@@ -747,6 +751,42 @@ describe('repos:add + repos:clone', () => {
       // Recreated project folders invalidate both worktree-root preparation and cached authorization.
       expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, saved)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+    })
+
+    it('keeps a project saved under a symlinked destination spelling', async () => {
+      const root = await createTempRoot()
+      await mkdir(join(root, 'real'))
+      const destination = join(root, 'alias')
+      await symlink(join(root, 'real'), destination, 'junction')
+      // Saved before clone paths were resolved, so it keeps the typed spelling.
+      const saved = savedProject(join(destination, 'orca'), {
+        gitRemoteIdentity: identity('example.com/orca')
+      })
+      mockStore.getRepos.mockReturnValue([saved])
+      gitExecFileAsyncMock.mockRejectedValue(new Error('spawn ENOENT'))
+
+      await expect(handlers.get('repos:clone')!(null, { url, destination })).resolves.toBe(saved)
+
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
+    })
+
+    it('refuses a different repo through a symlinked destination when the saved folder is gone', async () => {
+      const root = await createTempRoot()
+      await mkdir(join(root, 'real'))
+      const destination = join(root, 'alias')
+      await symlink(join(root, 'real'), destination, 'junction')
+      // Clone saves Git's resolved path; the typed alias must still find it.
+      const saved = savedProject(join(root, 'real', 'orca'), {
+        gitRemoteIdentity: identity('github.com/stablyai/orca')
+      })
+      mockStore.getRepos.mockReturnValue([saved])
+      gitExecFileAsyncMock.mockRejectedValue(new Error('spawn ENOENT'))
+
+      await expect(
+        handlers.get('repos:clone')!(null, { url: 'https://github.com/me/orca.git', destination })
+      ).rejects.toThrow('"orca" is already an Orca project')
+
+      expect(gitSpawnMock).not.toHaveBeenCalled()
     })
 
     it('refuses, naming the project, when the saved project was a different repo', async () => {

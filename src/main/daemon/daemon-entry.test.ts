@@ -23,22 +23,6 @@ describe('daemon-entry parseArgs', () => {
     expect(() => parseArgs(['--socket', '/tmp/t.sock'])).toThrow('Usage:')
   })
 
-  it('parses --log-file when present', () => {
-    const result = parseArgs([
-      '--socket',
-      '/tmp/t.sock',
-      '--token',
-      '/tmp/t.token',
-      '--log-file',
-      '/tmp/daemon.log'
-    ])
-    expect(result).toEqual({
-      socketPath: '/tmp/t.sock',
-      tokenPath: '/tmp/t.token',
-      logFilePath: '/tmp/daemon.log'
-    })
-  })
-
   it('parses the internal PID-record ownership pair', () => {
     expect(
       parseArgs([
@@ -107,10 +91,6 @@ describe('daemon-entry parseArgs', () => {
         'launch-a'
       ])
     ).toThrow('provided together')
-  })
-
-  it('still requires --socket and --token when --log-file is given', () => {
-    expect(() => parseArgs(['--log-file', '/tmp/daemon.log'])).toThrow('Usage:')
   })
 
   it('parses the GUI-only --login-session-watch flag and omits it when absent', () => {

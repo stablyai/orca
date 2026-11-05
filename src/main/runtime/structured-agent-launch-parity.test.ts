@@ -10,7 +10,7 @@ import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as AcpAdapterModule from '../acp/acp-structured-session-adapter'
 import type * as ClaudeAdapterModule from '../claude/structured/claude-structured-session-adapter'
-import type * as CodexAdapterModule from '../codex/codex-structured-session-adapter'
+import type * as CodexAdapterModule from '../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import type * as PiAdapterModule from '../pi/rpc-session-adapter'
 import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
@@ -67,15 +67,18 @@ vi.mock('./agent-session/structured-agent-session-runtime', async (importOrigina
   }
 })
 // Each adapter as production builds it, with its resolved launch recorded on the way to the spawn.
-vi.mock('../codex/codex-structured-session-adapter', async (importOriginal) => {
-  const actual = await importOriginal<typeof CodexAdapterModule>()
-  class RecordingAdapter extends actual.CodexStructuredSessionAdapter {
-    constructor(deps: ConstructorParameters<typeof actual.CodexStructuredSessionAdapter>[0]) {
-      super({ ...deps, resolveLaunch: (input) => deps.resolveLaunch(input).then(capture.record) })
+vi.mock(
+  '../codex/structured/session-lifecycle/codex-structured-session-adapter',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof CodexAdapterModule>()
+    class RecordingAdapter extends actual.CodexStructuredSessionAdapter {
+      constructor(deps: ConstructorParameters<typeof actual.CodexStructuredSessionAdapter>[0]) {
+        super({ ...deps, resolveLaunch: (input) => deps.resolveLaunch(input).then(capture.record) })
+      }
     }
+    return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
   }
-  return { ...actual, CodexStructuredSessionAdapter: RecordingAdapter }
-})
+)
 vi.mock('../claude/structured/claude-structured-session-adapter', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeAdapterModule>()
   class RecordingAdapter extends actual.ClaudeStructuredSessionAdapter {
@@ -125,10 +128,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../shared/structured-worker-handle'
-import { YOLO_TUI_AGENT_ARGS } from '../../shared/tui-agent-permissions'
-import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
+import { YOLO_TUI_AGENT_ARGS } from '../../shared/agent-launch/permissions/tui-agent-permissions'
+import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
   ORCA_AGENT_SESSION_CALLER_ENV_KEYS
@@ -531,6 +534,7 @@ function normalized(value: string): string {
     .split(process.cwd())
     .join('<repo>')
     .replace(/(acp-temp[\\/]\w+[\\/]run-)\w+/, '$1<random>')
+    .replace(/(probes[\\/])\d+-[\w-]+/, '$1<pid>-<random>')
 }
 
 /** Keys whose value is the installed SDK's own, which a dependency bump changes. */

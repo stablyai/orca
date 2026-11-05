@@ -2,16 +2,16 @@ import {
   resolveQualifiedFolderWorkspaceResult,
   type QualifiedFolderHostState,
   type FolderHostWorkspace
-} from '../../../shared/folder-workspace-execution-host'
+} from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import type { AppState } from './types'
-import { getFolderWorkspaceWorktree } from '../../../shared/folder-workspace-worktree'
-export { getFolderWorkspaceWorktree }
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { getFolderWorkspaceWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
+
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 // Route workspace readers here; check-workspace-record-read-ratchet.mjs enforces this boundary.
 

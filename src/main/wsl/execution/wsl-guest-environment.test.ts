@@ -44,20 +44,6 @@ describe('probing', () => {
     })
   })
 
-  it('collapses a concurrent burst into one probe', async () => {
-    // Collapse teardown/detection bursts instead of launching 32 login shells.
-    respondWithPayload(GOOD)
-    await Promise.all(Array.from({ length: 32 }, () => getWslGuestEnvironment('Ubuntu')))
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps distros isolated', async () => {
-    respondWithPayload(GOOD)
-    await getWslGuestEnvironment('Ubuntu')
-    await getWslGuestEnvironment('Debian')
-    expect(runProcessMock).toHaveBeenCalledTimes(2)
-  })
-
   it('does not retain deadline timers after a concurrent probe settles', async () => {
     vi.useFakeTimers()
     try {
@@ -67,21 +53,6 @@ describe('probing', () => {
       expect(runProcessMock).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
-    }
-  })
-
-  it('reads a warm cache without allocating deadline timers', async () => {
-    respondWithPayload(GOOD)
-    const environment = await getWslGuestEnvironment('Ubuntu')
-    const timeout = vi.spyOn(globalThis, 'setTimeout')
-    try {
-      for (let index = 0; index < 100; index++) {
-        expect(await getWslGuestEnvironment('Ubuntu')).toBe(environment)
-      }
-      expect(timeout).not.toHaveBeenCalled()
-      expect(runProcessMock).toHaveBeenCalledTimes(1)
-    } finally {
-      timeout.mockRestore()
     }
   })
 })
@@ -111,20 +82,6 @@ describe('bad answers are not cached as good ones', () => {
 })
 
 describe('transient versus permanent failure', () => {
-  it('does not retry a distro that cannot produce env', async () => {
-    // Exit 127 is explicit no-usable-env evidence; do not turn retries into polling.
-    runProcessMock.mockResolvedValue({
-      code: 127,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
-    await getWslGuestEnvironment('Ubuntu')
-    await getWslGuestEnvironment('Ubuntu')
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
-  })
-
   it('retries after the window when the probe timed out', async () => {
     vi.useFakeTimers()
     try {

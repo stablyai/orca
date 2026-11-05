@@ -3,50 +3,52 @@ import {
   restoreJournalInputPlaces,
   currentJournalInputIdentity,
   journalInputOrderChanged,
-  isJournalInputOverride
+  isJournalInputOverride,
+  recordJournalInputAdmission,
+  releaseJournalInputHistory
 } from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
-import { JournalSubmissionLinks } from './journal-submission-links'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { JournalSubmissionIndex } from './journal-submission-index'
+import { JournalNewestTurn } from './journal-newest-turn'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { InputPlaceQuery } from './journal-input-place-index'
+import { JournalInputEvidence } from './journal-input-evidence'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
-const owners = new WeakMap<JournalReducerState, JournalInputOrder>()
+import { getJournalInputOrder, setJournalInputOrder } from './journal-input-order-registry'
+export { setJournalInputOrder } from './journal-input-order-registry'
+
 export function initializeJournalInputOrder(
   state: JournalReducerState,
   originalAcceptance?: (id: string) => AgentJournalCursor | undefined
 ): JournalInputOrder {
   const owner = new JournalInputOrder(state, originalAcceptance)
-  owners.set(state, owner)
+  setJournalInputOrder(state, owner)
   return owner
 }
 export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
-  return owners.get(state) ?? initializeJournalInputOrder(state)
-}
-export function setJournalInputOrder(state: JournalReducerState, owner: JournalInputOrder): void {
-  owners.set(state, owner)
+  return getJournalInputOrder(state) ?? initializeJournalInputOrder(state)
 }
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
-export class JournalInputOrder {
-  readonly links = new JournalSubmissionLinks()
+export class JournalInputOrder extends JournalInputEvidence {
   private reconstructing = false
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
   private readonly originals = new Map<string, AgentJournalCursor | undefined>()
-  private readonly unsettled = new Map<string, AgentJournalSubmission>()
+  private readonly unsettled = new JournalSubmissionIndex()
+  // Recovered unknown sends stay unsettled forever; only pending ones can still be accepted.
+  private readonly sending = new JournalSubmissionIndex()
   private readonly queued = new Map<string, AgentJournalSubmission>()
   private readonly entered = new Map<string, AgentJournalSubmission>()
   private readonly overrides = new Map<string, AgentJournalSubmission>()
-  private pending: readonly AgentJournalSubmission[] | undefined
   readonly lineage: JournalInputLineageOwner
   readonly cards: JournalInputCardIndex
   private receiptCount = 0
@@ -54,9 +56,11 @@ export class JournalInputOrder {
   private revision = 0
 
   constructor(
-    private readonly state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+    state: JournalReducerState,
+    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
+    readonly newestTurn = new JournalNewestTurn(state)
   ) {
+    super(state)
     this.lineage = new JournalInputLineageOwner(state.inputCards)
     this.cards = new JournalInputCardIndex(this.lineage)
   }
@@ -77,20 +81,13 @@ export class JournalInputOrder {
       this.lineage.load(row.inputOrderLineage)
     }
     this.lineage.observe(row.seq)
-    if (row.kind !== 'submission' || !row.handoverRecorded || row.queuedMessageId !== undefined) {
-      return
-    }
-    if (this.state.inputEntries.has(row.clientMessageId)) {
-      return
-    }
-    const place = this.cards.admission(state, row, this.originalAcceptance)
-    if (place.context.basis === 'legacy') {
+    if (
+      recordJournalInputAdmission(state, row, this.cards, this.originalAcceptance, (id) =>
+        this.releasePlace(state, id)
+      )
+    ) {
       this.legacyPlaces++
     }
-    this.state.inputEntries.set(row.clientMessageId, {
-      context: place.context,
-      ...(place.witnessCardId ? { witnessCardId: place.witnessCardId } : {})
-    })
   }
 
   // A streaming prefix cannot establish the last legacy consumer.
@@ -119,12 +116,6 @@ export class JournalInputOrder {
     this.lineage.restoreFrontier(state.lastSequence, state.inputEntries.values())
   }
 
-  linkedVersion(): number {
-    return this.links.version()
-  }
-  linkedTo(id: string): Iterable<AgentJournalSubmission> {
-    return this.links.to(id)
-  }
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
     this.cards.overlay(state, rows)
   }
@@ -175,12 +166,27 @@ export class JournalInputOrder {
     return this.entered.values()
   }
   unsettledSubmissions(): readonly AgentJournalSubmission[] {
-    return (this.pending ??= [...this.unsettled.values()])
+    return this.unsettled.list()
+  }
+  sendingSubmissions(): readonly AgentJournalSubmission[] {
+    return this.sending.list()
   }
   version(): number {
     return this.revision
   }
 
+  liveCards(state: JournalReducerState): Iterable<QueuedMessageRow> {
+    this.cards.ensure(state)
+    return this.cards.live()
+  }
+  cardVersion(state: JournalReducerState): number {
+    this.cards.ensure(state)
+    return this.cards.version()
+  }
+  cardBounds(state: JournalReducerState): { first: number; last: number } {
+    this.cards.ensure(state)
+    return this.cards.bounds()
+  }
   head(state: JournalReducerState, floor: AgentJournalCursor | null): QueuedMessageRow | undefined {
     this.cards.ensure(state, floor)
     return this.cards.head()
@@ -205,7 +211,7 @@ export class JournalInputOrder {
     prior: QueuedMessageRow | undefined,
     card: QueuedMessageRow
   ): void {
-    this.cards.queueChanged(state, prior, card)
+    this.cards.queueChanged(state, prior, card, this.reconstructing || this.legacyPlaces > 0)
     if (!this.reconstructing && this.legacyPlaces === 0) {
       const source = this.lineage.cards.get(card.messageId)
       if (source) {
@@ -218,6 +224,7 @@ export class JournalInputOrder {
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
+    this.newestTurn.afterRow(state, row)
     if (journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }
@@ -240,26 +247,22 @@ export class JournalInputOrder {
   }
 
   private refreshItem(state: JournalReducerState, itemId: string): void {
-    const identity = parseAgentJournalItemKey(itemId)
-    if (identity?.provider === 'orca') {
-      this.refresh(state, identity.clientMessageId)
+    const id = this.inputIds.get(itemId)
+    if (id !== undefined) {
+      this.refresh(state, id)
     }
   }
 
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
-    this.links.refresh(id, entry, state.items)
-    if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
-      if (this.unsettled.get(id) !== entry) {
-        this.unsettled.set(id, entry)
-        this.pending = undefined
-        this.revision++
-      }
-    } else if (this.unsettled.delete(id)) {
-      this.pending = undefined
+    this.refreshInputEvidence(state, id, entry)
+    this.refreshLink(id)
+    const dispatch = entry?.dispatchState
+    if (this.unsettled.keep(id, entry, dispatch === 'pending' || dispatch === 'unknown')) {
       this.revision++
     }
-    if (entry?.dispatchState !== 'pending') {
+    this.sending.keep(id, entry, dispatch === 'pending')
+    if (dispatch !== 'pending') {
       this.releasePlace(state, id)
     }
     if (entry && isQueuedAgentJournalSubmission(entry)) {
@@ -289,6 +292,7 @@ export class JournalInputOrder {
           this.legacyPlaces === 0 &&
           !this.currentIdentity(state, card.messageId)
         ) {
+          this.cards.releaseCard(card.messageId, state.lastSequence)
           this.lineage.cards.delete(card.messageId)
         }
       }
@@ -310,8 +314,7 @@ export class JournalInputOrder {
   }
 
   private releaseHistory(state: JournalReducerState): void {
-    this.lineage.releaseHistory((id) => this.currentIdentity(state, id))
-    this.cards.releaseHistory()
+    releaseJournalInputHistory(state, this.lineage, this.cards)
   }
 
   precedes(card: QueuedMessageRow, submission: AgentJournalSubmission): boolean {

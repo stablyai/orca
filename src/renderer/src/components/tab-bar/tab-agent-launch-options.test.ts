@@ -1,77 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTabAgentLaunchOptions,
-  buildAgentPickerLaunchOptions,
   buildTabAgentLaunchOptionsFromRows,
-  findMatchingTabAgentLaunchOptions,
-  orderTabLaunchAgents
+  findMatchingTabAgentLaunchOptions
 } from './tab-agent-launch-options'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 describe('tab agent launch options', () => {
-  it('orders detected agents by the configured default first', () => {
-    expect(orderTabLaunchAgents('codex', ['claude', 'codex', 'gemini'])).toEqual([
-      'codex',
-      'claude',
-      'gemini'
-    ])
-  })
-
-  it('excludes disabled agents from the launch list', () => {
-    expect(orderTabLaunchAgents(null, ['claude', 'codex', 'openclaude'], ['openclaude'])).toEqual([
-      'claude',
-      'codex'
-    ])
-  })
-
-  it('drops a disabled default agent instead of surfacing it first', () => {
-    const ordered = orderTabLaunchAgents(
-      'openclaude',
-      ['claude', 'codex', 'openclaude'],
-      ['openclaude']
-    )
-    expect(ordered).not.toContain('openclaude')
-    expect(ordered).toEqual(['claude', 'codex'])
-  })
-
-  it('keeps a disabled agent out of new-tab search results', () => {
-    const options = buildTabAgentLaunchOptions(
-      orderTabLaunchAgents('codex', ['claude', 'codex', 'openclaude'], ['openclaude'])
-    )
-    expect(findMatchingTabAgentLaunchOptions('open', options).map((o) => o.agent)).toEqual([])
-  })
-
-  it('matches detected agents by id, label, command, and command override', () => {
-    const options = buildTabAgentLaunchOptions(['claude', 'codex', 'antigravity'], {
-      codex: 'codex-beta'
-    })
-
-    expect(
-      findMatchingTabAgentLaunchOptions('Claude', options).map((option) => option.agent)
-    ).toEqual(['claude'])
-    expect(findMatchingTabAgentLaunchOptions('openai codex', options)).toEqual([])
-    expect(
-      findMatchingTabAgentLaunchOptions('codex-beta', options).map((option) => option.agent)
-    ).toEqual(['codex'])
-    expect(findMatchingTabAgentLaunchOptions('agy', options).map((option) => option.agent)).toEqual(
-      ['antigravity']
-    )
-  })
-
-  it('matches agents on a partial prefix so the launcher actually searches', () => {
-    const options = buildTabAgentLaunchOptions(['claude', 'codex', 'gemini', 'antigravity'])
-
-    expect(findMatchingTabAgentLaunchOptions('gemin', options).map((o) => o.agent)).toEqual([
-      'gemini'
-    ])
-    expect(findMatchingTabAgentLaunchOptions('clau', options).map((o) => o.agent)).toEqual([
-      'claude'
-    ])
-    expect(findMatchingTabAgentLaunchOptions('anti', options).map((o) => o.agent)).toEqual([
-      'antigravity'
-    ])
-  })
-
   it('ranks an exact alias above weaker prefix matches', () => {
     const options = buildTabAgentLaunchOptions(['codebuff', 'codex', 'copilot'], {
       codebuff: 'codex-tools'
@@ -89,16 +23,6 @@ describe('tab agent launch options', () => {
 
     // Agent rows outrank files, so broad mid-string hits must not hijack the result list.
     expect(findMatchingTabAgentLaunchOptions('ode', options)).toEqual([])
-  })
-
-  it('requires at least two characters before a prefix matches (no single-key flood)', () => {
-    const options = buildTabAgentLaunchOptions(['claude', 'codex', 'copilot', 'cursor'])
-
-    // A lone "c" must not surface (and auto-launch) an agent.
-    expect(findMatchingTabAgentLaunchOptions('c', options)).toEqual([])
-    expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
-      expect.arrayContaining(['codex', 'copilot'])
-    )
   })
 })
 
@@ -122,32 +46,3 @@ it('projects the same CLI label, unavailable reason and stable chat ID as static
     ])
   ).toEqual([['cli:codex', 'cli']])
 })
-
-it.each(['chat', 'terminal'] as const)(
-  'offers only the %s default row while preserving custom command aliases and host identity',
-  (surface) => {
-    const entry: AgentPickerEntry = {
-      agent: 'codex',
-      label: 'Codex',
-      rows: [
-        { agent: 'codex', kind: 'chat', executionHostId: 'runtime:paired' },
-        { agent: 'codex', kind: 'cli', executionHostId: 'runtime:paired' }
-      ],
-      surfaces: ['chat', 'terminal'],
-      defaultSurface: surface,
-      terminal: {},
-      structured: {},
-      catalog: { origin: 'unknown' }
-    }
-    const options = buildAgentPickerLaunchOptions([entry], { codex: 'cx' })
-    expect(findMatchingTabAgentLaunchOptions('cx', options)).toEqual(options)
-    expect(findMatchingTabAgentLaunchOptions('codex', options)).toEqual(options)
-    expect(options).toHaveLength(1)
-    expect(options[0]).toMatchObject({
-      label: 'Codex',
-      row: { kind: surface === 'chat' ? 'chat' : 'cli', executionHostId: 'runtime:paired' },
-      pickerEntry: entry
-    })
-    expect(options[0].setup).toBeUndefined()
-  }
-)

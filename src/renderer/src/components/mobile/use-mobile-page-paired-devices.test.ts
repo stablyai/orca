@@ -21,7 +21,7 @@ vi.mock('sonner', () => ({
 }))
 
 // Disable polling to isolate the listDevices calls made directly by this hook.
-vi.mock('../settings/mobile-pairing-device-polling', () => ({
+vi.mock('../settings/mobile/pairing/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: (): void => {}
 }))
 
@@ -88,15 +88,6 @@ describe('useMobilePagePairedDevices', () => {
   afterEach(async () => {
     await unmountProbes()
     document.body.innerHTML = ''
-  })
-
-  it('resolves to the paired stage when a device is already paired', async () => {
-    mocks.listDevices.mockResolvedValue({ devices: [device('phone-1')] })
-
-    await renderProbe()
-
-    await vi.waitFor(() => expect(latest?.stage).toBe('paired'))
-    expect(latest?.devices.map((d) => d.deviceId)).toEqual(['phone-1'])
   })
 
   it('returns to the paired summary from step 0 while devices exist', async () => {

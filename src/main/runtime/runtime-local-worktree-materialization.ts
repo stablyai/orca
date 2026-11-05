@@ -5,8 +5,8 @@ import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup
 import type { GitWorktreeInfo, GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { getWorktreeCreationLayout } from '../ipc/worktree-logic'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
@@ -16,7 +16,7 @@ import {
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from '../ipc/worktree-symlinks'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'

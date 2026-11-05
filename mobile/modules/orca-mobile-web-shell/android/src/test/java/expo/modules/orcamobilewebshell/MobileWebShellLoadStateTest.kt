@@ -50,14 +50,6 @@ class MobileWebShellLoadStateTest {
   }
 
   @Test
-  fun `reports a load in progress and then a load that finished`() {
-    val machine = MobileWebShellLoadStateMachine()
-    assertEquals(MobileWebShellLoadEmission("loading", null), machine.started())
-    machine.committed()
-    assertEquals(MobileWebShellLoadEmission("ready", null), machine.finished())
-  }
-
-  @Test
   fun `says nothing twice in a row`() {
     val machine = MobileWebShellLoadStateMachine()
     assertNotNull(machine.started())

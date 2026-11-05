@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultScanWork } from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import { AiVaultScanTally } from './ai-vault-scan-tally'
 
 // Request signals distinguish scans from index-loop and interactive reads through the same readers.

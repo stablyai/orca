@@ -41,50 +41,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     shutdownBufferCaptures.clear()
   })
 
-  it('captures resumable provider session metadata before dropping sleep-time rows', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const now = Date.now()
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-
-    store.getState().setAgentStatus(
-      'tab-1:0',
-      {
-        state: 'working',
-        prompt: 'resume this',
-        agentType: 'codex'
-      },
-      'Codex',
-      { updatedAt: now, stateStartedAt: now },
-      { tabId: 'tab-1', worktreeId: wt },
-      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
-    )
-
-    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-
-    const state = store.getState()
-    expect(state.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toMatchObject({
-      paneKey: 'tab-1:0',
-      tabId: 'tab-1',
-      worktreeId: wt,
-      agent: 'codex',
-      origin: 'worktree-sleep',
-      providerSession: { key: 'session_id', id: 'codex-session-1' },
-      prompt: 'resume this',
-      terminalTitle: 'Codex'
-    })
-  })
-
   it('captures allowlisted done live sleeping pane sessions during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

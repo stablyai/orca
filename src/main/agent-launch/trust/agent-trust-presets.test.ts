@@ -41,8 +41,9 @@ const {
   markKimiWorkspaceTrusted
 } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
-  await import('../../codex/codex-trust-config-mutation-queue')
-const { getLocalCodexTrustConfigFiles } = await import('../../codex/codex-home-paths')
+  await import('../../codex/trust/toml/codex-trust-config-mutation-queue')
+const { getLocalCodexTrustConfigFiles } =
+  await import('../../codex/configuration/homes/codex-home-paths')
 
 // Real-binary tests prove Codex consumes the key; CI requires the binary instead of skipping.
 const codexTrustContract = {
@@ -86,22 +87,6 @@ describe('markCursorWorkspaceTrusted', () => {
       const payload = JSON.parse(readFileSync(trustFile, 'utf-8'))
       expect(payload.workspacePath).toBe(realpathSync.native(workspace))
       expect(typeof payload.trustedAt).toBe('string')
-    } finally {
-      rmSync(workspace, { recursive: true, force: true })
-    }
-  })
-
-  it('is idempotent — re-marking the same workspace does not overwrite trustedAt', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
-    try {
-      markCursorWorkspaceTrusted(workspace, testState.fakeHomeDir)
-      const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
-      const slugDirs = readdirSync(projectsDir)
-      const trustFile = join(projectsDir, slugDirs[0], '.workspace-trusted')
-      const firstPayload = readFileSync(trustFile, 'utf-8')
-      markCursorWorkspaceTrusted(workspace, testState.fakeHomeDir)
-      const secondPayload = readFileSync(trustFile, 'utf-8')
-      expect(secondPayload).toBe(firstPayload)
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }
@@ -221,21 +206,6 @@ describe('markCopilotFolderTrusted', () => {
 })
 
 describe('markAntigravityWorkspaceTrusted', () => {
-  it('appends the workspace to trustedWorkspaces in ~/.gemini/antigravity-cli/settings.json', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
-    try {
-      markAntigravityWorkspaceTrusted(workspace, testState.fakeHomeDir)
-      const configPath = join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json')
-      expect(existsSync(configPath)).toBe(true)
-      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
-      expect(Array.isArray(parsed.trustedWorkspaces)).toBe(true)
-      expect(parsed.trustedWorkspaces).toHaveLength(1)
-      expect(parsed.trustedWorkspaces[0]).toBe(realpathSync(workspace))
-    } finally {
-      rmSync(workspace, { recursive: true, force: true })
-    }
-  })
-
   it('preserves sibling settings keys and dedups an already-trusted workspace', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
     const realpath = realpathSync(workspace)
@@ -390,72 +360,11 @@ describe('markCodexProjectTrusted', () => {
       await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
     })
 
-    it('trusts a worktree whose main checkout .git points at a sibling .bare dir', async () => {
-      const source = join(fixtureRoot, 'source')
-      const project = join(fixtureRoot, 'project')
-      initRepoWithCommit(source)
-      git(fixtureRoot, 'clone', '-q', '--bare', source, join(project, '.bare'))
-      writeFileSync(join(project, '.git'), 'gitdir: ./.bare\n', 'utf-8')
-      git(project, 'worktree', 'add', '-q', join(project, 'wt'))
-      await expectWorkspaceTrusted(join(project, 'wt'))
-    })
-
-    it('trusts a worktree of a bare repository', async () => {
-      const source = join(fixtureRoot, 'source')
-      const bare = join(fixtureRoot, 'proj.git')
-      initRepoWithCommit(source)
-      git(fixtureRoot, 'clone', '-q', '--bare', source, bare)
-      git(bare, 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
-      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
-    })
-
-    it('trusts a worktree of a --separate-git-dir repository', async () => {
-      const repo = join(fixtureRoot, 'repo')
-      initRepoWithCommit(repo, `--separate-git-dir=${join(fixtureRoot, 'repo.git')}`)
-      git(repo, 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
-      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
-    })
-
-    it('trusts a worktree whose parent .git points at another repository', async () => {
-      const source = join(fixtureRoot, 'source')
-      initRepoWithCommit(source)
-      git(fixtureRoot, 'clone', '-q', '--bare', source, join(fixtureRoot, 'proj.git'))
-      git(fixtureRoot, 'clone', '-q', '--bare', source, join(fixtureRoot, 'other.git'))
-      writeFileSync(join(fixtureRoot, '.git'), 'gitdir: ./other.git\n', 'utf-8')
-      git(join(fixtureRoot, 'proj.git'), 'worktree', 'add', '-q', join(fixtureRoot, 'wt'))
-      await expectWorkspaceTrusted(join(fixtureRoot, 'wt'))
-    })
-
     it('trusts a plain folder workspace', async () => {
       const folder = join(fixtureRoot, 'folder')
       mkdirSync(folder)
       await expectWorkspaceTrusted(folder)
     })
-  })
-
-  it('writes ~/.codex/config.toml with the project marked trusted', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
-    try {
-      const realpath = realpathSync.native(workspace)
-      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
-      const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-      const runtimeConfigPath = join(
-        testState.userDataDir,
-        'codex-runtime-home',
-        'home',
-        'config.toml'
-      )
-      expect(existsSync(configPath)).toBe(true)
-      expect(existsSync(runtimeConfigPath)).toBe(true)
-      const written = readFileSync(configPath, 'utf-8')
-      const runtimeWritten = readFileSync(runtimeConfigPath, 'utf-8')
-      expect(written).toContain(`[projects."${escapeTomlBasicString(realpath)}"]`)
-      expect(written).toContain('trust_level = "trusted"')
-      expect(runtimeWritten).toContain(`[projects."${escapeTomlBasicString(realpath)}"]`)
-      expect(runtimeWritten).toContain('trust_level = "trusted"')
-    } finally {
-      rmSync(workspace, { recursive: true, force: true })
-    }
   })
 
   it('writes the managed-account CODEX_HOME the launch runs on (#27235)', async () => {

@@ -1,12 +1,13 @@
+import { getProviderChecksOutcome } from '../../../src/shared/source-control/checks/provider-check-summary'
 import type { CheckStatus } from '../../../src/shared/github/pull-request-types'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
-} from '../../../src/shared/workspace-attachment-normalization'
+} from '../../../src/shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachments,
   workspaceAttachmentReferenceLabel
-} from '../../../src/shared/workspace-attachments'
+} from '../../../src/shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../src/shared/worktree/types'
 import type { Worktree } from './workspace-list-types'
 
@@ -21,7 +22,7 @@ export type WorkspaceDetailLink = {
   url?: string
   /** Review state (`open`, `merged`, ...); reviews only. */
   state?: string
-  checks?: CheckStatus
+  checks?: CheckStatus | 'cancelled'
 }
 
 export type WorkspaceOrigin = { kind: 'automation'; name?: string } | { kind: 'cli' }
@@ -73,6 +74,8 @@ export function buildWorkspaceDetailLinks(row: Worktree): WorkspaceDetailLink[] 
       url: branchPR.url ?? link.url,
       state: pr.state,
       checks: pr.checksStatus
+        ? getProviderChecksOutcome(pr.checksSummary, pr.checksStatus)
+        : undefined
     })
     const index = items.findIndex((item) => isBranchPRAttachment(item, branchPR, row.repoId))
     if (index !== -1) {

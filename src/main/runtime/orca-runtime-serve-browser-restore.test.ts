@@ -7,7 +7,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import { withOpenedServeBrowserTab } from './serve-browser-tab-layout'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { BLANK_BROWSER_TAB_STATE } from '../../shared/workspace-layout/workspace-layout-beside'
 import { runInRemoteCliBrowserScope } from './desktop-browser-bridge/remote-cli-browser-scope'
 

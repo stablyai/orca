@@ -3,19 +3,19 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import { supportsHostedReviewCreation } from '../../../../../../shared/hosted-review-creation-providers'
+import { supportsHostedReviewCreation } from '../../../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewInfo,
   HostedReviewProvider
-} from '../../../../../../shared/hosted-review'
-import type { PrimaryAction, PrimaryActionInputs } from '../../source-control-primary-action-types'
-import { resolveCrossWorktreeWaitingAction } from '../../source-control-primary-action'
-import { resolveCreatePrIntentEligibility } from './create-pr-intent-state'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
+import { resolveCrossWorktreeWaitingAction } from './source-control-primary-action'
+import { resolveCreateReviewIntentEligibility as resolveCreatePrIntentEligibility } from '../../../../../../shared/source-control/decisions/source-control-create-review-intent'
 import {
   canClickBlockedCreateReviewReason,
   resolveBlockedCreateReviewNoticeMessage
-} from '../../source-control-create-review-blocked-action'
+} from './source-control-create-review-blocked-action'
 
 export function resolveProvisionalHostedReviewProvider(input: {
   hostedReview?: Pick<HostedReviewInfo, 'provider'> | null

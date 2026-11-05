@@ -2,8 +2,8 @@ import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark,
   type AgentMainAgentVerdictSource
-} from '../../../shared/agent-main-agent-verdict'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isProgramStatusRow } from './program-status/row'
 
 type VerdictLineSource = AgentMainAgentVerdictSource &

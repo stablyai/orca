@@ -7,7 +7,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
-import type { AgentChildWorkView } from '../agent-status-child-work-view'
+import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -23,7 +23,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from './journal/agent-session-journal-types'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
@@ -214,6 +214,8 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
+  /** Current child's reported execution model, independent of the next-turn selection. */
+  reportedModel?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
@@ -369,6 +371,8 @@ export type AgentSessionModelOption = {
   /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
   declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
+  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
+  chatEfforts?: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
   /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */

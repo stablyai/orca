@@ -7,7 +7,7 @@ export default defineConfig({
     ...baseConfig.test,
     // Project-level includes otherwise override this benchmark-only selection.
     projects: undefined,
-    include: ['config/scripts/agent-status-hot-path-benchmark.ts'],
+    include: ['config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'],
     fileParallelism: false,
     retry: 0
   }

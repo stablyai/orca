@@ -1,7 +1,7 @@
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
-} from './agent-process-recognition'
+} from './agent-status/process/agent-process-recognition'
 
 export type ForegroundProcessCandidate = {
   pid: number
