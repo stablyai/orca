@@ -76,16 +76,16 @@ export function useNativeChatComposerEditSession({
     }
     const destination = captureNativeChatEditDraftDestination(draftScopeKey)
     return registerDictationComposerTarget(element, (text) => {
-      if (destination && !destination.active) {
+      if (destination?.active === false) {
         return
       }
       const focused = element.ownerDocument.activeElement
       insertNativeChatComposerDraftText(destination?.scopeKey ?? draftScopeKey, text, {
-        // Late text must not pull the caret out of a field the user moved to mid-dictation.
-        keepFocus: !!focused && focused !== element.ownerDocument.body && !element.contains(focused)
+        // The mounted editor takes focus; don't pull it from a field the user moved to mid-dictation.
+        draftOnly: !!focused && focused !== element.ownerDocument.body && !element.contains(focused)
       })
     })
-  }, [draftScopeKey, root, handle])
+  }, [draftScopeKey, root])
 
   const refuseEditCommand = useCallback(
     (text: string): boolean => {

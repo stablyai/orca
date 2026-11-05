@@ -14,10 +14,9 @@ import type {
 export function insertNativeChatComposerDraftText(
   scope: string,
   text: string,
-  options?: { paste?: boolean; owner?: NativeChatComposerDraftOwner; keepFocus?: boolean }
+  options?: { paste?: boolean; owner?: NativeChatComposerDraftOwner; draftOnly?: boolean }
 ): void {
-  // The mounted editor takes focus to show the caret; keepFocus writes the draft, which it mirrors.
-  const mounted = options?.keepFocus ? null : nativeChatComposerScopeDestination(scope)
+  const mounted = options?.draftOnly ? null : nativeChatComposerScopeDestination(scope)
   const insertMounted = options?.paste
     ? (mounted?.insertPastedText ?? mounted?.insertTypedText)
     : mounted?.insertTypedText
