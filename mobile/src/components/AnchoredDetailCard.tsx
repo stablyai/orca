@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react'
-import { Animated, Easing, Platform, ScrollView, Text, View } from 'react-native'
-import { DetailCardFocusBoundary, commitDetailCardExit } from './detail-card-host'
+import { Animated, Easing, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { DetailCardFocusBoundary, DetailCardLayer, commitDetailCardExit } from './detail-card-host'
+import type { AnchoredDetailCardState } from './use-anchored-detail-card'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -18,8 +19,57 @@ const EDGE_INSET = spacing.sm
 const TRANSITION_MS = 150
 const SLIDE_FROM = -6
 
+type DetailCardContent = {
+  title: string
+  titleTrailing?: string
+  detail?: string | null
+  children?: ReactNode
+  footer?: ReactNode
+}
+
+/** The full-screen layer an anchored card measures from and draws in, with the card while it shows. */
+export function AnchoredDetailCardLayer({
+  card,
+  obscured,
+  layerRef,
+  ...content
+}: DetailCardContent & {
+  card: AnchoredDetailCardState
+  obscured: boolean
+  /** Replaces the hook's layer ref, for a caller that also needs the node. */
+  layerRef?: (view: View | null) => void
+}): React.JSX.Element {
+  return (
+    <DetailCardLayer>
+      <View
+        ref={layerRef ?? card.layerRef}
+        collapsable={false}
+        pointerEvents="box-none"
+        onLayout={card.onLayout}
+        style={layerStyle}
+      >
+        {card.visual ? (
+          <AnchoredDetailCard
+            {...card.visual}
+            {...content}
+            bounds={card.bounds}
+            layerHeight={card.layerHeight}
+            contentRef={card.contentRef}
+            boundaryRefs={card.boundaryRefs}
+            active={card.active}
+            obscured={obscured}
+            onSettled={card.onSettled}
+          />
+        ) : null}
+      </View>
+    </DetailCardLayer>
+  )
+}
+
+const layerStyle = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }
+
 /** Only the current motion may release the retained exit presentation. */
-export function AnchoredDetailCard({
+function AnchoredDetailCard({
   anchor,
   target,
   motion,
@@ -46,12 +96,7 @@ export function AnchoredDetailCard({
   active: boolean
   obscured: boolean
   onSettled: (motion: number) => void
-  title: string
-  titleTrailing?: string
-  detail?: string | null
-  children?: ReactNode
-  footer?: ReactNode
-}): React.JSX.Element {
+} & DetailCardContent): React.JSX.Element {
   useMobileColorScheme()
   // Unknown counts as reduced, so the card never slides before the setting is read.
   const slide = useReducedMotionEnabled() === false

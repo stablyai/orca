@@ -11,7 +11,22 @@ export type NativeChatContextUsageSummary = {
 }
 
 /** Past this the window is nearly spent, so the ring turns red to say so. */
-export const CONTEXT_USAGE_CRITICAL_PERCENTAGE = 90
+const CRITICAL_PERCENTAGE = 90
+
+/** What a ring draws: its fill clamped to 0-100, the red state, and the token counts as shown. */
+export function contextUsageRingReadout(usage: NativeChatContextUsageSummary): {
+  filled: number
+  critical: boolean
+  used: string
+  window: string
+} {
+  return {
+    filled: Math.min(Math.max(usage.percentage, 0), 100),
+    critical: usage.percentage >= CRITICAL_PERCENTAGE,
+    used: formatContextTokenCount(usage.usedTokens),
+    window: formatContextTokenCount(usage.windowTokens)
+  }
+}
 
 function rowPercentage(tokens: number, windowTokens: number): number {
   return windowTokens > 0 ? Math.round((tokens / windowTokens) * 1000) / 10 : 0

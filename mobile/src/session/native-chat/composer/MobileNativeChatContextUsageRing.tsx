@@ -1,14 +1,13 @@
 import { StyleSheet, Pressable, Text, View, type LayoutChangeEvent } from 'react-native'
-import { useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import Svg, { Circle } from 'react-native-svg'
 import {
-  CONTEXT_USAGE_CRITICAL_PERCENTAGE,
-  formatContextTokenCount,
+  contextUsageRingReadout,
   keyContextUsageRows,
   type NativeChatContextUsageSummary
 } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
-import { AnchoredDetailCard } from '../../../components/AnchoredDetailCard'
-import { DetailCardFocusBoundary, DetailCardLayer } from '../../../components/detail-card-host'
+import { AnchoredDetailCardLayer } from '../../../components/AnchoredDetailCard'
+import { DetailCardFocusBoundary } from '../../../components/detail-card-host'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
@@ -30,8 +29,6 @@ const RING_STROKE = 2
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 
-type ComposerAnchor = { ref: React.RefObject<View | null>; height: number; obscured: boolean }
-
 /** The composer box's props, which the card lines its trailing and bottom edges up with, and the
  *  ring for the action row (null without usage). `obscured` is the composer's own menu, which sits
  *  where the card would and closes it. */
@@ -45,24 +42,33 @@ export function useMobileNativeChatContextRing(
     (event: LayoutChangeEvent) => setHeight(event.nativeEvent.layout.height),
     []
   )
+  // Without usage there is no card to follow the bar, so its height need not re-render the composer.
   return {
-    barProps: { ref, onLayout },
+    barProps: usage ? { ref, onLayout } : { ref },
     ring: usage ? (
-      <MobileNativeChatContextUsageRing usage={usage} anchor={{ ref, height, obscured }} />
+      <MobileNativeChatContextUsageRing
+        usage={usage}
+        composerRef={ref}
+        composerHeight={height}
+        obscured={obscured}
+      />
     ) : null
   }
 }
 
-/** Composer ring for context-window usage; a tap shows the provider's breakdown above the composer. */
-function MobileNativeChatContextUsageRing({
+/** Composer ring for context-window usage; a tap shows the provider's breakdown above the composer.
+ *  Memoized so typing in the draft does not redraw it. */
+const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUsageRing({
   usage,
-  anchor
+  composerRef,
+  composerHeight,
+  obscured
 }: {
   usage: NativeChatContextUsageSummary
-  anchor: ComposerAnchor
+  composerRef: React.RefObject<View | null>
+  composerHeight: number
+  obscured: boolean
 }): React.JSX.Element {
-  const composerRef = anchor.ref
-  const { obscured } = anchor
   useMobileColorScheme()
   const t = useMobileTranslation()
   const keyboard = useKeyboardOcclusion()
@@ -86,8 +92,7 @@ function MobileNativeChatContextUsageRing({
   )
   // The composer rides the keyboard and grows with the draft; the open card moves with it.
   const card = useAnchoredDetailCard({
-    geometry: '',
-    follow: `${keyboard}:${anchor.height}`,
+    follow: `${keyboard}:${composerHeight}`,
     obscured,
     measure
   })
@@ -110,11 +115,8 @@ function MobileNativeChatContextUsageRing({
     },
     [layerRef, cardKeepsKeyboard]
   )
-  const filled = Math.min(Math.max(usage.percentage, 0), 100)
-  const critical = usage.percentage >= CONTEXT_USAGE_CRITICAL_PERCENTAGE
+  const { filled, critical, used, window } = contextUsageRingReadout(usage)
   const tint = critical ? colors.statusRed : colors.textMuted
-  const used = formatContextTokenCount(usage.usedTokens)
-  const window = formatContextTokenCount(usage.windowTokens)
   const label = t(
     'chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
@@ -164,56 +166,37 @@ function MobileNativeChatContextUsageRing({
         </Svg>
       </Pressable>
       <DetailCardFocusBoundary refs={card.boundaryRefs} index={1} active={card.active} />
-      <DetailCardLayer>
-        <View
-          ref={attachLayer}
-          collapsable={false}
-          pointerEvents="box-none"
-          onLayout={card.onLayout}
-          style={StyleSheet.absoluteFill}
-        >
-          {card.visual ? (
-            <AnchoredDetailCard
-              {...card.visual}
-              bounds={card.bounds}
-              layerHeight={card.layerHeight}
-              contentRef={card.contentRef}
-              boundaryRefs={card.boundaryRefs}
-              active={card.active}
-              obscured={obscured}
-              onSettled={card.onSettled}
-              title={t('chat.contextUsage.title', 'Context')}
-              titleTrailing={`${used}/${window}`}
-            >
-              <View style={styles.track}>
-                <View
-                  style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]}
-                />
-              </View>
-              {usage.rows.length > 0 ? (
-                <View style={styles.rows}>
-                  {keyContextUsageRows(usage.rows).map(({ key, row }) => (
-                    <View key={key} style={styles.row}>
-                      <Text style={styles.rowName} numberOfLines={1}>
-                        {row.name}
-                      </Text>
-                      <Text style={styles.rowValue}>{row.percentage}%</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-              {usage.estimated ? (
-                <Text style={styles.estimated}>
-                  {t('chat.contextUsage.estimated', 'Estimated from the last response.')}
-                </Text>
-              ) : null}
-            </AnchoredDetailCard>
-          ) : null}
+      <AnchoredDetailCardLayer
+        card={card}
+        obscured={obscured}
+        layerRef={attachLayer}
+        title={t('chat.contextUsage.title', 'Context')}
+        titleTrailing={`${used}/${window}`}
+      >
+        <View style={styles.track}>
+          <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
         </View>
-      </DetailCardLayer>
+        {usage.rows.length > 0 ? (
+          <View style={styles.rows}>
+            {keyContextUsageRows(usage.rows).map(({ key, row }) => (
+              <View key={key} style={styles.row}>
+                <Text style={styles.rowName} numberOfLines={1}>
+                  {row.name}
+                </Text>
+                <Text style={styles.rowValue}>{row.percentage}%</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {usage.estimated ? (
+          <Text style={styles.estimated}>
+            {t('chat.contextUsage.estimated', 'Estimated from the last response.')}
+          </Text>
+        ) : null}
+      </AnchoredDetailCardLayer>
     </>
   )
-}
+})
 
 const ringStyles = StyleSheet.create({
   ring: { transform: [{ rotate: '-90deg' }] }

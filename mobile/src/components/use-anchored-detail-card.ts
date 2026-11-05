@@ -67,12 +67,12 @@ export type DetailCardMeasure = (
 /** Open, measure, animate and dismiss state for an AnchoredDetailCard; any change to `geometry`
  *  closes it, while a change to `follow` moves an open card to its anchor's new place. */
 export function useAnchoredDetailCard({
-  geometry: placementGeometry,
+  geometry: placementGeometry = '',
   follow = '',
   obscured,
   measure
 }: {
-  geometry: string
+  geometry?: string
   follow?: string
   obscured: boolean
   measure: DetailCardMeasure

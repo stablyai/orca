@@ -4,8 +4,7 @@ import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
-  CONTEXT_USAGE_CRITICAL_PERCENTAGE,
-  formatContextTokenCount,
+  contextUsageRingReadout,
   keyContextUsageRows,
   type NativeChatContextUsageSummary
 } from '../../../../shared/native-chat/native-chat-context-usage-summary'
@@ -69,10 +68,7 @@ export function NativeChatContextUsageRing({
 }: {
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
-  const filled = Math.min(Math.max(usage.percentage, 0), 100)
-  const critical = usage.percentage >= CONTEXT_USAGE_CRITICAL_PERCENTAGE
-  const used = formatContextTokenCount(usage.usedTokens)
-  const window = formatContextTokenCount(usage.windowTokens)
+  const { filled, critical, used, window } = contextUsageRingReadout(usage)
   const label = translate(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
