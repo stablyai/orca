@@ -1,5 +1,6 @@
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import type { StructuredAgentSessionIdleSweepDeps } from './structured-agent-session-idle-sweep'
 import type {
   OpenedStructuredAgentSessionConversation,
   StructuredAgentSessionConversationOpenOptions
@@ -174,7 +175,7 @@ export type StructuredAgentSessionHostDeps = {
   /** Execution-host path for a new floating session. */
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   now?: () => number
-  idleSweep?: { intervalMs?: number; idleMs?: number }
+  idleSweep?: Pick<StructuredAgentSessionIdleSweepDeps, 'intervalMs' | 'idleMs'>
   usageLimitAutoContinue?: {
     isEnabled: () => boolean
     subscribe: (changed: () => void) => () => void

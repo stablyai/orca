@@ -1,3 +1,4 @@
+import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -51,6 +52,10 @@ export const createCheckActions = (
       options?.repoOwnerExecutionHostId
     )
     const repoId = options?.repoId ?? repo?.id
+    const checkContract = capturePRCheckContract(
+      get,
+      getGitHubSourceTarget(get(), repo, options?.sourceContext)
+    )
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
@@ -79,6 +84,22 @@ export const createCheckActions = (
     const userRefresh = options?.userRefresh === true
     const force = Boolean(options?.force) || userRefresh
     const noCache = force || Boolean(options?.noCache)
+    const syncLegacyChecks = (checks: PRCheckDetail[], observedHead: string | undefined) =>
+      !checkContract.complete && checkContract.current()
+        ? syncPRChecksStatus(
+            get(),
+            repoPath,
+            repoId,
+            branch,
+            checks,
+            observedHead,
+            prRepo,
+            requestSettings,
+            repo?.connectionId,
+            repo?.executionHostId,
+            repo !== undefined
+          )
+        : null
     if (
       !force &&
       !noCache &&
@@ -86,19 +107,7 @@ export const createCheckActions = (
       (!headSha || cached.headSha === headSha)
     ) {
       const cachedChecks = cached.data ?? []
-      const prStatusUpdate = syncPRChecksStatus(
-        get(),
-        repoPath,
-        repoId,
-        branch,
-        cachedChecks,
-        cached.headSha,
-        prRepo,
-        requestSettings,
-        repo?.connectionId,
-        repo?.executionHostId,
-        repo !== undefined
-      )
+      const prStatusUpdate = syncLegacyChecks(cachedChecks, cached.headSha)
       if (prStatusUpdate) {
         set(prStatusUpdate)
       }
@@ -204,19 +213,7 @@ export const createCheckActions = (
           })
         }
 
-        const prStatusUpdate = syncPRChecksStatus(
-          s,
-          repoPath,
-          repoId,
-          branch,
-          checks,
-          headSha,
-          prRepo,
-          requestSettings,
-          repo?.connectionId,
-          repo?.executionHostId,
-          repo !== undefined
-        )
+        const prStatusUpdate = syncLegacyChecks(checks, headSha)
         return { ...nextState, ...prStatusUpdate }
       })
       return checks

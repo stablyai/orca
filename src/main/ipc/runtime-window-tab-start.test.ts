@@ -5,7 +5,7 @@ import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/term
 import {
   setupLayoutOwnerRuntime,
   WORKTREE_ID
-} from '../runtime/orca-runtime-layout-owner-start-fixture'
+} from '../runtime/orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
 
 const { handleMock } = vi.hoisted(() => ({ handleMock: vi.fn() }))
 

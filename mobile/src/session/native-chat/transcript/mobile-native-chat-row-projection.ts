@@ -1,3 +1,4 @@
+import { sameNativeChatTurnDiff } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 import type {
   NativeChatBlock,
   NativeChatMessage
@@ -48,6 +49,9 @@ export function equalMobileNativeChatRowContent(
   return sameFields(a, b, (key, x, y) => {
     if (Object.is(x, y)) {
       return true
+    }
+    if (key === 'turnDiff') {
+      return sameNativeChatTurnDiff(a.turnDiff, b.turnDiff)
     }
     if (key === 'message') {
       return sameMessage(a.message, b.message)

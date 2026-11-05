@@ -474,6 +474,22 @@ describe('whose window a new workspace moves', () => {
 })
 
 describe('the structured session factory', () => {
+  it.each([{}, { effort: 'high' }, { model: 'sonnet' }])(
+    'keeps an explicit Chat view separate from Terminal options: %j',
+    async (chatOptions) => {
+      const runtime = runtimeStub()
+      await launch(
+        { ...CREATE_LAUNCH, sessionOptions: { model: 'opus', effort: 'low' }, chatOptions },
+        runtime
+      )
+      expect(createStructuredSession.mock.calls[0]?.[0]).toMatchObject({ options: chatOptions })
+      expect(createStructuredSession.mock.calls[0]?.[0].optionsMode).toBe(
+        chatOptions.model ? 'replace-model-selection' : undefined
+      )
+      expect(createArgs(runtime)).not.toHaveProperty('startupSessionOptions')
+    }
+  )
+
   it('creates the session for the worktree the launch just made, and activates it', async () => {
     const runtime = runtimeStub()
     const result = await launch(CREATE_LAUNCH, runtime)

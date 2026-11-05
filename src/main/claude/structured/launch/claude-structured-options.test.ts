@@ -466,6 +466,21 @@ describe('Claude structured option write under the request deadline', () => {
     expect(session.confirmedOptions.has('effort')).toBe(false)
   })
 
+  it('keeps an acknowledged effort pick when optional applied readback disagrees', async () => {
+    const { session } = fastModeSession(true)
+    session.connection.getSettings = async () => ({
+      effective: { effortLevel: 'high' },
+      applied: { effort: 'low', ultracode: false }
+    })
+    await expect(
+      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
+    ).resolves.toMatchObject({ effort: 'high' })
+    await vi.waitFor(() => expect(session.reportedOptions.effort).toBe('low'))
+    expect((await readClaudeStructuredSessionOptions(session)).current.effort).toBe('high')
+    expect(session.appliedInputOptions.get('effort')).toBe('high')
+    expect(session.confirmedOptions.has('effort')).toBe(false)
+  })
+
   it("keeps a timed-out client write as the deadline's own error, not a rejection", async () => {
     const session = sessionFor(async () => {
       throw new ClaudeControlRequestTimeoutError('set_model')

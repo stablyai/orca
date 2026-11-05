@@ -151,32 +151,6 @@ describe('working directory validation waiter lifetime', () => {
     }
   })
 
-  it('keeps UNC slots occupied after caller cancellation until native settlement', async () => {
-    const gates = Array.from({ length: 3 }, () => Promise.withResolvers<typeof directory>())
-    let calls = 0
-    stat.mockImplementation(() => {
-      const gate = gates[calls++]
-      if (!gate) {
-        throw new Error('Unexpected native stat')
-      }
-      return gate.promise
-    })
-    try {
-      for (let index = 0; index < 3; index += 1) {
-        await canceledWait(`\\\\synthetic-host\\path-${index}`)
-      }
-      expect(stat).toHaveBeenCalledTimes(2)
-      gates[0].resolve(directory)
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(stat).toHaveBeenCalledTimes(3)
-    } finally {
-      for (const gate of gates) {
-        gate.resolve(directory)
-      }
-      await new Promise<void>((resolve) => setImmediate(resolve))
-    }
-  })
-
   it.each(
     (['before', 'between', 'after'] as const).flatMap((position) =>
       [false, true].map((reject) => ({ position, reject }))

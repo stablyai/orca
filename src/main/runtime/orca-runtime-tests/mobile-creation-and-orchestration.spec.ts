@@ -1,14 +1,12 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, electronMocks, ipcMain } from '../orca-runtime-test-mocks.spec'
-import {
-  TEST_WORKTREE_ID,
-  createRuntime,
-  deferred,
-  store
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { ipcMain } from 'electron'
+import { TEST_WORKTREE_ID, createRuntime, deferred, store } from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not re-deliver the agent launch command when the adopted renderer PTY spawned with one', async () => {

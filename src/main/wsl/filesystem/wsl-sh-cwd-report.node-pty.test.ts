@@ -17,7 +17,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../../shared/wsl-login-shell-command'
 import { SH_WSL_ENV_FILE } from './wsl-shell-cwd-report'
-import { parseFileUriPath } from '../../daemon/osc7-file-uri'
+import { parseFileUriPath } from '../../daemon/emulation/osc7-file-uri'
 
 function findOnPath(name: string): string | null {
   for (const dir of ['/bin', '/usr/bin', '/usr/local/bin', '/opt/homebrew/bin']) {

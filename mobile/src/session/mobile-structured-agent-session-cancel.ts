@@ -43,11 +43,18 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   const prompt = args.prompt && args.promptCancelSupported === true ? args.prompt : undefined
   // Conversation Stop also covers un-echoed sends; card Cancel must still name its originating turn.
   const unnamed = args.hostStopsConversation === true && !args.prompt
-  if (!client || !sessionId || !enabled || current.fence === null || (!turnId && !unnamed)) {
+  // A card with no running turn names only itself; the host routes it.
+  if (
+    !client ||
+    !sessionId ||
+    !enabled ||
+    current.fence === null ||
+    (!turnId && !unnamed && !prompt)
+  ) {
     onSendError('Stop not sent')
     return false
   }
-  const fields = unnamed ? {} : { turnId, ...(prompt ? { prompt } : {}) }
+  const fields = unnamed ? {} : { ...(turnId ? { turnId } : {}), ...(prompt ? { prompt } : {}) }
   // Mint an id for each Stop so the ledger cannot replay an earlier press instead of stopping work.
   const fence = current.fence
   const stop = () => sendStop({ client, sessionId, fence, fields, onSendError })

@@ -19,7 +19,7 @@ import {
 } from './structured-session-lineage'
 import type { RunRow } from './types'
 import { chatAssigneeSessionId } from './chat-assignee'
-import { structuredWorkerCustody } from '../structured-worker-authority'
+import { structuredWorkerCustody } from './terminal-authority/structured-sessions/structured-worker-authority'
 
 /** A handle-less coordinator uses its generation-current session id; structured workers resolve by handle. */
 export function handleLessCoordinatorSessionId(

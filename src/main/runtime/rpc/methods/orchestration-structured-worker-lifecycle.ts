@@ -35,9 +35,9 @@ import {
   structuredWorkerAgent,
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
-} from '../../structured-worker-authority'
-import { structuredWorkerOwned } from '../../structured-worker-custody'
-import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerOwned } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import type { StructuredWorkerIdentity } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import {

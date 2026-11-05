@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import { NOTIFICATION_METHODS } from './notifications'
 import type { RpcContext, RpcMethod, RpcStreamingMethod } from '../core'
 

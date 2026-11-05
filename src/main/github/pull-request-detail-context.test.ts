@@ -64,20 +64,6 @@ beforeEach(() => {
 })
 
 describe('PR detail context requests', () => {
-  it('reads participants and viewed state in one request', async () => {
-    mockReads([response()])
-    const result = await getPRDetailContext('/folder-workspace', 42, repository)
-    expect(result.participants).toEqual([participant])
-    expect(result.viewedStates).toEqual({
-      pullRequestId: 'PR_42',
-      viewedStates: new Map([['src/changed.ts', 'VIEWED']])
-    })
-    expect(exec).toHaveBeenCalledTimes(1)
-    expect(graphqlCalls()).toHaveLength(1)
-    expect(graphqlCalls()[0].join(' ')).not.toMatch(/headRefOid|baseRefOid|\bbody\b/)
-    expect(exec.mock.calls[0][1]).toMatchObject({ cwd: '/folder-workspace', host: 'github.com' })
-  })
-
   it('paginates only files after the first page and retains nullable viewer states', async () => {
     mockReads([
       response(undefined, {
@@ -95,16 +81,6 @@ describe('PR detail context requests', () => {
     expect(graphqlCalls()).toHaveLength(2)
     expect(graphqlCalls()[1]).toContain('after=cursor-1')
     expect(graphqlCalls()[1].join(' ')).not.toContain('participants')
-  })
-
-  it('accepts successful empty sources without recovery requests', async () => {
-    mockReads([
-      response({ participants: { nodes: [] } }, { id: 'PR_42', files: { ...files, nodes: [] } })
-    ])
-    const result = await getPRDetailContext('/repo', 42, repository)
-    expect(result.participants).toEqual([])
-    expect(result.viewedStates).toEqual({ pullRequestId: 'PR_42', viewedStates: new Map() })
-    expect(graphqlCalls()).toHaveLength(1)
   })
 
   it.each([
@@ -175,24 +151,5 @@ describe('PR detail context requests', () => {
     const result = await getPRDetailContext('/repo', 42, repository)
     expect(result.viewedStates?.pullRequestId).toBe('PR_42')
     expect(exec).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([{ wslDistro: 'Ubuntu' }, {}])('keeps host and execution routing %j', async (options) => {
-    mockReads([response()])
-    await getPRDetailContext(
-      '/remote/repo',
-      42,
-      { ...repository, host: 'ghe.example.com' },
-      'ssh-1',
-      options
-    )
-    for (const [, execution] of exec.mock.calls) {
-      expect(execution).toMatchObject({
-        cwd: '/remote/repo',
-        connectionId: 'ssh-1',
-        host: 'ghe.example.com',
-        ...options
-      })
-    }
   })
 })

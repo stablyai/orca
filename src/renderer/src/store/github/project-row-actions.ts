@@ -5,7 +5,7 @@ import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import type { GitHubProjectMutationResult } from '../../../../shared/github/project-result-types'
 import type { ProjectRowContentPatch } from './cache-model'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { gitHubSlugApiForTarget } from '../../runtime/github-slug-owner-api'
 import { runtimeTargetForProjectRowOwner } from '../slices/github-project-row-owner'
 import { projectViewCacheKeyTarget } from './cache-identity'
 import { applyRowPatch, parseSlugAndNumber, rollbackRowIfPresent } from './project-cache'
@@ -119,15 +119,10 @@ export const createProjectRowActions = (
             ...(updates.body !== undefined ? { body: updates.body } : {})
           }
         }
-        const prRes =
-          target.kind === 'environment'
-            ? await callRuntimeRpc<GitHubProjectMutationResult>(
-                target,
-                'github.project.updatePullRequestBySlug',
-                args,
-                { timeoutMs: 30_000 }
-              )
-            : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
+        const prRes = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+          ...args,
+          wakeWslDistro: true
+        })
         if (!prRes.ok) {
           envelope = prRes
         }
@@ -155,15 +150,10 @@ export const createProjectRowActions = (
             ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
           }
         }
-        const issueRes =
-          target.kind === 'environment'
-            ? await callRuntimeRpc<GitHubProjectMutationResult>(
-                target,
-                'github.project.updateIssueBySlug',
-                args,
-                { timeoutMs: 30_000 }
-              )
-            : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
+        const issueRes = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+          ...args,
+          wakeWslDistro: true
+        })
         if (!issueRes.ok) {
           envelope = issueRes
         }
@@ -246,15 +236,10 @@ export const createProjectRowActions = (
       number,
       issueTypeId: issueType?.id ?? null
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<GitHubProjectMutationResult>(
-            target,
-            'github.project.updateIssueTypeBySlug',
-            args,
-            { timeoutMs: 30_000 }
-          )
-        : await window.api.gh.updateIssueTypeBySlug({ ...args, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updateIssueTypeBySlug({
+      ...args,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }

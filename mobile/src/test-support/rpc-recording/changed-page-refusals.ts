@@ -44,6 +44,10 @@ const AFTER_WORK_ITEM = ['work-item', 'checks', 'check-details', 'assignable']
 const AFTER_HOSTED_REVIEW = ['hosted-review', 'pr-for-branch', ...AFTER_WORK_ITEM]
 
 export const READ_AND_PROJECT_REFUSALS: Readonly<Record<string, PageRefusal>> = {
+  'matrix-tasks.item-review-github-pr-check-discovery': {
+    request: 'status.get#1',
+    checkpoints: { 'tk-item-review-github.result-absent:checks-settled': [] }
+  },
   'matrix-github.pr-read-github.listassignableusers-1': surfaceRead(
     'github.listAssignableUsers#1',
     'assignable',

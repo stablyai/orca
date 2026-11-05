@@ -53,13 +53,25 @@ export function AgentDefaultContextMenu({
   isDefault,
   onSetDefault
 }: AgentDefaultContextMenuProps): React.ReactNode {
+  const [open, setOpen] = React.useState(false)
   if (!onSetDefault) {
+    // Unmounting an open menu skips onOpenChange; reset so a remount is not marked open.
+    if (open) {
+      setOpen(false)
+    }
     return children
   }
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="z-[70]">
+    <ContextMenu onOpenChange={setOpen}>
+      {/* Row highlight follows focus, which moves into the menu; this marker keeps the row lit. */}
+      <ContextMenuTrigger asChild data-context-menu-open={open || undefined}>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className="z-[70]"
+        // Why: hovered menu rows beneath take focus; that must not dismiss this menu.
+        onFocusOutside={(event) => event.preventDefault()}
+      >
         <ContextMenuItem onSelect={onSetDefault} disabled={isDefault}>
           <Star className="size-3.5" />
           {isDefault

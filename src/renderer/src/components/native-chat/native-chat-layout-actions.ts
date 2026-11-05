@@ -87,6 +87,7 @@ export function runNativeChatSplitTarget(
       )
     )
   })
+  useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true
 }
 

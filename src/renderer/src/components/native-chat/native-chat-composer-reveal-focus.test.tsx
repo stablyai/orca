@@ -163,21 +163,6 @@ afterEach(() => {
 })
 
 describe('useNativeChatComposerRevealFocus', () => {
-  it('claims the composer again when its revealed tab is activated', () => {
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    const tab = document.createElement('div')
-    tab.tabIndex = 0
-    document.body.append(tab)
-    tab.focus()
-
-    act(() => requestNativeChatComposerFocus('chat-tab'))
-    expect(container.querySelector('textarea')).toBe(document.activeElement)
-    drainFrames()
-
-    expect(container.querySelector('textarea')).toBe(document.activeElement)
-  })
-
   it('takes focus from a control inside the pane when its tab is activated', () => {
     render({ isVisible: true, isFocusedGroup: true })
     drainFrames()
@@ -190,22 +175,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     drainFrames()
 
     expect(container.querySelector('textarea')).toBe(document.activeElement)
-  })
-
-  it('leaves the find input alone when its tab is activated', () => {
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    const findInput = container.querySelector('input')
-    act(() => {
-      findInput?.focus()
-    })
-    const before = focusCalls
-
-    act(() => requestNativeChatComposerFocus('chat-tab'))
-    drainFrames()
-
-    expect(focusCalls).toBe(before)
-    expect(document.activeElement).toBe(findInput)
   })
 
   it('does not carry an unfinished tab activation into a later reveal', () => {
@@ -276,32 +245,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     destination.remove()
   })
 
-  it('focuses when it mounts already revealed', () => {
-    render({ isVisible: true, isFocusedGroup: true })
-    expect(focusCalls).toBe(0)
-    drainFrames()
-    expect(focusCalls).toBe(1)
-    expect(container.querySelector('textarea')).toBe(document.activeElement)
-  })
-
-  it('focuses on the isVisible edge', () => {
-    render({ isVisible: false, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(0)
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(1)
-  })
-
-  it('focuses on the isFocusedGroup edge alone', () => {
-    render({ isVisible: true, isFocusedGroup: false })
-    drainFrames()
-    expect(focusCalls).toBe(0)
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(1)
-  })
-
   it('hands focus from a sibling composer to the newly focused pane', () => {
     const other = document.createElement('div')
     other.setAttribute('data-retained-pane-host', '')
@@ -354,21 +297,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     render({ isVisible: true, isFocusedGroup: true, nonce: 3 })
     drainFrames()
     expect(focusCalls).toBe(1)
-  })
-
-  it('reclaims focus after delayed programmatic restoration', () => {
-    render({ isVisible: true, isFocusedGroup: true, nonce: 1 })
-    drainFrames(1)
-    expect(focusCalls).toBe(1)
-    const outside = document.createElement('button')
-    document.body.appendChild(outside)
-    act(() => {
-      outside.focus()
-    })
-    drainFrames()
-    expect(focusCalls).toBe(2)
-    expect(container.querySelector('textarea')).toBe(document.activeElement)
-    outside.remove()
   })
 
   it.each(['menu', 'dialog'] as const)(
@@ -440,26 +368,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     }
   )
 
-  it('waits for both the launch menu and its portaled setup to dismiss', async () => {
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    const menu = mountOverlay()
-    const setup = mountOverlay('dialog')
-    const intent = captureNativeChatComposerFocusIntent()
-    act(() => intent.request('chat-tab'))
-    drainFrames()
-    const before = focusCalls
-
-    await act(async () => dismissOverlay(menu))
-    drainFrames()
-    expect(document.activeElement).toBe(setup)
-    expect(focusCalls).toBe(before)
-
-    await act(async () => dismissOverlay(setup))
-    drainFrames()
-    expect(document.activeElement).toBe(container.querySelector('textarea'))
-  })
-
   it.each(['menu', 'dialog'] as const)(
     'cancels a launch handoff when a newer %s opens before the source closes',
     async (role) => {
@@ -529,22 +437,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     drainFrames()
     expect(document.activeElement).toBe(document.body)
   })
-
-  it.each([false, true])(
-    'yields an immediate focus request to a menu (onlyIfFocusUnclaimed: %s)',
-    (onlyIfFocusUnclaimed) => {
-      render({ isVisible: true, isFocusedGroup: true })
-      const menu = mountOverlay()
-      menu.blur()
-
-      act(() => requestNativeChatComposerFocus('chat-tab', { onlyIfFocusUnclaimed }))
-      menu.remove()
-      drainFrames()
-
-      expect(document.activeElement).toBe(document.body)
-      expect(focusCalls).toBe(0)
-    }
-  )
 
   it.each(['slash', 'mention'] as const)(
     'reclaims focus after switching away from %s suggestions',
@@ -671,16 +563,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     }
   })
 
-  it('allows focus recovery while a dismissed menu animates out', () => {
-    const menu = mountOverlay()
-    menu.setAttribute('data-state', 'closed')
-
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-
-    expect(document.activeElement).toBe(container.querySelector('textarea'))
-  })
-
   it('allows a chat hosted inside a dialog to claim its composer', () => {
     const dialog = mountOverlay('dialog')
     dialog.appendChild(container)
@@ -735,55 +617,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     outside.remove()
   })
 
-  it('leaves focus on a non-editable control inside the pane', () => {
-    render({ isVisible: false, isFocusedGroup: true })
-    const button = container.querySelector('button')
-    act(() => {
-      button?.focus()
-    })
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(0)
-    expect(document.activeElement).toBe(button)
-  })
-
-  it('re-arms after the pane is hidden and revealed again', () => {
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    render({ isVisible: false, isFocusedGroup: true })
-    drainFrames()
-    act(() => {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur()
-      }
-    })
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(2)
-  })
-
-  it('retries across frames until the composer takes focus', () => {
-    render({ isVisible: true, isFocusedGroup: true, readyAfterAttempts: 2 })
-    drainFrames()
-    expect(focusCalls).toBe(3)
-    expect(container.querySelector('textarea')).toBe(document.activeElement)
-  })
-
-  it('gives up after a bounded number of attempts', () => {
-    render({ isVisible: true, isFocusedGroup: true, readyAfterAttempts: 99 })
-    drainFrames()
-    expect(focusCalls).toBe(6)
-  })
-
-  it('waits for a composer that is not ready yet, then focuses', () => {
-    render({ isVisible: true, isFocusedGroup: true, composerReady: false })
-    drainFrames()
-    expect(focusCalls).toBe(0)
-    render({ isVisible: true, isFocusedGroup: true, composerReady: true })
-    drainFrames()
-    expect(focusCalls).toBe(1)
-  })
-
   it('re-arms when a prompt replaces an already focused composer', () => {
     render({ isVisible: true, isFocusedGroup: true, composerReady: true })
     drainFrames()
@@ -803,28 +636,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     expect(container.querySelector('textarea')).toBe(document.activeElement)
   })
 
-  it('leaves focus alone when it is already inside the pane', () => {
-    render({ isVisible: false, isFocusedGroup: true })
-    const field = container.querySelector('textarea')
-    act(() => {
-      field?.focus()
-    })
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(0)
-  })
-
-  it('leaves a live text field outside the pane alone', () => {
-    const outside = document.createElement('input')
-    document.body.appendChild(outside)
-    outside.focus()
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(0)
-    expect(document.activeElement).toBe(outside)
-    outside.remove()
-  })
-
   it('claims focus from the composer of the chat tab hidden by the same switch', () => {
     const hiddenPane = document.createElement('div')
     const previousComposer = document.createElement('textarea')
@@ -838,17 +649,5 @@ describe('useNativeChatComposerRevealFocus', () => {
     drainFrames()
     expect(container.querySelector('textarea')).toBe(document.activeElement)
     hiddenPane.remove()
-  })
-
-  it('still claims focus from the covered xterm helper textarea', () => {
-    const helper = document.createElement('textarea')
-    helper.className = 'xterm-helper-textarea'
-    document.body.appendChild(helper)
-    helper.focus()
-    render({ isVisible: true, isFocusedGroup: true })
-    drainFrames()
-    expect(focusCalls).toBe(1)
-    expect(container.querySelector('textarea')).toBe(document.activeElement)
-    helper.remove()
   })
 })

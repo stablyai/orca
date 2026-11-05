@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import { buildRuntimeMobileAgentStatus } from '../runtime/runtime-mobile-agent-status-builder'
+import { buildRuntimeMobileAgentStatus } from '../runtime/session-lifecycle/projection/runtime-mobile-agent-status-builder'
 import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
 import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 

@@ -10,7 +10,7 @@ import {
 import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import { getHistorySessionDirName } from '../../daemon/history-paths'
+import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
 import { readProfileProjectTransferState } from '../../orca-profiles/profile-project-domain-state'
 import { getOrcaProfileStateDatabaseFile } from '../../orca-profiles/profile-storage-paths'
 import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'

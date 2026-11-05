@@ -34,6 +34,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     const extrasEdited =
       editingAutomationId === null ||
       !draftAtOpen ||
+      draft.launchSetupPatch !== undefined ||
       draft.surface !== draftAtOpen.surface ||
       draft.extraAgentArgs !== draftAtOpen.extraAgentArgs ||
       draft.agentId !== draftAtOpen.agentId ||
@@ -106,10 +107,15 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     }
     const effectiveDraft = { ...draft, surface }
     const extrasError = draftExtraAgentArgsNeedFreshSession(effectiveDraft)
-      ? translate(
-          'auto.components.automations.extraAgentArgs.needsFreshSession',
-          'Extra arguments require a fresh session for every run.'
-        )
+      ? draft.launchPreferences !== undefined || draft.agentArgs !== undefined
+        ? translate(
+            'auto.components.automations.launchSettings.needsFreshSession',
+            'Agent launch settings require a fresh session for every run.'
+          )
+        : translate(
+            'auto.components.automations.extraAgentArgs.needsFreshSession',
+            'Extra arguments require a fresh session for every run.'
+          )
       : getDraftExtraAgentArgsError(effectiveDraft)
     if (extrasEdited && extrasError) {
       toast.error(extrasError)

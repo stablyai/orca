@@ -3,7 +3,7 @@ import {
   type MobileTerminalCreateOptions,
   type OwnedMobileTerminalCreateOptions
 } from './mobile-terminal-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {
   prepareStructuredChatCliFork,
@@ -12,8 +12,8 @@ import {
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'

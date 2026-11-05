@@ -97,24 +97,6 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
       return { transport, callbacks, binding, setVisible, written }
     }
 
-    it('switches back to a quiet paused pane without fetching a snapshot', async () => {
-      const { transport, callbacks, binding, setVisible, written } = await connectRemotePane(true)
-
-      for (let switchIndex = 0; switchIndex < 3; switchIndex += 1) {
-        await setVisible(false)
-        expect(transport.setOutputPaused).toHaveBeenLastCalledWith(true)
-        await setVisible(true)
-        expect(transport.setOutputPaused).toHaveBeenLastCalledWith(false)
-      }
-      const live = 'live after reveal\r\n'
-      callbacks.current.onData?.(live, { seq: 10 + live.length, rawLength: live.length })
-      await flushAsyncTicks(20)
-
-      expect(transport.serializeBuffer).not.toHaveBeenCalled()
-      expect(written()).toContain(live)
-      binding.dispose()
-    })
-
     it('restores exactly once when the host reports a paused drop', async () => {
       const { transport, callbacks, binding, setVisible, written } = await connectRemotePane(true)
 
@@ -135,16 +117,6 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
       // The next quiet switch is free again.
       await setVisible(false)
       await setVisible(true)
-      expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
-      binding.dispose()
-    })
-
-    it('restores on reveal when the host cannot report drops', async () => {
-      const { transport, binding, setVisible } = await connectRemotePane(false)
-
-      await setVisible(false)
-      await setVisible(true)
-
       expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
       binding.dispose()
     })

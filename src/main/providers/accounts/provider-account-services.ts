@@ -173,5 +173,7 @@ export function createProviderAccountServices(
           )
       }))
   })
+  // Every host runs the poll timer; ticks fetch only while a window or remote reader watches.
+  rateLimits.start({ fetchImmediately: false })
   return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }
 }

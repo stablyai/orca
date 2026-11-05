@@ -10,8 +10,8 @@ import { addWorktree } from '../git/worktrees/creation/worktree-add'
 import { openWorktreeCreatePathClaim } from '../workspaces/creation/worktree-create-in-flight'
 import { WorktreeCreate } from '../../shared/rpc-contract/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from './rpc/methods/worktree-create-args'
-import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
-import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
+import { RuntimeRemoteFetchController } from './repositories/runtime-remote-fetch-controller'
+import { resolveRuntimeLocalWorktreeCreateCandidate } from './workspaces/creation/runtime-local-worktree-create-candidate'
 
 const roots: string[] = []
 afterEach(async () => {
