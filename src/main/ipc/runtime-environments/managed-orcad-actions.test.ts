@@ -1,7 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { managedServer, statusActivations } = vi.hoisted(() => ({
+  managedServer: {
+    id: 'env-1',
+    orcadDeployment: {
+      kind: 'ssh',
+      requestId: 'request-1',
+      sshTargetId: 'ssh-1',
+      sshTargetGeneration: 1,
+      localPort: 41000,
+      remotePort: 6768
+    }
+  },
+  statusActivations: vi.fn()
+}))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
-  resolveEnvironment: () => ({ id: 'env-1' })
+  resolveEnvironment: () => managedServer,
+  listEnvironments: () => [managedServer]
 }))
 vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
   updateManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'deferred' })),
@@ -9,13 +24,15 @@ vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
   rollbackManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' }))
 }))
 vi.mock('./runtime-environment-request-connections', () => ({
-  getRuntimeEnvironmentStatusOwner: () => ({ activate: vi.fn() })
+  getRuntimeEnvironmentStatusOwner: () => ({ activate: statusActivations })
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-launch-session', () => ({
   restartManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'refused' }))
 }))
 
 import { getManagedOrcadCrashLoopBrake } from '../../managed-server/lifecycle/orcad-managed-crash-loop'
+import { updateManagedOrcadEnvironment } from '../../ssh/orcad-runtime-maintenance'
+import { isSshUserDisconnected, recordSshUserDisconnected } from '../../ssh/ssh-user-disconnect'
 import { createManagedOrcadActions, restartManagedOrcad } from './managed-orcad-actions'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
@@ -72,7 +89,27 @@ describe('explicit server actions on a disconnected server', () => {
     ['Restart', () => restartManagedOrcad(options, 'env-1')]
   ])('%s connects it again, as Connect does', async (_action, run) => {
     markRuntimeEnvironmentManuallyDisconnected('env-1')
+    recordSshUserDisconnected('ssh-1')
     await run()
     expect(isRuntimeEnvironmentManuallyDisconnected('env-1')).toBe(false)
+    // The SSH host it runs on is connected too, as a server Connect does.
+    expect(isSshUserDisconnected('ssh-1')).toBe(false)
+  })
+
+  it('resumes its status only once the replaced transport is gone', async () => {
+    const order: string[] = []
+    statusActivations.mockImplementationOnce(() => order.push('status resumed'))
+    vi.mocked(updateManagedOrcadEnvironment).mockResolvedValueOnce(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action reads only outcome and environment.
+      { outcome: 'updated', environment: managedServer } as never
+    )
+    markRuntimeEnvironmentManuallyDisconnected('env-1')
+    await createManagedOrcadActions({
+      ...options,
+      invalidateTransport: () => {
+        order.push('transport invalidated')
+      }
+    }).update('env-1', false)
+    expect(order).toEqual(['transport invalidated', 'status resumed'])
   })
 })

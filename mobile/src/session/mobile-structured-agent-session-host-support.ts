@@ -17,6 +17,8 @@ import {
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-attention-capabilities'
@@ -67,6 +69,10 @@ export type StructuredAgentSessionHostSupport = {
   phoneAttachments: boolean
   /** Older hosts lack Continue on an Orca-stopped turn or refuse it from a phone; the phone sends an ordinary message there. */
   continueInterrupted?: boolean
+  /** Older hosts report goals but refuse the phone's goal changes. */
+  phoneThreadGoal?: boolean
+  /** Older hosts advertise rewind but refuse it from a phone. */
+  phoneRewind?: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -103,6 +109,8 @@ export function structuredAgentSessionHostSupport(
     phoneAttachments: capabilities.includes(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY),
     continueInterrupted: capabilities.includes(
       AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
-    )
+    ),
+    phoneThreadGoal: capabilities.includes(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY),
+    phoneRewind: capabilities.includes(AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY)
   }
 }

@@ -46,6 +46,8 @@ import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
 } from './MobileNativeChatComposerMic'
+import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
+import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -61,6 +63,8 @@ export type MobileNativeChatStructuredComposer = {
   // An uploading attachment must hold Send.
   files: readonly PendingNativeChatFile[]
   onRemoveFile: (id: string) => void
+  /** Null unless the host reports goals for this chat. */
+  threadGoal?: MobileStructuredThreadGoal | null
 }
 
 type Props = MobileNativeChatMicProps & {
@@ -164,6 +168,7 @@ export function MobileNativeChatComposer({
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
+  const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
@@ -186,6 +191,7 @@ export function MobileNativeChatComposer({
     },
     refuseCommand: editSession?.refuseCommand,
     editing: editSession !== undefined,
+    goalMode: goal.menu,
     agent,
     structuredCatalog: structured?.catalog,
     filePaths,
@@ -247,7 +253,7 @@ export function MobileNativeChatComposer({
     intent?: MobileNativeChatSendIntent,
     keepFocus = false
   ): Promise<void> => {
-    if (!canSend || sendingRef.current) {
+    if (!canSend || sendingRef.current || goal.consumeBareGoal(value, () => onChangeText(''))) {
       return
     }
     sendingRef.current = true
@@ -258,7 +264,7 @@ export function MobileNativeChatComposer({
     try {
       // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
       // to hand the user back exactly what they typed (#14819).
-      const accepted = await (intent ? onSend(value, intent) : onSend(value))
+      const accepted = await goal.send(onSend, value, intent)
       if (
         accepted &&
         mountedRef.current &&
@@ -289,6 +295,7 @@ export function MobileNativeChatComposer({
         />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
+        {goal.strip}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
@@ -325,6 +332,7 @@ export function MobileNativeChatComposer({
               menu.onSelectionChange(e.nativeEvent.selection)
             }}
             placeholder={
+              goal.placeholder ??
               placeholder ??
               t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands')
             }
@@ -346,6 +354,7 @@ export function MobileNativeChatComposer({
               disabled={disabled}
               menu={menu}
             />
+            {goal.chip}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
@@ -389,7 +398,7 @@ export function MobileNativeChatComposer({
                 ) : (
                   <MobileNativeChatSendButton
                     canSend={canSend}
-                    sendFollowUp={sendFollowUp}
+                    sendFollowUp={goal.sendFollowUp(sendFollowUp)}
                     onSend={(intent) => void handleSend(intent)}
                   />
                 )}

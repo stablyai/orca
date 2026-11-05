@@ -98,10 +98,16 @@ describe('desktop IPC and preload search boundary', () => {
       supportsQoderHistory: true,
       supportsJcodeHistory: true
     })
+    // The paired host's answer keeps what Resume in New Tab needs.
     expect(result).toMatchObject({
-      hits: [{ executionHostId: 'runtime:env-1', source: { presence: 'present' } }]
+      hits: [
+        {
+          executionHostId: 'runtime:env-1',
+          source: { presence: 'present', filePath: '/host/transcript.jsonl' },
+          resumeCommand: 'host-resume-command'
+        }
+      ]
     })
-    expect(JSON.stringify(result)).not.toContain('/host/transcript.jsonl')
     expect(local.search).not.toHaveBeenCalled()
     runtimeSearch.mockResolvedValue(unavailableSessionSearchStatus())
     expect(await aiVaultApi.searchStatus('runtime:env-1')).toEqual(unavailableSessionSearchStatus())
@@ -132,9 +138,13 @@ describe('desktop IPC and preload search boundary', () => {
         result.kind === 'results'
           ? result.hits.filter((hit) => hit.executionHostId !== 'local')
           : []
-      expect(remoteHits).toMatchObject([{ agent: 'jcode', source: { presence: 'present' } }])
-      expect(JSON.stringify(remoteHits)).not.toContain('/host/transcript')
-      expect(JSON.stringify(remoteHits)).not.toContain('resumeCommand')
+      expect(remoteHits).toMatchObject([
+        {
+          agent: 'jcode',
+          source: { presence: 'present', filePath: '/host/transcript.jsonl' },
+          resumeCommand: 'host-resume-command'
+        }
+      ])
       expect(local.search).not.toHaveBeenCalled()
       expect(scope === 'runtime:env-1' ? sshSearch : runtimeSearch).not.toHaveBeenCalled()
     }

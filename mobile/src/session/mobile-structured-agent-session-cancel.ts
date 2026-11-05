@@ -1,3 +1,5 @@
+import { useCallback, useRef } from 'react'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
@@ -99,4 +101,46 @@ async function sendStop(input: {
     input.onSendError(result.message)
   }
   return false
+}
+
+/** The chat's Stop and prompt cancel, with the host's Stop facts read from its capabilities. */
+export function useMobileStructuredRequestCancel(args: {
+  client: RpcClient | null
+  sessionId: string | null
+  enabled: boolean
+  hostSupport: StructuredAgentSessionHostSupport | null
+  stateRef: { readonly current: StructuredAgentSessionState }
+  onSendError: (message: string) => void
+}): (prompt?: PromptIdentity) => Promise<boolean> {
+  const { client, enabled, hostSupport, onSendError, sessionId, stateRef } = args
+  const promptCancelSupported = hostSupport?.promptCancel ?? null
+  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
+  const hostStopsConversation = hostSupport?.conversationStop ?? null
+  // Legacy hosts must join repeated Stop while the first turn cancel remains pending.
+  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
+  return useCallback(
+    (prompt?: PromptIdentity): Promise<boolean> =>
+      requestMobileStructuredAgentSessionCancel({
+        client,
+        enabled,
+        hostAnswersRepeatedStops,
+        hostStopsConversation,
+        inFlight: inFlightStopsRef.current,
+        onSendError,
+        prompt,
+        promptCancelSupported,
+        sessionId,
+        stateRef
+      }),
+    [
+      client,
+      enabled,
+      hostAnswersRepeatedStops,
+      hostStopsConversation,
+      onSendError,
+      promptCancelSupported,
+      sessionId,
+      stateRef
+    ]
+  )
 }
