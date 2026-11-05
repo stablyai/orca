@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { createOrchestrationRpcHarness } from '../../../main/runtime/rpc/methods/orchestration/rpc-test-harness'
-import { RuntimeClient, RuntimeClientError } from '../../runtime-client'
-import { okFixture } from '../../test-fixtures'
-import { ORCHESTRATION_CHECK_HANDLER } from './message-check-handler'
+import { createOrchestrationRpcHarness } from './rpc-test-harness'
+import { RuntimeClient, RuntimeClientError } from '../../../../../cli/runtime-client'
+import { okFixture } from '../../../../../cli/test-fixtures'
+import { ORCHESTRATION_CHECK_HANDLER } from '../../../../../cli/handlers/orchestration/message-check-handler'
 
 const h = createOrchestrationRpcHarness()
 
