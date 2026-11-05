@@ -11,6 +11,7 @@ type StoredDeferral = RecordedDeferral & {
 
 const deferrals = new Map<string, StoredDeferral>()
 
+/** Remember a failed activation for this host, with the active version it was recorded against. */
 export function recordManagedOrcadUpdateDeferral(
   environmentId: string,
   deferral: OrcadManagedDeferral,
@@ -24,10 +25,12 @@ export function recordManagedOrcadUpdateDeferral(
   })
 }
 
+/** Drop any recorded deferral for the environment. */
 export function clearManagedOrcadUpdateDeferral(environmentId: string): void {
   deferrals.delete(environmentId)
 }
 
+/** Return the stored deferral, baseline included, without judging whether it still applies. */
 function readManagedOrcadUpdateDeferral(environmentId: string): StoredDeferral | null {
   return deferrals.get(environmentId) ?? null
 }
