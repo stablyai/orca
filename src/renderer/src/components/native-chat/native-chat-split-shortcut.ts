@@ -1,11 +1,10 @@
 import type { KeyboardEvent } from 'react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
-  canonicalizeParsedKeybinding,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
+  getKeybindingConflictIdentity,
   keybindingMatchesAction,
-  parseKeybinding,
   type KeybindingActionId,
   type KeybindingInput,
   type KeybindingOverrides
@@ -36,26 +35,20 @@ export function matchNativeChatSplitShortcut(
   return match?.[1] ?? null
 }
 
-function canonicalBinding(binding: string): string {
-  const parsed = parseKeybinding(binding)
-  return parsed ? canonicalizeParsedKeybinding(parsed) : binding
-}
-
 export function nativeChatSplitShortcutLabels(
   platform: NodeJS.Platform,
   keybindings: KeybindingOverrides
 ): Record<NativeChatSplitDirection, string> {
   const bindingsFor = (actionId: KeybindingActionId): string[] =>
     getEffectiveKeybindingsForAction(actionId, platform, keybindings)
+  const identity = (binding: string): string => getKeybindingConflictIdentity(binding, platform)
   const claimed = new Set(
     SPLIT_SHORTCUTS.filter(([, split]) => split.opensTerminal)
       .flatMap(([actionId]) => bindingsFor(actionId))
-      .map(canonicalBinding)
+      .map(identity)
   )
   const label = (actionId: KeybindingActionId): string => {
-    const bindings = bindingsFor(actionId).filter(
-      (binding) => !claimed.has(canonicalBinding(binding))
-    )
+    const bindings = bindingsFor(actionId).filter((binding) => !claimed.has(identity(binding)))
     return bindings.length > 0 ? formatKeybindingList(bindings, platform) : ''
   }
   return { right: label('terminal.splitRight'), down: label('terminal.splitDown') }

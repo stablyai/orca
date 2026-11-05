@@ -22,4 +22,10 @@ it('the chat split menu hides a chord a terminal split claims', () => {
     right: '',
     down: '⌘⇧D'
   })
+  expect(nativeChatSplitShortcutLabels('darwin', { 'chat.splitTerminalRight': ['Cmd+D'] })).toEqual(
+    {
+      right: '',
+      down: '⌘⇧D'
+    }
+  )
 })
