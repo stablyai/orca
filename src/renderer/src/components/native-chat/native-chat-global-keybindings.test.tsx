@@ -121,7 +121,11 @@ function mount() {
   const view = render(<Composer />)
   const editor = view.getByText('draft stays').parentElement!
   editor.focus()
-  return { editor, paragraph: view.getByText('draft stays') }
+  return {
+    editor,
+    paragraph: view.getByText('draft stays'),
+    rerender: () => view.rerender(<Composer />)
+  }
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -174,11 +178,12 @@ it('renames the active chat and toggles sleeping workspaces from a nested prompt
 
 it('runs safe non-primary bindings and retains plugin precedence over built-ins', () => {
   fixture.state.keybindings = { 'sidebar.sleepingWorkspaces.toggle': ['Ctrl+Shift+S'] }
-  const { paragraph } = mount()
+  const { paragraph, rerender } = mount()
   press(paragraph, 'S', 'KeyS', { ctrlKey: true, shiftKey: true })
   expect(fixture.state.showSleepingWorkspaces).toBe(true)
-  fixture.state.keybindings = { 'view.plugins': ['F2'] }
-  press(paragraph, 'F2', 'F2')
+  fixture.state.keybindings = { 'view.plugins': ['Ctrl+Shift+S'] }
+  rerender()
+  press(paragraph, 'S', 'KeyS', { ctrlKey: true, shiftKey: true })
   expect(fixture.settingsTarget).toHaveBeenCalledExactlyOnceWith({
     pane: 'plugins',
     repoId: null,
@@ -266,7 +271,7 @@ it('keeps send, steer, clipboard and selection keys with the real composer despi
 })
 
 it('protects ordinary fields, shortcut recorders, floating panels and composing gestures', () => {
-  const { editor, paragraph } = mount()
+  const { editor, paragraph, rerender } = mount()
   const field = document.createElement('input')
   document.body.append(field)
   expect(press(field, '\\', 'Backslash', { metaKey: true }).defaultPrevented).toBe(false)
@@ -279,6 +284,7 @@ it('protects ordinary fields, shortcut recorders, floating panels and composing 
   press(paragraph, '\\', 'Backslash', { metaKey: true, isComposing: true })
   expect(fixture.state.showSleepingWorkspaces).toBe(false)
   fixture.state.keybindings = { 'sidebar.sleepingWorkspaces.toggle': ['DoubleTap+Ctrl'] }
+  rerender()
   press(paragraph, 'Control', 'ControlLeft', { ctrlKey: true, isComposing: true })
   fireEvent.keyUp(paragraph, { key: 'Control', code: 'ControlLeft', isComposing: true })
   press(paragraph, 'Control', 'ControlLeft', { ctrlKey: true })
