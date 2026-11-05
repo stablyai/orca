@@ -1,12 +1,34 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { isDispatchAssignee } from '../dispatch-context/dispatch-lookup'
 
-/** How much of the coordinator's mail the worker consumed, in any order; helpers' reports, heartbeats and mail it has not taken yet do not count. */
+/** How much mail from above (the coordinator, or Orca for it) the worker has consumed, in any order.
+ *  Reports its own helpers sent up to it, and mail it has not taken yet, do not count. */
 export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string): number {
-  const count = db.db
+  const helpers = db.db
     .prepare(
-      `SELECT COUNT(*) AS count FROM messages
-        WHERE to_handle = ? AND read = 1 AND type NOT IN ('worker_done', 'escalation', 'question', 'heartbeat')`
+      'SELECT id, assignee_handle, assignee_pane_key FROM dispatch_contexts WHERE creator_dispatch_id = ?'
     )
-    .get(`dispatch:${dispatchId}`)?.count
-  return typeof count === 'number' ? count : 0
+    .all(dispatchId)
+    .flatMap((row) =>
+      typeof row.id === 'string' && typeof row.assignee_handle === 'string'
+        ? [
+            {
+              id: row.id,
+              assignee_handle: row.assignee_handle,
+              assignee_pane_key:
+                typeof row.assignee_pane_key === 'string' ? row.assignee_pane_key : null
+            }
+          ]
+        : []
+    )
+  const senders = db.db
+    .prepare('SELECT from_handle FROM messages WHERE to_handle = ? AND read = 1')
+    .all(`dispatch:${dispatchId}`)
+    .map((row) => (typeof row.from_handle === 'string' ? row.from_handle : ''))
+  return senders.filter(
+    (from) =>
+      !helpers.some(
+        (helper) => from === `dispatch:${helper.id}` || isDispatchAssignee(helper, from, null)
+      )
+  ).length
 }
