@@ -9,7 +9,6 @@ import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-sess
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { renderJournalStatusItem } from '../agent-session-journal/journal-public-read'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionWorkEvidence
@@ -87,7 +86,6 @@ export class StructuredAgentSessionJournalProjections {
     ) {
       // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
       const snapshot = journal.statusRead()
-      const display = journal.queuedMessages.displayState()
       const sameContext =
         projection?.epoch === cursor.epoch && projection.contextId === contextId
           ? projection
@@ -142,7 +140,7 @@ export class StructuredAgentSessionJournalProjections {
             snapshot.submissions,
             fence,
             work.scope,
-            (itemId) => renderJournalStatusItem(display, itemId)
+            snapshot.item
           ),
           work.diedTurn()
         ),

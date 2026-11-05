@@ -9,7 +9,6 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import * as publicRead from '../agent-session-journal/journal-public-read'
 import * as stopNotes from '../agent-session-journal/journal-stop-note-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'
@@ -116,11 +115,19 @@ async function measure(turns: number, withCommand: boolean, stopped = false) {
   )
 
   let bodyReads = 0
+  let indexedReads = 0
   const statusRead = journal.statusRead.bind(journal)
   vi.spyOn(journal, 'statusRead').mockImplementation(() => {
     const read = statusRead()
+    const item = read.item
     return {
       ...read,
+      item:
+        item &&
+        ((itemId: string) => {
+          indexedReads += 1
+          return item(itemId)
+        }),
       items: read.items.map((item) =>
         Object.defineProperty({ ...item }, 'body', {
           enumerable: true,
@@ -132,8 +139,6 @@ async function measure(turns: number, withCommand: boolean, stopped = false) {
       )
     }
   })
-  const statusItem = vi.spyOn(publicRead, 'renderJournalStatusItem')
-  statusItem.mockClear()
   const rendered = vi.spyOn(stopNotes, 'projectJournalStopNote')
   rendered.mockClear()
   const projection = projections.read(journal, null)
@@ -142,7 +147,7 @@ async function measure(turns: number, withCommand: boolean, stopped = false) {
   return {
     bodyReads,
     renders,
-    indexedReads: statusItem.mock.calls.length,
+    indexedReads,
     rows: snapshot.items.length,
     state: projection.state,
     scanned: projectStructuredAgentSessionStatusState(snapshot.items, snapshot.submissions, 7)

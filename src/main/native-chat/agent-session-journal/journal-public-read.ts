@@ -131,7 +131,15 @@ function journalNormalizationKey(
   return corrections.length === 0 ? '' : JSON.stringify([state.epoch, corrections])
 }
 
-export function renderJournalStatus(state: JournalReducerState, owner: JournalInputOrder) {
+export function renderJournalStatus(
+  state: JournalReducerState,
+  owner: JournalInputOrder
+): {
+  items: AgentJournalSnapshot['items']
+  submissions: ReturnType<JournalInputOrder['statusInputs']>
+  /** One of `items` by key, from the same state; a reader without it scans `items`. */
+  item?: (itemId: string) => AgentJournalRenderItem | null
+} {
   const failed = state.queuePauseMarks.latestStop?.settle?.failedOn
   const items = renderJournalItems(state)
   return {
@@ -140,7 +148,8 @@ export function renderJournalStatus(state: JournalReducerState, owner: JournalIn
       state,
       items,
       failed && 'openedAfter' in failed ? failed.openedAfter : undefined
-    )
+    ),
+    item: (itemId) => renderJournalStatusItem(state, itemId)
   }
 }
 
