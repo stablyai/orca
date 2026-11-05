@@ -10,7 +10,7 @@ import { RENAME_TERMINAL_TAB_EVENT } from '../components/tab-bar/terminal-tab-re
 import { installMainWindowShortcutRouting } from '../../../main/window/main-window-shortcut-routing'
 import { registerWorkspaceShortcutIpcBridge } from '../hooks/ipc-events/workspace-shortcut-ipc-bridge'
 import type { MainWindowFocusLifecycle } from '../../../main/window/main-window-focus-lifecycle'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, Input } from 'electron'
 
 const fixture = vi.hoisted(() => ({
   state: {} as AppState,
@@ -334,7 +334,7 @@ it('carries native default deletion through the IPC bridge and preserves composi
     store: null,
     opts: { getKeybindings: () => fixture.state.keybindings }
   })
-  const input = {
+  const input: Input = {
     type: 'keyDown',
     key: 'Backspace',
     code: 'Backspace',
@@ -345,7 +345,7 @@ it('carries native default deletion through the IPC bridge and preserves composi
     isAutoRepeat: false,
     isComposing: false
   }
-  const dispatch = (value: object) => {
+  const dispatch = (value: Input) => {
     const preventDefault = vi.fn()
     fixture.handlers.get('before-input-event')!({ preventDefault }, value)
     return preventDefault
