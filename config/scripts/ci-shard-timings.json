@@ -7061,7 +7061,6 @@
       "src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-outputs.test.ts": 307,
       "src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-session-start-lifetime.test.ts": 140,
       "src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-session.test.ts": 180,
-      "src/renderer/src/components/editor/notebook/document/ipynb-parse.test.ts": 71,
       "src/renderer/src/components/editor/local-log-tail-decoder.test.ts": 115,
       "src/renderer/src/components/editor/markdown/documents/markdown-doc-links.test.ts": 120,
       "src/renderer/src/components/editor/markdown/documents/markdown-document-list-request.test.ts": 495,
