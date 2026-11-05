@@ -47,13 +47,9 @@ export function MobileNativeChatRowOverlaysHost({
     return shown?.image ? (
       <MobileNativeChatImageViewer {...shown.image} onClose={close} />
     ) : shown?.actionsFor ? (
-      <MobileNativeChatMessageActionsSheet
-        message={shown.actionsFor}
-        onQuote={shown.actionsFor.role === 'assistant' ? onQuote : undefined}
-        onClose={close}
-      />
+      <MobileNativeChatMessageActionsSheet message={shown.actionsFor} onClose={close} />
     ) : null
-  }, [shown, setShown, onQuote])
+  }, [shown, setShown])
   return (
     <MobileNativeChatRowOverlaysContext.Provider value={overlays}>
       {children}

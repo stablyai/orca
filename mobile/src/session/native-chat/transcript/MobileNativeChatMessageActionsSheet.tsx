@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Copy, TextQuote, TextSelect, X } from 'lucide-react-native'
+import { Copy, TextSelect, X } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { ActionSheetContent } from '../../../components/ActionSheetModal'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
@@ -15,13 +15,11 @@ import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-co
 
 type Props = {
   message: NativeChatMessage
-  onQuote?: (text: string) => void
   onClose: () => void
 }
 
 export function MobileNativeChatMessageActionsSheet({
   message,
-  onQuote,
   onClose
 }: Props): React.JSX.Element {
   const t = useMobileTranslation()
@@ -64,17 +62,6 @@ export function MobileNativeChatMessageActionsSheet({
                 })
               }
             },
-            ...(onQuote
-              ? [
-                  {
-                    id: 'quote',
-                    label: t('chat.messageActionsSheet.quote', 'Quote'),
-                    icon: TextQuote,
-                    disabled: text.length === 0,
-                    onPress: () => onQuote(text)
-                  }
-                ]
-              : []),
             {
               id: 'selectText',
               label: t('chat.messageActionsSheet.selectText', 'Select text'),
