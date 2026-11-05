@@ -291,15 +291,17 @@ function legacyTaskDisplayState(
 // The host decided each row's state; the row keeps it.
 function legacyTaskRow(task: AgentSessionBackgroundTask, settled: boolean): AgentChildRowModel {
   const displayState = legacyTaskDisplayState(task, settled)
-  // A task-only roster carries no role, so a name here can't be told from a role; no id tail.
-  const { name } = childName(task)
+  // A task-only roster can't tell a name from a role (Claude's subagent_type), so a named task with
+  // no description keeps its id tail; an unnamed one keeps the kind label it always showed.
+  const named = childName({ ...task, agentType: task.name })
+  const name = named.name
   const startedAt = task.startedAt ?? 0
   return {
     id: task.id,
     providerId: task.id,
     kind: task.kind,
     displayState,
-    name,
+    ...(name ? named : { name }),
     detail: agentChildRowDetail(
       { evidence: 'run-state', kind: task.kind, name, settled },
       displayState

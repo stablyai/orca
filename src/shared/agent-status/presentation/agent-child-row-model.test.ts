@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLegacyAgentChildRowModels } from './agent-child-row-model'
+import { buildLegacyAgentChildRowModels, buildLegacyTaskRowModels } from './agent-child-row-model'
 import { agentChildRowName } from './agent-child-row-lead-trail'
 import { childName } from './agent-child-row-name'
 
@@ -53,5 +53,21 @@ describe('child row names', () => {
         id: 'toolu_01AbCdEfGhIjKlMnOp'
       })
     ).toEqual({ name: 'general-purpose', idSuffix: 'EfGhIjKlMnOp' })
+  })
+
+  it('suffixes role-named tasks from a task-only roster but keeps an unnamed task plain', () => {
+    const rows = buildLegacyTaskRowModels(
+      [
+        { id: 'task_a1b2', kind: 'agent', name: 'general-purpose' },
+        { id: 'task_c3d4', kind: 'agent', name: 'general-purpose' },
+        { id: 'task_e5f6', kind: 'agent' }
+      ],
+      []
+    )
+    expect(rows.map((row) => agentChildRowName(row, () => 'Working'))).toEqual([
+      'general-purpose (task_a1b2)',
+      'general-purpose (task_c3d4)',
+      'Working'
+    ])
   })
 })
