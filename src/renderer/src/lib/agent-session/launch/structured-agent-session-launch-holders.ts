@@ -21,8 +21,7 @@ function holdsLaunchIdentity(
   return (
     (lifecycle !== 'visibility-unknown' ||
       (!!state.intent.params.firstMessage && requestId !== undefined)) &&
-    attempt.kind === 'first' &&
-    (requestId === undefined || attempt.requestId === requestId)
+    (requestId === undefined ? attempt.kind === 'first' : attempt.requestId === requestId)
   )
 }
 
