@@ -150,7 +150,8 @@ export async function launchNewTabAgentThroughHost(args: {
     )
     options.onPromptSent?.()
   } else if (warning) {
-    showToast(warning, 2400)
+    // Host notices are full sentences, such as why a chat started as a terminal.
+    showToast(warning, 6000)
   }
   return true
 }
