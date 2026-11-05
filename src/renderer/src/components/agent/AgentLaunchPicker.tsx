@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentSettingsMenuItem } from './AgentSettingsMenuItem'
+import { AgentDefaultContextMenu } from './agent-combobox-items'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +58,8 @@ export const AgentLaunchPicker = memo(
     onOpenChange,
     onCatalogOpen,
     onOpenAgentSettings,
+    defaultAgent,
+    onSetDefault,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -80,6 +83,9 @@ export const AgentLaunchPicker = memo(
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
+    /** The saved default; with onSetDefault, right-clicking a row or the field offers "Set as default". */
+    defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
+    onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -176,48 +182,53 @@ export const AgentLaunchPicker = memo(
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              ref={trigger}
-              type="button"
-              aria-label={translate('agentPicker.select', 'Select agent')}
-              variant="outline"
-              className="w-full min-w-0"
-              disabled={disabled || model.state !== 'settled'}
-              onKeyDown={(event) => {
-                if (open) {
-                  return
-                }
-                if (event.key === 'Enter' && onTriggerEnter) {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  onTriggerEnter()
-                  return
-                }
-                if (
-                  model.state === 'settled' &&
-                  !event.metaKey &&
-                  !event.ctrlKey &&
-                  !event.altKey &&
-                  event.key.length === 1 &&
-                  /\S/.test(event.key)
-                ) {
-                  event.preventDefault()
-                  setInitialQuery(event.key)
-                  setOpen(true)
-                }
-              }}
-            >
-              {agent ? <AgentIcon agent={agent} size={14} /> : null}
-              <span className="min-w-0 flex-1 truncate text-left">
-                {triggerLabel ?? agentLabel}
-                {!triggerLabel && agent && summary ? (
-                  <span className="text-muted-foreground"> · {summary}</span>
-                ) : null}
-              </span>
-              <ChevronDown className="size-3.5 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
+          <AgentDefaultContextMenu
+            isDefault={defaultAgent === (agent ?? 'blank')}
+            onSetDefault={onSetDefault ? () => onSetDefault(agent ?? 'blank') : undefined}
+          >
+            <DropdownMenuTrigger asChild>
+              <Button
+                ref={trigger}
+                type="button"
+                aria-label={translate('agentPicker.select', 'Select agent')}
+                variant="outline"
+                className="w-full min-w-0"
+                disabled={disabled || model.state !== 'settled'}
+                onKeyDown={(event) => {
+                  if (open) {
+                    return
+                  }
+                  if (event.key === 'Enter' && onTriggerEnter) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onTriggerEnter()
+                    return
+                  }
+                  if (
+                    model.state === 'settled' &&
+                    !event.metaKey &&
+                    !event.ctrlKey &&
+                    !event.altKey &&
+                    event.key.length === 1 &&
+                    /\S/.test(event.key)
+                  ) {
+                    event.preventDefault()
+                    setInitialQuery(event.key)
+                    setOpen(true)
+                  }
+                }}
+              >
+                {agent ? <AgentIcon agent={agent} size={14} /> : null}
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {triggerLabel ?? agentLabel}
+                  {!triggerLabel && agent && summary ? (
+                    <span className="text-muted-foreground"> · {summary}</span>
+                  ) : null}
+                </span>
+                <ChevronDown className="size-3.5 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+          </AgentDefaultContextMenu>
           <DropdownMenuContent
             portalContainer={portalContainer}
             align="start"
@@ -248,6 +259,8 @@ export const AgentLaunchPicker = memo(
                 disabled={disabled}
                 setupDisabled={setupDisabled}
                 onSelectAgent={selectAgent}
+                defaultAgent={defaultAgent}
+                onSetDefault={onSetDefault}
                 runLaunch={runLaunch}
               />
             ) : (
