@@ -19,7 +19,7 @@ it.each([
   'src/shared/deleted-contract.ts',
   'src/main/persistence/profile-state/new-worker.ts',
   'resources/licenses/ripgrep/COPYING',
-  'config/scripts/runtime-serve-terminal-smoke.test.mjs',
+  'config/scripts/runtime-verification/daemon-lifecycle/runtime-serve-terminal-smoke.test.mjs',
   'config/scripts/orcad-distribution/qualification/orcad-terminal-smoke-change-scope.test.mjs'
 ])('retains the smoke for build and dynamically opened input changes: %s', async (file) => {
   expect((await classifyOrcadTerminalSmokeChanges([file], async () => new Set())).shouldRun).toBe(
@@ -48,12 +48,12 @@ describe('the actual terminal smoke dependency graph', () => {
     'src/main/windows/windows-process-table.ts',
     'src/main/worker-threads/worker-thread-entry-path.ts',
     'src/cli/index.ts',
-    'config/scripts/runtime-serve-terminal-smoke.mjs',
+    'config/scripts/runtime-verification/daemon-lifecycle/runtime-serve-terminal-smoke.mjs',
     'config/scripts/orcad-distribution/prebuilds/build-orcad-node.mjs',
     'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs',
     'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.mjs',
-    'config/scripts/install-dev-cli.mjs',
-    'config/scripts/verify-cli-bin.mjs',
+    'config/scripts/development/setup/install-dev-cli.mjs',
+    'config/scripts/cli-build/verify-cli-bin.mjs',
     'config/scripts/node-server/qualification/node-server-change-scope.mjs'
   ])('retains the runtime, CLI, build or smoke dependency: %s', async (file) => {
     expect(inputs.has(file)).toBe(true)
@@ -65,7 +65,7 @@ describe('the actual terminal smoke dependency graph', () => {
   it.each([
     'src/renderer/src/components/Example.tsx',
     'src/main/menu/register-app-menu.ts',
-    'config/scripts/ci-shard-timings.json',
+    'config/scripts/ci/sharding/ci-shard-timings.json',
     '.github/workflows/e2e.yml',
     'docs/reference/ci-runner-efficiency.md'
   ])('skips unrelated inputs: %s', async (file) => {

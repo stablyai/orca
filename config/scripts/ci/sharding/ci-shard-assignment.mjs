@@ -48,7 +48,7 @@ export function balanceFiles(files, count, timings, overheadMs = 0) {
 }
 
 export function readTimingBaseline(suite) {
-  const bytes = readFileSync(new URL('../../ci-shard-timings.json', import.meta.url), 'utf8')
+  const bytes = readFileSync(new URL('./ci-shard-timings.json', import.meta.url), 'utf8')
   const baseline = JSON.parse(bytes)
   return { ...baseline[suite], baselineSha256: createHash('sha256').update(bytes).digest('hex') }
 }

@@ -17,7 +17,7 @@ on:
       - '.github/actions/prepare-windows-cli-launcher/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - 'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - '.github/actions/prepare-wayland-clipboard/**'
       - 'native/wayland-clipboard/**'
@@ -52,7 +52,7 @@ on:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - 'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-wayland-clipboard/**'
 
 permissions:

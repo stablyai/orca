@@ -107,6 +107,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ...(args.hostOptionStamp ? { hostOptionStamp: args.hostOptionStamp } : {}),
     fence: state.fence,
     turnId: transportState.turnId,
+    hasTurn: transportState.latestTurn != null || transportState.submissions.length > 0,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     mutate,
     capturePresentation,

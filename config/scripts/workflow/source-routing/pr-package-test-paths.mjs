@@ -56,6 +56,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/workspace-package-build/build-',
   'config/scripts/remote-host-build/wsl-guest/build-',
   'config/scripts/smoke-packaged',
+  'config/scripts/desktop-distribution/runtime-verification/smoke-packaged',
   'config/scripts/install-electron-package-binary',
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary',
   'config/scripts/verify-packaged',
@@ -66,6 +67,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/verify-linux-glibc',
   'config/scripts/native-build/linux/verify-linux-glibc',
   'config/scripts/run-electron-vite',
+  'config/scripts/development/launch/run-electron-vite',
   'config/scripts/desktop-build/execution/run-electron-vite',
   'skills/',
   'skill-guides/',
@@ -89,13 +91,18 @@ export const LINUX_PACKAGE_PREFIXES = [
   'config/docker/headless-serve-shutdown/',
   'config/docker/daemon-shutdown-descendants/',
   'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/runtime-verification/desktop-transport/run-linux-cli-launch-contract',
   'config/scripts/run-headless-linux-pairing-docker',
+  'config/scripts/runtime-verification/daemon-lifecycle/run-headless-linux-pairing-docker',
   'config/scripts/run-daemon-shutdown-descendants-docker',
+  'config/scripts/runtime-verification/daemon-lifecycle/run-daemon-shutdown-descendants-docker',
   'config/scripts/static-appimage-package-contract',
+  'config/scripts/desktop-distribution/appimage/static-appimage-package-contract',
   'native/computer-use-linux/',
   'native/wayland-clipboard/',
   'resources/linux/',
-  'config/scripts/run-headless-serve'
+  'config/scripts/run-headless-serve',
+  'config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve'
 ]
 
 export const WINDOWS_PACKAGE_PREFIXES = [
@@ -159,7 +166,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/windows-private-credential-file.test.ts',
   'config/scripts/native-build/windows/windows-process-tree-gyp-path.test.mjs',
   'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.test.mjs',
-  'config/scripts/package-electron-runtime-contract.test.mjs',
+  'config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
@@ -228,6 +235,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
 const WINDOWS_PROCESS_PROBE_PREFIXES = [
   'config/nsis/',
   'config/scripts/nsis-process-check',
+  'config/scripts/desktop-distribution/nsis/nsis-process-check',
   'config/scripts/idle-cpu-process-sampling',
   'config/scripts/performance/idle-cpu/idle-cpu-process-sampling',
   'config/vitest.config.',
@@ -257,7 +265,7 @@ export const WINDOWS_PACKAGE_TESTS = [
   ...WINDOWS_BOUNDARY_TESTS,
   ...LINUX_PACKAGE_TESTS,
   // The "Test Windows installer process probe" step runs these serially.
-  'config/scripts/nsis-process-check.test.mjs',
+  'config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs',
   'config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs'
 ]
 
