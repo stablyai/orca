@@ -1,5 +1,4 @@
 import { runProcess } from '@orca/process-host'
-import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 
 /**
  * Runs one shell command for the voice coordinator and returns a compact, model-facing
@@ -7,13 +6,15 @@ import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line
  * (`runProcess` — timeout tree-kill, output caps, exit-code-as-data all built in), never
  * a bare `child_process`. The command is a free-form string because the model writes
  * shell; POSIX runs it under `/bin/sh -c`, Windows under `cmd.exe /d /v:off /s /c` with
- * the line encoded by the shared `quoteWindowsCmdArgument` (percent-breaking, backslash
- * doubling, `""` quotes — a hand-rolled quoting here misses all three).
+ * the line verbatim inside one outer quote pair — `/s` strips exactly that pair, so
+ * `%VAR%` still expands and `&&`/quoting keep their shell meaning, matching the POSIX
+ * side. (`quoteWindowsCmdArgument` percent-breaks its input; it is for literal argv
+ * elements, not a shell line. Same shape as ssh-proxy-command.ts.)
  *
  * Acknowledged tradeoff (docs/reference/windows-edr-posture.md): `cmd.exe /c` carrying
- * caret-escaped free text is the shape obfuscated-command-line detectors score. For a
- * shell tool the free text IS the request, so the line is inherent; what we control is
- * using the canonical encoder and adding no further interpreter hops.
+ * free text is the shape obfuscated-command-line detectors score. For a shell tool the
+ * free text IS the request, so the line is inherent; what we control is adding no
+ * further interpreter hops.
  */
 
 export type VoiceCommandResult = {
@@ -52,7 +53,7 @@ export async function runVoiceCommand(options: {
     process.platform === 'win32'
       ? {
           program: process.env.ComSpec ?? 'cmd.exe',
-          args: ['/d', '/v:off', '/s', '/c', quoteWindowsCmdArgument(command)],
+          args: ['/d', '/v:off', '/s', '/c', `"${command}"`],
           windowsVerbatimArguments: true as const
         }
       : { program: '/bin/sh', args: ['-c', command] }

@@ -10,6 +10,7 @@ import type { VoiceAgentDispatchDeps, VoiceAgentLaunchDeps } from './voice-contr
 import { startVoiceAgentInWorktree } from './voice-control-agent-tool-dispatch'
 import type { RealtimeResponseGate } from './realtime-response-gate'
 import {
+  COMPLETION_MESSAGE_TYPE,
   VoiceControlReplyPump,
   type ControlMailboxMessage,
   type VoiceControlReplyPumpDeps
@@ -27,11 +28,7 @@ import {
   traceVoiceToolDispatch
 } from './voice-control-tracing'
 import type { VoiceTranscriptEntry } from './voice-control-transcript-log'
-import {
-  computeWatchdogFindings,
-  watchdogFindingKey,
-  type OutstandingWorkItem
-} from './voice-control-watchdog'
+import { VoiceControlWorkLedger } from './voice-control-work-ledger'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
@@ -48,8 +45,16 @@ export type VoiceControlSessionBackend = {
   observeEvent: (event: Record<string, unknown>) => void
   /** True while the coordinator owes the user follow-through — gates the dormant watcher. */
   hasOutstandingWork: () => boolean
+  /** Panes with unfinished follow-through — seeds the dormant watcher's drain set. */
+  outstandingPanes: () => string[]
   /** The session's orchestration run id — its mailbox outlives the audio session. */
   runId: () => string
+  /**
+   * Mail from an ENDED session's watched run mailbox. This session's pump watches its own
+   * run, so old-run replies only reach the user through here — spoken and recorded exactly
+   * like live mail.
+   */
+  ingestDormantMail: (messages: ControlMailboxMessage[]) => void
   dispose: () => void
 }
 
@@ -103,10 +108,8 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
   private pump: VoiceControlReplyPump | null = null
   private sequencer: ReplySpeechSequencer | null = null
   private roster: VoiceRosterEntry[] = []
-  /** Work the coordinator kicked off and owes follow-through on, keyed by pane. */
-  private readonly outstanding = new Map<string, OutstandingWorkItem>()
-  /** Watchdog findings already announced, `${paneKey}:${kind}` — each fires once. */
-  private readonly notifiedFindings = new Set<string>()
+  /** The follow-through ledger: outstanding dispatches plus announced watchdog findings. */
+  private readonly ledger = new VoiceControlWorkLedger()
   private watchdogTimer: ReturnType<typeof setInterval> | null = null
   private readonly commandAbort = new AbortController()
   private disposed = false
@@ -151,7 +154,15 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
   }
 
   hasOutstandingWork(): boolean {
-    return this.outstanding.size > 0
+    return this.ledger.hasOutstanding()
+  }
+
+  outstandingPanes(): string[] {
+    return this.ledger.outstandingPanes()
+  }
+
+  ingestDormantMail(messages: ControlMailboxMessage[]): void {
+    void this.handleMail(messages)
   }
 
   dispose(): void {
@@ -215,7 +226,7 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
       focusPane: this.deps.focusPane,
       emitAgentActivity: this.deps.emitAgentActivity,
       recordDispatch: (paneKey: string, spokenName: string, task: string) =>
-        this.recordDispatch(paneKey, spokenName, task),
+        this.ledger.record(paneKey, spokenName, task),
       startAgentInWorktree: (entry, message, explicitAgent) =>
         startVoiceAgentInWorktree(
           {
@@ -227,7 +238,7 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
             remoteRuntimeActive: this.deps.remoteRuntimeActive,
             refreshRoster: () => this.refreshRoster(),
             recordDispatch: (paneKey, spokenName, task) =>
-              this.recordDispatch(paneKey, spokenName, task)
+              this.ledger.record(paneKey, spokenName, task)
           },
           entry,
           message,
@@ -250,11 +261,6 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
     }
   }
 
-  /** The watchdog ledger write — one shape, used by message_agent and the launch ceremony. */
-  private recordDispatch(paneKey: string, spokenName: string, task: string): void {
-    this.outstanding.set(paneKey, { paneKey, spokenName, task, dispatchedAt: Date.now() })
-  }
-
   private async handleMail(messages: ControlMailboxMessage[]): Promise<void> {
     for (const message of messages) {
       if (this.disposed) {
@@ -264,8 +270,11 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
       if (!speaker) {
         continue
       }
-      // The reply IS the follow-through for that pane's outstanding work.
-      this.outstanding.delete(speaker.paneKey)
+      // Only a completion report settles the pane's outstanding work; progress mail
+      // (status, question, escalation) leaves the ledger entry in place.
+      if (message.type === COMPLETION_MESSAGE_TYPE) {
+        this.ledger.settle(speaker.paneKey)
+      }
       this.deps.emitAgentActivity({
         sessionId: this.deps.sessionId,
         paneKey: speaker.paneKey,
@@ -313,20 +322,11 @@ export class VoiceControlSessionBackendImpl implements VoiceControlSessionBacken
   }
 
   private async watchdogTick(): Promise<void> {
-    if (this.disposed || this.outstanding.size === 0) {
+    if (this.disposed || !this.ledger.hasOutstanding()) {
       return
     }
-    const roster = await this.refreshRoster()
-    const findings = computeWatchdogFindings({
-      outstanding: [...this.outstanding.values()],
-      roster,
-      notified: this.notifiedFindings
-    })
+    const findings = this.ledger.tick(await this.refreshRoster())
     for (const finding of findings) {
-      this.notifiedFindings.add(watchdogFindingKey(finding))
-      if (finding.kind === 'done') {
-        this.outstanding.delete(finding.paneKey)
-      }
       this.deps.recordTranscript({
         ts: Date.now(),
         kind: 'update',

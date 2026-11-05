@@ -22,7 +22,7 @@ describe('createMainWindow voice control shortcut', () => {
     vi.useRealTimers()
   })
 
-  it('only intercepts the voice control chord while the control feature gate is on', () => {
+  it('intercepts the voice control chord only with the gate on, and only where voice.control is bound (macOS by default)', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -33,6 +33,7 @@ describe('createMainWindow voice control shortcut', () => {
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       isDevToolsOpened: vi.fn(),
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
@@ -85,16 +86,24 @@ describe('createMainWindow voice control shortcut', () => {
     voice.control.enabled = true
     const enabledPreventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault: enabledPreventDefault }, controlInput)
-    expect(enabledPreventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.send).toHaveBeenCalledWith('ui:voiceControlToggle')
+    if (isDarwin) {
+      expect(enabledPreventDefault).toHaveBeenCalledTimes(1)
+      expect(webContents.send).toHaveBeenCalledWith('ui:voiceControlToggle')
 
-    webContents.send.mockClear()
-    const repeatPreventDefault = vi.fn()
-    windowHandlers['before-input-event'](
-      { preventDefault: repeatPreventDefault },
-      { ...controlInput, isAutoRepeat: true }
-    )
-    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.send).not.toHaveBeenCalled()
+      webContents.send.mockClear()
+      const repeatPreventDefault = vi.fn()
+      windowHandlers['before-input-event'](
+        { preventDefault: repeatPreventDefault },
+        { ...controlInput, isAutoRepeat: true }
+      )
+      expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
+      expect(webContents.send).not.toHaveBeenCalled()
+    } else {
+      // The default binding is darwin-only — off macOS Ctrl+Shift+V is terminal paste
+      // (pinned cross-platform in window-shortcut-policy-voice-control.test.ts), so even
+      // with the gate on the chord passes through unintercepted.
+      expect(enabledPreventDefault).not.toHaveBeenCalled()
+      expect(webContents.send).not.toHaveBeenCalledWith('ui:voiceControlToggle')
+    }
   })
 })
