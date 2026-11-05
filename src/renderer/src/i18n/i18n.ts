@@ -5,6 +5,7 @@ import enRuntimeRequired from './en-runtime-required.json'
 import deCatalogUrl from './locales/de.json?url'
 import esCatalogUrl from './locales/es.json?url'
 import frCatalogUrl from './locales/fr.json?url'
+import idCatalogUrl from './locales/id.json?url'
 import jaCatalogUrl from './locales/ja.json?url'
 import koCatalogUrl from './locales/ko.json?url'
 import ptCatalogUrl from './locales/pt.json?url'
@@ -29,6 +30,7 @@ const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> 
   de: deCatalogUrl,
   es: esCatalogUrl,
   fr: frCatalogUrl,
+  id: idCatalogUrl,
   ja: jaCatalogUrl,
   ko: koCatalogUrl,
   pt: ptCatalogUrl,
