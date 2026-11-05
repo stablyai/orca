@@ -84,14 +84,19 @@ export function findRemoteAttachmentForPaneProcess(
   paneKey: string,
   processIncarnation: () => string | null
 ): RemoteDispatchAttachmentRow | undefined {
-  if (!findRemoteAttachmentForPane(this, paneKey, '')) {
+  const latest = findRemoteAttachmentForPane(this, paneKey, '')
+  if (!latest) {
     return undefined
+  }
+  const process = processIncarnation()
+  if (!latest.process_incarnation || latest.process_incarnation === process) {
+    return latest
   }
   return findRemoteAttachmentForPane(
     this,
     paneKey,
     '(process_incarnation IS NULL OR process_incarnation = ?) AND',
-    [processIncarnation()]
+    [process]
   )
 }
 
