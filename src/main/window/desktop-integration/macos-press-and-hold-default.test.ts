@@ -110,6 +110,17 @@ describe('ensureMacPressAndHoldDefault', () => {
       expect(ensureMacPressAndHoldDefault(host)).toBe('already-decided')
       expect(writes).toEqual([])
     })
+
+    it('decides again for a renamed build that shares the same settings folder', () => {
+      const { host, writes, records } = createHost({
+        record: terminalRecord('applied'),
+        resolveBundleIdentifier: () => 'com.example.fork'
+      })
+
+      expect(ensureMacPressAndHoldDefault(host)).toBe('applied')
+      expect(writes).toEqual([{ domain: 'com.example.fork', value: false }])
+      expect(records.at(-1)?.domain).toBe('com.example.fork')
+    })
   })
 
   describe('domains we do not own', () => {
