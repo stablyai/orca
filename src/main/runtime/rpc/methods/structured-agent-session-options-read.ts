@@ -54,7 +54,9 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     handler: async (params, ctx) => {
       const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)
-      const result = await host.readOptions(params.sessionId, { readsWithoutModel })
+      const options = await host.readOptions(params.sessionId, { readsWithoutModel })
+      const conversation = host.deps.store.getConversation(params.sessionId)
+      const result = { ...options, sessionNeverStarted: conversation?.neverStarted }
       if (result.current.model === undefined && !readsWithoutModel) {
         return {
           ...result,
