@@ -1250,7 +1250,7 @@
       "discardTitle": "放弃更改？",
       "download": "下载文件",
       "downloadFailed": "无法下载此文件",
-      "downloadHostOutdated": "请更新此工作区所在设备上的 Orca,以便在手机上下载文件",
+      "downloadHostOutdated": "请更新此工作区所在设备上的 Orca，以便在手机上下载文件",
       "downloadSaved": "文件已保存",
       "fileTitle": "文件",
       "loadFailed": "无法加载预览",

@@ -9,11 +9,14 @@ import { FileSaveRefusedError } from '../platform/file-saver-contract'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileFilePreviewSource } from './mobile-file-preview-request'
 
+// How long the success/error notice stays visible.
 export const FILE_DOWNLOAD_NOTICE_MS = 4000
 
+// Result line shown under the top bar after a download ends.
 type Notice = { kind: 'success' | 'error'; message: string }
 
 // The shell picks the destination and streams the file there; this only tracks busy state and the result.
+// Returns the top-bar Download button (null when unavailable) and the result notice for the screen to render.
 export function useMobileFileDownload(
   source: MobileFilePreviewSource | null | undefined,
   relativePath: string
@@ -27,6 +30,7 @@ export function useMobileFileDownload(
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const worktreeId = source?.source === 'worktree' ? source.worktreeId : undefined
 
+  // Show a notice and replace any earlier one's dismissal timer.
   const show = useCallback((next: Notice) => {
     if (noticeTimer.current) {
       clearTimeout(noticeTimer.current)
@@ -49,6 +53,7 @@ export function useMobileFileDownload(
     }
   }, [saver])
 
+  // Start one download at a time; the shell reports saved:false when the user dismisses the folder picker.
   const download = useCallback(() => {
     if (!saver || !worktreeId || !relativePath || activeRef.current) {
       return

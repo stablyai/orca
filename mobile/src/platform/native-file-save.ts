@@ -20,6 +20,7 @@ import type { RpcClient } from '../transport/rpc-client'
 const GENERIC_MIME_TYPE = 'application/octet-stream'
 
 // Append per chunk: Expo's FileHandle rejects Android SAF content: URIs, but File.write(append) works on them and on iOS security-scoped folders.
+// Sink that appends each downloaded chunk to a file the user's folder picker granted; dispose removes a partial file.
 function pickedFolderSink(file: FsFile): MobileMediaSink {
   return {
     append: (bytes) => file.write(bytes, { append: true }),
@@ -40,12 +41,14 @@ function isPickerDismissal(error: unknown): boolean {
   return error instanceof Error && /cancel/i.test(`${error.message} ${code}`)
 }
 
+// Serves native.file.save: pick a folder, stream the workspace file into it, and cancel on request.
 export function createNativeFileSaver(
   readClient: () => RpcClient | null,
   isFocused: () => boolean,
   pickFolder: () => Promise<Directory> = () => Directory.pickDirectoryAsync()
 ) {
   let current: AbortController | null = null
+  // Download one file into a picked folder; resolves saved:false when the picker is dismissed.
   const save = async ({
     worktreeId,
     relativePath,
@@ -90,6 +93,7 @@ export function createNativeFileSaver(
     return { saved: true }
   }
   return {
+    // Validate page params, then dispatch save or cancel.
     serve: async (params: unknown): Promise<{ saved: boolean }> => {
       const request = fileSaveParamsSchema.parse(params)
       if (request.action === 'save') {
@@ -98,11 +102,13 @@ export function createNativeFileSaver(
       current?.abort()
       return { saved: false }
     },
+    // Abort any download in flight.
     dispose: () => current?.abort()
   }
 }
 
 // A replaced or covered shell must not keep downloading into a folder the user picked for a page they left.
+// Hook form of createNativeFileSaver: tied to the page session and aborted on blur or unmount.
 export function useNativeFileSaver(
   hostId: string,
   sessionId: string | null

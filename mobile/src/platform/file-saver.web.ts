@@ -6,6 +6,7 @@ import { translate } from '../i18n/mobile-i18n'
 import { FileSaveRefusedError, type FileSaver } from './file-saver-contract'
 
 // Older shells lack the verb, so callers get null and hide the button.
+// Page-side saver backed by the shell's native.file.save verb; null when the shell does not grant it.
 export function useFileSaver(): FileSaver | null {
   const verbs = useNativeVerbs()
   const server = parseExecutionHostId(useWorkspaceExecutionHost())
@@ -15,6 +16,7 @@ export function useFileSaver(): FileSaver | null {
       return null
     }
     return {
+      // Resolves false when the user dismissed the folder picker.
       save: async ({ worktreeId, relativePath }) => {
         try {
           return await verbs.saveFile({
@@ -39,6 +41,7 @@ export function useFileSaver(): FileSaver | null {
           )
         }
       },
+      // Stop a download the user left the preview during.
       cancel: () => {
         void verbs.cancelFileSave().catch(() => {})
       }

@@ -355,12 +355,11 @@ function MobileFilePreviewDocument({ route }: Props) {
                 content={preview.content}
                 truncated={preview.truncated}
               />
-            ) : (
-              download.notice
-            )
+            ) : null
           }
         />
       </SafeAreaView>
+      {download.notice}
       <MobileFilePreviewBody
         preview={preview}
         client={client}

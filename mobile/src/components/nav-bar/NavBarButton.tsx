@@ -45,7 +45,7 @@ export function NavBarButton({
       hitSlop={4}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled, selected: active }}
+      accessibilityState={{ disabled, selected: active, busy: loading }}
     >
       {loading ? (
         <ActivityIndicator size="small" color={colors.textPrimary} />
