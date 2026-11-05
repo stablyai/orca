@@ -144,7 +144,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
   })
 
-  it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {
+  it('keeps fallback PTYs in-process when the daemon becomes ready after startup aborts', async () => {
     const mod = await importFresh()
     let resolveEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void
     ensureRunningOverrides.push(
@@ -157,23 +157,46 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     const started = mod.initDaemonPtyProvider(abortController.signal)
     await Promise.resolve()
-
-    expect(spawnerInstances).toHaveLength(1)
     expect(spawnerInstances[0].ensureRunning).toHaveBeenCalledTimes(1)
 
     abortController.abort()
+    localFallbackProvider.hasPty.mockImplementation((id?: string) => id === 'fallback-pty')
     resolveEnsureRunning({
       socketPath: '/fake/socket-late',
       tokenPath: '/fake/token-late'
     })
     await started
 
-    expect(adapterInstances).toHaveLength(1)
-    expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
-    expect(adapterInstances[0].establishLifecycleLease).not.toHaveBeenCalled()
-    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
-    expect(rebindLocalProviderListenersMock).not.toHaveBeenCalled()
-    expect(mod.getDaemonProvider()).toBeNull()
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    expect(setLocalPtyProviderMock).toHaveBeenCalledWith(provider)
+    expect(rebindLocalProviderListenersMock).toHaveBeenCalledOnce()
+    expect(adapterInstances[0].disconnectOnly).not.toHaveBeenCalled()
+    provider?.write('fallback-pty', 'ls\r')
+    expect(localFallbackProvider.write).toHaveBeenCalledWith('fallback-pty', 'ls\r')
+  })
+
+  it('sends fresh terminals to a host adopted after startup fell back, leaving in-process PTYs', async () => {
+    const mod = await importFresh()
+    localFallbackProvider.hasPty.mockImplementation((id?: string) => id === 'fallback-pty')
+
+    await mod.initDaemonPtyProvider(undefined, { inProcessPtysMayExist: true })
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    if (!(provider instanceof DegradedDaemonPtyProvider)) {
+      throw new Error('expected in-process PTYs to keep their provider')
+    }
+    const daemonSpawn = vi.fn(async () => ({ id: 'daemon-pty' }))
+    Object.assign(adapterInstances[0], { spawn: daemonSpawn })
+    checkDaemonHealthMock.mockResolvedValue('healthy')
+
+    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
+    await expect(provider.spawn({ cols: 80, rows: 24 })).resolves.toEqual({ id: 'daemon-pty' })
+    expect(localFallbackProvider.spawn).not.toHaveBeenCalled()
+    provider.write('fallback-pty', 'ls\r')
+    expect(localFallbackProvider.write).toHaveBeenCalledWith('fallback-pty', 'ls\r')
   })
 
   it('disconnects uninstalled adapter leases when startup aborts during legacy discovery', async () => {
