@@ -1,5 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
-import { expect, vi, type Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
@@ -10,7 +10,6 @@ import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracki
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 
 type TestMock = Mock
@@ -53,13 +52,6 @@ vi.mock('../../git/worktrees/content-paths/worktree-symlink-detection', async (i
   ...(await importOriginal<Record<string, unknown>>()),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
 }))
-
-export async function waitForMobileSessionTabsEvents(
-  events: RuntimeMobileSessionTabsResult[],
-  count: number
-): Promise<void> {
-  await vi.waitFor(() => expect(events).toHaveLength(count))
-}
 
 export function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -173,6 +165,7 @@ const {
   listGitHubLabelsMock,
   listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
+  detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
@@ -260,6 +253,7 @@ const {
     listGitHubLabelsMock: vi.fn() as TestMock,
     listGitHubAssignableUsersMock: vi.fn() as TestMock,
     applyAgentStatusHooksEnabledMock: vi.fn() as TestMock,
+    detectAgentCommandsOnHostMock: vi.fn(async () => new Set(['qodercli'])),
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn() as TestMock,
     markCodexProjectTrustedMock: vi.fn() as TestMock,
     markCopilotFolderTrustedMock: vi.fn() as TestMock,
@@ -343,7 +337,7 @@ vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOrig
   forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
 }))
 
-vi.mock('../repo-worktree-resolution-scan', () => ({
+vi.mock('../workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution: scanLocalRepoWorktreesForResolutionMock
 }))
 
@@ -383,8 +377,12 @@ vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
+vi.mock('../../preflight/agent-command-detection', () => ({
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock
+}))
+
 vi.mock('../../preflight/agent-detection', () => ({
-  detectAgentCommandsOnHost: vi.fn(async () => new Set(['qodercli'])),
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 
@@ -616,7 +614,7 @@ vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
   }
 })
 
-vi.mock('../../git/repo', async (importOriginal) => ({
+vi.mock('../../git/repo-branch-conflict', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchConflictKind: vi.fn().mockResolvedValue(null)
 }))
@@ -888,4 +886,9 @@ vi.mock(import('../../gitlab/merge-request-update'), async (importOriginal) => (
 vi.mock(import('../../gitlab/gitlab-known-host-probe'), async (importOriginal) => ({
   ...(await importOriginal()),
   getGlabKnownHosts: getGlabKnownHostsMock
+}))
+
+vi.mock(import('../../github/client/lookup/get-pr-for-branch'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPRForBranch: getPRForBranchMock
 }))

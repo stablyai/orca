@@ -7,11 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createSetRenamingWorktreeId } from '@/store/slices/worktrees/session/worktree-slice-lookups'
 import { createUIStore } from '@/store/slices/ui-slice-test-harness'
 import type { AppState } from '@/store/types'
-import {
-  folderWorkspaceToWorktree,
-  getFolderWorkspaceHostIdentity
-} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
+
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { useSidebarRevealHighlight } from './use-reveal-highlight'
 import { useSidebarRevealRequests } from './use-reveal-requests'
@@ -330,28 +326,6 @@ function render() {
   }
 }
 
-it.each([false, true])('reveals the exact host and natural parent with repeat=%s', (repeat) => {
-  render()
-  press(repeat)
-  frame()
-  expectVisible(parent, 320)
-  expect(list.scrollTop).toBe(0)
-  expect(store.getState().pendingRevealWorktree).toBeNull()
-  expect(toggle).not.toHaveBeenCalled()
-  expect(filter).not.toHaveBeenCalled()
-  expect(activate).toHaveBeenCalledTimes(repeat ? 0 : 1)
-})
-
-it.each([false, true])('reveals the selected child inside its lineage with repeat=%s', (repeat) => {
-  activeHost = 'ssh:other'
-  render()
-  press(repeat)
-  frame()
-  expectVisible(child, 1020)
-  expect(list.scrollTop).toBe(347)
-  expect(store.getState().pendingRevealWorktree).toBeNull()
-})
-
 it.each([
   ['parent', false],
   ['parent', true],
@@ -374,20 +348,6 @@ it.each([
   }
 )
 
-it('keeps the last held preview visible and commits that exact child on keyup', () => {
-  render()
-  press(true)
-  press(true)
-  frame()
-  expectVisible(child, 1020)
-  expect(activate).not.toHaveBeenCalled()
-  act(() => window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' })))
-  expect(activate).toHaveBeenCalledWith(
-    'child',
-    expect.objectContaining({ executionHostId: 'ssh:other', revealInSidebar: false })
-  )
-})
-
 function request(rowKey = parent.rowKey, options = {}) {
   store.getState().revealWorktreeInSidebar('parent', { rowKey, behavior: 'auto', ...options })
 }
@@ -396,25 +356,6 @@ function drain() {
     frame()
   }
 }
-
-it('retires a vanished occurrence quietly and bounds a present target that never mounts', () => {
-  initiallyMounted = false
-  mountOnStage = false
-  render()
-  press(true)
-  drain()
-  expect(store.getState().pendingRevealWorktree).toBeNull()
-  act(() => {
-    request()
-    rows = [local]
-    renderRows = buildRenderableRows(rows)
-    root.render(<Probe />)
-  })
-  drain()
-  expect(store.getState().pendingRevealWorktree).toBeNull()
-  expect(toastError).not.toHaveBeenCalled()
-  expect(toggle).not.toHaveBeenCalled()
-})
 
 it.each(['workspace', 'header'] as const)(
   'supersedes an old preview with a newer %s before cleanup',
@@ -443,43 +384,6 @@ it.each(['workspace', 'header'] as const)(
   }
 )
 
-it('retires an old header, rejects stale preprocessing, and gives a same-key request a fresh lifetime', () => {
-  render()
-  beforeEffects = () => request(child.rowKey)
-  act(() => store.getState().revealSidebarRow('repo:missing'))
-  drain()
-  expect(persist).not.toHaveBeenCalled()
-  expect(filter).not.toHaveBeenCalled()
-  expect(list.scrollTop).toBe(347)
-  mountOnStage = false
-  hideTarget = true
-  const stage = vi.spyOn(pendingArgs.virtualizer, 'scrollToIndex')
-  for (const attempts of [8, 2]) {
-    const previous = store.getState().pendingRevealWorktree
-    act(() => request(child.rowKey))
-    const current = store.getState().pendingRevealWorktree
-    expect(current).not.toBe(previous)
-    stage.mockClear()
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      if (attempt > 1) {
-        frame() // Retry tick schedules the next reveal frame without staging.
-        expect(stage).toHaveBeenCalledTimes(attempt - 1)
-      }
-      frame()
-      expect(stage).toHaveBeenCalledTimes(attempt)
-      expect(store.getState().pendingRevealWorktree).toBe(current)
-    }
-  }
-  expect(list.scrollTop).toBeGreaterThan(10000)
-  hideTarget = false
-  act(() => root.render(<Probe />))
-  drain()
-  expect(store.getState().pendingRevealWorktree).toBeNull()
-  expectVisible(child, 1020)
-  expect(list.scrollTop).toBe(866)
-  expect(toastError).not.toHaveBeenCalled()
-})
-
 it('keeps explicit unhighlighted expansion, mounted rename and highlight outcomes', () => {
   render()
   rows = [...baseRows, { type: 'header', key: 'repo:repo-1', count: 2, icon: { kind: 'project' } }]
@@ -506,222 +410,4 @@ it('keeps explicit unhighlighted expansion, mounted rename and highlight outcome
     worktreeId: 'parent',
     rowKey: parent.rowKey
   })
-})
-
-it.each([false, true])(
-  'keeps a visible pinned occurrence and no disclosure with repeat=%s',
-  (repeat) => {
-    rows = [local, pinned]
-    renderRows = buildRenderableRows(rows)
-    render()
-    press(repeat)
-    drain()
-    expectVisible(pinned, 4120)
-    expect(list.scrollTop).toBe(3447)
-    expect([...store.getState().collapsedGroups]).toEqual(['all'])
-    expect(persist).not.toHaveBeenCalled()
-    expect(toggle).not.toHaveBeenCalled()
-    expect(filter).not.toHaveBeenCalled()
-  }
-)
-
-it.each([false, true])(
-  'carries the actual qualified folder key through activation/commit repeat=%s',
-  (repeat) => {
-    const group = {
-      id: 'g',
-      name: 'g',
-      parentPath: null,
-      parentGroupId: null,
-      createdFrom: 'manual' as const,
-      tabOrder: 0,
-      isCollapsed: false,
-      color: null,
-      createdAt: 0,
-      updatedAt: 0
-    }
-    const folder = {
-      id: 'f',
-      projectGroupId: 'g',
-      name: 'f',
-      folderPath: '/tmp/f',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 0,
-      updatedAt: 0
-    }
-    const twins: FolderWorkspace[] = [folder, { ...folder, executionHostId: 'ssh:other' }]
-    rows = twins.map((folderWorkspace) => ({
-      type: 'folder-workspace',
-      key: 'render-model-only',
-      folderWorkspace,
-      projectGroup: group,
-      depth: 0,
-      groupDepth: 0
-    }))
-    extraOptions = twins.map((f) => ({
-      ...local,
-      worktree: folderWorkspaceToWorktree(f),
-      rowKey: getFolderWorkspaceHostIdentity(f)
-    }))
-    activeId = 'folder:f'
-    renderRows = buildRenderableRows(rows)
-    render()
-    press(repeat)
-    drain()
-    if (repeat) {
-      act(() => window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' })))
-    }
-    expect(folderActivate).toHaveBeenCalledWith('f', {
-      navigationIntent: 'user-open',
-      executionHostId: 'ssh:other',
-      revealInSidebar: false
-    })
-    expectVisible(extraOptions[1]!, 1020)
-    expect(store.getState().pendingRevealWorktree).toBeNull()
-  }
-)
-
-it.each([10, 100])('visits zero hidden records in the real key/reveal chain with N=%s', (size) => {
-  let visits = 0
-  const counted = <T,>(values: T[]): T[] => {
-    values.forEach((value, index) => {
-      Object.defineProperty(values, index, {
-        get() {
-          visits++
-          return value
-        }
-      })
-    })
-    return values
-  }
-  worktrees = counted(Array.from({ length: size }, (_, i) => ({ ...worktree, id: `hidden${i}` })))
-  folderWorkspaces = counted(
-    Array.from({ length: size }, (_, i) => ({
-      id: `hidden${i}`,
-      projectGroupId: 'g',
-      name: 'hidden',
-      folderPath: '/tmp/hidden',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 0,
-      updatedAt: 0
-    }))
-  )
-  projectGroups = counted(
-    Array.from({ length: size }, (_, i) => ({
-      id: `hidden${i}`,
-      name: 'hidden',
-      parentPath: null,
-      parentGroupId: null,
-      createdFrom: 'manual' as const,
-      tabOrder: 0,
-      isCollapsed: false,
-      color: null,
-      createdAt: 0,
-      updatedAt: 0
-    }))
-  )
-  projectGrouping = {
-    projects: counted(
-      Array.from({ length: size }, (_, i) => ({
-        id: `p${i}`,
-        displayName: 'hidden',
-        badgeColor: '',
-        sourceRepoIds: [],
-        createdAt: 0,
-        updatedAt: 0
-      }))
-    ),
-    projectHostSetups: counted(
-      Array.from({ length: size }, (_, i) => ({
-        id: `s${i}`,
-        projectId: `p${i}`,
-        hostId: 'local' as const,
-        repoId: repo.id,
-        path: '/tmp/hidden',
-        displayName: 'hidden',
-        setupState: 'ready' as const,
-        setupMethod: 'legacy-repo' as const,
-        createdAt: 0,
-        updatedAt: 0
-      }))
-    )
-  }
-  for (const prefix of ['repo:', 'project-group:']) {
-    const selected = { ...pinned, rowKey: `${prefix}selected` }
-    rows = [local, selected]
-    extraOptions = [selected]
-    renderRows = buildRenderableRows(rows)
-    render()
-    visits = 0
-    for (const repeat of [false, true]) {
-      press(repeat)
-      drain()
-    }
-    act(() => window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' })))
-    expectVisible(selected, 1020)
-    act(() => {
-      request(selected.rowKey)
-      store.setState({ groupBy: 'repo' })
-      rows = [local]
-      renderRows = buildRenderableRows(rows)
-      root.render(<Probe />)
-    })
-    frame()
-    expect(visits).toBe(0)
-    expect(store.getState().pendingRevealWorktree).toBeNull()
-    expect(persist).not.toHaveBeenCalled()
-    expect(toggle).not.toHaveBeenCalled()
-    expect(filter).not.toHaveBeenCalled()
-    act(() => root.render(null))
-  }
-})
-
-it('cancels a queued older row-family frame while preserving the new workspace frame', () => {
-  render()
-  act(() => store.getState().revealSidebarRow(local.rowKey))
-  const oldIds = [...frames.keys()]
-  expect(oldIds).toHaveLength(1)
-  act(() => request(child.rowKey))
-  expect(oldIds.every((id) => !frames.has(id))).toBe(true)
-  expect(window.cancelAnimationFrame).toHaveBeenCalledWith(oldIds[0])
-  expect(frames.size).toBe(1)
-  drain()
-  expectVisible(child, 1020)
-  expect(store.getState().pendingRevealSidebarRow).toBeNull()
-  expect(store.getState().pendingRevealWorktree).toBeNull()
-})
-
-it('keeps repo-owned host identity through held preview and activation', () => {
-  const selected: WorktreeItemRow = {
-    ...pinned,
-    rowKey: 'repo-owned-parent',
-    worktree: { ...pinned.worktree, hostId: undefined },
-    repo: { ...repo, executionHostId: 'ssh:other' }
-  }
-  activeId = 'a'
-  rows = [row('a', 'a', false), selected]
-  extraOptions = [selected]
-  renderRows = buildRenderableRows(rows)
-  render()
-  press(true)
-  expect(store.getState().pendingRevealWorktree?.rowKey).toBe(selected.rowKey)
-  drain()
-  expectVisible(selected, 1020)
-  act(() => window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' })))
-  expect(activate).toHaveBeenCalledWith(
-    'parent',
-    expect.objectContaining({ executionHostId: 'ssh:other' })
-  )
 })

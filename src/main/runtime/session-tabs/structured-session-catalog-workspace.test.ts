@@ -11,12 +11,12 @@ vi.mock('./structured-session-account-home.ts', () => ({
 }))
 
 import { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
-import { RuntimeWorkspaceCatalog } from '../workspaces/workspace-catalog'
-import { RuntimeWorkspaceRepoScanRefresh } from '../workspaces/workspace-repo-scan-refresh'
+import { RuntimeWorkspaceCatalog } from '../workspaces/catalog/workspace-catalog'
+import { RuntimeWorkspaceRepoScanRefresh } from '../workspaces/catalog/workspace-repo-scan-refresh'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/workspace-file-session-targets'
 import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
-import { RuntimeResolvedWorktreeCache } from '../runtime-resolved-worktree-cache'
+import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-resolved-worktree-cache'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../rpc/methods/structured-agent-session-options-read'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { createAgentModelCatalogService } from '../../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -39,9 +39,9 @@ import type { RpcContext } from '../rpc/core'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentModelCatalogReadParams } from '../../native-chat/agent-model-catalog/agent-model-catalog-service-contract'
 import type { RuntimeWorktreeScanCache, RuntimeWorktreeScanInFlight } from '../orca-runtime-core'
-import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { ResolvedWorktreeRowsJoin } from '../workspaces/resolved-worktree-scan-join'
+import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+import type { ResolvedWorktreeRowsJoin } from '../workspaces/catalog/resolved-worktree-scan-join'
 import type { OrcaRuntimeWithWorktreePsDependencies } from '../workspaces/workspace-process-listing-dependencies'
 
 type ScopeFixture = {

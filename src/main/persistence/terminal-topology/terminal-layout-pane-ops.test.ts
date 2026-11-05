@@ -10,7 +10,7 @@ import { WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/work
 import {
   closeTerminalSurfaceInWorkspaceSession,
   collectTerminalLayoutLeafIds
-} from '../../runtime/terminal-surface-close'
+} from '../../runtime/terminal/surface/terminal-surface-close'
 import { applyCommandToSession } from './terminal-pane-admission'
 import { leafIds, WindowSession } from './terminal-topology-window-session-fixture'
 import {

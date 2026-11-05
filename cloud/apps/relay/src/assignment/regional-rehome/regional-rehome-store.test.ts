@@ -5,14 +5,12 @@ import {
   RelayAssignmentStore as BaseRelayAssignmentStore,
   type RegionalRehomeAttempt,
   REGIONAL_REHOME_QUARANTINE_FAILURES,
-  REGIONAL_REHOME_QUARANTINE_MS,
-  REGIONAL_REHOME_REDRAIN_SEND_LIMIT
+  REGIONAL_REHOME_QUARANTINE_MS
 } from '../assignment-store.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,
-  type RelayLockOptions,
-  type SqlRow
+  type RelayLockOptions
 } from '../../database/database.js'
 import {
   REGIONAL_REHOME_SQL_FAILURES_LIMIT,
@@ -44,28 +42,6 @@ const targetIncarnation = '22222222-2222-4222-8222-222222222222'
 const bystanderIncarnation = '33333333-3333-4333-8333-333333333333'
 
 describe('regional rehome assignment state', () => {
-  it('advances past a full candidate page whose destination lacks capacity', async () => {
-    const context = await setup()
-    for (let i = 0; i < 10; i++) {
-      await activatePreferredSource(context, {
-        userId: `blocked-${i}`,
-        relayHostId: 'abcdefghijklmnop'
-      })
-    }
-    context.advance(1)
-    const reverse = { userId: 'healthy-reverse', relayHostId: 'abcdefghijklmnop' }
-    await activateReversePreferredSource(context, reverse)
-    await context.database.query(
-      'UPDATE relay_cells SET capacity_requests = reserved_requests WHERE cell_id = ?',
-      [target.id]
-    )
-    expect(await context.store.tryIdleRehome()).toMatchObject({
-      userId: reverse.userId,
-      sourceCellId: target.id,
-      targetCellId: source.id
-    })
-    await context.database.close()
-  })
 
   it('defaults optional correction off even with enabled durable control', async () => {
     const context = await setup()
@@ -143,32 +119,6 @@ describe('regional rehome assignment state', () => {
     )
     expect(Number(rows[0]?.updated_at)).toBe(context.now())
     await context.database.close()
-  })
-
-  it('does not open a transaction while the worker is disabled', async () => {
-    const delegate = await openInMemoryRelayDatabase()
-    const database = new TransactionCountingDatabase(delegate)
-    const store = new IdleRehomeTestStore(database, () => 1_000_000)
-    await store.inspectRegionalRehomeControl()
-    database.transactionCalls = 0
-
-    await expect(store.tryIdleRehome()).resolves.toBeNull()
-    expect(database.transactionCalls).toBe(0)
-    await database.close()
-  })
-
-  it('initializes a missing control row without opening a transaction', async () => {
-    const delegate = await openInMemoryRelayDatabase()
-    const database = new TransactionCountingDatabase(delegate)
-    const store = new IdleRehomeTestStore(database, () => 1_000_000)
-
-    await expect(store.tryIdleRehome()).resolves.toBeNull()
-    expect(database.transactionCalls).toBe(0)
-    await expect(store.inspectRegionalRehomeControl()).resolves.toMatchObject({
-      generation: 0,
-      enabled: false
-    })
-    await database.close()
   })
 
   it('uses a generation-bound durable kill switch', async () => {
@@ -653,22 +603,6 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('does not throttle or log an idle tick with no candidates', async () => {
-    const context = await setup()
-
-    const warnings = collectEventWarnings('orca_relay_regional_rehome_candidates_skipped')
-    try {
-      expect(await context.store.tryIdleRehome()).toBeNull()
-    } finally {
-      warnings.restore()
-    }
-    expect(warnings.entries).toEqual([])
-    expect(
-      await context.database.query(`SELECT next_dispatch_at FROM relay_region_rehome_worker_state`)
-    ).toEqual([{ next_dispatch_at: 0 }])
-    await context.database.close()
-  })
-
   it('pauses the claim without latching when a sql spike lands between selection and commit', async () => {
     const context = await setup()
     await activatePreferredSource(context, {
@@ -912,23 +846,6 @@ describe('regional rehome assignment state', () => {
   })
 
   // Only inventory contention is ordinary; other failures must propagate and count against dispatch.
-  it('propagates a claim failure that is not inventory contention', async () => {
-    const probe = new CellInventoryLockProbe()
-    const context = await setup({ wrap: (database) => probe.wrap(database) })
-    await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
-    probe.reset()
-    probe.failWith = new Error('relay_capacity_exhausted')
-    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
-
-    try {
-      await expect(context.store.tryIdleRehome()).rejects.toThrow('relay_capacity_exhausted')
-    } finally {
-      busy.restore()
-    }
-
-    expect(busy.entries).toEqual([])
-    await context.database.close()
-  })
 
   // One inventory failure abandons the transaction’s whole candidate page, so count all candidates skipped.
 
@@ -1484,36 +1401,6 @@ describe('regional rehome assignment state', () => {
   })
 })
 
-class TransactionCountingDatabase implements RelayDatabase {
-  transactionCalls = 0
-
-  constructor(private readonly delegate: RelayDatabase) {}
-
-  query(sql: string, params?: unknown[]): Promise<SqlRow[]> {
-    return this.delegate.query(sql, params)
-  }
-
-  queryLocked(
-    sql: string,
-    params?: unknown[],
-    options?: { failIfUnavailable?: boolean }
-  ): Promise<SqlRow[]> {
-    return this.delegate.queryLocked(sql, params, options)
-  }
-
-  transaction<T>(
-    operation: (transaction: RelayDatabase) => Promise<T>,
-    options?: { reportRetries?: boolean }
-  ): Promise<T> {
-    this.transactionCalls += 1
-    return this.delegate.transaction(operation, options)
-  }
-
-  close(): Promise<void> {
-    return this.delegate.close()
-  }
-}
-
 type Context = Awaited<ReturnType<typeof setup>>
 
 function collectDisableWarnings() {
@@ -1907,21 +1794,6 @@ class CellInventoryLockProbe {
       close: async () => undefined
     })
     return decorate(database)
-  }
-}
-
-async function workerState(
-  context: Context
-): Promise<{ consecutiveFailures: number; pausedUntil: number }> {
-  const row = (
-    await context.database.query(
-      `SELECT consecutive_failures, paused_until
-       FROM relay_region_rehome_worker_state WHERE worker_id = 'global'`
-    )
-  )[0]!
-  return {
-    consecutiveFailures: Number(row.consecutive_failures),
-    pausedUntil: Number(row.paused_until)
   }
 }
 

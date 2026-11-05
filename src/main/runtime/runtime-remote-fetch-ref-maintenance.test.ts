@@ -18,7 +18,7 @@ vi.mock('../git/refs/maintenance/local-repo-ref-maintenance', async (importOrigi
 }))
 
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
-import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
+import { RuntimeRemoteFetchController } from './repositories/runtime-remote-fetch-controller'
 
 function armedTargets(): { key: string }[] {
   return armMock.mock.calls.map(([args]) => args as { key: string })

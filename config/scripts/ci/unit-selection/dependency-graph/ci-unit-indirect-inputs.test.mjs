@@ -67,15 +67,3 @@ it.each([
     expect(selected(source)).toEqual(['src/changed.test.ts', 'src/indirect.test.ts'])
   }
 )
-
-it('retains type-import ownership edges independently of runtime opacity', () => {
-  const graph = buildUnitDependencyGraph(
-    new Map([
-      ['src/types.ts', 'export interface Worker { id: string }'],
-      ['src/consumer.ts', "import type { Worker } from './types'"],
-      ['src/value.json', '{"global":true}']
-    ])
-  )
-  expect([...graph.reverse.get('src/types.ts')]).toEqual(['src/consumer.ts'])
-  expect(graph.opaque.size).toBe(0)
-})

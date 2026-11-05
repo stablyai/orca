@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './orca-runtime-tests/runtime-durable-store-fixture'
 /** Daemon-shaped ids rely on persisted host bindings to survive renderer omission.
  * User close must release those bindings; these cases cover connected/exited, never unverifiable PTYs. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => ({ isDestroyed: () => false })) },

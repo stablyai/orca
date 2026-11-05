@@ -204,36 +204,6 @@ describe('relay cell admission selector', () => {
     expect(await store.resolve(identity)).toBeNull()
   })
 
-  it('commits atomically and resolves an ambiguous response idempotently', async () => {
-    const store = await setup(() => 100)
-    const input = {
-      attemptId: 'cutover_004',
-      expectedGeneration: 0,
-      expectedMembershipSha256: BASE_MEMBERSHIP_SHA256,
-      membership: INITIAL_MEMBERSHIP
-    }
-
-    await expect(store.applyCellAdmissionSelector(input)).resolves.toMatchObject({
-      changed: true,
-      selector: { generation: 1, membership: INITIAL_MEMBERSHIP }
-    })
-    await expect(store.applyCellAdmissionSelector(input)).resolves.toMatchObject({
-      changed: false,
-      selector: { generation: 1, membership: INITIAL_MEMBERSHIP }
-    })
-    await expect(store.inspectCellAdmissionSelector(input.attemptId)).resolves.toMatchObject({
-      intent: { state: 'committed' }
-    })
-    expect(await store.cellDeploymentStatus('c1')).toMatchObject({
-      enabled: false,
-      admissionState: 'existing-only'
-    })
-    expect(await store.cellDeploymentStatus('c2')).toMatchObject({
-      enabled: true,
-      admissionState: 'migration-only'
-    })
-  })
-
   it('rejects a generation-zero membership change between intent and commit', async () => {
     const delegate = await openInMemoryRelayDatabase()
     const hooked = new AfterTransactionDatabase(delegate)

@@ -14,8 +14,8 @@ import { readWorkerTranscript } from './worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration-structured-worker-lifecycle'
 import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
-import { structuredWorkerAgent } from '../structured-worker-authority'
-import type { StructuredWorkerIdentity } from '../structured-worker-identity'
+import { structuredWorkerAgent } from './terminal-authority/structured-sessions/structured-worker-authority'
+import type { StructuredWorkerIdentity } from './terminal-authority/structured-sessions/structured-worker-identity'
 import { readWorkerTerminalArchive } from './worker-terminal-archive-read'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.

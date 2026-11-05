@@ -4,14 +4,17 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID,
   waitForTranscriptIdle
-} from './agent-transcript-pane-test-harness'
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import {
   finalReadProjection,
   finalReplayFrame,
   readRuntimeFixture,
   type TranscriptReplayResize
 } from './agent-transcript-replay-test-harness'
-import { isKnownReadyPromptBody, isQuietReadyScreenBody } from './terminal-wait-detection'
+import {
+  isKnownReadyPromptBody,
+  isQuietReadyScreenBody
+} from './terminal/wait/terminal-wait-detection'
 import { evaluateAgentStateRules } from './agent-state-rules/agent-state-rules-engine'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 

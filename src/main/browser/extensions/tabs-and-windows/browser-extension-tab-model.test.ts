@@ -25,11 +25,11 @@ vi.mock('../../browser-manager', () => ({
     getWorktreeIdForTab: (pageId: string) => mocks.pages.get(pageId)?.worktreeId
   }
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: mocks.createTab
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-activate', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-activate', () => ({}))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))

@@ -13,7 +13,7 @@ import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint
 } from '../agent-model-catalog/agent-model-catalog-fingerprint'
-import { structuredAgentModelCatalogAccountReads } from '../../runtime/structured-agent-model-catalog-wiring'
+import { structuredAgentModelCatalogAccountReads } from '../../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring'
 import {
   createReceivingCallerFixture,
   PARENT

@@ -272,7 +272,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
   'src/main/runtime/runtime-worktree-agent-',
-  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
+  'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).

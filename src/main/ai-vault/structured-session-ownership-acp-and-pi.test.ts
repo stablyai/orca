@@ -11,7 +11,7 @@ import {
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import { installOwnership, listResult } from './structured-session-ownership.test-support'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
+import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 
 const OPENCODE_ID = 'ses_2f9aB3cD4eF5gH6iJ7kL8mN9oP'
 const GROK_ID = '019fd600-1a2b-7c3d-8e4f-5a6b7c8d9e0f'

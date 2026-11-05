@@ -1,4 +1,4 @@
-import { sessionIdFromStructuredWorkerIncarnation } from '../../structured-worker-identity'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { observeStructuredWorker } from '../../rpc/methods/orchestration-structured-worker-lifecycle'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from '../../orca-runtime-core'

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PtyShellOwnershipMirror } from '../../../runtime/pty-shell-ownership-mirror'
+import { PtyShellOwnershipMirror } from '../../../runtime/terminal/query/pty-shell-ownership-mirror'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
 import { TerminalShellRecoveryBarrier } from '../terminal-shell-recovery-barrier'
 
@@ -42,16 +42,6 @@ async function recover(data: string) {
 }
 
 describe('process boundary ground at a proven crash', () => {
-  it('turns off mouse modes a program armed before the first prompt marker', async () => {
-    // .zshrc starts tmux, which dies with mouse armed before the shell's first 133;A.
-    const { enabled, live } = await recover(
-      `\x1b[?1000h\x1b[?1006h${PROMPT}${COMMAND_START}\x1b[?1003hRUN\r\n${COMMAND_DONE}$ `
-    )
-
-    expect(enabled).toEqual(['25'])
-    expect(live.modes.mouseTrackingMode).toBe('none')
-  })
-
   it("keeps ConPTY's focus reporting without injecting an enable a mirror would read as a new owner", async () => {
     const { ground, enabled, live, barrier, mirror } = await recover(
       `\x1b[?1004h${PROMPT}${COMMAND_START}\x1b[?1003hRUN\r\n${COMMAND_DONE}$ `

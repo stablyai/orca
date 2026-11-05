@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 it.each(['pty', 'leaf', 'unknown', 'disconnected'] as const)(
   'publishes only the handle-owning incarnation for %s',
