@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { fireEvent, getByRole } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
@@ -284,9 +285,17 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     expect(unsupported.getAttribute('aria-disabled')).toBe('true')
     await act(async () => fireEvent.click(unsupported))
     expect(onSave).not.toHaveBeenCalled()
-    await act(async () =>
-      fireEvent.keyDown(getByRole(document.body, 'menuitem', { name: 'Codex' }), { key: 'Enter' })
-    )
+    await act(async () => fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' }))
+    const user = userEvent.setup()
+    act(() => trigger.focus())
+    await user.keyboard('co')
+    const search = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Search agents and setups…"]'
+    )!
+    expect(document.activeElement).toBe(search)
+    expect(search.value).toBe('co')
+    expect(search.selectionStart).toBe(2)
+    await user.keyboard('{Enter}')
     expect(onSave).not.toHaveBeenCalled()
 
     await act(async () =>

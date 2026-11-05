@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { act, useSyncExternalStore } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { fireEvent, getByRole } from '@testing-library/react'
+import { fireEvent, getByRole, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -248,7 +250,7 @@ it.each(['button', 'enter'] as const)(
   }
 )
 
-it('opens from a printable key on the focused trigger and seeds the search', () => {
+it('keeps continuous trigger typing in the search inside a dialog', async () => {
   const claude: AgentPickerEntry = {
     ...entry,
     agent: 'claude',
@@ -272,7 +274,12 @@ it('opens from a printable key on the focused trigger and seeds the search', () 
   act(() =>
     root.render(
       <TooltipProvider>
-        <AgentLaunchPicker model={model} entries={entries} agent="codex" onPick={launch} />
+        <Dialog open>
+          <DialogContent>
+            <DialogTitle>Agent selection</DialogTitle>
+            <AgentLaunchPicker model={model} entries={entries} agent="codex" onPick={launch} />
+          </DialogContent>
+        </Dialog>
       </TooltipProvider>
     )
   )
@@ -281,11 +288,27 @@ it('opens from a printable key on the focused trigger and seeds the search', () 
     document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
   fireEvent.keyDown(trigger, { key: 'c', metaKey: true })
   expect(search()).toBeNull()
-  fireEvent.keyDown(trigger, { key: 'l' })
-  expect(search()?.value).toBe('l')
-  expect(getByRole(document.body, 'button', { name: 'Configure Claude' })).toBeTruthy()
-  expect(document.querySelector('[aria-label="Configure Codex"]')).toBeNull()
-  fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' })
-  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  const user = userEvent.setup()
+  act(() => trigger.focus())
+  await user.keyboard('c')
+  expect(document.activeElement).toBe(search())
+  expect(search()?.value).toBe('c')
+  expect(search()?.selectionStart).toBe(1)
+  await user.keyboard('o')
+  expect(document.activeElement).toBe(search())
+  expect(search()?.value).toBe('co')
+  expect(search()?.selectionStart).toBe(2)
+  expect(document.querySelector('[aria-label="Configure Claude"]')).toBeNull()
+  expect(launch).not.toHaveBeenCalled()
+  await user.keyboard('{Enter}')
+  expect(launch).toHaveBeenCalledOnce()
+  expect(launch.mock.calls[0][0]).toBe('codex')
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+  await user.click(trigger)
+  expect(document.activeElement).toBe(search())
   expect(search()?.value).toBe('')
+  await user.keyboard('{ArrowDown}')
+  expect(document.activeElement).toBe(getByRole(document.body, 'menuitem', { name: /^Codex/ }))
+  await user.keyboard('{Escape}')
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
 })

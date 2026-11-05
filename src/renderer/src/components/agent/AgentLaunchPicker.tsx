@@ -89,6 +89,7 @@ export const AgentLaunchPicker = memo(
     const ownDraftScope = useAgentPickerDraftScope()
     const [settingsOpen, setSettingsOpen] = useState(false)
     const trigger = useRef<HTMLButtonElement>(null)
+    const searchInput = useRef<HTMLInputElement>(null)
     const [open, setOpenState] = useState(false)
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
@@ -209,6 +210,12 @@ export const AgentLaunchPicker = memo(
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
+            onOpenAutoFocus={(event) => {
+              if (searchInput.current) {
+                event.preventDefault()
+                searchInput.current.focus({ preventScroll: true })
+              }
+            }}
             className={
               matchTriggerWidth
                 ? 'w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)'
@@ -222,6 +229,7 @@ export const AgentLaunchPicker = memo(
                 model={model}
                 entries={entries}
                 initialQuery={initialQuery}
+                searchInputRef={searchInput}
                 value={value}
                 draftForEntry={draftForEntry}
                 mode="select"

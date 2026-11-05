@@ -1,5 +1,5 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { useEffect, useRef, useState, type ComponentProps } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,7 @@ export function AgentLaunchPickerMenu({
   entries,
   hideSearch,
   initialQuery = '',
+  searchInputRef,
   onSelectAgent
 }: {
   model?: NewTabAgentMenuModel
@@ -45,6 +46,8 @@ export function AgentLaunchPickerMenu({
   hideSearch?: boolean
   /** Seeds the search field; read once when the menu mounts. */
   initialQuery?: string
+  /** A supplied ref gives the owning popup control of initial focus. */
+  searchInputRef?: Ref<HTMLInputElement>
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useEffect(() => {
@@ -125,9 +128,10 @@ export function AgentLaunchPickerMenu({
       {!hideSearch ? (
         <div className="px-1 py-0.5">
           <Input
+            ref={searchInputRef}
             value={query}
             density="compact"
-            autoFocus
+            autoFocus={!searchInputRef}
             onFocus={(event) => {
               // Why: a seeded query must keep the caret after the typed key.
               const end = event.currentTarget.value.length
