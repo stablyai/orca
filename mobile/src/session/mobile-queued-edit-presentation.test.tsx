@@ -404,7 +404,7 @@ describe('phone inline editor presentation', () => {
       sendRequest.mock.calls.some(([method]) => method === 'agentSession.queuedMessageUpdate')
     ).toBe(false)
     expect(state.hook!.queued.cards[0]?.images).toEqual(message.body.blocks)
-    expect(state.hook!.queued.cards[0]?.attribution).not.toBeNull()
+    expect(state.hook!.queued.cards[0]?.from).toBeDefined()
     expect(state.bottomText).toBe('')
   })
   it('saves a scanned model skill picked through More and Edit without dispatching a host command', async () => {

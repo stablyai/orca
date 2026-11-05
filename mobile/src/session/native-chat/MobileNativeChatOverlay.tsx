@@ -3,6 +3,7 @@ import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStructuredComposer } from './composer/MobileNativeChatComposer'
@@ -45,6 +46,8 @@ type Props = {
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
   hostName: string | null
+  /** Offered for tapped links; absent where the host can't open a browser tab. */
+  onOpenUrlInOrca?: (url: string) => void
 }
 
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
@@ -69,7 +72,8 @@ export function MobileNativeChatOverlay({
   sessionId,
   getSendCompletionGeneration,
   keyboardInset,
-  hostName
+  hostName,
+  onOpenUrlInOrca
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -81,6 +85,7 @@ export function MobileNativeChatOverlay({
     () => foldMobileNativeChatMessages(fullContent.messages, agent),
     [fullContent.messages, agent]
   )
+  const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
   const composerTray = useMobileNativeChatComposerTray({
@@ -99,6 +104,7 @@ export function MobileNativeChatOverlay({
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
       agentWorking: controller.nativeChatTurnActive
     },
+    taskList,
     backgroundTasks: controller.nativeChatBackgroundTasks
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
@@ -175,6 +181,7 @@ export function MobileNativeChatOverlay({
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
+      onOpenUrlInOrca={onOpenUrlInOrca}
     >
       <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
         <View style={styles.overlay}>

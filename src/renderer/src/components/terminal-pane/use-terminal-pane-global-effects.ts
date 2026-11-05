@@ -259,11 +259,15 @@ export function useTerminalPaneGlobalEffects({
         manager: managerRef.current,
         acknowledgeAgents: (paneKeys) => useAppStore.getState().acknowledgeAgents(paneKeys),
         surfaceStaleAgentRow,
-        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded
+        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded,
+        expandedLeafId: useAppStore.getState().terminalLayoutsByTabId[tabId]?.expandedLeafId,
+        toggleExpandPane
       })
     }
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+    // toggleExpandPane only reads refs, like the expand listener above, so it is not re-subscribed on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
 
   useEffect(() => {

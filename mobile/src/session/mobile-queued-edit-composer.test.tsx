@@ -470,7 +470,7 @@ describe('real phone inline composer from More through picker pruning and host b
         )
         await open()
         expect(state.hook!.queued.editor?.text).toBe('user replacement')
-        expect(state.hook!.queued.cards[0]?.attribution).toBeNull()
+        expect(state.hook!.queued.cards[0]?.from).toBeUndefined()
       } finally {
         await rig.dispose()
         clock.mockRestore()

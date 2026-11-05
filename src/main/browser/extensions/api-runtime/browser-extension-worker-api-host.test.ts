@@ -13,10 +13,10 @@ vi.mock('../../browser-manager', () => ({ browserManager: {} }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 

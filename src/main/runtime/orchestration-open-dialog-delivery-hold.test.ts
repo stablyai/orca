@@ -122,4 +122,33 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       db.close()
     }
   )
+
+  it("delivers past the agent's dim prompt suggestion right after the user typed (#38015)", async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-prompt-suggestion-delivery-')
+    const { runtime, write } = createRuntime(db, {
+      getAgentStatusSnapshot: () => [claudeHookRow('done')],
+      checkHookAgentPresence: async () => 'live',
+      launchAgent: 'claude'
+    })
+    const run = createBoundRun(db, 'Claude Run')
+    await runtime.listTerminals()
+
+    runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'add a second line\r')
+    runtime.onPtyData(
+      PTY_ID,
+      `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ \x1b7\x1b[2madd a timestamp line\x1b[22m\x1b8\r\n${'─'.repeat(40)}\x1b[1A\x1b[3G`,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(200)
+    insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    db.close()
+  })
 })

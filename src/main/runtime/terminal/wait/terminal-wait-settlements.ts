@@ -1,22 +1,18 @@
 import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-handle-bindings'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult
-} from '../../terminal-wait-results'
+} from './terminal-wait-results'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
-import { detectExplicitIdleStatusFromTitle } from '../../terminal-wait-detection'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
-import {
-  evaluateTuiIdle,
-  isTuiIdleReadyVerdict,
-  type TuiIdleVerdict
-} from '../../tui-idle-evidence'
-import { ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
-import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
+import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
+import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
+import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { detectTerminalComposerDraft } from '../../../../shared/terminal/input/terminal-composer-draft'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
@@ -143,7 +139,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       : isTuiIdleReadyVerdict(verdict)
   }
 
-  /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one. */
+  /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
+   *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
   private isPtyHoldingDelivery(ptyId: string): boolean {
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return true
@@ -154,7 +151,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       lastInputAt !== null &&
       Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
       !!state &&
-      detectTerminalComposerDraft(state.emulator.getCursorLineContext()) !== null
+      !!readTerminalComposerTypedText(state.emulator.getCursorLineContext())
     )
   }
 

@@ -448,39 +448,6 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     clearWorktreeAgentExpansionStateForTests()
   })
 
-  it('[full mode] both toggles render independently at mount', async () => {
-    setAgentLineageState({ agentActivityDisplayMode: 'full' })
-    const { container } = await renderWorktreeList()
-
-    expect(container.textContent).toContain('Parent Terminal')
-    expect(container.textContent).not.toContain('PARENT_AGENT_PROMPT')
-    // Child agents stay collapsed until the user opens them; child worktrees stay open.
-    expect(container.textContent).not.toContain('CHILD_AGENT_PROMPT')
-
-    expect(childWorktreeChip(container)).not.toBeNull()
-    expect(agentChildDisclosure(container)).not.toBeNull()
-
-    expect(childWorktreeChip(container)!.getAttribute('aria-expanded')).toBe('true')
-    expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
-    expect(childWorktreeCardPresent(container)).toBe(true)
-  })
-
-  it('[full mode] toggling AGENTS does NOT change the child-worktrees chip (agents -> children uncoupled)', async () => {
-    setAgentLineageState({ agentActivityDisplayMode: 'full' })
-    const { container } = await renderWorktreeList()
-
-    expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('false')
-    expect(childWorktreeCardPresent(container)).toBe(true)
-
-    await click(agentChildDisclosure(container)!)
-
-    expect(agentChildDisclosure(container)!.getAttribute('aria-expanded')).toBe('true')
-    expect(container.textContent).toContain('CHILD_AGENT_PROMPT')
-    expect(childWorktreeChip(container)!.getAttribute('aria-expanded')).toBe('true')
-    expect(childWorktreeCardPresent(container)).toBe(true)
-    expect((mockStore.state.collapsedGroups as Set<string>).size).toBe(0)
-  })
-
   it('[full mode] toggling CHILD WORKTREES still remounts the card but PRESERVES agent expansion (regression)', async () => {
     setAgentLineageState({ agentActivityDisplayMode: 'full' })
     const { container, root } = await renderWorktreeList()

@@ -106,6 +106,7 @@ export function useMobileStructuredAgentSession(
     mutate,
     optionStamp,
     turnId,
+    hasTurn: state.latestTurn != null || state.submissions.length > 0,
     hostSupport
   })
   const sendController = useMobileStructuredCommandController(options)

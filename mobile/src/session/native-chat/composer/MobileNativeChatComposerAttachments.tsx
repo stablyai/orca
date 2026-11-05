@@ -17,6 +17,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../files/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
 
 const THUMB_SIZE = 58
 // Items sit 12pt in from the composer box's edge (box padding plus strip padding).
@@ -39,17 +40,16 @@ export function MobileNativeChatComposerAttachments({
   images,
   files,
   onRemoveImage,
-  onRemoveFile,
-  onOpenFile
+  onRemoveFile
 }: {
   images: readonly PendingNativeChatImage[]
   files: readonly PendingNativeChatFile[]
   onRemoveImage?: (id: string) => void
   onRemoveFile?: (id: string) => void
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const onOpenFile = useMobileNativeChatOpenFile()
   if (images.length === 0 && files.length === 0) {
     return null
   }

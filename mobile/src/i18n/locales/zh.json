@@ -375,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "默认",
-      "notReportedMarker": "未上报"
+      "notReportedMarker": "未上报",
+      "moreModels": "更多模型",
+      "fewerModels": "较少模型"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认"
@@ -1204,6 +1206,10 @@
       "retryLoading": "重试加载 {{path}}",
       "unavailable": "移动端不可用"
     },
+    "fileExplorerRowActions": {
+      "copyName": "复制名称",
+      "copyRelativePath": "复制相对路径"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",
       "copySource": "复制 Markdown 源码",
@@ -1765,13 +1771,8 @@
       "noUpdate": "已有 {{value0}} 未更新"
     },
     "agentMessageAttribution": {
-      "from": "来自 {{sender}}",
-      "fromMore": "来自 {{sender}} 及其他 {{count}} 个智能体",
-      "fromUnnamed": "来自智能体",
-      "messageFrom": "来自 {{sender}} 的消息",
-      "messageFromMore": "来自 {{sender}} 及其他 {{count}} 个智能体的消息",
-      "messageFromUnnamed": "来自智能体的消息",
-      "unnamedSender": "一个智能体"
+      "unnamedSender": "一个智能体",
+      "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "创建终端失败",
@@ -1796,6 +1797,7 @@
       "countWorkflows_one": "{{count}} 个工作流程",
       "countWorkflows_other": "{{count}} 个工作流程",
       "detailsUnavailable": "此会话的任务详细信息不可用。",
+      "outputFile": "输出：{{value0}}",
       "groupAgents": "智能体",
       "groupMonitors": "监控",
       "groupShell": "Shell",
@@ -2139,8 +2141,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "排队消息中不能保存命令。",
-      "editing": "正在编辑消息",
-      "editingAttributed": "正在编辑消息 · {{attribution}}"
+      "editing": "正在编辑消息"
     },
     "quickCommandEditorForm": {
       "action": "操作",

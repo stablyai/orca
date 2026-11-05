@@ -24,7 +24,7 @@ describe('per-job path classification', () => {
     expect(
       classifyPrJobs([
         unit,
-        'config/scripts/process-host-build-dist.test.mjs',
+        'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs',
         'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
         'src/shared/worktree/id.test.ts'
       ])

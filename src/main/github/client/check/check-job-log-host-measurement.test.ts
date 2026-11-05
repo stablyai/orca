@@ -26,8 +26,8 @@ describe('standalone host measurement identity', () => {
   it.each([
     'src/main/github/client/check/check-job-log-host-measurement.mjs',
     'src/main/github/client/check/check-job-log-cache-retention-child.mjs',
-    'config/scripts/check-job-log-performance-cases.mjs',
-    'config/scripts/check-job-log-byte-cap-benchmark.mjs',
+    'config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs',
+    'config/scripts/performance/check-job-log/check-job-log-byte-cap-benchmark.mjs',
     'src/shared/github/repository-identity-key.ts',
     'src/main/git/command-runner/abort-error.ts'
   ])('rejects stale record identity after an owned-copy mutation of %s', async (name) => {

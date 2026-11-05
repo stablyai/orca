@@ -23,6 +23,8 @@ export type SelectionOperation = {
   key: string
   value: string
   model: string | null
+  /** False when remembering must leave the new-chat model alone. */
+  adoptsModel?: false
   transmitted: boolean
   outcome?: SelectionOutcome
   request?: Promise<SelectionOutcome>
@@ -106,7 +108,9 @@ export function createStructuredSessionSelectionController(
               modelId: model,
               optionId: operation.key,
               value,
-              ...(!adopt ? { adoptModelAsLaunchDefault: false } : {})
+              ...(!adopt || operation.adoptsModel === false
+                ? { adoptModelAsLaunchDefault: false }
+                : {})
             }
           ])
         } catch {
@@ -151,7 +155,8 @@ export function createStructuredSessionSelectionController(
       value: string,
       model: string | null,
       offers?: (key: string, value: string) => boolean,
-      onIssue?: (operation: SelectionOperation) => void
+      onIssue?: (operation: SelectionOperation) => void,
+      adoptsModel?: false
     ): SelectionOperation {
       if (!isCurrent()) {
         const outcome = { kind: 'superseded' } as const
@@ -182,6 +187,7 @@ export function createStructuredSessionSelectionController(
         key,
         value,
         model: key === 'model' ? value : model,
+        ...(adoptsModel === false && key !== 'model' ? { adoptsModel } : {}),
         transmitted: false,
         result: reply.promise,
         resolve: reply.resolve

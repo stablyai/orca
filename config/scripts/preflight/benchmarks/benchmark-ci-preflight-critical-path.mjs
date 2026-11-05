@@ -38,7 +38,7 @@ const save = () =>
 
 const currentScriptPaths = {
   'config/scripts/runtime-serve-terminal-smoke.mjs':
-    'config/scripts/runtime-serve-terminal-smoke.mjs',
+    'config/scripts/runtime-verification/daemon-lifecycle/runtime-serve-terminal-smoke.mjs',
   'config/scripts/run-typecheck-projects-in-parallel.mjs':
     'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs',
   'config/scripts/check-main-sync-spawn-ratchet.mjs':

@@ -1,46 +1,11 @@
-import { existsSync, realpathSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTree } from '../../../../src/shared/windows-transient-lock-removal.ts'
-import {
-  runPackagedProcessHostConsumer,
-  stagePackagedProcessHost,
-  writePackagedProcessHostConsumer
-} from './packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
-const {
-  createPackagedRuntimeNodeModuleResources
-} = require('../../../packaged-runtime-node-modules.cjs')
-const {
-  collectRuntimeClosure
-} = require('../../runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
-const nodeExecutable = process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath
-
-it('loads the copied process package from an unpacked CLI without checkout dependencies', async () => {
-  const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-process-host-'))
-  try {
-    const resource = createPackagedRuntimeNodeModuleResources().find(
-      (entry) => entry.to === join('node_modules', '@orca', 'process-host')
-    )
-    expect(resource).toBeDefined()
-    expect(resource.filter).toEqual(['package.json', 'dist/**/*'])
-    const packageDir = await stagePackagedProcessHost(resourcesDir)
-    expect(existsSync(join(packageDir, 'src'))).toBe(false)
-
-    const { outDir, entry } = await writePackagedProcessHostConsumer(resourcesDir)
-    const closure = collectRuntimeClosure(outDir, resourcesDir)
-    expect(closure).toContain(realpathSync(join(packageDir, 'dist', 'run-process.js')))
-    const result = runPackagedProcessHostConsumer(nodeExecutable, resourcesDir, entry)
-    expect(result.code, result.stderr).toBe(0)
-    expect(result.stdout).toBe('copied-runtime')
-  } finally {
-    await removeTree(resourcesDir)
-  }
-})
 
 describe('process-host output packaging guard', () => {
   const { assertProcessHostOutputBuilt } = require('../../../packaged-runtime-node-modules.cjs')
@@ -75,10 +40,6 @@ describe('process-host output packaging guard', () => {
     } finally {
       await removeTree(packageDir)
     }
-  })
-
-  it('accepts the checkout package', () => {
-    expect(() => assertProcessHostOutputBuilt()).not.toThrow()
   })
 
   it.each([

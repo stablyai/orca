@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  listWorktrees,
-  resolveWorktreeScanCacheTtlMs
-} from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { resolveWorktreeScanCacheTtlMs } from '../workspaces/catalog/runtime-worktree-scan-cache'
+import { store } from './orca-runtime-test-fixtures.spec'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 describe('resolveWorktreeScanCacheTtlMs', () => {

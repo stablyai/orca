@@ -33,6 +33,8 @@ export function useMobileStructuredAgentOptions(args: {
   enabled: boolean
   fence: number | null
   turnId: string | null
+  /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
+  hasTurn?: boolean
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
   hostSupport: Pick<
@@ -146,6 +148,7 @@ export function useMobileStructuredAgentOptions(args: {
       snapshot: readOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
+      existingChat: createdHere === undefined || args.hasTurn === true,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
         controller.flush(async (pick) => {

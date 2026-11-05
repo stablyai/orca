@@ -1,6 +1,6 @@
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
 
@@ -41,23 +41,23 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 )
 
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
-import { resetPRForBranchMocks } from './client-test-harness'
+import { installIndependentCheckFixtures, resetPRForBranchMocks } from './client-test-harness'
 
-const {
-  ghExecFileAsyncMock,
-  getOwnerRepoMock,
-  resolvePRRepositoryCandidatesMock,
-  gitExecFileAsyncMock
-} = clientMocks
+const { getOwnerRepoMock, resolvePRRepositoryCandidatesMock, gitExecFileAsyncMock } = clientMocks
+
+const metadataRequests = vi.fn()
+const unexpectedChecks: string[][] = []
+afterEach(() => expect(unexpectedChecks).toEqual([]))
 
 describe('getPRForBranch', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)
+    installIndependentCheckFixtures(clientMocks, metadataRequests, unexpectedChecks)
   })
 
   it('derives a read-only conflict summary for conflicting PRs when the base ref exists locally', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -92,7 +92,7 @@ describe('getPRForBranch', () => {
 
   it('routes local WSL branch status and conflict summary git probes through the selected distro', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -123,7 +123,7 @@ describe('getPRForBranch', () => {
     expect(resolvePRRepositoryCandidatesMock).toHaveBeenCalledWith('/repo-root', null, {
       wslDistro: 'Ubuntu'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(metadataRequests).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
         cwd: '/repo-root',
@@ -154,7 +154,7 @@ describe('getPRForBranch', () => {
 
   it('treats GitHub DIRTY merge state as conflicting when mergeable is still unknown', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           number: 42,
@@ -191,7 +191,7 @@ describe('getPRForBranch', () => {
 
   it('omits conflict summaries for SSH-backed repos', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -216,7 +216,7 @@ describe('getPRForBranch', () => {
 
   it('keeps conflicted file paths when git merge-tree exits 1 with stdout', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -248,7 +248,7 @@ describe('getPRForBranch', () => {
 
   it('falls back to the legacy merge-tree invocation when Git lacks --merge-base', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -337,7 +337,7 @@ describe('getPRForBranch', () => {
     // Change head OID to bypass the result cache while retaining the learned Git capability.
     const pushedBranchLookup = { ...branchLookup, head: { ref: 'feature/test', sha: 'head-oid-2' } }
     const pushedExactLookup = { ...exactLookup, headRefOid: 'head-oid-2' }
-    ghExecFileAsyncMock
+    metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify([branchLookup]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify(exactLookup) })
       .mockResolvedValueOnce({
@@ -376,7 +376,7 @@ describe('getPRForBranch', () => {
 
   it('does not retry legacy merge-tree for older Git failures unrelated to --merge-base', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -424,7 +424,7 @@ describe('getPRForBranch', () => {
 
   it('marks the conflict summary as locally clean when GitHub reports dirty but merge-tree has no conflicted files', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,
@@ -461,7 +461,7 @@ describe('getPRForBranch', () => {
 
   it('falls back to GitHub baseRefOid when fetching or resolving the base ref fails', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
+    metadataRequests.mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 42,

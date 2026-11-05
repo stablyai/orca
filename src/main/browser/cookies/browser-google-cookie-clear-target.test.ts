@@ -322,8 +322,8 @@ it.each(['between selectors', 'queued profile'])(
   }
 )
 
-import { browserProfileRpcFixture } from '../../runtime/browser/browser-profile-rpc-test-fixture'
-import { RuntimeBrowserProfiles } from '../../runtime/browser/browser-profiles'
+import { browserProfileRpcFixture } from '../../runtime/browser/commands/browser-profile-rpc-test-fixture'
+import { RuntimeBrowserProfiles } from '../../runtime/browser/commands/browser-profiles'
 it('validates required executor params at the dispatcher before owner entry', async () => {
   const clear = vi.spyOn(RuntimeBrowserProfiles.prototype, 'browserProfileClearGoogleCookies')
   const { dispatcher } = browserProfileRpcFixture('S1')

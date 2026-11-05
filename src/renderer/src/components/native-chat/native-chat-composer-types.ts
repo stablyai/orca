@@ -173,7 +173,7 @@ export type NativeChatComposerHandle = {
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
-  /** Append deduplicated text after a blank line and place the caret at its end. */
+  /** Append text after a blank line and place the caret at its end; repeated additions stay separate. */
   appendText: (text: string) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {

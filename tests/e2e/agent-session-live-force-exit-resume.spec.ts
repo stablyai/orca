@@ -2,10 +2,10 @@ import {
   readPersistedProfileState,
   mutateStoppedProfileState
 } from './helpers/persisted-profile-state'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { ChildProcess } from 'node:child_process'
+
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -19,7 +19,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import type { AgentProviderSessionKey } from '../../src/shared/agent-session/lifecycle/agent-session-resume'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'

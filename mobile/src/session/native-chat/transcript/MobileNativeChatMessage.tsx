@@ -1,7 +1,3 @@
-import {
-  nativeChatTextAttachmentPaths,
-  chatTextAttachmentName
-} from '../../../../../src/shared/native-chat-text-attachment-references'
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
@@ -28,6 +24,7 @@ import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
+import { TextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
@@ -37,6 +34,8 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
+import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundTaskRun'
+import { withoutBackgroundTaskRows } from '../../../../../src/shared/native-chat/input/native-chat-background-task-row'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
@@ -56,7 +55,6 @@ function MobileNativeChatMessageImpl({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile,
   turnStatus,
   turnStatusAbove = false,
   turnExpanded,
@@ -90,7 +88,6 @@ function MobileNativeChatMessageImpl({
   previousTodoWrite?: Chat.NativeChatToolCallBlock
   previousUpdatePlan?: Chat.NativeChatToolCallBlock
   fontScale?: number
-  onOpenFile?: (relativePath: string) => void
   turnStatus?: NativeChatTurnStatus | null
   turnStatusAbove?: boolean
   turnExpanded?: boolean
@@ -140,7 +137,6 @@ function MobileNativeChatMessageImpl({
         live={activeTurnIsWorking === true}
         expanded={openReasoning?.has(nativeChatReasoningDisclosureKey(thoughtMessage.id)) === true}
         onToggle={onToggleReasoning}
-        onOpenFile={onOpenFile}
         onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openSheet(thoughtMessage)}
       />
     )
@@ -149,13 +145,19 @@ function MobileNativeChatMessageImpl({
       before.set(block, thoughts.map(thought))
     }
     return { before, after: run.thoughtsAfter.map(thought) }
-  }, [run, fontScale, activeTurnIsWorking, openReasoning, onToggleReasoning, onOpenFile, openSheet])
+  }, [run, fontScale, activeTurnIsWorking, openReasoning, onToggleReasoning, openSheet])
   // Asks and prose read no files, so the run's own blocks or this message's give the same images.
   const viewedImages = useMemo(
     () => nativeChatToolRunViewedImages(run?.blocks ?? message.blocks),
     [run, message.blocks]
   )
-  const drawnProse = isReasoning ? [] : withoutSubagentGroupTwins(prose)
+  // Task rows replace their plain-text twins, which the host writes for readers without task blocks.
+  const { backgroundTasks } = deriveNativeChatRowContent(message.blocks)
+  const drawnProse = isReasoning
+    ? []
+    : withoutSubagentGroupTwins(
+        backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
+      )
   const isSystem = message.role === 'system'
   const showToolRun = tools.length > 0
   const askPending = structuredActivityUi
@@ -226,7 +228,6 @@ function MobileNativeChatMessageImpl({
               live={activeTurnIsWorking === true}
               expanded={reasoningExpanded}
               onToggle={onToggleReasoning}
-              onOpenFile={onOpenFile}
               onLongPress={onLongPress}
             />
             {showFull}
@@ -255,13 +256,11 @@ function MobileNativeChatMessageImpl({
           block={block}
           userMessage
           fontScale={fontScale}
-          onOpenFile={onOpenFile}
           onLongPress={onLongPress}
           text={text}
         />
         <TextAttachmentActions
           text={text}
-          onOpenFile={onOpenFile}
           pastedText={t('chat.textAttachmentPreview.pastedText', 'Pasted text')}
         />
       </View>
@@ -271,7 +270,6 @@ function MobileNativeChatMessageImpl({
         block={block}
         userMessage={isUser}
         fontScale={fontScale}
-        onOpenFile={onOpenFile}
         onLongPress={onLongPress}
         renderVisual={message.role === 'assistant' ? renderVisual : undefined}
         text={text}
@@ -297,7 +295,6 @@ function MobileNativeChatMessageImpl({
               from={agentFrom}
               fontScale={fontScale}
               attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
-              onOpenFile={onOpenFile}
               onLongPress={onLongPress}
               status={showFull}
             />
@@ -308,7 +305,6 @@ function MobileNativeChatMessageImpl({
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}
-                  onOpenFile={onOpenFile}
                   onLongPress={onLongPress}
                 />
               ) : null}
@@ -339,6 +335,13 @@ function MobileNativeChatMessageImpl({
               {isUser ? null : showFull}
             </>
           )}
+          {(isReasoning ? [] : backgroundTasks).map((task) => (
+            <MobileNativeChatBackgroundTaskRun
+              key={task.taskId}
+              block={task}
+              fontScale={fontScale}
+            />
+          ))}
           {askRow}
           {showToolRun ? (
             <ToolRun
@@ -351,7 +354,6 @@ function MobileNativeChatMessageImpl({
               previousTodoWrite={previousTodoWrite}
               previousUpdatePlan={previousUpdatePlan}
               fontScale={fontScale}
-              onOpenFile={onOpenFile}
               viewedImages={
                 viewedImages.length > 0
                   ? // Keyed by path: a read finishing late inserts above images already loaded.
@@ -392,22 +394,3 @@ function MobileNativeChatMessageImpl({
 }
 
 export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
-
-const TextAttachmentActions = memo(function TextAttachmentActions(props: {
-  text: string
-  pastedText: string
-  onOpenFile?: (path: string) => void
-}) {
-  const { text, pastedText, onOpenFile } = props
-  const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
-  return paths.map((path) => (
-    <Text
-      key={path}
-      accessibilityRole="button"
-      onPress={() => onOpenFile?.(path)}
-      style={styles.agentAttribution}
-    >
-      {chatTextAttachmentName(path, pastedText)}
-    </Text>
-  ))
-})

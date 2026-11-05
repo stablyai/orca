@@ -11,7 +11,7 @@ import { resetAiVaultSessionListCacheForTests } from '../ai-vault/cached-session
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { AI_VAULT_METHODS } from '../runtime/rpc/methods/ai-vault'
-import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
+import { structuredChatNamingDeps } from '../runtime/agent-session/naming/structured-chat-naming-runtime'
 import { createStructuredChatNamingHandler } from './structured-chat-naming'
 import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
 import {
