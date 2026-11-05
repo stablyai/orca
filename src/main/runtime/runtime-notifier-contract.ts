@@ -27,9 +27,9 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
-  RuntimeTerminalDriverState,
-  RuntimeTerminalPresentation
-} from '../../shared/runtime-types'
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../shared/runtime-terminal-contracts'
 
 type DriverState = RuntimeTerminalDriverState
 
