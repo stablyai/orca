@@ -829,7 +829,6 @@
 13 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-indicator.test.tsx
-13 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.pr-display.test.tsx
 14 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts
 14 test-no-wall-clock:src/wsl-guest/agent-hook-integration.test.ts
 15 test-no-wall-clock:src/main/github/pr-refresh-coordinator-alias-coalescing.test.ts
@@ -1264,7 +1263,6 @@
 4 test-no-wall-clock:src/main/ssh/orcad-exited-own-fence-mutation-race.test.ts
 4 test-no-wall-clock:src/main/ssh/ssh-remote-commands.test.ts
 4 test-no-wall-clock:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
-4 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.compact-hover.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
 4 test-timeout-needs-reason:src/main/claude/claude-agent-sdk-exit-proof.test.ts
@@ -1308,7 +1306,6 @@
 5 test-timeout-needs-reason:src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts
 5 test-timeout-needs-reason:src/main/pty/process-retirement/node-pty-master-fd-retirement.test.ts
 5 test-timeout-needs-reason:src/main/runtime/terminal/wait/tui-idle-hook-lane-runtime.test.ts
-5 test-timeout-needs-reason:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.compact-hover.test.tsx
 5 test-timeout-needs-reason:tests/e2e/browser-agent-input-focus-isolation.spec.ts
 5 test-timeout-needs-reason:tests/e2e/persisted-session-production-upgrade.spec.ts
 5 test-timeout-needs-reason:tests/e2e/ssh-orcad-auto-convert.spec.ts
@@ -1351,7 +1348,6 @@
 7 test-no-wall-clock:src/renderer/src/store/slices/jira.test.ts
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 7 test-timeout-needs-reason:mobile/src/tasks/worktree-create-retry.test.ts
-7 test-timeout-needs-reason:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.pr-display.test.tsx
 8 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
 8 test-no-real-time-wait:tests/e2e/terminal-column-desync-repro.spec.ts
 8 test-no-wall-clock:src/main/ai-vault-search/session-search-indexer.test.ts
