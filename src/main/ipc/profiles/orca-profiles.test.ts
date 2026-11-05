@@ -1,6 +1,7 @@
 import type * as NewProfileStateModule from '../../orca-profiles/new-profile-state'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProfileStoragePaths from '../../orca-profiles/profile-storage-paths'
+import type * as ProfileCloudService from '../../orca-profiles/profile-cloud-service'
 
 const {
   handlers,
@@ -10,6 +11,7 @@ const {
   relaunchAppMock,
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
+  createCloudLinkedOrcaProfileMock,
   getOrcaProfileListStateMock,
   initializeNewOrcaProfileStateMock,
   setActiveOrcaProfileMock,
@@ -23,6 +25,7 @@ const {
   relaunchAppMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
+  createCloudLinkedOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
   initializeNewOrcaProfileStateMock: vi.fn(),
   setActiveOrcaProfileMock: vi.fn(),
@@ -61,6 +64,11 @@ vi.mock('../../orca-profiles/profile-index-store', () => ({
 vi.mock('../../orca-profiles/new-profile-state', async (importOriginal) => ({
   ...(await importOriginal<typeof NewProfileStateModule>()),
   initializeNewOrcaProfileState: initializeNewOrcaProfileStateMock
+}))
+
+vi.mock('../../orca-profiles/profile-cloud-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProfileCloudService>()),
+  createCloudLinkedOrcaProfile: createCloudLinkedOrcaProfileMock
 }))
 
 function makeStoreMock(flushPendingOrThrowAsync = vi.fn()) {
@@ -107,6 +115,7 @@ describe('registerOrcaProfileHandlers', () => {
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
+    createCloudLinkedOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
     initializeNewOrcaProfileStateMock.mockReset()
     setActiveOrcaProfileMock.mockReset()
@@ -141,6 +150,23 @@ describe('registerOrcaProfileHandlers', () => {
     ).resolves.toBe(createState)
     expect(createLocalOrcaProfileMock).toHaveBeenCalledWith({ name: 'Work' })
     expect(initializeNewOrcaProfileStateMock).toHaveBeenCalledWith('local-work', undefined)
+  })
+
+  it('initializes Home for a newly created cloud-linked profile', async () => {
+    const created = {
+      status: 'created',
+      auth: { activeProfileId: 'local-default' },
+      activeProfileId: 'local-default',
+      profiles: [],
+      profile: { id: 'cloud-1' }
+    }
+    createCloudLinkedOrcaProfileMock.mockResolvedValue(created)
+    registerOrcaProfileHandlers(makeStoreMock() as never)
+
+    await expect(
+      handlers.get('orcaProfiles:createCloudLinked')?.(ipcEvent, { orgId: 'org-1', name: 'Work' })
+    ).resolves.toBe(created)
+    expect(initializeNewOrcaProfileStateMock).toHaveBeenCalledWith('cloud-1', undefined)
   })
 
   it('reports multiProfileUi when the env flag is set', async () => {

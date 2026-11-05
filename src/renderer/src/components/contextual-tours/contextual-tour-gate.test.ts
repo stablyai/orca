@@ -1,7 +1,9 @@
+import type { ContextualTourStep } from '../../../../shared/contextual-tours'
 import { describe, expect, it } from 'vitest'
 import { getContextualTour } from '../../../../shared/contextual-tours'
 import {
   getContextualTourRequestDecision,
+  getContextualTourStartStepIndex,
   getContextualTourStepProgress,
   getContextualTourOutcomeStepTotal,
   getMeasurableContextualTourTarget,
@@ -335,6 +337,87 @@ describe('contextual tour gate', () => {
     expect(getContextualTourOutcomeStepTotal([])).toBe(1)
   })
 
+  it('shows exactly one split step, matching the active tab kind', () => {
+    const tour = getContextualTour('workspace-agent-sessions')
+    const target = (id: string): string =>
+      tour.steps.find((step) => step.id === id)?.targetSelector ?? ''
+    const onChatTab = (selector: string): boolean => selector !== target('agent-sessions-split')
+    const visibleStepIndexes = getVisibleContextualTourStepIndexes(tour, onChatTab)
+
+    expect(visibleStepIndexes.map((index) => tour.steps[index]?.id)).toEqual([
+      'agent-sessions-new-tab',
+      'agent-sessions-split-chat',
+      'agent-sessions-add-project',
+      'agent-sessions-parallel'
+    ])
+    expect(getContextualTourStepProgress({ visibleStepIndexes, stepIndex: 1 })).toEqual({
+      current: 2,
+      total: 4
+    })
+  })
+
+  it('starts at the split step when the + menu is not on screen', () => {
+    const tour = getContextualTour('workspace-agent-sessions')
+    const newTabTarget = tour.steps[0]?.targetSelector
+    const chatTarget = tour.steps[1]?.targetSelector
+
+    expect(
+      getContextualTourStartStepIndex(
+        tour,
+        (selector) => selector !== newTabTarget && selector !== chatTarget,
+        undefined,
+        'terminal'
+      )
+    ).toBe(2)
+  })
+
+  it.each([
+    ['terminal', 'terminal-pane-split'],
+    ['agent-session', 'tab-splits']
+  ] as const)(
+    'resumes after the matching %s split without replaying New agents',
+    (activeType, event) => {
+      const tour = getContextualTour('workspace-agent-sessions')
+      const splitDone = (step: ContextualTourStep): boolean =>
+        step.advanceOnFeatureInteraction === event
+      expect(getContextualTourStartStepIndex(tour, () => true, splitDone, activeType)).toBe(3)
+      expect(
+        getContextualTourStartStepIndex(
+          tour,
+          () => true,
+          (step) =>
+            splitDone(step) || step.advanceOnFeatureInteraction === 'project-add-introduction',
+          activeType
+        )
+      ).toBe(4)
+      const noIntroduction = (selector: string): boolean =>
+        !selector.includes('project-add-control')
+      expect(
+        getContextualTourStartStepIndex(tour, noIntroduction, splitDone, activeType)
+      ).toBeNull()
+      expect(
+        getNextVisibleContextualTourStepIndex({
+          tour,
+          currentStepIndex: activeType === 'terminal' ? 2 : 1,
+          targetExists: noIntroduction,
+          isStepDone: splitDone,
+          activeTabType: activeType
+        })
+      ).toBe(3)
+    }
+  )
+
+  it('keeps the active terminal lesson when only the chat split was completed', () => {
+    expect(
+      getContextualTourStartStepIndex(
+        getContextualTour('workspace-agent-sessions'),
+        () => true,
+        (step) => step.advanceOnFeatureInteraction === 'tab-splits',
+        'terminal'
+      )
+    ).toBe(0)
+  })
+
   it('hides the browser cookie step until the Import Cookies menu row is measurable', () => {
     const tour = getContextualTour('browser')
     const cookieTarget = tour.steps[2]!.targetSelector
@@ -353,5 +436,21 @@ describe('contextual tour gate', () => {
       current: 2,
       total: 2
     })
+  })
+
+  it('waits for the matching split when later controls are absent', () => {
+    const tour = getContextualTour('workspace-agent-sessions')
+    const targetExists = (selector: string): boolean => selector === tour.steps[0]!.targetSelector
+    const visibleStepIndexes = getVisibleContextualTourStepIndexes(tour, targetExists)
+
+    expect(visibleStepIndexes).toEqual([0])
+    expect(
+      getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: 0,
+        targetExists,
+        activeTabType: 'terminal'
+      })
+    ).toBe(2)
   })
 })

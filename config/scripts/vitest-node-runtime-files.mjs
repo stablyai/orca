@@ -120,7 +120,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/plugins/workers/plugin-worker-typescript-entry.integration.test.ts',
   // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
   'src/main/plugins/plugin-service-reconciliation.test.ts',
-  'src/main/usage/usage-scan-worker-event-loop.test.ts',
   'src/main/ipc/command-path/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',

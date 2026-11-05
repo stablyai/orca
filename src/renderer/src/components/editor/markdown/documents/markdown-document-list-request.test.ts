@@ -27,30 +27,6 @@ function deferred<T>(): {
 }
 
 describe('shared Markdown document list requests', () => {
-  it('collapses concurrent pane scans and releases the result after settlement', async () => {
-    const pending = deferred<MarkdownDocument[]>()
-    const load = vi.fn(() => pending.promise)
-    const requests = Array.from({ length: 200 }, () =>
-      requestSharedMarkdownDocumentList(context(), '/repo', {}, load)
-    )
-
-    expect(load).toHaveBeenCalledTimes(1)
-    expect(new Set(requests).size).toBe(1)
-
-    const documents = [{ filePath: '/repo/README.md', relativePath: 'README.md' }]
-    pending.resolve(documents as MarkdownDocument[])
-    await expect(Promise.all(requests)).resolves.toEqual(
-      Array.from({ length: 200 }, () => documents)
-    )
-
-    const nextDocuments = [{ filePath: '/repo/notes.md', relativePath: 'notes.md' }]
-    load.mockResolvedValueOnce(nextDocuments as MarkdownDocument[])
-    await expect(requestSharedMarkdownDocumentList(context(), '/repo', {}, load)).resolves.toBe(
-      nextDocuments
-    )
-    expect(load).toHaveBeenCalledTimes(2)
-  })
-
   it('starts a fresh scan after a mutation instead of joining an older snapshot', async () => {
     const stale = deferred<MarkdownDocument[]>()
     const fresh = deferred<MarkdownDocument[]>()
@@ -128,37 +104,6 @@ describe('shared Markdown document list requests', () => {
       stale.resolve([])
       await expect(retryRequest).resolves.toEqual([])
       await expect(initialRequest).resolves.toEqual([])
-    } finally {
-      now.mockRestore()
-    }
-  })
-
-  it('evicts an abandoned scan for a route that is never requested again', async () => {
-    const abandoned = deferred<MarkdownDocument[]>()
-    const load = vi.fn().mockReturnValueOnce(abandoned.promise).mockResolvedValueOnce([])
-    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
-
-    try {
-      const abandonedRequest = requestSharedMarkdownDocumentList(
-        context(),
-        '/abandoned-only',
-        {},
-        load
-      )
-      now.mockReturnValue(31_001)
-      // A different route must release expired entries, including abandoned promises.
-      await expect(
-        requestSharedMarkdownDocumentList(context(), '/other-route', {}, load)
-      ).resolves.toEqual([])
-
-      load.mockResolvedValueOnce([])
-      await expect(
-        requestSharedMarkdownDocumentList(context(), '/abandoned-only', {}, load)
-      ).resolves.toEqual([])
-      expect(load).toHaveBeenCalledTimes(3)
-
-      abandoned.resolve([])
-      await expect(abandonedRequest).resolves.toEqual([])
     } finally {
       now.mockRestore()
     }

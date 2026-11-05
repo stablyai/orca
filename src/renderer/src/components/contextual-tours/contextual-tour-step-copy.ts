@@ -4,6 +4,8 @@ import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
 export type LocalizedContextualTourStepCopy = {
   title: string
   body: string
+  /** Shown instead of `body` when the shortcut it names has no binding. */
+  bodyWithoutShortcut?: string
   primaryActionLabel?: string
   secondaryActionLabel?: string
 }
@@ -39,6 +41,34 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Add a folder or Git repository to start working on your project.'
     )
   }),
+  'agent-sessions-new-tab': () => ({
+    title: translate(
+      'components.contextualTours.agentSessions.newTab.title',
+      'New agents start here'
+    ),
+    body: translate(
+      'components.contextualTours.agentSessions.newTab.body',
+      'Click + to start an agent, a terminal, or a browser tab.'
+    )
+  }),
+  'agent-sessions-split-chat': () => ({
+    title: translate(
+      'components.contextualTours.agentSessions.splitChat.title',
+      'Run two chats side by side'
+    ),
+    body: translate(
+      'components.contextualTours.agentSessions.splitChat.body',
+      'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.'
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.agentSessions.splitChat.bodyWithoutShortcut',
+      'Click the split button at the top of the chat. Each side gets its own tabs.'
+    ),
+    primaryActionLabel: translate(
+      'components.contextualTours.agentSessions.splitChat.action',
+      'Split chat'
+    )
+  }),
   'agent-sessions-split': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
@@ -47,6 +77,10 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.body',
       'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.'
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.agentSessions.split.bodyWithoutShortcut',
+      'Right-click the pane for split options.'
     ),
     primaryActionLabel: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',

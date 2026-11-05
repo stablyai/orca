@@ -93,6 +93,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeModal: s.activeModal,
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
           targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType,
           isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
         })
         if (decision.kind !== 'start') {
@@ -155,6 +156,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           tour,
           currentStepIndex: s.activeContextualTourStepIndex,
           targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType,
           isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
         })
         if (nextStepIndex !== null) {
@@ -166,6 +168,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
             tour,
             currentStepIndex: s.activeContextualTourStepIndex,
             targetExists: () => true,
+            activeTabType: s.activeTabType,
             isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
           })
           if (pendingStepIndex !== null) {
@@ -182,7 +185,8 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
           tour: getContextualTour(s.activeContextualTourId),
           currentStepIndex: s.activeContextualTourStepIndex,
-          targetExists: hasContextualTourTarget
+          targetExists: hasContextualTourTarget,
+          activeTabType: s.activeTabType
         })
         if (previousStepIndex === null) {
           return s

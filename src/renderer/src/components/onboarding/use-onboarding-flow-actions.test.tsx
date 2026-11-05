@@ -79,6 +79,7 @@ function renderActions(
       stepIndex,
       setStepIndex: vi.fn(),
       selectedAgent,
+      agentSurface: 'terminal',
       themeLookBaseline: null,
       setTheme: vi.fn(),
       updateSettings: vi.fn(),

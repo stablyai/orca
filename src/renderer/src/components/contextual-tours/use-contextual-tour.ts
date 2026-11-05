@@ -182,7 +182,7 @@ export function useContextualTour(
     let requestPending = false
     let cancelled = false
     const request = (): void => {
-      if (frame !== null || requestPending) {
+      if (cancelled || frame !== null || requestPending) {
         return
       }
       requestPending = true
@@ -196,14 +196,14 @@ export function useContextualTour(
         getContextualToursSeenIds: () => useAppStore.getState().contextualToursSeenIds
       }).then((shouldRequest) => {
         requestPending = false
-        if (!shouldRequest) {
+        if (cancelled || !shouldRequest) {
           return
         }
         attempts += 1
         frame = window.requestAnimationFrame(() => {
           frame = null
           const latestSnapshot = enabledInteractionSnapshotRef.current
-          if (useAppStore.getState().contextualToursSeenIds.includes(id)) {
+          if (cancelled || useAppStore.getState().contextualToursSeenIds.includes(id)) {
             return
           }
           requestContextualTour(

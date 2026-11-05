@@ -34,24 +34,26 @@ export function getContextualTourProgressionForFeatureInteraction(
     tour,
     currentStepIndex: state.activeContextualTourStepIndex,
     targetExists: hasContextualTourTarget,
+    activeTabType: state.activeTabType,
     isStepDone: (step) => isContextualTourStepDone(step, state.featureInteractions)
   })
-  if (nextStepIndex !== null) {
-    return 'advance'
-  }
   if (
     state.activeContextualTourId === 'workspace-agent-sessions' &&
-    step.id === 'agent-sessions-split' &&
-    id === 'terminal-pane-split' &&
-    !state.sidebarOpen
+    (step.id === 'agent-sessions-split' || step.id === 'agent-sessions-split-chat') &&
+    !state.sidebarOpen &&
+    (nextStepIndex === null || !hasContextualTourTarget(tour.steps[nextStepIndex].targetSelector))
   ) {
     return 'reveal-sidebar-and-advance'
+  }
+  if (nextStepIndex !== null) {
+    return 'advance'
   }
   // Completing here would mark the tour seen and drop a next tip whose target isn't measurable yet.
   return getNextVisibleContextualTourStepIndex({
     tour,
     currentStepIndex: state.activeContextualTourStepIndex,
     targetExists: () => true,
+    activeTabType: state.activeTabType,
     isStepDone: (step) => isContextualTourStepDone(step, state.featureInteractions)
   }) !== null
     ? 'advance'

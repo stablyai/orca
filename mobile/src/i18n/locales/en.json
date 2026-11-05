@@ -194,6 +194,7 @@
       "loadFailed": "Failed to load host.",
       "saveFailed": "Failed to save host.",
       "title": "Edit host",
+      "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
       "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
@@ -520,9 +521,7 @@
       "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
     },
     "listFooter": {
-      "hostPickerTitle": "Open Tasks On",
-      "automationsHeading": "Automations",
-      "automationsHostPickerTitle": "Open Automations On"
+      "hostPickerTitle": "Open Tasks On"
     },
     "listHeader": {
       "desktopsHeading": "Desktops"
@@ -542,13 +541,59 @@
       "pairDesktop": "Pair a desktop"
     },
     "jumpBackIn": {
-      "heading": "Jump back in",
       "lastOpened": "Last opened",
       "connectToOpen": "Connect {{desktop}} to open"
     },
     "sections": {
       "tasks": "Tasks",
       "tasksSubtitle": "Browse your issues and reviews"
+    },
+    "stats": {
+      "heading": "Your stats",
+      "agentsSpawned": "Agents spawned",
+      "agentTime": "Agent time",
+      "prsCreated": "PRs created",
+      "days": "{{days}}d",
+      "hours": "{{hours}}h",
+      "minutes": "{{minutes}}m"
+    },
+    "agents": {
+      "heading": "Agents",
+      "activeCount": "{{count}} active",
+      "showFewer": "Show fewer",
+      "showAll": "Show all {{count}}"
+    },
+    "automationsTab": {
+      "newAutomation": "New automation",
+      "lastStatus": "Last: {{status}}",
+      "paused": "Paused",
+      "showFor": "Show automations for",
+      "emptyTitle": "Schedule agent work",
+      "pairDesktop": "Pair a desktop to view and run automations.",
+      "updateDesktop": "Update Orca on {{desktop}} to use automations.",
+      "connectDesktop": "Connect {{desktop}} to view and run automations.",
+      "noAutomations": "No automations yet",
+      "createHint": "Tap + to schedule an agent.",
+      "scheduled": "Scheduled",
+      "toggleFailed": "Couldn’t update {{name}}"
+    },
+    "tabs": {
+      "automations": "Automations",
+      "feed": "Feed",
+      "chooseDesktop": "{{desktop}}, choose another desktop",
+      "usage": "Usage"
+    },
+    "usage": {
+      "refresh": "Refresh usage",
+      "showUsageFor": "Show usage for",
+      "pairDesktop": "Pair a desktop to see agent account usage.",
+      "connectDesktop": "Connect {{desktop}} to see agent account usage.",
+      "addAccounts": "Add accounts from desktop Settings → Accounts.",
+      "updatedJustNow": "Updated just now",
+      "updatedAgo": "Updated {{time}} ago",
+      "active": "Active",
+      "openAccountsHint": "Opens this desktop’s accounts",
+      "emptyTitle": "No usage yet"
     }
   },
   "hooks": {
@@ -1046,7 +1091,9 @@
       "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",
-      "hostActions": "Actions for {{title}}"
+      "hostActions": "Actions for {{title}}",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
     },
     "htmlPreview": {
       "previewRenderedHtml": "Preview rendered HTML",
@@ -2278,9 +2325,6 @@
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
-    },
-    "tabCard": {
-      "editor": "Editor"
     },
     "terminalTabAgent": {
       "newBrowser": "New Browser",
@@ -4429,6 +4473,7 @@
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Runs on the selected host. Keep that host available at the scheduled time.",
       "host": "Host",
       "pairedHost": "Paired host",
+      "chooseHost": "Automations on {{host}}, choose another host",
       "selectedServerUnavailable": "Selected server (unavailable)",
       "addANameInstructionsAndAnAgent": "Add a name, instructions and an agent.",
       "chooseAnExistingWorkspace": "Choose an existing workspace.",
@@ -4457,7 +4502,6 @@
       "unknownResult": "Unknown result",
       "notReported": "Not reported",
       "searchOptions": "Search options",
-      "scheduleAgentWorkAndViewRuns": "Schedule agent work and view runs",
       "task": "Task",
       "review": "Review"
     },
