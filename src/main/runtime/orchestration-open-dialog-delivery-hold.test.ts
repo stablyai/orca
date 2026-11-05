@@ -193,12 +193,13 @@ describe('mailbox delivery into a pane awaiting the user', () => {
   it('after an Orca restart, holds mail while the restored screen is still loading', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-restoring-screen-delivery-hold-')
-    const { runtime, write } = createRuntime(db, {
+    const { runtime } = createRuntime(db, {
       getAgentStatusSnapshot: () => [claudeHookRow('done')],
       checkHookAgentPresence: async () => 'live',
       launchAgent: 'claude'
     })
     let finishRestore = (_screen: string): void => {}
+    const write = vi.fn((_ptyId: string, _data: string) => true)
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
