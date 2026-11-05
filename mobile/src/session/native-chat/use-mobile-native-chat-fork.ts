@@ -60,52 +60,55 @@ function useRegisteredAgent(
   } | null>(null)
   const generation = client?.getGeneration?.()
   const learned = agents?.client === client && agents?.generation === generation
+  const wanted = !!client && host === 'supported' && !learned
+  // Each attempt is one read; a failed read counts toward a few spaced retries.
+  const [attempt, setAttempt] = useState({ count: 0, failures: 0 })
   useEffect(() => {
-    if (!client || host !== 'supported' || learned) {
+    if (!client || !wanted) {
       return
     }
     let cancelled = false
-    let reading = false
-    let failures = 0
-    let retry: ReturnType<typeof setTimeout> | undefined
-    const read = (): void => {
-      if (cancelled || reading) {
-        return
-      }
-      reading = true
-      void client
-        .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
-        .then((response) => (response.ok ? decodeAgentSessionAgentsResult(response.result) : null))
-        .catch(() => null)
-        .then((rows) => {
-          reading = false
-          if (cancelled) {
-            return
-          }
-          if (rows) {
-            setAgents({ client, generation, rows })
-            return
-          }
-          // The action stays disabled while unread: a few spaced retries, then the next reconnect.
-          if (++failures <= AGENTS_READ_RETRIES_MS.length) {
-            retry = setTimeout(read, AGENTS_READ_RETRIES_MS[failures - 1])
-          }
-        })
-    }
-    read()
-    const stopWatching = client.onStateChange((state) => {
-      if (state === 'connected') {
-        failures = 0
-        clearTimeout(retry)
-        read()
-      }
-    })
+    void client
+      .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
+      .then((response) => (response.ok ? decodeAgentSessionAgentsResult(response.result) : null))
+      .catch(() => null)
+      .then((rows) => {
+        if (cancelled) {
+          return
+        }
+        if (rows) {
+          setAgents({ client, generation, rows })
+        } else {
+          setAttempt((current) => ({ ...current, failures: current.failures + 1 }))
+        }
+      })
     return () => {
       cancelled = true
-      clearTimeout(retry)
-      stopWatching()
     }
-  }, [client, generation, host, learned])
+  }, [client, generation, wanted, attempt.count])
+  // The action stays disabled while unread: a few spaced retries, then the next reconnect.
+  const retryMs = wanted ? AGENTS_READ_RETRIES_MS[attempt.failures - 1] : undefined
+  useEffect(() => {
+    if (retryMs === undefined) {
+      return
+    }
+    const timer = setTimeout(
+      () => setAttempt((current) => ({ ...current, count: current.count + 1 })),
+      retryMs
+    )
+    return () => clearTimeout(timer)
+    // Armed once per failure: a retry's own read must not arm another timer.
+  }, [retryMs])
+  useEffect(() => {
+    if (!client || !wanted) {
+      return
+    }
+    return client.onStateChange((state) => {
+      if (state === 'connected') {
+        setAttempt((current) => ({ count: current.count + 1, failures: 0 }))
+      }
+    })
+  }, [client, wanted])
   return learned ? agents.rows.find((row) => row.agent === agent) : undefined
 }
 
