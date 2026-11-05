@@ -46,6 +46,16 @@ function readInstallation(filePath: string): InstallationRead {
   }
 }
 
+/** The profile's existing identity, never created or repaired; undefined when absent or unreadable. */
+export function readExistingHostInstallationId(userDataPath: string): string | undefined {
+  try {
+    const current = readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
+    return current.kind === 'valid' ? current.installationId : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
   const current = readInstallation(filePath)

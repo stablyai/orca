@@ -1,3 +1,5 @@
+import { getPublishedHostDescriptor, readExistingHostInstallationId } from '../../host-descriptor'
+import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -66,7 +68,13 @@ export const WORKTREE_METHODS = [
     name: 'worktree.resolveCallerParent',
     permission: 'workspace',
     params: WorktreeResolveCallerParent,
-    handler: async (params, { runtime }) => await runtime.resolveCallerParentForAnotherStore(params)
+    handler: async (params, { runtime }) =>
+      await runtime.resolveCallerParentForAnotherStore(
+        params,
+        // Desktops without a paired transport publish no descriptor; the file is read, never created.
+        getPublishedHostDescriptor(runtime.getRuntimeId())?.installationId ??
+          readExistingHostInstallationId(getCanonicalUserDataPath())
+      )
   }),
   defineMethod({
     name: 'worktree.show',
