@@ -55,7 +55,11 @@ export function SidebarAgentActions({
         <DropdownMenuContent
           align="end"
           onClick={(event) => event.stopPropagation()}
-          onCloseAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => {
+            if (renaming) {
+              event.preventDefault()
+            }
+          }}
         >
           {liveTab ? (
             <DropdownMenuItem onSelect={() => setRenaming(true)}>
