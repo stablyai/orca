@@ -108,7 +108,8 @@ public class OrcaReservedRegionsModule: Module {
         hasFoldDivision: !window.reservedRegions(kind: .division, options: .includeInactive).isEmpty,
         occlusions: window.reservedRegions(kind: .occlusion).map(\.frame),
         windowBounds: window.bounds,
-        windowSafeAreaInsets: window.safeAreaInsets,
+        // Corner-adapted like the root's inset (OrcaWindowControlsInset), so pages clear iPad window controls.
+        windowSafeAreaInsets: window.edgeInsets(for: .safeArea(cornerAdaptation: .vertical)),
         keyboardInset: keyboardInset
       )
       // The first layout always reports, so a listener starts from the real state.
