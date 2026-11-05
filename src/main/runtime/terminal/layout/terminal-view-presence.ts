@@ -79,11 +79,36 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   }
 
   /** Input waits, bounded, for main's in-flight re-attach after an endpoint loss instead of being refused. */
-  protected async waitForPtyEndpointReattach(ptyId: string, signal?: AbortSignal): Promise<void> {
+  protected async waitForPtyEndpointReattach(
+    ptyId: string | undefined,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const reattach =
+      ptyId === undefined ? undefined : this.mainDaemonAttachments.pendingReattach(ptyId)
+    if (ptyId === undefined || !reattach) {
+      return
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await this.settleEndpointReattach(ptyId, reattach, signal)
+    if (signal?.aborted) {
+      // A cancelled send must not be written once the terminal is back.
+      throw new Error('request_aborted')
+    }
+    // Input held for one process must not reach a process that replaced it under the same id.
+    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
+  private async settleEndpointReattach(
+    ptyId: string,
+    first: Promise<boolean>,
+    signal?: AbortSignal
+  ): Promise<void> {
     const deadline = performance.now() + ENDPOINT_REATTACH_INPUT_WAIT_MS
     // A further loss mid-attach starts another attempt; keep waiting within the same bound.
-    let reattach = this.mainDaemonAttachments.pendingReattach(ptyId)
-    while (reattach && signal?.aborted !== true) {
+    let reattach: Promise<boolean> | undefined = first
+    while (reattach) {
       const remainingMs = deadline - performance.now()
       if (remainingMs <= 0) {
         return

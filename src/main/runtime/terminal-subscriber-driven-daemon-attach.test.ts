@@ -553,6 +553,47 @@ describe('re-attach after a daemon reconnect detached a spawned session', () => 
     expect(model.writes).toEqual(['early key'])
   })
 
+  it('drops input cancelled while the re-attach is in flight', async () => {
+    const { runtime, model, handle } = setupSpawnedAttachedSession()
+    const releaseAttach = model.deferNextAttach(true)
+    loseEndpoint(runtime, model)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    const cancel = new AbortController()
+    const send = runtime.sendTerminal(
+      handle,
+      { text: 'cancelled key' },
+      { inputKind: 'driving', signal: cancel.signal }
+    )
+    await Promise.resolve()
+
+    cancel.abort()
+    releaseAttach()
+
+    await expect(send).rejects.toThrow('request_aborted')
+    expect(model.writes).toEqual([])
+  })
+
+  it('does not hand held input to a terminal that replaced the one it was sent to', async () => {
+    const { runtime, model, handle } = setupSpawnedAttachedSession()
+    const releaseAttach = model.deferNextAttach(true)
+    loseEndpoint(runtime, model)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    const send = runtime.sendTerminal(
+      handle,
+      { text: 'for the old shell' },
+      { inputKind: 'driving' }
+    )
+    await Promise.resolve()
+
+    await runtime.onPtyExit(PTY_ID, 0)
+    runtime.onPtySpawned(PTY_ID, undefined, { awaitsRegistration: false })
+    model.sessions.get(PTY_ID)!.attached = true
+    releaseAttach()
+
+    await expect(send).rejects.toThrow()
+    expect(model.writes).toEqual([])
+  })
+
   it('leaves a failed re-attach to the next view or inventory pass, not to each keystroke', async () => {
     const { runtime, model, handle } = setupSpawnedAttachedSession()
     const releaseAttach = model.deferNextAttach(false)

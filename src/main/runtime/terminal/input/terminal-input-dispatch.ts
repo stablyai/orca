@@ -125,6 +125,13 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     return probe
   }
 
+  /** The PTY a handle names right now, read without resolving or refusing the handle. */
+  private handlePtyId(handle: string): string | undefined {
+    return (
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.handles.get(handle)?.ptyId ?? undefined
+    )
+  }
+
   /** sendTerminal once plugin hooks decided (terminal-plugin-hooked-input.ts). */
   protected async sendTerminalAfterPluginHooks(
     handle: string,
@@ -139,6 +146,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       const target = await starting
       return { ...(await this.sendTerminalAfterPluginHooks(target, action, options)), handle }
     }
+    // Before resolving the target: a terminal closed or replaced during the wait is then refused, not written.
+    await this.waitForPtyEndpointReattach(this.handlePtyId(handle), options.signal)
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
@@ -149,7 +158,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.waitForPtyEndpointReattach(pty.pty.ptyId, options.signal)
       if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
         return { handle, accepted: false, bytesWritten: 0 }
       }
@@ -183,7 +191,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
-    await this.waitForPtyEndpointReattach(leaf.ptyId, options.signal)
     if (!(await this.launchComposerAdmitsSubmit(leaf.ptyId, action, options))) {
       return { handle, accepted: false, bytesWritten: 0 }
     }
@@ -246,6 +253,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       const target = await starting
       return { ...(await this.sendAgentPromptAfterPluginHooks(target, prompt, options)), handle }
     }
+    await this.waitForPtyEndpointReattach(
+      this.handlePtyId(handle),
+      agentPromptObservationSignal(options)
+    )
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
@@ -253,7 +264,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       }
       const payload = payloadFor(pty.pty.ptyId)
       await assertTerminalInputWithinLimitWithYield(payload)
-      await this.waitForPtyEndpointReattach(pty.pty.ptyId, agentPromptObservationSignal(options))
       // Only opted-in calls take the extra layer, so every default caller's timing is untouched.
       if (agentPromptWriteOptsIn(options)) {
         return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
@@ -290,7 +300,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
-    await this.waitForPtyEndpointReattach(leaf.ptyId, agentPromptObservationSignal(options))
     if (agentPromptWriteOptsIn(options)) {
       return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
     }
