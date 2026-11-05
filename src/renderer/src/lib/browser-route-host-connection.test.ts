@@ -20,13 +20,25 @@ function stateWith(entry: RuntimeEnvironmentStatus | undefined): AppState {
 }
 
 describe('browser route host connection for a recipe VM', () => {
-  it('waits while the recipe server is still being reached', () => {
-    expect(resolveBrowserRouteHostConnection(stateWith(undefined), 'wt', RECIPE_TARGET)).toEqual(
+  it('waits only while the recipe server is being dialed', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an awaiting handshake needs no other fields here.
+    const dialing = {
+      status: null,
+      remoteControl: { state: 'awaiting_ready' },
+      checkedAt: 1
+    } as RuntimeEnvironmentStatus
+    expect(resolveBrowserRouteHostConnection(stateWith(dialing), 'wt', RECIPE_TARGET)).toEqual(
       expect.objectContaining({
         phase: 'connecting',
         targetId: RECIPE_TARGET,
         connectedEpoch: null
       })
+    )
+  })
+
+  it('settles when the recipe server was never reached, so the route offers recovery', () => {
+    expect(resolveBrowserRouteHostConnection(stateWith(undefined), 'wt', RECIPE_TARGET).phase).toBe(
+      'unavailable'
     )
   })
 

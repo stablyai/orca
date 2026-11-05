@@ -12,10 +12,7 @@ import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isConnectedRuntimeHostState } from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 
 /**
  * `local`: no SSH target this client dials for the worktree — a local workspace, a
@@ -144,12 +141,13 @@ export function resolveBrowserRouteHostConnection(
   const entry = state.runtimeStatusByEnvironmentId?.get(environmentId)
   const hostState = runtimeHostConnectionStateForEntry(entry)
   const connected = isConnectedRuntimeHostState(hostState)
+  // Only a live dial waits; lost or never-attempted contact settles so the route card offers recovery.
   return {
     phase: connected
       ? 'connected'
-      : isDisconnectedRuntimeHostState(hostState)
-        ? 'unavailable'
-        : 'connecting',
+      : entry && hostState === 'checking'
+        ? 'connecting'
+        : 'unavailable',
     targetId,
     environmentId: null,
     publishedStatus: null,
