@@ -9,6 +9,8 @@ import {
   type ChatTabLayoutCommand
 } from './agent-session/agent-session-tab-layout'
 
+const MAX_STALE_PLACEMENT_RETRIES = 3
+
 export type QueuedChatTabChange = {
   worktreeId: string
   change: ChatTabChange
@@ -61,6 +63,7 @@ export function createChatTabLayoutQueue(deps: {
       }
       for (const queued of changes) {
         try {
+          let placementRetries = 0
           for (let step = 0; step < 2;) {
             if (queued.eligible && !queued.eligible()) {
               break
@@ -101,7 +104,14 @@ export function createChatTabLayoutQueue(deps: {
                   }
                 })
               : null
-            if (placementChanged && reply && !reply.ok && reply.code === 'tab_not_found') {
+            if (
+              placementChanged &&
+              reply &&
+              !reply.ok &&
+              reply.code === 'tab_not_found' &&
+              placementRetries < MAX_STALE_PLACEMENT_RETRIES
+            ) {
+              placementRetries++
               continue
             }
             if (command && reply && !reply.ok) {
