@@ -1249,6 +1249,10 @@
       "retryLoading": "Tentar carregar {{path}} novamente",
       "unavailable": "Indisponível no celular"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Copiar Nome",
+      "copyRelativePath": "Copiar Caminho Relativo"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",
       "copySource": "Copiar código-fonte Markdown",
@@ -1860,6 +1864,7 @@
       "countWorkflows_one": "{{count}} fluxo de trabalho",
       "countWorkflows_other": "{{count}} fluxos de trabalho",
       "detailsUnavailable": "Os detalhes da tarefa não estão disponíveis para esta sessão.",
+      "outputFile": "Saída: {{value0}}",
       "groupAgents": "Agentes",
       "groupMonitors": "Monitores",
       "groupShell": "Shell",

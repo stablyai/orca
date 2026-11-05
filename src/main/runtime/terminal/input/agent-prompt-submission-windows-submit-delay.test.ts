@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { makeStore } from '../../runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const WORKTREE_PATH = '/tmp/worktree-a'
 const PTY_ID = 'pty-prompt'

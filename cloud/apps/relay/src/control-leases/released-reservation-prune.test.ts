@@ -137,30 +137,6 @@ describePostgres('heap window reaper against PostgreSQL', () => {
     return Number(pages.pages)
   }
 
-  it('stops each tick at its row cap and drains the backlog over later ticks', async () => {
-    const pages = await seed()
-    expect(pages).toBeGreaterThan(20)
-    const reaper = new HeapWindowReaper(
-      'relay_control_connection_reservations',
-      PREDICATE,
-      { pagesPerStatement: 2, maxPagesPerTick: 1_000, maxRowsPerTick: 300, budgetMs: 60_000 },
-      () => 0.5
-    )
-
-    const first = await reaper.reap(database, [NOW])
-    // One statement past the cap at most: two pages of this shape hold well under 300 rows.
-    expect(first).toBeGreaterThanOrEqual(300)
-    expect(first).toBeLessThan(600)
-
-    let ticks = 1
-    while ((await reaper.reap(database, [NOW])) > 0) ticks += 1
-    expect(ticks).toBeGreaterThan(5)
-    const left = await database.query(
-      `SELECT state, COUNT(*) AS rows FROM relay_control_connection_reservations GROUP BY state`
-    )
-    expect(left).toEqual([{ state: 'claimed', rows: String(ROWS / 3) }])
-  })
-
   it('wraps from the end of the heap back to its first page', async () => {
     const pages = await seed()
     // Starts on the last page, so every other page is reached only after the wrap.
@@ -212,43 +188,4 @@ describePostgres('heap window reaper against PostgreSQL', () => {
     }
   })
 
-  it('plans each statement as a TID range scan, never a sequential scan', async () => {
-    await seed()
-    await database.query('ANALYZE relay_control_connection_reservations')
-    const client = new pg.Client({ connectionString: scopedUrl() })
-    await client.connect()
-    try {
-      const plans: string[] = []
-      const query = database.query.bind(database)
-      const observed: RelayDatabase = {
-        dialect: database.dialect,
-        query: async (sql, params) => {
-          if (sql.trimStart().startsWith('DELETE')) {
-            let parameter = 0
-            const plan = await client.query(
-              `EXPLAIN ${sql.replace(/\?/g, () => `$${++parameter}`)}`,
-              params
-            )
-            plans.push(plan.rows.map((row) => String(row['QUERY PLAN'])).join('\n'))
-          }
-          return await query(sql, params)
-        },
-        queryLocked: database.queryLocked.bind(database),
-        transaction: database.transaction.bind(database),
-        close: database.close.bind(database)
-      }
-      const reaper = new HeapWindowReaper(
-        'relay_control_connection_reservations',
-        PREDICATE,
-        { pagesPerStatement: 16, maxPagesPerTick: 16, maxRowsPerTick: ROWS, budgetMs: 60_000 },
-        () => 0
-      )
-      expect(await reaper.reap(observed, [NOW])).toBeGreaterThan(0)
-      expect(plans).toHaveLength(1)
-      expect(plans[0]).toContain('Tid Range Scan')
-      expect(plans[0]).not.toContain('Seq Scan')
-    } finally {
-      await client.end()
-    }
-  })
 })

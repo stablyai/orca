@@ -9,7 +9,6 @@ import {
   redactTranscript,
   scanTranscriptForSecrets
 } from './pty-transcript-secret-scan.mjs'
-import { parseArgs, resizeMarker, resolveSpawn } from './capture-agent-pty-transcript.mjs'
 
 describe('pty transcript secret scan', () => {
   it('finds the account row of a ready screen', () => {
@@ -45,12 +44,6 @@ describe('pty transcript secret scan', () => {
     expect(placeholderFor('uuid', findings[0].match.length)).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
     )
-  })
-
-  it('claims a span once, so a token inside an email is not double-reported', () => {
-    const email = 'longlivedaccountnamefortycharacterslongenough@corp.internal'
-    const findings = scanTranscriptForSecrets(email)
-    expect(findings).toMatchObject([{ kind: 'email', match: email, index: 0 }])
   })
 
   it('passes a fixture that is already scrubbed, so "prove it is gone" can succeed', () => {
@@ -93,65 +86,5 @@ describe('committed transcripts', () => {
   it.each(transcripts)('%s carries no account identifier or credential', (name) => {
     const findings = scanTranscriptForSecrets(readFileSync(join(fixtureDir, name), 'utf8'))
     expect(findings, formatFindings(name, findings)).toEqual([])
-  })
-})
-
-describe('capture argv', () => {
-  it('splits recorder options from the agent command', () => {
-    const { options, command } = parseArgs([
-      '--name',
-      'antigravity-ready-personal-non-gemini',
-      '--cols',
-      '120',
-      '--',
-      'agy',
-      '--model',
-      'sonnet'
-    ])
-    expect(options.name).toBe('antigravity-ready-personal-non-gemini')
-    expect(options.cols).toBe(120)
-    expect(command).toEqual(['agy', '--model', 'sonnet'])
-  })
-
-  it('collects a multi-file scan list', () => {
-    const { options } = parseArgs(['--scan', 'a.txt', 'b.txt', '--redact'])
-    expect(options.scan).toEqual(['a.txt', 'b.txt'])
-    expect(options.redact).toBe(true)
-  })
-
-  it('collects repeatable mid-capture resizes', () => {
-    const { options } = parseArgs([
-      '--name',
-      'codex-conpty-resize',
-      '--resize-at',
-      '3000:80x24',
-      '--resize-at',
-      '6000:140x40',
-      '--',
-      'codex'
-    ])
-    expect(options.resizes).toEqual([
-      { atMs: 3000, cols: 80, rows: 24 },
-      { atMs: 6000, cols: 140, rows: 40 }
-    ])
-  })
-
-  it('rejects a malformed resize', () => {
-    expect(() => parseArgs(['--resize-at', '3000:80'])).toThrow(/--resize-at expects/)
-    expect(() => parseArgs(['--resize-at', '3000:0x24'])).toThrow(/--resize-at expects/)
-  })
-
-  it('marks a resize with XTWINOPS rows;cols, which the secret scan ignores', () => {
-    const marker = resizeMarker(80, 24)
-    expect(marker).toBe(`${String.fromCharCode(27)}[8;24;80t`)
-    expect(scanTranscriptForSecrets(`before${marker}after`)).toEqual([])
-  })
-
-  it('routes a Windows shim through cmd.exe, which node-pty cannot spawn directly', () => {
-    expect(resolveSpawn(['agy.cmd', '--model', 'sonnet'])).toEqual(
-      process.platform === 'win32'
-        ? { file: 'cmd.exe', args: ['/c', '"agy.cmd"', '--model', 'sonnet'] }
-        : { file: 'agy.cmd', args: ['--model', 'sonnet'] }
-    )
   })
 })

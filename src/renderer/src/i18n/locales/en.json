@@ -19255,6 +19255,7 @@
         "promptCopyFailed": "Failed to copy prompt"
       },
       "prCheckCounts": {
+        "noCheckDetails": "No check details available",
         "noChecksFound": "No checks found",
         "checksFailing_one": "{{count}} check failing",
         "checksFailing_other": "{{count}} checks failing",
@@ -20310,7 +20311,6 @@
         "unnamedSender": "an agent",
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
-        "showMore": "Show more",
         "startedWorker": "Started worker",
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",

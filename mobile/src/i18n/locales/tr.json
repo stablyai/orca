@@ -1210,6 +1210,10 @@
       "retryLoading": "{{path}} klasörünü yüklemeyi yeniden dene",
       "unavailable": "Mobilde kullanılamıyor"
     },
+    "fileExplorerRowActions": {
+      "copyName": "Adı Kopyala",
+      "copyRelativePath": "Göreli Yolu Kopyala"
+    },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",
       "copySource": "Markdown kaynağını kopyala",
@@ -1802,6 +1806,7 @@
       "countWorkflows_one": "{{count}} iş akışı",
       "countWorkflows_other": "{{count}} iş akışı",
       "detailsUnavailable": "Bu oturum için görev ayrıntıları kullanılamıyor.",
+      "outputFile": "Çıktı: {{value0}}",
       "groupAgents": "Ajanlar",
       "groupMonitors": "İzleyiciler",
       "groupShell": "Kabuk",

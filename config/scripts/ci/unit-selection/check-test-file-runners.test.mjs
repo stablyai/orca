@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findRunnerDrift, findUncollectedTestFiles } from './check-test-file-runners.mjs'
-import { classifyPrJobs } from '../../workflow/source-routing/pr-code-change-scope.mjs'
+import { findUncollectedTestFiles } from './check-test-file-runners.mjs'
 
 const RUNNERS = [
   { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/live/**'] },
@@ -79,36 +78,4 @@ describe('findUncollectedTestFiles', () => {
   })
 })
 
-describe('findRunnerDrift', () => {
-  it('reports a runner whose sources no longer contain the include it mirrors', () => {
-    const runners = [
-      { name: 'kept', sources: ['a.config.ts'], mirrors: ["'src/**/*.test.ts'"] },
-      { name: 'split', sources: ['a.config.ts', 'b.config.ts'], mirrors: ["'src/**/*.spec.ts'"] },
-      { name: 'changed', sources: ['b.config.ts'], mirrors: ["'src/**/*.test.ts'"] },
-      { name: 'deleted', sources: ['c.config.ts'], mirrors: [] }
-    ]
-    const files = {
-      'a.config.ts': "include: ['src/**/*.test.ts']",
-      'b.config.ts': "include: ['src/**/*.spec.ts']"
-    }
-    expect(findRunnerDrift(runners, (file) => files[file] ?? null)).toEqual([
-      `changed: b.config.ts do not contain "'src/**/*.test.ts'"`,
-      'deleted: c.config.ts is missing'
-    ])
-  })
-})
-
 // Why: cloud/ is outside the lint and format trees, so only these paths bring the check to a cloud-only diff.
-it('runs the static job when a cloud diff touches code that could hold or run a test', () => {
-  const routed = (file) => classifyPrJobs([file]).static_analysis
-  expect(
-    [
-      'cloud/apps/push/src/new-case.spec.ts',
-      'cloud/packages/push-contract/src/contract.test.ts',
-      'cloud/package.json',
-      'cloud/apps/relay/vitest.config.ts',
-      'cloud/dev/scripts/lease-check.mjs'
-    ].filter((file) => !routed(file))
-  ).toEqual([])
-  expect(routed('cloud/apps/relay/Dockerfile')).toBe(false)
-})

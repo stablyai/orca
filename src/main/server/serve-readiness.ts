@@ -1,4 +1,4 @@
-import type { PairingOfferUnavailableReason } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
+import type { PairingOfferUnavailableReason } from '../runtime/rpc/server/runtime-rpc-pairing-types'
 import type { OrcadHealth } from '../orcad/orcad-health'
 import { describePtyProcessCeiling } from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
 

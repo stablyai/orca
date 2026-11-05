@@ -9,7 +9,7 @@ import {
   getMobileSessionSnapshotTabIdentityKeys,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
-} from '../mobile-session-tab-merge'
+} from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { terminalIsOfTab } from '../session-lifecycle/close/closed-tab-terminal'

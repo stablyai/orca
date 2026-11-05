@@ -1,6 +1,6 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { OrcaRuntimeWithBuildPtyTerminalSummary } from '../query/pty-terminal-summary'
-import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
+import type { PtyIncarnationHandleRecord } from './terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

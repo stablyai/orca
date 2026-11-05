@@ -45,6 +45,8 @@ type Props = {
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
   hostName: string | null
+  /** Offered for tapped links; absent where the host can't open a browser tab. */
+  onOpenUrlInOrca?: (url: string) => void
 }
 
 // Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
@@ -69,7 +71,8 @@ export function MobileNativeChatOverlay({
   sessionId,
   getSendCompletionGeneration,
   keyboardInset,
-  hostName
+  hostName,
+  onOpenUrlInOrca
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -175,6 +178,7 @@ export function MobileNativeChatOverlay({
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
+      onOpenUrlInOrca={onOpenUrlInOrca}
     >
       <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
         <View style={styles.overlay}>

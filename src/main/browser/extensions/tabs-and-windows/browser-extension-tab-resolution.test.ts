@@ -77,9 +77,9 @@ vi.mock('../../browser-manager', () => ({
     getGuestWebContentsId: (pageId: string) => mocks.pages.get(pageId) ?? null
   }
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-activate', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-activate', () => ({}))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({}))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
 vi.mock('../actions/browser-extension-popup-host', () => ({ closeBrowserExtensionPopup: vi.fn() }))

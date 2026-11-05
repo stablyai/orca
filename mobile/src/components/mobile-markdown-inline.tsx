@@ -15,6 +15,8 @@ import { plainText } from './mobile-markdown-tree'
 export type MarkdownInlineContext = {
   // File targets call this when viewer exists; omit to keep paths plain.
   onOpenFile?: (pathText: string) => void
+  // Web links other than mail go here; the screen decides where they open.
+  onOpenLink: (url: string) => void
   tone: MarkdownTone
   textScale: number
 }
@@ -22,15 +24,23 @@ export type MarkdownInlineContext = {
 type SpanStyle = TextProps['style']
 
 // Send web/mail links to system handler; desktop-compatible file:/scheme-less targets go to onOpenFile.
-export function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
+export function openMarkdownHref(
+  href: string,
+  ctx: Pick<MarkdownInlineContext, 'onOpenFile' | 'onOpenLink'>
+): void {
   const route = routeMarkdownHref(href)
   if (route.kind === 'web') {
-    // Use link-opening seam: RN Linking inside shell page resolves without opening anything.
-    openExternalLink(route.url)
+    // Mail links skip the screen's choices: the Orca browser can't open them.
+    if (/^mailto:/i.test(route.url)) {
+      // Use link-opening seam: RN Linking inside shell page resolves without opening anything.
+      openExternalLink(route.url)
+    } else {
+      ctx.onOpenLink(route.url)
+    }
     return
   }
-  if (route.kind === 'file' && onOpenFile) {
-    onOpenFile(route.pathText)
+  if (route.kind === 'file' && ctx.onOpenFile) {
+    ctx.onOpenFile(route.pathText)
   }
 }
 
@@ -74,7 +84,7 @@ function renderLink(
     <MarkdownText
       key={key}
       style={[outer, styles.link, ctx.tone.link]}
-      onPress={() => openMarkdownHref(url, ctx.onOpenFile)}
+      onPress={() => openMarkdownHref(url, ctx)}
     >
       {label}
     </MarkdownText>
@@ -97,7 +107,8 @@ function renderPhrasing(
     case 'delete': {
       const emphasis =
         node.type === 'strong'
-          ? [styles.bold, ctx.tone.text]
+          ? // A tone recolours bold text, but bold keeps its weight over a tone's weight.
+            [styles.bold, ctx.tone.text, { fontWeight: styles.bold.fontWeight }]
           : node.type === 'emphasis'
             ? styles.italic
             : styles.strike

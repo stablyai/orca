@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS,
   MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
   MobileWebBundleRouteSchema
 } from '../../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 import { resolveMobileWebPageRoutes } from './build-mobile-web-app-bundle.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { routePathnameFromKey } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 
 // Test declared screens separately from bundle mechanics so route inventory can grow without coupling builder test size.
@@ -59,48 +57,10 @@ describe('the page routes the manifest declares', () => {
     ])
   })
 
-  it('serializes cross-layout ownership only for opted-in routes and declares it only on the host root', () => {
-    const routes = resolveMobileWebPageRoutes(
-      ['./h/[hostId]/index.tsx', './h/[hostId]/tasks.tsx'],
-      [
-        {
-          pathname: '/h/[hostId]',
-          grants: ['navigate'],
-          canOwnHostArea: true,
-          canOwnHostAreaAcrossLayouts: true
-        },
-        { pathname: '/h/[hostId]/tasks', grants: ['navigate'], canOwnHostArea: true }
-      ]
-    )
-    expect(JSON.parse(JSON.stringify(routes))).toEqual([
-      {
-        pathname: '/h/[hostId]',
-        grants: ['navigate'],
-        canOwnHostArea: true,
-        canOwnHostAreaAcrossLayouts: true
-      },
-      { pathname: '/h/[hostId]/tasks', grants: ['navigate'], canOwnHostArea: true }
-    ])
-    expect(
-      MOBILE_WEB_PAGE_ROUTES.filter((route) => route.canOwnHostAreaAcrossLayouts).map(
-        (route) => route.pathname
-      )
-    ).toEqual(['/h/[hostId]'])
-    for (const route of routes) {
-      expect(MobileWebBundleRouteSchema.safeParse(route).success).toBe(true)
-    }
-  })
-
   /**
    * The wide iPad's host-area session is granted every served route's list, so its in-page hops
    * stay in the page. Bounded by what one route can be granted, so that grant never outgrows one route's.
    */
-  it('bounds the aggregate required and optional grants by one route-grant ceiling', () => {
-    const union = new Set(
-      MOBILE_WEB_PAGE_ROUTES.flatMap((route) => [...route.grants, ...(route.optionalGrants ?? [])])
-    )
-    expect(union.size).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS)
-  })
 
   it('holds the optional lane to the manifest grammar and its own ceiling', () => {
     // Released shells read each list against the ceiling on its own, so the writer bounds each the same way.

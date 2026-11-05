@@ -24,7 +24,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
-import { describeMobileSessionTabCloseRefusal } from '../../mobile-session-tab-close-refusal-message'
+import { describeMobileSessionTabCloseRefusal } from '../../session-lifecycle/close/mobile-session-tab-close-refusal-message'
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
 import { anySleepKeyNames, hostSleepKey, resolveSleepScope } from './worktree-terminal-sleep-key'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
