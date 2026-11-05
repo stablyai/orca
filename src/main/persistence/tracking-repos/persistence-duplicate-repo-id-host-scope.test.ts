@@ -13,8 +13,8 @@ import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
-import { resetRetirementCollisionKeyCacheForTests } from '../../worktree-name-retirement'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 let hasCreatedStoreInCase = false

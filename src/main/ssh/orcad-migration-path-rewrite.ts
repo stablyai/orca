@@ -1,7 +1,7 @@
 /** Rewrite differing source/destination paths, such as WSL via \wsl.localhost; SSH identity rewriting must preserve payload bytes. */
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { rewriteWorktreeIdPath } from '../../shared/worktree/id'
 import {

@@ -4,13 +4,90 @@ import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from './journal-host-database'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import type { AgentSessionJournal } from './journal-store'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 export function registerQueuedMessageReopenPauseTests(
   fixture: ReturnType<typeof createFixture>
 ): void {
   describe('which cards a pause holds', () => {
+    it.each(['stopped', 'restarted'] as const)(
+      'keeps the original %s population through a nonempty fork and consumes the later instruction',
+      async (reason) => {
+        let journal = await fixture.open()
+        await fixture.turn(journal, 'accepted-A')
+        const identity = {
+          provider: 'claude',
+          sessionId: 'native-1',
+          uuid: 'successful-A'
+        } as const
+        const body = {
+          kind: 'turn',
+          turnId: 'successful-A',
+          state: 'completed',
+          outcome: 'success'
+        } as const
+        await journal.appendItem(identity, body, { fence: 0, turnScope: { kind: 'thread' } })
+        await journal.queuedMessages.insert({
+          messageId: 'O',
+          body: fixture.message('O'),
+          options: { effort: 'high' }
+        })
+        await (reason === 'stopped' ? fixture.userStop(journal) : journal.markQueueReopen(0))
+        await journal.queuedMessages.insert({
+          messageId: 'N',
+          body: fixture.message('N'),
+          options: { effort: 'low' }
+        })
+        const cards = structuredClone(journal.queuedMessages.list())
+        const pauses = structuredClone(journal.queuedMessages.pauses())
+        expect(fixture.held(journal)).toEqual([
+          ['O', true],
+          ['N', false]
+        ])
+        expect(journal.queuedMessages.nextInputCard()).toBeNull()
+        await journal.replaceEpochItems('handle_forked', 0, [{ identity, body, ownerFence: 0 }])
+        expect(journal.newestTurn()).toEqual({
+          turnId: 'successful-A',
+          state: 'completed',
+          outcome: 'success'
+        })
+        expect(journal.queuedMessages.list()).toEqual(cards)
+        expect(journal.queuedMessages.pauses()).toEqual(pauses)
+        expect(fixture.held(journal)).toEqual([
+          ['O', true],
+          ['N', false]
+        ])
+        await journal.close()
+        journal = await fixture.open()
+        expect(journal.queuedMessages.list()).toEqual(cards)
+        expect(journal.queuedMessages.pauses()).toEqual(pauses)
+        await journal.queuedMessages.withdraw(['O'])
+        expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('N')
+        await journal.appendSubmission(
+          {
+            clientMessageId: 'consume-N',
+            body: fixture.message('N'),
+            payloadFingerprint: fixture.fingerprintOf('N'),
+            fence: 0,
+            handoverRecorded: true,
+            options: { effort: 'low' }
+          },
+          { messageId: 'N', expect: 'waiting', yieldsToPause: true }
+        )
+        expect(journal.queuedMessages.get('N')).toEqual({
+          ...cards[1],
+          state: 'dispatched',
+          consumedAs: 'consume-N'
+        })
+        expect(journal.submissionBody('consume-N')).toEqual(fixture.message('N'))
+        expect(journal.submission('consume-N')).toMatchObject({
+          queuedMessageId: 'N',
+          options: { effort: 'low' }
+        })
+      }
+    )
+
     it('only cards queued before the Stop event: one queued after it is a new instruction', async () => {
       let journal = await fixture.open()
       await fixture.queueDraft(journal, 'before')

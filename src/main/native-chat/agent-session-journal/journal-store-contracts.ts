@@ -1,36 +1,42 @@
 import type { JournalItemEcho } from './journal-item-echo'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalCursor,
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalResetReason,
-  AgentJournalRowAttribution,
-  AgentJournalTurnScope,
+  AgentJournalRowAttribution
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
-import type { JournalReadRow } from './journal-read-row'
+import type { JournalRowsRead } from './journal-read-row'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalRowWriter } from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
+import type { QueuedMessageOwed } from './queued-message-consume-error'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
   database: JournalHostDatabase
   now?: () => number
   mintEpoch?: () => string
+  /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
+  withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
 }
 
 export type JournalReadSince =
-  | { ok: true; rows: JournalReadRow[]; cursor: AgentJournalCursor }
+  | ({ ok: true; cursor: AgentJournalCursor } & JournalRowsRead)
   | { ok: false; reset: AgentJournalResetReason }
 
 export type ResolveDispatchInput = {
@@ -92,12 +98,13 @@ export type JournalLifecycleBatchInput = {
   dispatches?: readonly ResolveDispatchInput[]
   /** Atomically reject queued sends before the batch; skip the batch when none remain. */
   rejectsQueued?: AgentJournalDispatchRejection
+  keepFailedStart?: boolean
 }
 
 /** Plan after preceding writes, including answers and Stops. */
 export type JournalPlannedLifecycleBatchInput = Pick<
   JournalLifecycleBatchInput,
-  'settlementId' | 'fence' | 'recovered'
+  'settlementId' | 'fence' | 'recovered' | 'keepFailedStart'
 > & {
   plan: () => {
     mutations: readonly JournalLifecycleMutationInput[]
@@ -134,6 +141,10 @@ export type JournalSubmissionConsume = {
   expect: 'waiting' | 'returned'
   /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
   yieldsToPause?: true
+  /** Transient selection for mail joining active work; never persisted. */
+  steer?: boolean
+  /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
+  owed?: () => QueuedMessageOwed
 }
 
 export type JournalItemAppendInput = {

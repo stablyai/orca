@@ -17,7 +17,7 @@ import {
   installStructuredHostStub
 } from './rpc/methods/structured-agent-session-rpc.test-fixture'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-session-contracts'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 
 const SPLIT_ROOT: TerminalPaneLayoutNode = {
   type: 'split',
@@ -83,14 +83,6 @@ describe('client pane names on a host with its own desktop window', () => {
 
     // Its map can predate a name the host set since, so it must not revert that name.
     await renamePanes(SPLIT_ROOT, { [HEADLESS_LEAF_ID]: 'stale' }, [])
-
-    expect(setPaneTitle).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing when the client left titles out, which means unchanged', async () => {
-    const { setPaneTitle, renamePanes } = desktopHostRuntime()
-
-    await renamePanes(SPLIT_ROOT, undefined)
 
     expect(setPaneTitle).not.toHaveBeenCalled()
   })

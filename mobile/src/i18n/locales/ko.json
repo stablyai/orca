@@ -5,10 +5,13 @@
       "connecting": "호스트에 연결 중…",
       "connectingTo": "{{name}}에 연결 중…",
       "default": "시스템 기본값",
+      "fableWindow": "Fable",
       "hostNotFound": "호스트를 찾을 수 없습니다.",
       "invalidSnapshot": "호스트에서 받은 계정 스냅샷이 유효하지 않습니다.",
       "loadingAccounts": "계정 로드 중…",
       "manageAccountsHint": "데스크톱의 설정 → 계정에서 계정을 추가하거나 다시 인증하세요.",
+      "mcpWindow": "MCP",
+      "otherAgents": "기타 에이전트",
       "refreshAccounts": "계정 새로고침",
       "sessionWindow": "5시간",
       "switchFailed": "계정을 전환하지 못했습니다.",
@@ -21,7 +24,6 @@
     "panel": {
       "all": "모두",
       "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
-      "loadFailed": "로드 실패",
       "missingResumeId": "이 세션에는 재개 ID가 없습니다.",
       "noSearchResults": "검색 조건에 맞는 세션이 없습니다.",
       "noSessions": "에이전트 세션 없음",
@@ -111,13 +113,8 @@
       "tryAgain": "다시 시도"
     },
     "terminalSettings": {
-      "autocomplete": "자동 완성 및 자동 수정",
-      "autocompleteOff": "꺼짐",
-      "autocompleteOn": "켜짐",
       "defaultText": "기본 (100%)",
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "keyboardInputDescription": "자동 완성, 자동 수정, 맞춤법 제안은 버퍼 방식의 명령어 입력에만 적용됩니다. 키보드 위의 이중 화살표 버튼을 눌러 실시간 입력에서 전환한 다음, 명령어를 수정하고 '보내기'를 누르세요. 명령어, 플래그, 경로가 자동으로 바뀌지 않도록 기본적으로 꺼져 있습니다.",
-      "keyboardInputHeading": "키보드 입력",
       "largeText": "크게 (125%)",
       "largerText": "더 크게 (150%)",
       "largestText": "가장 크게 (200%)",
@@ -186,7 +183,11 @@
       "cancelEditing": "편집 취소",
       "placeholder": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
       "saveEditedMessage": "수정한 메시지 저장",
-      "sendMessage": "메시지 보내기"
+      "sendMessage": "메시지 보내기",
+      "sendQueue": "대기열에 추가",
+      "sendSteer": "지금 보내기",
+      "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
+      "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -280,7 +281,8 @@
       "stoppedManually": "수동으로 중지됨",
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
-      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
+      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
+      "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -327,7 +329,10 @@
       "emptyAnswer": "빈 답변",
       "resolved": "해결됨",
       "resolver": "{{device}}에서 답변됨",
-      "unavailable": "선택한 답변을 사용할 수 없습니다."
+      "unavailable": "선택한 답변을 사용할 수 없습니다.",
+      "thisPhone": "이 휴대전화",
+      "computer": "컴퓨터",
+      "otherDevice": "다른 기기"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -370,7 +375,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "기본값",
-      "notReportedMarker": "보고되지 않음"
+      "notReportedMarker": "보고되지 않음",
+      "moreModels": "모델 더 보기",
+      "fewerModels": "모델 간단히 보기"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음"
@@ -518,6 +525,28 @@
       "disconnected": "첨부 실패(연결 끊김)",
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "에이전트에게 넘김",
+      "startedAgent": "에이전트 시작됨"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
+      "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
+      "notText": "이 파일은 텍스트로 미리 볼 수 없습니다. 저장한 후 다른 앱에서 여세요.",
+      "openFailed": "첨부 파일을 열 수 없습니다. 다시 시도하세요.",
+      "hostUpdate": "이 호스트는 아직 텍스트 첨부 파일을 열 수 없습니다. 해당 호스트에서 Orca를 업데이트한 후 다시 시도하세요.",
+      "copyTooLarge": "파일이 너무 커서 복사할 수 없습니다. 대신 저장하세요.",
+      "connectionChanged": "연결이 변경되었습니다. 첨부 파일을 다시 열어 보세요.",
+      "hostChanged": "첨부 파일의 호스트가 변경되었습니다. 닫은 후 다시 여세요.",
+      "readFailed": "첨부 파일을 읽을 수 없습니다. 다시 연결한 후 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다.",
+      "copyFrame": "이 첨부 파일을 전체 복사하려면 예정된 휴대전화 업데이트가 필요합니다.",
+      "copyFailed": "첨부 파일을 복사할 수 없습니다. 다시 시도하세요.",
+      "pastedText": "붙여넣은 텍스트",
+      "textAttachment": "텍스트 첨부 파일",
+      "byteSize": "{{size}}바이트",
+      "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
+      "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     }
   },
   "common": {
@@ -650,17 +679,14 @@
       "loadingDiff": "차이점 로드 중…",
       "loadingReview": "리뷰 로드 중…",
       "noReviewableChanges": "리뷰할 변경 사항 없음",
-      "retryLabel": "리뷰 다시 불러오기",
       "reviewUnavailable": "리뷰 사용 불가",
       "selectFile": "리뷰할 파일을 선택하세요.",
-      "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다.",
-      "tryDifferentFilter": "다른 리뷰 필터를 사용해 보세요."
+      "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다."
     },
     "diffReviewDrawers": {
       "addNote": "메모 추가",
       "cancelNote": "메모 취소",
       "clearSentNotes": "전송한 메모 지우기",
-      "completeTitle": "리뷰 완료",
       "copyNotes": "메모 복사",
       "deleteNote": "메모 삭제",
       "discard": "버리기",
@@ -668,13 +694,8 @@
       "discardTitle": "파일 변경사항 취소",
       "editNote": "메모 편집",
       "fileNote": "파일 메모",
-      "fileSummary_one": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
-      "fileSummary_other": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
-      "filesSummary_one": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
-      "filesSummary_other": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
       "lineNumber": "{{lineNumber}}행",
       "loadingSessions": "에이전트 세션 로드 중…",
-      "markUnreviewed": "리뷰 안 됨으로 표시",
       "newAgentSession": "새 에이전트 세션",
       "openInSession": "세션에서 열기",
       "reviewNote": "리뷰 메모",
@@ -682,11 +703,6 @@
       "sendNotes": "메모 보내기",
       "sendNotesLabel": "에이전트에 메모 보내기",
       "sendUnsentNotes": "미전송 메모 보내기",
-      "stageReviewed": "리뷰한 파일 스테이지",
-      "stageReviewedFiles": "리뷰한 파일 스테이지",
-      "stageReviewedLabel": "리뷰한 파일 스테이지",
-      "stageableFiles_one": "리뷰를 마쳤지만 스테이징되지 않은 파일 {{count}}개를 스테이지할 수 있습니다.",
-      "stageableFiles_other": "리뷰를 마쳤지만 스테이징되지 않은 파일 {{count}}개를 스테이지할 수 있습니다.",
       "statusUnreadable": "이 호스트의 상태를 읽지 못했습니다. 다시 시도 중…",
       "terminal": "터미널",
       "terminalLabel": "{{title}} ({{id}})",
@@ -695,57 +711,17 @@
       "updateRequired": "컴퓨터에서 Orca를 업데이트하세요"
     },
     "diffReviewFileSummary": {
-      "branch": "브랜치",
-      "branchFrom": "브랜치 · 이전 경로: {{oldPath}}",
       "changed": "변경됨",
       "editFileNote": "파일 메모 편집",
-      "hunk": "변경 블록",
-      "nextHunk": "다음 변경 블록",
-      "notes_one": "메모 {{count}}개",
-      "notes_other": "메모 {{count}}개",
-      "previousHunk": "이전 변경 블록",
-      "reviewed": "리뷰 완료",
-      "staged": "스테이징됨",
-      "stagedFrom": "스테이징됨 · 이전 경로: {{oldPath}}",
-      "stale": "오래됨",
-      "staleCount": "오래된 메모 {{count}}개",
-      "unstaged": "스테이징 안 됨",
-      "unstagedFrom": "스테이징 안 됨 · 이전 경로: {{oldPath}}"
+      "stale": "오래됨"
     },
     "diffReviewFooter": {
-      "addFileNote": "파일 메모 추가",
-      "discard": "버리기",
-      "discardFile": "파일 변경사항 취소",
-      "markFileReviewed": "파일을 리뷰 완료로 표시",
-      "markReviewed": "리뷰 완료로 표시",
       "nextFile": "다음 파일",
-      "note": "메모",
-      "previousFile": "이전 파일",
-      "reviewed": "리뷰 완료",
-      "stage": "스테이지",
-      "stageFile": "파일 스테이지",
-      "unstage": "언스테이지",
-      "unstageFile": "파일 언스테이지"
+      "previousFile": "이전 파일"
     },
     "diffReviewHeader": {
-      "filterAll": "모두",
-      "filterBranch": "브랜치",
-      "filterNotes": "메모",
-      "filterStaged": "스테이징됨",
-      "filterUnreviewed": "리뷰 안 됨",
-      "filterUnstaged": "스테이징 안 됨",
-      "openPullRequestSidebar": "PR 사이드바 열기",
       "openReviewActions": "리뷰 작업 메뉴 열기",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} 리뷰 완료",
-      "showAllFiles": "모든 리뷰 대상 파일 표시",
-      "showBranchFiles": "브랜치의 리뷰 대상 파일 표시",
-      "showNotesFiles": "메모가 있는 리뷰 대상 파일 표시",
-      "showStagedFiles": "스테이징된 리뷰 대상 파일 표시",
-      "showUnreviewedFiles": "리뷰하지 않은 파일 표시",
-      "showUnstagedFiles": "스테이징되지 않은 리뷰 대상 파일 표시",
-      "title": "변경 사항",
-      "unsentNotes_one": "미전송 메모 {{count}}개",
-      "unsentNotes_other": "미전송 메모 {{count}}개"
+      "title": "변경 사항"
     },
     "diffReviewLine": {
       "addNoteOnLine": "{{number}}번 줄에 메모 추가",
@@ -765,6 +741,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 관련 작업",
+      "needsYou_one": "확인 필요 {{count}}개",
+      "needsYou_other": "확인 필요 {{count}}개",
       "openHost": "{{title}} 열기",
       "pairingInvalid": "페어링이 유효하지 않음",
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
@@ -844,7 +822,6 @@
       "selectRunTarget": "실행 대상 선택"
     },
     "prSidebar": {
-      "loadFailed": "문제가 발생했습니다.",
       "loading": "PR 로드 중…",
       "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
       "retryLoading": "PR 로드 다시 시도"
@@ -996,6 +973,16 @@
       "title": "문제가 발생했습니다",
       "tryAgain": "다시 시도",
       "home": "홈"
+    },
+    "svgPreview": {
+      "drawFailed": "이 SVG를 그릴 수 없습니다",
+      "label": "{{title}} 그림",
+      "previewDrawing": "그림 미리보기",
+      "viewSource": "SVG 소스 보기"
+    },
+    "mermaidDiagram": {
+      "expand": "다이어그램 확대",
+      "label": "Mermaid 다이어그램"
     }
   },
   "connection": {
@@ -1289,10 +1276,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "활성 {{count}}개",
+      "heading": "에이전트",
+      "showAll": "{{count}}개 모두 보기",
+      "showFewer": "접기"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
       "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요."
+    },
+    "automationsTab": {
+      "connectDesktop": "자동화를 보고 실행하려면 {{desktop}}에 연결하세요.",
+      "createHint": "+를 탭하여 에이전트를 예약하세요.",
+      "emptyTitle": "에이전트 작업 예약",
+      "lastStatus": "최근: {{status}}",
+      "newAutomation": "새 자동화",
+      "noAutomations": "아직 자동화가 없습니다",
+      "pairDesktop": "자동화를 보고 실행하려면 데스크톱을 페어링하세요.",
+      "paused": "일시 중지됨",
+      "scheduled": "예약됨",
+      "showFor": "자동화를 볼 데스크톱",
+      "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
+      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
     },
     "emptyState": {
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
@@ -1304,9 +1311,7 @@
       "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
-      "hostPickerTitle": "작업을 열 호스트",
-      "automationsHeading": "자동화",
-      "automationsHostPickerTitle": "자동화를 열 호스트"
+      "hostPickerTitle": "작업을 열 호스트"
     },
     "listHeader": {
       "desktopsHeading": "데스크탑"
@@ -1317,6 +1322,33 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "removeHostTitle": "호스트 제거",
       "tryAgain": "다시 시도하세요."
+    },
+    "stats": {
+      "agentTime": "Agent 시간",
+      "agentsSpawned": "시작된 Agents",
+      "days": "{{days}}일",
+      "heading": "내 통계",
+      "hours": "{{hours}}시간",
+      "minutes": "{{minutes}}분",
+      "prsCreated": "생성된 PR"
+    },
+    "tabs": {
+      "automations": "자동화",
+      "chooseDesktop": "{{desktop}}, 다른 데스크톱 선택",
+      "feed": "피드",
+      "usage": "사용량"
+    },
+    "usage": {
+      "active": "사용 중",
+      "addAccounts": "데스크톱의 설정 → 계정에서 계정을 추가하세요.",
+      "connectDesktop": "에이전트 계정 사용량을 보려면 {{desktop}}에 연결하세요.",
+      "emptyTitle": "아직 사용량이 없습니다",
+      "openAccountsHint": "이 데스크톱의 계정을 엽니다",
+      "pairDesktop": "에이전트 계정 사용량을 보려면 데스크톱을 페어링하세요.",
+      "refresh": "사용량 새로고침",
+      "showUsageFor": "사용량을 볼 데스크톱",
+      "updatedAgo": "{{time}} 전 업데이트됨",
+      "updatedJustNow": "방금 업데이트됨"
     }
   },
   "hooks": {
@@ -1517,7 +1549,7 @@
       "notificationsTitle": "에이전트의 요청을 놓치지 마세요",
       "openInChatUi": "채팅 UI에서 세션 열기",
       "openInTerminal": "터미널에서 세션 열기",
-      "sessionViewDescription": "지원되는 에이전트 세션을 이 기기에서 터미널로 열지, 채팅 UI로 열지 선택하세요. 세션 탭을 길게 눌러 보기를 전환하거나, 나중에 설정에서 기본값을 변경할 수 있습니다.",
+      "sessionViewDescription": "지원되는 에이전트 세션을 이 기기에서 터미널로 열지, 채팅 UI로 열지 선택하세요. 세션 탭을 길게 눌러 보기를 전환하거나, 언제든지 설정 → 채팅 UI에서 기본값을 변경할 수 있습니다.",
       "sessionViewTitle": "세션을 어떻게 열까요?",
       "skipNotifications": "지금은 알림 설정 건너뛰기",
       "useChatUi": "채팅 UI 사용"
@@ -1525,40 +1557,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "조치 필요",
-      "cancelled": "취소됨",
-      "checkDetails": "{{name}} 체크 세부 정보",
-      "failed": "실패",
       "failing": "{{count}}개 실패",
-      "failingChecks_one": "실패한 검사 {{count}}개",
-      "failingChecks_other": "실패한 검사 {{count}}개",
-      "fix": "수정",
-      "fixFailing": "AI로 실패한 체크 수정",
-      "inProgress": "진행 중",
-      "inspectOrFix": "세부 정보를 확인하거나 AI로 수정을 시작하세요.",
-      "loadDetailsFailed": "체크 세부 정보를 불러오지 못했습니다.",
-      "neutral": "중립",
-      "neutralCount": "{{count}}개 중립",
       "noChecks": "체크 없음",
       "openOnWeb": "웹에서 {{name}} 열기",
       "passed": "{{count}}개 통과",
-      "pending": "대기 중",
-      "pendingCount": "{{count}}개 대기 중",
-      "queued": "대기 중",
-      "rerunFailing": "실패한 체크 다시 실행",
-      "skipped": "건너뜀",
-      "successful": "성공",
-      "timedOut": "시간 초과",
-      "title": "체크",
-      "unavailable": "검사를 사용할 수 없습니다."
+      "title": "체크"
     },
     "commentCard": {
       "daysAgo_one": "{{count}}일 전",
       "daysAgo_other": "{{count}}일 전",
-      "deleteComment": "댓글 삭제",
       "deleteConfirmMessage": "GitHub에서 댓글이 영구적으로 삭제됩니다.",
       "deleteConfirmTitle": "댓글을 삭제하시겠습니까?",
-      "editComment": "댓글 수정",
       "editPlaceholder": "댓글 수정…",
       "hoursAgo_one": "{{count}}시간 전",
       "hoursAgo_other": "{{count}}시간 전",
@@ -1567,53 +1576,20 @@
       "minutesAgo_other": "{{count}}분 전",
       "monthsAgo_one": "{{count}}개월 전",
       "monthsAgo_other": "{{count}}개월 전",
-      "openOnGitHub": "GitHub에서 댓글 열기",
       "reply": "답장",
-      "replyPlaceholder": "답장 작성…",
-      "replyToComment": "댓글에 답장하기",
       "resolve": "해결",
-      "resolveThread": "스레드 해결",
-      "resolved": "해결됨",
       "unresolve": "해결 취소",
-      "unresolveThread": "스레드 해결 취소",
       "yearsAgo_one": "{{count}}년 전",
       "yearsAgo_other": "{{count}}년 전"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "댓글 추가…",
-      "all": "모두",
-      "bots": "봇",
       "comment": "댓글",
-      "commentsLoadFailed": "댓글을 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
       "description": "설명",
       "descriptionLoadFailed": "설명을 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
-      "humans": "사람",
-      "noBotComments": "봇 댓글이 없습니다.",
       "noComments": "아직 댓글이 없습니다.",
       "noDescription": "설명이 제공되지 않았습니다.",
-      "noHumanComments": "사람 댓글이 없습니다.",
-      "resolvedCommentCount": "{{author}}님의 댓글 · 해결됨 ({{count}})",
-      "resolvedCommentSingle": "{{author}}님의 댓글 · 해결됨",
-      "resolvedThreadCount": "{{author}}님의 스레드 · 해결됨 ({{count}})",
-      "resolvedThreadSingle": "{{author}}님의 스레드 · 해결됨",
       "showMore": "{{count}}개 더 보기",
-      "showMoreOf": "남은 {{remaining}}개 중 {{count}}개 더 보기",
       "title": "댓글"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "커밋 {{count}}개 뒤처짐 (기준 커밋: {{baseCommit}})",
-      "commitsBehind_other": "커밋 {{count}}개 뒤처짐 (기준 커밋: {{baseCommit}})",
-      "copyCommands": "명령 복사",
-      "copyFailed": "텍스트 복사 실패",
-      "copyRefreshCommands": "병합 가능성 새로 고침 명령 복사",
-      "detailsUnavailable": "충돌 파일 세부정보를 사용할 수 없습니다.",
-      "filesHeading": "충돌하는 파일",
-      "localMergeClean": "GitHub에서는 충돌이 있다고 보고하지만 로컬 Git에서는 충돌이 재현되지 않았습니다. PR을 새로고침하거나 브랜치를 푸시해 병합 가능성을 다시 계산하세요.",
-      "mustResolve": "이 브랜치에는 해결해야 할 충돌이 있습니다.",
-      "refreshing": "충돌 세부정보 새로고침 중…",
-      "resolveWithAi": "AI로 충돌 해결",
-      "runFromWorktree": "이 워크트리에서 실행",
-      "title": "충돌"
     },
     "linkPrForm": {
       "linkButton": "PR 연결",
@@ -1626,27 +1602,14 @@
       "details": "세부 정보"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "자동 병합 켜기/끄기",
-      "autoMergeLabel": "준비되면 자동 병합",
-      "autoMergeOff": "꺼짐",
-      "autoMergeOn": "켜짐",
-      "closeAccessibilityLabel": "PR 닫기",
       "closeConfirmMessage": "병합하지 않고 #{{number}}을(를) 닫습니다.",
       "closeConfirmTitle": "PR을 닫으시겠습니까?",
-      "markReadyAccessibilityLabel": "PR을 리뷰 준비 완료로 표시",
       "markReadyButton": "리뷰 준비 완료",
-      "mergeAccessibilityLabel": "PR 병합",
-      "mergeButton": "병합",
-      "mergeConfirmTitle": "PR을 병합하시겠습니까?",
-      "recheckAccessibilityLabel": "병합 상태 다시 확인",
-      "recheckButton": "다시 확인",
       "reopenAccessibilityLabel": "PR 다시 열기",
       "reopenButton": "다시 열기",
       "reopenConfirmMessage": "#{{number}}을(를) 다시 엽니다.",
       "reopenConfirmTitle": "PR을 다시 여시겠습니까?",
-      "unlinkAccessibilityLabel": "PR 연결 해제",
-      "unlinkButton": "연결 해제",
-      "unlinkFailed": "PR 연결을 해제하지 못했습니다."
+      "unlinkButton": "연결 해제"
     },
     "prActionsState": {
       "behindHint": "병합하기 전에 브랜치 업데이트",
@@ -1739,46 +1702,24 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
-      "branchRequired": "PR을 작성하기 전에 브랜치를 체크아웃하세요.",
-      "createFailed": "PR을 작성하지 못했습니다.",
-      "createPr": "PR 작성",
-      "createPullRequest": "PR 작성",
       "currentBranchNotLinked": "현재 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
-      "linkExistingPr": "기존 PR 연결",
       "linkExistingPullRequest": "기존 PR 연결",
       "linkedPrUnavailable": "연결된 PR #{{number}} 사용 불가",
-      "noOpenPullRequest": "열려 있는 PR 없음",
-      "refreshOrCreate": "새로고침하여 다시 확인하거나 이 브랜치의 새 PR을 작성하세요.",
-      "refreshPullRequest": "PR 새로고침",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "제목 편집 취소",
-      "editTitle": "PR 제목 편집",
-      "openInBrowser": "브라우저에서 PR #{{number}} 열기",
-      "openOnWeb": "웹에서 PR #{{number}} 열기",
-      "saveTitle": "제목 저장"
+      "refreshOrCreate": "새로고침하여 다시 확인하거나 이 브랜치의 새 PR을 작성하세요."
     },
     "prViewPanel": {
       "branchUnavailable": "현재 브랜치를 확인할 수 없습니다.",
-      "providerUnavailable": "이 제공자에서는 호스팅 PR 패널을 사용할 수 없습니다."
+      "githubRemoteRequired": "이 탭에서 풀 리퀘스트 세부 정보를 보려면 GitHub 원격 저장소가 필요합니다. 지원되는 다른 서비스에서는 변경 사항에서 리뷰를 만들고 브라우저에서 여세요."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "사용자 목록을 불러오지 못했습니다.",
-      "noMatches": "일치하는 사용자가 없습니다.",
-      "removeReviewer": "{{login}} 제거",
-      "requestReviewer": "{{login}}에게 리뷰 요청",
-      "searchPeople": "사용자 검색",
-      "title": "리뷰어"
+      "noMatches": "일치하는 사용자가 없습니다."
     },
     "reviewersSection": {
-      "addOrRemove": "리뷰어 추가 또는 제거",
       "approved": "승인됨",
       "changesRequested": "변경 요청됨",
       "commented": "댓글 작성됨",
       "dismissed": "해제됨",
-      "loadFailed": "리뷰어를 불러오지 못했습니다. 새로고침을 눌러 다시 시도하세요.",
-      "loading": "리뷰어 로드 중…",
       "noReviewers": "리뷰 요청 없음",
       "pending": "대기 중",
       "removeReviewer": "{{login}} 제거",
@@ -1791,15 +1732,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "키보드 닫기",
       "sendKey": "{{label}} 보내기",
-      "modifierHint": "다음 키에 적용됩니다. 두 번 탭하면 계속 켜집니다.",
       "typeCharacter": "{{character}} 입력",
       "interrupt": "터미널 중단",
       "keysModeLabel": "키 모드: 입력 내용이 터미널로 바로 전송됩니다. 메시지 모드로 전환",
       "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
-      "keysMode": "키",
-      "messageMode": "메시지",
       "moreKeys": "더 많은 키와 작업",
-      "showKeyboard": "키보드 표시"
+      "showKeyboard": "키보드 표시",
+      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
+      "switchToDesktopMode": "데스크톱 모드로 전환",
+      "switchToPhoneMode": "휴대폰 모드로 전환",
+      "pasteFromClipboard": "클립보드에서 붙여넣기",
+      "paste": "붙여넣기",
+      "addCustomShortcut": "사용자 지정 단축키 추가"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1910,11 +1854,7 @@
     },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
-      "liveInputLabel": "실시간 터미널 입력",
-      "sendCommand": "명령 보내기",
-      "messageAgentPlaceholder": "{{agent}}에게 메시지 보내기",
-      "writeCommandPlaceholder": "명령을 작성한 후 전송",
-      "theAgent": "에이전트"
+      "liveInputLabel": "실시간 터미널 입력"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
@@ -1963,6 +1903,7 @@
       "attachmentAtMost": "{{agent}}은(는) 메시지 하나에 이미지를 최대 {{limit}}개까지 받을 수 있어 이 메시지가 전송되지 않았습니다.",
       "attachmentEmpty": "이 메시지의 이미지가 비어 있어 메시지가 전송되지 않았습니다.",
       "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+      "attachmentsExpired": "{{names}}이(가) 만료되었습니다.",
       "attachmentLargerThan": "이 메시지의 이미지가 {{size}}MB보다 커서 메시지가 전송되지 않았습니다.",
       "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
       "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
@@ -2036,6 +1977,7 @@
       "providerRetrying": "{{agent}}에 일시적인 문제가 발생하여 다시 시도하고 있습니다.",
       "providerRetryingQuoted": "{{agent}}이(가) 다시 시도하고 있습니다: {{detail}}.",
       "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
+      "savedConversationMissing": "{{agent}}에서 이 채팅의 저장된 대화를 찾을 수 없습니다.",
       "queueFull": "에이전트를 기다리는 메시지가 너무 많아 이 메시지는 전송되지 않았습니다.",
       "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
       "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
@@ -2166,7 +2108,7 @@
     },
     "prActionsEngine": {
       "mergeFailed": "PR을 병합하지 못했습니다.",
-      "refreshFailed": "PR을 새로고침하지 못했습니다."
+      "refreshFailed": "풀 리퀘스트를 새로 고치지 못했습니다."
     },
     "prAiTriageLaunch": {
       "agentStarted": "에이전트 시작됨",
@@ -2398,9 +2340,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "소스 제어 작업에 실패했습니다.",
-      "reviewedFilesStaged_one": "리뷰한 파일 {{count}}개 스테이징됨",
-      "reviewedFilesStaged_other": "리뷰한 파일 {{count}}개 스테이징됨",
-      "stageResults": "{{staged}}개 스테이징됨, {{failed}}개 실패",
       "waitingForDesktop": "데스크톱 연결 대기 중…"
     },
     "useDiffReviewInteractions": {
@@ -2461,8 +2400,7 @@
       "actionFailed": "댓글 작업에 실패했습니다."
     },
     "usePrTitleAction": {
-      "disconnected": "데스크톱에 연결되어 있지 않습니다.",
-      "updateFailed": "제목을 업데이트하지 못했습니다."
+      "disconnected": "데스크톱에 연결되어 있지 않습니다."
     },
     "useQuickCommands": {
       "loadFailed": "빠른 명령을 불러오지 못했습니다.",
@@ -2551,6 +2489,7 @@
       "queueTooLarge": "대기열에 쌓인 텍스트가 너무 많습니다.",
       "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
       "reattachFile": "제거한 후 다시 첨부하세요.",
+      "reattachFiles": "제거한 후 다시 첨부하세요.",
       "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
       "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
       "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
@@ -2598,14 +2537,6 @@
       "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
       "saveFailedMessage": "현재는 이 레이아웃이 적용됩니다. 다시 선택하여 저장을 재시도하세요."
     },
-    "terminalArrowPad": {
-      "label": "방향키",
-      "hint": "한쪽을 탭하면 방향키를 한 번 누르고, 길게 눌러 드래그하면 반복합니다",
-      "up": "위",
-      "down": "아래",
-      "left": "왼쪽",
-      "right": "오른쪽"
-    },
     "terminalMoreKeys": {
       "sendKey": "{{label}} 보내기",
       "paste": "붙여넣기",
@@ -2626,6 +2557,10 @@
       "terminal": "터미널",
       "tapToFocusPane": "{{title}}, 탭하여 포커스",
       "inputPane": "{{title}} · 입력"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "워크트리가 삭제되었습니다.",
+      "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
     }
   },
   "settings": {
@@ -2773,6 +2708,9 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
+    },
+    "agents": {
+      "permissionOwnAll": "에이전트 자체 설정"
     }
   },
   "sourceControl": {
@@ -2784,7 +2722,6 @@
       "checkingReviewStatus": "리뷰 상태를 확인 중입니다.",
       "checkoutBeforePublish": "커밋을 게시하기 전에 브랜치를 체크아웃하세요.",
       "commitStagedChanges": "스테이징된 변경 사항을 커밋하세요.",
-      "commits": "커밋",
       "committing": "커밋이 진행 중입니다.",
       "createPr": "PR 작성",
       "enterCommitMessage": "커밋하려면 커밋 메시지를 입력하세요.",
@@ -2812,33 +2749,15 @@
       "resolveFailed": "브랜치의 기준점을 확인할 수 없습니다."
     },
     "branchCard": {
-      "branchCount": "브랜치 변경 {{count}}개",
-      "changedCount": "변경 {{count}}개",
-      "cherryPickState": "체리픽",
-      "mergeState": "병합",
-      "rebaseState": "리베이스",
-      "stagedCount": "{{count}}개 스테이징됨",
       "completingMerge": "완료 중…",
       "completeMerge": "병합 완료"
     },
     "branchCompare": {
-      "commits_one": "커밋 {{count}}개",
-      "commits_other": "커밋 {{count}}개",
-      "files_one": "파일 {{count}}개",
-      "files_other": "파일 {{count}}개",
-      "sectionTitle": "브랜치에 커밋됨",
-      "summary": "{{files}} - {{baseRef}} 대비",
-      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} 대비"
+      "sectionTitle": "브랜치에 커밋됨"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "비교할 기본 브랜치를 확인할 수 없습니다.",
       "loadFailed": "커밋된 변경 사항을 로드할 수 없습니다."
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "커밋된 차이점 미리보기 닫기",
-      "committedOnBranch": "브랜치에 커밋됨",
-      "loadFailed": "차이점을 불러올 수 없음",
-      "truncated": "모바일 미리보기용으로 차이점의 일부가 생략되었습니다."
     },
     "commitDropdown": {
       "checkOutBranchToPush": "커밋을 푸시하기 전에 브랜치를 체크아웃하세요",
@@ -2893,12 +2812,8 @@
       "emptyMessage": "워크트리에 변경 사항이 없습니다.",
       "emptyTitle": "로컬 변경 사항 없음",
       "generateMessage": "AI로 commit 메시지 생성",
-      "noStagedFiles": "스테이징된 파일 없음",
-      "openActions": "소스 제어 작업 열기",
       "reconnecting": "데스크톱에 다시 연결 중…",
-      "regenerateHint": "다시 생성하려면 메시지를 지웁니다.",
-      "stageAll": "모두 스테이지",
-      "unstageAll": "모두 언스테이징"
+      "regenerateHint": "다시 생성하려면 메시지를 지웁니다."
     },
     "createPrAction": {
       "checkingStatus": "리뷰 상태 확인 중…",
@@ -2927,20 +2842,15 @@
       "titleUnpublishedForcePushCount_one": "브랜치 커밋 {{count}}개를 lease로 강제 푸시하고 필요하면 업스트림을 설정합니다.",
       "titleUnpublishedForcePushCount_other": "브랜치 커밋 {{count}}개를 lease로 강제 푸시하고 필요하면 업스트림을 설정합니다."
     },
-    "fileList": {
-      "committedSection": "브랜치에 커밋됨"
-    },
     "fileRows": {
       "addedByThem": "상대 쪽에서 추가됨",
       "addedByUs": "우리 쪽에서 추가됨",
       "bothAdded": "양쪽에서 추가됨",
       "bothDeleted": "양쪽에서 삭제됨",
       "bothModified": "양쪽에서 수정됨",
-      "committedSection": "브랜치에 커밋됨",
       "committedUnavailable": "커밋된 변경 사항을 확인할 수 없습니다.",
       "deletedByThem": "상대 쪽에서 삭제됨",
       "deletedByUs": "우리 쪽에서 삭제됨",
-      "discardFile": "{{path}} 변경사항 취소",
       "loadingCommitted": "커밋된 변경 사항 로드 중…",
       "openChangedFile": "변경된 파일 {{path}} 열기",
       "openCommittedChange": "{{path}}의 커밋된 변경 사항 열기",
@@ -2973,9 +2883,7 @@
       "waitingForDesktop": "데스크톱 응답 대기 중…"
     },
     "gitStatus": {
-      "changes": "변경 사항",
-      "conflicts": "충돌",
-      "stagedChanges": "스테이징된 변경 사항"
+      "conflicts": "충돌"
     },
     "header": {
       "backToSession": "세션으로 돌아가기",
@@ -3034,9 +2942,7 @@
       "pushBeforeCreateFailed": "푸시에 실패했습니다. 푸시 오류를 해결한 후 다시 시도하세요."
     },
     "hubTab": {
-      "changes": "변경 사항",
-      "commits": "커밋",
-      "pullRequest": "PR"
+      "changes": "변경 사항"
     },
     "loaders": {
       "connectingToDesktop": "데스크톱에 연결 중…",
@@ -3045,7 +2951,6 @@
       "waitingForDesktop": "데스크톱 연결 대기 중…"
     },
     "modals": {
-      "actionsTitle": "소스 제어",
       "currentBranch": "현재",
       "discardButton": "버리기",
       "discardConfirmMessage": "\"{{path}}\"의 변경 사항을 버리시겠습니까? 이 작업은 되돌릴 수 없습니다.",
@@ -3055,23 +2960,8 @@
       "prCreatedTitle": "PR 생성 완료",
       "switchBranchTitle": "브랜치 전환"
     },
-    "openers": {
-      "openDiffFailed": "차이점을 열 수 없습니다.",
-      "tabNotReady": "파일은 열렸지만 탭이 아직 준비되지 않았습니다. 다시 시도하세요.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
-    },
     "panel": {
-      "loadFailedTitle": "로드 실패",
       "unavailableTitle": "소스 제어 사용 불가"
-    },
-    "prChip": {
-      "createPr": "PR 생성",
-      "loading": "PR 로드 중…",
-      "loadingLabel": "PR 로드 중",
-      "openLabel": "PR #{{number}}, {{state}}, {{checks}}. PR 열기.",
-      "openWithComments_one": "PR #{{number}}, {{state}}, {{checks}}, 해결되지 않은 댓글 {{count}}개. PR 열기.",
-      "openWithComments_other": "PR #{{number}}, {{state}}, {{checks}}, 해결되지 않은 댓글 {{count}}개. PR 열기.",
-      "unavailableLabel": "PR 확인 불가: {{message}}"
     },
     "prCreate": {
       "authRequired": "{{reviewLabel}} 생성 전에 인증하세요.",
@@ -3102,7 +2992,6 @@
       "publishBranch": "브랜치 게시",
       "pull": "풀",
       "push": "푸시",
-      "stageAll": "모두 스테이지",
       "sync": "동기화"
     },
     "remoteDropdown": {
@@ -3161,7 +3050,6 @@
       "noBranch": "브랜치 없음"
     },
     "state": {
-      "noUpstream": "업스트림 없음",
       "syncStatus": "{{ahead}}개 앞섬, {{behind}}개 뒤처짐"
     },
     "textGenerationFailure": {
@@ -3250,9 +3138,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "커밋 메시지를 생성하지 못했습니다."
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "PR을 생성하기 전에 브랜치를 체크아웃하세요."
     },
     "useMobileGitRequests": {
       "actionFailed": "소스 제어 작업에 실패했습니다.",
@@ -3371,7 +3256,6 @@
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "subIssueTitle": "하위 이슈 제목",
       "subIssues": "하위 이슈"
     },
@@ -3602,7 +3486,6 @@
       "requestReview": "리뷰 요청",
       "requestReviewers": "리뷰어 요청",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },
@@ -3889,8 +3772,7 @@
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
       "noMatches": "일치하는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
-      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다.",
-      "retrying": "worktree.ps가 실패했습니다({{error}}). 자동으로 다시 시도합니다."
+      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
     },
     "workspaceListSections": {
       "all": "모두",
@@ -4052,7 +3934,6 @@
       "unknownResult": "알 수 없는 결과",
       "notReported": "보고되지 않음",
       "searchOptions": "옵션 검색",
-      "scheduleAgentWorkAndViewRuns": "에이전트 작업 예약 및 실행 보기",
       "task": "작업",
       "review": "확인"
     },

@@ -13,15 +13,15 @@ import {
   setTerminalViewAttributes,
   tmpdir
 } from '../orca-runtime-test-mocks.spec'
-import { getTerminalViewerColors } from '../terminal-view-attribute-store'
+import { getTerminalViewerColors } from '../terminal/view/terminal-view-attribute-store'
 import type {
   TerminalViewAttributes,
   TerminalViewRgb
-} from '../../../shared/terminal-view-attributes'
+} from '../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../orca-runtime-test-mocks.spec'
+} from '../../../shared/agent-session/agent-session-host-authority'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,

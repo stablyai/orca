@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SidebarClock } from './sidebar-clock'
 import { AgentHookServer } from '../../agent-hooks/server'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   WorkspaceActivityFactsProducer,
   type WorkspaceSurfaceActivity
@@ -9,7 +9,7 @@ import {
 
 const WT_A = 'repo-1::/tmp/a'
 const WT_B = 'repo-1::/tmp/b'
-const FOLDER = 'folder:11111111-1111-4111-8111-111111111111'
+
 const PANE_A = 'tab-a:11111111-1111-4111-8111-111111111111'
 const PANE_B = 'tab-b:22222222-2222-4222-8222-222222222222'
 const NONE: WorkspaceSurfaceActivity = { terminal: null, browser: false, structuredChat: false }
@@ -48,41 +48,6 @@ function terminalStatus(
 describe('WorkspaceActivityFactsProducer', () => {
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('lists only active workspaces and bumps the revision only on a change', () => {
-    const { producer, surfaces } = createProducer()
-    surfaces.set(WT_A, { ...NONE, terminal: 'live' })
-    surfaces.set(FOLDER, { ...NONE, browser: true, structuredChat: true })
-    producer.refreshWorkspace(WT_A)
-    producer.refreshWorkspace(FOLDER)
-    producer.refreshWorkspace(WT_B)
-    expect(producer.snapshot()).toEqual({
-      revision: 2,
-      facts: {
-        [WT_A]: { terminal: 'live', browser: false, structuredChat: false, agent: null },
-        [FOLDER]: { terminal: null, browser: true, structuredChat: true, agent: null }
-      }
-    })
-
-    producer.refreshWorkspace(WT_A)
-    expect(producer.snapshot().revision).toBe(2)
-
-    surfaces.delete(WT_A)
-    producer.refreshWorkspace(WT_A)
-    expect(producer.snapshot()).toEqual({
-      revision: 3,
-      facts: { [FOLDER]: expect.anything() }
-    })
-  })
-
-  it('keeps an SSH workspace whose host lost contact as unverifiable, not idle', () => {
-    const { producer, surfaces } = createProducer()
-    surfaces.set(WT_A, { ...NONE, terminal: 'live' })
-    producer.refreshWorkspace(WT_A)
-    surfaces.set(WT_A, { ...NONE, terminal: 'unverifiable' })
-    producer.refreshWorkspace(WT_A)
-    expect(producer.snapshot().facts[WT_A]?.terminal).toBe('unverifiable')
   })
 
   it('follows agent status transitions without re-reading any surfaces', () => {

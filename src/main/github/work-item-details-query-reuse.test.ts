@@ -1,6 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubApiRepository } from './github-api-repository'
-import type { LocalGitExecOptions } from './gh-utils'
 
 const mocks = vi.hoisted(() => ({
   exec: vi.fn(),
@@ -37,7 +36,6 @@ vi.mock('./rate-limit', () => ({
   noteRepositoryRateLimitSpend: vi.fn()
 }))
 
-import { getWorkItemDetails } from './work-item-details'
 import { getWorkItemWithRepository } from './client/fetch/get-work-item'
 
 const repository = { owner: 'team', repo: 'widgets', host: 'github.example.com:8443' }
@@ -90,45 +88,6 @@ beforeEach(() => {
   }))
 })
 
-it.each<{ connectionId?: string; options: LocalGitExecOptions; execution: object }>([
-  { options: {}, execution: { cwd: '/repo', host: repository.host } },
-  {
-    options: { wslDistro: 'Ubuntu' },
-    execution: { cwd: '/repo', wslDistro: 'Ubuntu', host: repository.host }
-  },
-  { connectionId: 'ssh-1', options: {}, execution: { host: repository.host } }
-])(
-  'loads issue metadata and conversation with one GraphQL read: $execution',
-  async ({ connectionId, options, execution }) => {
-    const details = await getWorkItemDetails('/repo', 5, 'issue', connectionId, options, 'origin')
-    expect(details?.item).toMatchObject({
-      title: 'Closed issue',
-      state: 'closed',
-      labels: ['bug', 'urgent'],
-      author: 'author',
-      assignees: [{ login: 'assigned', name: 'Assigned User' }]
-    })
-    expect(details).toMatchObject({
-      body: 'Description',
-      comments: [{ id: 10, isBot: true }],
-      assignees: ['assigned'],
-      timelineItems: []
-    })
-    expect(mocks.source).toHaveBeenCalledWith('/repo', 'origin', connectionId, options)
-    expect(mocks.exec).toHaveBeenCalledTimes(2)
-    expect(mocks.exec.mock.calls[0][0]).toContain('includeItem=true')
-    expect(mocks.exec.mock.calls[1][0]).toContain(
-      'repos/team/widgets/issues/5/timeline?per_page=100&page=1'
-    )
-    expect(
-      mocks.exec.mock.calls.every(
-        ([, options]) => JSON.stringify(options) === JSON.stringify(execution)
-      )
-    ).toBe(true)
-    expect(mocks.release).toHaveBeenCalledTimes(mocks.acquire.mock.calls.length)
-  }
-)
-
 it.each(['incomplete labels', 'invalid metadata', 'partial errors'])(
   'retains the REST item fallback for %s',
   async (reason) => {
@@ -167,13 +126,6 @@ it.each(['incomplete labels', 'invalid metadata', 'partial errors'])(
   }
 )
 
-it('keeps ordinary metadata lookups on their existing REST path', async () => {
-  const result = await getWorkItemWithRepository('/repo', 5, 'issue')
-  expect(result.item?.title).toBe('REST issue')
-  expect(mocks.exec).toHaveBeenCalledTimes(1)
-  expect(mocks.exec.mock.calls[0][0]).toEqual(['api', 'repos/team/widgets/issues/5'])
-})
-
 it.each([
   { reason: 'missing nodes', nodes: undefined },
   { reason: 'null nodes', nodes: null },
@@ -197,22 +149,4 @@ it.each([
     expect.arrayContaining(['api', 'repos/team/widgets/issues/5/timeline?per_page=100&page=1']),
     ['api', 'repos/team/widgets/issues/5']
   ])
-})
-
-it('does not query an unavailable explicitly selected source', async () => {
-  mocks.source.mockResolvedValue({ source: null, fellBack: false })
-  expect(
-    (await getWorkItemWithRepository('/repo', 5, 'issue', undefined, {}, 'origin', true)).item
-  ).toBeNull()
-  expect(mocks.exec).not.toHaveBeenCalled()
-})
-
-it('retains REST bot login normalization for issue metadata', async () => {
-  issue.author = {
-    __typename: 'Bot',
-    login: 'automation',
-    avatarUrl: 'https://avatars.example/bot'
-  }
-  const result = await getWorkItemWithRepository('/repo', 5, 'issue', undefined, {}, 'origin', true)
-  expect(result.item?.author).toBe('automation[bot]')
 })

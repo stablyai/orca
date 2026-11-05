@@ -1,5 +1,6 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
-import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -9,7 +10,7 @@ import type {
   WorkspaceAttachment,
   Worktree
 } from '../../shared/worktree/types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
@@ -67,6 +68,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   onWorkspaceCreated?: (worktreeId: string) => void
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean
+  startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
   /** Main-only: caller delivers any uncarried startupPrompt through a compatible typed line and receives delivery status. */
@@ -103,6 +105,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
     envParentWorkspace?: string
     parentWorktree?: string
     cwdParentWorktree?: string
+    cwdParentAmbiguous?: true
     noParent?: boolean
     callerTerminalHandle?: string
     comment?: string

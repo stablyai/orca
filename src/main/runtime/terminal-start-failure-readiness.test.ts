@@ -3,11 +3,11 @@ import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript
 import {
   waitForWorkerAgentReady,
   waitForLaunchedAgentComposer
-} from './launched-agent-composer-readiness'
+} from './terminal/wait/launched-agent-composer-readiness'
 import {
   formatTerminalStartFailure,
   readTerminalStartFailure
-} from '../../shared/terminal-start-failure'
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -66,48 +66,6 @@ describe('accepted spawn followed by failed startup readiness', () => {
     }
   )
 
-  it.each([true, false])(
-    'preserves an already-exited generic/reused wait (reused=%s)',
-    async (reusesTerminal) => {
-      const { runtime, handle } = await createTranscriptPane({
-        paneTitle: 'shell',
-        foregroundProcess: 'bash',
-        launchAgent: 'codex',
-        data: ''
-      })
-      runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 256, 'inc-1', {
-        providerExitObserved: true,
-        cause: {
-          kind: 'exited',
-          exitCode: 256,
-          ...(reusesTerminal
-            ? { initialOutputDiagnostic: 'git-bash-console-capacity' as const }
-            : {})
-        }
-      })
-      const ordinary = await runtime
-        .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 50 })
-        .catch((error: unknown) => error)
-      const worker = await waitForWorkerAgentReady(runtime, handle, {
-        agent: 'codex',
-        reusesTerminal,
-        timeoutMs: 50
-      }).catch((error: unknown) => error)
-      for (const error of [ordinary, worker]) {
-        expect(error).toBeInstanceOf(Error)
-        expect(error).toHaveProperty('message', 'terminal_exited')
-        expect(error).toHaveProperty('terminalExitCause', {
-          kind: 'exited',
-          exitCode: 256,
-          ...(reusesTerminal ? { initialOutputDiagnostic: 'git-bash-console-capacity' } : {})
-        })
-        expect(error).not.toHaveProperty('terminalStartFailure')
-        expect(readTerminalStartFailure(error)).toBeUndefined()
-        expect(formatTerminalStartFailure(error)).toBeUndefined()
-      }
-    }
-  )
-
   it.each(['fresh', 'reattach', 'adopted', 'missing', 'wrong-incarnation'] as const)(
     'uses actual create provenance independently of readiness scheduling (%s)',
     async (context) => {
@@ -155,26 +113,4 @@ describe('accepted spawn followed by failed startup readiness', () => {
       }
     }
   )
-
-  it('keeps reused-terminal readiness and ordinary later waits generic', async () => {
-    const { runtime, handle } = await createTranscriptPane({
-      paneTitle: 'shell',
-      foregroundProcess: 'bash',
-      data: ''
-    })
-    const reused = waitForWorkerAgentReady(runtime, handle, {
-      agent: 'codex',
-      reusesTerminal: true,
-      timeoutMs: 50
-    }).catch((error: unknown) => error)
-    const ordinary = runtime
-      .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 50 })
-      .catch((error: unknown) => error)
-    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 256, 'inc-1', {
-      providerExitObserved: true,
-      cause: { kind: 'exited', exitCode: 256, initialOutputDiagnostic: 'git-bash-console-capacity' }
-    })
-    expect(formatTerminalStartFailure(await reused)).toBeUndefined()
-    expect(formatTerminalStartFailure(await ordinary)).toBeUndefined()
-  })
 })

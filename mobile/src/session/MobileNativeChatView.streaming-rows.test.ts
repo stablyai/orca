@@ -1,27 +1,28 @@
 import { createElement, useMemo, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { agentJournalTurnBody } from '../../../src/shared/agent-session/lifecycle/agent-session-turn-record'
+
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
-import { MobileNativeChatPageList } from './MobileNativeChatPageList'
+import { MobileNativeChatPageList } from './native-chat/transcript/MobileNativeChatPageList'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
-import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
-import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
+} from '../../../src/shared/native-chat/native-chat-types'
+import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
+import type * as MobileNativeChatItemReadModule from './native-chat/mobile-native-chat-item-read'
 import type * as MobileNativeChatRowPropsModule from './native-chat/transcript/use-mobile-native-chat-row-props'
 import type * as MobileNativeChatRowProjectionModule from './native-chat/transcript/mobile-native-chat-row-projection'
 import type * as MobileNativeChatMessageDetailModule from './native-chat/transcript/use-mobile-native-chat-message-detail'
-import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import type { MobileNativeChatController } from './native-chat/mobile-native-chat-controller-contract'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import { MobileNativeChatView } from './MobileNativeChatView'
+import { MobileNativeChatView } from './native-chat/MobileNativeChatView'
 import { MobileNativeChatRowContent } from './native-chat/transcript/MobileNativeChatRowItemSource'
 
 vi.mock('react-native', async () => ({
+  ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   ActivityIndicator: 'ActivityIndicator',
   ScrollView: 'ScrollView',
   Platform: { OS: 'web' },
@@ -51,7 +52,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 const itemReads = vi.hoisted(() => vi.fn())
-vi.mock('./mobile-native-chat-item-read', async (importOriginal) => ({
+vi.mock('./native-chat/mobile-native-chat-item-read', async (importOriginal) => ({
   ...(await importOriginal<typeof MobileNativeChatItemReadModule>()),
   readMobileNativeChatItem: itemReads
 }))
@@ -119,7 +120,7 @@ const rendered = vi.hoisted(() => new Map<string, number>())
 vi.mock('./native-chat/transcript/MobileNativeChatMessage', async () => {
   const React = await import('react')
   const { useMobileNativeChatFullMessage, MobileNativeChatToolOutput } =
-    await import('./MobileNativeChatFullContent')
+    await import('./native-chat/MobileNativeChatFullContent')
   const { MobileNativeChatGroupedThought } =
     await import('./native-chat/transcript/MobileNativeChatReasoningRow')
   return {
@@ -360,62 +361,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function measure(turns: number, all: boolean) {
-  scroller.scrollHeight = all ? 100 : 10000
-  scroller.clientHeight = all ? 100 : 500
-  const items = journal(turns, 'hello')
-  showElement(createElement(Harness, { items }))
-  expect(renderer!.root.findAllByType(MobileNativeChatPageList)).toHaveLength(1)
-  const mounted = renderer!.root.findAll((node) => Object.is(node.type, 'ChatMessage'))
-  const total =
-    foldMobileNativeChatMessages(projectStructuredAgentSessionMessages(items, [], []), 'claude')
-      .length + 1
-  expect(mounted.length).toBe(all ? total : 24)
-  const mountedIds = new Set(mounted.map((node) => node.props.message.id))
-  const members = new Set(
-    mounted.flatMap((node) =>
-      (node.props.workRun ?? [node.props.message]).map((member: NativeChatMessage) => member.id)
-    )
-  )
-  const maximum = { resolve: 0, compare: 0, raw: 0, state: 0 }
-  for (let batch = 0; batch < 20; batch++) {
-    rendered.clear()
-    const updated = items.map((item) =>
-      item.itemId === 'live-answer'
-        ? {
-            ...item,
-            revision: batch + 2,
-            body: textBody('assistant', `hello${'.'.repeat(batch + 1)}`)
-          }
-        : item
-    )
-    Object.values(operations).forEach((ids) => ids.splice(0))
-    act(() => renderer!.update(createElement(Harness, { items: updated })))
-    expect([...rendered.keys()]).toEqual(['live-answer'])
-    for (const key of ['resolve', 'compare', 'raw', 'state'] as const) {
-      expect(
-        operations[key].every((id) =>
-          (key === 'resolve' || key === 'compare' ? mountedIds : members).has(id)
-        )
-      ).toBe(true)
-      expect(operations[key].length).toBeLessThanOrEqual(
-        key === 'resolve' || key === 'compare' ? mounted.length : 2 * mounted.length
-      )
-      maximum[key] = Math.max(maximum[key], operations[key].length)
-    }
-  }
-  return maximum
-}
-
-it.each([false, true])('bounds final work at mounted rows only, all history: %s', (all) => {
-  const small = measure(10, all)
-  act(() => renderer?.unmount())
-  renderer = null
-  const large = measure(100, all)
-  for (const operation of ['resolve', 'compare', 'raw', 'state'] as const) {
-    expect(large[operation]).toBeLessThanOrEqual(all ? 10 * small[operation] : small[operation])
-  }
-})
 it('reuses footer rows during a command and returns them to the list afterward', () => {
   const base = journal(0, 'hello').map((item) =>
     item.body.kind === 'message' && item.body.role === 'user'

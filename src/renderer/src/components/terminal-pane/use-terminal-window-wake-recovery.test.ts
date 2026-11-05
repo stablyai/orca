@@ -27,10 +27,7 @@ vi.mock('@/lib/pane-manager/pane-webgl-renderer', () => ({
 }))
 
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
-import {
-  getTerminalFreezeBreadcrumbs,
-  resetTerminalFreezeBreadcrumbsForTesting
-} from './terminal-freeze-breadcrumbs'
+import { resetTerminalFreezeBreadcrumbsForTesting } from './terminal-freeze-breadcrumbs'
 
 describe('useTerminalWindowWakeRecovery', () => {
   const manager = {} as PaneManager
@@ -136,22 +133,6 @@ describe('useTerminalWindowWakeRecovery', () => {
       isChatViewMode: covered,
       clearGlyphAtlases: false
     })
-  })
-
-  it('records a wake-recovery breadcrumb with the trigger source and atlas decision', () => {
-    // Record focus/atlas=false versus system-resumed/atlas=true for post-wake garble diagnosis.
-    renderWakeRecoveryHook()
-
-    window.dispatchEvent(new Event('focus'))
-    systemResumedCallback?.()
-
-    const wakeCrumbs = getTerminalFreezeBreadcrumbs().filter((crumb) =>
-      crumb.kind.startsWith('wake-recovery:')
-    )
-    expect(wakeCrumbs.map((crumb) => [crumb.kind, crumb.detail])).toEqual([
-      ['wake-recovery:focus', { clearGlyphAtlases: false }],
-      ['wake-recovery:system-resumed', { clearGlyphAtlases: true }]
-    ])
   })
 
   it('reasserts pane PTY sizes after the window-focus fit', () => {

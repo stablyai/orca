@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { AgentJournalTurnScopeSchema } from '../../../shared/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session-execution-options'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import { AgentJournalTurnScopeSchema } from '../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalHistoryOrigin } from './journal-history-origin'
 import type { JournalStopEvent } from './journal-row-schema'
@@ -105,6 +105,7 @@ export const outcomeFormat1StoredScalars = z.object({
   lastActivityAt: number,
   oldestSequence: number,
   highestFence: number,
+  contextBoundary: z.number().int().safe().min(2).optional(),
   derivedTurnScope: z.string().nullable(),
   latestAcceptedTurnSequence: number,
   queuePauseMarks: pauseMarks,
@@ -249,7 +250,7 @@ type Collection = (typeof OUTCOME_FORMAT_1_COLLECTIONS)[number]
 type StoredIn<F> = F extends 'items'
   ? AgentJournalRenderItem
   : F extends 'queue.cards'
-    ? Stored<Cards>
+    ? [string, Omit<Cards extends Map<string, infer V> ? V : never, 'recovers'>]
     : F extends keyof State
       ? Stored<State[F]>
       : never

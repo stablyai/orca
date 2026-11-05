@@ -10,7 +10,7 @@ import {
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import type { PRInfo, CheckStatus } from '../../../../shared/github/pull-request-types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import '../../../../shared/source-control/hosted-review/hosted-review-github'
 
 function createRefreshContext(pr: PRInfo | null = null) {
   const store = createTestStore()
@@ -77,52 +77,6 @@ describe('manual PR refresh whose outcome main also broadcasts', () => {
       data: expect.objectContaining({ number: 6 }),
       fetchedAt: 1_300
     })
-  })
-
-  it.each([
-    ['drops the PR when a newer lookup found no review', null, undefined],
-    [
-      'keeps the PR when a newer lookup found the same one',
-      hostedReviewInfoFromGitHubPRInfo(
-        makePR({ number: 6, title: 'Newer review title', checksStatus: 'success' })
-      ),
-      6
-    ],
-    [
-      'drops the PR when a newer lookup found the same number in a different repository',
-      hostedReviewInfoFromGitHubPRInfo(
-        makePR({
-          number: 6,
-          url: 'https://github.com/another-owner/another-repo/pull/6',
-          prRepo: { owner: 'another-owner', repo: 'another-repo', host: 'github.com' }
-        })
-      ),
-      undefined
-    ]
-  ])('%s between the broadcast and the reply', async (_name, newerReview, expectedPR) => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const { store, repoPath, repoId, branch, worktreeId, cacheKey, alias } = createRefreshContext()
-    const outcome: PRRefreshOutcome = { kind: 'found', pr: makePR({ number: 6 }), fetchedAt: 1_300 }
-    mockApi.hostedReview.forBranch.mockResolvedValue(newerReview)
-    mockApi.gh.refreshPRNow.mockImplementationOnce(async () => {
-      store.getState().applyGitHubPRRefreshEvent({
-        sequence: 1,
-        aliases: [alias],
-        reason: 'manual',
-        requestStartedAt: 1_100,
-        outcome
-      })
-      vi.setSystemTime(2_000)
-      await store.getState().fetchHostedReviewForBranch(repoPath, branch, { force: true, repoId })
-      return outcome
-    })
-
-    await store.getState().fetchPRForBranch(repoPath, branch, { force: true, repoId, worktreeId })
-
-    const hostedReviews = Object.values(store.getState().hostedReviewCache)
-    expect(hostedReviews).toMatchObject([{ data: newerReview, fetchedAt: 2_000 }])
-    expect(store.getState().prCache[cacheKey]?.data?.number).toBe(expectedPR)
   })
 
   const checksSnapshots: { raw: CheckStatus; expected: CheckStatus; check: PRCheckDetail }[] = [

@@ -1,7 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './worktree-terminal-sleep'
 import { setsEqual } from '../../runtime-worktree-binding-index'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -193,8 +193,9 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
   }
 
   protected getExistingTerminalHandlesForPtyId(ptyId: string): string[] {
+    const leaves = this.getLeavesForPty(ptyId)
     const handles = new Set(
-      this.getLeavesForPty(ptyId)
+      leaves
         .map((leaf) => this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)))
         .filter((handle): handle is string => handle !== undefined)
     )
@@ -202,7 +203,9 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     if (runtimeHandle) {
       handles.add(runtimeHandle)
     }
-    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+    // A paneless alias names the process for exit waits only, not as one of its control handles.
+    const incarnationHandle =
+      leaves.length > 0 ? this.handleByPtyIncarnation.get(ptyId)?.handle : undefined
     if (incarnationHandle) {
       handles.add(incarnationHandle)
     }

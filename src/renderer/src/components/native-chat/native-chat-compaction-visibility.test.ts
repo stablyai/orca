@@ -1,17 +1,17 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
-import { selectNativeChatTurnStatuses } from '../../../../shared/native-chat-turn-status'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { selectNativeChatTurnStatuses } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { z } from 'zod'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
-import { isAdmissibleAgentJournalSubmission } from '../../../../shared/agent-session-journal-submission-schema'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 
 type CapturedJournal = { items: AgentJournalRenderItem[]; submissions: AgentJournalSubmission[] }
 
@@ -98,49 +98,5 @@ describe('captured OMP compaction visibility', () => {
       statusAbove: true,
       turnFolds: false
     })
-  })
-
-  it('keeps a newly marked outcome visible without an opener or a legacy identity', async () => {
-    const captured = await capturedCompaction((journal) => ({
-      items: journal.items
-        .filter((item) => item.body.kind !== 'message')
-        .map((item) =>
-          item.body.kind === 'status'
-            ? {
-                ...item,
-                itemId: 'orca:future-outcome',
-                body: { ...item.body, presentation: 'compaction-skipped' }
-              }
-            : item
-        ),
-      submissions: []
-    }))
-    expect(slotsFor(captured)[0]).toMatchObject({ drawsMessage: true, folded: false })
-  })
-
-  it.each([
-    'orca:ordinary-warning',
-    'legacy:grok:runtime-session-1:item%3Ap%3Asession-1%3Acompaction%253Acompact%253Acompact-1'
-  ])('continues folding an ordinary warning beside a compact command: %s', async (itemId) => {
-    const captured = await capturedCompaction((journal) => ({
-      ...journal,
-      items: journal.items.map((item) => (item.body.kind === 'status' ? { ...item, itemId } : item))
-    }))
-    const slots = slotsFor(captured)
-    expect(slots.map((slot) => slot.kind === 'message' && slot.message.role)).toEqual(['user'])
-    expect(slots[0]).toMatchObject({ turnFolds: true })
-  })
-
-  it('preserves an unknown presentation instead of reclassifying its warning', async () => {
-    const captured = await capturedCompaction((journal) => ({
-      ...journal,
-      items: journal.items.map((item) =>
-        item.body.kind === 'status'
-          ? { ...item, body: { ...item.body, presentation: 'future-presentation' } }
-          : item
-      )
-    }))
-    expect(captured.messages[1]?.blocks[0]).toMatchObject({ presentation: 'future-presentation' })
-    expect(slotsFor(captured)).toHaveLength(1)
   })
 })

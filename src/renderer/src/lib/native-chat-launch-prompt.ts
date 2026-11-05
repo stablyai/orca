@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 export type NativeChatLaunchPrompt = {
   tabId: string
@@ -18,4 +18,8 @@ export type NativeChatLaunchDraft = {
   adopted?: boolean
   /** Accepted mobile submission consumed the TUI-side copy. */
   resolved?: boolean
+  /** Read off the input line where the user typed it, rather than typed there by Orca. */
+  fromTerminal?: boolean
+  /** Text of the adopted seed this one replaces; a composer still holding it takes the new text. */
+  replacesText?: string
 }

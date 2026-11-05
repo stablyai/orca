@@ -1,3 +1,5 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repository'
@@ -9,6 +11,16 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  gitExecFileAsync: clientMocks.gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GhExecFileModule>()),
+  ghExecFileAsync: clientMocks.ghExecFileAsyncMock
+}))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -39,6 +51,87 @@ const {
 describe('getPRForBranch', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)
+  })
+
+  it('publishes complete cancellation after REST discovery is replaced by exact hydration', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 7,
+            title: 'Cancelled run',
+            state: 'open',
+            html_url: 'https://github.com/acme/widgets/pull/7',
+            head: { ref: 'feature/test', sha: 'head-oid' },
+            base: { ref: 'main' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 7,
+          title: 'Cancelled run',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/7',
+          headRefOid: 'head-oid',
+          statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'CANCELLED' }]
+        })
+      })
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+    expect(ghExecFileAsyncMock.mock.calls.slice(0, 2).map(([args]) => args.slice(0, 2))).toEqual([
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
+      ['pr', 'view']
+    ])
+    expect(pr).toMatchObject({
+      checksStatus: 'failure',
+      headSha: 'head-oid',
+      checksSummary: {
+        state: 'failure',
+        total: 1,
+        passed: 0,
+        failed: 1,
+        cancelled: 1,
+        pending: 0,
+        neutral: 0
+      }
+    })
+  })
+
+  it('keeps branch-list fallback coarse when exact hydration cannot read a failure beyond page 100', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets' }],
+      headRepo: null
+    })
+    const completeChecks = Array.from({ length: 101 }, (_, index) => ({
+      status: 'COMPLETED',
+      conclusion: index === 100 ? 'FAILURE' : 'CANCELLED'
+    }))
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'pr' && args[1] === 'list') {
+        return {
+          stdout: JSON.stringify([
+            {
+              number: 7,
+              title: 'Partial check page',
+              state: 'OPEN',
+              url: 'https://github.com/acme/widgets/pull/7',
+              headRefOid: 'head-oid',
+              statusCheckRollup: completeChecks.slice(0, 100)
+            }
+          ])
+        }
+      }
+      throw new Error('network unavailable')
+    })
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+    expect(ghExecFileAsyncMock.mock.calls.slice(0, 2).map(([args]) => args.slice(0, 2))).toEqual([
+      ['pr', 'list'],
+      ['pr', 'view']
+    ])
+    expect(pr).toMatchObject({ number: 7, checksStatus: 'failure' })
+    expect(pr?.checksSummary).toBeUndefined()
   })
 
   it.each([
@@ -210,7 +303,7 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
@@ -220,6 +313,7 @@ describe('getPRForBranch', () => {
     expect(pr?.mergeable).toBe('MERGEABLE')
     expect(pr?.prRepo).toEqual({ owner: 'acme', repo: 'widgets' })
     expect(pr?.headRepo).toEqual({ owner: 'acme', repo: 'widgets' })
+    expect(pr?.checksSummary).toBeUndefined()
   })
 
   it('resolves fork PRs from the upstream PR repo with the origin head owner', async () => {
@@ -251,7 +345,7 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'api',
-        'repos/stablyai/orca/pulls?head=fork%3Afeature%2Ftest&state=all&per_page=1',
+        'repos/stablyai/orca/pulls?head=fork%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
@@ -287,7 +381,7 @@ describe('getPRForBranch', () => {
       1,
       [
         'api',
-        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
@@ -336,7 +430,7 @@ describe('getPRForBranch', () => {
       1,
       [
         'api',
-        'repos/acme/old-widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1',
+        'repos/acme/old-widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
         '--include'
       ],
       { cwd: '/repo-root' }
@@ -348,6 +442,70 @@ describe('getPRForBranch', () => {
     primeRenamedOriginBranchLookup('other-widgets')
 
     expect(await getPRForBranch('/repo-root', 'feature/test')).toBeNull()
+  })
+
+  it('prefers the open PR over a newer closed PR on the same branch', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 5001,
+          title: 'Abandoned retry',
+          state: 'closed',
+          html_url: 'https://github.com/acme/widgets/pull/5001',
+          updated_at: '2026-03-29T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        },
+        {
+          number: 5000,
+          title: 'Reopened original',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/5000',
+          updated_at: '2026-03-30T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        }
+      ])
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr).toMatchObject({ number: 5000, state: 'open' })
+  })
+
+  it('falls back to the newest PR when none on the branch is open', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 5001,
+          title: 'Newer closed',
+          state: 'closed',
+          html_url: 'https://github.com/acme/widgets/pull/5001',
+          updated_at: '2026-03-29T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        },
+        {
+          number: 5000,
+          title: 'Older closed',
+          state: 'closed',
+          html_url: 'https://github.com/acme/widgets/pull/5000',
+          updated_at: '2026-03-28T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        }
+      ])
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.number).toBe(5001)
   })
 
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {

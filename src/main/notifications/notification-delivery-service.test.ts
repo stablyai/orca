@@ -5,9 +5,12 @@ import {
 } from '../runtime/push/push-dispatcher.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { createNotificationDeliveryService } from './notification-delivery-service'
-import { toWebTerminalSurfaceTabId } from '../../shared/terminal-surface-id'
-import type { NotificationDeliveryDependencies } from './notification-delivery-service'
+import {
+  createNotificationDeliveryService,
+  type NotificationDeliveryDependencies
+} from './notification-delivery-service'
+import { toWebTerminalSurfaceTabId } from '../../shared/workspace-layout/terminal-surface-id'
+
 import type {
   NotificationDispatchRequest,
   NotificationSettings
@@ -17,6 +20,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
   return {
     enabled: true,
     agentTaskComplete: true,
+    agentNeedsInput: true,
     terminalBell: true,
     suppressWhenFocused: false,
     customSoundId: 'system',
@@ -115,6 +119,25 @@ describe('createNotificationDeliveryService', () => {
       expect.objectContaining({ desktopAllowed: false, source: 'agent-task-complete' })
     )
     expect(harness.order).toEqual(['tray', 'mobile'])
+  })
+
+  it('gates agent questions on needs-input and finished turns on task-complete', () => {
+    const harness = makeHarness(makeSettings({ agentTaskComplete: false }))
+    const service = createNotificationDeliveryService(harness.deps)
+    expect(service.dispatch(makeRequest({ agentState: 'blocked' }))).toEqual({ delivered: true })
+    expect(
+      service.dispatch(
+        makeRequest({ agentState: 'done', worktreeId: 'wt-2', worktreeLabel: 'wt-2' })
+      )
+    ).toEqual({ delivered: false, reason: 'source-disabled' })
+
+    const quiet = makeHarness(makeSettings({ agentNeedsInput: false }))
+    expect(
+      createNotificationDeliveryService(quiet.deps).dispatch(makeRequest({ agentState: 'waiting' }))
+    ).toEqual({ delivered: false, reason: 'source-disabled' })
+    expect(quiet.dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ desktopAllowed: false, agentState: 'waiting' })
+    )
   })
 
   it('keeps the desktop source gates distinct per source', () => {

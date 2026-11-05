@@ -10,7 +10,7 @@ import {
   createQueuedMessageTestRig,
   eventually
 } from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionJournalProjections } from '../../../../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
 import { installSqlVisitCounters } from '../../../dispatch-predicate-visits.test-fixture'
@@ -42,7 +42,13 @@ it.each([10, 100])(
       coordinatorPaneKey: null
     })
     const tabs: ReturnType<typeof createMinimalPersistedTerminalTab>[] = []
-    const facts: { dispatchId: string; workerAddress: string; task: string; name: string }[] = []
+    const facts: {
+      dispatchId: string
+      workerAddress: string
+      task: string
+      name: string
+      agent: null
+    }[] = []
     for (let index = 0; index < 10 * count; index++) {
       const handle = `term_scale_${index}`
       const tabId = `scale-tab-${index}`
@@ -55,7 +61,7 @@ it.each([10, 100])(
           existingTabCount: index
         })
       )
-      runtime.handles.set(handle, {
+      runtime.seedTerminalHandle(handle, {
         handle,
         runtimeId: runtime.getRuntimeId(),
         rendererGraphEpoch: 1,
@@ -92,7 +98,8 @@ it.each([10, 100])(
           dispatchId: dispatch.id,
           workerAddress: handle,
           task: task.spec,
-          name: `Scale worker ${index}`
+          name: `Scale worker ${index}`,
+          agent: null
         })
       }
     }
@@ -137,9 +144,14 @@ it.each([10, 100])(
     )
     let dispatchVisits = 0
     let taskVisits = 0
+    let workerVisits = 0
     installSqlVisitCounters({
       start_dispatch_visit: () => {
         dispatchVisits++
+        return 1
+      },
+      start_worker_visit: () => {
+        workerVisits++
         return 1
       },
       start_task_visit: () => {
@@ -156,6 +168,10 @@ it.each([10, 100])(
             .replace(
               'WHERE assignee_handle = ?',
               'WHERE assignee_handle = ? AND start_dispatch_visit(rowid)'
+            )
+            .replace(
+              'FROM worker_dispatches WHERE dispatch_id = ?',
+              'FROM worker_dispatches WHERE dispatch_id = ? AND start_worker_visit(rowid)'
             )
             .replace(
               'FROM tasks WHERE id = ?',
@@ -179,7 +195,7 @@ it.each([10, 100])(
     const activeSource = vi.spyOn(db, 'getActiveDispatchForTerminal')
     const recordedSource = vi.spyOn(db, 'getDispatchContextById')
     const sender = vi.spyOn(runtime.orchestrationSenderNames, 'sender')
-    const names = vi.spyOn(runtime.orchestrationSenderNames, 'nameOf')
+    const names = vi.spyOn(runtime.orchestrationSenderNames, 'snapshotOf')
     const dedupe = vi.spyOn(journal, 'hasRecordedItem')
     const scan = vi.spyOn(journal, 'visitItemsWithLinkage')
     const projection = StructuredAgentSessionJournalProjections.prototype
@@ -197,11 +213,12 @@ it.each([10, 100])(
         projecting = previous
       }
     })
-    const snapshotSources: string[] = []
-    const readSnapshot = journal.snapshot.bind(journal)
-    const snapshot = vi.spyOn(journal, 'snapshot').mockImplementation(() => {
-      snapshotSources.push(projecting ? 'status-projection' : 'other')
-      return readSnapshot()
+    const statusSources: string[] = []
+    const snapshot = vi.spyOn(journal, 'snapshot')
+    const readStatus = journal.statusRead.bind(journal)
+    const statusRead = vi.spyOn(journal, 'statusRead').mockImplementation(() => {
+      statusSources.push(projecting ? 'status-projection' : 'other')
+      return readStatus()
     })
     const append = vi.spyOn(current.host, 'appendAgentStart')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -217,16 +234,17 @@ it.each([10, 100])(
     await Promise.allSettled(append.mock.results.map((result) => result.value))
     await eventually(() =>
       expect(warn).toHaveBeenCalledWith(
-        '[orchestration] recording a started worker in its caller chat failed',
+        '[orchestration] recording a started agent in its caller chat failed',
         expect.any(Error)
       )
     )
     expect(epochReads).toHaveBeenCalledTimes(4)
     expect(serialized).toHaveBeenCalledTimes(1)
     expect(inserts).toHaveBeenCalledTimes(1)
-    expect(sourceQueries).toHaveBeenCalledTimes(2)
+    expect(sourceQueries).toHaveBeenCalledTimes(3)
     expect(dispatchVisits).toBe(1)
     expect(taskVisits).toBe(1)
+    expect(workerVisits).toBe(1)
     expect(tabVisits).toBe(9 * count + 1)
     expect(journal.snapshot()).toEqual(before)
     expect(
@@ -247,13 +265,14 @@ it.each([10, 100])(
       dedupe,
       scan,
       snapshot,
+      statusRead,
       append,
       warn
     ]) {
       counter.mockClear()
     }
-    snapshotSources.length = 0
-    tabVisits = dispatchVisits = taskVisits = 0
+    statusSources.length = 0
+    tabVisits = dispatchVisits = taskVisits = workerVisits = 0
     const publishers = facts.map(() => prepareWorkerStartCard(runtime, admitted.caller))
     expect(epochReads).toHaveBeenCalledTimes(count)
     facts.forEach((fact, index) => publishers[index](fact))
@@ -262,7 +281,7 @@ it.each([10, 100])(
     expect(epochReads).toHaveBeenCalledTimes(4 * count)
     expect(serialized).toHaveBeenCalledTimes(count)
     expect(inserts).toHaveBeenCalledTimes(count)
-    expect(snapshotSources).toEqual(['status-projection'])
+    expect(statusSources).toEqual(['status-projection'])
     // Duplicate callbacks still name the sender but must stop before row serialization/insertion.
     facts.forEach((fact, index) => publishers[index](fact))
     await eventually(() => expect(append).toHaveBeenCalledTimes(2 * count))
@@ -274,16 +293,18 @@ it.each([10, 100])(
     expect(names).toHaveBeenCalledTimes(2 * count)
     expect(activeSource).toHaveBeenCalledTimes(2 * count)
     expect(recordedSource).not.toHaveBeenCalled()
-    expect(sourceQueries).toHaveBeenCalledTimes(4 * count)
+    expect(sourceQueries).toHaveBeenCalledTimes(6 * count)
     expect(dispatchVisits).toBe(2 * count)
     expect(taskVisits).toBe(2 * count)
+    expect(workerVisits).toBe(2 * count)
     const visitsPerPass = facts.reduce((sum, _fact, index) => sum + 9 * count + index + 1, 0)
     expect(tabVisits).toBe(2 * visitsPerPass)
     expect(tabVisits).toBeLessThanOrEqual(2 * count * tabs.length)
     expect(dedupe).toHaveBeenCalledTimes(2 * count)
     expect(scan).not.toHaveBeenCalled()
-    expect(snapshot).toHaveBeenCalledTimes(1)
-    expect(snapshotSources).toEqual(['status-projection'])
+    expect(statusRead).toHaveBeenCalledTimes(1)
+    expect(snapshot).not.toHaveBeenCalled()
+    expect(statusSources).toEqual(['status-projection'])
     expect(
       journalQueries.mock.calls.filter(
         ([query]) => /FROM journal_rows/.test(query) && !/seq = 1/.test(query)
@@ -301,6 +322,7 @@ it.each([10, 100])(
       inserts: inserts.mock.calls.length,
       dispatchVisits,
       taskVisits,
+      workerVisits,
       tabVisits
     })
   }

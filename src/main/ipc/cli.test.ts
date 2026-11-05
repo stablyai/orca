@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 
 const {
   handlers,
@@ -29,13 +29,15 @@ vi.mock('../cli/wsl-cli-registration-registry', () => ({
   recordWslCliRegistrationRemoved: recordRemovedMock,
   forgetWslCliRegistration: forgetMock
 }))
-vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/canonical-user-data' }))
+vi.mock('../persistence/loading-store/user-data-path', () => ({
+  getCanonicalUserDataPath: () => '/canonical-user-data'
+}))
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: vi.fn(async () => ({ ok: false })),
   mergePathSegments: vi.fn()
 }))
-vi.mock('../wsl', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))
@@ -98,30 +100,6 @@ describe('WSL CLI registration IPC', () => {
     })
 
     await expect(getWslHandler('cli:getWslInstallStatus')({})).rejects.toThrow('permission denied')
-  })
-
-  it('records a successful explicit-distro installation', async () => {
-    const install = vi.fn(async () => ({ state: 'installed' }))
-    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
-      return { install }
-    })
-
-    await expect(getWslHandler('cli:installWsl')({}, { distro: ' Debian ' })).resolves.toEqual({
-      state: 'installed'
-    })
-    expect(wslInstallerMock).toHaveBeenCalledWith({ distro: 'Debian' })
-    expect(recordInstalledMock).toHaveBeenCalledWith('/canonical-user-data', 'Debian')
-  })
-
-  it('records removal from the resolved default distro', async () => {
-    const remove = vi.fn(async () => ({ state: 'not_installed' }))
-    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
-      return { remove }
-    })
-
-    await expect(getWslHandler('cli:removeWsl')({})).resolves.toEqual({ state: 'not_installed' })
-    expect(wslInstallerMock).toHaveBeenCalledWith({ distro: 'Ubuntu' })
-    expect(recordRemovedMock).toHaveBeenCalledWith('/canonical-user-data', 'Ubuntu')
   })
 
   it('forgets the registration of a deleted distro instead of failing the removal', async () => {

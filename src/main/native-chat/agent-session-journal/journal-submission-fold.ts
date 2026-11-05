@@ -1,16 +1,17 @@
+import { getJournalInputOrder } from './journal-input-order-registry'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
-import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -74,8 +75,24 @@ export function placeHandedOverMessage(
   }
 }
 
-/** Uncertain handoffs remain spent at their handover position; derive display without rewriting rejection. */
-export function foldQueuedHandOffInDoubt(
+/**
+ * A queued card's hand-off refused with no proof the agent never got it: it may have run, so its
+ * message reads as sent and is never sent again. With a turn it was answered into, it reads as
+ * that turn's unconfirmed message, where it was handed over, and the turn's own end says Stop; a
+ * withdrawal before any turn opened reads as a person's own send a Stop took back. Derived on
+ * every fold from the stored rejection, which stays as written.
+ */
+export function foldQueuedHandOffInDoubt(submission: AgentJournalSubmission): void {
+  if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
+    return
+  }
+  submission.dispatchState = 'unknown'
+  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+  submission.recovered = true
+  delete submission.rejection
+}
+
+export function placeQueuedHandOffInDoubt(
   state: JournalReducerState,
   submission: AgentJournalSubmission
 ): void {
@@ -89,12 +106,7 @@ export function foldQueuedHandOffInDoubt(
   }
   if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
     delete submission.queuedMessageId
-    return
   }
-  submission.dispatchState = 'unknown'
-  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
-  submission.recovered = true
-  delete submission.rejection
 }
 
 /** Place proven rejections at settlement in thread scope; uncertain deliveries retain their position. */
@@ -126,14 +138,15 @@ export function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
-  const submission = [...state.submissions.values()].find(
-    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
-  )
+  state.inputs.echoes.add(resolvedItemId)
+  const submission = getJournalInputOrder(state)?.inputForItem(resolvedItemId)
   if (!submission || !journalDispatchRowApplies(submission)) {
     return
   }
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
+  state.inputs.candidates.delete(submission.clientMessageId)
+  state.inputs.revision++
   noteTurnAccepted(state, submission)
   submission.providerItemId = providerItemId
   submission.reason = null

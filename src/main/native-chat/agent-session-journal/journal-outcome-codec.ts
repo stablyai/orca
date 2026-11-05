@@ -1,3 +1,9 @@
+import {
+  admitOutcomeFormat2,
+  JOURNAL_OUTCOME_FORMAT_2,
+  isNativeOutcomeField,
+  decodeNativeOutcome
+} from './journal-outcome-format-2'
 import { z } from 'zod'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalReducerState } from './journal-reducer'
@@ -9,7 +15,8 @@ import {
   type AdmittedOutcome
 } from './journal-outcome-format-1'
 import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
-import { AgentSessionJournalError } from './journal-write-guards'
+import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
+export { JournalOutcomeDecodeError } from './journal-write-guards'
 
 export type JournalOutcome = {
   seq: number
@@ -23,12 +30,6 @@ export type JournalOutcome = {
 
 /** A key first written over a frozen input prefix keeps the place the prefix gave it. */
 export const JOURNAL_PREFIX_ORDINAL = 'b'
-
-/** Stored outcome content this build rejects; storage errors never become this, so they stay
- * retryable, as main's replay keeps them. */
-export class JournalOutcomeDecodeError extends Error {
-  override readonly name = 'JournalOutcomeDecodeError'
-}
 
 const scalars = (state: JournalReducerState): Record<string, unknown> =>
   z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))
@@ -46,12 +47,21 @@ export function encodeJournalOutcomes(
     seq: state.lastSequence,
     field: entry.path,
     key: JSON.stringify(entry.key),
-    format: JOURNAL_OUTCOME_FORMAT_1,
+    format: JOURNAL_OUTCOME_FORMAT_2,
     json: entry.deleted
       ? 'null'
       : entry.path === 'items'
         ? JSON.stringify(entry.value, untracked)
-        : journalEntryJson(entry.key, entry.value, untracked),
+        : journalEntryJson(entry.key, entry.value, (key, value) => {
+            const current = untracked(key, value)
+            if (entry.path === 'queue.cards' && current === untracked('', entry.value)) {
+              const { recovers: _derived, ...stored } = z
+                .record(z.string(), z.unknown())
+                .parse(current)
+              return stored
+            }
+            return current
+          }),
     deleted: entry.deleted
   }))
   for (const [key, value] of Object.entries(next)) {
@@ -61,7 +71,7 @@ export function encodeJournalOutcomes(
         seq: state.lastSequence,
         field: '$',
         key: JSON.stringify(key),
-        format: JOURNAL_OUTCOME_FORMAT_1,
+        format: JOURNAL_OUTCOME_FORMAT_2,
         json: JSON.stringify(value),
         deleted: false
       })
@@ -69,8 +79,8 @@ export function encodeJournalOutcomes(
   }
   for (const value of values) {
     // A reducer field format 1 has no home for needs a new outcome format, never a silent change.
-    if (admitOutcomeFormat1(value) === 'unknown') {
-      throw new Error(`journal outcome format 1 does not store ${value.field} ${value.key}`)
+    if (admitOutcomeFormat2(value) === 'unknown') {
+      throw new Error(`journal outcome format 2 does not store ${value.field} ${value.key}`)
     }
   }
   return { values, scalars: next }
@@ -114,7 +124,11 @@ function admitJournalOutcome(row: SqliteRow): { value: JournalOutcome; admitted:
       deleted: row.deleted === 1
     }
     const admitted =
-      value.format === JOURNAL_OUTCOME_FORMAT_1 ? admitOutcomeFormat1(value) : 'unknown'
+      value.format === JOURNAL_OUTCOME_FORMAT_1
+        ? admitOutcomeFormat1(value)
+        : value.format === JOURNAL_OUTCOME_FORMAT_2
+          ? admitOutcomeFormat2(value)
+          : 'unknown'
     if (admitted === 'unknown') {
       throw new AgentSessionJournalError('journal_read_only', 'the chat holds a newer outcome')
     }
@@ -134,7 +148,7 @@ export function decodingOutcome<T>(decode: () => T): T {
   }
 }
 
-type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted'>
+type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted' | 'format'>
 
 /** Last-write-wins per key, deletions included, so the tail can remove values from a frozen prefix;
  * order comes from the canonical log. */
@@ -148,8 +162,23 @@ export class JournalOutcomeFold {
       field = new Map()
       this.values.set(value.field, field)
     }
-    field.set(value.key, { ordinal: value.ordinal, deleted: value.deleted, ...admitted })
+    field.set(value.key, {
+      ordinal: value.ordinal,
+      deleted: value.deleted,
+      format: value.format,
+      ...admitted
+    })
     return value
+  }
+
+  introduction(field: string, id: string): number | undefined {
+    const ordinal = this.values.get(field)?.get(JSON.stringify(id))?.ordinal
+    return ordinal?.startsWith('s') ? Number(ordinal.slice(1, 17)) : undefined
+  }
+
+  replaced(field: string, id: string): boolean {
+    const value = this.values.get(field)?.get(JSON.stringify(id))
+    return Boolean(value && (value.deleted || value.ordinal !== JOURNAL_PREFIX_ORDINAL))
   }
 
   /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
@@ -173,7 +202,7 @@ export class JournalOutcomeFold {
     ]
     const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalars, baseline))
     for (const [field, entries] of this.values) {
-      if (field === '$') {
+      if (field === '$' || isNativeOutcomeField(field)) {
         continue
       }
       // Canonical ordinals compare bytewise, as SQLite's BINARY collation orders them; the prefix
@@ -191,6 +220,19 @@ export class JournalOutcomeFold {
       }
     }
     const state = decode.finish()
+    for (const [field, entries] of this.values) {
+      if (!isNativeOutcomeField(field)) {
+        continue
+      }
+      const ordered = [...entries.values()].sort((a, b) =>
+        a.ordinal < b.ordinal ? -1 : a.ordinal > b.ordinal ? 1 : 0
+      )
+      for (const value of ordered) {
+        decodingOutcome(() =>
+          decodeNativeOutcome(state, field, value.entryKey, value.kept, value.deleted)
+        )
+      }
+    }
     if (state.sessionId !== sessionId || state.epoch !== epoch) {
       throw new JournalOutcomeDecodeError('invalid journal outcome coverage')
     }

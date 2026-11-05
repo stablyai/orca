@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
 import { makeDisposable } from './pty-ipc-test-constants'
@@ -19,7 +19,7 @@ export type ObservableDaemonProviderDouble = {
   setPtyBackgrounded: Mock
   shutdown: Mock
   getBufferSnapshot: Mock
-  emitData: (id: string, data: string) => void
+  emitData: (id: string, data: string, extra?: { sequenceChars?: number }) => void
   emitExit: (id: string, code?: number) => void
   emitDataGap: (id: string, droppedChars: number) => void
 }
@@ -174,7 +174,8 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       setPtyBackgrounded,
       shutdown,
       getBufferSnapshot,
-      emitData: (id: string, data: string) => dataHandler?.({ id, data }),
+      emitData: (id: string, data: string, extra?: { sequenceChars?: number }) =>
+        dataHandler?.({ id, data, ...extra }),
       emitExit: (id: string, code = 0) => exitHandler?.({ id, code }),
       emitDataGap: (id: string, droppedChars: number) =>
         backgroundStreamHandler?.({ id, kind: 'dataGap', droppedChars })

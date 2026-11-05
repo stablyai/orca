@@ -1,4 +1,8 @@
-import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
+import {
+  pendingSelectionTabId,
+  withoutPendingHandle,
+  withoutPendingTabId
+} from './pending-session-selection'
 import {
   sessionTabClose,
   sessionTerminalClose,
@@ -20,9 +24,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
-    reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
-    clearTerminalLiveInputDefault,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -78,7 +80,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
-        clearTerminalLiveInputDefault(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
         terminalsRef.current = next
         setTerminals(next)
@@ -142,7 +143,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           })
         }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
-        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -150,16 +150,22 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
-          clearTerminalLiveInputDefault(terminalHandle)
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
         // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+        if (selectedSessionTabIdRef.current === tab.id) {
+          selectedSessionTabIdRef.current =
+            remainingTabs.find((candidate) => candidate.id === activeSessionTabIdRef.current)?.id ??
+            null
+        }
+        if (pendingSelectionTabId(pendingSelectionRef.current) === tab.id) {
+          pendingSelectionRef.current = withoutPendingTabId(pendingSelectionRef.current)
+        }
         // Read active identity live: bulk close can reactivate its anchor while an older close closure still names another tab.
-        if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
+        if (activeSessionTabIdRef.current === tab.id) {
           activeSessionTabTypeRef.current = null
-          selectedSessionTabIdRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null

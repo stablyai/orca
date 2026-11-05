@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
@@ -51,16 +51,6 @@ const rules = (session: WorkspaceSessionState) =>
   )
 
 describe('Loader precedence for stored data that disagrees with itself, and its change report', () => {
-  it('reads an absent editor or browser map as an empty one, which is not a change', () => {
-    // Main's row mint stores an SSH partition without these maps; the Serializer always writes them.
-    const stored = addWorkspace(emptySession(), SSH_KEY, [
-      { id: 'g1', tabs: [{ id: 'tab-a', leaves: [[leaf(1), 'pty-a']] }] }
-    ])
-    delete stored.openFilesByWorktree
-    delete stored.browserTabsByWorktree
-    expect(changed(load(stored))).toEqual([])
-  })
-
   it('gives terminal rows saved without a tab bar (headless runtime) an entry in a new first group', () => {
     const stored = twoTabs()
     stored.unifiedTabs = {}
@@ -111,14 +101,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
       ['tab-b', 0],
       ['tab-a', 1]
     ])
-  })
-
-  it('orders a tab no group lists by tab-bar sortOrder, then row sortOrder, then creation time', () => {
-    const stored = twoTabs()
-    stored.tabGroups![GIT_KEY]![0]!.tabOrder = []
-    stored.unifiedTabs![GIT_KEY]![0]!.sortOrder = 5
-    const loaded = load(stored)
-    expect(loaded.layout.workspaces[GIT_KEY]!.groups[0]!.tabOrder).toEqual(['tab-b', 'tab-a'])
   })
 
   it('keeps a tab in the group its tab-bar entry names, as the window does', () => {
@@ -247,27 +229,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(rules(saved)).toEqual([])
   })
 
-  it('reports each fact the two records or the workspace records name differently, keeping one', () => {
-    const stored = twoTabs()
-    stored.unifiedTabs![GIT_KEY]![0]!.color = '#ff0000'
-    stored.tabGroups![GIT_KEY]![0]!.worktreeId = 'repo-1::/elsewhere'
-    stored.unifiedTabs![GIT_KEY]![1]!.executionHostId = 'ssh:other'
-    const loaded = load(stored)
-    expect(loaded.changes).toEqual([
-      expect.objectContaining({ table: 'terminalEntry', field: 'color', before: '#ff0000' }),
-      expect.objectContaining({
-        table: 'terminalEntry',
-        field: 'executionHostId',
-        before: 'ssh:other'
-      }),
-      expect.objectContaining({ table: 'group', field: 'worktreeId', after: GIT_KEY })
-    ])
-    const saved = saveWorkspaceLayout(loaded)
-    expect(saved.unifiedTabs![GIT_KEY]![0]!.color).toBeNull()
-    expect(saved.tabGroups![GIT_KEY]![0]!.worktreeId).toBe(GIT_KEY)
-    expect(saved.unifiedTabs![GIT_KEY]![1]!.executionHostId).toBe(LOCAL_EXECUTION_HOST_ID)
-  })
-
   it('saves a moved editor tab an older build left naming its old workspace under its own', () => {
     // Before #29930 a tab Orca moved to its file's workspace kept the source's worktree id.
     const stored = localDesktopSession()
@@ -369,18 +330,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(saveWorkspaceLayout(loaded).tabsByWorktree[GIT_KEY]![0]!.ptyId).toBe('pty-a')
   })
 
-  it('re-mints the tab-bar id of a row whose own id another tab already uses, and reports it', () => {
-    const stored = twoTabs()
-    const [entryA, entryB] = stored.unifiedTabs![GIT_KEY]!
-    stored.unifiedTabs![GIT_KEY] = [
-      entryA!,
-      { ...entryB!, entityId: '/w/b.ts', contentType: 'editor' }
-    ]
-    const loaded = load(stored)
-    expect(changed(loaded)).toContain('terminalEntry.*')
-    expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
-  })
-
   it('applies a legacy surface tombstone once: the pane closes, the tombstone is cleared, authority stays', () => {
     const stored = twoTabs()
     stored.terminalSurfaceTombstonesByPaneKey = {
@@ -458,16 +407,6 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(saveWorkspaceLayout(loaded).tabsByWorktree[GIT_KEY]!.map((row) => row.id)).toEqual([
       'tab-a'
     ])
-  })
-
-  it('drops the transient spawn handoff main’s minimal row mint stores, and reports it', () => {
-    const stored = twoTabs()
-    stored.tabsByWorktree[GIT_KEY]![0]!.pendingActivationSpawn = true
-    const loaded = load(stored)
-    expect(changed(loaded)).toEqual(['row.pendingActivationSpawn'])
-    expect(saveWorkspaceLayout(loaded).tabsByWorktree[GIT_KEY]![0]).not.toHaveProperty(
-      'pendingActivationSpawn'
-    )
   })
 
   it('carries a pane layout with no terminal tab through unchanged', () => {

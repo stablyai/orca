@@ -17,8 +17,9 @@ import {
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
-import type { DispatchContextRow, RunRow } from './types'
+import type { RunRow } from './types'
 import { chatAssigneeSessionId } from './chat-assignee'
+import { structuredWorkerCustody } from '../structured-worker-authority'
 
 /** A handle-less coordinator uses its generation-current session id; structured workers resolve by handle. */
 export function handleLessCoordinatorSessionId(
@@ -36,42 +37,95 @@ export function handleLessCoordinatorSessionId(
   return currentRunCoordinatorOrcaSessionId(run)
 }
 
+/** Who holds a mailbox: the chat session its mail reaches; someone else (a terminal, a released worker,
+ *  another host, an ended conversation); or a fact needed to decide that cannot be read now. */
+export type StructuredMailboxCustody = StructuredPointerTarget | 'elsewhere' | 'unverifiable'
+
+/** Any lineage session's custody: its live reachable session, or why mail cannot reach it. */
+export function structuredSessionMailCustody(
+  sessionId: string,
+  db: OrchestrationDb | null | undefined,
+  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+): StructuredMailboxCustody {
+  if (!store) {
+    return 'unverifiable'
+  }
+  const record = store.getRecord(sessionId)
+  if (!record) {
+    return store.isSessionUnreadable?.(sessionId) ? 'unverifiable' : 'elsewhere'
+  }
+  const reach = structuredSessionMailReach(store, record, db)
+  if (reach.kind === 'reachable') {
+    return { sessionId: reach.session.sessionId, dispatchId: null }
+  }
+  return reach.kind === 'unverifiable' ? 'unverifiable' : 'elsewhere'
+}
+
 /** Resolve any lineage session to its live reachable target; null means unreachable here. */
 export function structuredSessionMailTarget(
   sessionId: string,
   db: OrchestrationDb | null | undefined,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): StructuredPointerTarget | null {
-  const record = store?.getRecord(sessionId)
-  const reach = store && record ? structuredSessionMailReach(store, record, db) : null
-  return reach?.kind === 'reachable'
-    ? { sessionId: reach.session.sessionId, dispatchId: null }
-    : null
+  const custody = structuredSessionMailCustody(sessionId, db, store)
+  return typeof custody === 'object' ? custody : null
 }
 
-/** Chat Dispatch target under its budget; undefined preserves non-chat worker lookup. */
-export function chatDispatchMailTarget(
-  dispatch: Pick<DispatchContextRow, 'id' | 'assignee_handle'>,
-  db: OrchestrationDb | null | undefined
-): StructuredPointerTarget | null | undefined {
-  const sessionId = chatAssigneeSessionId(dispatch.assignee_handle)
-  if (!sessionId) {
-    return undefined
+function withDispatch(custody: StructuredMailboxCustody, dispatchId: string | null) {
+  return typeof custody === 'object' ? { ...custody, dispatchId } : custody
+}
+
+function workerMailCustody(
+  handle: string,
+  db: OrchestrationDb | null | undefined,
+  /** Undefined: direct mail, routed through the worker's active Dispatch if it has one. */
+  dispatchId?: string | null
+): StructuredMailboxCustody {
+  const worker = structuredWorkerCustody(handle, db)
+  if (typeof worker !== 'object') {
+    return worker
   }
-  const target = structuredSessionMailTarget(sessionId, db)
-  return target ? { ...target, dispatchId: dispatch.id } : null
+  // Direct worker mail goes through its active Dispatch, or a session-scoped ledger between Dispatches.
+  const active =
+    dispatchId === undefined
+      ? (db?.findActiveDispatchForAssignee?.(handle, worker.identity.paneKey)?.id ?? null)
+      : dispatchId
+  return { sessionId: worker.running.sessionId, dispatchId: active }
 }
 
-/** Resolve session addresses; undefined lets other address forms use their own resolver. */
-export function structuredSessionAddressTarget(
+/** Every structured-owned mailbox: Run, session address, Dispatch and direct worker handle. Only a
+ *  readable fact naming someone else is `elsewhere`; a fact that cannot be read is `unverifiable`. */
+export function structuredMailboxCustody(
   mailboxHandle: string,
   db: OrchestrationDb | null | undefined
-): StructuredPointerTarget | null | undefined {
-  if (!mailboxHandle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
-    return undefined
+): StructuredMailboxCustody {
+  if (mailboxHandle.startsWith('run:')) {
+    const run = db?.getRun?.(mailboxHandle.slice('run:'.length))
+    const sessionId = run ? handleLessCoordinatorSessionId(run) : null
+    if (sessionId) {
+      return structuredSessionMailCustody(sessionId, db)
+    }
+    // Coordinators need Run nudges after turns end; no blocking check waiter or Dispatch is required.
+    return run?.coordinator_handle
+      ? workerMailCustody(run.coordinator_handle, db, null)
+      : 'elsewhere'
   }
-  const sessionId = parseOrcaSessionAddress(mailboxHandle)
-  return sessionId ? structuredSessionMailTarget(sessionId, db) : null
+  if (mailboxHandle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+    const sessionId = parseOrcaSessionAddress(mailboxHandle)
+    return sessionId ? structuredSessionMailCustody(sessionId, db) : 'elsewhere'
+  }
+  if (!mailboxHandle.startsWith('dispatch:')) {
+    return workerMailCustody(mailboxHandle, db)
+  }
+  const dispatch = db?.getDispatchContextById?.(mailboxHandle.slice('dispatch:'.length))
+  // A Dispatch's mail follows its Task: none reaches the chat before it took the Task, or after it ended.
+  if (!dispatch?.assignee_handle || dispatch.status !== 'dispatched') {
+    return 'elsewhere'
+  }
+  const chat = chatAssigneeSessionId(dispatch.assignee_handle)
+  return chat
+    ? withDispatch(structuredSessionMailCustody(chat, db), dispatch.id)
+    : workerMailCustody(dispatch.assignee_handle, db, dispatch.id)
 }
 
 /** Re-derive Run, direct and active-Dispatch mail on each idle edge, including root mail for /clear successors. */

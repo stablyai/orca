@@ -7,10 +7,8 @@ import {
   getRemoteManagedCommand as getClaudeRemoteCommand,
   getRemoteManagedEventCommand
 } from '../claude/hook-settings'
-import {
-  getManagedCommand as getCodexCommand,
-  wrapReadablePosixHookCommand
-} from '../codex/codex-hook-definition'
+import { wrapReadablePosixHookCommand } from '../codex/hooks/definitions/codex-hook-definition'
+import { buildCodexHookCommand as getCodexCommand } from '../codex/hooks/definitions/codex-hook-command-form'
 import { ANTIGRAVITY_EVENTS, ANTIGRAVITY_PRE_TOOL_USE_DECISION } from '../antigravity/hook-events'
 import { CURSOR_EVENTS } from '../cursor/hook-events'
 import {

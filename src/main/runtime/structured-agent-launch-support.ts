@@ -1,16 +1,16 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
-} from '../../shared/tui-agent-launch-defaults'
+} from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   checkAgentCliVersion,
   launchableRelease,
   type AgentCliVersionCheck
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
@@ -27,7 +27,7 @@ import {
   resolveHostAgentBaseEnvironment,
   createStructuredAgentEnvironmentResolvers
 } from './structured-agent-shell-environment'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 

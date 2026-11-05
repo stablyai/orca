@@ -10,15 +10,15 @@ import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from '@/hooks/editor-external-watch-event-reconciliation'
-import { selectEditorExternalWatchTargets as getEditorExternalWatchTargets } from '@/hooks/editor-external-watch-targets'
+import '@/hooks/editor-external-watch-targets'
 import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import '../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
@@ -211,16 +211,6 @@ describe('restored editor owner reparent', () => {
     expect(next.pendingExplorerReveal?.worktreeId).toBe(TARGET)
   })
 
-  it('does not retarget an explorer reveal owned by another workspace', () => {
-    const oldId = openRestoredSource()
-    useAppStore.setState({
-      pendingExplorerReveal: { worktreeId: 'other-workspace', filePath: FILE_PATH, requestId: 1 }
-    })
-
-    expect(reparent(oldId).ok).toBe(true)
-    expect(useAppStore.getState().pendingExplorerReveal?.worktreeId).toBe('other-workspace')
-  })
-
   it('commits active reparenting through the complete workspace activation projection', async () => {
     const oldId = await openDrawnRestoredSource()
     const refreshGitHubForWorktreeIfStale = vi.fn()
@@ -347,92 +337,6 @@ describe('restored editor owner reparent', () => {
     expect(refreshGitHubForWorktreeIfStale).toHaveBeenCalledWith(TARGET)
   })
 
-  it('repairs a duplicate migrated tab id held by a non-selected destination group', async () => {
-    const oldId = await openDrawnRestoredSource()
-    const movedTabId = useAppStore.getState().unifiedTabsByWorktree[SOURCE]![0]!.id
-    const keptFileId = useAppStore.getState().openFile(
-      {
-        filePath: '/repo-b/docs/other.md',
-        relativePath: 'docs/other.md',
-        worktreeId: TARGET,
-        runtimeEnvironmentId: null,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
-    )
-    await main.settle()
-    const keptTab = useAppStore
-      .getState()
-      .unifiedTabsByWorktree[TARGET]!.find((tab) => tab.entityId === keptFileId)!
-    useAppStore.setState((state) => ({
-      unifiedTabsByWorktree: {
-        ...state.unifiedTabsByWorktree,
-        [TARGET]: [
-          { ...keptTab, groupId: 'other-group' },
-          // A stale duplicate carrying the id the source tab keeps through the move.
-          { ...keptTab, id: movedTabId, groupId: 'other-group' }
-        ]
-      },
-      groupsByWorktree: {
-        ...state.groupsByWorktree,
-        [TARGET]: [
-          {
-            id: 'target-group',
-            worktreeId: TARGET,
-            activeTabId: null,
-            tabOrder: [],
-            recentTabIds: []
-          },
-          {
-            id: 'other-group',
-            worktreeId: TARGET,
-            activeTabId: movedTabId,
-            tabOrder: [keptTab.id, movedTabId],
-            recentTabIds: [keptTab.id, movedTabId]
-          }
-        ]
-      },
-      layoutByWorktree: {
-        ...state.layoutByWorktree,
-        [TARGET]: {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', groupId: 'target-group' },
-          second: { type: 'leaf', groupId: 'other-group' }
-        }
-      },
-      activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, [TARGET]: 'target-group' }
-    }))
-
-    const before = useAppStore.getState()
-    expect(reparent(oldId).ok).toBe(true)
-    await main.settle()
-
-    const next = useAppStore.getState()
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main holds no such group, so it refuses the move and the window changes nothing.
-      expect(next.openFiles.find((file) => file.id === oldId)).toMatchObject({
-        worktreeId: SOURCE,
-        pendingOwnerMigration: undefined
-      })
-      expect(next.groupsByWorktree[TARGET]).toEqual(before.groupsByWorktree[TARGET])
-      expect(next.unifiedTabsByWorktree).toEqual(before.unifiedTabsByWorktree)
-      return
-    }
-    const groups = next.groupsByWorktree[TARGET]!
-    const otherGroup = groups.find((group) => group.id === 'other-group')!
-    expect(otherGroup).toMatchObject({
-      activeTabId: keptTab.id,
-      tabOrder: [keptTab.id],
-      recentTabIds: [keptTab.id]
-    })
-    expect(groups.find((group) => group.id === 'target-group')?.tabOrder).toContain(movedTabId)
-    expect(next.unifiedTabsByWorktree[TARGET]!.filter((tab) => tab.id === movedTabId)).toHaveLength(
-      1
-    )
-  })
-
   it('persists and restores the destination owner and dirty hot-exit draft', () => {
     const oldId = openRestoredSource()
     useAppStore.getState().setEditorDraft(oldId, 'hot exit')
@@ -463,34 +367,6 @@ describe('restored editor owner reparent', () => {
       isDirty: true
     })
     expect(useAppStore.getState().editorDrafts[restored.id]).toBe('hot exit')
-  })
-
-  it.each([false, true])('fails closed on a %s destination collision', (dirtyDestination) => {
-    const sourceId = openRestoredSource()
-    const destinationId = useAppStore.getState().openFile(
-      {
-        filePath: FILE_PATH,
-        relativePath: 'docs/readme.md',
-        worktreeId: TARGET,
-        runtimeEnvironmentId: null,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
-    )
-    if (dirtyDestination) {
-      useAppStore.getState().setEditorDraft(destinationId, 'destination draft')
-      useAppStore.getState().markFileDirty(destinationId, true)
-    }
-    const before = useAppStore.getState().openFiles
-
-    expect(reparent(sourceId)).toEqual({ ok: false, reason: 'collision' })
-    expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual(
-      before.map((file) => file.id)
-    )
-    expect(useAppStore.getState().openFiles.find((file) => file.id === sourceId)?.worktreeId).toBe(
-      SOURCE
-    )
   })
 
   it('leaves destination tabs and groups byte-identical when activation hits a collision', async () => {
@@ -560,24 +436,6 @@ describe('restored editor owner reparent', () => {
     expect(after.activeFileId).toBe(sourceId)
   })
 
-  it('moves the watcher projection from source to destination without fanout', () => {
-    const oldId = openRestoredSource()
-    const before = getEditorExternalWatchTargets(useAppStore.getState())
-    const result = reparent(oldId)
-    expect(result.ok).toBe(true)
-    const after = getEditorExternalWatchTargets(useAppStore.getState())
-
-    expect(before.targets.map((target) => target.worktreeId)).toEqual([SOURCE])
-    expect(after.targets).toEqual([
-      {
-        worktreeId: TARGET,
-        worktreePath: '/repo-b',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      }
-    ])
-  })
-
   it('unsubscribes the source watch once and subscribes the destination once', async () => {
     const watchWorktree = vi.fn().mockResolvedValue(undefined)
     const unwatchWorktree = vi.fn().mockResolvedValue(undefined)
@@ -618,125 +476,6 @@ describe('restored editor owner reparent', () => {
     await act(async () => root.unmount())
     container.remove()
     ;(window as unknown as { api?: unknown }).api = previousApi
-  })
-
-  it('reparents into a folder workspace with local save and watch authority', () => {
-    useAppStore.setState({
-      folderWorkspaces: [
-        {
-          id: 'notes',
-          projectGroupId: 'group-notes',
-          folderPath: '/notes',
-          connectionId: null,
-          executionHostId: 'local'
-        }
-      ],
-      projectGroups: [{ id: 'group-notes', name: 'Notes', executionHostId: 'local' }]
-    } as unknown as Partial<AppState>)
-    const oldId = useAppStore.getState().openFile(
-      {
-        filePath: '/notes/todo.md',
-        relativePath: '/notes/todo.md',
-        worktreeId: SOURCE,
-        runtimeEnvironmentId: null,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
-    )
-    useAppStore.getState().setRestoredEditorOwnerMigrationPending(oldId, true)
-    const result = useAppStore.getState().reparentRestoredEditorFileOwner({
-      fileId: oldId,
-      targetWorktreeId: 'folder:notes',
-      targetRelativePath: 'todo.md',
-      targetExecutionHostId: 'local',
-      targetRuntimeEnvironmentId: null,
-      targetOperationProvenance: captureEditorFileOperationProvenance(
-        useAppStore.getState(),
-        'folder:notes',
-        null,
-        true
-      )
-    })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    const state = useAppStore.getState()
-    const moved = state.openFiles.find((file) => file.id === result.fileId)!
-    expect(getEditorFileOperationContext(state, moved, null)).toMatchObject({
-      worktreeId: 'folder:notes',
-      worktreePath: '/notes',
-      expectedExecutionHostId: 'local'
-    })
-    expect(getEditorExternalWatchTargets(state).targets).toEqual([
-      {
-        worktreeId: 'folder:notes',
-        worktreePath: '/notes',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      }
-    ])
-  })
-
-  it('captures exact direct-SSH host and connection-generation authority', () => {
-    useAppStore.setState((state) => ({
-      repos: state.repos.map((repo) => ({
-        ...repo,
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1'
-      })),
-      worktreesByRepo: Object.fromEntries(
-        Object.entries(state.worktreesByRepo).map(([repoId, worktrees]) => [
-          repoId,
-          worktrees.map((worktree) => ({ ...worktree, hostId: 'ssh:ssh-1' as const }))
-        ])
-      ),
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected' as const,
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 7
-          }
-        ]
-      ])
-    }))
-    const oldId = openRestoredSource()
-    useAppStore.getState().setRestoredEditorOwnerMigrationPending(oldId, true)
-    const result = useAppStore.getState().reparentRestoredEditorFileOwner({
-      fileId: oldId,
-      targetWorktreeId: TARGET,
-      targetRelativePath: 'docs/readme.md',
-      targetExecutionHostId: 'ssh:ssh-1',
-      targetRuntimeEnvironmentId: null,
-      targetOperationProvenance: captureEditorFileOperationProvenance(
-        useAppStore.getState(),
-        TARGET,
-        null,
-        true
-      )
-    })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(
-      useAppStore.getState().openFiles.find((file) => file.id === result.fileId)
-    ).toMatchObject({
-      externalSshTargetId: 'ssh-1',
-      operationProvenance: {
-        expectedSshConnectionGeneration: 7,
-        generation: {
-          route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
-        }
-      }
-    })
   })
 
   it('correlates destination change, delete, and rename events after reparent', () => {

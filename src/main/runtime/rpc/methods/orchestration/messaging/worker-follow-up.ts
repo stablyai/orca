@@ -1,10 +1,13 @@
+import {
+  planSemanticWorkerFollowUp,
+  workerFollowUpArguments
+} from '../worker/worker-follow-up-admission'
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   carryWorkerResumeSession,
-  FOLLOW_UP_MESSAGE_TYPES,
   resolveWorkerLineage
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -12,13 +15,19 @@ import type { DispatchContextRow, MessageType } from '../../../../orchestration/
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
 import type { RpcContext } from '../../../core'
 import { startWorker } from '../worker/workers'
-import { chooseWorkerFollowUpPlacement } from '../worker/worker-follow-up-choice'
-
-const ACTIVE_STATUSES: readonly string[] = ['pending', 'dispatched']
+import {
+  chooseWorkerFollowUpPlacement,
+  type WorkerFollowUpDelivery
+} from '../worker/worker-follow-up-choice'
 
 export type WorkerFollowUpPlan =
   | { kind: 'steer'; dispatchId: string }
-  | { kind: 'start'; latest: DispatchContextRow; resource: WorkerTerminalResourceRow | undefined }
+  | {
+      kind: 'start'
+      addressed: string
+      latest: DispatchContextRow
+      resource: WorkerTerminalResourceRow | undefined
+    }
 
 export type WorkerFollowUpOutcome =
   | { kind: 'steer'; dispatchId: string }
@@ -36,27 +45,14 @@ export function planWorkerFollowUp(
   dispatchId: string,
   type: MessageType
 ): WorkerFollowUpPlan | undefined {
-  const addressed = db.getDispatchContextById(dispatchId)
-  // A working worker reads its mail; only a settled Dispatch can have been continued.
-  const lineage =
-    addressed && !ACTIVE_STATUSES.includes(addressed.status)
-      ? resolveWorkerLineage(db, addressed.id)
-      : undefined
-  if (!lineage) {
-    return undefined
-  }
-  const { latest, resource } = lineage
-  if (ACTIVE_STATUSES.includes(latest.status)) {
-    return { kind: 'steer', dispatchId: latest.id }
-  }
-  if (
-    !FOLLOW_UP_MESSAGE_TYPES.some((followUpType) => followUpType === type) ||
-    db.getFederatedDispatch(latest.id) ||
-    !db.getWorkerDispatch(resource?.origin_dispatch_id ?? latest.id)
-  ) {
-    return latest.id === dispatchId ? undefined : { kind: 'steer', dispatchId: latest.id }
-  }
-  return { kind: 'start', latest, resource }
+  return planSemanticWorkerFollowUp(
+    dispatchId,
+    db.getDispatchContextById(dispatchId),
+    () => resolveWorkerLineage(db, dispatchId),
+    type,
+    (id) => Boolean(db.getFederatedDispatch(id)),
+    (id) => Boolean(db.getWorkerDispatch(id))
+  )
 }
 
 export async function startWorkerFollowUp(args: {
@@ -65,51 +61,54 @@ export async function startWorkerFollowUp(args: {
   plan: Extract<WorkerFollowUpPlan, { kind: 'start' }>
   from: string
   message: { subject: string; body?: string | undefined }
-  /** Unread mail this follow-up carries, read in the same claim. */
-  consumesMessageIds?: readonly string[]
+  /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
+  takesMailOf?: string
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
   const { subject, body } = args.message
-  const placement = await chooseWorkerFollowUpPlacement(ctx.runtime, db, latest, resource)
-  const { reopen } = placement
+  let delivery: WorkerFollowUpDelivery = 'follow_up'
+  let reopening = false
   let freshInstead = false
-  const spec = [
-    body || subject,
-    placement.delivery === 'started_fresh' ? placement.earlierWork : undefined
-  ]
-    .filter(Boolean)
-    .join('\n\n')
+  let releasedShellOf: string | undefined
   let receipt: unknown
   try {
     receipt = await startWorker(
       {
         from: args.from,
         run: latest.run_id,
-        spec,
-        taskTitle: subject,
-        worktree: `id:${placement.worktreeId}`,
-        ...(placement.terminal ? { terminal: placement.terminal } : {}),
-        ...(placement.agent ? { agent: placement.agent } : {}),
-        ...(placement.model ? { model: placement.model } : {}),
-        ...(placement.effort ? { effort: placement.effort } : {})
+        spec: body || subject,
+        taskTitle: subject
       },
       // The send's own receipt is already pending; the follow-up only names what it accepted.
       { ...ctx, orchestrationMutation: undefined },
       {
-        of: latest.id,
-        ...(ctx.orchestrationMutation ? { acceptedBy: ctx.orchestrationMutation } : {}),
-        ...(args.consumesMessageIds ? { consumesMessageIds: args.consumesMessageIds } : {}),
-        ...(placement.earlierWork ? { earlierWork: placement.earlierWork } : {}),
-        ...(reopen
-          ? {
-              reopen: async (dispatchId: string) => {
-                const reopened = await reopen(dispatchId)
-                freshInstead = reopened === null
-                return reopened
-              }
+        ...workerFollowUpArguments(args.plan),
+        place: async (assertCreatorCurrent) => {
+          const placement = await chooseWorkerFollowUpPlacement(ctx.runtime, db, latest, resource, {
+            admit: assertCreatorCurrent,
+            requested: (dispatchId) => {
+              releasedShellOf = dispatchId
             }
-          : {})
+          })
+          delivery = placement.delivery
+          const { reopen } = placement
+          reopening = Boolean(reopen)
+          return {
+            ...placement,
+            ...(reopen
+              ? {
+                  reopen: async (dispatchId: string) => {
+                    const reopened = await reopen(dispatchId)
+                    freshInstead = reopened === null
+                    return reopened
+                  }
+                }
+              : {})
+          }
+        },
+        ...(ctx.orchestrationMutation ? { acceptedBy: ctx.orchestrationMutation } : {}),
+        ...(args.takesMailOf ? { takesMailOf: args.takesMailOf } : {})
       }
     )
   } catch (error) {
@@ -117,23 +116,45 @@ export async function startWorkerFollowUp(args: {
     if (error instanceof OrchestrationError && error.code === 'follow_up_claimed') {
       return { kind: 'steer', dispatchId: readClaimedDispatchId(error) ?? latest.id }
     }
-    throw error
+    throw releasedShellOf ? afterShellRelease(error, releasedShellOf) : error
   }
   const started = {
     ...(receipt && typeof receipt === 'object' ? receipt : {}),
-    delivery: freshInstead ? 'started_fresh' : placement.delivery,
+    delivery: freshInstead ? 'started_fresh' : delivery,
     followUpOf: latest.id
   }
   if (
     resource &&
     'dispatchId' in started &&
     typeof started.dispatchId === 'string' &&
-    reopen &&
+    reopening &&
     !freshInstead
   ) {
     carryWorkerResumeSession(db, started.dispatchId, resource)
   }
   return { kind: 'started', receipt: started }
+}
+
+/** Closing the leftover shell was requested before this refusal and stays requested, so the refusal keeps its cause but not its claim that nothing happened. */
+function afterShellRelease(error: unknown, dispatchId: string): unknown {
+  if (!(error instanceof OrchestrationError)) {
+    return error
+  }
+  const { data } = error
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !('effectsApplied' in data) ||
+    data.effectsApplied !== false
+  ) {
+    return error
+  }
+  // Refusals that claim no effects end with a "No ... effects were applied." sentence; that sentence is what goes.
+  return new OrchestrationError(
+    error.code,
+    `${error.message.replace(/\s*No [^.]*effects were applied\.$/, '')} The follow-up did not start, but Orca had already asked to close the shell Dispatch ${dispatchId}'s finished agent left behind.`,
+    { ...data, effectsApplied: true }
+  )
 }
 
 function readClaimedDispatchId(error: OrchestrationError): string | undefined {

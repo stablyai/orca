@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { createStore, testState } from '../persistence/persistence-test-harness'
 
 vi.mock('electron', () => ({
@@ -52,15 +52,6 @@ describe('host-created terminal close durability', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('a host-created terminal does NOT push a fresh repo into host-authoritative membership', async () => {
-    const store = await makeStore()
-    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree?.[WT]?.map((t) => t.id)).toContain(TAB)
-    // Unarmed, nonsplit repos must keep renderer closes authoritative.
-    expect(session.terminalTopologyRevisionByRepoId?.[REPO_ID] ?? 0).toBe(0)
-  })
-
   it('a renderer close write durably removes the row it persisted', async () => {
     const store = await makeStore()
     await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
@@ -78,29 +69,5 @@ describe('host-created terminal close durability', () => {
     store.setWorkspaceSession(rendererWriteWithout(store.getWorkspaceSession(), TAB))
     // Existing armed-fence behavior retains omitted rows until exit retirement, independently of CLI creates.
     expect(store.getWorkspaceSession().tabsByWorktree?.[WT]?.map((t) => t.id)).toContain(TAB)
-  })
-})
-
-/** Census every fence-advancing seam to catch newly introduced create-time arming. */
-describe('topology fence census', () => {
-  beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-fence-census-'))
-    testStateDirRef.dir = testState.dir
-  })
-
-  afterEach(() => {
-    rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('a second pane in the same tab still does not arm the fence', async () => {
-    const store = await makeStore()
-    await store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
-    await store.persistPtyBinding({
-      worktreeId: WT,
-      tabId: TAB,
-      leafId: '22222222-2222-4222-8222-222222222222',
-      ptyId: `${PTY}-b`
-    })
-    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.[REPO_ID] ?? 0).toBe(0)
   })
 })

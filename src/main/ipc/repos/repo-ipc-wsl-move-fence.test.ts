@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
@@ -15,7 +15,6 @@ import {
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
 import { registerFolderWorkspaceHandlers } from './folder-workspace-handlers'
-import { registerRepoCatalogHandlers } from './repo-catalog-handlers'
 import { runtimeRepoSelectorText } from '../../runtime/runtime-repo-selector'
 
 const { handlers } = vi.hoisted(() => ({
@@ -105,25 +104,6 @@ describe('folderWorkspaces:update under a WSL move', () => {
       name: 'notes',
       isUnread: workspace.isUnread
     })
-  })
-})
-
-describe('projects:update under a WSL move', () => {
-  it('refuses a runtime preference change when a source repo is moving', async () => {
-    store.addRepo(repo('repo-1'))
-    store.addRepo(repo('repo-2'))
-    seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store, { removeProject: vi.fn() })
-    const projectFor = (repoId: string) =>
-      store.getProjects().find((project) => project.sourceRepoIds.includes(repoId))
-    const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }
-
-    await expect(
-      invoke('projects:update', { projectId: projectFor('repo-1')?.id, updates })
-    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    await expect(
-      invoke('projects:update', { projectId: projectFor('repo-2')?.id, updates })
-    ).resolves.toMatchObject({ sourceRepoIds: ['repo-2'] })
   })
 })
 

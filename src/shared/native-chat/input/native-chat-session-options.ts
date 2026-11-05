@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 
 export type SessionOptionValue = string | boolean
 
@@ -6,6 +6,8 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  /** An alias of a listed versioned row: listed only for a matching search. */
+  searchOnly?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
@@ -37,6 +39,8 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
+  /** Model-pill display only; currentValue remains the accepted selection. */
+  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean

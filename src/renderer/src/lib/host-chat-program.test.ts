@@ -1,20 +1,33 @@
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { agentMenuShortcutLabels } from '../components/tab-bar/agent-menu-shortcut-labels'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { getDefaultSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
+import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { pr } from '@/hooks/composer-state/composer-review-base-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../shared/managed-runtime-install'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
+  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH
+} from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
-  STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as MODE
-} from '../../../shared/protocol-version'
-const rpc = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), direct: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc.call }))
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+const rpc = vi.hoisted(() => ({
+  call: vi.fn(),
+  subscribe: vi.fn(),
+  direct: vi.fn(),
+  supports: vi.fn()
+}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: rpc.call,
+  runtimeEnvironmentSupportsCapability: rpc.supports
+}))
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: rpc.subscribe }))
 import { useAppStore } from '@/store'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
@@ -45,6 +58,7 @@ const flush = () =>
   Array.from({ length: 12 }).reduce<Promise<void>>((tick) => tick.then(), Promise.resolve())
 beforeEach(() => {
   rpc.call.mockReset().mockResolvedValue(catalog)
+  rpc.supports.mockReset().mockResolvedValue(true)
   rpc.subscribe.mockReset().mockResolvedValue({ unsubscribe: vi.fn() })
   setLocalRuntimeCapabilitiesForTests(CAPS)
   useAppStore.setState({
@@ -55,6 +69,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   resetHostStructuredAgentsForTests()
+  clearHostAgentMenuSettingsForTests()
   setLocalRuntimeCapabilitiesForTests(null)
   useAppStore.setState(initial, true)
 })
@@ -83,8 +98,19 @@ it('acquires inactive B independently of detection, preserves unknown truth and 
       ]
     },
     runtimeDetectedAgentIds: {},
-    settings: { ...current.settings!, defaultTuiAgent: 'grok', nativeChatProviders: { grok: true } }
+    settings: {
+      ...current.settings!,
+      defaultTuiAgent: 'claude',
+      nativeChatProviders: { grok: true }
+    }
   }))
+  rpc.call.mockResolvedValue({
+    settings: projectAgentLaunchSettings({ defaultTuiAgent: 'grok' })
+  })
+  await ensureAgentLaunchPreferences(useAppStore.getState(), {
+    kind: 'git-worktree',
+    worktreeId: 'known-chat'
+  })
   expect(agentMenuShortcutLabels('known-chat', {}, 'darwin').get('grok')).toBe('⌘⌥T')
   const state = useAppStore.getState()
   const lease = holdChatProgramFacts(chat.resolveChatProgramContext(state, workspace))
@@ -152,6 +178,27 @@ it('adapts only absent publication on older hosts and shares the saved Checks ga
     openModalFallback: vi.fn()
   })
   expect(rpc.direct.mock.lastCall?.[0].agentOverride).toBe('antigravity')
+  settings.nativeChatProviders = { antigravity: false }
+  useAppStore.setState({ settings: { ...settings } })
+  expect(checksAgent('fixChecks')).toBeNull()
+  settings.sourceControlAi.actions = { fixChecks: { agentId: 'antigravity', surface: 'chat' } }
+  useAppStore.setState({ settings: { ...settings } })
+  expect(checksAgent('fixChecks')).toBe('antigravity')
+  expect(chat.agentsOfferedForLaunch(useAppStore.getState(), local, [])).toEqual([])
+  expect(chat.agentsOfferedForLaunch(useAppStore.getState(), local, [], 'antigravity')).toEqual([
+    'antigravity'
+  ])
+  await startFixChecksAgent({
+    repoId: 'missing',
+    basePrompt: 'saved Chat',
+    item: { ...pr, repoId: 'missing' },
+    launchSource: 'task_page',
+    openModalFallback: vi.fn()
+  })
+  expect(rpc.direct.mock.lastCall?.[0].resolveLaunchInputs('antigravity')).toMatchObject({
+    requestedSurface: undefined,
+    preferredSurface: 'chat'
+  })
   useAppStore.setState({ settings: { ...settings, disabledTuiAgents: ['antigravity'] } })
   expect(checksAgent('fixChecks')).toBeNull()
   const localChat = { executionHostId: 'local', hostCapabilities: [CHAT] }

@@ -1,4 +1,4 @@
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
+import { terminalImageViewerSupported } from '../../terminal/launch/terminal-image-viewer-env'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -115,6 +115,9 @@ export function buildManagedWorktreeCreateArgs(
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
+      ...(params.cwdParentAmbiguous === true
+        ? { cwdParentAmbiguous: params.cwdParentAmbiguous }
+        : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
       orchestrationContext: params.orchestrationContext

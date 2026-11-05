@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./runner', async (importOriginal) => ({
+vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   gitExecFileAsync: gitExecFileAsyncMock
 }))

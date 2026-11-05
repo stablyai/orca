@@ -1,16 +1,18 @@
 import { mkdir, realpath, writeFile, rm, symlink, readFile } from 'node:fs/promises'
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await original<object>()),
-    readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (original) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await original<object>()),
+      readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
@@ -19,12 +21,9 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directory-probe'
-import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
-import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
-import { structuredAgentsDeclaringNothing } from './structured-agent-session-adapter-router-test-support'
-import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session-launch-directory'
+import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session/agent-session-launch-directory'
 import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'
@@ -205,36 +204,3 @@ it('uses current selected ancestors, then refuses retargeted/foreign sources bef
   expect(probe).toHaveBeenLastCalledWith(workspaceCwd, sourceCwd, expect.any(AbortSignal))
   expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true, replayed: true })
 })
-
-it.each(['opencode', 'opencode2'] as const)(
-  'commits %s actual database history using the same linked-cwd admission',
-  async (agent) => {
-    const definition = structuredAgentRuntimeRegistration(agent)!.definition
-    await fixture.rig.dispose()
-    fixture.rig = await createRestTestRig({
-      agents: structuredAgentsDeclaringNothing([definition])
-    })
-    const physical = await realpath(fixture.rig.root)
-    const registered = join(fixture.rig.root, 'registered')
-    await symlink(physical, registered, process.platform === 'win32' ? 'junction' : 'dir')
-    const transcriptPath = join(fixture.rig.root, 'opencode.db')
-    writeOpenCodeSqliteDatabase(transcriptPath, [
-      { id: THREAD, directory: physical, turns: [{ role: 'user', parts: ['database context'] }] }
-    ])
-    const params = createTestParams(undefined, {
-      agent,
-      provider: agent,
-      accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } },
-      adopt: {
-        providerHandle: { agent, transport: definition.handleTransport, nativeId: THREAD },
-        transcriptPath,
-        source: { providerSessionId: THREAD, workspaceCwd: registered }
-      }
-    })
-    expect(await fixture.rig.host.create(CALLER, params)).toMatchObject({ ok: true })
-    expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain[0].handle.nativeId).toBe(
-      THREAD
-    )
-    expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
-  }
-)

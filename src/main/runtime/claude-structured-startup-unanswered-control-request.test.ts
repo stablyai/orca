@@ -1,7 +1,7 @@
 // Settings-read timeouts must not block initialized startup or overwrite saved launch options.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -174,15 +174,15 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     ).resolves.toMatchObject({ ok: true })
     await ready(host)
     expect(record(host)?.options).toEqual({ model: 'sonnet' })
-    // Saved model is offered before provider confirmation.
-    expect(await picker(host)).toEqual({ model: 'sonnet', effort: 'high', confirmed: ['effort'] })
+    // Legacy effective-only settings describe a default, not an accepted effort input.
+    expect(await picker(host)).toEqual({ model: 'sonnet', effort: 'high', confirmed: undefined })
 
     // Turn reports must not replace the next send's saved choice.
     turnReportsModel('claude-sonnet-5')
     expect(await picker(host)).toEqual({
       model: 'sonnet',
       effort: 'high',
-      confirmed: ['effort']
+      confirmed: []
     })
     expect(record(host)?.options).toEqual({ model: 'sonnet' })
 

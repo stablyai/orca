@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { batchAgentPaneKeysForTabs, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'

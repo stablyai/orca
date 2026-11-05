@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
-import { buildPluginPanelShellHtml } from './plugin-panel-shell'
+import { buildPluginGuestShellHtml, buildPluginPanelShellHtml } from './plugin-panel-shell'
 
 describe('buildPluginPanelShellHtml', () => {
   it('removes WebRTC peer connections before plugin code can reach them', () => {
@@ -74,5 +74,19 @@ describe('buildPluginPanelShellHtml', () => {
     )
     expect(style.textContent).toBe(':root{/stylescriptx/script}')
     style.remove()
+  })
+})
+
+describe('buildPluginGuestShellHtml', () => {
+  it('paints the host theme before any script, so boot-time token reads get values', () => {
+    const html = buildPluginGuestShellHtml('<main></main>', 'panel', {
+      theme: { colorScheme: 'dark', tokens: '--orca-background:#000;}</style><script>x' }
+    })
+    expect(html).toMatch(/^<!doctype html>\n<html class="dark">/)
+    expect(html).toContain(
+      '<style id="orca-design-tokens">:root{--orca-background:#000;/stylescriptx}</style>'
+    )
+    expect(html.indexOf('orca-design-tokens')).toBeLessThan(html.indexOf('<script>'))
+    expect(buildPluginGuestShellHtml('<main></main>')).toContain('<html>\n')
   })
 })

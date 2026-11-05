@@ -201,10 +201,12 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const resolveAndClose = useCallback(
     (decision: 'run' | 'skip') => {
       if (decision === 'run' && repoId) {
+        // Repo-wide trust is ignored when the repo id is on two hosts, so keep this script's approval too.
+        if (contentHash) {
+          markOrcaHookScriptConfirmed(repoId, scriptKind, contentHash)
+        }
         if (alwaysTrust) {
           markOrcaHookRepoAlwaysTrusted(repoId)
-        } else if (contentHash) {
-          markOrcaHookScriptConfirmed(repoId, scriptKind, contentHash)
         }
       }
       onResolve?.(decision)

@@ -14,7 +14,7 @@ const guard = vi.hoisted(() => ({
     }
   })
 }))
-vi.mock('./wsl-host-windows-drive-guard', () => ({
+vi.mock('./terminal/launch/wsl-host-windows-drive-guard', () => ({
   refuseWslHostWindowsDrivePath: guard.refuse
 }))
 
@@ -94,6 +94,9 @@ describe('WSL host backstop for Windows drive projects', () => {
       notifyReposChanged: () => {},
       resolveFolderConnectionId: () => null,
       teardownFolderWorkspacePtys: async () => undefined,
+      acquireFileWatcherRemoval: async () => {
+        throw new Error('not used')
+      },
       cleanupRemovedFolderWorkspaceState: () => undefined,
       emitWorktreeLifecycle: () => undefined
     })

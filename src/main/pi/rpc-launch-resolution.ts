@@ -1,20 +1,20 @@
 import { open, realpath } from 'node:fs/promises'
 import { isAbsolute, normalize } from 'node:path'
 import { z } from 'zod'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from '../../shared/agent-session-provider-handle'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
@@ -32,6 +32,11 @@ import {
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
+import {
+  ensurePiBackgroundWorkBridge,
+  type PiBackgroundWorkLaunch
+} from './rpc-background-work-bridge'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -43,6 +48,8 @@ export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
+  ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
+  logger?: StructuredAgentSessionLogger
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -204,6 +211,16 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const backgroundWork = await (
+      deps.ensureBackgroundWorkBridge ??
+      (() =>
+        ensurePiBackgroundWorkBridge((error) =>
+          deps.logger?.warn('Pi chat starts without its background-work bridge', {
+            scope: 'pi-background-work',
+            error
+          })
+        ))
+    )()
     return {
       launch: {
         command,
@@ -215,7 +232,8 @@ export function piRpcLaunchPart(
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
-        ...(replacement ? { replacement } : {})
+        ...(replacement ? { replacement } : {}),
+        ...(backgroundWork ? { backgroundWork } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE

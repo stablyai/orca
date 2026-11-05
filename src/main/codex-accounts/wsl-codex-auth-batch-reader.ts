@@ -1,4 +1,4 @@
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 
 export type WslCodexAuthRead =
   | { kind: 'missing' | 'unreadable' }

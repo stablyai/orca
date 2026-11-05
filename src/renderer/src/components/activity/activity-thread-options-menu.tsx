@@ -17,12 +17,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
+import { OptionsFilterCountBadge } from '@/components/sidebar/worktree-list/controls/options-filter-count-badge'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
 } from './activity-scope-filter-controls'
-import type { ActivityGroupBy } from './activity-thread-types'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
 
 const GROUP_BY_OPTIONS = [
   'none',

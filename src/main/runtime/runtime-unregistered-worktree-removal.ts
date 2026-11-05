@@ -1,18 +1,18 @@
-import { removeWorktree } from '../git/worktree-removal'
-import { usesNativeWindowsRemoval } from '../git/windows-worktree-removal'
+import { removeWorktree } from '../git/worktrees/removal/worktree-removal'
+import { usesNativeWindowsRemoval } from '../git/worktrees/removal/windows-worktree-removal'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
-import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import {
   resolveWorktreeRemovalHome,
   type WorktreeRemovalRoute
-} from '../worktree-removal-execution-host-route'
+} from '../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
-} from '../local-worktree-filesystem'
+} from '../workspaces/removal/local-worktree-filesystem'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -21,7 +21,7 @@ import {
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
-} from '../worktree-removal-safety'
+} from '../workspaces/removal/worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 import { isLocalRuntimeWorktreePathMissing } from './runtime-worktree-filesystem'
@@ -66,15 +66,22 @@ export async function removeRuntimeUnregisteredWorktree(args: {
     }
 
     await deleteUnregisteredDirectory(args)
-    args.finishRemoval()
     return {}
   }
   if (await isLocalRuntimeWorktreePathMissing(target.path, args.localOptions)) {
     if (!args.force && !removedMeta) {
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
-    await cleanupPushTarget(args)
-    args.finishRemoval()
+    const gate = await args.acquireWatcherRemoval(target.path)
+    try {
+      try {
+        await cleanupPushTarget(args)
+      } finally {
+        args.finishRemoval()
+      }
+    } finally {
+      await gate.finish(true)
+    }
     return {}
   }
   throw new Error(`Refusing to delete unregistered worktree path: ${target.path}`)
@@ -95,10 +102,14 @@ async function deleteUnregisteredDirectory(
         })
       : removeLocalWorktreePath(args.target.path, args.localOptions))
     completed = true
+    try {
+      await cleanupPushTarget(args)
+    } finally {
+      args.finishRemoval()
+    }
   } finally {
     await gate.finish(completed)
   }
-  await cleanupPushTarget(args)
 }
 
 async function cleanupPushTarget(

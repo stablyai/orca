@@ -8,18 +8,18 @@ import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/
 import { getEditorHeaderCopyState } from './editor-header'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
-import { DiffNavigationProvider } from './diff-navigation-context'
+import { DiffNavigationProvider } from './diff/review/diff-navigation-context'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
-import { canUseChangesModeForFile } from './editor-panel-file-mode'
+import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
-import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
+import { useEditorCmdSaveRequest } from './save/commands/useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
-import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
+import { useMarkdownPreviewShortcut } from './view-mode/useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
-import { extractFrontMatter } from './markdown-frontmatter'
-import { useEditorContentChangeHandler } from './use-editor-content-change-handler'
+import { extractFrontMatter } from './markdown/source-scanning/markdown-frontmatter'
+import { useEditorContentChangeHandler } from './model-lifetime/buffer-text/use-editor-content-change-handler'
 import {
   selectEditorPanelGitBranchEntries,
   selectEditorPanelGitStatusEntries
@@ -29,10 +29,11 @@ import {
   createCurrentEditorArtifactRequest,
   editorArtifactContentType
 } from './editor-artifact-upload'
-import { useEditorPanelSave } from './useEditorPanelSave'
+import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
 import { useFileCustomEditors } from '@/store/plugin-custom-editors'
-import { applyCustomEditorToggle } from './custom-editor-toggle'
+import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
+import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -68,6 +69,7 @@ function EditorPanelInner({
     selectEditorPanelGitBranchEntries(s, activeWorktreeId)
   )
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
+  const markdownDefaultViewMode = useAppStore((s) => s.settings?.markdownDefaultViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const markdownRichModeSizeOverridden = useAppStore(
     (s) => activeFileId !== null && s.markdownRichModeSizeOverride[activeFileId] === true
@@ -86,9 +88,9 @@ function EditorPanelInner({
     [activeFile]
   )
   const editorDrafts = useAppStore(editorDraftSelector)
-  const settings = useAppStore((s) => s.settings)
+  const diffDefaultView = useAppStore((s) => s.settings?.diffDefaultView)
   const customEditors = useFileCustomEditors(activeFileId, activeFile?.filePath)
-  const markdownReviewNotesEnabled = isMarkdownReviewNotesEnabled(settings)
+  const markdownReviewNotesEnabled = useAppStore((s) => isMarkdownReviewNotesEnabled(s.settings))
   const panelRef = useRef<HTMLDivElement>(null)
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
@@ -113,13 +115,13 @@ function EditorPanelInner({
     },
     [clearCopiedPathToastResetTimer]
   )
-  const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
-  const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
+  const [sideBySide, setSideBySide] = useState(diffDefaultView === 'side-by-side')
+  const [prevDiffView, setPrevDiffView] = useState(diffDefaultView)
 
-  if (settings?.diffDefaultView !== prevDiffView) {
-    setPrevDiffView(settings?.diffDefaultView)
-    if (settings?.diffDefaultView !== undefined) {
-      setSideBySide(settings.diffDefaultView === 'side-by-side')
+  if (diffDefaultView !== prevDiffView) {
+    setPrevDiffView(diffDefaultView)
+    if (diffDefaultView !== undefined) {
+      setSideBySide(diffDefaultView === 'side-by-side')
     }
   }
 
@@ -232,6 +234,7 @@ function EditorPanelInner({
     gitStatusEntries,
     gitBranchEntries,
     markdownViewMode,
+    markdownDefaultViewMode,
     markdownRichModeSizeOverridden,
     isChangesMode,
     canOpenWorkspaceFileBrowser,
@@ -270,6 +273,12 @@ function EditorPanelInner({
     }
   }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
+    runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
+      applyEditorToggle(next)
+    )
+  }
+  const applyEditorToggle = (next: EditorToggleValue): void => {
     const fileId = activeFile.id
     if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
       handleOpenDiffTargetFile('rich')

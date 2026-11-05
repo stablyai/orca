@@ -2,16 +2,16 @@ import { resolveChatAutomationRun } from './automation-chat-run-observation'
 export { chatAutomationRunObservation } from './automation-chat-run-observation'
 import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
 import type { AutomationRun } from '../../shared/automations-types'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { readAutomationRunReceipt } from './automation-run-receipt'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export async function observeAutomationChatRun(
   runtime: OrcaRuntimeService,
@@ -111,7 +111,7 @@ export async function observeAutomationChatRun(
           const version = revision
           const readingSource = source
           const current = () => !settled && version === revision && readingSource === source
-          const snapshot = await host.journalSnapshot(sessionId)
+          const snapshot = await host.journalCurrentRead(sessionId, [submissionId, messageId])
           if (!current()) {
             continue
           }

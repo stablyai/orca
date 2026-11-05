@@ -1,5 +1,5 @@
+import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
 import {
-  launchStateLifecycle,
   structuredLaunchStates,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
@@ -19,7 +19,8 @@ function holdsLaunchIdentity(
   }
   const { attempt } = state.callers
   return (
-    lifecycle !== 'visibility-unknown' &&
+    (lifecycle !== 'visibility-unknown' ||
+      (!!state.intent.params.firstMessage && requestId !== undefined)) &&
     attempt.kind === 'first' &&
     (requestId === undefined || attempt.requestId === requestId)
   )

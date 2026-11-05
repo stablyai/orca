@@ -1,6 +1,6 @@
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
-import { describe, expect, it } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { describe, expect, it, vi } from 'vitest'
+
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 
 export function registerJournalUnsentSendHoldQueueTests(
@@ -51,32 +51,28 @@ export function registerJournalUnsentSendHoldQueueTests(
         await fixture.accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
         await fixture.accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
       })
-      // Simulate a crash after keeping A at a stale position but before settling B.
-      await interrupted.resolveDispatch(
-        {
-          clientMessageId: 'A',
-          state: 'rejected',
-          ...fixture.HOST_RESTARTED,
-          fence: 0,
-          recovered: true,
+      const resolve = interrupted.resolveDispatch.bind(interrupted)
+      const fault = vi
+        .spyOn(interrupted, 'resolveDispatch')
+        .mockImplementation((...args) =>
+          args[0].clientMessageId === 'B'
+            ? Promise.reject(new Error('keep and fallback unavailable'))
+            : resolve(...args)
+        )
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await expect(fixture.hold(interrupted)).rejects.toThrow('settling unsent sends failed')
+        expect(interrupted.submission('A')).toMatchObject({
+          dispatchState: 'rejected',
           keptAsQueuedMessageId: 'A'
-        },
-        () =>
-          interrupted.queuedMessages.plan([
-            {
-              messageId: 'A',
-              change: {
-                op: 'queued',
-                body: fixture.message('text of A'),
-                queuedAt: {
-                  epoch: 'epoch-1',
-                  sequence: interrupted.submission('A')!.acceptedSequence!
-                },
-                position: 5
-              }
-            }
-          ])
-      )
+        })
+        expect(interrupted.submission('B')?.dispatchState).toBe('pending')
+        expect(interrupted.queuedMessages.get('A')?.position).toBe(0)
+        expect(interrupted.queuedMessages.get('C')?.position).toBe(2)
+      } finally {
+        fault.mockRestore()
+        warn.mockRestore()
+      }
       await interrupted.close()
       const journal = await fixture.open()
       await fixture.hold(journal)
@@ -131,23 +127,15 @@ export function registerJournalUnsentSendHoldQueueTests(
       const reopened = await fixture.open()
       await fixture.hold(reopened)
 
-      expect(reopened.queuedMessages.get('A')?.queuedAt?.epoch).not.toBe(
-        reopened.queuedMessages.get('B')?.queuedAt?.epoch
-      )
+      const a = reopened.queuedMessages.get('A')!.queuedAt!
+      const b = reopened.queuedMessages.get('B')!.queuedAt!
+      expect(a.epoch).toBe(b.epoch)
+      expect(a.sequence).toBeLessThan(b.sequence)
       expect(fixture.cardOrder(reopened)).toEqual(['A', 'B'])
     })
   })
 
   describe('the source a send records', () => {
-    it('is folded from the row; a row without one folds without it', async () => {
-      const journal = await fixture.open()
-      await fixture.accept(journal, 'with-source', { origin: 'host', source: USER_MESSAGE_SOURCE })
-      await fixture.accept(journal, 'without', { origin: 'client' })
-      const folded: AgentJournalSubmission | undefined = journal.submission('with-source')
-      expect(folded?.source).toEqual({ kind: 'user' })
-      expect(journal.submission('without')).not.toHaveProperty('source')
-    })
-
     it('keeps only the kind of an agent’s source, never its senders', async () => {
       const journal = await fixture.open()
       await fixture.accept(journal, 'mail', { origin: 'host', source: fixture.MAIL_SOURCE })

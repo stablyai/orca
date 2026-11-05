@@ -1,4 +1,4 @@
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
@@ -11,7 +11,7 @@ import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-l
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   assertFolderWorkspacePathUsable,
   getResolvedFolderWorkspacePathStatus,
@@ -21,15 +21,18 @@ import {
   blockedWslDistroForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
-import { browserNetworkExecutionHostKey } from '../../browser/browser-network-execution-route'
-import type { ClientHostedBrowserRpcRoute } from '../runtime-browser-client-automation'
-import { routeRuntimeBrowserClientAutomation } from '../runtime-browser-client-automation'
+import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
+
+import {
+  type ClientHostedBrowserRpcRoute,
+  routeRuntimeBrowserClientAutomation
+} from '../runtime-browser-client-automation'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
 import {
@@ -62,11 +65,11 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
+    this.terminalIdentity.clearTabs()
+    this.terminalIdentity.clearLeaves()
     this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
+    this.terminalIdentity.clearHandles()
+    this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
@@ -77,16 +80,16 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   }
 
   protected restoreHeadlessGraphAuthority(): void {
-    this.rendererGraphEpoch += 1
+    this.terminalIdentity.advanceRendererEpoch()
     this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
     this.graphStatus = 'ready'
     this.rendererGeneration = null
     this.setTerminalSideEffectConsumerAvailable(false)
-    this.tabs.clear()
-    this.leaves.clear()
+    this.terminalIdentity.clearTabs()
+    this.terminalIdentity.clearLeaves()
     this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
+    this.terminalIdentity.clearHandles()
+    this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
@@ -269,11 +272,13 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   routeClientHostedBrowserRpc(
     method: string,
-    params: unknown
+    params: unknown,
+    caller: RpcContext['caller']
   ): Promise<ClientHostedBrowserRpcRoute> {
     return routeRuntimeBrowserClientAutomation({
       method,
       params,
+      caller,
       pages: getRuntimeBrowserPageRegistry(this),
       leases: getBrowserHostLeaseRegistry(this),
       resolveWorkspace: (selector) =>

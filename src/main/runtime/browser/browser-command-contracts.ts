@@ -1,6 +1,6 @@
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { BrowserNetworkExecutionHost } from '../../../shared/browser-network-execution-host'
+import type { BrowserNetworkExecutionHost } from '../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import type { BrowserWindow } from 'electron'
@@ -12,6 +12,7 @@ import type { BrowserTabBarEntry } from './browser-tab-listing'
 export type BrowserCommandTargetParams = {
   worktree?: string
   page?: string
+  expectUrl?: string
 }
 
 export type ResolvedBrowserCommandTarget = {

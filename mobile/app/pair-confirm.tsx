@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator, BackHandler } from 'react-native'
+import { View, Text, Pressable, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -13,7 +13,7 @@ import {
 } from '../src/transport/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
+import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
@@ -22,6 +22,12 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import {
+  PAIRING_SUCCESS_HOLD_MS,
+  PairingProgress,
+  waitForBeat
+} from '../src/pairing/pairing-visuals'
+import { triggerSuccess } from '../src/platform/haptics'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -46,6 +52,7 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
+  const [paired, setPaired] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
   // Ref keeps RPC callback logs current and batches bursty state updates.
@@ -124,7 +131,12 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
       }
       // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
       refreshHostClient(hostId)
-      const onboardingSteps = await loadMobileOnboardingSteps()
+      setPaired(true)
+      triggerSuccess()
+      const [onboardingSteps] = await Promise.all([
+        loadMobileOnboardingSteps(),
+        waitForBeat(PAIRING_SUCCESS_HOLD_MS)
+      ])
       if (!mountedRef.current) {
         return
       }
@@ -160,7 +172,7 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
   return (
     <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
       <Pressable
-        style={styles.backButton}
+        style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
         onPress={cancel}
         hitSlop={8}
         accessibilityRole="button"
@@ -182,12 +194,18 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
               )}
             </Text>
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                onPress={() => void confirm()}
+              >
                 <Text style={styles.primaryButtonText}>
                   {t('app.pairConfirm.pairButton', 'Pair')}
                 </Text>
               </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={cancel}>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
+                onPress={cancel}
+              >
                 <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
             </View>
@@ -196,10 +214,11 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
 
         {resolvedStatus === 'connecting' && (
           <>
-            <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>
-              {t('app.pairConfirm.connecting', 'Connecting…')}
-            </Text>
+            <PairingProgress
+              succeeded={paired}
+              connectingLabel={t('app.pairConfirm.connecting', 'Connecting…')}
+              labelStyle={styles.connectingText}
+            />
             <View style={styles.logSlot}>
               <ConnectionLog
                 entries={logs}
@@ -221,7 +240,10 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
               </View>
             )}
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={cancel}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                onPress={cancel}
+              >
                 <Text style={styles.primaryButtonText}>
                   {t('app.pairConfirm.backToHome', 'Back to home')}
                 </Text>

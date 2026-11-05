@@ -1,4 +1,4 @@
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeProviderTimelineRigs,

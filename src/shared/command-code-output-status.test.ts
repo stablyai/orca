@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
-import { stripTerminalControl } from './terminal-control-stripping'
+import { stripTerminalControl } from './terminal/protocol/escape/terminal-control-stripping'
 
 afterEach(() => {
   vi.restoreAllMocks()

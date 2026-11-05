@@ -4,13 +4,13 @@ import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-c
 import { OrcaRuntimeWithActivateManagedWorktree } from '../workspace-activation'
 import type { WorktreeTerminalProvisioningHost } from '../../runtime-worktree-terminal-provisioning'
 import type { WorktreeStartupReadinessHost } from '../../runtime-worktree-startup-readiness'
-import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefetch'
-import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
-import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
+import { prefetchWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base-prefetch'
+import { prepareWorktreeCreateForRepo } from '../../../workspaces/creation/preparation/worktree-create-preparation'
+import { getWorktreeCreatePrefetchGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget

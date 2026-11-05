@@ -1,17 +1,16 @@
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { WorktreeMemory } from '../../../../shared/process-stats-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { Worktree } from '../../../../shared/worktree/types'
 import type {
-  AgentOwnershipEvidence,
-  PtyListedSession
-} from '../../../../shared/pty-listed-session'
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import type { AgentOwnershipEvidence } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 /** Null means no process sample, commonly for SSH PTYs; render an em dash. */
 export type Metric = number | null
 
 /** One `pty.listSessions()` row. Aliased so ownership evidence cannot be dropped locally. */
-export type DaemonSession = PtyListedSession
 
 export type UnifiedSessionRow = {
   sessionId: string

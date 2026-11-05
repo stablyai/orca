@@ -12,6 +12,7 @@ export function encodeJournalState(state: JournalReducerState): {
     lastSequence: state.lastSequence,
     lastActivityAt: state.lastActivityAt,
     oldestSequence: state.oldestSequence,
+    ...(state.contextBoundary > 1 ? { contextBoundary: state.contextBoundary } : {}),
     highestFence: state.highestFence,
     itemFences: [...state.itemFences],
     itemExecutionOwners: [...state.itemExecutionOwners],
@@ -19,6 +20,8 @@ export function encodeJournalState(state: JournalReducerState): {
     tombstones: [...state.tombstones],
     removedTurnIds: [...state.removedTurnIds],
     submissions: [...state.submissions],
+    inputEntries: [...state.inputEntries],
+    inputCards: [...state.inputCards],
     receipts: [...state.receipts],
     aliases: [...state.aliases],
     itemEchoes: [...state.itemEchoes].map(([key, value]) =>
@@ -33,7 +36,10 @@ export function encodeJournalState(state: JournalReducerState): {
     normalizedHandOffs: [...state.normalizedHandOffs],
     queue: { revision: state.queue.revision, cards: [...state.queue.cards] },
     historyOrigin: state.historyOrigin
-  } satisfies Record<Exclude<keyof JournalReducerState, 'items'>, unknown>
+  } satisfies Record<
+    Exclude<keyof JournalReducerState, 'items' | 'inputs' | 'contextBoundary'>,
+    unknown
+  > & { contextBoundary?: number }
   return {
     stateJson: JSON.stringify(stored),
     items: [...state.items].map(([itemId, item], ordinal) => ({

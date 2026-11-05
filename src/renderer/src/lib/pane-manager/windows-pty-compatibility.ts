@@ -6,7 +6,10 @@ import {
   parseWindowsBuildNumber,
   windowsPtyForOwnerBackend
 } from '../../../../shared/xterm-conpty-options'
-import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
+import {
+  resolvePtyOwnerBackend,
+  type PtyOwnerBackend
+} from '../../../../shared/terminal/pty/lifecycle/pty-owner-backend'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string
