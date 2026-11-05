@@ -18,6 +18,8 @@ export type StructuredAgentSessionOptionsArgs = {
   hostOptionStamp?: string
   fence: number | null
   turnId: string | null
+  /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
+  hasTurn?: boolean
   unloadedTurnRevisions: number | undefined
   capturePresentation?: CaptureStructuredAgentSessionPresentation
   mutate: StructuredAgentSessionMutate

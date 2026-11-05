@@ -74,21 +74,37 @@ export function findActiveRemoteAttachmentForPane(
   this: OrchestrationDb,
   paneKey: string
 ): RemoteDispatchAttachmentRow | undefined {
+  return findRemoteAttachmentForPane(this, paneKey, `${potentiallyLiveRemoteAttachmentSql()} AND`)
+}
+
+/** The newest remote Dispatch this pane ran, finished or not. */
+export function findLatestRemoteAttachmentForPane(
+  this: OrchestrationDb,
+  paneKey: string
+): RemoteDispatchAttachmentRow | undefined {
+  return findRemoteAttachmentForPane(this, paneKey, '')
+}
+
+function findRemoteAttachmentForPane(
+  db: OrchestrationDb,
+  paneKey: string,
+  stateFilter: string
+): RemoteDispatchAttachmentRow | undefined {
   if (!parsePaneKey(paneKey)) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
-    return this.db
+    return db.db
       .prepare(
         `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
-         WHERE ${potentiallyLiveRemoteAttachmentSql()} AND pane_key = ?
+         WHERE ${stateFilter} pane_key = ?
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(paneKey) as RemoteDispatchAttachmentRow | undefined
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
-  return this.db
+  return db.db
     .prepare(
       `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
-       WHERE ${potentiallyLiveRemoteAttachmentSql()} AND pane_key IS NOT NULL
+       WHERE ${stateFilter} pane_key IS NOT NULL
          AND instr(pane_key, ':') > 1
          AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?
        ORDER BY rowid DESC LIMIT 1`
@@ -101,6 +117,7 @@ export type RemoteDispatchAttachmentStopMethods = {
   settleRemoteAttachmentStop: typeof settleRemoteAttachmentStop
   markRemoteAttachmentStopUnknown: typeof markRemoteAttachmentStopUnknown
   findActiveRemoteAttachmentForPane: typeof findActiveRemoteAttachmentForPane
+  findLatestRemoteAttachmentForPane: typeof findLatestRemoteAttachmentForPane
 }
 
 export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }): void {
@@ -108,6 +125,7 @@ export function attachRemoteDispatchAttachmentStop(ctor: { prototype: object }):
     beginRemoteAttachmentStop,
     settleRemoteAttachmentStop,
     markRemoteAttachmentStopUnknown,
-    findActiveRemoteAttachmentForPane
+    findActiveRemoteAttachmentForPane,
+    findLatestRemoteAttachmentForPane
   })
 }

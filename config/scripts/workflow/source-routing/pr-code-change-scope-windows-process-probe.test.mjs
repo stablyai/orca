@@ -6,7 +6,7 @@ describe('Windows installer process probe routing', () => {
     [],
     ['config/nsis/orca-process-check.nsh'],
     ['config/nsis/orca-installer-hooks.nsh'],
-    ['config/scripts/nsis-process-check.test.mjs'],
+    ['config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs'],
     ['config/scripts/performance/idle-cpu/idle-cpu-process-sampling.mjs'],
     ['config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs'],
     ['src/packages/process-host/src/run-process.ts'],

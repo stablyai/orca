@@ -125,7 +125,7 @@ describe('modified Node-server policy self-tests', () => {
   })
 
   it.each([
-    'config/scripts/node-server-concurrency.test.mjs',
+    'config/scripts/ci/unit-selection/node-server-concurrency.test.mjs',
     'config/scripts/node-server-packaged-chat-selection.test.mjs'
   ])(
     'preserves unrelated %s routing with complete, absent, or non-modification evidence',
@@ -140,7 +140,7 @@ describe('modified Node-server policy self-tests', () => {
   )
 
   it.each([
-    'config/scripts/node-server-concurrency.test.mjs',
+    'config/scripts/ci/unit-selection/node-server-concurrency.test.mjs',
     'config/scripts/node-server-packaged-chat-selection.test.mjs'
   ])('preserves both unmodified rename sides for unrelated %s', async (file) => {
     const changed = [file, file.replace('.test.mjs', '-renamed.test.mjs')]
@@ -153,7 +153,7 @@ describe('modified Node-server policy self-tests', () => {
 
   it('preserves unrelated tests when only part of their changed vector is modified', async () => {
     const changed = [
-      'config/scripts/node-server-concurrency.test.mjs',
+      'config/scripts/ci/unit-selection/node-server-concurrency.test.mjs',
       'config/scripts/node-server-packaged-chat-selection.test.mjs'
     ]
     const scope = await classifyNodeServerChanges(changed, async () => inputs, {

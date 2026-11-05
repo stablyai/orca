@@ -110,13 +110,21 @@ export function getDiscoveredModels(
   )
 }
 
+/** Discovered models as settings keep them: an alias row's resolved model is read live, never saved. */
+export function savedDiscoveredModels(
+  models: readonly (CommitMessageAiModelCapability & { resolvedModel?: string })[]
+): CommitMessageAiModelCapability[] {
+  return models.map(({ resolvedModel: _resolvedModel, ...model }) => model)
+}
+
 /** Save a host's discovered models where generation, and older builds, read them. */
 export function withDiscoveredModels(
   config: SourceControlAiSettings,
   agentId: TuiAgent,
-  models: CommitMessageAiModelCapability[],
+  discovered: CommitMessageAiModelCapability[],
   hostKey: string
 ): Pick<SourceControlAiSettings, 'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost'> {
+  const models = savedDiscoveredModels(discovered)
   return {
     discoveredModelsByAgent:
       hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY

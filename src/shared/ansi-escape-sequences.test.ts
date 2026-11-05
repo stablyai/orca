@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   prepareBenchmark,
   runDescriptor
-} from '../../config/scripts/check-job-log-byte-cap-benchmark.mjs'
-import { createManifest } from '../../config/scripts/check-job-log-performance-cases.mjs'
+} from '../../config/scripts/performance/check-job-log/check-job-log-byte-cap-benchmark.mjs'
+import { createManifest } from '../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
 import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
 
 describe('ordered linear ANSI stripping', () => {

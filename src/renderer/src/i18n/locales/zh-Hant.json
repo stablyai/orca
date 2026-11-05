@@ -20322,7 +20322,10 @@
       "workerAutoClose": {
         "running": "暫時的協作工作者 · 完成後 2 分鐘關閉",
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
-        "keepOpen": "保持開啟"
+        "keepOpen": "保持開啟",
+        "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
+        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
+        "temporaryBadge": "暫時"
       }
     },
     "wslHostMark": {

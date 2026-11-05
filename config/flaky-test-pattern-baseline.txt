@@ -31,7 +31,6 @@
 1 test-no-in-test-import-actual:src/main/ssh/orcad-snapshot-room.test.ts
 1 test-no-in-test-import-actual:src/main/window/dropped-path-preparation.test.ts
 1 test-no-in-test-import-actual:src/main/workspaces/removal/local-worktree-removal-recovery.test.ts
-1 test-no-in-test-import-actual:src/renderer/src/components/native-chat/use-native-chat-context-menu.test.tsx
 1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/sidebar-feedback/SidebarFeedbackDialog.test.tsx
 1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/workspace-card/activity/WorktreeCardAgents.activation.test.tsx
 1 test-no-in-test-import-actual:src/renderer/src/components/terminal-pane/pty-connection-hook-idle-arbitration.test.ts
@@ -43,7 +42,7 @@
 1 test-no-in-test-import-actual:src/renderer/src/lib/agent-launch-caller-routing.test.ts
 1 test-no-in-test-import-actual:tests/e2e/structured-agent-session-launch-admission.unit.test.ts
 1 test-no-polling-loop:config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts
-1 test-no-polling-loop:config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts
+1 test-no-polling-loop:config/scripts/mobile-web-app/shell/mobile-web-app-frame-budget-sweep.test.ts
 1 test-no-polling-loop:mobile/src/transport/rpc-client-live-recovery.test.ts
 1 test-no-polling-loop:src/main/browser/cdp/transport/cdp-ws-proxy.test.ts
 1 test-no-polling-loop:src/main/browser/cookies/browser-cookie-import-concurrency.test.ts
@@ -145,8 +144,8 @@
 1 test-no-polling-loop:tests/e2e/terminal-tab-screenshot.ts
 1 test-no-polling-loop:tests/e2e/workspace-sleep-in-main.spec.ts
 1 test-no-polling-loop:tests/e2e/worktree-switch-first-paint.spec.ts
-1 test-no-real-time-wait:config/scripts/codex-primary-home-tripwire.test.ts
-1 test-no-real-time-wait:config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts
+1 test-no-real-time-wait:config/scripts/runtime-verification/codex-account/codex-primary-home-tripwire.test.ts
+1 test-no-real-time-wait:config/scripts/mobile-web-app/shell/mobile-web-app-frame-budget-sweep.test.ts
 1 test-no-real-time-wait:mobile/src/tasks/worktree-create-retry.test.ts
 1 test-no-real-time-wait:mobile/src/terminal/terminal-web-document-mount.test.ts
 1 test-no-real-time-wait:mobile/src/terminal/terminal-webview-tap-routing.test.ts
@@ -293,9 +292,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatModelCombobox.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-lifecycle.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/structured-chat-menu-lifetime.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-options.learned-default.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/use-structured-agent-session-read.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/checks-panel/review-actions/use-checks-panel-generation.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/file-explorer/watching/file-explorer-watch-refresh-scheduler.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/right-sidebar/source-control/review/use-pull-request-generation.test.tsx
@@ -421,7 +417,7 @@
 1 test-no-real-time-wait:tests/e2e/worktree-jump-sleep-focus.spec.ts
 1 test-no-real-time-wait:tests/e2e/worktree-parent-reorder.spec.ts
 1 test-no-real-time-wait:tests/e2e/wsl-host-fake-transport.spec.ts
-1 test-no-wall-clock:config/scripts/github-opened-issue-repository.test.ts
+1 test-no-wall-clock:config/scripts/runtime-verification/github-work-items/github-opened-issue-repository.test.ts
 1 test-no-wall-clock:config/scripts/worktree-storage/reclaim-release-test-caches.test.ts
 1 test-no-wall-clock:mobile/scripts/native-build-cache.test.ts
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
@@ -911,7 +907,6 @@
 2 test-no-real-time-wait:src/main/startup/gpu-lifecycle-install-dir-acl-guard.test.ts
 2 test-no-real-time-wait:src/main/startup/windows-install-dir-acl-recovery.test.ts
 2 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
-2 test-no-real-time-wait:src/renderer/src/components/native-chat/use-native-chat-find.test.tsx
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-exit-record.test.ts
 2 test-no-real-time-wait:src/renderer/src/lib/execute-open-editor-path-move.test.ts
@@ -956,7 +951,7 @@
 2 test-no-real-time-wait:tests/e2e/terminal-windows-codex-multiline-paste.spec.ts
 2 test-no-real-time-wait:tests/e2e/workspace-emoji-picker.spec.ts
 2 test-no-real-time-wait:tests/e2e/worktree-card-downward-drag.spec.ts
-2 test-no-wall-clock:config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts
+2 test-no-wall-clock:config/scripts/mobile-web-app/shell/mobile-web-app-frame-budget-sweep.test.ts
 1 test-no-wall-clock:mobile/src/session/native-chat/composer/use-mobile-native-chat-message-send-draft-lifetime.test.ts
 2 test-no-wall-clock:src/cli/format.test.ts
 2 test-no-wall-clock:src/cli/runtime/serve-appimage-update.test.ts
@@ -1041,7 +1036,6 @@
 2 test-no-wall-clock:src/renderer/src/components/artifacts/artifact-list-windowing.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSessionStatus.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/native-chat/use-native-chat-interactive-send.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.single-reference-details.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -1207,7 +1201,7 @@
 3 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts
-3 test-timeout-needs-reason:config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts
+3 test-timeout-needs-reason:config/scripts/mobile-web-app/shell/mobile-web-app-frame-budget-sweep.test.ts
 3 test-timeout-needs-reason:mobile/src/transport/rpc-client-reconnect-wait.test.ts
 3 test-timeout-needs-reason:src/main/antigravity/windows-hook-payload-delivery.test.ts
 3 test-timeout-needs-reason:src/main/daemon/daemon-shutdown-final-checkpoint-caller-deadline.test.ts
@@ -1338,7 +1332,7 @@
 6 test-no-real-time-wait:src/main/runtime/rpc/ws-transport.test.ts
 6 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
 2 test-no-real-time-wait:src/main/windows/windows-pty-job.win32.test.ts
-6 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
+4 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
 6 test-no-real-time-wait:src/wsl-guest/agent-hook-server.test.ts
 6 test-no-real-time-wait:tests/e2e/paired-instant-browser-tab.spec.ts
 6 test-no-wall-clock:src/main/agent-hooks/server-launch-resume-identity.test.ts
@@ -1371,7 +1365,6 @@
 8 test-no-real-time-wait:tests/e2e/terminal-column-desync-repro.spec.ts
 8 test-no-wall-clock:src/main/ai-vault-search/session-search-indexer.test.ts
 8 test-no-wall-clock:src/main/ssh/orcad-exited-own-fence.test.ts
-8 test-no-wall-clock:src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx
 8 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.test.tsx
 8 test-timeout-needs-reason:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
 9 test-no-real-time-wait:tests/e2e/chinese-ime-chat-input-repro.spec.ts
