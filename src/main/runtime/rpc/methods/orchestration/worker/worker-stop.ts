@@ -73,7 +73,6 @@ async function stopHelpers(
       }
       const state = db.getWorkerDispatch(dispatchId)?.state
       if (state === 'starting') {
-        stopsAfterStart(runtime).add(dispatchId)
         return [
           { ...helper, outcome: 'starting', state },
           ...(await stopHelpers(runtime, dispatchId, mutation))
@@ -138,19 +137,7 @@ function helperMutation(mutation: StopMutation, dispatchId: string): StopMutatio
   return mutation && { ...mutation, requestId: `${mutation.requestId}:${dispatchId}` }
 }
 
-const stopsAfterStartByRuntime = new WeakMap<OrcaRuntimeService, Set<string>>()
-
-/** Helpers a creator's stop found still starting; their start's end stops them. */
-function stopsAfterStart(runtime: OrcaRuntimeService): Set<string> {
-  let pending = stopsAfterStartByRuntime.get(runtime)
-  if (!pending) {
-    pending = new Set()
-    stopsAfterStartByRuntime.set(runtime, pending)
-  }
-  return pending
-}
-
-/** Stops a helper whose creator's stop found it starting, once that start ends. */
+/** Stops a helper whose start ended after worker-stop fenced its creator, which listed it as starting. */
 export async function stopHelperAfterStart(
   runtime: OrcaRuntimeService,
   startReceipt: unknown,
@@ -160,7 +147,12 @@ export async function stopHelperAfterStart(
     startReceipt && typeof startReceipt === 'object' && 'dispatchId' in startReceipt
       ? startReceipt.dispatchId
       : undefined
-  if (typeof dispatchId !== 'string' || !stopsAfterStart(runtime).delete(dispatchId)) {
+  if (typeof dispatchId !== 'string') {
+    return
+  }
+  const db = runtime.getOrchestrationDb()
+  const creator = db.getDispatchContextById(dispatchId)?.creator_dispatch_id
+  if (!creator || !db.isWorkerStopRequested(creator)) {
     return
   }
   // A start that already settled is skipped by the single stop; its helpers still stop.
