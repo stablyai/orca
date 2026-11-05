@@ -361,6 +361,157 @@ describe('updater', () => {
     )
   })
 
+  it('downloads a background-found update quietly when automatic downloads are on', async () => {
+    const sendMock = vi.fn()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockResolvedValue(undefined)
+    const { setupAutoUpdater } = await loadUpdaterModule()
+
+    setupAutoUpdater(updaterMainWindow(sendMock), {
+      getLastUpdateCheckAt: () => null,
+      getAutoDownloadUpdates: () => true
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+    })
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'available',
+      version: '1.0.61',
+      changelog: null,
+      background: true
+    })
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 0,
+      version: '1.0.61',
+      background: true
+    })
+    autoUpdaterMock.emit('download-progress', { percent: 100 })
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    if (process.platform === 'darwin') {
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+    }
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenLastCalledWith('updater:status', {
+        state: 'downloaded',
+        version: '1.0.61'
+      })
+    })
+  })
+
+  it('lets a background download finish when the user checks for updates mid-download', async () => {
+    const sendMock = vi.fn()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockResolvedValue(undefined)
+    const { setupAutoUpdater, checkForUpdatesFromMenu, getUpdateStatus } = await loadUpdaterModule()
+    setupAutoUpdater(updaterMainWindow(sendMock), {
+      getLastUpdateCheckAt: () => null,
+      getAutoDownloadUpdates: () => true
+    })
+    await vi.waitFor(() => {
+      expect(getUpdateStatus().state).toBe('downloading')
+    })
+
+    checkForUpdatesFromMenu()
+    expect(getUpdateStatus()).toEqual(
+      expect.objectContaining({ state: 'downloading', version: '1.0.61' })
+    )
+    autoUpdaterMock.emit('download-progress', { percent: 100 })
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    if (process.platform === 'darwin') {
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+    }
+
+    await vi.waitFor(() => {
+      expect(getUpdateStatus()).toEqual({ state: 'downloaded', version: '1.0.61' })
+    })
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves a user-started check for the user to download even with automatic downloads on', async () => {
+    const sendMock = vi.fn()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    const { setupAutoUpdater, checkForUpdatesFromMenu, getUpdateStatus } = await loadUpdaterModule()
+
+    setupAutoUpdater(updaterMainWindow(sendMock), {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutoDownloadUpdates: () => true
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(getUpdateStatus()).toEqual({ state: 'available', version: '1.0.61', changelog: null })
+    })
+    expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+  })
+
+  it('keeps a downloaded update ready when a scheduled check comes due', async () => {
+    const sendMock = vi.fn()
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    const { setupAutoUpdater, checkForUpdatesFromMenu, checkForUpdates, getUpdateStatus } =
+      await loadUpdaterModule()
+
+    setupAutoUpdater(updaterMainWindow(sendMock), { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(getUpdateStatus().state).toBe('available')
+    })
+    autoUpdaterMock.emit('download-progress', { percent: 100 })
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    if (process.platform === 'darwin') {
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+    }
+    await vi.waitFor(() => {
+      expect(getUpdateStatus().state).toBe('downloaded')
+    })
+
+    checkForUpdates()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    expect(getUpdateStatus()).toEqual(
+      expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+    )
+  })
+
   it('does not recover quit-for-update state from late errors after install commit', async () => {
     const sendMock = vi.fn()
     const mainWindow = updaterMainWindow(sendMock)

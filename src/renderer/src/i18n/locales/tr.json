@@ -985,6 +985,12 @@
       "commandHelp": "Dosyanın ana bilgisayarında, çalışma alanının kökünde çalışır. Tamponu stdin üzerinden okur ve stdout üzerine yalnızca biçimlendirilmiş metin yazmalıdır. Yol için ${file} veya ${relativeFile} kullanın. Argümanlar kabuk kullanılmadan doğrudan iletilir. --write kullanmayın. Bu projede devre dışı bırakmak için boş bırakın.",
       "include": "Dahil edilecek glob'lar (her satıra bir tane)",
       "includeHelp": "Çalışma alanı köküne göre göreli yollarla eşleşir. Eşleşen glob yoksa biçimlendirme yapılmaz. * ve ** noktayla başlayan adları atlar; bunları açıkça belirtin, ör. .github/**/*.yml. Bu komutu kullanmak için Genel > Düzenleyici bölümünde Kaydederken biçimlendir seçeneğini etkinleştirin."
+    },
+    "autoDownloadUpdates": {
+      "title": "Güncellemeleri otomatik indir",
+      "description": "Orca yeni sürümleri arka planda indirir. Bir sonraki çıkışınızda yüklenirler; daha erken güncellemek için yeniden başlatın.",
+      "keywordAutomatic": "otomatik",
+      "keywordBackground": "arka plan"
     }
   },
   "menu": {
@@ -3161,7 +3167,6 @@
       },
       "UpdateCard": {
         "68b235d264": "Güncellemek için Yeniden Başlat",
-        "6714206e5a": "Orca v{{value0}} indirildi. Hazır olduğunuzda yeniden başlatın.",
         "93794ea932": "Orca v{{value0}} indiriliyor.",
         "8acbdd3961": "Durum çubuğuna küçült",
         "17412483da": "Kuruluma Hazır",
@@ -3178,7 +3183,6 @@
         "9abc59f814": "Güncelleme Mevcut",
         "aad383aecc": "Tüm sürüm notlarını okuyun",
         "b1d867f4fb": "Güncelleme sırasında terminal oturumlarınız kesintiye uğramayacak.",
-        "09a55c39b5": "Kuruluyor...",
         "ea2a41adbe": "En son sürümü kullanıyorsunuz.",
         "ba5ffc949c": "Güncellemeler kontrol ediliyor...",
         "2c2d3e03ca": "Tekrar Dene",
@@ -21942,6 +21946,15 @@
       "rateLimitedInMinutes_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin.",
       "rateLimitedInMinutesSignedOut_one": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
       "rateLimitedInMinutesSignedOut_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın."
+    },
+    "restartConfirm": {
+      "title": "Güncellemek için şimdi yeniden başlatılsın mı?",
+      "chatsMidReply_one": "{{count}} sohbet hâlâ yanıt veriyor. Yeniden başlatmak onu durdurur; Orca yeniden açıldığında devam ettirebilirsiniz. Terminaller çalışmaya devam eder.",
+      "chatsMidReply_other": "{{count}} sohbet hâlâ yanıt veriyor. Yeniden başlatmak onları durdurur; Orca yeniden açıldığında devam ettirebilirsiniz. Terminaller çalışmaya devam eder.",
+      "cancel": "Şimdi Değil"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} indirildi. Hazır olduğunuzda yeniden başlatın; aksi hâlde Orca’dan bir sonraki çıkışınızda yüklenir."
     }
   },
   "jira": {

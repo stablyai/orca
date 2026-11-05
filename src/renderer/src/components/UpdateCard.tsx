@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { updaterMessageText } from '@/lib/updater-message-copy'
 import { UpdateCardStateContent } from './maintenance/update-card/UpdateCardStateContent'
 import { buildUpdateCardErrorModel } from './maintenance/update-card/update-card-error-model'
+import { useUpdateRestartRequest } from './maintenance/update-card/UpdateRestartConfirm'
 import {
   getUpdateCardAriaLabel,
   isHttp2ProtocolError,
@@ -27,7 +28,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const setCollapsed = useAppStore((state) => state.setUpdateCardCollapsed)
   const reassuranceSeen = useAppStore((state) => state.updateReassuranceSeen)
   const markReassuranceSeen = useAppStore((state) => state.markUpdateReassuranceSeen)
-  const hasStartedDownload = useRef(false)
   const dismissAnimationTimerRef = useRef<number | null>(null)
   const collapseAnimationTimerRef = useRef<number | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
@@ -51,7 +51,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const prevVersionRef = useRef<string | null>(null)
   if (status.state === 'available' && status.version !== prevVersionRef.current) {
     prevVersionRef.current = status.version
-    hasStartedDownload.current = false
     setMediaFailed(false)
     setMediaLoaded(false)
     setInstallError(null)
@@ -76,13 +75,7 @@ export function UpdateCard(): React.JSX.Element | null {
     const timer = window.setTimeout(() => setAutoDismissed(true), 3000)
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
-  useEffect(() => {
-    if (status.state === 'downloaded' && hasStartedDownload.current) {
-      void window.api.updater.quitAndInstall().catch((error) => {
-        setInstallError(String((error as Error)?.message ?? error))
-      })
-    }
-  }, [status.state])
+  const { requestRestart, confirmDialog } = useUpdateRestartRequest(setInstallError)
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const clearAnimationTimers = useCallback(() => {
@@ -118,7 +111,6 @@ export function UpdateCard(): React.JSX.Element | null {
   }
 
   const handleUpdate = (): void => {
-    hasStartedDownload.current = true
     if (!reassuranceSeen) {
       markReassuranceSeen()
     }
@@ -126,11 +118,6 @@ export function UpdateCard(): React.JSX.Element | null {
   }
   const handleClose = (): void => {
     dismissUpdate()
-  }
-  const handleInstallRetry = (): void => {
-    void window.api.updater.quitAndInstall().catch((error) => {
-      setInstallError(String((error as Error)?.message ?? error))
-    })
   }
   const handleEnableHttp1Compatibility = (): void => {
     if (compatibilityRelaunching) {
@@ -165,7 +152,7 @@ export function UpdateCard(): React.JSX.Element | null {
     onEnableHttp1Compatibility: handleEnableHttp1Compatibility,
     onRetryDownload: handleUpdate,
     onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
-    onInstallRetry: handleInstallRetry
+    onInstallRetry: requestRestart
   })
   const linuxPackageRecovery =
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
@@ -223,14 +210,13 @@ export function UpdateCard(): React.JSX.Element | null {
       errorCard={errorCard}
       linuxPackageRecovery={linuxPackageRecovery}
       isLocalBuild={isLocalBuild}
-      hasStartedDownload={hasStartedDownload.current}
       prefersReducedMotion={prefersReducedMotion}
       mediaFailed={mediaFailed}
       mediaLoaded={mediaLoaded}
       onMediaError={() => setMediaFailed(true)}
       onMediaLoad={() => setMediaLoaded(true)}
       onUpdate={handleUpdate}
-      onInstallRetry={handleInstallRetry}
+      onInstallRetry={requestRestart}
       onDismiss={handleDismissWithAnimation}
       onCollapse={handleCollapseWithAnimation}
     />
@@ -279,6 +265,7 @@ export function UpdateCard(): React.JSX.Element | null {
       >
         {cardContent}
       </Card>
+      {confirmDialog}
     </div>
   )
 }

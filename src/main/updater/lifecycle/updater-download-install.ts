@@ -5,7 +5,10 @@ import {
   setMacInstallPreflightInProgress
 } from '../mac-install/updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
+import {
+  getLinuxPackageType,
+  isExternallyManagedLinuxInstall
+} from '../linux-package/linux-update-package-type'
 import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
@@ -50,7 +53,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }, QUIT_AND_INSTALL_DELAY_MS)
   }
 
-  protected downloadUpdate(): void {
+  protected downloadUpdate(options?: { background?: boolean }): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -93,6 +96,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
     this.downloadInFlight = true
+    this.backgroundDownload = options?.background === true
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()
     // Acknowledge acceptance before setup delays progress events so the card responds immediately.
@@ -119,6 +123,18 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     } else {
       startDownload()
     }
+  }
+
+  /** Only installs that finish on a normal quit download unasked: deb/rpm, serve and dev jumps need a person. */
+  protected shouldDownloadAutomatically(): boolean {
+    return (
+      this.getAutoDownloadUpdates?.() === true &&
+      this.updateInstallMode === 'interactive' &&
+      getLinuxPackageType() === 'non-root' &&
+      !isExternallyManagedLinuxInstall() &&
+      this.activeUpdateSource !== 'local' &&
+      !this.isPinnedBuildActive
+    )
   }
 
   protected isQuittingForUpdate(): boolean {

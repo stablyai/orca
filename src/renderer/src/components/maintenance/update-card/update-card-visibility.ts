@@ -27,8 +27,17 @@ export function isUpdateCardVisible({
   if (status.state === 'idle') {
     return false
   }
+  // Orca downloads this offer itself; the card returns once it is ready to install.
+  if (status.state === 'available' && status.background) {
+    return false
+  }
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    // A finished download is the prompt to restart, even for an offer dismissed earlier.
+    if (
+      status.state !== 'downloading' &&
+      status.state !== 'downloaded' &&
+      status.state !== 'error'
+    ) {
       return false
     }
   }

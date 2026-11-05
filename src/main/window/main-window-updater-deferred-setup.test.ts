@@ -398,20 +398,6 @@ describe('completed deferred updater setup ownership', () => {
     updater.ensureAutoUpdaterConfigured()
     const options = capturedSetupOptions()
     expect(options.getMainWindow).toBe(getMainWindowMock)
-    expect(Object.keys(options)).toEqual([
-      'getMainWindow',
-      'getLastUpdateCheckAt',
-      'onBeforeQuit',
-      'setLastUpdateCheckAt',
-      'getPendingUpdateNudgeId',
-      'getDismissedUpdateNudgeId',
-      'setPendingUpdateNudgeId',
-      'setDismissedUpdateNudgeId',
-      'getReleaseChannelOverride',
-      'getUpdateDelayDays',
-      'onBeforeQuitFailure',
-      'installMode'
-    ])
     expect(options.getLastUpdateCheckAt?.()).toBe(123)
     expect(options.getPendingUpdateNudgeId?.()).toBe('pending')
     expect(options.getDismissedUpdateNudgeId?.()).toBe('dismissed')

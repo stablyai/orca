@@ -75,6 +75,9 @@ export abstract class UpdaterState {
   // Only native-invoked failures can recover; pre-native errors must not clear quittingForUpdate.
   protected quitAndInstallNativeInvoked = false
   protected persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
+  protected getAutoDownloadUpdates: (() => boolean) | null = null
+  /** The in-flight download was started by Orca, not the user. */
+  protected backgroundDownload = false
   protected _getLastUpdateCheckAt: (() => number | null) | null = null
   protected backgroundCheckLaunchPending = false
   // Retain promotion on the launch because its error event can precede the promise catch.

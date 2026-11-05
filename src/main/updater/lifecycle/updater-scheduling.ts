@@ -61,7 +61,13 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
-    if (this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking') {
+    // A desktop download waits for a restart or quit; a new check would reset it to "available".
+    // Serve never installs on quit, so it keeps checking for newer releases.
+    if (
+      this.backgroundCheckLaunchPending ||
+      this.currentStatus.state === 'checking' ||
+      (this.currentStatus.state === 'downloaded' && this.updateInstallMode === 'interactive')
+    ) {
       return false
     }
     if (!app.isPackaged) {

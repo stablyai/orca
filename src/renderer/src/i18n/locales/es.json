@@ -559,6 +559,12 @@
       "includeHelp": "Compara rutas relativas a la raíz del espacio de trabajo. Si ningún patrón coincide, no se aplica formato. * y ** omiten los nombres que empiezan por punto; inclúyelos explícitamente, por ejemplo .github/**/*.yml. Activa Formatear al guardar en General > Editor para usar este comando.",
       "saving": "Guardando…",
       "save": "Guardar formateador"
+    },
+    "autoDownloadUpdates": {
+      "title": "Descargar actualizaciones automáticamente",
+      "description": "Orca descarga las nuevas versiones en segundo plano. Se instalan la próxima vez que cierres Orca, o reinicia para actualizar antes.",
+      "keywordAutomatic": "automático",
+      "keywordBackground": "segundo plano"
     }
   },
   "menu": {
@@ -2709,7 +2715,6 @@
       },
       "UpdateCard": {
         "68b235d264": "Reiniciar para actualizar",
-        "6714206e5a": "Orca v{{value0}} se descargó. Reinicia cuando estés listo.",
         "93794ea932": "Orca v{{value0}} se está descargando.",
         "8acbdd3961": "Minimizar a la barra de estado",
         "17412483da": "Listo para instalar",
@@ -2726,7 +2731,6 @@
         "9abc59f814": "Actualización disponible",
         "aad383aecc": "Lee las notas de la versión completas",
         "b1d867f4fb": "Tus sesiones de terminal no se interrumpirán durante la actualización.",
-        "09a55c39b5": "Instalando...",
         "ea2a41adbe": "Estás en la última versión.",
         "ba5ffc949c": "Buscando actualizaciones...",
         "2c2d3e03ca": "Intentar de nuevo",
@@ -22408,6 +22412,16 @@
       "rateLimitedInMinutesSignedOut_one": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minuto o ejecuta `gh auth login` para que Orca pueda usar el límite más alto de tu cuenta.",
       "rateLimitedInMinutesSignedOut_other": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minutos o ejecuta `gh auth login` para que Orca pueda usar el límite más alto de tu cuenta.",
       "rateLimitedInMinutesSignedOut_many": "Se alcanzó el límite de velocidad de GitHub. Inténtalo de nuevo en aproximadamente {{count}} minutos o ejecuta `gh auth login` para que Orca pueda usar el límite más alto de tu cuenta."
+    },
+    "restartConfirm": {
+      "title": "¿Reiniciar ahora para actualizar?",
+      "chatsMidReply_one": "{{count}} chat sigue respondiendo. Reiniciar lo detiene y podrás reanudarlo cuando Orca vuelva a abrirse. Los terminales siguen funcionando.",
+      "chatsMidReply_other": "{{count}} chats siguen respondiendo. Reiniciar los detiene y podrás reanudarlos cuando Orca vuelva a abrirse. Los terminales siguen funcionando.",
+      "chatsMidReply_many": "{{count}} chats siguen respondiendo. Reiniciar los detiene y podrás reanudarlos cuando Orca vuelva a abrirse. Los terminales siguen funcionando.",
+      "cancel": "Ahora no"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} se ha descargado. Reinicia cuando quieras o se instalará la próxima vez que cierres Orca."
     }
   },
   "jira": {

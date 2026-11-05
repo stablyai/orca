@@ -29,6 +29,7 @@ export type UpdaterSetupOptions = {
   getLastUpdateCheckAt?: () => number | null
   onBeforeQuit?: () => void | Promise<void>
   setLastUpdateCheckAt?: (timestamp: number) => void
+  getAutoDownloadUpdates?: () => boolean
   getPendingUpdateNudgeId?: () => string | null
   getDismissedUpdateNudgeId?: () => string | null
   setPendingUpdateNudgeId?: (id: string | null) => void
@@ -48,8 +49,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.checkForUpdatesFromMenu(options)
   }
 
-  downloadUpdate(): void {
-    super.downloadUpdate()
+  downloadUpdate(options?: { background?: boolean }): void {
+    super.downloadUpdate(options)
   }
 
   quitAndInstall(): void {
@@ -121,6 +122,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.onBeforeQuitFailure = opts?.onBeforeQuitFailure ?? 'continue'
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
     this._getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
+    this.getAutoDownloadUpdates = opts?.getAutoDownloadUpdates ?? null
     this._getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
     this._getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
     this._setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
@@ -234,7 +236,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       },
       setUserInitiatedCheck: (value) => {
         this.userInitiatedCheck = value
-      }
+      },
+      shouldDownloadAutomatically: () => this.shouldDownloadAutomatically(),
+      startAutomaticDownload: () => this.downloadUpdate({ background: true })
     })
 
     void this.checkForUpdateNudge()

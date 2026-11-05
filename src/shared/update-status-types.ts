@@ -86,6 +86,7 @@ export type UpdateStatus = (
       /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
        *  Additive and optional — older clients simply keep offering their own download. */
       externallyManaged?: boolean
+      background?: true
     }
   | {
       state: 'not-available'
@@ -93,7 +94,14 @@ export type UpdateStatus = (
       /** Optional so older paired clients keep rendering "up to date". */
       delayedUpdate?: DelayedUpdate
     }
-  | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
+  | {
+      state: 'downloading'
+      percent: number
+      version: string
+      activeNudgeId?: string
+      /** Orca started this download itself; clients keep it in the status bar until it is ready. */
+      background?: true
+    }
   | {
       state: 'downloaded'
       version: string
@@ -119,6 +127,7 @@ export type UpdateStatus = (
       recovery?: LinuxPackageInstallRecovery
       /** Optional so older paired clients retain the diagnostic and install retry. */
       installBlock?: UpdateInstallBlock
+      background?: true
     }
 ) & { source?: UpdateSource }
 

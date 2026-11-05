@@ -1,4 +1,5 @@
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
+import { useUpdateRestartRequest } from '../../maintenance/update-card/UpdateRestartConfirm'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
@@ -13,6 +14,7 @@ import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-che
 import { GeneralRemoteServerUpdates } from '../runtime-environments/updates/GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
+import { AutoDownloadUpdatesSetting } from './AutoDownloadUpdatesSetting'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/hooks/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/update-delay'
@@ -55,10 +57,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
     }
   }, [])
 
-  const handleRestartToUpdate = (): void => {
-    // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
-    void window.api.updater.quitAndInstall().catch(console.error)
-  }
+  // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
+  const { requestRestart: handleRestartToUpdate, confirmDialog } = useUpdateRestartRequest()
 
   return (
     <section key="updates" className="space-y-4">
@@ -284,9 +284,11 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     ))}
         </p>
       </SearchableSetting>
+      <AutoDownloadUpdatesSetting />
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
+      {confirmDialog}
     </section>
   )
 }

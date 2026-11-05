@@ -6,6 +6,7 @@ import {
 } from './mac-install/updater-mac-install'
 import { compareVersions } from './releases/updater-fallback'
 import { fetchChangelog } from './releases/updater-changelog'
+import type { UpdateStatus } from '../../shared/update-status-types'
 import type { UpdaterHandlerContext } from './updater-handler-context'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
@@ -59,7 +60,9 @@ export function registerAutoUpdaterHandlers({
   suppressMissingManifestPrereleaseFallbackPromiseFailure,
   setAvailableReleaseUrl,
   setAvailableVersion,
-  setUserInitiatedCheck
+  setUserInitiatedCheck,
+  shouldDownloadAutomatically,
+  startAutomaticDownload
 }: UpdaterHandlerContext): void {
   registerMacUpdaterEvents({
     getCurrentStatus,
@@ -156,15 +159,28 @@ export function registerAutoUpdaterHandlers({
           }
         }
 
-        sendStatus(
-          getRetainedLinuxPackageManualInstallStatus() ?? {
-            state: 'available',
-            version: info.version,
-            changelog,
-            // Tell clients this host cannot self-update before offering a download.
-            ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
-          }
-        )
+        const retainedLinuxPackageStatus = getRetainedLinuxPackageManualInstallStatus()
+        if (retainedLinuxPackageStatus) {
+          sendStatus(retainedLinuxPackageStatus)
+          return
+        }
+        // Person/client checks wait for an Update click; a last-good stand-in would pin an older release.
+        const background =
+          !wasUserInitiated &&
+          !missingManifestFallback &&
+          !publishingWindowLastGoodCheck &&
+          shouldDownloadAutomatically()
+        const available: UpdateStatus = {
+          state: 'available',
+          version: info.version,
+          changelog,
+          // Tell clients this host cannot self-update before offering a download.
+          ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
+        }
+        sendStatus(background ? { ...available, background: true } : available)
+        if (background) {
+          startAutomaticDownload()
+        }
       } finally {
         clearUpdateAvailableEventPending(attemptId)
       }

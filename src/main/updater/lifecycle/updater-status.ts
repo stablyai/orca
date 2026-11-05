@@ -98,6 +98,15 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     return { ...status, delayedUpdate: this.delayedUpdate }
   }
 
+  // A background download's progress and failure stay in the status bar; its finish is the prompt.
+  private decorateStatusWithBackgroundDownload(status: UpdateStatus): UpdateStatus {
+    if (status.state !== 'downloading' && status.state !== 'error') {
+      this.backgroundDownload = false
+      return status
+    }
+    return this.backgroundDownload ? { ...status, background: true } : status
+  }
+
   /** `force` re-delivers a status the renderer must not miss even when it repeats the current one. */
   protected sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     const pendingUserInitiatedCheckOptions = this.pendingUserInitiatedCheckAfterInFlight
@@ -143,7 +152,9 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       this.activeUpdateSource === 'release'
         ? this.decorateStatusWithDelayedUpdate(status)
         : { ...status, source: this.activeUpdateSource }
-    const decoratedStatus = this.decorateStatusWithActiveNudge(sourcedStatus)
+    const decoratedStatus = this.decorateStatusWithBackgroundDownload(
+      this.decorateStatusWithActiveNudge(sourcedStatus)
+    )
 
     if (this.isUpdateCheckResultState(status.state)) {
       this.finishActiveUpdateCheckAttempt()

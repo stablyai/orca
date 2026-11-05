@@ -46,4 +46,6 @@ export type UpdaterHandlerContext = {
   setAvailableReleaseUrl: (releaseUrl: string | null) => void
   setAvailableVersion: (version: string | null) => void
   setUserInitiatedCheck: (value: boolean) => void
+  shouldDownloadAutomatically: () => boolean
+  startAutomaticDownload: () => void
 }

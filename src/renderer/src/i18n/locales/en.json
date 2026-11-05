@@ -1216,7 +1216,13 @@
       "save": "Save formatter",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     },
-    "experimental": {}
+    "experimental": {},
+    "autoDownloadUpdates": {
+      "title": "Download Updates Automatically",
+      "description": "Orca downloads new versions in the background. They install the next time you quit, or restart to update sooner.",
+      "keywordAutomatic": "automatic",
+      "keywordBackground": "background"
+    }
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",
@@ -3401,7 +3407,6 @@
       },
       "UpdateCard": {
         "68b235d264": "Restart to Update",
-        "6714206e5a": "Orca v{{value0}} is downloaded. Restart when you're ready.",
         "93794ea932": "Orca v{{value0}} is downloading.",
         "8acbdd3961": "Minimize to status bar",
         "17412483da": "Ready to Install",
@@ -3418,7 +3423,6 @@
         "9abc59f814": "Update Available",
         "aad383aecc": "Read the full release notes",
         "b1d867f4fb": "Your terminal sessions won't be interrupted during the update.",
-        "09a55c39b5": "Installing...",
         "ea2a41adbe": "You're on the latest version.",
         "ba5ffc949c": "Checking for updates...",
         "2c2d3e03ca": "Try Again",
@@ -22610,6 +22614,15 @@
       "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
+    },
+    "restartConfirm": {
+      "title": "Restart to update now?",
+      "chatsMidReply_one": "{{count}} chat is still replying. Restarting stops it, and you can resume it when Orca reopens. Terminals keep running.",
+      "chatsMidReply_other": "{{count}} chats are still replying. Restarting stops them, and you can resume them when Orca reopens. Terminals keep running.",
+      "cancel": "Not Now"
+    },
+    "readyToInstall": {
+      "installsOnQuit": "Orca v{{version}} is downloaded. Restart when you’re ready, or it installs the next time you quit Orca."
     }
   },
   "jira": {

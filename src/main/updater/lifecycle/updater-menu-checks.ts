@@ -28,10 +28,11 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     if (this.localBuildSelectionInProgress || this.pinnedBuildSelectionInProgress) {
       return
     }
-    if (
-      this.activeUpdateSource !== 'release' &&
-      (this.currentStatus.state === 'checking' || this.currentStatus.state === 'downloading')
-    ) {
+    // A new check mid-download clears its target, so the finished download would never report.
+    if (this.currentStatus.state === 'downloading') {
+      return
+    }
+    if (this.activeUpdateSource !== 'release' && this.currentStatus.state === 'checking') {
       return
     }
     this.restoreReleaseUpdateSource()
