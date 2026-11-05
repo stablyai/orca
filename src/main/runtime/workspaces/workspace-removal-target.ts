@@ -17,7 +17,7 @@ import {
 import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-attachment'
 import { closeClientHostedBrowserPagesForWorktree } from './removal/worktree-browser-client-page-close'
 import { teardownStops } from './removal/owned-session-teardown-policy'
-import { deleteRemovedOwnerBrowserProfile } from '../browser-host/managed-browser-profile-removal'
+import { deleteRemovedOwnerBrowserProfile } from '../browser-host/profiles/managed-browser-profile-removal'
 import type {
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult

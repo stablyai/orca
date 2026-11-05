@@ -50,7 +50,7 @@
 1 src/main/persistence/tracking-repos/project-group-operations.ts
 4 src/main/persistence/tracking-repos/repo-worktree-pruning.ts
 3 src/main/persistence/tracking-repos/worktree-identity-migration.ts
-1 src/main/runtime/client-hosted-browser-page-persistence.ts
+1 src/main/runtime/browser/client-pages/client-hosted-browser-page-persistence.ts
 1 src/main/runtime/client/runtime-client-state.ts
 1 src/main/runtime/mobile-session-editor-projection.ts
 3 src/main/runtime/terminal/surface/mobile-session-layout-projection.ts
