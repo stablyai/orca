@@ -1802,6 +1802,7 @@
       "countWorkflows_one": "{{count}} 個工作流程",
       "countWorkflows_other": "{{count}} 個工作流程",
       "detailsUnavailable": "無法取得此工作階段的任務詳細資訊。",
+      "outputFile": "輸出：{{value0}}",
       "groupAgents": "代理程式",
       "groupMonitors": "監控項目",
       "groupShell": "Shell 命令",
