@@ -106,15 +106,26 @@ export function useWorktreeLineageDropCommit(args: {
         return false
       }
       const { children, parent } = drop
-      for (const child of children) {
-        if (isCrossStoreParent(child, parent)) {
-          void assignCrossStoreWorktreeParent(child, parent).catch(showCrossStoreParentError)
-          continue
+      const crossStore = children.filter((child) => isCrossStoreParent(child, parent))
+      const sameStore = children.filter((child) => !isCrossStoreParent(child, parent))
+      void (async () => {
+        try {
+          // Cross-machine refs are all validated before any write, so a refusal changes nothing.
+          if (crossStore.length > 0) {
+            await assignCrossStoreWorktreeParent(crossStore, parent)
+          }
+        } catch (error) {
+          showCrossStoreParentError(error)
+          return
         }
-        void assignWorktreeParent(child.id, {
-          parentWorktreeId: parent.id,
-          ...(child.hostId ? { executionHostId: child.hostId } : {})
-        }).catch((err) => {
+        await Promise.all(
+          sameStore.map((child) =>
+            assignWorktreeParent(child.id, {
+              parentWorktreeId: parent.id,
+              ...(child.hostId ? { executionHostId: child.hostId } : {})
+            })
+          )
+        ).catch((err) => {
           console.error('Failed to nest workspace:', err)
           toast.error(
             translate(
@@ -123,7 +134,7 @@ export function useWorktreeLineageDropCommit(args: {
             )
           )
         })
-      }
+      })()
       return true
     },
     [assignCrossStoreWorktreeParent, assignWorktreeParent, resolveLineageDrop]

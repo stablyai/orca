@@ -99,27 +99,42 @@ export function createAssignWorktreeParent(
   }
 }
 
-/** Set Parent to a workspace on another machine: the child's store saves a ref built from verified ids. */
+/** Set Parent to a workspace on another machine: each child's store saves a ref built from verified
+ * ids. Every ref is built first, so a refusal (an older Orca, an unconfirmed parent) writes nothing. */
 export function createAssignCrossStoreWorktreeParent(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['assignCrossStoreWorktreeParent'] {
-  return async (child, parent) => {
-    const ownerRoute = hostRouteForWorktreeOwner(get(), child.id, child.hostId)
+  return async (children, parent) => {
+    const routes = children.map((child) => ({
+      child,
+      target: hostRouteForWorktreeOwner(get(), child.id, child.hostId).target
+    }))
     try {
-      const crossStoreParent = await buildCrossStoreParentRef(get(), ownerRoute.target, parent)
-      await callRuntimeRpc(
-        ownerRoute.target,
-        'worktree.set',
-        { worktree: toRuntimeWorktreeSelector(child.id), crossStoreParent },
-        { timeoutMs: 15_000 }
+      const prepared = await Promise.all(
+        routes.map(async (route) => ({
+          ...route,
+          crossStoreParent: await buildCrossStoreParentRef(get(), route.target, parent)
+        }))
+      )
+      await Promise.all(
+        prepared.map(({ child, target, crossStoreParent }) =>
+          callRuntimeRpc(
+            target,
+            'worktree.set',
+            { worktree: toRuntimeWorktreeSelector(child.id), crossStoreParent },
+            { timeoutMs: 15_000 }
+          )
+        )
       )
     } catch (err) {
       console.error('Failed to assign a parent on another machine:', err)
       throw err
     } finally {
       // The child's store owns its records; its list replaces both same-store and cross-store links.
-      await refreshWorktreeLineageBestEffort(ownerRoute.target, set, get)
+      await Promise.all(
+        routes.map(({ target }) => refreshWorktreeLineageBestEffort(target, set, get))
+      )
     }
   }
 }

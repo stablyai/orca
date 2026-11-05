@@ -185,7 +185,7 @@ export function WorktreeParentPickerPopover({
     (candidate: Worktree) => {
       if (child && isCrossStoreParent(child, candidate)) {
         onOpenChange(false)
-        void assignCrossStoreWorktreeParent(child, candidate).catch(showCrossStoreParentError)
+        void assignCrossStoreWorktreeParent([child], candidate).catch(showCrossStoreParentError)
         return
       }
       selectWorktreeParent({

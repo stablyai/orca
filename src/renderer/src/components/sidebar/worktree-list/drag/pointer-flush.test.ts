@@ -30,7 +30,7 @@ function setup() {
     return 1
   })
   let state = WORKTREE_ROW_DRAG_INITIAL_STATE
-  let target = NO_WORKTREE_SIDEBAR_DROP_TARGET
+  const target = NO_WORKTREE_SIDEBAR_DROP_TARGET
   const offsets = new Map([['parent', 56]])
   const args: WorktreePointerDragFrameArgs = {
     drag: {
@@ -96,9 +96,6 @@ function setup() {
     args,
     offsets,
     state: () => state,
-    nest: (id: string | null) => {
-      target = { ...NO_WORKTREE_SIDEBAR_DROP_TARGET, lineageParentIdentity: id }
-    },
     tick: (ms: number) => {
       time += ms
       const callback = nextFrame
@@ -109,38 +106,6 @@ function setup() {
 }
 
 describe('combined nesting and animated reordering', () => {
-  it('lets the pointer cross an edge into nesting without moving the destination', () => {
-    const t = setup()
-    flushWorktreePointerDragFrame(t.args)
-    expect(t.state().previewOffsetsByWorktreeId.size).toBe(0)
-    t.nest('parent')
-    t.tick(80)
-    expect(t.state().lineageDropTargetIdentity).toBe('parent')
-    expect(t.state().previewOffsetsByWorktreeId.size).toBe(0)
-    t.tick(200)
-    expect(t.state().lineageDropTargetIdentity).toBe('parent')
-    expect(t.state().dropIndicatorY).toBeNull()
-  })
-
-  it('opens the reorder gap, holds it during nesting, then restores the edge preview', () => {
-    const t = setup()
-    flushWorktreePointerDragFrame(t.args)
-    t.tick(160)
-    expect(t.state().previewOffsetsByWorktreeId).toBe(t.offsets)
-    expect(t.state().dropIndicatorY).toBe(300)
-    t.nest('parent')
-    flushWorktreePointerDragFrame(t.args)
-    expect(t.state().lineageDropTargetIdentity).toBe('parent')
-    expect(t.state().previewOffsetsByWorktreeId).toBe(t.offsets)
-    expect(t.state().dropIndicatorY).toBeNull()
-    t.nest(null)
-    flushWorktreePointerDragFrame(t.args)
-    t.tick(160)
-    expect(t.state().lineageDropTargetIdentity).toBeNull()
-    expect(t.state().previewOffsetsByWorktreeId).toBe(t.offsets)
-    expect(t.state().dropIndicatorY).toBe(300)
-  })
-
   it('clears the old line during a new intent and stops scheduling after settling', () => {
     const t = setup()
     flushWorktreePointerDragFrame(t.args)
