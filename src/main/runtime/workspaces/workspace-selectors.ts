@@ -199,9 +199,9 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
   }
 
   resolveCallerParentForAnotherStore(
-    input: Parameters<RuntimeWorktreeLineageController['resolveCallerParentForAnotherStore']>[0]
+    ...args: Parameters<RuntimeWorktreeLineageController['resolveCallerParentForAnotherStore']>
   ): ReturnType<RuntimeWorktreeLineageController['resolveCallerParentForAnotherStore']> {
-    return this.worktreeLineage.resolveCallerParentForAnotherStore(input)
+    return this.worktreeLineage.resolveCallerParentForAnotherStore(...args)
   }
 
   /** This store's installationId; cross-store records name their parent's store by it. */
