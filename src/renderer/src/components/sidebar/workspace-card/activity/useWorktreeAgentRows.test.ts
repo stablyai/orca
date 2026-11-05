@@ -751,7 +751,8 @@ describe('applyAgentRowLineage', () => {
     })
     expect(children[0].entry.prompt).toBe('Review loop')
     expect(children[1]).toMatchObject({ state: 'idle', agentType: 'code-reviewer' })
-    expect(children[1].entry.prompt).toBe('code-reviewer')
+    // A child named only by its role carries its id tail so same-role siblings differ.
+    expect(children[1].entry.prompt).toBe('code-reviewer (r1)')
 
     const ordered = applyAgentRowLineage(rows)
     expect(ordered[0].paneKey).toBe(PANE_KEY_1)

@@ -313,7 +313,9 @@ export function reconcileCodexSubagentTranscript(
     } else {
       tracked.unresolvedSince = undefined
       // A missed or early hook read must not leave the child unnamed; the poll's bounded retries read it.
-      queueCodexSubagentIdentity(roster, id, tracked.filePath)
+      if (tracked.filePath) {
+        queueCodexSubagentIdentity(roster, id, tracked.filePath)
+      }
       tracked.model = readChildModel(records) ?? tracked.model
       // Reapply each poll because parent activity can rebuild the child row and erase its discovered model.
       setCodexSubagentModel(roster, id, tracked.model)
