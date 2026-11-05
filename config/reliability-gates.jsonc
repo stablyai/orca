@@ -18403,22 +18403,22 @@
       "coveredProviders": ["relay"],
       "coverageNotes": "Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/host-session-registry.ts"
+        "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/connections/host-session-registry.ts"
       ],
       "invariant": "A closed queued transport starts no durable activation; an already-started activation retains cleanup, and a live successor becomes the indexed control without concurrent same-host activation.",
       "oracle": "Queue a closed control before a live retry behind stalled persistence. With controlled 4s store calls, require two total activations, one release for the already-started closed control, and live readiness at 4s. Existing tests retain cleanup when closure happens during I/O.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/connections/host-session-registry.test.ts ../../../cloud/apps/relay/src/connections/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts --silent=false"
       ],
       "testFiles": [
-        "cloud/apps/relay/src/host-session-registry.test.ts",
-        "cloud/apps/relay/src/host-session-client-accept.test.ts",
-        "cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts",
-        "cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts"
+        "cloud/apps/relay/src/connections/host-session-registry.test.ts",
+        "cloud/apps/relay/src/connections/host-session-client-accept.test.ts",
+        "cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts",
+        "cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "cloud/apps/relay/src/host-session-registry.test.ts",
+          "file": "cloud/apps/relay/src/connections/host-session-registry.test.ts",
           "assertions": [
             "skips a closed queued control so its live retry avoids abandoned database work",
             "does not publish a control that closes during activation",
@@ -18433,6 +18433,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/connections/host-session-registry.test.ts ../../../cloud/apps/relay/src/connections/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts --silent=false",
           "result": "passed",
           "durationSeconds": 0.407,
           "summary": "88 tests across four files passed; relay typecheck passed separately."
@@ -18480,15 +18481,15 @@
       "invariant": "A single-cell capacity check reads only that cell while retaining snapshot freshness, incarnation, outstanding reservation and missing-limit policy; new placement retains the full fleet inventory.",
       "oracle": "With 32 capped cells, an existing active host stays on its pinned cell and reads one headroom row; new placement reads all 32. Missing, expired or prior-incarnation snapshots, capacity exhaustion and outstanding debt still refuse the active pinned host; an uncapped cell remains admissible.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell/admission/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --silent=false"
       ],
       "testFiles": [
         "cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts",
         "cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts",
         "cloud/apps/relay/src/assignment/assignment-store.test.ts",
-        "cloud/apps/relay/src/cell-inventory-lock-contention.test.ts",
+        "cloud/apps/relay/src/cell/admission/cell-inventory-lock-contention.test.ts",
         "cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts",
-        "cloud/apps/relay/src/regional-rehome-target-selection.test.ts"
+        "cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts"
       ],
       "assertionRefs": [
         {
@@ -18508,7 +18509,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay test src/assignment/assignment-headroom-scope.test.ts src/assignment/assignment-connection-headroom.test.ts src/assignment/assignment-store.test.ts src/cell-inventory-lock-contention.test.ts src/assignment/assignment-isolated-cell-replacement.test.ts src/regional-rehome-target-selection.test.ts --silent=false --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/cell/admission/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --silent=false",
           "result": "passed",
           "durationSeconds": 2.22,
           "summary": "164 tests passed across the six remaining headroom fixture suites on Linux through the relay package runner, including its schema/contract build hooks. This executes the current selector with two workers. It does not establish native PostgreSQL contention or transaction recovery coverage."

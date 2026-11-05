@@ -12,8 +12,8 @@ import {
   type RelayLockOptions,
   type RelayTransactionOptions,
   type SqlRow
-} from '../database.js'
-import { ReservePaceError } from '../reserve-assignment.js'
+} from '../database/database.js'
+import { ReservePaceError } from './reserve-placement/reserve-assignment.js'
 
 const CELLS: RelayCellConfig[] = [
   { id: 'us-c1', url: 'https://us-c1.relay.example.com', region: 'us-central1', capacityRequests: 100 },
