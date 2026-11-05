@@ -228,7 +228,18 @@
       "selectText": "テキストを選択"
     },
     "nativeChatImageViewer": {
-      "closeImage": "画像を閉じる"
+      "closeImage": "画像を閉じる",
+      "imageActions": "画像の操作",
+      "copyImage": "画像をコピー",
+      "saveImage": "画像を保存",
+      "share": "共有…",
+      "imageCopied": "画像をコピーしました",
+      "imageSaved": "画像を保存しました",
+      "copyFailed": "画像をコピーできませんでした",
+      "saveFailed": "画像を保存できませんでした",
+      "shareFailed": "画像を共有できませんでした",
+      "photosAccessDenied": "設定で Orca に写真の追加を許可してください",
+      "imageTooLarge": "この画像は大きすぎます"
     },
     "nativeChatProse": {
       "attachedImage": "添付画像",
@@ -567,6 +578,22 @@
       "stopped": "{{hostName}} は停止しています。コンピューターで起動してください。",
       "server": "サーバー",
       "unavailable": "{{hostName}} はスマートフォンから利用できません。コンピューターでそのプロジェクトのいずれかを開いてください。"
+    },
+    "goal": {
+      "chip": "ゴール",
+      "exitMode": "ゴールモードを終了する",
+      "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を定義する",
+      "pursuing": "目標を追求中",
+      "set": "目標を設定済み",
+      "paused": "一時停止されたゴール",
+      "blocked": "ゴール阻止",
+      "limited": "目標が限定されている",
+      "clear": "目標を削除",
+      "expand": "完全な目標を表示",
+      "collapse": "完全な目標を非表示にする",
+      "attachmentsUnsupported": "目標を設定する前に添付ファイルを削除してください。",
+      "pause": "一時停止",
+      "resume": "再開"
     }
   },
   "common": {

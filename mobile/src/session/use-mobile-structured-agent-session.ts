@@ -1,11 +1,6 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
-import { createStructuredQuestionProjection } from '../../../src/shared/structured-agent-question-projection'
-import { projectStructuredAgentStartItem } from '../../../src/shared/structured-agent-start-projection'
-import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { agentSessionTranscriptRows } from '../../../src/shared/agent-session/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
@@ -48,10 +43,11 @@ import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
 import { useMobileStructuredContextUsage } from './use-mobile-structured-context-usage'
 import { useMobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
-
-const mobileStructuredTranscript = createStructuredQuestionProjection(
-  projectStructuredAgentStartItem
-)
+import {
+  useMobileStructuredThreadGoal,
+  useMobileStructuredThreadGoalSend
+} from './use-mobile-structured-thread-goal'
+import { useMobileStructuredTranscript } from './use-mobile-structured-transcript'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -122,13 +118,6 @@ export function useMobileStructuredAgentSession(
     onSendError
   })
 
-  const transcriptItems = useMemo(
-    () =>
-      withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items), {
-        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined
-      }),
-    [agent, state.items]
-  )
   const sends = useMobileStructuredSends({
     sessionKey,
     cursor: state.cursor,
@@ -136,15 +125,10 @@ export function useMobileStructuredAgentSession(
     queuedMessages,
     onSendError
   })
-  const messages = useMemo(
-    () =>
-      projectStructuredAgentSessionMessages(
-        transcriptItems,
-        sends.optimistic,
-        state.submissions,
-        mobileStructuredTranscript.messages
-      ),
-    [transcriptItems, sends.optimistic, state.submissions]
+  const { transcriptItems, messages, receipts } = useMobileStructuredTranscript(
+    agent,
+    state,
+    sends.optimistic
   )
   const turnTiming = useMobileStructuredAgentTurnTiming(
     { ...state, items: transcriptItems },
@@ -182,6 +166,15 @@ export function useMobileStructuredAgentSession(
     queueFollowUps,
     queueSendsNext
   })
+  const goal = useMobileStructuredThreadGoal(args, state, {
+    sessionKey,
+    report: options.threadGoalSupport,
+    turnId,
+    workingStartedAt: turnTiming.workingStartedAt,
+    working: isWorking || queueSendsNext,
+    mutate,
+    commands: sendController
+  })
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -197,13 +190,14 @@ export function useMobileStructuredAgentSession(
     reject: sends.reject,
     commandPending: commandPendingRef,
     sendsOut,
-    controller: sendController,
+    controller: goal.commands,
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
+  useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
   const { items, currentRequests, actionablePromptIds, status, epoch } = state
   // Prefer host actionability: ended-agent prompts must receive no answer.
   const [approvalPrompt, questionPrompt] = useMemo(() => {
@@ -294,7 +288,7 @@ export function useMobileStructuredAgentSession(
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
-    receipts: mobileStructuredTranscript.transcript(transcriptItems).receipts,
+    receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt),
@@ -306,6 +300,7 @@ export function useMobileStructuredAgentSession(
     interruptedContinue: useMobileStructuredInterruptedContinue(
       { client, sessionId, sessionKey, hostSupport, ...state },
       isWorking || queueSendsNext
-    )
+    ),
+    threadGoal: goal.threadGoal
   }
 }

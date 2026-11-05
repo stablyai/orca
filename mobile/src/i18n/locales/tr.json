@@ -228,7 +228,18 @@
       "selectText": "Metni seç"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Görseli kapat"
+      "closeImage": "Görseli kapat",
+      "imageActions": "Görsel işlemleri",
+      "copyImage": "Görseli kopyala",
+      "saveImage": "Görseli kaydet",
+      "share": "Paylaş…",
+      "imageCopied": "Görsel kopyalandı",
+      "imageSaved": "Görsel kaydedildi",
+      "copyFailed": "Görsel kopyalanamadı",
+      "saveFailed": "Görsel kaydedilemedi",
+      "shareFailed": "Görsel paylaşılamadı",
+      "photosAccessDenied": "Ayarlar'da Orca'nın fotoğraf eklemesine izin verin",
+      "imageTooLarge": "Bu görsel çok büyük"
     },
     "nativeChatProse": {
       "attachedImage": "Ekli görsel",
@@ -571,6 +582,22 @@
       "stopped": "{{hostName}} durduruldu. Bilgisayarınızda başlatın.",
       "server": "Sunucu",
       "unavailable": "{{hostName}} telefonunuzdan kullanılamıyor. Bilgisayarınızda projelerinden birini açın."
+    },
+    "goal": {
+      "chip": "Hedef",
+      "exitMode": "Hedef modundan çık",
+      "placeholder": "Hedefinizi açıklayın; en iyi sonuçlar için ölçülebilir sonuçlar tanımlayın",
+      "pursuing": "Hedef üzerinde çalışılıyor",
+      "set": "Hedef belirlendi",
+      "paused": "Hedef duraklatıldı",
+      "blocked": "Hedef engellendi",
+      "limited": "Hedef sınırına ulaşıldı",
+      "clear": "Hedefi temizle",
+      "expand": "Hedefin tamamını göster",
+      "collapse": "Hedefin tamamını gizle",
+      "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın.",
+      "pause": "Duraklat",
+      "resume": "Devam et"
     }
   },
   "common": {

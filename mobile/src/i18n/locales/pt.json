@@ -232,7 +232,18 @@
       "selectText": "Selecionar texto"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Fechar imagem"
+      "closeImage": "Fechar imagem",
+      "imageActions": "Ações da imagem",
+      "copyImage": "Copiar imagem",
+      "saveImage": "Salvar imagem",
+      "share": "Compartilhar…",
+      "imageCopied": "Imagem copiada",
+      "imageSaved": "Imagem salva",
+      "copyFailed": "Não foi possível copiar a imagem",
+      "saveFailed": "Não foi possível salvar a imagem",
+      "shareFailed": "Não foi possível compartilhar a imagem",
+      "photosAccessDenied": "Permita que o Orca adicione fotos em Ajustes",
+      "imageTooLarge": "Esta imagem é grande demais"
     },
     "nativeChatProse": {
       "attachedImage": "Imagem anexada",
@@ -606,6 +617,22 @@
       "stopped": "{{hostName}} está parado. Inicie-o no seu computador.",
       "server": "O servidor",
       "unavailable": "{{hostName}} não está disponível no seu telefone. Abra um dos projetos dele no seu computador."
+    },
+    "goal": {
+      "chip": "Objetivo",
+      "exitMode": "Sair do modo de objetivo",
+      "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",
+      "pursuing": "Buscando o objetivo",
+      "set": "Objetivo definido",
+      "paused": "Objetivo pausado",
+      "blocked": "Objetivo bloqueado",
+      "limited": "Objetivo limitado",
+      "clear": "Limpar objetivo",
+      "expand": "Mostrar objetivo completo",
+      "collapse": "Ocultar objetivo completo",
+      "attachmentsUnsupported": "Remova os anexos antes de definir um objetivo.",
+      "pause": "Pausar",
+      "resume": "Retomar"
     }
   },
   "common": {
