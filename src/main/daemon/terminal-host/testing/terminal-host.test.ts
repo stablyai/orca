@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync, rmSync } from 'node:fs'
 import { Session } from '../../sessions/session'
-import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../../sessions/session-termination-controller'
+import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from '../../sessions/immediate-kill-reply-budget'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 import { TerminalHost } from '../terminal-host'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

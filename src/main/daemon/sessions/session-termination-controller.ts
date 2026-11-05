@@ -6,7 +6,6 @@ import {
 } from './immediate-kill-reply-budget'
 
 const KILL_TIMEOUT_MS = 5_000
-export { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS, SESSION_FORCE_KILL_RETRY_MS }
 const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 
 export type SessionTerminationControllerDeps = {

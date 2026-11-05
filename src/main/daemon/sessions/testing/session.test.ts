@@ -4,7 +4,7 @@ import { TerminalSessionTeardown } from '../../terminal-host/terminal-session-te
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
   SESSION_FORCE_KILL_RETRY_MS
-} from '../session-termination-controller'
+} from '../immediate-kill-reply-budget'
 import type { SessionState, ShellReadyState } from '../../protocol/daemon-rpc-contract'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from '../terminal-host'
 import type { TerminalHostOptions } from '../terminal-host-options'
-import { SESSION_FORCE_KILL_RETRY_MS } from '../../sessions/session-termination-controller'
+import { SESSION_FORCE_KILL_RETRY_MS } from '../../sessions/immediate-kill-reply-budget'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
 
