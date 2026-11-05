@@ -13,7 +13,7 @@ import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
-import { clearFlushTimerIfIdle } from './flush'
+import { cancelPendingDataFlush, clearFlushTimerIfIdle } from './flush'
 import { advancePtyEscapeBoundary, escapeBoundaryFields } from './pty-escape-boundary'
 import type { PtyIpcSession } from '../session'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
@@ -73,10 +73,7 @@ export function acceptPtyDataForRenderer(
   const isQueryCopy = payload.sequenceChars === 0
   const startEscapeBoundary = isQueryCopy ? '' : advancePtyEscapeBoundary(payload.id, payload.data)
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
-    if (session.flushTimer) {
-      clearTimeout(session.flushTimer)
-      session.flushTimer = null
-    }
+    cancelPendingDataFlush(session)
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.clearPendingPtyData()

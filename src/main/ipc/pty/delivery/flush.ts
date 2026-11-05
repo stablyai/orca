@@ -6,7 +6,7 @@ import { advanceEscapeBoundary } from './pty-escape-boundary'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
 import {
-  PTY_BATCH_DRAIN_CONTINUE_MS,
+  PTY_BATCH_SEND_RETRY_MS,
   PTY_BATCH_FLUSH_CHUNK_CHARS,
   PTY_BATCH_FLUSH_MAX_WRITES,
   PTY_DISPATCHER_READY_WATCHDOG_MS
@@ -17,11 +17,27 @@ import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
 
+/** A zero delay yields through setImmediate: input IPC still interleaves, without a clamped timer tick per slice. */
 export function schedulePendingDataFlush(session: PtyIpcSession, delayMs: number): void {
   if (session.flushTimer) {
     return
   }
-  session.flushTimer = setTimeout(() => session.flushPendingData(), delayMs)
+  const flush = (): void => session.flushPendingData()
+  session.flushTimer =
+    delayMs <= 0 ? { immediate: setImmediate(flush) } : { timeout: setTimeout(flush, delayMs) }
+}
+
+export function cancelPendingDataFlush(session: PtyIpcSession): void {
+  const scheduled = session.flushTimer
+  if (!scheduled) {
+    return
+  }
+  session.flushTimer = null
+  if ('immediate' in scheduled) {
+    clearImmediate(scheduled.immediate)
+  } else {
+    clearTimeout(scheduled.timeout)
+  }
 }
 
 export function invalidatePendingPtyDrainClassification(
@@ -69,11 +85,10 @@ export function armDispatcherReadyWatchdog(session: PtyIpcSession): void {
 }
 
 export function clearFlushTimerIfIdle(session: PtyIpcSession): void {
-  if (session.pendingData.size > 0 || session.flushTimer === null) {
+  if (session.pendingData.size > 0) {
     return
   }
-  clearTimeout(session.flushTimer)
-  session.flushTimer = null
+  cancelPendingDataFlush(session)
 }
 
 export function flushPendingData(session: PtyIpcSession): void {
@@ -200,15 +215,12 @@ export function flushPendingData(session: PtyIpcSession): void {
     session.ackGatedFlushSkipCount++
   }
   if (sendFailed && session.pendingData.size > 0) {
-    if (session.flushTimer) {
-      clearTimeout(session.flushTimer)
-      session.flushTimer = null
-    }
-    schedulePendingDataFlush(session, PTY_BATCH_DRAIN_CONTINUE_MS)
+    cancelPendingDataFlush(session)
+    schedulePendingDataFlush(session, PTY_BATCH_SEND_RETRY_MS)
     return
   }
   if (session.pendingData.size > 0 && (writes > 0 || creditReleasedDuringFlush)) {
     // Yield between slices so background floods do not delay keystroke writes.
-    schedulePendingDataFlush(session, writes > 0 ? PTY_BATCH_DRAIN_CONTINUE_MS : 0)
+    schedulePendingDataFlush(session, 0)
   }
 }

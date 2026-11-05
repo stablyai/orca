@@ -80,7 +80,10 @@ export type PtyIpcSession = {
   pendingOverflowMarkedPtys: Set<string>
   rendererDeliveryAccountingByPty: Map<string, RendererPtyDeliveryAccounting>
   trustedTerminalHandleEnv: Set<string>
-  flushTimer: ReturnType<typeof setTimeout> | null
+  flushTimer:
+    | { immediate: ReturnType<typeof setImmediate> }
+    | { timeout: ReturnType<typeof setTimeout> }
+    | null
   pendingDataFlushActive: boolean
   pendingDataCreditReleasedDuringFlush: boolean
   rendererInFlightTotalChars: number
