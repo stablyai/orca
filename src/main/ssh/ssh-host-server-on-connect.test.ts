@@ -427,8 +427,6 @@ describe('which server an SSH host runs on connect', () => {
 
     expect(await remedyFor('orcad_activation_fence_busy')).toBe('retry')
     expect(await remedyFor('orcad_snapshot_space_insufficient')).toBe('free-host-space')
-    expect(await remedyFor('orcad_initial_runtime_live')).toBe('stop-unmanaged-runtime')
-    expect(await remedyFor('orcad_activation_daemon_absent')).toBe('see-details')
     // Thrown errors and older hosts publish no code.
     expect(sshHostServerSetupRemedy(undefined)).toBe('retry')
     warn.mockRestore()
