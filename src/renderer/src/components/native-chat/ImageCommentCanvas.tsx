@@ -56,9 +56,10 @@ export function ImageCommentCanvas({
       return
     }
     const id =
-      (event.target as Element)
-        .closest('[data-image-comment-id]')
-        ?.getAttribute('data-image-comment-id') ?? null
+      event.target instanceof Element
+        ? (event.target.closest('[data-image-comment-id]')?.getAttribute('data-image-comment-id') ??
+          null)
+        : null
     gesture.current = {
       id,
       x: event.clientX,

@@ -20613,7 +20613,25 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
-      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
+      "imageComments": {
+        "pin": "Comment {{number}}",
+        "comments": "Comments",
+        "hint": "Click the image to add a numbered comment. Drag a pin to move it. Hold Alt to pan.",
+        "emptyComment": "Write a comment…",
+        "delete": "Delete comment {{number}}",
+        "doneHint": "Done adds the marked image and comments to your draft. Nothing is sent automatically.",
+        "title": "Image comments",
+        "add": "Add comment",
+        "done": "Done",
+        "loadFailed": "This image could not be loaded.",
+        "discardTitle": "Discard image comments?",
+        "discardDescription": "These comments have not been added to your chat draft.",
+        "action": "Comment on image",
+        "draftUnavailable": "The chat draft is unavailable. Try again when the input is ready.",
+        "attachFailed": "The image could not be added to this chat draft. Your comments are still here; try again.",
+        "coordinates": "x {{x}}% · y {{y}}%"
+      }
     },
     "tab": {
       "bar": {
@@ -21936,7 +21954,8 @@
   },
   "common": {
     "retry": "Retry",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "discard": "Discard"
   },
   "terminal": {
     "sessionSaveFailure": {

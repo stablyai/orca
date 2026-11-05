@@ -57,7 +57,11 @@ export function ImageCommentSidebar({
                   )}
               </span>
               <span className="text-xs tabular-nums text-muted-foreground">
-                x {item.x.toFixed(2)}% · y {item.y.toFixed(2)}%
+                {translate(
+                  'components.native-chat.imageComments.coordinates',
+                  'x {{x}}% · y {{y}}%',
+                  { x: item.x.toFixed(2), y: item.y.toFixed(2) }
+                )}
               </span>
             </button>
             <ImageCommentTool

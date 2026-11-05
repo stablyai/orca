@@ -92,7 +92,10 @@ function Probe({
     resolvePendingImageAttachment: attachments.resolvePendingImageAttachment,
     revealPendingImageAttachment: attachments.revealPendingImageAttachment,
     dropPendingImageAttachment: attachments.dropPendingImageAttachment,
-    insertTypedText: () => true,
+    insertTypedText: (text) => {
+      setDraft((previous) => previous + text)
+      return true
+    },
     setCaret,
     setNotice
   })
@@ -162,6 +165,7 @@ describe('clipboard image paste into a remote terminal-backed chat', () => {
       )
     })
     expect(attached).toBe(true)
+    expect(latest().draft).toContain('1. [x=25%, y=75%] Align graph')
     expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
       runtimeEnvironmentId: 'env-1',
       imageDataUrl: 'data:image/png;base64,cG5n'
@@ -172,6 +176,32 @@ describe('clipboard image paste into a remote terminal-backed chat', () => {
     expect(mocks.readClipboardImageThumbnail).not.toHaveBeenCalled()
     expect(mocks.readClipboardText).not.toHaveBeenCalled()
   })
+
+  it.each(['save failure', 'owner changed'] as const)(
+    'keeps edited-image text out of the draft after %s',
+    async (failure) => {
+      let owner = SERVER_OWNER
+      mocks.saveClipboardImageAsTempFile.mockImplementation(async () => {
+        if (failure === 'save failure') {
+          throw new Error('Upload failed')
+        }
+        owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-2' }
+        return '/tmp/orca-paste-remote.png'
+      })
+      const latest = await render(() => owner)
+      let attached = true
+      await act(async () => {
+        attached = await latest().paste.attachCommentedImage(
+          'data:image/png;base64,cG5n',
+          '1. [x=25%, y=75%] Align graph'
+        )
+      })
+      expect(attached).toBe(false)
+      expect(latest().attachments.imageAttachments).toHaveLength(0)
+      expect(latest().draft).toBe('')
+      expect(latest().notice).not.toBeNull()
+    }
+  )
 
   it.each(['event', 'menu'] as const)(
     'attaches the image saved on the server via %s paste',

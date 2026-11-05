@@ -111,16 +111,19 @@ export function NativeChatImageCommentsDialog({
       >
         <DialogContent
           showCloseButton={false}
+          surface="panel"
           aria-describedby={undefined}
-          className="flex h-[90dvh] w-[90vw] max-w-[90vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[90vw]"
+          className="flex h-[90dvh] w-[90vw] max-w-[90vw] flex-col overflow-hidden sm:max-w-[90vw]"
           onEscapeKeyDown={(event) => {
             event.preventDefault()
             close()
           }}
           onPointerDownOutside={(event) => event.preventDefault()}
           onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            ;(event.currentTarget as HTMLElement).focus()
+            if (event.currentTarget instanceof HTMLElement) {
+              event.preventDefault()
+              event.currentTarget.focus()
+            }
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)) {
@@ -129,8 +132,8 @@ export function NativeChatImageCommentsDialog({
             }
           }}
         >
-          <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-            <div className="min-w-0 flex-1">
+          <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+            <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
               <DialogTitle>
                 {translate('components.native-chat.imageComments.title', 'Image comments')}
               </DialogTitle>
