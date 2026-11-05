@@ -606,4 +606,113 @@ describe('Claude permission wait that Claude denies itself', () => {
     ])
     expect(states.at(-1)).toBe('PostToolBatch:working')
   })
+
+  describe('with a wait Orca cannot identify', () => {
+    const childA = { agent_id: 'agent-a', agent_type: 'general-purpose' }
+    const childB = { agent_id: 'agent-b', agent_type: 'general-purpose' }
+    const commandB = { command: 'touch /private/tmp/orca-permcap-b' }
+    const childBDenial = [
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: commandB,
+        tool_use_id: 'toolu-b',
+        ...childB
+      },
+      { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: commandB, ...childB },
+      {
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ tool_name: 'Bash', tool_input: commandB, tool_use_id: 'toolu-b' }],
+        ...childB
+      }
+    ]
+
+    it('keeps an unanswered MCP dialog when a result without an id arrives twice', async () => {
+      const dialog = { hook_event_name: 'Elicitation', mode: 'form', mcp_server_name: 'srv' }
+      const result = { hook_event_name: 'ElicitationResult', mcp_server_name: 'srv' }
+      const states = await replay([
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', ...childB },
+        dialog,
+        dialog,
+        result,
+        result,
+        ...childBDenial
+      ])
+      expect(states.at(-1)).toBe('PostToolBatch:waiting')
+    })
+
+    it("keeps one server's MCP dialog when another server answers a dialog with the same id", async () => {
+      const states = await replay([
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', ...childB },
+        { hook_event_name: 'Elicitation', mcp_server_name: 'one', elicitation_id: 'e-1' },
+        { hook_event_name: 'Elicitation', mcp_server_name: 'two', elicitation_id: 'e-1' },
+        { hook_event_name: 'ElicitationResult', mcp_server_name: 'one', elicitation_id: 'e-1' },
+        ...childBDenial
+      ])
+      expect(states.at(-1)).toBe('PostToolBatch:waiting')
+    })
+
+    it('ends a wait whose call was never seen when the user approves the request', async () => {
+      const command = { command: 'touch /private/tmp/orca-permcap-unseen' }
+      const request = {
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Bash',
+        tool_input: command,
+        ...childA
+      }
+      const states = await replay([
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', ...childA },
+        request,
+        request,
+        {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: command,
+          tool_use_id: 'toolu-unseen',
+          ...childA
+        }
+      ])
+      expect(states.slice(-2)).toEqual(['PermissionRequest:waiting', 'PostToolUse:working'])
+    })
+
+    it("keeps a request whose call was never seen after the same agent's matching tool finishes", async () => {
+      const readA = { file_path: '/tmp/orca-permcap-a' }
+      const states = await replay([
+        { hook_event_name: 'UserPromptSubmit', prompt: 'work' },
+        { hook_event_name: 'SubagentStart', ...childA },
+        { hook_event_name: 'SubagentStart', ...childB },
+        { hook_event_name: 'PermissionRequest', tool_name: 'Read', tool_input: readA, ...childA },
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Read',
+          tool_input: { file_path: '/tmp/orca-permcap-sibling' },
+          tool_use_id: 'toolu-sibling',
+          ...childA
+        },
+        {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Read',
+          tool_input: { file_path: '/tmp/orca-permcap-sibling' },
+          tool_use_id: 'toolu-sibling',
+          ...childA
+        },
+        {
+          hook_event_name: 'PostToolBatch',
+          tool_calls: [
+            {
+              tool_name: 'Read',
+              tool_input: { file_path: '/tmp/orca-permcap-sibling' },
+              tool_use_id: 'toolu-sibling'
+            }
+          ],
+          ...childA
+        },
+        ...childBDenial
+      ])
+      expect(states.at(-1)).toBe('PostToolBatch:waiting')
+    })
+  })
 })
