@@ -1,6 +1,6 @@
 import React from 'react'
-import { Loader2 } from 'lucide-react'
 import { useNow } from '@/hooks/use-now'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
@@ -19,20 +19,26 @@ export function WorkspaceCleanupFreshness({
   if (scannedAt === null && !refreshing) {
     return null
   }
+  // A fixed suffix, not a ticking counter: the age stays readable and nothing reflows mid-scan.
   return (
-    <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-      {scannedAt !== null ? (
-        <span className="truncate">
-          {translate('components.workspace.cleanup.browse.updatedAgo', 'Updated {{value0}}', {
+    <span className="min-w-0 truncate text-xs text-muted-foreground">
+      {scannedAt !== null
+        ? translate('components.workspace.cleanup.browse.updatedAgo', 'Updated {{value0}}', {
             value0: formatWorkspaceCleanupRelativeTime(scannedAt, now).toLowerCase()
-          })}
-        </span>
-      ) : null}
+          })
+        : null}
+      {scannedAt !== null && refreshing ? ' · ' : null}
       {refreshing ? (
-        <span className="flex shrink-0 items-center gap-1">
-          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-          {formatWorkspaceCleanupRefreshingLabel(progress)}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              {translate('components.workspace.cleanup.browse.refreshing', 'Refreshing…')}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {formatWorkspaceCleanupRefreshingLabel(progress)}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
     </span>
   )

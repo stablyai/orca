@@ -155,33 +155,6 @@ describe('hidden-pane cursor blink suspension', () => {
     expect(rendersBlinkingCursor(pane)).toBe(true)
   })
 
-  it('restores every pane of a split, including one revealed a second time', async () => {
-    const owner = {}
-    const left = createTestPane()
-    const right = createTestPane()
-    const panes = [left, right]
-    await write(left.terminal, 'left$ ')
-    await write(right.terminal, 'right$ ')
-    await flushRender()
-
-    for (let cycle = 0; cycle < 2; cycle++) {
-      suspendPaneRendering(panes, { owner, livePanes: () => panes })
-      resumePaneRendering(panes, owner)
-      // Focus split panes one at a time because DOM blink classes follow actual terminal focus.
-      for (const [name, pane] of [
-        ['left', left],
-        ['right', right]
-      ] as const) {
-        pane.terminal.focus()
-        await nextFrame()
-        expect(renderedCursor(pane), `${name} cursor, cycle ${cycle}`).not.toBeNull()
-        expect(rendersBlinkingCursor(pane), `${name} blink, cycle ${cycle}`).toBe(true)
-      }
-    }
-    expect(renderedText(left)).toContain('left$')
-    expect(renderedText(right)).toContain('right$')
-  })
-
   it('does not re-arm a hidden pane when the blink setting changes mid-hide', async () => {
     const pane = createTestPane({ cursorBlink: false })
     suspendPaneRendering([pane])

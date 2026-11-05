@@ -14,6 +14,7 @@ export type ContextualTourRequestDecision =
         | 'auto-disabled'
         | 'onboarding'
         | 'seen'
+        | 'already-progressed'
         | 'session-consumed'
         | 'active-tour'
         | 'modal'
@@ -75,17 +76,31 @@ export function getContextualTourStartStepIndex(
   targetExists: (selector: string) => boolean,
   isStepDone: (step: ContextualTourStep) => boolean = () => false
 ): number | null {
-  const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  let startIndex = Math.max(requiredStepIndex, 0)
-  // Resume at the first unfinished step; a finished action step never shows again.
-  while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
-    startIndex += 1
+  const requiredStepIndexes = tour.steps.flatMap((step, index) =>
+    step.requiredForStart === true ? [index] : []
+  )
+  const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  // Never start before the user's latest done step, so steps added ahead of it don't rewind the tour.
+  const lastDoneIndex = tour.steps.findLastIndex((step) => isStepDone(step))
+  for (const candidate of candidates) {
+    let startIndex = Math.max(candidate, lastDoneIndex)
+    while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
+      const nextIndex = getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: startIndex,
+        targetExists
+      })
+      if (nextIndex === null) {
+        return null
+      }
+      startIndex = nextIndex
+    }
+    const step = tour.steps[startIndex]
+    if (step && targetExists(step.targetSelector)) {
+      return startIndex
+    }
   }
-  const step = tour.steps[startIndex]
-  if (!step || !targetExists(step.targetSelector)) {
-    return null
-  }
-  return startIndex
+  return null
 }
 
 export function getVisibleContextualTourStepIndexes(
@@ -135,6 +150,7 @@ export function getContextualTourRequestDecision(args: {
   autoEligible: boolean
   onboardingVisible: boolean
   seenIds: readonly string[]
+  progressBlocked: boolean
   sessionConsumed: boolean
   activeTourId: string | null
   activeModal: string
@@ -153,6 +169,9 @@ export function getContextualTourRequestDecision(args: {
   }
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
+  }
+  if (args.progressBlocked) {
+    return { kind: 'blocked', reason: 'already-progressed' }
   }
   if (args.sessionConsumed) {
     return { kind: 'blocked', reason: 'session-consumed' }

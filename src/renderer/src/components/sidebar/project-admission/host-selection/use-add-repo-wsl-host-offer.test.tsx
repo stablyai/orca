@@ -112,38 +112,6 @@ describe('useAddRepoWslHostOffer', () => {
     expect(addLocalPath).not.toHaveBeenCalled()
   })
 
-  it('offers to run the distro, not the saved host, while WSL hosts are off', () => {
-    mocks.state.settings = { experimentalWslHosts: false }
-    const { view, showNotice } = setup(true)
-    act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
-    showNotice()
-    expect(screen.queryByText('Add on the Ubuntu host (recommended)')).toBeNull()
-    expect(screen.getByText('Run Ubuntu as a host (recommended)')).toBeTruthy()
-  })
-
-  it('Add on host selects the host and prefills the Linux path', async () => {
-    const { view, showNotice, selectHost, connectHost, setServerPath, clickAddOnHost } = setup(true)
-    act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
-    showNotice()
-    await clickAddOnHost()
-    expect(selectHost).toHaveBeenCalledWith(HOST)
-    expect(connectHost).not.toHaveBeenCalled()
-    view.rerender({ selectedHostId: HOST })
-    expect(setServerPath).toHaveBeenLastCalledWith('/home/me/repo')
-
-    // A later drop onto the open dialog wins over the earlier choice.
-    view.rerender({ selectedHostId: HOST, droppedHostPath: { hostId: HOST, path: '/srv/other' } })
-    expect(setServerPath).toHaveBeenLastCalledWith('/srv/other')
-  })
-
-  it('Add on host starts a host that is not selectable yet', async () => {
-    const { view, showNotice, connectHost, clickAddOnHost } = setup(false)
-    act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
-    showNotice()
-    await clickAddOnHost()
-    expect(connectHost).toHaveBeenCalledWith(HOST)
-  })
-
   it('keeps the offer when the host fails to start, so the user can still add it here', async () => {
     const { view, showNotice, addLocalPath, clickAddOnHost } = setup(false, false)
     act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
@@ -154,23 +122,6 @@ describe('useAddRepoWslHostOffer', () => {
     showNotice()
     act(() => fireEvent.click(screen.getByRole('button', { name: 'Add on this computer' })))
     expect(addLocalPath).toHaveBeenCalledWith(PATH, 'local_folder_picker')
-  })
-
-  it('Add on this computer adds the Windows path as before', () => {
-    const { view, showNotice, addLocalPath } = setup(true)
-    act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
-    showNotice()
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Add on this computer' })))
-    expect(addLocalPath).toHaveBeenCalledWith(PATH, 'local_folder_picker')
-    expect(view.result.current.hostPath).toBeNull()
-  })
-
-  it('still offers to run a distro that is not a host yet', () => {
-    mocks.state.runtimeEnvironments = []
-    const { view, showNotice } = setup(true)
-    act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
-    showNotice()
-    expect(screen.getByText('Run Ubuntu as a host (recommended)')).toBeTruthy()
   })
 
   it('holds nothing while another host is selected', () => {

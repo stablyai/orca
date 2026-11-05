@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useAppStore } from '@/store'
+import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
 import {
   getContextualTour,
   hasUndoneContextualTourAction,
@@ -47,11 +48,13 @@ export function ContextualTourOverlay(): JSX.Element | null {
     s.activeContextualTourId
       ? hasUndoneContextualTourAction(
           getContextualTour(s.activeContextualTourId),
-          s.featureInteractions
+          s.featureInteractions,
+          s.activeContextualTourStepIndex
         )
       : false
   )
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
@@ -173,9 +176,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (measurement.kind !== 'render') {
       // Discard stale/detached targets so the next scroll performs a full scan.
       measuredTargetRef.current = null
+      setRenderState(null)
     }
     if (measurement.kind === 'advance') {
       advanceContextualTour()
+      return
+    }
+    if (measurement.kind === 'regress') {
+      regressContextualTour()
       return
     }
     if (measurement.kind === 'wait') {
@@ -205,6 +213,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
+    regressContextualTour,
     sidebarOpen
   ])
 
@@ -250,7 +259,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
 
   useLayoutEffect(() => {
     measureTourOverlay()
-  }, [measureTourOverlay])
+  }, [activeTabId, activeTabType, measureTourOverlay])
 
   useEffect(() => {
     if (
@@ -361,6 +370,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       },
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
+      splitActiveChat: () => {
+        const { activeWorktreeId, activeGroupIdByWorktree } = useAppStore.getState()
+        runActiveNativeChatSplit(
+          activeWorktreeId,
+          activeWorktreeId ? (activeGroupIdByWorktree[activeWorktreeId] ?? null) : null,
+          'right'
+        )
+      },
       schedule: (callback) => {
         window.setTimeout(callback, 0)
       }

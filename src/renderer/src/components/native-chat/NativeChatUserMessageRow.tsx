@@ -114,6 +114,8 @@ export function NativeChatUserMessageRow({
                 messageId={message.id}
                 markdown={markdown}
                 onRefolded={onRefolded}
+                // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
+                className="-mx-3.5 px-3.5"
               >
                 <NativeChatTextAttachments
                   content={markdown}

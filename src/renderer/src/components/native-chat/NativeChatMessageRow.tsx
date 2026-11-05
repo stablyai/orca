@@ -14,7 +14,7 @@ import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-cha
 import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
 import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
-import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
   NativeChatSubagentDisclosure,
   NativeChatSubagentRosterState

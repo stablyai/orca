@@ -50,19 +50,35 @@ const LIVE_MODELS = [
 ]
 
 describe('parseClaudeModelList', () => {
-  it('parses the picker catalog and drops the mirror default row', () => {
+  it('keys rows by the versioned model they run, aliases after, and drops the mirror default row', () => {
     const parsed = parseClaudeModelList(`${controlResponseLine(LIVE_MODELS)}\n`)
-    expect(parsed.map(({ id }) => id)).toEqual(['opus[1m]', 'sonnet', 'haiku'])
+    expect(parsed.map(({ id, label }) => [id, label])).toEqual([
+      ['claude-opus-5[1m]', 'Claude Opus 5 (1M context)'],
+      ['claude-sonnet-5', 'Claude Sonnet 5'],
+      ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5'],
+      ['opus[1m]', 'Opus (1M context) alias'],
+      ['sonnet', 'Sonnet alias'],
+      ['haiku', 'Haiku alias']
+    ])
     expect(parsed[0]).toEqual({
-      id: 'opus[1m]',
-      label: 'Opus (1M context)',
+      id: 'claude-opus-5[1m]',
+      resolvedModel: 'claude-opus-5[1m]',
+      label: 'Claude Opus 5 (1M context)',
       description: 'Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
       supportsFastMode: true,
       isDefault: true
     })
+    // A saved alias (a commit-message or terminal model) keeps a row with its own controls.
+    expect(parsed[3]).toMatchObject({
+      id: 'opus[1m]',
+      resolvedModel: 'claude-opus-5[1m]',
+      effortLevels: ['low', 'medium', 'high', 'xhigh', 'max']
+    })
     expect(parsed[2]).toMatchObject({ effortLevels: [], supportsFastMode: false })
-    expect(parsed.filter((model) => model.isDefault).map(({ id }) => id)).toEqual(['opus[1m]'])
+    expect(parsed.filter((model) => model.isDefault).map(({ id }) => id)).toEqual([
+      'claude-opus-5[1m]'
+    ])
   })
 
   // `claude` 2.1.280: the default row and the row it resolves to carry the same flag; haiku none.
@@ -78,7 +94,10 @@ describe('parseClaudeModelList', () => {
     expect(
       parsed.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
     ).toEqual([
-      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'claude-opus-5-5[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'claude-sonnet-5', isDefault: undefined, supportsAutoMode: true },
+      { id: 'claude-haiku-4-5-20251001', isDefault: undefined, supportsAutoMode: undefined },
+      { id: 'opus[1m]', isDefault: undefined, supportsAutoMode: true },
       { id: 'sonnet', isDefault: undefined, supportsAutoMode: true },
       { id: 'haiku', isDefault: undefined, supportsAutoMode: undefined }
     ])

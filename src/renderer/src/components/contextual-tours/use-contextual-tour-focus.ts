@@ -1,3 +1,4 @@
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { useEffect, useRef, type RefObject } from 'react'
 import {
   getContextualTour,
@@ -55,7 +56,10 @@ export function useContextualTourFocus({
 
     const timeout = window.setTimeout(() => {
       const panel = panelRef.current
-      const firstFocusable = panel ? getContextualTourFocusableElements(panel)[0] : null
+      if (!panel || hasVisibleOverlay({ ignoreContaining: panel })) {
+        return
+      }
+      const firstFocusable = getContextualTourFocusableElements(panel)[0]
       ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
     }, 0)
     return () => window.clearTimeout(timeout)
@@ -68,7 +72,10 @@ export function useContextualTourFocus({
     focusedStepRef.current = null
     const previousFocus = previousFocusRef.current
     previousFocusRef.current = null
-    if (previousFocus?.isConnected) {
+    if (
+      previousFocus?.isConnected &&
+      !hasVisibleOverlay({ ignoreContaining: previousFocus, ignoreDismissed: true })
+    ) {
       previousFocus.focus({ preventScroll: true })
     }
   }, [activeTourId])

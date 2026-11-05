@@ -60,7 +60,10 @@ import type {
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
+import type {
+  NativeChatDiffReveal,
+  NativeChatDiffTarget
+} from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
@@ -166,11 +169,7 @@ export function NativeChatMessageList({
     latestTurn
   )
   const { messages: rows, turnKeys, liveTurnKey } = turnRows
-  const turnDiffs = useNativeChatTurnDiffs(
-    journalItems ? turnRows : null,
-    subagentRowsInOrder,
-    subagentSections.pathOf
-  )
+  const turnDiffs = useNativeChatTurnDiffs(turnRows, subagentRowsInOrder, subagentSections.pathOf)
   // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
   const thinking = useMemo(
     () => isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),

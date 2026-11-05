@@ -57,6 +57,7 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  menuPane: ManagedPane | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
@@ -293,7 +294,8 @@ export function useTerminalPaneContextMenu({
 
   // Closed menus need neither pane counts nor target identity; avoid wrapper allocation on every retained-tab render.
   const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
-  const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
+  const menuPane = open ? resolveMenuPane() : null
+  const menuPaneId = menuPane?.id ?? null
 
   return {
     open,
@@ -302,6 +304,7 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    menuPane,
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,

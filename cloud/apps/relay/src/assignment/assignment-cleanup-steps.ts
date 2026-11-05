@@ -1,4 +1,4 @@
-import { runRelayBackgroundOperation } from '../relay-background-operation.js'
+import { runRelayBackgroundOperation } from '../process-lifecycle/relay-background-operation.js'
 
 // Each 30s sweep is idempotent and re-derives DB state, so isolate failures per step. Log sweep errors without spending dispatch-failure budget or disabling rehoming.
 export type AssignmentCleanupStore = {

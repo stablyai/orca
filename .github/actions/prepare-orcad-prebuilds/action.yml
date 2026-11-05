@@ -33,7 +33,7 @@ runs:
         (runner.arch == 'X64' || runner.arch == 'ARM64')
       continue-on-error: true
       shell: bash
-      run: node config/scripts/orcad-windows-prebuild-cache.mjs --fingerprint
+      run: node config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs --fingerprint
 
     - name: Restore the exact Windows server prebuild
       id: orcad-prebuild-cache-restore
@@ -55,7 +55,7 @@ runs:
       run: |
         if [ "$RUNNER_OS" = Windows ] && [ "$WINDOWS_PREBUILD_CACHE_HIT" = true ] &&
            [ "$WINDOWS_PREBUILD_CACHE_RESTORE_OUTCOME" = success ] &&
-           node config/scripts/orcad-windows-prebuild-cache.mjs --validate; then
+           node config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs --validate; then
           echo 'Using the validated Windows server prebuild'
         else
           if [ "$RUNNER_OS" = Windows ]; then
@@ -63,5 +63,5 @@ runs:
           fi
           pnpm build:orcad-prebuilds
         fi
-        node config/scripts/build-orcad-prebuilds.mjs --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
-        node config/scripts/build-orcad-prebuilds.mjs --smoke
+        node config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs --require-slots "$(node config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs --print-slot)"
+        node config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs --smoke

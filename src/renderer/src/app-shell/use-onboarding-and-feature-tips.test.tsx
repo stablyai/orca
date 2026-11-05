@@ -10,7 +10,6 @@ import type { TelemetrySettings } from '../../../shared/telemetry-settings-types
 import type * as telemetry from '@/lib/telemetry'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { wasChatUiLaunchTipShown } from '../components/feature-tips/feature-tip-telemetry'
 import { useOnboardingAndFeatureTips } from './use-onboarding-and-feature-tips'
 
 const telemetryMock = vi.hoisted(() => ({ passThrough: false }))
@@ -41,7 +40,8 @@ function Gate(): JSX.Element | null {
 
 async function launch(
   cohort: TelemetrySettings['chatUiLaunchTipCohort'],
-  targeting?: TelemetrySettings['chatUiLaunchTipTargeting']
+  targeting?: TelemetrySettings['chatUiLaunchTipTargeting'],
+  agentDefaultSurface: 'terminal' | 'chat' = 'terminal'
 ): Promise<void> {
   const markFeatureTipsSeen = vi.fn((ids: FeatureTipId[]) =>
     useAppStore.setState((state) => ({ featureTipsSeenIds: [...state.featureTipsSeenIds, ...ids] }))
@@ -50,6 +50,7 @@ async function launch(
     persistedUIReady: true,
     featureTipsSeenIds: [],
     settings: createGlobalSettingsFixture({
+      agentDefaultSurface,
       aiVaultSearch: { enabled: true, historyDays: null },
       telemetry: {
         optedIn: true,
@@ -98,13 +99,13 @@ describe('Chat UI launch tip holdout', () => {
       expect(container.querySelector('output')?.textContent).toBe('true')
       expect(useAppStore.getState().activeModal).toBe('none')
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-        launch_tip_experiment_version: 'corner-card-v2',
+        launch_tip_experiment_version: 'corner-card-v3',
         variant: 'chat_ui_off',
         launch_tip_cohort: label,
         shown: true
       })
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_shown', {
-        launch_tip_experiment_version: 'corner-card-v2',
+        launch_tip_experiment_version: 'corner-card-v3',
         variant: 'chat_ui_off'
       })
     }
@@ -118,7 +119,7 @@ describe('Chat UI launch tip holdout', () => {
   it('records control exposure without showing the tip, then lets the next tip open', async () => {
     await launch('control')
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-      launch_tip_experiment_version: 'corner-card-v2',
+      launch_tip_experiment_version: 'corner-card-v3',
       variant: 'chat_ui_off',
       launch_tip_cohort: 'control',
       shown: false
@@ -135,7 +136,7 @@ describe('Chat UI launch tip holdout', () => {
       vi.mocked(window.api.onboarding.getChatUiLaunchTipVariant).mockResolvedValue(variant)
       await launch('treatment', { mode: 'eligible-harnesses', eligible: false })
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-        launch_tip_experiment_version: 'corner-card-v2',
+        launch_tip_experiment_version: 'corner-card-v3',
         variant: variant === 'chat-ui-off' ? 'chat_ui_off' : 'chat_ui_on',
         launch_tip_cohort: 'treatment',
         targeting: 'eligible-harnesses',
@@ -143,12 +144,6 @@ describe('Chat UI launch tip holdout', () => {
       })
       expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'cmd-j-palette' })
       expect(container.querySelector('output')?.textContent).toBe('false')
-      expect(
-        wasChatUiLaunchTipShown(
-          useAppStore.getState().featureTipsSeenIds,
-          useAppStore.getState().settings
-        )
-      ).toBe(false)
     }
   )
 
@@ -158,7 +153,7 @@ describe('Chat UI launch tip holdout', () => {
       await launch(cohort, { mode: 'eligible-harnesses', eligible: false })
       expect(container.querySelector('output')?.textContent).toBe('false')
       expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-        launch_tip_experiment_version: 'corner-card-v2',
+        launch_tip_experiment_version: 'corner-card-v3',
         variant: 'chat_ui_off',
         launch_tip_cohort: cohort,
         targeting: 'eligible-harnesses',
@@ -183,20 +178,18 @@ describe('Chat UI launch tip holdout', () => {
       expect(useAppStore.getState().activeModal).toBe('none')
     }
     expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-      launch_tip_experiment_version: 'corner-card-v2',
+      launch_tip_experiment_version: 'corner-card-v3',
       variant: variant === 'chat-ui-off' ? 'chat_ui_off' : 'chat_ui_on',
       launch_tip_cohort: 'treatment',
       targeting: targeting.mode,
       shown: true
     })
-    const { settings, featureTipsSeenIds } = useAppStore.getState()
-    expect(wasChatUiLaunchTipShown(featureTipsSeenIds, settings)).toBe(true)
+    const { settings } = useAppStore.getState()
     await act(async () => {
       useAppStore.setState({
         settings: settings ? { ...settings, agentDefaultSurface: 'chat' } : null
       })
     })
-    expect(wasChatUiLaunchTipShown(featureTipsSeenIds, useAppStore.getState().settings)).toBe(true)
     expect(
       vi.mocked(track).mock.calls.filter(([event]) => event === 'chat_ui_feature_tip_exposure')
     ).toHaveLength(1)
@@ -212,7 +205,7 @@ describe('Chat UI launch tip holdout', () => {
       Object.assign(window.api, { telemetryTrack })
       await launch(cohort)
       expect(telemetryTrack).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
-        launch_tip_experiment_version: 'corner-card-v2',
+        launch_tip_experiment_version: 'corner-card-v3',
         variant: 'chat_ui_off',
         launch_tip_cohort: cohort,
         shown: cohort === 'treatment'
@@ -228,3 +221,31 @@ describe('Chat UI launch tip holdout', () => {
     }
   )
 })
+
+it.each(['chat-ui-off', 'chat-ui-on'] as const)(
+  'consumes the automatic %s announcement for current Chat defaults without showing or reenrollment',
+  async (variant) => {
+    vi.mocked(window.api.onboarding.getChatUiLaunchTipVariant).mockResolvedValue(variant)
+    await launch('treatment', { mode: 'all' }, 'chat')
+    expect(container.querySelector('output')?.textContent).toBe('false')
+    expect(useAppStore.getState().modalData).not.toMatchObject({ tipId: 'chat-ui-here' })
+    expect(useAppStore.getState().featureTipsSeenIds).toContain('chat-ui-here')
+    expect(track).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+      launch_tip_experiment_version: 'corner-card-v3',
+      variant: variant === 'chat-ui-off' ? 'chat_ui_off' : 'chat_ui_on',
+      launch_tip_cohort: 'treatment',
+      targeting: 'all',
+      shown: false
+    })
+    expect(track).not.toHaveBeenCalledWith('chat_ui_feature_tip_shown', expect.anything())
+    const settings = useAppStore.getState().settings!
+    expect(settings.agentDefaultSurface).toBe('chat')
+    await act(async () =>
+      useAppStore.setState({ settings: { ...settings, agentDefaultSurface: 'terminal' } })
+    )
+    expect(container.querySelector('output')?.textContent).toBe('false')
+    expect(
+      vi.mocked(track).mock.calls.filter(([event]) => event === 'chat_ui_feature_tip_exposure')
+    ).toHaveLength(1)
+  }
+)
