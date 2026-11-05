@@ -7,10 +7,10 @@ import type { TerminalCursorContext } from './terminal-composer-draft'
 const OPENCODE_BOX_GUTTER = '┃'
 const OPENCODE_PLACEHOLDERS = ['Ask anything…', 'Run a command…']
 
-/** What the user typed into OpenCode's composer: '' when it is empty, null when the cursor is not in it.
- *  This is the screen copy, so a soft-wrapped draft has a newline at each wrap; it shows that the user
- *  typed something, not exactly what. Callers check that OpenCode is the pane's agent. */
-export function readOpenCodeComposerText(context: TerminalCursorContext): string | null {
+/** Whether OpenCode's composer may hold a typed draft, so mail must wait. False when the cursor is
+ *  not in its textarea. A box not laid out as expected (a footer wrapped in a very narrow pane) holds,
+ *  since its textarea rows cannot be told from the footer's. Callers check OpenCode is the pane's agent. */
+export function openCodeComposerHoldsDraft(context: TerminalCursorContext): boolean {
   const cursorIndex = context.rows.length - 1
   const column = (context.rows[cursorIndex] ?? '').indexOf(OPENCODE_BOX_GUTTER)
   const inBox = (row: string | undefined): boolean =>
@@ -19,7 +19,7 @@ export function readOpenCodeComposerText(context: TerminalCursorContext): string
     row.startsWith(OPENCODE_BOX_GUTTER, column) &&
     !row.slice(0, column).trim()
   if (context.cursorHidden || !inBox(context.rows[cursorIndex])) {
-    return null
+    return false
   }
   let top = cursorIndex
   while (inBox(context.rows[top - 1])) {
@@ -32,28 +32,22 @@ export function readOpenCodeComposerText(context: TerminalCursorContext): string
   const rows = [
     ...context.typedRows.slice(top, cursorIndex + 1),
     ...context.typedRowsBelow.slice(0, below)
-  ].map((row) => row.slice(column + OPENCODE_BOX_GUTTER.length).trimEnd())
+  ].map((row) => row.slice(column + OPENCODE_BOX_GUTTER.length).trim())
   const cursorLine = cursorIndex - top
-  if (cursorLine === 0 || rows[0]?.trim()) {
-    return null
-  }
-  // Laid out as expected, the box ends with a spacer and a metadata row; otherwise (a footer wrapped
-  // in a very narrow pane) only the rows through the cursor are surely the textarea's.
   const spacer = rows.length - 2
-  const laidOut = rows.length >= 4 && !rows[spacer]?.trim() && cursorLine < spacer
-  // The metadata row shares the textarea's left padding; text past it is the user's.
-  const metadata = laidOut ? (rows.at(-1) ?? '') : ''
-  const padding = metadata.trim() ? metadata.length - metadata.trimStart().length : 2
-  const unpad = (row: string): string =>
-    row.startsWith(' '.repeat(padding)) ? row.slice(padding) : row.trimStart()
-  const lines = rows.slice(1, laidOut ? spacer : cursorLine + 1).map(unpad)
-  const first = lines.findIndex((line) => line.trim())
-  const last = lines.findLastIndex((line) => line.trim())
+  // The cursor sits below the box's blank padding row; anything else is not OpenCode's composer.
+  if (cursorLine === 0 || rows[0]) {
+    return false
+  }
+  if (rows.length < 4 || rows[spacer] || cursorLine >= spacer) {
+    return true
+  }
+  const typed = rows.slice(1, spacer).filter(Boolean)
   const placeholder =
-    first === 0 &&
-    last === 0 &&
+    typed.length === 1 &&
     cursorLine === 1 &&
-    !unpad(context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length)) &&
-    OPENCODE_PLACEHOLDERS.some((stock) => lines[0]?.startsWith(stock))
-  return first === -1 || placeholder ? '' : lines.slice(first, last + 1).join('\n')
+    rows[1] === typed[0] &&
+    !context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length).trim() &&
+    OPENCODE_PLACEHOLDERS.some((stock) => typed[0]?.startsWith(stock))
+  return typed.length > 0 && !placeholder
 }

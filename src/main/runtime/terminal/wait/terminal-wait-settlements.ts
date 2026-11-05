@@ -16,7 +16,7 @@ import {
   readTerminalComposerTypedText,
   type TerminalCursorContext
 } from '../../../../shared/terminal/input/terminal-composer-draft'
-import { readOpenCodeComposerText } from '../../../../shared/terminal/input/opencode-composer'
+import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
@@ -151,7 +151,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
-    const draft = !!state && !!this.readComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
@@ -171,11 +171,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
-  private readComposerDraft(ptyId: string, context: TerminalCursorContext | null): string | null {
+  private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
     const agent = this.getPaneTerminalAgent(ptyId)
     return (agent === 'opencode' || agent === 'opencode2') && context
-      ? readOpenCodeComposerText(context)
-      : readTerminalComposerTypedText(context)
+      ? openCodeComposerHoldsDraft(context)
+      : !!readTerminalComposerTypedText(context)
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {

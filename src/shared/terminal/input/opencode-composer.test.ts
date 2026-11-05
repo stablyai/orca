@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readOpenCodeComposerText } from './opencode-composer'
+import { openCodeComposerHoldsDraft } from './opencode-composer'
 
 // OpenCode 2.2's box: a padding row, the textarea, a spacer row, a metadata row; `╹▀` closes it on
 // opaque themes only. The cursor sits in the textarea.
@@ -33,14 +33,21 @@ function wideBox(typed: string) {
   }
 }
 
-describe('readOpenCodeComposerText', () => {
+// A Shell footer that a very narrow pane wraps onto a second metadata row.
+function wrappedFooter(textRows: string[], cursorRow: number) {
+  const narrow = box(textRows, cursorRow, '', { metadata: 'Shel' })
+  const rowsBelow = [...narrow.rowsBelow.slice(0, -1), '   ┃  l', ...narrow.rowsBelow.slice(-1)]
+  return { ...narrow, rowsBelow, typedRowsBelow: rowsBelow }
+}
+
+describe('openCodeComposerHoldsDraft', () => {
   it.each([
     ['the stock placeholder', box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')],
     ['the shell placeholder', box(['Run a command… "git status"'], 0, '', { metadata: 'Shell' })],
     ['a placeholder clipped by a narrow pane', box(['Ask anything…'], 0, '', { metadata: '' })],
     ['a transparent theme', box(['Ask anything… "Fix broken tests"'], 0, '', { bottom: '' })]
-  ])('reads an empty box showing %s as empty', (_label, context) => {
-    expect(readOpenCodeComposerText(context)).toBe('')
+  ])('lets mail through an empty box showing %s', (_label, context) => {
+    expect(openCodeComposerHoldsDraft(context)).toBe(false)
   })
 
   it.each([
@@ -51,40 +58,27 @@ describe('readOpenCodeComposerText', () => {
     ['that is the short stock prefix "Ask", cursor at its start, in a wide box', wideBox('Ask')],
     ['in shell mode', box(['ls -la'], 0, 'ls -la', { metadata: 'Shell' })],
     ['under a model-only metadata row', box(['fix it'], 0, 'fix it', { metadata: 'Big Pickle' })],
-    ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })]
-  ])('reads a typed draft %s, without the metadata row', (_label, context) => {
-    expect(readOpenCodeComposerText(context)).toBe(context.rows.at(-1)?.slice(6))
+    ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })],
+    ['that a narrow pane cut to look like a clipped placeholder', box(['Ask anythin'], 0, '')],
+    ['on a line below the cursor', box(['', 'second line'], 0, '')]
+  ])('holds mail for a typed draft %s', (_label, context) => {
+    expect(openCodeComposerHoldsDraft(context)).toBe(true)
   })
 
-  it('reads a placeholder a narrow pane cut short as a draft, which only delays the wake', () => {
-    expect(readOpenCodeComposerText(box(['Ask anythin'], 0, '', { metadata: '' }))).toBe(
-      'Ask anythin'
-    )
+  it.each([
+    ['a draft', wrappedFooter(['Ask'], 0)],
+    ['a draft below the cursor', wrappedFooter(['', 'fix it'], 0)]
+  ])('holds mail for %s when a wrapped footer hides where the textarea ends', (_label, context) => {
+    expect(openCodeComposerHoldsDraft(context)).toBe(true)
   })
 
-  it('reads a draft whose Shell footer wraps in a very narrow pane', () => {
-    const narrow = box(['Ask'], 0, '', { metadata: 'Shel' })
-    const wrapped = {
-      ...narrow,
-      rowsBelow: [...narrow.rowsBelow.slice(0, -1), '   ┃  l', ...narrow.rowsBelow.slice(-1)],
-      typedRowsBelow: [...narrow.rowsBelow.slice(0, -1), '   ┃  l', ...narrow.rowsBelow.slice(-1)]
-    }
-    expect(readOpenCodeComposerText(wrapped)).toBe('Ask')
-  })
-
-  it('reads every line of a multi-line draft around the cursor', () => {
-    expect(readOpenCodeComposerText(box(['first line', '', 'third line'], 1, ''))).toBe(
-      'first line\n\nthird line'
-    )
-  })
-
-  it('returns null when the cursor is outside a box', () => {
+  it('lets mail through when the cursor is outside a box', () => {
     expect(
-      readOpenCodeComposerText({
+      openCodeComposerHoldsDraft({
         ...box(['fix it'], 0, 'fix it'),
         rows: ['$ ls'],
         beforeCursor: '$ ls'
       })
-    ).toBeNull()
+    ).toBe(false)
   })
 })
