@@ -68,8 +68,18 @@ describe('openCodeComposerHoldsDraft', () => {
   it.each([
     ['a draft', wrappedFooter(['Ask'], 0)],
     ['a draft below the cursor', wrappedFooter(['', 'fix it'], 0)]
-  ])('holds mail for %s when a wrapped footer hides where the textarea ends', (_label, context) => {
+  ])('holds mail for %s under a footer a narrow pane wrapped', (_label, context) => {
     expect(openCodeComposerHoldsDraft(context)).toBe(true)
+  })
+
+  it.each([
+    ['an empty box under a wrapped footer', wrappedFooter([''], 0)],
+    [
+      'a placeholder wrapped onto two rows',
+      box(['Ask anything… "Fix a TODO in', 'the codebase"'], 0, '')
+    ]
+  ])('lets mail through %s', (_label, context) => {
+    expect(openCodeComposerHoldsDraft(context)).toBe(false)
   })
 
   it('lets mail through when the cursor is outside a box', () => {

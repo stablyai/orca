@@ -7,9 +7,8 @@ import type { TerminalCursorContext } from './terminal-composer-draft'
 const OPENCODE_BOX_GUTTER = '┃'
 const OPENCODE_PLACEHOLDERS = ['Ask anything…', 'Run a command…']
 
-/** Whether OpenCode's composer may hold a typed draft, so mail must wait. False when the cursor is
- *  not in its textarea. A box not laid out as expected (a footer wrapped in a very narrow pane) holds,
- *  since its textarea rows cannot be told from the footer's. Callers check OpenCode is the pane's agent. */
+/** Whether OpenCode's composer shows a typed draft, so mail must wait. False when the cursor is not
+ *  in a box laid out as OpenCode's. Callers check that OpenCode is the pane's agent. */
 export function openCodeComposerHoldsDraft(context: TerminalCursorContext): boolean {
   const cursorIndex = context.rows.length - 1
   const column = (context.rows[cursorIndex] ?? '').indexOf(OPENCODE_BOX_GUTTER)
@@ -34,20 +33,19 @@ export function openCodeComposerHoldsDraft(context: TerminalCursorContext): bool
     ...context.typedRowsBelow.slice(0, below)
   ].map((row) => row.slice(column + OPENCODE_BOX_GUTTER.length).trim())
   const cursorLine = cursorIndex - top
-  const spacer = rows.length - 2
-  // The cursor sits below the box's blank padding row; anything else is not OpenCode's composer.
-  if (cursorLine === 0 || rows[0]) {
+  // The footer follows the last blank row, the spacer; a narrow pane wraps it onto more rows.
+  const spacer = rows.findLastIndex((row) => !row)
+  // Not a padding row, textarea, spacer and footer around the cursor: read as any other prompt.
+  if (cursorLine === 0 || rows[0] || spacer <= cursorLine || spacer === rows.length - 1) {
     return false
   }
-  if (rows.length < 4 || rows[spacer] || cursorLine >= spacer) {
-    return true
-  }
-  const typed = rows.slice(1, spacer).filter(Boolean)
+  const textarea = rows.slice(1, spacer)
+  // The placeholder wraps onto more rows in a narrow box.
+  const shown = textarea.join(' ').trim()
   const placeholder =
-    typed.length === 1 &&
     cursorLine === 1 &&
-    rows[1] === typed[0] &&
+    textarea.every(Boolean) &&
     !context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length).trim() &&
-    OPENCODE_PLACEHOLDERS.some((stock) => typed[0]?.startsWith(stock))
-  return typed.length > 0 && !placeholder
+    OPENCODE_PLACEHOLDERS.some((stock) => shown.startsWith(stock))
+  return !!shown && !placeholder
 }
