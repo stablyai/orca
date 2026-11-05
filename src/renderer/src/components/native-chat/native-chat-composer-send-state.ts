@@ -32,6 +32,8 @@ export function nativeChatComposerSendState(input: {
   canStop: boolean
   /** The draft is an Orca command such as /resume, which runs without the agent. */
   orcaCommand?: boolean
+  /** Goal mode submits the draft as an objective, which starts work. */
+  goalMode?: boolean
 }): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
   const imageBlock = nativeChatImageSendBlock(input.imageAttachments)
@@ -43,6 +45,7 @@ export function nativeChatComposerSendState(input: {
   const runsWhileHostHolds =
     input.orcaCommand === true ||
     (transport !== undefined &&
+      input.goalMode !== true &&
       input.imageAttachments.length === 0 &&
       isStructuredAgentSessionHostCommand(input.draft, transport.threadGoal !== undefined) &&
       !structuredAgentSessionCommandChangesConversation(input.draft))
@@ -57,7 +60,11 @@ export function nativeChatComposerSendState(input: {
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
   return {
-    sendBlockedReason: imageBlock.reason ?? transport?.sendBlockedReason ?? null,
+    // The host's reason labels Send only while it holds this draft.
+    sendBlockedReason:
+      imageBlock.reason ??
+      (hostHold && !runsWhileHostHolds ? transport?.sendBlockedReason : null) ??
+      null,
     sendHeld,
     hasDraft,
     sendButtonDisabled,

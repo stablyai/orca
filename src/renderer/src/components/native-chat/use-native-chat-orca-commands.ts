@@ -153,25 +153,29 @@ export function useNativeChatOrcaCommands(args: {
     ]
   )
 
-  const openUsage = useCallback((): void => {
-    const state = useAppStore.getState()
-    // The chat's host owns its Codex accounts, as the status bar's usage does for its workspace.
-    const { target } = resolveAccountOwner(
-      runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
-      state.runtimeEnvironments
-    )
-    state.openSettingsTarget({
-      pane: 'accounts',
-      repoId: null,
-      hostScope: target,
-      sectionId: CODEX_ACCOUNTS_SECTION_ID
-    })
-    state.openSettingsPage()
-    setDraft('')
-    setCaret(0)
-    setActiveSuggestion(0)
-    setNotice(null)
-  }, [runtimeEnvironmentId, setActiveSuggestion, setCaret, setDraft, setNotice])
+  /** Opens Settings and leaves `rest`, the draft past the command, for the next prompt. */
+  const openUsage = useCallback(
+    (rest = ''): void => {
+      const state = useAppStore.getState()
+      // The chat's host owns its Codex accounts, as the status bar's usage does for its workspace.
+      const { target } = resolveAccountOwner(
+        runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
+        state.runtimeEnvironments
+      )
+      state.openSettingsTarget({
+        pane: 'accounts',
+        repoId: null,
+        hostScope: target,
+        sectionId: CODEX_ACCOUNTS_SECTION_ID
+      })
+      state.openSettingsPage()
+      setDraft(rest)
+      setCaret(rest.length)
+      setActiveSuggestion(0)
+      setNotice(null)
+    },
+    [runtimeEnvironmentId, setActiveSuggestion, setCaret, setDraft, setNotice]
+  )
 
   const matchesDraft = useCallback(
     (draft: string): boolean =>
@@ -202,14 +206,11 @@ export function useNativeChatOrcaCommands(args: {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         // An explicit Orca command pick overrides an earlier same-named skill pick.
         const draft = textareaRef.current?.value ?? ''
-        // Text after the token makes /usage a message, so the pick only completes it.
-        const usageMessage =
-          item.name === NATIVE_CHAT_USAGE_COMMAND &&
-          draft.slice((draft.split(/\s/, 1)[0] ?? '').length).trim() !== ''
-        if (leading && item.kind === 'command' && item.orcaOwned && !usageMessage) {
+        if (leading && item.kind === 'command' && item.orcaOwned) {
           clearSkillOrigin()
           if (item.name === NATIVE_CHAT_USAGE_COMMAND) {
-            openUsage()
+            // The pick replaces only the typed command; text after it stays as the draft.
+            openUsage(draft.slice((draft.split(/\s/, 1)[0] ?? '').length).trimStart())
             return
           }
           // The caret can sit right after `/resume` with a search already typed past it.

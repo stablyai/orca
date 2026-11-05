@@ -2,7 +2,7 @@
 
 // @vitest-environment happy-dom
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, renderHook } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
@@ -31,7 +31,13 @@ const mocks = vi.hoisted(() => {
     fieldProps: FieldProps | null
     keyDownArgs: KeyDownArgs | null
   } = { draft: '/resume', imageAttachments: [], fieldProps: null, keyDownArgs: null }
-  const fns = { setDraft: vi.fn(), clearImageAttachments: vi.fn(), openHistory: vi.fn() }
+  const fns = {
+    setDraft: vi.fn(),
+    clearImageAttachments: vi.fn(),
+    openHistory: vi.fn(),
+    openSettingsTarget: vi.fn(),
+    openSettingsPage: vi.fn()
+  }
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
@@ -47,6 +53,9 @@ vi.mock('../../store/index', () => {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
+    runtimeEnvironments: [],
+    openSettingsTarget: mocks.openSettingsTarget,
+    openSettingsPage: mocks.openSettingsPage,
     clearNativeChatLaunchDraft: vi.fn()
   }
   const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
@@ -95,6 +104,8 @@ import {
   discardNativeChatQueuedEdit
 } from './native-chat-queued-edit-draft'
 import { NativeChatComposer } from './NativeChatComposer'
+import { useNativeChatOrcaCommands } from './use-native-chat-orca-commands'
+import type { NativeChatPickerState } from './use-native-chat-picker-state'
 
 const RESUME: CommandItem = {
   kind: 'command',
@@ -104,6 +115,8 @@ const RESUME: CommandItem = {
   skillCollision: false,
   orcaOwned: true
 }
+
+const USAGE: CommandItem = { ...RESUME, id: 'command:usage', name: 'usage', token: '/usage' }
 
 function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
   const transport: NativeChatStructuredComposerTransport = {
@@ -180,6 +193,46 @@ describe('/resume in the native chat composer', () => {
     renderStructuredChat()
     act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))
     expect(mocks.openHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it("opens a Codex chat's usage from the picked row and keeps the text typed after it", () => {
+    const textarea = document.createElement('textarea')
+    textarea.value = '/usa keep this text'
+    const editor = {
+      textareaRef: { current: textarea },
+      setDraft: mocks.setDraft,
+      setCaret: vi.fn(),
+      setActiveSuggestion: vi.fn()
+    }
+    const { result } = renderHook(() =>
+      useNativeChatOrcaCommands({
+        structuredTransport: { worktreeId: 'wt-structured', runtimeEnvironmentId: null },
+        agent: 'codex',
+        terminalTabId: 'tab-1',
+        picker: {
+          // The caret sits right after `/usa`, so the row is a leading command.
+          autocomplete: {
+            mode: 'slash',
+            dispatchable: true
+          } as NativeChatPickerState['autocomplete'],
+          isPickedSkill: () => false,
+          clearSkillOrigin: vi.fn()
+        },
+        editor,
+        setNotice: vi.fn()
+      })
+    )
+    const dispatch = vi.fn()
+    act(() => result.current.interceptPick(dispatch)(USAGE))
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({
+      pane: 'accounts',
+      repoId: null,
+      hostScope: { kind: 'local' },
+      sectionId: 'accounts-codex'
+    })
+    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('keep this text')
   })
 
   it('sends a picked skill named resume to the agent, as the skill it is', () => {

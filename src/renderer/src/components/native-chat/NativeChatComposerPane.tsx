@@ -296,7 +296,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       editSession,
       isWorking,
       canStop: hasPty && onStop !== undefined,
-      orcaCommand: !pending && !launchPrompt && resume.matchesDraft(draft)
+      orcaCommand: !pending && !launchPrompt && resume.matchesDraft(draft),
+      goalMode: goalMode.active
     })
 
     const { send, chooseEditItem, fieldOverrides, dispatchPickerCommand } =
