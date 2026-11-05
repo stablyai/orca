@@ -1,4 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { isAgentStatusHeldOpenByChildWork } from '../../shared/agent-status/lifecycle/agent-lead-status-fold'
 
 // Why a cap: Esc posts no hook, so a dismissed dialog's row can outlive it; a draft can be abandoned.
 export const USER_INPUT_HOLD_CAP_MS = 10 * 60_000
@@ -27,20 +28,22 @@ export function isClaudeDialogHoldingPane(args: {
   now?: number
 }): boolean {
   const { row } = args
+  // Background work keeps an ended turn working, so a dialog can paint before its waiting hook.
+  const heldByChildWork = row?.state === 'working' && isAgentStatusHeldOpenByChildWork(row)
   if (
     row?.agentType !== 'claude' ||
-    (row.state !== 'waiting' && row.state !== 'blocked') ||
+    (row.state !== 'waiting' && row.state !== 'blocked' && !heldByChildWork) ||
     row.receivedAt < (args.respawnedAt ?? -1) ||
     (args.now ?? Date.now()) - row.receivedAt > USER_INPUT_HOLD_CAP_MS
   ) {
     return false
   }
   const lines = args.readScreenLines()
-  return lines === null || isClaudeDialogOnScreen(lines)
+  return lines === null ? !heldByChildWork : isClaudeDialogOnScreen(lines)
 }
 
 /** Whether Claude's live screen shows a selection dialog, hook-reported or not. */
-export function isClaudeDialogOnScreen(lines: readonly string[]): boolean {
+function isClaudeDialogOnScreen(lines: readonly string[]): boolean {
   const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
   return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
 }
