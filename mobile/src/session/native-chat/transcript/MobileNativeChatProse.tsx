@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import {
   isImageRefBlock,
   isTextBlock,
@@ -61,7 +61,6 @@ export function Prose({
   text,
   userMessage,
   fontScale,
-  onOpenFile,
   onLongPress,
   renderVisual,
   growing = false,
@@ -76,7 +75,6 @@ export function Prose({
   /** The reply may still be growing: a directive still being typed at its tail is held back. */
   growing?: boolean
   revealing?: boolean
-  onOpenFile?: (relativePath: string) => void
   /** Android only: routes a long press on a link span to the row's actions sheet. */
   onLongPress?: () => void
 }): React.JSX.Element | null {
@@ -104,19 +102,18 @@ export function Prose({
     }
     if (userMessage) {
       return (
-        <MobileMarkdown
+        <MobileNativeChatMarkdown
           content={text}
           tone="userMessage"
           rangeSelectable
           textScale={CHAT_PROSE_SCALE * fontScale}
-          onOpenFile={onOpenFile}
           onLongPress={onLongPress}
           renderImage={renderImage}
         />
       )
     }
     return (
-      <MobileMarkdown
+      <MobileNativeChatMarkdown
         content={
           renderVisual && (growing || revealing)
             ? withoutPendingNativeChatVisualDirectiveTail(text)
@@ -126,7 +123,6 @@ export function Prose({
         renderVisual={renderVisual}
         rangeSelectable
         textScale={CHAT_PROSE_SCALE * fontScale}
-        onOpenFile={onOpenFile}
         onLongPress={onLongPress}
         renderImage={renderImage}
       />

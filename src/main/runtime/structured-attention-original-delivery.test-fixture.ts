@@ -1,7 +1,7 @@
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationDismissEvent
-} from './runtime-mobile-notification-controller'
+} from './push/notifications/runtime-mobile-notification-controller'
 
 export async function captureOriginalDeliveryRetirement(directory: string): Promise<{
   originalEpoch: string

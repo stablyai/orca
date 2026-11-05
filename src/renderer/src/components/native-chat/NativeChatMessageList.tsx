@@ -6,7 +6,6 @@ import {
 import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
 import { useNativeChatRowTypography } from './use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { nativeChatScrollsToLatestOnSend } from '../../../../shared/native-chat/native-chat-appearance-settings'
@@ -85,8 +84,6 @@ export function NativeChatMessageList({
   isVisible = true,
   isWorking,
   expandSignal,
-  onLinkClick,
-  allowFileUriLinks = false,
   workingStartedAt,
   settledTurns,
   deliveryNotices,
@@ -117,8 +114,6 @@ export function NativeChatMessageList({
   workingStartedAt?: number | null
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
   /** Set while the turn waits on the reader; the live activity line yields to it. */
   awaitingInput?: NativeChatAwaitingInput | null
@@ -348,9 +343,7 @@ export function NativeChatMessageList({
     taskListPredecessors,
     expandedTurnIds,
     deliveryNotices,
-    allowFileUriLinks,
     runtimeContext,
-    onLinkClick,
     onToggleExpandedTurn: toggleExpandedTurn,
     subagentDisclosure,
     onScrollMessageToTop: scrollMessageToTop,
@@ -393,11 +386,7 @@ export function NativeChatMessageList({
                   forwardGesture={readerInput.forwardedGesture}
                 />
                 {liveLine ? (
-                  <NativeChatTurnActivityLine
-                    line={liveLine}
-                    onLinkClick={onLinkClick}
-                    allowFileUriLinks={allowFileUriLinks}
-                  />
+                  <NativeChatTurnActivityLine line={liveLine} />
                 ) : tailRow === 'awaiting-input' ? (
                   <NativeChatAwaitingInputRow subject={null} pending />
                 ) : null}

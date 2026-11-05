@@ -189,7 +189,15 @@ describe('ACP reviewed traffic and recovery', () => {
           'late-permission'
         ).events
       )
-      expect(await f.rig.rows()).toEqual(before)
+      const toolTurn = before.find((row) => row.body.kind === 'tool-call')?.turnScope
+      expect(toolTurn).toMatchObject({ kind: 'turn' })
+      const added = (await f.rig.rows()).filter(
+        (row) => !before.some((earlier) => earlier.itemId === row.itemId)
+      )
+      // The agent still waits on it, so its card stays answerable in the tool's ended turn.
+      expect(added.map((row) => [row.body, row.turnScope])).toMatchObject([
+        [{ kind: 'approval', resolution: { state: 'pending' } }, toolTurn]
+      ])
     }
   )
 

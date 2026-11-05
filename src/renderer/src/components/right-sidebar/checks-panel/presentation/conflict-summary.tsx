@@ -3,11 +3,13 @@ import { Check, Copy, Files } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type {
   PRConflictSummary,
+  ProviderCheckSummary,
   PRMergeableState
 } from '../../../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 
 export type ConflictReview = {
+  checksSummary?: ProviderCheckSummary
   mergeable: PRMergeableState
   conflictSummary?: PRConflictSummary
 }

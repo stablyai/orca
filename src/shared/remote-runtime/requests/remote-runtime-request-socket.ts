@@ -26,6 +26,7 @@ import {
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
 import type {
+  RuntimeRequestPreparation,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -42,7 +43,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
-  requestSelection?: RuntimeRequestSelection
+  requestSelection?: RuntimeRequestSelection,
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -60,16 +62,36 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         method: 'status.get'
       })
     : null
-  const prepare = (selectedParams: unknown) =>
-    prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
-        deviceToken: connection.credential.deviceToken,
-        method,
-        params: selectedParams,
-        envelope
-      })
+  const serialize = (
+    selectedParams: unknown,
+    selectedEnvelope: RuntimeOrchestrationEnvelope | undefined
+  ) =>
+    serializeRemoteRuntimeRpcRequest({
+      requestId,
+      deviceToken: connection.credential.deviceToken,
+      method,
+      params: selectedParams,
+      envelope: selectedEnvelope
+    })
+  const prepare = (selectedParams: unknown) => {
+    let measured:
+      | { params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined; serialized: string }
+      | undefined
+    const selected = prepareRequest?.({
+      params: selectedParams,
+      envelope,
+      measure: (candidateParams, candidateEnvelope) => {
+        const serialized = serialize(candidateParams, candidateEnvelope)
+        measured = { params: candidateParams, envelope: candidateEnvelope, serialized }
+        return Buffer.byteLength(serialized, 'utf8')
+      }
+    }) ?? { params: selectedParams, envelope }
+    return prepareRemoteRuntimeRequest(new Map(), () =>
+      measured && measured.params === selected.params && measured.envelope === selected.envelope
+        ? measured.serialized
+        : serialize(selected.params, selected.envelope)
     )
+  }
   const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
     // Reserve this connection before authentication; select mutation params only after status.
     preparedRequest:

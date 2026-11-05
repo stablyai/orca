@@ -1,4 +1,4 @@
-import { summarizeProviderChecks } from './provider-check-summary'
+import { summarizeProviderChecks, type CheckOutcomeInput } from './provider-check-summary'
 import type { PRCheckDetail } from '../../github/check-types'
 import type { CheckStatus, ProviderCheckSummary } from '../../github/pull-request-types'
 
@@ -8,12 +8,11 @@ export function derivePRCheckStatus(checks: readonly PRCheckDetail[]): CheckStat
   return state === 'none' ? 'neutral' : state
 }
 
-type RawCheckRollup = { status?: unknown; conclusion?: unknown; state?: unknown }
-
-function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail {
-  const status = String(raw.status ?? '').toLowerCase()
-  const state = String(raw.state ?? '').toLowerCase()
-  const conclusion = String(raw.conclusion ?? '').toLowerCase()
+function normalizeRollupCheck(value: unknown): CheckOutcomeInput {
+  const raw = value && typeof value === 'object' ? value : {}
+  const status = String('status' in raw ? (raw.status ?? '') : '').toLowerCase()
+  const state = String('state' in raw ? (raw.state ?? '') : '').toLowerCase()
+  const conclusion = String('conclusion' in raw ? (raw.conclusion ?? '') : '').toLowerCase()
   const normalizedConclusion =
     conclusion === 'error' || conclusion === 'startup_failure'
       ? 'failure'
@@ -23,20 +22,11 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
           : state === 'success'
             ? 'success'
             : '')
-  const isPending =
-    status === 'queued' ||
-    status === 'in_progress' ||
-    status === 'pending' ||
-    state === 'pending' ||
-    conclusion === 'pending'
-
+  const observedStatus =
+    status || (['success', 'failure', 'error'].includes(state) ? 'completed' : 'queued')
   return {
-    name: `check-${index}`,
-    status: isPending ? (status === 'in_progress' ? 'in_progress' : 'queued') : 'completed',
-    conclusion: (isPending
-      ? 'pending'
-      : normalizedConclusion || null) as PRCheckDetail['conclusion'],
-    url: null
+    status: observedStatus,
+    conclusion: normalizedConclusion || null
   }
 }
 
@@ -44,11 +34,7 @@ export function summarizePRCheckRollup(rollup: unknown): ProviderCheckSummary {
   if (!Array.isArray(rollup) || rollup.length === 0) {
     return summarizeProviderChecks([])
   }
-  return summarizeProviderChecks(
-    rollup.map((raw, index) =>
-      normalizeRollupCheck(raw && typeof raw === 'object' ? (raw as RawCheckRollup) : {}, index)
-    )
-  )
+  return summarizeProviderChecks(rollup.map(normalizeRollupCheck))
 }
 
 export function derivePRCheckStatusFromRollup(rollup: unknown): CheckStatus {

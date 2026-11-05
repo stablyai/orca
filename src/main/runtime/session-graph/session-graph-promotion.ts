@@ -17,8 +17,15 @@ import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
+import type { SessionTitleAuthority } from '../session-tabs/session-title-publisher'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
+  protected abstract captureSessionTitleAuthority(): SessionTitleAuthority
+  protected abstract republishSessionTitleAuthorityChanges(
+    before: SessionTitleAuthority,
+    alreadyChanged?: ReadonlySet<string>
+  ): void
+
   protected abstract agentSenderGraphReply(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>

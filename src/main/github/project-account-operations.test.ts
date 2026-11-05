@@ -644,7 +644,7 @@ it.each(['error', 'absent'] as const)(
 it('recovers visible merged review through Bob complete membership iteration after Alice error and reuses Bob confirmation', async () => {
   request = (args, child, token) =>
     queueMicrotask(() => {
-      const membership = args.find((arg) => arg.includes('/commits/'))
+      const membership = args.find((arg) => arg.includes('/commits/') && arg.includes('/pulls?'))
       if (membership && token === 'Alice-token') {
         child.stderr?.emit('data', Buffer.from('request failed'))
         child.emit('exit', 1, null)
@@ -697,8 +697,11 @@ it('recovers visible merged review through Bob complete membership iteration aft
   })
   expect(
     requests
-      .filter((r) => r.args.some((arg) => arg.includes('/commits/')))
-      .map((r) => ({ endpoint: r.args.find((arg) => arg.includes('/commits/')), token: r.token }))
+      .filter((r) => r.args.some((arg) => arg.includes('/commits/') && arg.includes('/pulls?')))
+      .map((r) => ({
+        endpoint: r.args.find((arg) => arg.includes('/commits/') && arg.includes('/pulls?')),
+        token: r.token
+      }))
   ).toEqual([
     {
       endpoint: 'repos/acme/widgets/commits/bbbb2222bbbb2222/pulls?per_page=100&page=1',

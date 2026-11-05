@@ -6,10 +6,10 @@ import type { Repo } from '../../../../shared/repo-types'
 
 import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
-import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
+import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../workspaces/creation/worktree-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
-import { withTimeoutResult } from '../../runtime-async-boundaries'
-import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 import {
   type ResolvedWorktree,
   inferWorktreeIdFromPtyId

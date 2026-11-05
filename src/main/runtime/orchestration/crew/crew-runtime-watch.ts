@@ -1,4 +1,4 @@
-import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../terminal-authority/orchestration-compatibility-authority'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainTerminalSourceInputs } from '../../terminal/surface/pty-pane-query'
 import { runtimeLayoutLoadContext } from '../../workspace-layout-projection'

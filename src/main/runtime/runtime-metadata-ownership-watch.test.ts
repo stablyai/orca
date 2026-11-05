@@ -5,7 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import { clearRuntimeMetadata, readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
+import {
+  clearRuntimeMetadata,
+  readRuntimeMetadata,
+  writeRuntimeMetadata
+} from './rpc/server/runtime-metadata'
 import {
   shouldReclaimRuntimeMetadata,
   watchRuntimeMetadataOwnership,

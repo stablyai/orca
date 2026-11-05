@@ -24,11 +24,9 @@ import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-i
 import type { PtyBindingSourceExpectation } from '../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type {
-  PtyProviderBufferSnapshot,
-  PtyProcessInfo,
-  PtySpawnResult
-} from '../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../providers/pty-process-info'
+import type { PtySpawnResult } from '../providers/pty-spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'

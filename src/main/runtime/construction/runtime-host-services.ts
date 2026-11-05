@@ -13,7 +13,8 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
-import type * as TerminalContracts from '../runtime-terminal-contracts'
+import type { AgentSessionCreateOperation } from '../session-construction/agent-session/agent-session-create-operation'
+import type * as CompatibilityAuthority from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
@@ -23,8 +24,8 @@ import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
-import { RuntimeMobileSpeechCatalog } from '../runtime-mobile-speech-catalog'
-import { RuntimeMobileDictationController } from '../runtime-mobile-dictation-controller'
+import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
+import { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
 import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'
@@ -40,8 +41,6 @@ import { RuntimeAiVaultCommands } from '../runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
-
-type SessionCreateOperation = TerminalContracts.AgentSessionCreateOperation
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
@@ -190,7 +189,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly agentSessionClaimSigner!: HostBindings['agentSessionClaimSigner']
 
-  protected readonly agentSessionCreateOperations = new Map<string, SessionCreateOperation>()
+  protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
 
   protected readonly agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
 
@@ -205,7 +204,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly orchestrationCompatibilitySshAttachments = new Map<
     string,
-    TerminalContracts.OrchestrationCompatibilitySshAttachmentAuthority
+    CompatibilityAuthority.OrchestrationCompatibilitySshAttachmentAuthority
   >()
 
   protected sshRelayRecoveryGenerationByTargetId = new Map<string, number>()
@@ -263,7 +262,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected restoredOrchestrationAuthorityByPtyId = new Map<
     string,
-    TerminalContracts.RestoredOrchestrationAuthorityReceipt
+    CompatibilityAuthority.RestoredOrchestrationAuthorityReceipt
   >()
 
   protected ptyControllerInventorySequence = 0

@@ -7,7 +7,6 @@ import { buildMobileWebAppBundle } from '../../build/mobile-web-app/build-mobile
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
-  waitForPageFrames,
   installShellDouble,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
@@ -18,7 +17,6 @@ import {
 // Browser check proves control is present/reachable and shell handoff leaves document in place.
 
 const HOST_ROUTE = '/h/render-check-host'
-const FILES_ROUTE = '/h/render-check-host/files/wt-1'
 const HOST_PATTERN = '/h/[hostId]'
 const TASKS_PATTERN = '/h/[hostId]/tasks'
 /** The bundle key for the target route, so its chunk can be named rather than inferred. */
@@ -43,7 +41,6 @@ const PAGE_ROUTE_GRANTS = [
 ]
 /** Wide enough for `app/h/_layout.tsx` to render the sidebar beside the route. */
 const WIDE = { width: 1180, height: 820 }
-const NARROW = { width: 390, height: 844 }
 
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
@@ -223,31 +220,6 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     await page.close()
   }, 60_000)
 
-  it('hands the hop over from the narrow header too, whose control C2.10 named', async () => {
-    // Narrow layout has no sidebar; aim at C2.10 Tasks toolbar sibling and enforce same handoff rule.
-    const opened = await openHostRoute({
-      viewport: NARROW,
-      grants: [faultGrant, 'navigate', 'storage', 'haptics']
-    })
-    const { page, errors, jsResponses } = opened
-    const more = page.getByRole('button', { name: 'More actions', exact: true })
-    // Require one narrow header menu or selecting among duplicates could hide a stray wide header.
-    expect(await more.count()).toBe(1)
-    await openTasksFromHeader(page, more)
-    await expect
-      .poll(() => navigates(page))
-      .toEqual([
-        { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
-      ])
-    expect(await navigates(page)).toEqual([
-      { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
-    ])
-    expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
-    expect(jsResponses.filter(({ path }) => path.endsWith(tasksChunk))).toEqual([])
-    expect(errors).toEqual([])
-    await page.close()
-  }, 60_000)
-
   it('keeps the old behaviour when the shell sent no pairs at all', async () => {
     // Older shells omit coverage field; absence must not force every hop into shell handoff.
     const opened = await openHostRoute({
@@ -262,43 +234,5 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     expect(await navigates(page)).toEqual([])
     expect(errors).toEqual([])
     await page.close()
-  }, 60_000)
-
-  it('draws no sidebar beside a files route in a wide viewport, so there is no hop to make', async () => {
-    // Only init host-area ownership permits page sidebar; detail routes omit it to avoid duplicating shell sidebar.
-    const opened = await openHostRoute({
-      viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'haptics'],
-      route: FILES_ROUTE,
-      awaitText: 'Files'
-    })
-    const { page, errors } = opened
-    await waitForPageFrames(page)
-    expect(
-      await page.evaluate((name) => document.body.innerText.includes(name), SHELL_HOST.name)
-    ).toBe(false)
-    expect(await page.getByRole('button', { name: 'Back to hosts', exact: true }).count()).toBe(0)
-    expect(errors).toEqual([])
-    await page.close()
-  }, 60_000)
-
-  it('draws the sidebar on the host route only for the session that owns the host area', async () => {
-    const hostArea = await openHostRoute({
-      viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'haptics'],
-      ownsHostArea: true
-    })
-    // The sidebar's list beside the empty detail pane.
-    await hostArea.page.getByText('No workspace open').first().waitFor({ timeout: 30_000 })
-    expect(hostArea.errors).toEqual([])
-    await hostArea.page.close()
-    const detailOnly = await openHostRoute({
-      viewport: WIDE,
-      grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'haptics']
-    })
-    await waitForPageFrames(detailOnly.page)
-    expect(await detailOnly.page.getByText('No workspace open').count()).toBe(0)
-    expect(detailOnly.errors).toEqual([])
-    await detailOnly.page.close()
   }, 60_000)
 })

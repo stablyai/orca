@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../orca-runtime-postlude'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../terminal/output/provider-snapshot-budget'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
