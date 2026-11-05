@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { TerminalQuitSessionSettings } from '../../../shared/terminal/pty/lifecycle/terminal-quit-session-settings'
 import { isAppRelaunchRequested } from './app-relaunch'
 import { disconnectDaemon } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { killAllDaemonSessions } from '../../ipc/pty/pty-management'
@@ -36,7 +36,7 @@ async function stopTerminalSessionsThenDisconnect(
 
 /** Normal quits keep sessions for warm reattach; the opt-in setting stops them unless the quit is a restart. */
 export function disconnectDaemonOnQuit(options: {
-  settings: Pick<GlobalSettings, 'stopTerminalSessionsOnQuit'> | undefined
+  settings: TerminalQuitSessionSettings | undefined
   isUpdateQuit: boolean
   isServeMode: boolean
   finalSaveFrozen: Promise<boolean>
