@@ -7,7 +7,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main } from './check-react-doctor-changed.mjs'
-import { collectAddedLineRanges } from './check-changed-code-quality.mjs'
+import { collectAddedLineRanges } from './preflight/changed-checks/check-changed-code-quality.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const script = path.join(repoRoot, 'config', 'scripts', 'check-react-doctor-changed.mjs')

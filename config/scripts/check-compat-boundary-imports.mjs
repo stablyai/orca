@@ -1,8 +1,8 @@
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { collectProcessHostSources } from './check-process-host-imports.mjs'
-import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
-import { isTestOnlySourcePath } from './test-only-source-path.mjs'
+import { collectProcessHostSources } from './static-analysis/process-boundaries/check-process-host-imports.mjs'
+import { collectModuleSpecifiers } from './static-analysis/module-requests/static-module-specifiers.mjs'
+import { isTestOnlySourcePath } from './static-analysis/process-boundaries/test-only-source-path.mjs'
 
 // Legacy folders are reachable only through listed entrypoints/importers, keeping removal confined to those boundaries.
 export const COMPAT_FOLDERS = [

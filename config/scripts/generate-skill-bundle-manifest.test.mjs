@@ -53,8 +53,13 @@ async function createGeneratorSandbox() {
     path.resolve(import.meta.dirname, '../../src/shared/bundled-skill-renames.json'),
     path.join(root, 'src', 'shared', 'bundled-skill-renames.json')
   )
-  for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
-    await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
+  for (const name of [
+    'generate-skill-bundle-manifest.mjs',
+    'git/pr-diff-base/git-pull-request-diff-base.mjs'
+  ]) {
+    const target = path.join(path.dirname(script), name)
+    await mkdir(path.dirname(target), { recursive: true })
+    await copyFile(path.join(import.meta.dirname, name), target)
   }
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
   const run = (env, args) =>

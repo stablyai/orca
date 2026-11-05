@@ -2,7 +2,7 @@ import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invaria
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from '../config.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database/database.js'
 
 const LIMITED_CELL: RelayCellConfig = {
   id: 'limited',

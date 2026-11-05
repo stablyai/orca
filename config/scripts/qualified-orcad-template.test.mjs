@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { runProcessSync } from '@orca/process-host'
-import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs'
+import { writeOrcadTemplateTestFixture } from './orcad-distribution/template/orcad-template-test-fixture.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/qualified-orcad-template.yml', 'utf8'))
 const identity = workflow.jobs.cache.steps.find((step) => step.id === 'identity')

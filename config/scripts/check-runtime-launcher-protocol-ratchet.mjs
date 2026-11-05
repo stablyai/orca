@@ -4,23 +4,26 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { DAEMON_PROTOCOL_SOURCE_PATH, parseDaemonProtocolFacts } from './daemon-protocol-facts.mjs'
+import {
+  DAEMON_PROTOCOL_SOURCE_PATH,
+  parseDaemonProtocolFacts
+} from './daemon-protocol/schema-facts/daemon-protocol-facts.mjs'
 
 /** Files that decide which runtime executable launches orcad or the terminal daemon. */
 export const RUNTIME_LAUNCHER_PATHS = [
   // orcad handoff to its bundled runtime, and the pinned runtimes it can hand off to.
   'src/main/orcad/orcad-bundled-runtime.ts',
   'src/main/orcad/launcher.ts',
-  'config/scripts/orcad-entry-build.mjs',
+  'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs',
   'src/shared/node-runtime-pin.ts',
   'src/main/node-runtime/pinned-runtime-materializer.ts',
   'src/main/node-runtime/runtime-archive-download.ts',
   'src/main/managed-server/install/orcad-remote-node-runtime.ts',
   // orcad slot layout: which runtime file a packaged slot carries.
   'src/shared/orcad-artifacts.ts',
-  'config/scripts/build-orcad.mjs',
-  'config/scripts/build-orcad-node.mjs',
-  'config/scripts/build-orcad-template.mjs',
+  'config/scripts/orcad-distribution/server-bundle/build-orcad.mjs',
+  'config/scripts/orcad-distribution/prebuilds/build-orcad-node.mjs',
+  'config/scripts/orcad-distribution/template/build-orcad-template.mjs',
   // Remote slot runtime selection.
   'src/main/managed-server/install/orcad-remote-runtime.ts',
   // Terminal daemon host launch: which executable the daemon child is forked from.

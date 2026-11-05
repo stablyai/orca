@@ -146,7 +146,6 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          ...(namesDefault ? { model: 'policy' } : {}),
           fastMode: 'policy',
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(

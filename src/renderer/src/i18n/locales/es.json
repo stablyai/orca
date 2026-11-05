@@ -3272,7 +3272,6 @@
             "e8b3741ff7": "ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Rama",
-            "0b1766738a": "Repositorio",
             "bbb1ab6a6f": "Selecciona {{value0}}",
             "b771c92598": "Eliminar seleccionados",
             "7eee951968": "Verificando seguridad del espacio de trabajo",
@@ -3281,7 +3280,6 @@
             "b2c1331844": "Eliminar espacios de trabajo inactivos",
             "7f451a3e2c": "No se pudo ignorar la sugerencia de limpieza",
             "662b8ec3f8": "Falló el escaneo de limpieza del espacio de trabajo",
-            "4d0b72481c": "Ignorar",
             "9cc26c019d": "Eliminar",
             "0e2d235c63": "Escaneo del espacio de trabajo inactivo listo",
             "4a35c08764": "Revisar",
@@ -3289,9 +3287,6 @@
             "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
             "4c2990886e": "{{value0}}/{{value1}} eliminados",
             "86ba852118": "{{value0}}, {{value1}} fallidos",
-            "deletingCount": "Eliminando espacios de trabajo: {{value0}}",
-            "deleteCount": "¿Eliminar espacios de trabajo: {{value0}}?",
-            "selectedForDeletionCount": "Seleccionados para eliminar: {{value0}}",
             "deleteButtonCount": "Eliminar {{value0}}",
             "archivedStatus": "Archivado",
             "74f6c16279": "Atrás"
@@ -3306,7 +3301,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Confirmaciones",
             "contextLabel": "Contexto",
             "flagsLabel": "Indicadores",
             "collapseDetails": "Contraer detalles",
@@ -15229,8 +15223,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "p. ej. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Comando personalizado",
-            "4b2fc4b80c": "Esfuerzo de razonamiento",
-            "be8917699e": "Modelo",
             "560d4feb00": "Personalizado",
             "29d119fe95": "Agente",
             "f9382b48a1": "Habilitar autor de IA",
@@ -19584,8 +19576,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferencias",
-        "hideDiff": "Ocultar diferencias",
         "changedFiles_one": "{{count}} archivo modificado",
         "changedFiles_other": "{{count}} archivos modificados",
         "changedFiles_many": "{{count}} archivos modificados"
@@ -20040,9 +20030,7 @@
           },
           "noSizes": "Aún no se han medido los tamaños de los espacios de trabajo.",
           "noSizesDescription": "Los tamaños aparecen después de medir el uso de disco.",
-          "measureSizes": "Escanear",
           "measureSizesTitle": "Escanear tamaños de espacios de trabajo",
-          "measureSizesDescription": "Escanea el uso de disco para comparar, ordenar y filtrar espacios de trabajo por tamaño.",
           "sizeOnDisk": "Tamaño en disco: {{value0}}",
           "checkingGitRow": "Comprobando estado de Git",
           "searchPlaceholder": "Buscar nombre, repositorio, rama, ruta, host",

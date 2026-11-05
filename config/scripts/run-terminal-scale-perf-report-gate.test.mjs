@@ -76,9 +76,9 @@ describe('run-terminal-scale-perf-report-gate', () => {
     expect(readFileSync(reportPath, 'utf8')).toBe('{"suites":[]}')
     expect(calls.map((call) => call.args[0])).toEqual([
       'config/scripts/run-terminal-scale-perf-e2e.mjs',
-      'config/scripts/summarize-terminal-perf-report.mjs',
-      'config/scripts/check-terminal-perf-report-budgets.mjs',
-      'config/scripts/generate-terminal-perf-html-report.mjs'
+      'config/scripts/performance/terminal-reporting/summarize-terminal-perf-report.mjs',
+      'config/scripts/performance/terminal-reporting/check-terminal-perf-report-budgets.mjs',
+      'config/scripts/performance/terminal-reporting/generate-terminal-perf-html-report.mjs'
     ])
     expect(calls[0].args).toEqual([
       'config/scripts/run-terminal-scale-perf-e2e.mjs',
@@ -88,13 +88,16 @@ describe('run-terminal-scale-perf-report-gate', () => {
       '25 ACK-backpressured real PTYs'
     ])
     expect(calls[0].options.env.ORCA_TEST_MARKER).toBe('1')
-    expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
+    expect(calls[1].args).toEqual([
+      'config/scripts/performance/terminal-reporting/summarize-terminal-perf-report.mjs',
+      reportPath
+    ])
     expect(calls[2].args).toEqual([
-      'config/scripts/check-terminal-perf-report-budgets.mjs',
+      'config/scripts/performance/terminal-reporting/check-terminal-perf-report-budgets.mjs',
       reportPath
     ])
     expect(calls[3].args).toEqual([
-      'config/scripts/generate-terminal-perf-html-report.mjs',
+      'config/scripts/performance/terminal-reporting/generate-terminal-perf-html-report.mjs',
       reportPath,
       '--output',
       'test-results/terminal-perf-impact-report.html'
@@ -111,7 +114,10 @@ describe('run-terminal-scale-perf-report-gate', () => {
     })
 
     expect(status).toBe(0)
-    expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
+    expect(calls[1].args).toEqual([
+      'config/scripts/performance/terminal-reporting/summarize-terminal-perf-report.mjs',
+      reportPath
+    ])
   })
 
   it('uses the HTML report path from env when provided', () => {
@@ -129,7 +135,7 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
     expect(status).toBe(0)
     expect(calls[3].args).toEqual([
-      'config/scripts/generate-terminal-perf-html-report.mjs',
+      'config/scripts/performance/terminal-reporting/generate-terminal-perf-html-report.mjs',
       reportPath,
       '--output',
       'tmp/terminal-report.html'
@@ -155,9 +161,21 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
   it.each([
     ['scale', 'config/scripts/run-terminal-scale-perf-e2e.mjs', 1],
-    ['summary', 'config/scripts/summarize-terminal-perf-report.mjs', 2],
-    ['budget', 'config/scripts/check-terminal-perf-report-budgets.mjs', 3],
-    ['HTML', 'config/scripts/generate-terminal-perf-html-report.mjs', 4]
+    [
+      'summary',
+      'config/scripts/performance/terminal-reporting/summarize-terminal-perf-report.mjs',
+      2
+    ],
+    [
+      'budget',
+      'config/scripts/performance/terminal-reporting/check-terminal-perf-report-budgets.mjs',
+      3
+    ],
+    [
+      'HTML',
+      'config/scripts/performance/terminal-reporting/generate-terminal-perf-html-report.mjs',
+      4
+    ]
   ])('returns the %s failure and stops subsequent stages', (_stage, failedScript, count) => {
     const reportPath = tempReportPath()
     const { calls, spawnSyncImpl } = makeSpawnSync({ statuses: { [failedScript]: 7 } })
@@ -171,9 +189,9 @@ describe('run-terminal-scale-perf-report-gate', () => {
     expect(calls.map((call) => call.args[0])).toEqual(
       [
         'config/scripts/run-terminal-scale-perf-e2e.mjs',
-        'config/scripts/summarize-terminal-perf-report.mjs',
-        'config/scripts/check-terminal-perf-report-budgets.mjs',
-        'config/scripts/generate-terminal-perf-html-report.mjs'
+        'config/scripts/performance/terminal-reporting/summarize-terminal-perf-report.mjs',
+        'config/scripts/performance/terminal-reporting/check-terminal-perf-report-budgets.mjs',
+        'config/scripts/performance/terminal-reporting/generate-terminal-perf-html-report.mjs'
       ].slice(0, count)
     )
   })

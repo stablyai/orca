@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from 'node:fs/
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as RepoWorktrees from '../../../workspaces/catalog/repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem-auth'

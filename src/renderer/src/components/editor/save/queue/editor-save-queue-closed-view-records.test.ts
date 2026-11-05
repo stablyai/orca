@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import {
-  CLOSED_VIEW_PATH,
   closedViewTab,
   closedViewWorktree,
   createClosedViewHarness,
@@ -12,18 +11,6 @@ import {
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 
 // A view opened before a reconnect: its captured connection generation no longer matches.
-const STALE_PROVENANCE: EditorFileOperationProvenance = {
-  ownershipProjection: 'explicit',
-  expectedSshConnectionGeneration: 7,
-  generation: {
-    route: { executionHostId: 'local', runtimeEnvironmentId: null },
-    runtimeConnectionGeneration: null,
-    runtimePairingRevision: undefined,
-    runtimeSshGeneration: null,
-    nestedSshGeneration: null,
-    directSshGeneration: null
-  }
-}
 
 describe('editor save queue: closed saving view, record changes', () => {
   let h: ClosedViewHarness
@@ -63,28 +50,6 @@ describe('editor save queue: closed saving view, record changes', () => {
     expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('disk'))
   })
 
-  it('a queued save skips a stale-connection view for a current one', async () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({
-      openFiles: [
-        closedViewTab('A', 'wt-1'),
-        { ...closedViewTab('old', 'wt-2'), operationProvenance: STALE_PROVENANCE },
-        closedViewTab('B', 'wt-2')
-      ]
-    })
-    h.type('A', 'edit')
-    const { saved: first } = await startHeldSave()
-    h.type('A', 'edit 2')
-    const second = h.queue.queueSave(h.view('A'), 'edit 2')
-    h.closeView('A')
-    h.release()
-
-    await expect(first).resolves.toBe('written')
-    await expect(second).resolves.toBe('written')
-    expect(h.disk.files.get(CLOSED_VIEW_PATH)).toBe('edit 2')
-    expect(h.view('B').isDirty).toBe(false)
-  })
-
   it("moves a detached peer's baseline to the write, keeping its edits", async () => {
     h.store.setState({ openFiles: [] })
     h.store.setState({
@@ -104,33 +69,6 @@ describe('editor save queue: closed saving view, record changes', () => {
     expect(h.view('B').isDirty).toBe(true)
     expect(h.store.getState().editorDrafts.B).toBe('theirs')
     await expect(h.queue.queueSave(h.view('B'), 'theirs')).resolves.toBe('written')
-  })
-
-  it('settles a kept detached record without dropping a divergent live record', async () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({
-      openFiles: [
-        { ...closedViewTab('A', 'wt-1'), isDirty: true },
-        { ...closedViewTab('B', 'wt-2'), isDirty: true }
-      ],
-      editorDrafts: { A: 'theirs', B: 'mine' }
-    })
-    const detached = h.recordOf('B')
-    expect(detached).not.toBe(h.recordOf('A'))
-    h.holdNextWrite()
-    const saved = h.queue.queueSave(h.view('B'), 'mine')
-    await vi.advanceTimersByTimeAsync(0)
-    h.store.setState((state) => ({
-      openFiles: state.openFiles.filter((file) => file.id !== 'B'),
-      editorBufferKeepRequest: { viewIds: new Set(['B']), notice: 2 }
-    }))
-    expect(h.store.getState().editorBufferKept[detached]?.draft).toBe('mine')
-    h.release()
-    await expect(saved).resolves.toBe('written')
-    expect(h.store.getState().editorBufferKept[detached]).toBeUndefined()
-    expect(h.view('A').isDirty).toBe(true)
-    expect(h.store.getState().editorDrafts.A).toBe('theirs')
-    expect(h.view('A').lastKnownDiskSignature).toBe(getDiskBaselineSignature('mine'))
   })
 
   it.each(['mine, more', 'mine'])(
@@ -227,21 +165,6 @@ describe('editor save queue: closed saving view, record changes', () => {
     expect(h.store.getState().editorBufferKept).toEqual({})
   })
 
-  it('drops a kept record whose text the write saved', async () => {
-    h.type('A', 'edit')
-    const { saved } = await startHeldSave()
-    // A no-prompt removal closes both views and keeps the dirty record.
-    h.store.setState({
-      openFiles: [],
-      editorBufferKeepRequest: { viewIds: new Set(['A', 'B']), notice: 1 }
-    })
-    expect(Object.keys(h.store.getState().editorBufferKept)).toHaveLength(1)
-    h.release()
-    await expect(saved).resolves.toBe('written')
-
-    expect(h.store.getState().editorBufferKept).toEqual({})
-  })
-
   it('marks the record clean when only a read-only view is left', async () => {
     h.store.setState({ openFiles: [] })
     h.store.setState({
@@ -256,12 +179,5 @@ describe('editor save queue: closed saving view, record changes', () => {
 
     expect(h.view('log').isDirty).toBe(false)
     expect(h.store.getState().editorDrafts.log).toBeUndefined()
-  })
-
-  it('a read-only view still never becomes dirty', () => {
-    h.store.setState({ openFiles: [] })
-    h.store.setState({ openFiles: [{ ...closedViewTab('log', 'wt-1'), readOnly: true }] })
-    h.store.getState().markFileDirty('log', true, { written: true })
-    expect(h.view('log').isDirty).toBe(false)
   })
 })

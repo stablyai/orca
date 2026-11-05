@@ -1,11 +1,11 @@
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
-import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tree.mjs'
+import { compileAggregateExpression } from './workflow/pr-admission/pr-aggregate-gate-context.mjs'
+import { writeMobileWebBundleFixtureTree } from './build/mobile-web-app/mobile-web-bundle-fixture-tree.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/ssh-windows-hosts.yml', 'utf8'))
 const producer = workflow.jobs.mobile_web_bundle
@@ -81,8 +81,9 @@ it.skipIf(process.platform === 'win32')(
       mkdirSync(join(directory, 'config', 'scripts'), { recursive: true })
       for (const file of [
         'config/dark-build-switches.cjs',
-        'config/scripts/verify-packaged-mobile-web-bundle.cjs'
+        'config/scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
       ]) {
+        mkdirSync(dirname(join(directory, file)), { recursive: true })
         copyFileSync(file, join(directory, file))
       }
       const bundleDir = join(directory, 'out', 'mobile-web')

@@ -15,7 +15,7 @@ import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 import { createAutomationRunWriter } from './automation-run-writer'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type * as PrecheckRunner from './precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
