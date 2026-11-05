@@ -106,27 +106,3 @@ export function mobileMathMeasureText(value: string): string {
     .replace(/[{}^_\s]/g, '')
   return 'm'.repeat(Math.ceil([...glyphs].length * scale))
 }
-
-declare module 'mdast' {
-  interface InlineMath extends Literal {
-    type: 'inlineMath'
-    /** `$$` or `\[`: shown as a display formula when it stands alone in its paragraph. */
-    display: boolean
-    /** The authored text, delimiters included, for copying and fallbacks. */
-    source: string
-  }
-  interface Math extends Literal {
-    type: 'math'
-    source: string
-  }
-  interface PhrasingContentMap {
-    inlineMath: InlineMath
-  }
-  interface RootContentMap {
-    inlineMath: InlineMath
-    math: Math
-  }
-  interface BlockContentMap {
-    math: Math
-  }
-}
