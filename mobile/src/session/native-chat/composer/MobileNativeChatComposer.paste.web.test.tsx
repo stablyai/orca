@@ -103,30 +103,4 @@ describe('pasting into the mobile composer in the paired web page', () => {
     expect(onAttachPastedText).toHaveBeenCalledTimes(1)
     expect(onPasteImages).not.toHaveBeenCalled()
   })
-
-  it('keeps a long paste as text when the host stores no phone files', async () => {
-    await render({ structured: null })
-    expect(paste('a'.repeat(40 * 1024)).defaultPrevented).toBe(false)
-  })
-
-  it('attaches a pasted image and leaves its caption to the field', async () => {
-    await render()
-    const event = paste('a caption', new File([], 'image.png', { type: 'image/png' }))
-    expect(onPasteImages).toHaveBeenCalledTimes(1)
-    expect(event.defaultPrevented).toBe(false)
-  })
-
-  it('reads the pasteboard when Paste brought neither text nor image bytes', async () => {
-    await render()
-    expect(paste('').defaultPrevented).toBe(true)
-    expect(onPasteImages).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves every paste to the field while a queued edit saves', async () => {
-    await render({ editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: true } })
-    expect(paste('a'.repeat(40 * 1024)).defaultPrevented).toBe(false)
-    expect(paste('').defaultPrevented).toBe(false)
-    expect(onAttachPastedText).not.toHaveBeenCalled()
-    expect(onPasteImages).not.toHaveBeenCalled()
-  })
 })

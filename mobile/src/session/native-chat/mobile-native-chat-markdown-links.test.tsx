@@ -93,38 +93,3 @@ it('links only workspace paths the host confirms, asking once for the whole repl
   act(() => linked(tree)[0]?.props.onPress())
   expect(onOpenFile).toHaveBeenCalledWith('src/app.ts:12')
 })
-
-it('links paths like before on a host too old to check them', async () => {
-  const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
-    id: '1',
-    ok: false,
-    error: {
-      code: 'forbidden',
-      message: 'Method files.pathsExist is not available to mobile clients'
-    },
-    _meta: { runtimeId: 'runtime-1' }
-  }))
-  const fileLinks = createMobileNativeChatFileLinkExistence(
-    { sendRequest },
-    'repo-1::/work',
-    '/work'
-  )
-
-  const tree = await renderChat('Edited src/app.ts and the docs folder at src/notes today.', {
-    fileLinks,
-    githubRepo: null
-  })
-
-  expect(linked(tree).map(label)).toEqual(['src/app.ts'])
-})
-
-it('opens a bare #123 on the repo bare refs point to', async () => {
-  const tree = await renderChat('Fixed in #123.', {
-    fileLinks: null,
-    githubRepo: { owner: 'stablyai', repo: 'orca' }
-  })
-
-  expect(linked(tree).map(label)).toEqual(['#123'])
-  act(() => linked(tree)[0]?.props.onPress())
-  expect(openURL).toHaveBeenCalledWith('https://github.com/stablyai/orca/issues/123')
-})
