@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { acquire, release } from './linear-request-concurrency'
 import { linearError } from './issue-context/errors'
-import { runLinearWriteAction } from '../runtime/runtime-linear-write-action'
+import { runLinearWriteAction } from '../runtime/integrations/linear/runtime-linear-write-action'
 import { writeIssueRelation } from './issue-relation-write'
 
 const mocks = vi.hoisted(() => ({ rawRequest: vi.fn() }))

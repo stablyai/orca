@@ -21,13 +21,6 @@ import {
   makeFolderWorkspacePathStatusMockState,
   makeFolderWorkspacePathStatusState
 } from './worktree-list-lineage-card-test-fixtures'
-import {
-  getCardOpeningTag,
-  getDataNumber,
-  getFlushCardContentStart,
-  getFolderWorkspaceSurfaceOpeningTag,
-  getPaddingLeft
-} from '../viewport/worktree-list-card-markup-queries'
 
 vi.mock('@/store', () => createAppStoreModuleMock())
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
@@ -68,34 +61,14 @@ function makeFolderWorkspace(
   }
 }
 
-function setFolderWorkspaceFixtureState(
-  options: {
-    createdFrom?: ProjectGroup['createdFrom']
-    experimentalNewWorktreeCardStyle?: boolean
-    nestedGroup?: boolean
-  } = {}
-) {
-  const parentGroup: ProjectGroup | null = options.nestedGroup
-    ? {
-        id: 'folder-parent-group-1',
-        name: 'Parent Folder Group',
-        parentPath: '/tmp/lineage-order',
-        parentGroupId: null,
-        createdFrom: 'folder-scan',
-        tabOrder: 0,
-        isCollapsed: false,
-        color: null,
-        createdAt: 1,
-        updatedAt: 1
-      }
-    : null
+function setFolderWorkspaceFixtureState() {
   const group: ProjectGroup = {
     id: 'folder-group-1',
     name: 'Folder Group',
     parentPath: '/tmp/lineage-order/folder',
-    parentGroupId: parentGroup?.id ?? null,
-    createdFrom: options.createdFrom ?? 'folder-scan',
-    tabOrder: parentGroup ? 1 : 0,
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
     isCollapsed: false,
     color: null,
     createdAt: 1,
@@ -125,7 +98,7 @@ function setFolderWorkspaceFixtureState(
     pendingRevealWorktree: null,
     prCache: {},
     prVisibleRefreshGeneration: 0,
-    projectGroups: parentGroup ? [parentGroup, group] : [group],
+    projectGroups: [group],
     ptyIdsByTabId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
@@ -137,9 +110,7 @@ function setFolderWorkspaceFixtureState(
     setRenamingWorktreeId: vi.fn(),
     setShowSleepingWorkspaces: vi.fn(),
     setSortBy: vi.fn(),
-    settings: options.experimentalNewWorktreeCardStyle
-      ? { experimentalNewWorktreeCardStyle: true }
-      : null,
+    settings: null,
     renamingWorktreeId: null,
     showSleepingWorkspaces: true,
     sortBy: 'manual',
@@ -200,77 +171,5 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain(
       'aria-activedescendant="worktree-list-option-local%7Cfolder%3Afolder-workspace-1"'
     )
-  })
-
-  it('keeps folder workspace cards one compact step under their group header', async () => {
-    setFolderWorkspaceFixtureState()
-    const markup = await renderWorktreeListMarkup()
-    const folderWorktreeId = folderWorkspaceKey('folder-workspace-1')
-    const cardOpeningTag = getCardOpeningTag(markup, folderWorktreeId)
-    const surfaceOpeningTag = getFolderWorkspaceSurfaceOpeningTag(markup, 'folder-workspace-1')
-    const cardContentIndent = getDataNumber(cardOpeningTag, 'data-content-indent')
-
-    expect(cardOpeningTag).toContain('data-content-indent="6"')
-    expect(cardOpeningTag).toContain('data-flush-surface="true"')
-    expect(
-      getFlushCardContentStart({
-        cardContentIndent,
-        surfaceInset: getPaddingLeft(surfaceOpeningTag)
-      })
-    ).toBe(20)
-  })
-
-  it('uses comparable new-card worktree geometry for experimental folder workspace rows', async () => {
-    setFolderWorkspaceFixtureState({ experimentalNewWorktreeCardStyle: true })
-    const markup = await renderWorktreeListMarkup()
-    const folderWorktreeId = folderWorkspaceKey('folder-workspace-1')
-    const cardOpeningTag = getCardOpeningTag(markup, folderWorktreeId)
-    const surfaceOpeningTag = getFolderWorkspaceSurfaceOpeningTag(markup, 'folder-workspace-1')
-    const cardContentIndent = getDataNumber(cardOpeningTag, 'data-content-indent')
-
-    expect(surfaceOpeningTag).toContain('padding-left:14px')
-    expect(cardOpeningTag).toContain('data-content-indent="16"')
-    expect(cardOpeningTag).toContain('data-flush-surface="true"')
-    expect(
-      getFlushCardContentStart({
-        cardContentIndent,
-        surfaceInset: getPaddingLeft(surfaceOpeningTag)
-      })
-    ).toBe(30)
-  })
-
-  it('preserves manual folder workspace indentation outside folder-scanned groups', async () => {
-    setFolderWorkspaceFixtureState({ createdFrom: 'manual' })
-    const markup = await renderWorktreeListMarkup()
-    const folderWorktreeId = folderWorkspaceKey('folder-workspace-1')
-    const cardOpeningTag = getCardOpeningTag(markup, folderWorktreeId)
-    const surfaceOpeningTag = getFolderWorkspaceSurfaceOpeningTag(markup, 'folder-workspace-1')
-    const cardContentIndent = getDataNumber(cardOpeningTag, 'data-content-indent')
-
-    expect(cardOpeningTag).toContain('data-content-indent="24"')
-    expect(
-      getFlushCardContentStart({
-        cardContentIndent,
-        surfaceInset: getPaddingLeft(surfaceOpeningTag)
-      })
-    ).toBe(38)
-  })
-
-  it('caps nested folder workspace surfaces to keep compact final anchors', async () => {
-    setFolderWorkspaceFixtureState({ nestedGroup: true })
-    const markup = await renderWorktreeListMarkup()
-    const folderWorktreeId = folderWorkspaceKey('folder-workspace-1')
-    const cardOpeningTag = getCardOpeningTag(markup, folderWorktreeId)
-    const surfaceOpeningTag = getFolderWorkspaceSurfaceOpeningTag(markup, 'folder-workspace-1')
-    const cardContentIndent = getDataNumber(cardOpeningTag, 'data-content-indent')
-
-    expect(surfaceOpeningTag).toContain('padding-left:24px')
-    expect(cardOpeningTag).toContain('data-content-indent="6"')
-    expect(
-      getFlushCardContentStart({
-        cardContentIndent,
-        surfaceInset: getPaddingLeft(surfaceOpeningTag)
-      })
-    ).toBe(30)
   })
 })

@@ -41,7 +41,7 @@ import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/ma
 import type { RuntimeMessageWaiter } from '../runtime-message-waiters'
 import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 import type { WorkerTurnStopReportDeps } from '../orchestration/worker-turn-stop-report'
-import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
+import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
-import { PROTOCOL_VERSION } from '../../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../../src/main/daemon/protocol/daemon-protocol-version'
 import { expect } from './orca-app'
 import { createRestartSession } from './orca-restart'
 import { bootstrapRestoredLaunch } from './terminal-restart-persistence'
@@ -131,7 +131,7 @@ export async function runOracleScenario(
         )
         if (!options.quitWithoutSettling) {
           run.oracle.compareRestart(coldDaemon ? 'cold relaunch' : 'relaunch', after, {
-            maskPtyIds: coldDaemon
+            maskPtyIds: restartsTerminals
           })
         }
       }

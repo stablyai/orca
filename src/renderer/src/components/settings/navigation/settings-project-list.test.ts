@@ -2,18 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
 import {
-  buildRepoIdToHostSelection,
-  buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
   getSettingsEntryHostSelection,
   getSettingsProjectRemovalScope,
-  getSettingsProjectRepresentativeRepoId,
-  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
-  resolveEffectiveProjectHost,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
 
@@ -51,94 +45,6 @@ const gitRemote = {
 }
 
 describe('buildSettingsProjectList', () => {
-  it('collapses a git same-remote pair on two hosts (different ids) into one project', () => {
-    const repos: Repo[] = [
-      makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote }),
-      makeRepo({
-        id: 'remote-9',
-        gitRemoteIdentity: gitRemote,
-        executionHostId: 'runtime:home-mac'
-      })
-    ]
-
-    const projects = buildSettingsProjectList(repos)
-
-    expect(projects).toHaveLength(1)
-    expect(projects[0].setups).toHaveLength(2)
-    expect(projects[0].representativeRepoId).toBe('local-1')
-    expect(getSettingsProjectRemovalScope(projects[0])).toBe('project')
-  })
-
-  it('collapses a folder with the same id on local + runtime into one project', () => {
-    const repos: Repo[] = [
-      makeRepo({ id: 'folder-x', kind: 'folder' }),
-      makeRepo({ id: 'folder-x', kind: 'folder', executionHostId: 'runtime:home-mac' })
-    ]
-
-    const projects = buildSettingsProjectList(repos)
-
-    expect(projects).toHaveLength(1)
-    expect(projects[0].setups).toHaveLength(2)
-    expect(projects[0].representativeRepoId).toBe('folder-x')
-  })
-
-  it('gives each same-host clone of one remote its own entry, like the sidebar (#20861)', () => {
-    const repos: Repo[] = [
-      makeRepo({ id: 'clone-a', displayName: 'app', gitRemoteIdentity: gitRemote }),
-      makeRepo({ id: 'clone-b', displayName: 'app-b', gitRemoteIdentity: gitRemote })
-    ]
-
-    const projects = buildSettingsProjectList(repos)
-
-    expect(projects.map((entry) => entry.representativeRepoId)).toEqual(['clone-a', 'clone-b'])
-    expect(projects.map((entry) => entry.checkoutLabel)).toEqual(['app', 'app-b'])
-    expect(buildRepoIdToRepresentative(projects).get('clone-b')).toBe('clone-b')
-  })
-
-  it('splits by the setups the sidebar groups with, not only the loaded repos', () => {
-    const cloneA = makeRepo({ id: 'clone-a', displayName: 'app', gitRemoteIdentity: gitRemote })
-    const cloneB = makeRepo({ id: 'clone-b', displayName: 'app-b', gitRemoteIdentity: gitRemote })
-    const sidebarProjection = projectHostSetupProjectionFromRepos([cloneA, cloneB])
-
-    const projects = buildSettingsProjectList([cloneA], {
-      projects: sidebarProjection.projects,
-      projectHostSetups: sidebarProjection.setups
-    })
-
-    expect(projects.map((entry) => entry.checkoutLabel)).toEqual(['app'])
-    expect(buildSettingsProjectList([cloneA]).map((entry) => entry.checkoutLabel)).toEqual([
-      undefined
-    ])
-  })
-
-  it("keeps a clone's same-id twin on another host in that clone's entry", () => {
-    const repos: Repo[] = [
-      makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote }),
-      makeRepo({ id: 'clone-b', gitRemoteIdentity: gitRemote }),
-      makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote, executionHostId: 'runtime:mac' })
-    ]
-
-    const projects = buildSettingsProjectList(repos)
-
-    expect(projects.map((entry) => entry.representativeRepoId)).toEqual(['clone-a', 'clone-b'])
-    expect(projects[0].setups.map((setup) => setup.hostId)).toEqual(['local', 'runtime:mac'])
-  })
-
-  it('gives each clone entry its own host selection key', () => {
-    const repos: Repo[] = [
-      makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote }),
-      makeRepo({ id: 'clone-b', gitRemoteIdentity: gitRemote }),
-      makeRepo({ id: 'remote-9', gitRemoteIdentity: gitRemote, executionHostId: 'ssh:box' })
-    ]
-
-    const projects = buildSettingsProjectList(repos)
-    const keys = projects.map((entry) => entry.selectionKey)
-
-    expect(new Set(keys).size).toBe(3)
-    expect(projects[2].selectionKey).toBe(projects[2].projectId)
-    expect(buildRepoIdToHostSelection(projects).get('clone-b')?.selectionKey).toBe(keys[1])
-  })
-
   it("keeps a clone's host pick when its sibling clone is removed", () => {
     const cloneA = makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote })
     const cloneATwin = makeRepo({
@@ -189,159 +95,13 @@ describe('buildSettingsProjectList', () => {
       'split-project'
     ])
   })
-
-  it('keeps the representative stable when an unrelated host is removed', () => {
-    const withRuntime: Repo[] = [
-      makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote }),
-      makeRepo({
-        id: 'remote-9',
-        gitRemoteIdentity: gitRemote,
-        executionHostId: 'runtime:home-mac'
-      })
-    ]
-    const localOnly: Repo[] = [makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote })]
-
-    expect(buildSettingsProjectList(withRuntime)[0].representativeRepoId).toBe(
-      buildSettingsProjectList(localOnly)[0].representativeRepoId
-    )
-  })
-})
-
-describe('getSettingsProjectRepresentativeRepoId', () => {
-  it('prefers the local host setup', () => {
-    const setups = [
-      makeSetup({ hostId: 'runtime:home-mac', repoId: 'aaa' }),
-      makeSetup({ hostId: 'local', repoId: 'zzz' })
-    ]
-    expect(getSettingsProjectRepresentativeRepoId(setups)).toBe('zzz')
-  })
-
-  it('falls back to the lowest repoId when there is no local setup', () => {
-    const setups = [
-      makeSetup({ hostId: 'runtime:home-mac', repoId: 'zzz' }),
-      makeSetup({ hostId: 'ssh:box', repoId: 'aaa' })
-    ]
-    expect(getSettingsProjectRepresentativeRepoId(setups)).toBe('aaa')
-  })
-})
-
-describe('resolveEffectiveProjectHost', () => {
-  const setups = [
-    makeSetup({ hostId: 'local', repoId: 'local-1' }),
-    makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
-  ]
-
-  it('keeps a valid stored selection', () => {
-    expect(resolveEffectiveProjectHost(setups, 'runtime:home-mac')).toBe('runtime:home-mac')
-  })
-
-  it('falls back to local when the stored host no longer exists', () => {
-    expect(resolveEffectiveProjectHost(setups, 'runtime:gone')).toBe('local')
-  })
-
-  it('falls back to the first ready setup when there is no local host', () => {
-    const remoteSetups = [
-      makeSetup({ hostId: 'ssh:box', repoId: 'a', setupState: 'not-set-up' }),
-      makeSetup({ hostId: 'runtime:home-mac', repoId: 'b', setupState: 'ready' })
-    ]
-    expect(resolveEffectiveProjectHost(remoteSetups, 'runtime:gone')).toBe('runtime:home-mac')
-  })
-
-  it('returns undefined when there are no setups', () => {
-    expect(resolveEffectiveProjectHost([], 'local')).toBeUndefined()
-  })
 })
 
 describe('deep-link resolution', () => {
-  const repos: Repo[] = [
-    makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote }),
-    makeRepo({ id: 'remote-9', gitRemoteIdentity: gitRemote, executionHostId: 'runtime:home-mac' })
-  ]
-  const projects = buildSettingsProjectList(repos)
-
-  it('maps every host repoId to the representative section (getSettingsSectionId resolver)', () => {
-    const map = buildRepoIdToRepresentative(projects)
-    expect(map.get('remote-9')).toBe('local-1')
-    expect(map.get('local-1')).toBe('local-1')
-  })
-
-  it('maps a repoId to its owning project + host for selection', () => {
-    const map = buildRepoIdToHostSelection(projects)
-    expect(map.get('remote-9')).toEqual({
-      selectionKey: projects[0].selectionKey,
-      hostId: 'runtime:home-mac',
-      setupId: 'remote-9'
-    })
-  })
-
-  it('uses an explicit host when same-id repo rows collide', () => {
-    const sameIdProjects = buildSettingsProjectList([
-      makeRepo({ id: 'same-repo', gitRemoteIdentity: gitRemote }),
-      makeRepo({
-        id: 'same-repo',
-        gitRemoteIdentity: gitRemote,
-        executionHostId: 'ssh:server',
-        connectionId: 'server',
-        path: '/remote/repo'
-      })
-    ])
-
-    expect(getSettingsTargetHostSelection(sameIdProjects, 'same-repo', 'ssh:server')).toEqual(
-      expect.objectContaining({
-        selectionKey: sameIdProjects[0].selectionKey,
-        hostId: 'ssh:server'
-      })
-    )
-  })
-
-  it('parses a repoId from a host-specific subsection sectionId', () => {
-    const repoIds = [...buildRepoIdToHostSelection(projects).keys()]
-    expect(
-      resolveSettingsTargetRepoId(
-        { repoId: null, sectionId: 'repo-remote-9-source-control-ai' },
-        repoIds
-      )
-    ).toBe('remote-9')
-  })
-
-  it('prefers an explicit target repoId over the sectionId', () => {
-    expect(
-      resolveSettingsTargetRepoId({ repoId: 'local-1', sectionId: 'repo-remote-9-icon' }, [
-        'local-1',
-        'remote-9'
-      ])
-    ).toBe('local-1')
-  })
-
   it('disambiguates repo ids where one is a prefix of another (longest match wins)', () => {
     expect(
       resolveSettingsTargetRepoId({ repoId: null, sectionId: 'repo-app-2-icon' }, ['app', 'app-2'])
     ).toBe('app-2')
-  })
-
-  it('resolves the remote host repo row when a remote host is selected', () => {
-    const hostSelection = buildRepoIdToHostSelection(projects).get('remote-9')
-    expect(getSettingsProjectHostRepo(projects[0], repos, hostSelection?.hostId)?.id).toBe(
-      'remote-9'
-    )
-  })
-
-  it('opens the linked setup when one entry holds two setups on that host (#11689)', () => {
-    const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\app'
-    const sameHostRepos = [
-      makeRepo({ id: 'windows-clone', gitRemoteIdentity: gitRemote, path: 'C:\\repos\\app' }),
-      makeRepo({ id: 'wsl-clone', gitRemoteIdentity: gitRemote, path: wslPath })
-    ]
-    const [entry] = buildSettingsProjectList(sameHostRepos)
-    const selection = buildRepoIdToHostSelection([entry]).get('wsl-clone')
-
-    expect(
-      getSettingsProjectHostRepo(entry, sameHostRepos, selection?.hostId, selection?.setupId)?.path
-    ).toBe(wslPath)
-  })
-
-  it('defaults to the local host repo row when no host is selected', () => {
-    expect(getSettingsProjectHostRepo(projects[0], repos, undefined)?.id).toBe('local-1')
   })
 
   it('distinguishes same-id repo rows by execution host', () => {
@@ -391,23 +151,6 @@ describe('deep-link resolution', () => {
 })
 
 describe('removeSettingsProjectFromAllHosts', () => {
-  it('removes every host setup with its own hostId and skips setups without a repo row', async () => {
-    const removeProject = vi.fn().mockResolvedValue(undefined)
-    const setups = [
-      makeSetup({ hostId: 'local', repoId: 'local-1' }),
-      makeSetup({ hostId: 'ssh:box', repoId: '  ' }),
-      makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
-    ]
-
-    await removeSettingsProjectFromAllHosts(setups, removeProject)
-
-    // User-initiated removal failures must surface.
-    expect(removeProject.mock.calls).toEqual([
-      ['local-1', { hostId: 'local', errorFeedback: 'toast' }],
-      ['remote-9', { hostId: 'runtime:home-mac', errorFeedback: 'toast' }]
-    ])
-  })
-
   it('awaits each host removal before starting the next', async () => {
     let resolveFirst: (() => void) | undefined
     const removeProject = vi

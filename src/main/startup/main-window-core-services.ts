@@ -161,6 +161,4 @@ export function attachMainWindowCoreServices(
   // Attach durable diagnostic pulls now, defer process launch past first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)
-  // Quota probes spawn CLIs/use network; defer to show/focus refresh so they do not compete with first paint.
-  rateLimits.start({ fetchImmediately: false })
 }
