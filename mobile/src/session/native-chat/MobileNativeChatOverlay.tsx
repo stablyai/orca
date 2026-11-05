@@ -24,7 +24,6 @@ import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-im
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/types'
-import { NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY } from '../../../../src/shared/native-chat/native-chat-interrupted-continue'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
@@ -310,7 +309,7 @@ export function MobileNativeChatOverlay({
                         continueFailed
                           ? t(
                               'chat.interruptedContinue.failed',
-                              NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY
+                              "Couldn't continue this chat. Try again, or send a message."
                             )
                           : sendErrorMessage
                       }

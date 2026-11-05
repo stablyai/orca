@@ -31,7 +31,6 @@ import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../
 import {
   failNativeChatInterruptedContinue,
   nativeChatInterruptedContinueState,
-  NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY,
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
   nativeChatInterruptedContinueAccepted
 } from '../../../../shared/native-chat/native-chat-interrupted-continue'
@@ -213,7 +212,7 @@ export function useNativeChatInterruptedContinuation(input: {
   )
   const failedText = translate(
     'components.native-chat.interruptedContinue.failed',
-    NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY
+    "Couldn't continue this chat. Try again, or send a message."
   )
   const usageFailedHere = usageFailure !== null && usageFailure === usageLimitCut?.turnItemId
   return {

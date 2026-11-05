@@ -3,9 +3,6 @@
 import type { StructuredAgentSessionHostCapabilityState } from '../agent-session/structured-agent-session-host-capability'
 import type { NativeChatOrcaStopCut } from './native-chat-orca-stop-cut'
 
-export const NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY =
-  "Couldn't continue this chat. Try again, or send a message."
-
 /** `asked`: the cut this client asked to continue, hidden until the journal shows what came of it. */
 export type NativeChatInterruptedContinueAttempt = {
   asked: string | null
