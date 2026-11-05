@@ -9,10 +9,12 @@ const FIELD_CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End'])
 
 // RN Web skips composing Enter keydowns; beforeinput line breaks recover those submits.
 // Submitted keydowns are cancelled, preventing duplicates; candidate acceptance emits insertCompositionText and remains untouched.
+// WebKit sends no input event after compositionend, so the committed text is reported here.
 export function bindTerminalTextFieldSubmit(
   node: TextInput | null,
   onSubmit: () => void,
-  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
+  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean,
+  onCompositionEnd?: (text: string) => void
 ): () => void {
   if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLTextAreaElement)) {
     return () => {}
@@ -36,6 +38,7 @@ export function bindTerminalTextFieldSubmit(
   }
   const endComposition = (): void => {
     composing = false
+    onCompositionEnd?.(field.value)
   }
   const captureKeyChord = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) {
