@@ -8,7 +8,7 @@ import {
 } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { claudeProfileMarkerPath } from '../claude-accounts/claude-profile-paths'
-import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
+import { resolveStructuredClaudeAccountHomePath } from '../runtime/agent-session/environment/structured-agent-account-home'
 import { prepareClaudeLaunchAccount } from './claude-launch-account'
 
 const roots: string[] = []

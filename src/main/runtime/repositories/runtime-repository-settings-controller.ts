@@ -58,6 +58,9 @@ type RepositoryUpdates = Partial<
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  /** Only `null` clears a pin; a stripped (undefined) field leaves it. */
+  claudeAccountId?: string | null
+  codexAccountId?: string | null
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.

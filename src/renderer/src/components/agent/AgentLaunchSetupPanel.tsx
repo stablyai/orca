@@ -1,5 +1,5 @@
 import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
-import { ClaudeProjectAccountRow } from './ClaudeProjectAccountRow'
+import { ProjectAccountRow } from './ProjectAccountRow'
 import { textActionArgumentsOwnModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
@@ -288,7 +288,7 @@ export function AgentLaunchSetupPanel({
         </CommandList>
       </Command>
       <div className="grid min-w-0 grid-cols-1 gap-2.5 border-t border-border px-3 pt-2.5 pb-1">
-        {mode === 'launch' ? <ClaudeProjectAccountRow entry={entry} disabled={disabled} /> : null}
+        {mode === 'launch' ? <ProjectAccountRow entry={entry} disabled={disabled} /> : null}
         {renderOptions(
           optionRows.filter((row) => row.id !== 'fastMode' && row.id !== 'serviceTier')
         )}

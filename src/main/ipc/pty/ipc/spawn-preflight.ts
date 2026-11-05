@@ -1,4 +1,7 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import {
+  withClaudeProfileTerminalEnv,
+  withClaudeProjectWslPointer
+} from '../../../claude-accounts/claude-profile-installed-router'
 import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
@@ -114,11 +117,14 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
-  ctx.codexSelectionTarget = target.codexSelectionTarget
+  // Why worktreeId: a project can pin its sessions to one Claude or Codex account.
+  ctx.codexSelectionTarget = { ...target.codexSelectionTarget, worktreeId: args.worktreeId }
   ctx.spawnTiming.mark('preflight')
-  // Why worktreeId: a project can pin its terminals to one Claude account.
-  const claudeTarget = { ...ctx.codexSelectionTarget, worktreeId: args.worktreeId }
-  args.env = withClaudeProfileTerminalEnv(args.env, claudeTarget)
+  const claudeTarget = ctx.codexSelectionTarget
+  args.env = await withClaudeProjectWslPointer(
+    withClaudeProfileTerminalEnv(args.env, claudeTarget),
+    claudeTarget
+  )
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(claudeTarget)

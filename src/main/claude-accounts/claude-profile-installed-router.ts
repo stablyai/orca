@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { CLAUDE_PROFILE_POINTER_ENV } from '../../shared/claude-profile-routing'
 import { isDirectory } from './claude-profile-homes'
 // Keep the router setup graph out of scan workers.
 import type { ClaudeProfileRouter } from './claude-profile-router'
@@ -35,6 +36,32 @@ export function installClaudeWslProfileRouter(router: ClaudeWslProfileRouter | u
 
 export function getClaudeWslProfileRouter(): ClaudeWslProfileRouter | undefined {
   return installedWsl
+}
+
+let installedWslProjectPointer:
+  | ((target: ClaudeAccountSelectionTarget) => Promise<string | null>)
+  | undefined
+
+export function installClaudeWslProjectPointer(
+  publish: ((target: ClaudeAccountSelectionTarget) => Promise<string | null>) | undefined
+): void {
+  installedWslProjectPointer = publish
+}
+
+/** A pinned project's WSL pane gets its own pointer, written before the shell can run `claude`;
+ *  any failure keeps the selection's pointer rather than block the terminal. */
+export async function withClaudeProjectWslPointer<Env extends Record<string, string> | undefined>(
+  env: Env,
+  target: ClaudeAccountSelectionTarget
+): Promise<Env | Record<string, string>> {
+  if (target.runtime !== 'wsl' || !target.worktreeId || !installedWslProjectPointer) {
+    return env
+  }
+  const pointer = await installedWslProjectPointer(target).catch((error: unknown) => {
+    console.warn('[claude-profile] Could not pin the WSL project account:', error)
+    return null
+  })
+  return pointer ? { ...env, [CLAUDE_PROFILE_POINTER_ENV]: pointer } : env
 }
 
 export function withClaudeProfileTerminalEnv<Env extends Record<string, string> | undefined>(

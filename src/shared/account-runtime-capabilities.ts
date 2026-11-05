@@ -12,7 +12,11 @@ export const USAGE_CREDENTIALS_RUNTIME_CAPABILITY = 'accounts.usage-credentials.
 // Why: a paired client adds a Claude/Codex account whose login runs on this host (#20009).
 export const HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.host-sign-in.v1' as const
 
+// Why: an older host's repo.update strips claudeAccountId/codexAccountId, so a pin would look saved and do nothing.
+export const PROJECT_AGENT_ACCOUNT_PIN_RUNTIME_CAPABILITY = 'accounts.project-pin.v1' as const
+
 export const ACCOUNT_RUNTIME_CAPABILITIES = [
+  PROJECT_AGENT_ACCOUNT_PIN_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,

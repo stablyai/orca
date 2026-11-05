@@ -9,6 +9,8 @@ export type ClaudeAccountSelectionTarget = {
   wslDistro?: string | null
   /** A launch's workspace; its project may pin a host account over the selection. */
   worktreeId?: string
+  /** The project's pin when this process cannot read the project, such as a WSL host's. */
+  projectAccountId?: string
 }
 
 export type NormalizedClaudeAccountSelectionTarget = {

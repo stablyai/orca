@@ -23540,11 +23540,11 @@
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
     "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files",
-    "claudeAccountFollow": "Active account ({{email}})",
-    "claudeAccountFollowDefault": "Active account",
-    "claudeAccount": "Account",
-    "claudeAccountLabel": "Claude account for this project",
-    "claudeAccountHint": "Saved for this project. New sessions here use it, in a terminal or a chat."
+    "projectAccountFollow": "Active account ({{email}})",
+    "projectAccountFollowDefault": "Active account",
+    "projectAccount": "Account",
+    "projectAccountLabel": "{{agent}} account for this project",
+    "projectAccountHint": "Saved for this project. New sessions here use it, in a terminal or a chat."
   },
   "automations": {
     "runFailures": {

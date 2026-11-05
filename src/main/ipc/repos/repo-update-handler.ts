@@ -9,6 +9,10 @@ import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../share
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
+import {
+  normalizeRepoAgentAccountId,
+  REPO_AGENT_ACCOUNT_FIELDS
+} from '../../../shared/repo-agent-account'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
@@ -64,6 +68,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | null
           ghAccount?: GhAccountBinding | null
           claudeAccountId?: string | null
+          codexAccountId?: string | null
         }
       }
     ): Promise<Repo | null> => {
@@ -103,11 +108,14 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           }
         }
       }
-      // Null clears the pin; the id names a folder, so malformed values are dropped.
-      if ('claudeAccountId' in updates) {
-        const id = updates.claudeAccountId
-        if (id != null && (typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id))) {
-          delete updates.claudeAccountId
+      for (const field of REPO_AGENT_ACCOUNT_FIELDS) {
+        if (field in updates) {
+          const id = normalizeRepoAgentAccountId(updates[field])
+          if (id === undefined) {
+            delete updates[field]
+          } else {
+            updates[field] = id
+          }
         }
       }
       // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.

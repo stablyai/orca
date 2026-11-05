@@ -18,8 +18,13 @@ import { markCodexSessionBackfillMarkerPending } from '../codex/history/backfill
 import { getCodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-scan-dates'
 import { resolveCodexSessionBackfillPaths } from '../codex/history/backfill/codex-session-backfill'
 import type { CodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-types'
-import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
+import {
+  ManagedCodexHomeTemporarilyUnavailableError,
+  PINNED_CODEX_HOME_UNUSABLE_MESSAGE
+} from './host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
+import { projectPinnedCodexAccount } from './codex-project-pin'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import { getWslHomeAsync } from '../wsl/discovery/distro-catalog'
 
@@ -36,6 +41,31 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       : normalizeCodexRuntimeSelection(settings).host
   }
 
+  /** The saved host account a worktree's project pins; a removed or WSL one pins nothing. */
+  protected getProjectPinnedHostAccount(worktreeId?: string): CodexManagedAccount | null {
+    const account = projectPinnedCodexAccount(this.store, worktreeId)
+    return account && !this.getWslManagedHomePath(account) ? account : null
+  }
+
+  /** A pinned project's own home. Unlike a selected account it never moves or clears the selection,
+   *  and it refuses rather than run the launch under another account. */
+  protected preparePinnedManagedHomeForLaunch(account: CodexManagedAccount): string {
+    const resolved = this.resolveSelfContainedManagedHome(account)
+    if (resolved.kind === 'indeterminate') {
+      throw new ManagedCodexHomeTemporarilyUnavailableError()
+    }
+    if (resolved.kind === 'untrusted') {
+      throw new Error(PINNED_CODEX_HOME_UNUSABLE_MESSAGE)
+    }
+    syncSystemCodexResourcesIntoManagedHome(resolved.homePath)
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: resolved.homePath,
+      systemHomePath: getSystemCodexHomePath()
+    })
+    this.startSelfContainedSessionBridgeForLaunch(resolved.homePath)
+    return resolved.homePath
+  }
+
   /** Prepare the launch home without waiting for background history bridging. */
   prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
@@ -48,6 +78,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       this.startLegacyWslAuthDrain(wslTarget)
       this.finishWslLaunchPreparation(wslTarget, homePath)
       return homePath
+    }
+    const pinned = this.getProjectPinnedHostAccount(target?.worktreeId)
+    if (pinned) {
+      return this.preparePinnedManagedHomeForLaunch(pinned)
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
@@ -105,8 +139,12 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   }
 
   /** Resolve the launch home without side effects for catalog reads; null means real ~/.codex. */
-  resolveHostCodexHomePathForLaunchReadOnly(launchEnv?: NodeJS.ProcessEnv): string | null {
-    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+  resolveHostCodexHomePathForLaunchReadOnly(
+    launchEnv?: NodeJS.ProcessEnv,
+    worktreeId?: string
+  ): string | null {
+    const pinned = this.getProjectPinnedHostAccount(worktreeId)
+    const selfContainedAccount = pinned ?? this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
@@ -115,6 +153,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       if (resolved.kind === 'indeterminate') {
         // Keep reads under the selected account; an unreadable home cannot imply system default.
         throw new ManagedCodexHomeTemporarilyUnavailableError()
+      }
+      if (pinned) {
+        throw new Error(PINNED_CODEX_HOME_UNUSABLE_MESSAGE)
       }
       // Predict launch's route after deselection while leaving the selection untouched.
       return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
@@ -125,6 +166,22 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     return this.isHostSystemDefaultRealHomeSelected(launchEnv)
       ? null
       : resolveOrcaManagedCodexHomePath()
+  }
+
+  /** A pinned project's home, for resumes and restarts; null when the project pins nothing. */
+  resolveProjectPinnedHostCodexHomePathForResume(worktreeId?: string): string | null {
+    const pinned = this.getProjectPinnedHostAccount(worktreeId)
+    if (!pinned) {
+      return null
+    }
+    const resolved = this.resolveSelfContainedManagedHome(pinned)
+    if (resolved.kind === 'indeterminate') {
+      throw new ManagedCodexHomeTemporarilyUnavailableError()
+    }
+    if (resolved.kind === 'untrusted') {
+      throw new Error(PINNED_CODEX_HOME_UNUSABLE_MESSAGE)
+    }
+    return resolved.homePath
   }
 
   async prepareForCodexLaunchAsync(

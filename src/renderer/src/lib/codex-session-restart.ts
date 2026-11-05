@@ -25,6 +25,7 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import { isPinnedProject } from './project-agent-account-pin'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
@@ -84,8 +85,10 @@ async function scanCodexPanes(
     isLaneInScope: (laneKey: string) => boolean
   }
 ): Promise<CodexPaneScanResult[]> {
-  const panes = Object.values(state.tabsByWorktree)
-    .flat()
+  // A pinned project's panes relaunch on its own account, so a selection switch never stales them.
+  const panes = Object.entries(state.tabsByWorktree)
+    .filter(([worktreeId]) => !isPinnedProject(state, 'codex', worktreeId))
+    .flatMap(([, tabs]) => tabs)
     .flatMap((tab) =>
       (state.ptyIdsByTabId[tab.id] ?? [])
         .filter((ptyId) => args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))

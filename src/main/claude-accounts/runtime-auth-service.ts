@@ -10,6 +10,7 @@ import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
   installClaudeProfileRouter,
+  installClaudeWslProjectPointer,
   installClaudeWslProfileRouter
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
@@ -46,6 +47,7 @@ export class ClaudeRuntimeAuthService {
     )
     this.wslRouter = process.platform === 'win32' ? new ClaudeWslProfileRouter(args) : undefined
     installClaudeWslProfileRouter(this.wslRouter)
+    installClaudeWslProjectPointer((target) => this.publishWslProjectPointer(target))
     void this.publishAll().catch((error: unknown) => {
       console.warn('[claude-runtime-auth] Failed to publish the Claude account selection:', error)
     })
@@ -56,8 +58,25 @@ export class ClaudeRuntimeAuthService {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
     return wsl
-      ? wsl.router.prepareLaunch(wsl.distro)
+      ? wsl.router.prepareLaunch(wsl.distro, this.projectAccountIdFor(target))
       : this.router.prepareLaunch(target?.worktreeId)
+  }
+
+  private projectAccountIdFor(target?: ClaudeAccountSelectionTarget): string | null {
+    const worktreeId = target?.worktreeId
+    return (
+      target?.projectAccountId ??
+      (worktreeId
+        ? (this.store.getRepo?.(getRepoIdFromWorktreeId(worktreeId))?.claudeAccountId ?? null)
+        : null)
+    )
+  }
+
+  /** A WSL pane of a pinned project reads its own guest pointer; null keeps the selection's. */
+  async publishWslProjectPointer(target: ClaudeAccountSelectionTarget): Promise<string | null> {
+    const wsl = this.wslRouteFor(target)
+    const pinned = wsl?.router.pinnedAccountIn(wsl.distro, this.projectAccountIdFor(target))
+    return wsl && pinned ? wsl.router.publishProjectPointer(wsl.distro, pinned) : null
   }
 
   async prepareForRateLimitFetch(

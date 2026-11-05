@@ -3,6 +3,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime
 import {
   guestCodexHomePath,
   prepareWslOrcadAccountEnv,
+  readWslHostProjectPins,
   withWslOrcadAccountEnv,
   type WslOrcadAccountEnvDependencies
 } from './wsl-orcad-account-env'
@@ -102,6 +103,41 @@ describe('withWslOrcadAccountEnv', () => {
     expect(created).toMatchObject({
       params: { env: { KEEP: '1', CLAUDE_CONFIG_DIR: CLAUDE_HOME } }
     })
+  })
+
+  it("launches a WSL host project's sessions on the accounts its repo pins", async () => {
+    const PINNED = '~/.local/share/orca/claude-profiles/acct-w/project-pointer'
+    const deps = dependencies({ claudeProjectPointer: vi.fn(async () => PINNED) })
+    const showRepo = vi.fn(async (_repoId: string) => ({
+      ok: true,
+      result: { repo: { claudeAccountId: 'acct-w', codexAccountId: 'codex-w' } }
+    }))
+    const env = await withWslOrcadAccountEnv(
+      {
+        environmentId: 'wsl:ubuntu',
+        method: 'terminal.create',
+        params: { worktree: 'id:repo-1::/home/u/app' },
+        hostSupports: async () => 'supported',
+        readProjectPins: (repoId) => readWslHostProjectPins(() => showRepo(repoId))
+      },
+      deps,
+      wsl
+    )
+    expect(showRepo).toHaveBeenCalledWith('repo-1')
+    expect(env).toMatchObject({ params: { env: { ORCA_CLAUDE_PROFILE_POINTER: PINNED } } })
+    expect(deps.claudeProjectPointer).toHaveBeenCalledWith(
+      expect.objectContaining({ wslDistro: 'Ubuntu', projectAccountId: 'acct-w' })
+    )
+    expect(deps.prepareCodexHome).toHaveBeenCalledWith(
+      expect.objectContaining({ projectAccountId: 'codex-w' })
+    )
+    // A malformed or missing pin falls back to the distro's selection.
+    await expect(
+      readWslHostProjectPins(async () => ({
+        ok: true,
+        result: { repo: { claudeAccountId: '../x' } }
+      }))
+    ).resolves.toEqual({})
   })
 
   it('never turns a bare command or agent preset into a caller-built launch', async () => {

@@ -65,6 +65,7 @@ export type RepoUpdate = Partial<
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   ghAccount?: GhAccountBinding | null
   claudeAccountId?: string | null
+  codexAccountId?: string | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']

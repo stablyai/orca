@@ -66,8 +66,10 @@ export type Repo = {
   defaultJiraProject?: JiraProjectReference | null
   /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */
   ghAccount?: GhAccountBinding
-  /** Saved Claude account this project's local terminals launch under; absent follows the selection. */
+  /** Saved Claude account this project's sessions launch under; absent follows the selection. */
   claudeAccountId?: string
+  /** Saved Codex account this project's sessions launch under; absent follows the selection. */
+  codexAccountId?: string
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */

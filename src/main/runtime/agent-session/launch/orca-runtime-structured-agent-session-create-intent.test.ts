@@ -270,7 +270,8 @@ describe('structured agent-session create intent', () => {
     })
 
     expect(prepareCodexStructuredLaunch).toHaveBeenCalledWith({
-      launchEnv: expect.objectContaining({ CODEX_HOME: '/configured/home' })
+      launchEnv: expect.objectContaining({ CODEX_HOME: '/configured/home' }),
+      worktreeId: 'workspace-1'
     })
     expect(intent.accountHome).toEqual({
       variable: 'CODEX_HOME',

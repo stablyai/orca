@@ -3,6 +3,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/sett
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
+import { normalizeRepoAgentAccountId } from '../repo-agent-account'
 import { normalizeJiraProjectReference } from '../jira/jira-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -72,6 +73,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
           // Why: malformed bindings must omit the key (IPC deletes); never clear via undefined.
           return normalizeGhAccountBinding(value) ?? undefined
         }),
+      claudeAccountId: z.unknown().optional().transform(normalizeRepoAgentAccountId),
+      codexAccountId: z.unknown().optional().transform(normalizeRepoAgentAccountId),
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
       externalWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),
       externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),

@@ -123,6 +123,34 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     await expect(f.router.publish('Ubuntu')).rejects.toThrow('WSL Ubuntu: exited with code 3')
   })
 
+  it("launches a pinned project's pane on its distro account through its own pointer", async () => {
+    const f = fixture()
+    f.settings.claudeManagedAccounts = [
+      f.account('a'),
+      f.account('b'),
+      { ...f.account('h'), managedAuthRuntime: 'host', wslDistro: null }
+    ]
+    const projectPointer = join(guest.home, '.local/share/orca/claude-profiles/b/project-pointer')
+    const homeB = join(guest.home, '.local/share/orca/claude-profiles/b/home')
+    expect(f.router.pinnedAccountIn('Ubuntu', 'b')).toBe('b')
+    // A host account, or another distro's, never pins this distro's panes.
+    expect(f.router.pinnedAccountIn('Ubuntu', 'h')).toBeNull()
+    expect(f.router.pinnedAccountIn('Debian', 'b')).toBeNull()
+
+    expect(await f.router.publishProjectPointer('Ubuntu', 'b')).toBe(
+      '~/.local/share/orca/claude-profiles/b/project-pointer'
+    )
+    expect(readFileSync(projectPointer, 'utf8')).toBe(homeB)
+    const launch = await f.router.prepareLaunch('Ubuntu', 'b')
+    expect(launch.envPatch).toMatchObject({
+      ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/b/project-pointer',
+      CLAUDE_CONFIG_DIR: homeB
+    })
+    // The distro's selection pointer still names its selected account.
+    await f.router.publish('Ubuntu')
+    expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
+  })
+
   it('never publishes at startup to a distro a list still names while it stops (E9)', async () => {
     const f = fixture()
     gate.blocked.mockResolvedValueOnce({ distro: 'Ubuntu', state: 'stopped' })

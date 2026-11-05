@@ -21,6 +21,14 @@ export function wslClaudeProfilePointer(hostDataRoot: string): string {
   return `.local/share/orca/claude-profiles/selected-wsl-${build}`
 }
 
+/** A project pinned to this account reads its own guest-home-relative pointer beside the folder. */
+export function wslClaudeProjectPointer(accountId: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(accountId)) {
+    throw new Error('Invalid Claude profile location')
+  }
+  return `.local/share/orca/claude-profiles/${accountId}/project-pointer`
+}
+
 /** Legacy layouts contain no managed login and return null. */
 export function savedWslClaudeAccountHome(account: {
   id: string

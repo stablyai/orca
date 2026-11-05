@@ -10,6 +10,7 @@ vi.mock('./main-process-state', () => ({
     codexRuntimeHome: {
       isHostSystemDefaultRealHomeSelected: () => false,
       getHostCodexHomePathsForSessionDiscovery: () => [homes.original, homes.selected],
+      resolveProjectPinnedHostCodexHomePathForResume: () => null,
       resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
     },
     store: { getSettings: () => ({}) }

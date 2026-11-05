@@ -52,11 +52,15 @@ export async function resolveStructuredClaudeAccountHomePath(
   )
 }
 
+/** A Codex chat home lookup; the workspace lets a project pin its account. */
+export type StructuredCodexLaunchHomeInput = { launchEnv: NodeJS.ProcessEnv; worktreeId?: string }
+
 export type StructuredCodexAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
+  worktreeId?: string
   /** Resolve create-prepared or side-effect-free read homes identically; null selects env/system defaults. Reads must not sync homes or clear selections. */
   resolveLaunchHome:
-    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
+    | ((input: StructuredCodexLaunchHomeInput) => string | null | Promise<string | null>)
     | null
 }
 
@@ -64,7 +68,10 @@ export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
+  const resolvedHome = await deps.resolveLaunchHome?.({
+    launchEnv: deps.launchEnv,
+    ...(deps.worktreeId ? { worktreeId: deps.worktreeId } : {})
+  })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||

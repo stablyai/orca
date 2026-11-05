@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
-import { pinnedClaudeAccountId } from '@/lib/claude-project-account-pin'
+import { pinnedProjectAccountId } from '@/lib/project-agent-account-pin'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
@@ -40,7 +40,7 @@ export function useNativeChatClaudeSignIn(input: {
   // Why local only: the hidden sign-in runs on this device, and Claude chats run on its host.
   const accountId = useAppStore((s) =>
     input.agent === 'claude' && input.target.kind === 'local'
-      ? (pinnedClaudeAccountId(s, input.worktreeId) ??
+      ? (pinnedProjectAccountId(s, 'claude', input.worktreeId) ??
         s.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
         s.settings?.activeClaudeManagedAccountId ??
         null)
