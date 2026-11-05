@@ -52,6 +52,7 @@ function serviceWith(
     linkRoutes?: ReturnType<PluginService['contentPacks']['linkRoutes']['declared']>
   } = {}
 ): PluginService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double supplying only the PluginService members buildPluginList reads.
   return {
     options: {
       getPluginConsents: () => ({}),

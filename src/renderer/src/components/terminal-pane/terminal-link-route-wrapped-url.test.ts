@@ -20,6 +20,7 @@ function route(host: string, destination: NormalizedLinkRoute['destination']): N
 
 function makeBufferLine(fragment: string): IBufferLine {
   const text = fragment.padEnd(COLS)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double supplying only the IBufferLine members the hit test reads.
   return {
     isWrapped: false,
     length: COLS,
@@ -41,6 +42,7 @@ function makeBufferLine(fragment: string): IBufferLine {
 
 function makeTerminal(): Terminal {
   const rows = [TRUNCATED_ROW, TAIL_ROW]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double supplying only the Terminal members the hit test reads.
   return {
     cols: COLS,
     rows: 10,
@@ -61,6 +63,7 @@ function makeTerminal(): Terminal {
 }
 
 function clickFirstRow(): MouseEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double supplying only the MouseEvent fields the click handler reads.
   return {
     button: 0,
     metaKey: true,
