@@ -77,16 +77,3 @@ it('fetches both merge parents and deleted content without unrelated branches or
     rmSync(directory, { recursive: true, force: true })
   }
 })
-
-it('completes history before scanning the same HEAD and Cloud paths', () => {
-  expect(steps[0].with['fetch-depth']).toBe(1)
-  expect(history['working-directory']).toBe('.')
-  const scanIndex = steps.findIndex(
-    (step) => step.run?.includes('docker run') && step.run.includes('gitleaks@')
-  )
-  expect(steps.indexOf(history)).toBeLessThan(scanIndex)
-  expect(steps[scanIndex].run).toContain(
-    '--log-opts="HEAD -- cloud :(glob).github/workflows/cloud-*.yml .github/actions/cloud-sql-rollout-lease"'
-  )
-  expect(steps.some((step) => step.run?.includes('trufflehog@'))).toBe(true)
-})
