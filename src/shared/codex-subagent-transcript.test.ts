@@ -62,7 +62,7 @@ describe('Codex subagent transcript reconciliation', () => {
     expect(codexRosterToSnapshots(roster)).toEqual([
       {
         id: CHILD_ID,
-        description: '/root/sidebar_repro',
+        description: 'sidebar_repro',
         state: 'working',
         startedAt: 1234,
         agentType: undefined,
@@ -235,7 +235,7 @@ describe('Codex subagent transcript reconciliation', () => {
       expect(codexRosterToSnapshots(roster)).toEqual([
         {
           id: CHILD_ID,
-          description: '/root/sidebar_repro',
+          description: 'sidebar_repro',
           state: 'working',
           startedAt: 1234,
           agentType: undefined,

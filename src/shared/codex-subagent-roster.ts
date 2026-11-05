@@ -76,13 +76,14 @@ export function enrichCodexSubagentIdentity(
     return false
   }
   const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
-  if (!identity) {
+  const description = normalizeOptionalField(
+    identity?.description,
+    AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
+  )
+  if (!description) {
     return false
   }
   child.identityTranscriptPath = transcriptPath
-  const description =
-    normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
-    child.description
   const changed = description !== child.description
   child.description = description
   return changed

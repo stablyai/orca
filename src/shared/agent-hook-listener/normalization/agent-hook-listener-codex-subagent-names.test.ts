@@ -78,6 +78,15 @@ describe('Codex child names from provider metadata', () => {
     expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
   })
 
+  it('retries a matching metadata header that did not yet contain a name', () => {
+    const { writeMeta, post } = fixture()
+    writeMeta({})
+    expect(post()?.[0]?.description).toBeUndefined()
+
+    writeMeta({ agent_path: '/root/review/mobile' })
+    expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
+  })
+
   it('publishes distinct delayed worker names on parent polls without reviving completed children', () => {
     const directory = mkdtempSync(join(tmpdir(), 'codex-polled-child-name-'))
     directories.push(directory)
@@ -136,12 +145,31 @@ describe('Codex child names from provider metadata', () => {
       expect.objectContaining({ id: firstId, agentType: 'worker', description: 'task_a' }),
       expect.objectContaining({ id: secondId, agentType: 'worker', description: 'task_b' })
     ])
+    function parentActivity(agentPath: string): void {
+      appendFileSync(
+        parentPath,
+        `${JSON.stringify({
+          type: 'event_msg',
+          payload: {
+            type: 'sub_agent_activity',
+            agent_thread_id: firstId,
+            agent_path: agentPath,
+            kind: 'interacted'
+          }
+        })}\n`
+      )
+    }
+    parentActivity('/root/task_a')
+    expect(poll()?.[0]?.description).toBe('task_a')
+    parentActivity('/root/review/mobile')
+    expect(poll()?.[0]?.description).toBe('mobile')
+
     current = normalizeAndAccept(state, 'codex', {
       hook_event_name: 'PostToolUse',
       agent_id: firstId,
       agent_type: 'worker'
     })
-    expect(current?.payload.subagents?.[0]?.description).toBe('task_a')
+    expect(current?.payload.subagents?.[0]?.description).toBe('mobile')
 
     appendFileSync(firstPath, '{"type":"event_msg","payload":{"type":"task_complete"}}\n')
     expect(poll()).toEqual([

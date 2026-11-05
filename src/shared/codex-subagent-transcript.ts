@@ -1,4 +1,5 @@
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { codexSubagentPathLabel } from './codex-agent-path'
 
 import {
   readJsonlCursor,
@@ -128,7 +129,8 @@ function readActivity(recordValue: JsonRecord):
   return {
     id,
     description:
-      typeof payload.agent_path === 'string' ? payload.agent_path.trim() || undefined : undefined,
+      codexSubagentPathLabel(typeof payload.agent_path === 'string' ? payload.agent_path : null) ??
+      undefined,
     kind: rawKind,
     startedAt:
       typeof payload.occurred_at_ms === 'number' && Number.isFinite(payload.occurred_at_ms)
