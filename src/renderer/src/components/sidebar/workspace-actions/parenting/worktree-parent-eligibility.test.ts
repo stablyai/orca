@@ -189,14 +189,14 @@ describe('canAssignWorktreeParent', () => {
     ).toEqual([sameRepo.id, otherRepo.id])
   })
 
-  it('offers a same-repo candidate on another machine', () => {
+  it('lists candidates on another machine after the child machine candidates', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameHost = makeWorktree('same-host', 'repo-a')
     const otherHost = makeWorktree('other-host', 'repo-a')
     child.hostId = 'runtime:env-a'
     sameHost.hostId = 'runtime:env-a'
     otherHost.hostId = 'runtime:env-b'
-    const worktrees = [child, sameHost, otherHost]
+    const worktrees = [otherHost, child, sameHost]
 
     expect(
       getEligibleWorktreeParents({

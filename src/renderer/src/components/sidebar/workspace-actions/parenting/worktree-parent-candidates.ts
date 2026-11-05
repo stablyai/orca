@@ -46,20 +46,30 @@ export function getEligibleWorktreeParents({
     precomputedCyclicLineageIds ?? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
   const isCrossStoreParent = crossStoreParentEligibility(child, parentIdentities)
   const closesLoop = closesResolvedLoop(child, worktrees, parentIdentities)
-  return worktrees.filter(
-    (candidate) =>
-      !closesLoop(candidate) &&
-      (isCrossStoreParent(candidate) ||
-        isEligibleWorktreeParent({
-          child,
-          candidateParent: candidate,
-          lineageById,
-          worktreeMap,
-          repoMap,
-          cyclicLineageIds,
-          childHostId
-        }))
-  )
+  const sameMachine: Worktree[] = []
+  const otherMachines: Worktree[] = []
+  for (const candidate of worktrees) {
+    if (closesLoop(candidate)) {
+      continue
+    }
+    if (
+      isEligibleWorktreeParent({
+        child,
+        candidateParent: candidate,
+        lineageById,
+        worktreeMap,
+        repoMap,
+        cyclicLineageIds,
+        childHostId
+      })
+    ) {
+      sameMachine.push(candidate)
+    } else if (isCrossStoreParent(candidate)) {
+      otherMachines.push(candidate)
+    }
+  }
+  // The child's own machine first, so the usual parent isn't pushed below other machines' rows.
+  return [...sameMachine, ...otherMachines]
 }
 
 /** A create-time parent in another Orca store; the create saves a ref to it built from verified ids. */
