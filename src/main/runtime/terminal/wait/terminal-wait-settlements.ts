@@ -14,6 +14,7 @@ import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
+import { claudeHookTurnQueuesTypedInput } from './tui-idle-hook-lane'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
 
@@ -134,7 +135,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
     // The ranking vetoes overlays only on ready verdicts; an overlay refuses input mid-turn too.
     // Only a recognized agent queues mid-turn text; an unknown program would read it as stdin.
-    return verdict.kind === 'working'
+    const queueSafe =
+      verdict.kind === 'working' ||
+      (verdict.kind === 'pending' &&
+        claudeHookTurnQueuesTypedInput(evidence.agent, evidence.readHookTurn?.()))
+    return queueSafe
       ? !!this.getPaneTerminalAgent(ptyId) && evidence.readScreenInputVeto() !== true
       : isTuiIdleReadyVerdict(verdict)
   }

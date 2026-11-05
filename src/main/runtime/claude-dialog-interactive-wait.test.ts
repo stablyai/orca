@@ -6,6 +6,9 @@ import {
   TRANSCRIPT_PANE_PTY_ID
 } from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import type { RuntimeVisibleTerminalState } from './terminal/records/runtime-terminal-state-records'
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
+import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
+import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -93,6 +96,56 @@ describe('hand-typed native Claude, whose process name is its version', () => {
     expect(before).not.toBe('claude')
     expect(counts.scans).toBe(1)
   })
+
+  // Windows native Claude is claude.exe, recognized by name; only POSIX scans a version name.
+  it.skipIf(process.platform === 'win32')(
+    'keeps native Claude identified once its own title is up',
+    async () => {
+      const { runtime } = await createTranscriptPane({
+        paneTitle: 'bash',
+        foregroundProcess: '2.1.310',
+        confirmedForegroundProcess: 'claude',
+        data: '\u001b]0;\u2733 Fix the build\u0007'
+      })
+      await runtime.refreshPtyForegroundAgentFromController(TRANSCRIPT_PANE_PTY_ID)
+      expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).toBe('claude')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'drops a confirming scan that a newer transition superseded',
+    async () => {
+      const pty = makeTuiIdlePty({
+        lastAgentStatus: 'idle',
+        launchAgent: null,
+        foregroundAgent: null
+      })
+      let foreground = '2.1.310'
+      let finishScan: ((name: string) => void) | undefined
+      const controller = {
+        getForegroundProcess: async () => foreground,
+        confirmForegroundProcess: () =>
+          new Promise<string>((resolve) => {
+            finishScan = resolve
+          })
+      }
+      const tracker = new RuntimePtyForegroundAgent({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tracker calls only these two controller methods.
+        getController: () => controller as unknown as RuntimePtyController,
+        getPty: () => pty,
+        touchSnapshot: () => {},
+        finishDelayedSnapshot: () => {}
+      })
+      const first = tracker.refresh(pty.ptyId, 1)
+      await vi.waitFor(() => expect(finishScan).toBeDefined())
+      foreground = 'bash'
+      pty.lastAgentStatus = null
+      const second = tracker.refresh(pty.ptyId, 2)
+      finishScan?.('claude')
+      await Promise.all([first, second])
+      expect(pty.foregroundAgent).toBeNull()
+    }
+  )
 
   it('never scans for a name that is not a version', async () => {
     const { runtime, handle, counts } = await typedPane({ foregroundProcess: 'vim' })
