@@ -83,13 +83,14 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'worker-stop'],
     destructive: true,
-    summary: 'Fence one Dispatch and stop its supervised agent terminal',
+    summary: 'Fence one Dispatch and stop its supervised agent terminal and its helpers',
     usage:
       'orca orchestration worker-stop --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.',
       'processAction closed_agent_terminal means Orca issued the close (do not also run terminal close); stop_unknown exits 1 and may still report it when the agent exit was not proven.',
+      'Also stops every helper it started and theirs, listed in helpers; a helper the user kept open is listed and keeps running.',
       'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.'
     ]
   },

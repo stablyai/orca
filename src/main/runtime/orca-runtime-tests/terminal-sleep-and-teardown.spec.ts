@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
-  WORKTREE_TEARDOWN_RPC_MARGIN_MS,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../workspaces/removal/worktree-teardown'
+import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../workspaces/removal/worktree-teardown-deadline'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -17,7 +16,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('durably closes every terminal in one workspace without touching a sibling', async () => {

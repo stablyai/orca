@@ -1,4 +1,4 @@
-import type { DeviceRegistry } from '../device-registry'
+import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { RelayRevokeOutbox } from './relay-revoke-outbox'
 
 type RelayDemandLedgerOptions = {

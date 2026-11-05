@@ -1,9 +1,11 @@
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
+import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
+import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
 import type { EditorTypographySettings } from './editor-typography-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
@@ -19,6 +21,7 @@ import type { EditorSaveSettings } from './editor-save-settings'
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
+  NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
@@ -33,4 +36,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   TerminalScrollSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
-  EditorSaveSettings
+  EditorSaveSettings &
+  BrowserPasswordsGlobalSettings

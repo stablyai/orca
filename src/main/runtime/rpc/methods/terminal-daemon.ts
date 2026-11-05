@@ -3,7 +3,7 @@ import { TerminalDaemonRestartSeveredParams } from '../../../../shared/rpc-contr
 import {
   readSeveredDaemonStatus,
   restartSeveredDaemon
-} from '../../../daemon/daemon-host-image-state'
+} from '../../../daemon/providers/lifecycle/daemon-host-image-state'
 import { defineMethod } from '../core'
 
 export const TERMINAL_DAEMON_METHODS = [
@@ -28,7 +28,7 @@ export const TERMINAL_DAEMON_METHODS = [
       severed: await readSeveredDaemonStatus(),
       // Import the probe lazily to avoid loading daemon providers with the RPC table.
       daemon: await (
-        await import('../../../daemon/daemon-liveness-report')
+        await import('../../../daemon/health/daemon-liveness-report')
       ).readTerminalDaemonLiveness()
     })
   }),

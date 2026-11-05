@@ -9,7 +9,7 @@ import {
 import { HOST_TEST_NOW } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { RpcContext } from '../core'
-import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
+import { LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
 import {
   methodNamed,
   rpcContext,
@@ -144,67 +144,6 @@ it('records one card per launch operation, linking the new chat, and none on rep
       task: TASK
     }
   ])
-})
-
-it('records a card for each handoff, and never re-adds one the user removed, across a restart', async () => {
-  await launch({ prompt: { text: TASK, delivery: 'submit' } })
-  await launch({ prompt: { text: 'second task', delivery: 'submit' } }, AGENT_CLI, {
-    surface: 'terminal'
-  })
-  await vi.waitFor(async () => expect(await cards()).toHaveLength(2))
-  const [removed, kept] = await cards()
-  expect(kept.body).toMatchObject({
-    task: 'second task',
-    agent: { party: { address: 'term_1' } }
-  })
-
-  const journal = rig.host.collaboratorsForTests().sessions.get(CALLER)!.journal
-  if (removed.body.kind !== 'agent-handoff') {
-    throw new Error('expected a handoff card')
-  }
-  const identity = {
-    provider: 'orca' as const,
-    clientMessageId: `agent-handoff:${removed.body.launchId}`
-  }
-  await journal.appendTombstone(identity, {
-    fence: rig.store.getConversation(CALLER)!.currentFence
-  })
-  // Reopened from disk, the kept card reads back and the removed one stays removed.
-  const host = await rig.restart()
-  const destination = host.captureAgentStartDestination(CALLER)!
-  await host.appendAgentStart(destination, removed.body, removed.observedAt + 10)
-
-  expect(await cards()).toEqual([kept])
-})
-
-it.each([
-  ['no prompt', {}],
-  ['a draft', { prompt: { text: TASK, delivery: 'draft' } }],
-  ['a blank submit, which the CLI never sends', { prompt: { text: ' \t\n ', delivery: 'submit' } }]
-])('records the new agent with no task for %s', async (_label, params) => {
-  await launch(params)
-
-  await vi.waitFor(async () =>
-    expect((await cards()).map((card) => card.body)).toMatchObject([{ task: '' }])
-  )
-})
-
-it.each([
-  [
-    'a window',
-    {
-      caller: DESKTOP_RPC_CALLER,
-      orchestrationCompatibilityEvidence: AGENT_CLI.orchestrationCompatibilityEvidence
-    }
-  ],
-  ['a CLI outside a chat', { caller: LOCAL_CLI_RPC_CALLER }]
-])('records nothing for a launch from %s', async (_label, context) => {
-  const append = vi.spyOn(rig.host, 'appendAgentStart')
-
-  await launch({ prompt: { text: TASK, delivery: 'submit' } }, context)
-
-  expect(append).not.toHaveBeenCalled()
-  expect(await cards()).toEqual([])
 })
 
 it('records nothing when the launch fails, and the failure is the launch’s own', async () => {

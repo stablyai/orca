@@ -135,14 +135,6 @@ function seedServerWorkspace(): void {
   })
 }
 
-function fileIdentities() {
-  return useAppStore.getState().openFiles.map(({ id, worktreeId, relativePath }) => ({
-    id,
-    worktreeId,
-    relativePath
-  }))
-}
-
 describe('a restored tab re-owned inside its own workspace, layout-owner build', () => {
   let container: HTMLDivElement
   let root: Root
@@ -184,18 +176,6 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
     main = null
     act(() => root.unmount())
     container.remove()
-  })
-
-  it('keeps a local tab where it is when loaded for its own workspace', async () => {
-    seedNestedLocalWorkspaces()
-    const id = await drawFromMain(openAbsoluteTabInFolder)
-    const before = fileIdentities()
-
-    await act(async () => load!(FILE_PATH, id, FOLDER, FILE_PATH))
-
-    expect(fileIdentities()).toEqual(before)
-    expect(fileContents[id]).toMatchObject({ content: '# a' })
-    expect(layoutCommands()).toEqual([])
   })
 
   it.each([

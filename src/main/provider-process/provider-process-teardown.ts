@@ -9,7 +9,7 @@ import {
 } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 /** What the teardown observed of the descendants; null when it signalled but observed nothing. */
 export type ProviderProcessTeardownVerdict =

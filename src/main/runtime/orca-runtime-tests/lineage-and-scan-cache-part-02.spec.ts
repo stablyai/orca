@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, join, listWorktrees, tmpdir } from '../orca-runtime-test-mocks.spec'
-import type { WorktreeLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { tmpdir } from 'node:os'
+import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   makeWorktreeInfo,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget

@@ -25,12 +25,16 @@ const fixtureScript = path.join(
   process.cwd(),
   'config',
   'scripts',
+  'diagnostics',
+  'remote-agent-authority',
   'remote-agent-session-repro-fixture.mjs'
 )
 const writableShellScript = path.join(
   process.cwd(),
   'config',
   'scripts',
+  'diagnostics',
+  'remote-agent-authority',
   'remote-agent-session-repro-writable-shell.mjs'
 )
 

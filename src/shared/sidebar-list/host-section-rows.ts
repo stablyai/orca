@@ -50,8 +50,11 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
   switch (row.type) {
     case 'item':
       return getWorktreeExecutionHostId(row.worktree, row.repo, defaultHostId)
-    case 'pending-creation':
     case 'imported-worktrees-card':
+      return row.placement === 'all-projects'
+        ? row.hostId
+        : getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
+    case 'pending-creation':
     case 'new-external-worktrees-inbox':
       return getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
     case 'folder-workspace':

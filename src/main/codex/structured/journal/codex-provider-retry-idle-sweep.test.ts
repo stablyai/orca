@@ -85,7 +85,10 @@ beforeEach(async () => {
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
-    idleSweep: { intervalMs: MANUAL_SWEEP_INTERVAL_MS, idleMs: STRUCTURED_AGENT_SESSION_IDLE_MS },
+    idleSweep: {
+      intervalMs: MANUAL_SWEEP_INTERVAL_MS,
+      idleMs: () => STRUCTURED_AGENT_SESSION_IDLE_MS
+    },
     now: () => clock
   })
 })

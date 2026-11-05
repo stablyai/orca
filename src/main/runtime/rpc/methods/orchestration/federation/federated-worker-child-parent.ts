@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { readCallerStoreInstallationId } from '../../../../host-descriptor'
+import { readCallerStoreInstallationId } from '../../../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'

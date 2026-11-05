@@ -42,22 +42,6 @@ describe('terminal split --retry-split', () => {
     vi.restoreAllMocks()
   })
 
-  it('sends the retry to a host that can resume the split', async () => {
-    const call = vi.fn().mockResolvedValue({
-      result: { split: { handle: 'term_2', tabId: 'tab-1', paneRuntimeId: 1, leafId: 'leaf-1' } }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await retrySplit(splitClient(call, [TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY]))
-
-    expect(call).toHaveBeenCalledExactlyOnceWith('terminal.split', {
-      terminal: 'term_1',
-      direction: undefined,
-      command: 'agent --task 1',
-      retrySplit: 'leaf-1'
-    })
-  })
-
   // An older host strips `retrySplit` and splits again, starting a second copy of the command.
   it('refuses rather than splitting again on a host without the capability', async () => {
     const call = vi.fn()

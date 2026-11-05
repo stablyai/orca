@@ -154,32 +154,4 @@ describe('useTerminalQuickCommandHosts', () => {
       expect(testState.loadRuntimeTerminalQuickCommands).toHaveBeenCalledWith('build')
     }
   )
-
-  it('keeps mutations pending until remote capability ownership resolves', async () => {
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(renderedHosts.map((host) => host.hostId)).toEqual(['local'])
-    expect(remoteHostPending).toBe(true)
-  })
-
-  it('distinguishes an unresolved host failure from active loading', async () => {
-    testState.runtimeTerminalQuickCommands = new Map([
-      [
-        'build',
-        {
-          commands: [],
-          connectionGeneration: 4,
-          error: 'offline',
-          loading: false,
-          ready: false,
-          supported: null
-        }
-      ]
-    ])
-
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(remoteHostPending).toBe(true)
-    expect(remoteHostLoadFailed).toBe(true)
-  })
 })

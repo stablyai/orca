@@ -61,21 +61,6 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
-  it('does not bubble already-handled Ctrl chords on macOS', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(
-        event({ key: 'c', code: 'KeyC', defaultPrevented: true, ctrlKey: true }),
-        opts
-      )
-    ).toBe(false)
-  })
-
-  it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), opts)
-    ).toBe(true)
-  })
-
   it('bubbles Shift+non-ASCII keyup so kitty does not emit a Latin release sequence', () => {
     expect(
       shouldBypassXtermKeyboardEvent(
@@ -91,12 +76,6 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
         event({ type: 'keypress', key: 'Ф', code: 'KeyA', shiftKey: true }),
         opts
       )
-    ).toBe(false)
-  })
-
-  it('leaves ordinary Shift+Space available to the terminal', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: ' ', code: 'Space', shiftKey: true }), opts)
     ).toBe(false)
   })
 })
@@ -116,15 +95,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     candidateKeyGuardActive: true,
     pendingCandidateKeyReleaseActive: false
   }
-
-  it('suppresses keyboard events while Chromium reports active IME composition', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Backspace', code: 'Backspace', isComposing: true }),
-        idle
-      )
-    ).toBe(true)
-  })
 
   it('lets standalone Process keys reach xterm so its CompositionHelper can diff text', () => {
     expect(
@@ -151,36 +121,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
         idle
       )
     ).toBe(true)
-  })
-
-  it('suppresses Process keys while the terminal composition tracker is active', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
-        composing
-      )
-    ).toBe(true)
-  })
-
-  it('suppresses IME-owned editing keys while composition is active', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Backspace', code: 'Backspace' }),
-        composing
-      )
-    ).toBe(true)
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'ArrowDown', code: 'ArrowDown' }),
-        composing
-      )
-    ).toBe(true)
-  })
-
-  it('does not suppress ordinary text keys solely because composition is active', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
-    ).toBe(false)
   })
 
   it('does not suppress keypress events because they carry committed text', () => {

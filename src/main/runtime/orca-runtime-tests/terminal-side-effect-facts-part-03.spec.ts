@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
-import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('terminal side-effect fact channel', () => {
   it('arms the stale-title timer for a seeded working title', async () => {

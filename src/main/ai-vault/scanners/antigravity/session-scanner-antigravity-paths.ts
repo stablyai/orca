@@ -38,6 +38,11 @@ export function antigravityHistoryPathForBrainDir(brainDir: string): string {
   return join(dirname(brainDir), 'history.jsonl')
 }
 
+/** `<home>/conversations/<id>.meta`, where the ACP server records the session's cwd. */
+export function antigravityAcpSessionMetadataPath(historyPath: string, sessionId: string): string {
+  return join(dirname(historyPath), 'conversations', `${sessionId}.meta`)
+}
+
 function pathSegments(filePath: string): string[] {
   return filePath.split(/[\\/]+/).filter(Boolean)
 }

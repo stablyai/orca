@@ -97,6 +97,10 @@ export const store = {
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.capability,
+  runtimeEnvironmentSupportsCapabilities: async (
+    environmentId: string,
+    capabilities: Parameters<typeof RuntimeRpcClient.runtimeEnvironmentSupportsCapabilities>[1]
+  ) => Promise.all(capabilities.map((capability) => mocks.capability(environmentId, capability))),
   callRuntimeRpc: mocks.hostRpc
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))

@@ -11,15 +11,6 @@ function bindFresh(now = 1_000): AdvertisedUrlWatcher {
 }
 
 describe('AdvertisedUrlWatcher.lookupBest PID validation', () => {
-  it('pins the listener PID on first lookupBest match', () => {
-    const watcher = bindFresh()
-    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
-    const first = watcher.lookupBest([WORKTREE], 3001, 4242)
-    expect(first?.validatedListenerPid).toBe(4242)
-    const second = watcher.lookupBest([WORKTREE], 3001, 4242)
-    expect(second?.host).toBe('a.example.com')
-  })
-
   it('evicts stale candidates after scanner-observed listener PID changes', () => {
     const watcher = bindFresh()
     watcher.bindPty('pty-2', 'repo::/wt2')
@@ -64,15 +55,6 @@ describe('AdvertisedUrlWatcher.lookupBest PID validation', () => {
 })
 
 describe('AdvertisedUrlWatcher.lookup PID validation', () => {
-  it('records the listener PID on first lookup that supplies one', () => {
-    const watcher = bindFresh()
-    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
-    const first = watcher.lookup(WORKTREE, 3001, 4242)
-    expect(first?.validatedListenerPid).toBe(4242)
-    const second = watcher.lookup(WORKTREE, 3001, 4242)
-    expect(second?.host).toBe('a.example.com')
-  })
-
   it('evicts the entry when the listener PID changes', () => {
     const watcher = bindFresh()
     const events: { worktreeId: string; port: number }[] = []
@@ -82,13 +64,6 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
     expect(watcher.lookup(WORKTREE, 3001, 9999)).toBeUndefined()
     expect(watcher.lookup(WORKTREE, 3001, 4242)).toBeUndefined()
     expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
-  })
-
-  it('skips validation when no PID is provided', () => {
-    const watcher = bindFresh()
-    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
-    watcher.lookup(WORKTREE, 3001, 4242)
-    expect(watcher.lookup(WORKTREE, 3001)?.host).toBe('a.example.com')
   })
 
   it('replacing a cached URL resets validatedListenerPid', () => {

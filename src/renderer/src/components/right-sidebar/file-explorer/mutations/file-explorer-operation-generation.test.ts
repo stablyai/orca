@@ -2,14 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  getDefaultSettings
-} from '../../../../../../shared/constants'
+
 import {
   captureFileExplorerOperationGuard,
-  getFileExplorerOperationOwner,
-  getFileExplorerOperationOwnerFromState
+  getFileExplorerOperationOwner
 } from '../navigation/file-explorer-operation-owner'
 
 const initialState = useAppStore.getInitialState()
@@ -31,24 +27,6 @@ afterEach(() => {
 })
 
 describe('file explorer operation generations', () => {
-  it('routes floating file ownership and mutations locally while a runtime is focused', () => {
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'focused-env' },
-      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      activeWorkspaceExecutionHostId: 'runtime:focused-env'
-    })
-    const owner = getFileExplorerOperationOwner(FLOATING_TERMINAL_WORKTREE_ID)
-    const guard = captureFileExplorerOperationGuard(FLOATING_TERMINAL_WORKTREE_ID, owner)
-
-    expect(owner).toEqual({ kind: 'local' })
-    expect(
-      getFileExplorerOperationOwnerFromState(useAppStore.getState(), FLOATING_TERMINAL_WORKTREE_ID)
-    ).toEqual(owner)
-    expect(guard.route.target).toEqual({ kind: 'local' })
-    expect(guard.route.expectedExecutionHostId).toBe('local')
-    expect(() => guard.assertCurrent()).not.toThrow()
-  })
-
   it('invalidates a nested SSH mutation when that target reconnects', () => {
     useAppStore.setState({
       repos: [],

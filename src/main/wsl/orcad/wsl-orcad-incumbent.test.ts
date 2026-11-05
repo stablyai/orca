@@ -7,7 +7,7 @@ import {
   parsePairingCode
 } from '../../../shared/remote-runtime/pairing/pairing'
 import { pairedRuntimeConnectionToken } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../../shared/orcad-terminal-census'
 import { emptyOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'

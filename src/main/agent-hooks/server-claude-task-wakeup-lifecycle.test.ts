@@ -8,7 +8,7 @@ import { createRuntimeAutomationRunTerminalObserver } from '../automations/runti
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 vi.mock('electron', () => ({
