@@ -7,14 +7,14 @@ import {
   RelayAssignmentStore,
   STRANDED_MIGRATION_ABANDON_MS
 } from './assignment-store.js'
-import { encodeMembership, type CellAdmissionMembership } from '../cell-admission-selector.js'
+import { encodeMembership, type CellAdmissionMembership } from '../cell/admission/cell-admission-selector.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,
   type RelayLockOptions,
   type RelayTransactionOptions,
   type SqlRow
-} from '../database.js'
+} from '../database/database.js'
 
 const CELLS: RelayCellConfig[] = [
   { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 },
