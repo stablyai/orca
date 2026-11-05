@@ -13,6 +13,8 @@ describe('daemon protocol crossing gate routing', () => {
 
   it.each([
     'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts.mjs',
+    'config/scripts/daemon-protocol/schema-facts/daemon-protocol-revision-facts.mjs',
+    'config/scripts/runtime-verification/daemon-lifecycle/git-baseline-sources.mjs',
     'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing.mjs',
     'config/scripts/release/versioning/stable-release-tags.mjs'
   ])('runs the gate when its checker %s changes', (file) => {

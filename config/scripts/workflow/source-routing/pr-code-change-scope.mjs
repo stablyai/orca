@@ -198,6 +198,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
   'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts',
+  'config/scripts/daemon-protocol/schema-facts/daemon-protocol-revision-facts',
+  'config/scripts/runtime-verification/daemon-lifecycle/git-baseline-sources',
   'config/scripts/check-daemon-protocol-crossing',
   'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing',
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
