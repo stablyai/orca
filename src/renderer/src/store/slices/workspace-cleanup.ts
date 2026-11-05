@@ -167,19 +167,26 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     })
 })
 
+// Streamed frames merge from the progress copy, so both copies must carry the new dismissal state.
 function withWorkspaceCleanupDismissals(
   state: AppState,
   dismissals: Record<string, WorkspaceCleanupDismissal>
-): Pick<AppState, 'workspaceCleanupDismissals' | 'workspaceCleanupScan'> {
+): Pick<
+  AppState,
+  'workspaceCleanupDismissals' | 'workspaceCleanupScan' | 'workspaceCleanupProgress'
+> {
+  const reconcile = <T extends { candidates: WorkspaceCleanupCandidate[] }>(
+    snapshot: T | null
+  ): T | null =>
+    snapshot && {
+      ...snapshot,
+      candidates: snapshot.candidates.map((candidate) =>
+        applyWorkspaceCleanupDismissal(candidate, dismissals)
+      )
+    }
   return {
     workspaceCleanupDismissals: dismissals,
-    workspaceCleanupScan: state.workspaceCleanupScan
-      ? {
-          ...state.workspaceCleanupScan,
-          candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
-            applyWorkspaceCleanupDismissal(candidate, dismissals)
-          )
-        }
-      : state.workspaceCleanupScan
+    workspaceCleanupScan: reconcile(state.workspaceCleanupScan),
+    workspaceCleanupProgress: reconcile(state.workspaceCleanupProgress)
   }
 }

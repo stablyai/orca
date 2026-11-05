@@ -163,7 +163,7 @@ function RowMetric({ label, value }: { label: string; value: string }): React.JS
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="min-w-14 truncate text-right" aria-label={label}>
+        <span className="w-16 truncate text-right" aria-label={label}>
           {value}
         </span>
       </TooltipTrigger>
