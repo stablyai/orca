@@ -1,0 +1,244 @@
+import type MarkdownIt from 'markdown-it'
+import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
+import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
+import {
+  isCitationBracketMath,
+  isDisplayMathOpener,
+  markdownMathCloser,
+  rejectsSingleDollarClose,
+  rejectsSingleDollarOpen
+} from '../../../src/shared/markdown-math-rules'
+
+// Desktop chat's math grammar (src/renderer/src/components/sidebar/chat-markdown-math.ts) for markdown-it.
+
+export type MobileMarkdownMathMeta = { opener: string; closed: boolean }
+
+/** Where each delimiter sits in one inline source, so every opener's search is a lookup. */
+type InlineMathIndex = {
+  escaped: Uint8Array
+  /** Start of each unescaped `$` run, keyed by run length. */
+  dollarRuns: Map<number, number[]>
+  /** Unescaped `\` starting `\)` or `\]`, keyed by the closer. */
+  closers: Map<string, number[]>
+  newlines: number[]
+  backticks: number[]
+}
+
+const inlineIndexes = new WeakMap<StateInline, InlineMathIndex>()
+
+/** `escaped[i]`: an odd backslash run sits right before character i. */
+function escapedCharacters(text: string): Uint8Array {
+  const escaped = new Uint8Array(text.length + 1)
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === '\\' && !escaped[index]) {
+      escaped[index + 1] = 1
+    }
+  }
+  return escaped
+}
+
+function pushKeyed<K>(map: Map<K, number[]>, key: K, value: number): void {
+  const list = map.get(key)
+  if (list) {
+    list.push(value)
+  } else {
+    map.set(key, [value])
+  }
+}
+
+function indexInlineSource(src: string): InlineMathIndex {
+  const escaped = escapedCharacters(src)
+  const index: InlineMathIndex = {
+    escaped,
+    dollarRuns: new Map(),
+    closers: new Map(),
+    newlines: [],
+    backticks: []
+  }
+  for (let at = 0; at < src.length; at += 1) {
+    const char = src[at]
+    if (char === '$' && !escaped[at]) {
+      let end = at
+      while (src[end] === '$') {
+        end += 1
+      }
+      pushKeyed(index.dollarRuns, end - at, at)
+      at = end - 1
+    } else if (char === '\\' && !escaped[at] && (src[at + 1] === ')' || src[at + 1] === ']')) {
+      pushKeyed(index.closers, `\\${src[at + 1]}`, at)
+    } else if (char === '\n') {
+      index.newlines.push(at)
+    } else if (char === '`') {
+      index.backticks.push(at)
+    }
+  }
+  return index
+}
+
+/** The first entry at or after `from`, or Infinity. */
+function nextAtOrAfter(sorted: readonly number[] | undefined, from: number): number {
+  if (!sorted) {
+    return Infinity
+  }
+  let low = 0
+  let high = sorted.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (sorted[middle]! < from) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+  return sorted[low] ?? Infinity
+}
+
+function openerAt(src: string, at: number): string | null {
+  if (src[at] === '\\') {
+    return src[at + 1] === '(' || src[at + 1] === '[' ? src.slice(at, at + 2) : null
+  }
+  let end = at
+  while (src[end] === '$') {
+    end += 1
+  }
+  return end > at ? src.slice(at, end) : null
+}
+
+function inlineMath(state: StateInline, silent: boolean): boolean {
+  const { src, pos } = state
+  const opener = openerAt(src, pos)
+  if (!opener) {
+    return false
+  }
+  let index = inlineIndexes.get(state)
+  if (!index) {
+    index = indexInlineSource(src)
+    inlineIndexes.set(state, index)
+  }
+  // A `$` run is one opener: its tail never reopens after the whole run failed.
+  if (opener[0] === '$' && src[pos - 1] === '$' && !index.escaped[pos - 1]) {
+    return false
+  }
+  const bodyStart = pos + opener.length
+  if (opener === '$' && rejectsSingleDollarOpen(src[bodyStart])) {
+    return false
+  }
+  const closer = markdownMathCloser(opener)
+  const close =
+    opener[0] === '$'
+      ? nextAtOrAfter(index.dollarRuns.get(opener.length), bodyStart)
+      : nextAtOrAfter(index.closers.get(closer), bodyStart)
+  const singleLine = opener === '$' || opener === '\\('
+  const stop = Math.min(
+    nextAtOrAfter(index.backticks, bodyStart),
+    singleLine ? nextAtOrAfter(index.newlines, bodyStart) : Infinity
+  )
+  if (close >= stop || close + closer.length > state.posMax) {
+    return false
+  }
+  const body = src.slice(bodyStart, close)
+  if (
+    (opener === '$' && rejectsSingleDollarClose(body, /[0-9]/.test(src[close + 1] ?? ''))) ||
+    isCitationBracketMath(opener, body)
+  ) {
+    return false
+  }
+  if (!silent) {
+    const token = state.push('math_inline', 'math', 0)
+    token.content = body
+    token.markup = opener
+    token.meta = { opener, closed: true } satisfies MobileMarkdownMathMeta
+  }
+  state.pos = close + closer.length
+  return true
+}
+
+/** The closer's offset in one line of a block, honouring backslash escapes, or -1. */
+function closerInLine(text: string, opener: string): number {
+  const escaped = escapedCharacters(text)
+  for (let at = 0; at < text.length; at += 1) {
+    if (escaped[at]) {
+      continue
+    }
+    if (opener[0] === '$' && text[at] === '$') {
+      let end = at
+      while (text[end] === '$') {
+        end += 1
+      }
+      if (end - at === opener.length) {
+        return at
+      }
+      at = end - 1
+    } else if (opener === '\\[' && text.startsWith('\\]', at)) {
+      return at
+    }
+  }
+  return -1
+}
+
+function blockMath(
+  state: StateBlock,
+  startLine: number,
+  endLine: number,
+  silent: boolean
+): boolean {
+  if (state.sCount[startLine]! - state.blkIndent >= 4) {
+    return false
+  }
+  const { src } = state
+  const start = state.bMarks[startLine]! + state.tShift[startLine]!
+  const opener = openerAt(src, start)
+  // Single `$` and `\(` never open a block.
+  if (!opener || !isDisplayMathOpener(opener)) {
+    return false
+  }
+  const closer = markdownMathCloser(opener)
+  const lines: string[] = []
+  let closed = false
+  let line = startLine
+  let from = start + opener.length
+  while (line < endLine) {
+    const text = src.slice(from, state.eMarks[line])
+    const at = closerInLine(text, opener)
+    if (at >= 0) {
+      // A closer with text after it is inline math in a paragraph, not a block.
+      if (text.slice(at + closer.length).trim()) {
+        return false
+      }
+      lines.push(text.slice(0, at))
+      closed = true
+      break
+    }
+    lines.push(text)
+    line += 1
+    from = state.bMarks[line]! + state.tShift[line]!
+    // Like a fence, the block ends where its list item or quote does.
+    if (line < endLine && from < state.eMarks[line]! && state.sCount[line]! < state.blkIndent) {
+      break
+    }
+  }
+  const body = lines.join('\n')
+  if (isCitationBracketMath(opener, body)) {
+    return false
+  }
+  if (silent) {
+    return true
+  }
+  const next = closed ? line + 1 : line
+  const token = state.push('math_block', 'math', 0)
+  token.block = true
+  token.content = body
+  token.markup = opener
+  token.map = [startLine, next]
+  token.meta = { opener, closed } satisfies MobileMarkdownMathMeta
+  state.line = next
+  return true
+}
+
+/** `$…$`, `$$…$$`, `\(…\)` and `\[…\]`, by desktop chat's rules. */
+export function mobileMarkdownMath(markdown: MarkdownIt): void {
+  markdown.inline.ruler.before('escape', 'math_inline', inlineMath)
+  markdown.block.ruler.before('fence', 'math_block', blockMath, {
+    alt: ['paragraph', 'reference', 'blockquote', 'list']
+  })
+}

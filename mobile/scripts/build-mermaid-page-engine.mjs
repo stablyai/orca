@@ -39,6 +39,7 @@ async function main() {
     legalComments: 'none',
     logLevel: 'silent',
     nodePaths: [path.join(mobileRoot, 'node_modules')],
+    external: ['katex'],
     define: { 'process.env.NODE_ENV': '"production"' }
   })
   const bundle = Buffer.from(outputFiles[0].contents).toString('utf8')

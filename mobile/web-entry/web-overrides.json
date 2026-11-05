@@ -212,6 +212,10 @@
     {
       "file": "src/platform/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
+    },
+    {
+      "file": "src/components/mobile-markdown-math-typesetter.web.ts",
+      "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX and its stylesheet with the first formula the page draws."
     }
   ]
 }
