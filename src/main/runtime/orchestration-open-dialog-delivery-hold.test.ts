@@ -255,39 +255,51 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       `${rule}\r\n\u276f ${draft}\r\n${rule}\r\n  \u23f5\u23f5 bypass permissions on \u00b7 1 shell\r\n` +
       `  \u23fa main\r\n  \u25ef general-purpose  Running sleep 15 commands  39s\x1b[2;${draft.length + 3}H`
 
-    it('holds Enter when a dialog paints between the pointer and Enter without its hook', async () => {
-      vi.useFakeTimers()
-      const db = createDatabase('orca-held-open-late-dialog-')
-      const { runtime, write } = createRuntime(db, {
-        getAgentStatusSnapshot: () => [heldOpenRow('working')],
-        checkHookAgentPresence: async () => 'live',
-        launchAgent: 'claude'
-      })
-      const run = createBoundRun(db, 'Claude Run')
-      await runtime.listTerminals()
-      runtime.onPtyData(PTY_ID, `\x1b]0;Claude Code\x07${composer('')}`, Date.now())
-      const repaint = setInterval(
-        () => runtime.onPtyData(PTY_ID, '\x1b7\x1b[6;55H40s\x1b8', Date.now()),
-        500
-      )
-      await vi.advanceTimersByTimeAsync(200)
-      insertDirectRunMessage(db, run.id, 'Worker heartbeat')
-      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-      await vi.advanceTimersByTimeAsync(100)
-      expect(write).toHaveBeenCalledTimes(1)
-      runtime.onPtyData(
-        PTY_ID,
-        `\x1b[2J\x1b[H${QUESTION_SCREEN.slice(QUESTION_SCREEN.indexOf('\x07') + 1)}`,
-        Date.now()
-      )
-      await vi.advanceTimersByTimeAsync(10_000)
-      clearInterval(repaint)
+    it.each([
+      ['a dialog paints without its hook', (): void => {}],
+      [
+        'the screen turns unreadable',
+        (runtime: ReturnType<typeof createRuntime>['runtime']): void => {
+          runtime['providerSnapshotPreferredPtys'].add(PTY_ID)
+        }
+      ]
+    ] as const)(
+      'holds Enter when, between the pointer and Enter, %s',
+      async (_label, afterDialog) => {
+        vi.useFakeTimers()
+        const db = createDatabase('orca-held-open-late-dialog-')
+        const { runtime, write } = createRuntime(db, {
+          getAgentStatusSnapshot: () => [heldOpenRow('working')],
+          checkHookAgentPresence: async () => 'live',
+          launchAgent: 'claude'
+        })
+        const run = createBoundRun(db, 'Claude Run')
+        await runtime.listTerminals()
+        runtime.onPtyData(PTY_ID, `\x1b]0;Claude Code\x07${composer('')}`, Date.now())
+        const repaint = setInterval(
+          () => runtime.onPtyData(PTY_ID, '\x1b7\x1b[6;55H40s\x1b8', Date.now()),
+          500
+        )
+        await vi.advanceTimersByTimeAsync(200)
+        insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(100)
+        expect(write).toHaveBeenCalledTimes(1)
+        runtime.onPtyData(
+          PTY_ID,
+          `\x1b[2J\x1b[H${QUESTION_SCREEN.slice(QUESTION_SCREEN.indexOf('\x07') + 1)}`,
+          Date.now()
+        )
+        afterDialog(runtime)
+        await vi.advanceTimersByTimeAsync(10_000)
+        clearInterval(repaint)
 
-      expect(write.mock.calls.map(([, data]) => data)).toEqual([
-        expect.stringContaining('You have 1 orchestration message')
-      ])
-      db.close()
-    })
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([
+          expect.stringContaining('You have 1 orchestration message')
+        ])
+        db.close()
+      }
+    )
 
     it.each([
       ['an empty composer takes the pointer', 'working', composer(''), 2],

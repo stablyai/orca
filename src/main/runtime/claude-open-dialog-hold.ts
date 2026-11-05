@@ -39,7 +39,7 @@ export function isClaudeDialogHoldingPane(args: {
     return false
   }
   const lines = args.readScreenLines()
-  return lines === null ? !heldByChildWork : isClaudeDialogOnScreen(lines)
+  return lines === null || isClaudeDialogOnScreen(lines)
 }
 
 /** Whether Claude's live screen shows a selection dialog, hook-reported or not. */
