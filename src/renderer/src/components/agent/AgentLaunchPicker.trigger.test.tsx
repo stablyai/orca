@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
+import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import * as inventoryModule from './use-agent-launch-picker-inventory'
 import type {
@@ -271,18 +272,25 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
       refresh: async () => entries.map((entry) => entry.agent)
     }
   }
-  act(() =>
-    root.render(
-      <TooltipProvider>
-        <Dialog open>
-          <DialogContent>
-            <DialogTitle>Agent selection</DialogTitle>
-            <AgentLaunchPicker model={model} entries={entries} agent="codex" onPick={launch} />
-          </DialogContent>
-        </Dialog>
-      </TooltipProvider>
+  const show = (currentModel: NewTabAgentMenuModel = model, currentEntries = entries) =>
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <Dialog open>
+            <DialogContent>
+              <DialogTitle>Agent selection</DialogTitle>
+              <AgentLaunchPicker
+                model={currentModel}
+                entries={currentEntries}
+                agent="codex"
+                onPick={launch}
+              />
+            </DialogContent>
+          </Dialog>
+        </TooltipProvider>
+      )
     )
-  )
+  show()
   const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
   const search = () =>
     document.querySelector<HTMLInputElement>('input[placeholder="Search agents and setups…"]')
@@ -309,6 +317,15 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
   expect(search()?.value).toBe('')
   await user.keyboard('{ArrowDown}')
   expect(document.activeElement).toBe(getByRole(document.body, 'menuitem', { name: /^Codex/ }))
+  show(model, [...entries])
+  expect(document.activeElement).toBe(getByRole(document.body, 'menuitem', { name: /^Codex/ }))
+  show({ state: 'loading', placeholderCount: 2 })
+  expect(search()).toBeNull()
+  show()
+  await waitFor(() => expect(document.activeElement).toBe(search()))
+  await user.keyboard('co')
+  expect(search()?.value).toBe('co')
+  expect(search()?.selectionStart).toBe(2)
   await user.keyboard('{Escape}')
   await waitFor(() => expect(document.activeElement).toBe(trigger))
 })
