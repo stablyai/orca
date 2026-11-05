@@ -7026,7 +7026,6 @@
       "src/renderer/src/components/editor/rich-markdown/schema/drag-selection-guard-lifetime.test.ts": 626,
       "src/renderer/src/components/editor/autosave/editor-autosave-conflict-flow.test.ts": 1931,
       "src/renderer/src/components/editor/autosave/editor-autosave-controller.test.ts": 2324,
-      "src/renderer/src/components/editor/autosave/editor-autosave.test.ts": 529,
       "src/renderer/src/components/editor/model-lifetime/buffer-text/editor-buffer-adapter.test.ts": 2812,
       "src/renderer/src/components/editor/model-lifetime/buffer-text/editor-buffer-sharing.test.ts": 5929,
       "src/renderer/src/components/editor/save/bytes/editor-bytes-documents.test.ts": 690,
