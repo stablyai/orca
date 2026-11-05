@@ -4449,6 +4449,16 @@
           "059945f71d": "按天汇总的输入、输出、缓存读取和缓存写入。",
           "c9f7cd30e9": "每日使用量"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "不支持的 /stats 文件版本",
+          "reasonInvalid": "无法识别的 /stats 文件",
+          "reasonTooLarge": "/stats 文件过大，无法读取",
+          "reasonUnreadable": "无法读取 /stats 文件",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "累计 {{tokens}} 个 Token · {{where}} · 截至 {{date}}",
+          "lifetimeTokens": "累计 {{tokens}} 个 Token · 截至 {{date}}"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "缓存",
           "a8b7487ff7": "输出",

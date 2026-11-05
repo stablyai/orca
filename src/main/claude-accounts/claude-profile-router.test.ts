@@ -249,6 +249,13 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.systemDefaultRunsAnotherAccount()).toBeNull()
   })
 
+  it('maps an account folder back to its saved account, and other folders to none', () => {
+    const f = fixture()
+    expect(f.router.savedAccountForHome(f.home('b'))?.email).toBe('b@example.test')
+    expect(f.router.savedAccountForHome(join(f.userHome, '.claude'))).toBeUndefined()
+    expect(f.router.savedAccountForHome(f.home('removed'))).toBeUndefined()
+  })
+
   it('keeps an account on its own folder when System default is signed in to another email, or out', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()

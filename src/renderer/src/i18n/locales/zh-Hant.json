@@ -4903,6 +4903,16 @@
           "059945f71d": "按天彙總的輸入、輸出、快取讀取和快取寫入。",
           "c9f7cd30e9": "每日用量"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "不支援的 /stats 檔案版本",
+          "reasonInvalid": "無法辨識的 /stats 檔案",
+          "reasonTooLarge": "/stats 檔案過大，無法讀取",
+          "reasonUnreadable": "無法讀取 /stats 檔案",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "累計 {{tokens}} 個 token · {{where}} · 截至 {{date}}",
+          "lifetimeTokens": "累計 {{tokens}} 個 token · 截至 {{date}}"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "快取",
           "a8b7487ff7": "輸出",

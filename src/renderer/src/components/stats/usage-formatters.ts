@@ -1,6 +1,9 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
 
 export function formatTokens(value: number): string {
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(1)}B`
+  }
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
@@ -15,6 +18,15 @@ export function formatCost(value: number | null): string {
     return 'n/a'
   }
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
+}
+
+// Why: day keys are calendar days; `new Date('YYYY-MM-DD')` parses as UTC and can shift a day.
+export function formatDayKey(day: string, options: Intl.DateTimeFormatOptions): string {
+  const parsed = new Date(`${day}T12:00:00`)
+  if (Number.isNaN(parsed.getTime())) {
+    return day
+  }
+  return parsed.toLocaleDateString(getIntlLocale(), options)
 }
 
 export function formatUpdatedAt(timestamp: number | null): string {

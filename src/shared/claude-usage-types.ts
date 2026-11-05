@@ -72,3 +72,26 @@ export type ClaudeUsageSnapshot = {
   projectBreakdown: ClaudeUsageBreakdownRow[]
   recentSessions: ClaudeUsageSessionRow[]
 }
+
+export const CLAUDE_STATS_CACHE_UNAVAILABLE_REASONS = [
+  'unsupported-version',
+  'invalid',
+  'too-large',
+  'unreadable'
+] as const
+
+export type ClaudeStatsCacheUnavailableReason =
+  (typeof CLAUDE_STATS_CACHE_UNAVAILABLE_REASONS)[number]
+
+/** Claude's own /stats all-time total per transcript history; never merged into Orca totals. */
+export type ClaudeStatsCacheHome = {
+  configHome: string
+  label: string
+} & (
+  | {
+      status: 'ok'
+      totalTokens: number
+      lastComputedDate: string
+    }
+  | { status: 'unavailable'; reason: ClaudeStatsCacheUnavailableReason }
+)

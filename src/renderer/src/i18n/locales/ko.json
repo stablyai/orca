@@ -4449,6 +4449,16 @@
           "059945f71d": "일별 입력, 출력, 캐시 읽기 및 캐시 쓰기 합계입니다.",
           "c9f7cd30e9": "일일 사용량"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "지원되지 않는 /stats 파일 버전",
+          "reasonInvalid": "인식할 수 없는 /stats 파일",
+          "reasonTooLarge": "/stats 파일이 너무 커서 읽을 수 없습니다",
+          "reasonUnreadable": "/stats 파일을 읽을 수 없습니다",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "누적 토큰 {{tokens}}개 · {{where}} · {{date}} 기준",
+          "lifetimeTokens": "누적 토큰 {{tokens}}개 · {{date}} 기준"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "캐시",
           "a8b7487ff7": "출력",

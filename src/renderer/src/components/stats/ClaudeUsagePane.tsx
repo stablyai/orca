@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { ClaudeUsageRange, ClaudeUsageScope } from '../../../../shared/claude-usage-types'
 import { useAppStore } from '../../store'
+import { ClaudeStatsCacheSection, useClaudeStatsCache } from './ClaudeStatsCacheSection'
 import { ClaudeUsageDetails } from './ClaudeUsageDetails'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { ShareUsageButton } from './ShareUsageButton'
@@ -64,6 +65,11 @@ export function ClaudeUsagePane(): React.JSX.Element {
   const setClaudeUsageScope = useAppStore((state) => state.setClaudeUsageScope)
   const setClaudeUsageRange = useAppStore((state) => state.setClaudeUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
+
+  // Start and end both refresh, so a failed scan still re-reads Claude's own totals.
+  const statsCacheHomes = useClaudeStatsCache(
+    scanState?.enabled ? `${scanState.lastScanStartedAt}:${scanState.lastScanCompletedAt}` : null
+  )
 
   useEffect(() => {
     void fetchClaudeUsage()
@@ -122,6 +128,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
       }
       isRefreshing={scanState.isScanning}
       hasData={hasAnyData}
+      titleAccessory={<ClaudeStatsCacheSection homes={statsCacheHomes} />}
       enableLabel={enableLabel}
       optionsLabel={translate(
         'auto.components.stats.ClaudeUsagePane.e9bf9fce0e',

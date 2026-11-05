@@ -4809,6 +4809,16 @@
           "059945f71d": "Totaux quotidiens d'entrées, de sorties, de lectures et d'écritures en cache.",
           "c9f7cd30e9": "Utilisation quotidienne"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "Version du fichier /stats non prise en charge",
+          "reasonInvalid": "Fichier /stats non reconnu",
+          "reasonTooLarge": "Le fichier /stats est trop volumineux pour être lu",
+          "reasonUnreadable": "Impossible de lire le fichier /stats",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "{{tokens}} tokens au total · {{where}} · au {{date}}",
+          "lifetimeTokens": "{{tokens}} tokens au total · au {{date}}"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "Cache",
           "a8b7487ff7": "Sortie",

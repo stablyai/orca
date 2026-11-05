@@ -46,12 +46,17 @@ export function withClaudeProfileTerminalEnv<Env extends Record<string, string> 
 }
 
 /** The user's CLAUDE_CONFIG_DIR from the login shell, folders Orca saw Claude use, and account homes. */
-export function claudeProfileHistoryDirs(surface: 'projects' | 'transcripts'): string[] {
-  const homes = [
+export function claudeProfileConfigHomes(): string[] {
+  return [
     installed?.userConfigDir(),
     ...(installedObserved?.list() ?? []),
     ...(installed?.accountHomes() ?? [])
   ].filter((home): home is string => Boolean(home))
-  const dirs = homes.map((home) => join(home, surface)).filter(isDirectory)
+}
+
+export function claudeProfileHistoryDirs(surface: 'projects' | 'transcripts'): string[] {
+  const dirs = claudeProfileConfigHomes()
+    .map((home) => join(home, surface))
+    .filter(isDirectory)
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }

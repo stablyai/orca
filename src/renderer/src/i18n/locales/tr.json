@@ -5002,6 +5002,16 @@
           "059945f71d": "Güne göre girdi, çıktı, önbellekten okuma ve önbelleğe yazma toplamları.",
           "c9f7cd30e9": "Günlük kullanım"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "Desteklenmeyen /stats dosyası sürümü",
+          "reasonInvalid": "Tanınmayan /stats dosyası",
+          "reasonTooLarge": "/stats dosyası okunamayacak kadar büyük",
+          "reasonUnreadable": "/stats dosyası okunamadı",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "Toplam {{tokens}} token · {{where}} · {{date}} itibarıyla",
+          "lifetimeTokens": "Toplam {{tokens}} token · {{date}} itibarıyla"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "Önbellek",
           "a8b7487ff7": "Çıktı",

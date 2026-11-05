@@ -4460,6 +4460,16 @@
           "059945f71d": "日別の入力、出力、キャッシュ読み取り、およびキャッシュ書き込みの合計。",
           "c9f7cd30e9": "毎日の使用量"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "サポートされていない /stats ファイルのバージョン",
+          "reasonInvalid": "認識できない /stats ファイル",
+          "reasonTooLarge": "/stats ファイルが大きすぎて読み込めません",
+          "reasonUnreadable": "/stats ファイルを読み込めませんでした",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "累計 {{tokens}} トークン · {{where}} · {{date}} 時点",
+          "lifetimeTokens": "累計 {{tokens}} トークン · {{date}} 時点"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "キャッシュ",
           "a8b7487ff7": "出力",

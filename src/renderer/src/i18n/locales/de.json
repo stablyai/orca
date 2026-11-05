@@ -5016,6 +5016,16 @@
           "059945f71d": "Tagessummen für Eingabe, Ausgabe, Cache-Lesen und Cache-Schreiben.",
           "c9f7cd30e9": "Tägliche Nutzung"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "Nicht unterstützte Version der /stats-Datei",
+          "reasonInvalid": "Unbekannte /stats-Datei",
+          "reasonTooLarge": "/stats-Datei ist zu groß zum Lesen",
+          "reasonUnreadable": "/stats-Datei konnte nicht gelesen werden",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "{{tokens}} Token insgesamt · {{where}} · Stand {{date}}",
+          "lifetimeTokens": "{{tokens}} Token insgesamt · Stand {{date}}"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "Cache",
           "a8b7487ff7": "Ausgabe",

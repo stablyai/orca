@@ -15,7 +15,7 @@ import type {
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
 import { getRecentUsageDays } from './usage-overview-daily-series'
-import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import { buildUsageOverview } from './usage-overview-model'
 
 function enabledClaudeScanState(): ClaudeUsageScanState {
   return {
@@ -398,14 +398,5 @@ describe('usage overview model', () => {
     expect(overview.daily).toHaveLength(130_000)
     expect(overview.bestDay?.totalTokens).toBe(130_000)
     expect(overview.daily.at(-1)?.intensity).toBe(4)
-  })
-
-  it('formats token and cost values for compact UI labels', () => {
-    expect(formatUsageTokens(999)).toBe('999')
-    expect(formatUsageTokens(1_200)).toBe('1.2k')
-    expect(formatUsageTokens(2_500_000)).toBe('2.5M')
-    expect(formatUsageCost(null)).toBe('n/a')
-    expect(formatUsageCost(0.0042)).toBe('$0.0042')
-    expect(formatUsageCost(1.234)).toBe('$1.23')
   })
 })

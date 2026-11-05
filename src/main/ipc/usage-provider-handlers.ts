@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { readHostClaudeStatsCaches } from '../claude-usage/claude-stats-cache'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -72,6 +73,7 @@ function registerProviderHandlers<Scope, Range, BreakdownKind>(
 
 export function registerUsageProviderHandlers(stores: UsageProviderStores): void {
   registerProviderHandlers('claudeUsage', stores.claudeUsage)
+  ipcMain.handle('claudeUsage:getStatsCache', () => readHostClaudeStatsCaches())
   registerProviderHandlers('codexUsage', stores.codexUsage)
   registerProviderHandlers('openCodeUsage', stores.openCodeUsage)
   registerProviderHandlers('museUsage', stores.museUsage)

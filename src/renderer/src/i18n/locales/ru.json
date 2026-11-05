@@ -5206,6 +5206,16 @@
           "059945f71d": "Ввод, вывод, чтение из кеша и запись в кеш по дням.",
           "c9f7cd30e9": "Использование по дням"
         },
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "Неподдерживаемая версия файла /stats",
+          "reasonInvalid": "Нераспознанный файл /stats",
+          "reasonTooLarge": "Файл /stats слишком большой для чтения",
+          "reasonUnreadable": "Не удалось прочитать файл /stats",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "Всего токенов: {{tokens}} · {{where}} · на {{date}}",
+          "lifetimeTokens": "Всего токенов: {{tokens}} · на {{date}}"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "Кеш",
           "a8b7487ff7": "Вывод",

@@ -15399,6 +15399,16 @@
         }
       },
       "stats": {
+        "ClaudeStatsCacheSection": {
+          "reasonUnsupportedVersion": "Versão do arquivo /stats não suportada",
+          "reasonInvalid": "Arquivo /stats não reconhecido",
+          "reasonTooLarge": "O arquivo /stats é grande demais para ser lido",
+          "reasonUnreadable": "Não foi possível ler o arquivo /stats",
+          "hostHome": "{{host}} · {{home}}",
+          "homeUnavailable": "{{where}} · {{reason}}",
+          "lifetimeTokensAtHome": "{{tokens}} tokens no total · {{where}} · em {{date}}",
+          "lifetimeTokens": "{{tokens}} tokens no total · em {{date}}"
+        },
         "ClaudeUsagePane": {
           "21ea00bfa8": "Cache",
           "a8b7487ff7": "Saída",
