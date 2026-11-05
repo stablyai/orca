@@ -194,9 +194,12 @@ export class RepoUpdatePersistenceOperations {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
     }
+    // Null clears a pin; undefined leaves it, so it must not reach the assign below either.
     for (const field of REPO_AGENT_ACCOUNT_FIELDS) {
       if (field in sanitizedUpdates && sanitizedUpdates[field] == null) {
-        delete repo[field]
+        if (sanitizedUpdates[field] === null) {
+          delete repo[field]
+        }
         delete sanitizedUpdates[field]
       }
     }

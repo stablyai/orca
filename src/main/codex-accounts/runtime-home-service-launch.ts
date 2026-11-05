@@ -47,6 +47,24 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     return account && !this.getWslManagedHomePath(account) ? account : null
   }
 
+  /** Refuses a WSL launch whose project pins this distro's account but has no usable home for it,
+   *  rather than run the launch under the distro's selection or the system home. */
+  protected assertPinnedWslLaunchHome(target: CodexAccountSelectionTarget): void {
+    const pinned = projectPinnedCodexAccount(this.store, target.worktreeId, target.projectAccountId)
+    const distro = target.wslDistro?.trim()
+    // A host account, or another distro's, pins nothing here.
+    if (
+      pinned?.managedHomeRuntime !== 'wsl' ||
+      !distro ||
+      pinned.wslDistro?.trim().toLowerCase() !== distro.toLowerCase()
+    ) {
+      return
+    }
+    if (!this.getWslLaunchCodexHomePath(pinned, distro)) {
+      throw new Error(PINNED_CODEX_HOME_UNUSABLE_MESSAGE)
+    }
+  }
+
   /** A pinned project's own home. Unlike a selected account it never moves or clears the selection,
    *  and it refuses rather than run the launch under another account. */
   protected preparePinnedManagedHomeForLaunch(account: CodexManagedAccount): string {
@@ -74,6 +92,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   ): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
+      this.assertPinnedWslLaunchHome(wslTarget)
       const homePath = this.getWslCodexHomePathForSelection(wslTarget)
       this.startLegacyWslAuthDrain(wslTarget)
       this.finishWslLaunchPreparation(wslTarget, homePath)
@@ -193,6 +212,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
+    this.assertPinnedWslLaunchHome(wslTarget)
     // A passive restore reaches this before its hold (#35813); the probe, drain, sync and bridge
     // below would each start a stopped distro (E9). A user act passes and does them all.
     if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
