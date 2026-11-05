@@ -5,7 +5,7 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
   observeClaudeSettingsApplied,
-  readClaudeSettingsEffort,
+  observeClaudeSettingsEffort,
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
@@ -221,15 +221,13 @@ async function confirmClaudeOption(
   const adopted =
     input.key === 'fastMode'
       ? readClaudeSettingsFastMode(settings)
-      : readClaudeSettingsEffort(settings)
+      : observeClaudeSettingsEffort(session, settings)
   const decoded =
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
       : input.value
   if (input.key === 'fastMode' && typeof adopted === 'boolean') {
     session.reportedOptions.fastMode = adopted
-  } else if (typeof adopted === 'string' && adopted !== decoded) {
-    session.reportedOptions.effort = adopted
   }
   if (adopted !== null && adopted === decoded) {
     session.confirmedOptions.add(input.key)
