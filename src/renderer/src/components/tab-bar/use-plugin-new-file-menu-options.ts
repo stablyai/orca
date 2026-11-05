@@ -8,7 +8,8 @@ import { withPluginNewFileMenuOptions, type TabCreateMenuOption } from './tab-cr
 export function usePluginNewFileMenuOptions(
   menuOptions: TabCreateMenuOption[],
   onSelectMenuOption: (option: TabCreateMenuOption) => void,
-  groupId: string
+  groupId: string,
+  onNewPluginFile?: (newFile: ReturnType<typeof usePluginNewFiles>[number]) => void
 ): {
   menuOptions: TabCreateMenuOption[]
   onSelectMenuOption: (option: TabCreateMenuOption) => void
@@ -29,7 +30,11 @@ export function usePluginNewFileMenuOptions(
         return onSelectMenuOption(option)
       }
       return option.pluginNewFile
-        ? useAppStore.getState().openNewPluginFileInActiveWorkspace(option.pluginNewFile, groupId)
+        ? (
+            onNewPluginFile ??
+            ((newFile) =>
+              useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId))
+          )(option.pluginNewFile)
         : undefined
     }
   }

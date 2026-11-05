@@ -93,11 +93,11 @@ test('an async Markdown selection does not also seed a terminal', async ({ orcaP
     }
     const original = state.openNewMarkdownInActiveWorkspace
     window.__store!.setState({
-      openNewMarkdownInActiveWorkspace: async (groupId) => {
+      openNewMarkdownInActiveWorkspace: async (...args) => {
         await new Promise<void>((resolve) =>
           window.addEventListener('test-release-markdown', () => resolve(), { once: true })
         )
-        return original(groupId)
+        return original(...args)
       }
     })
     return id
@@ -130,7 +130,7 @@ test('an async Markdown selection does not also seed a terminal', async ({ orcaP
   await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(0)
 })
 
-test('Markdown creation uses the menu group after another workspace becomes active', async ({
+test('Markdown creation keeps an empty workspace after activation changes', async ({
   orcaPage
 }) => {
   const setup = await orcaPage.evaluate(() => {
@@ -142,6 +142,12 @@ test('Markdown creation uses the menu group after another workspace becomes acti
     if (!state.tabsByWorktree[other.id]?.length) {
       state.createTab(other.id)
     }
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      state.closeTab(tab.id, { reason: 'user' })
+    }
+    window.__store!.setState((s) => ({
+      groupsByWorktree: { ...s.groupsByWorktree, [worktreeId]: [] }
+    }))
     return { worktreeId, other: other.id }
   })
   await worktreeRow(orcaPage, setup.worktreeId)

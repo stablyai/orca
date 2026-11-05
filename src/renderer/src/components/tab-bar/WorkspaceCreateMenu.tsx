@@ -1,4 +1,5 @@
 import React from 'react'
+import type { usePluginNewFiles } from '@/store/plugin-new-files'
 import { Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import {
@@ -17,12 +18,14 @@ import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 
 export function WorkspaceCreateMenu({
   props,
+  onNewPluginFile,
   runtime,
   createMenu,
   trigger,
   onClosed
 }: {
   props: TabBarProps
+  onNewPluginFile?: (newFile: ReturnType<typeof usePluginNewFiles>[number]) => void
   runtime: TabBarRuntimeModel
   createMenu: TabBarCreateMenuController
   trigger?: React.ReactNode
@@ -124,6 +127,7 @@ export function WorkspaceCreateMenu({
         {showStaticCreateMenuItems ? (
           <TabBarStaticCreateMenu
             props={props}
+            onNewPluginFile={onNewPluginFile}
             groupId={resolvedGroupId}
             terminalOnly={terminalOnly}
             mobileEmulatorEnabled={mobileEmulatorEnabled}

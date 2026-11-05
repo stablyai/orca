@@ -34,10 +34,12 @@ export async function createUntitledFileInActiveWorkspace(
   get: EditorGet,
   groupId: string | undefined,
   create: (context: UntitledFileCreationContext) => Promise<UntitledMarkdownFileInfo | null>,
-  failureMessage: string
+  failureMessage: string,
+  targetWorktreeId?: string
 ): Promise<boolean> {
   const state = get()
   const worktreeId =
+    targetWorktreeId ??
     (groupId ? findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId : undefined) ??
     state.activeWorktreeId
   const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId) : undefined
@@ -84,7 +86,8 @@ function openSeededUntitledFile(
   get: EditorGet,
   extension: string,
   readContent: () => Promise<string>,
-  groupId?: string
+  groupId?: string,
+  targetWorktreeId?: string
 ): Promise<boolean> {
   return createUntitledFileInActiveWorkspace(
     get,
@@ -104,7 +107,8 @@ function openSeededUntitledFile(
           assertOperationCurrent: context.assertOperationCurrent
         }
       ),
-    translate('auto.store.pluginNewFile.failed', "Couldn't create the file.")
+    translate('auto.store.pluginNewFile.failed', "Couldn't create the file."),
+    targetWorktreeId
   )
 }
 
@@ -113,7 +117,7 @@ export function createPluginNewFileActions(
   get: EditorGet
 ): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openBlankFileInActiveWorkspace'> {
   return {
-    openNewPluginFileInActiveWorkspace: async (newFile, groupId) => {
+    openNewPluginFileInActiveWorkspace: async (newFile, groupId, targetWorktreeId) => {
       const readTemplate = window.api?.plugins?.readNewFileTemplate
       if (!readTemplate) {
         return
@@ -137,7 +141,8 @@ export function createPluginNewFileActions(
           }
           return content
         },
-        groupId
+        groupId,
+        targetWorktreeId
       )
     },
     openBlankFileInActiveWorkspace: async (extension) => {

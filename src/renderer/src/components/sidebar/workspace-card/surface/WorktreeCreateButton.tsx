@@ -1,6 +1,7 @@
 import { afterPendingWorkspaceTabs } from '@/runtime/layout-owner-pending-tabs'
 import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
 import { useState, useRef } from 'react'
+import type { usePluginNewFiles } from '@/store/plugin-new-files'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { workspaceRootGroupId } from '../../../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { Plus } from 'lucide-react'
@@ -104,6 +105,10 @@ function WorktreeCreateMenu({
     )
     return result
   }
+  const onNewPluginFile = (newFile: ReturnType<typeof usePluginNewFiles>[number]) =>
+    track(() =>
+      useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId, worktreeId)
+    )
   const model = useTabGroupWorkspaceModel({ worktreeId, groupId })
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
   const { commands } = model
@@ -130,7 +135,8 @@ function WorktreeCreateMenu({
     onNewSimulatorTab: commands.newSimulatorTab
       ? () => track(() => commands.newSimulatorTab?.())
       : undefined,
-    onNewFileTab: () => track(commands.newFileTab),
+    onNewFileTab: () =>
+      track(() => useAppStore.getState().openNewMarkdownInActiveWorkspace(groupId, worktreeId)),
     onOpenEntry: (entry) => track(() => commands.openEntry(entry)),
     onSetCustomTitle: commands.setTabCustomTitle,
     onSetTabColor: commands.setTabColor,
@@ -151,11 +157,13 @@ function WorktreeCreateMenu({
   const plugins = usePluginNewFileMenuOptions(
     controller.createMenuOptions,
     controller.handleSelectCreateMenuOption,
-    runtime.resolvedGroupId
+    runtime.resolvedGroupId,
+    onNewPluginFile
   )
   return (
     <WorkspaceCreateMenu
       props={props}
+      onNewPluginFile={onNewPluginFile}
       runtime={runtime}
       createMenu={{
         ...controller,
