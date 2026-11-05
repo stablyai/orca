@@ -23,6 +23,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
   isAgentSettledForDelivery: (ptyId: string) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
+  /** When the person last typed into the PTY; Orca's own writes don't count. */
+  readLastDrivingInputAt?: (ptyId: string) => number | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null

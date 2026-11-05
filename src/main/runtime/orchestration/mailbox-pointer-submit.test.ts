@@ -177,6 +177,69 @@ describe('orchestration mailbox pointer submit', () => {
     )
   })
 
+  it('presses no Enter when the person typed after the pointer was written', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'mid-typing'
+    })
+    const ptyId = 'pty-typing'
+    const mailboxHandle = 'run:run-1'
+    const terminal = {
+      ptyId,
+      handle: 'term-typing',
+      paneKeys: ['tab-1:leaf-1'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const target = { terminal, processIncarnation: 'inc-typing' }
+    const reservation = { ptyId, processIncarnation: target.processIncarnation }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark(mailboxHandle, 1, ptyId)
+    expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
+    expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
+    flight.pointerWriteStartedAt = 1_000
+    const writePty = vi.fn(settledWriteStub())
+    const redrive = vi.fn()
+    const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+
+    submitOrchestrationMailboxPointer(
+      {
+        mailboxOwner: { resolve: () => mailboxHandle } as never,
+        state,
+        getDb: () => db,
+        resolveSubmitTarget: () => target,
+        isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
+        readLastDrivingInputAt: () => 1_200,
+        writePty,
+        settle,
+        redrive
+      },
+      {
+        mailboxHandle,
+        messages: [{ id: message.id, type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget: target
+      }
+    )
+
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(writePty).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
+      pointer_enter_pending: 0,
+      pointer_pty_id: null
+    })
+    expect(redrive).toHaveBeenCalledWith(mailboxHandle, true)
+    db.close()
+  })
+
   it('holds the Enter while a dialog is open and submits once the agent is idle again', async () => {
     const ptyId = 'pty-question'
     const mailboxHandle = 'run:run-1'

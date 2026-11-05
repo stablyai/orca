@@ -95,6 +95,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.settle(ptyId, flight)
   }
   try {
+    flight.pointerWriteStartedAt = Date.now()
     const writeResult = args.deps.writePty(
       ptyId,
       formatMessagePointer(
@@ -144,6 +145,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
+          readLastDrivingInputAt: args.deps.readLastDrivingInputAt,
           writePty: args.deps.writePty,
           settle: args.settle,
           redrive: args.redrive

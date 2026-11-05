@@ -22,6 +22,8 @@ import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
+/** A person typing a few seconds ago may be mid-word in a composer the draft reader can't see. */
+const TYPING_PAUSE_HOLD_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected abstract resolveWaiter(
@@ -150,6 +152,9 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return true
     }
     const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    if (lastInputAt !== null && Date.now() - lastInputAt < TYPING_PAUSE_HOLD_MS) {
+      return true
+    }
     const state = this.readWholeScreenModel(ptyId)
     return (
       lastInputAt !== null &&
