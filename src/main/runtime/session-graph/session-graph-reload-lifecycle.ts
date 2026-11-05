@@ -198,8 +198,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
-      this.republishBrowserSessionTabs()
-      this.republishSessionTitleAuthorityChanges(titleAuthority)
+      this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
       return
     }
     // Without an authoritative graph, live-terminal operations must fail closed.
@@ -223,17 +222,19 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
     this.rejectAllWaiters('terminal_handle_stale')
-    this.republishBrowserSessionTabs()
-    this.republishSessionTitleAuthorityChanges(titleAuthority)
+    this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
   }
 
   // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.
-  private republishBrowserSessionTabs(): void {
+  private republishBrowserSessionTabs(): Set<string> {
+    const republished = new Set<string>()
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       if (snapshot.tabs.some((tab) => tab.type === 'browser')) {
         this.republishMobileSessionTabsSnapshot(worktreeId)
+        republished.add(worktreeId)
       }
     }
+    return republished
   }
 
   protected handleGraphReloadTimeout(windowId: number): void {
