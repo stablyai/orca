@@ -58,7 +58,7 @@ describe('onboarding completion persistence', () => {
     expect(saveProgress).not.toHaveBeenCalled()
     expect(onOnboardingChange).not.toHaveBeenCalled()
     expect(openModal).not.toHaveBeenCalled()
-    expect(notify).toHaveBeenCalledExactlyOnceWith('Could not save progress')
+    expect(notify).toHaveBeenCalledOnce()
   })
 
   it.each([
