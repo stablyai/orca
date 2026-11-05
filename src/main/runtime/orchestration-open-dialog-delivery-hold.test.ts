@@ -297,6 +297,12 @@ describe('mailbox delivery into a pane awaiting the user', () => {
         composer('please refactor the auth'),
         0
       ],
+      [
+        'a redraw with no composer on screen holds it',
+        'working',
+        '  \u23fa main\r\n  \u25ef general-purpose  Running sleep 15 commands  39s',
+        0
+      ],
       ['an open question holds it', 'waiting', QUESTION_SCREEN, 0],
       [
         'a question painted before its waiting hook holds it',

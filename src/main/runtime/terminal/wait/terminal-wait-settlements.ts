@@ -139,8 +139,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       verdict.kind === 'working' ||
       (verdict.kind === 'pending' &&
         claudeHookTurnQueuesTypedInput(evidence.agent, evidence.readHookTurn?.()) &&
-        // The dialog hold checked this screen; an unreadable one cannot rule a dialog out.
-        this.readLiveTerminalScreenLines(ptyId) !== null)
+        // Only a visible empty composer proves the input box is up; a blank redraw cannot.
+        readTerminalComposerTypedText(
+          this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
+        ) === '')
     return queueSafe
       ? !!this.getPaneTerminalAgent(ptyId) && evidence.readScreenInputVeto() !== true
       : isTuiIdleReadyVerdict(verdict)
