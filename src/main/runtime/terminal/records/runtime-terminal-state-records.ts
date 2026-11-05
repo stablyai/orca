@@ -169,6 +169,8 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedEscapeTail?: string
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
+  /** Fresh bytes still needed at the reflowed size before every visible cell was painted there. */
+  reflowRepaintBytesOutstanding?: number
 }
 
 export type RuntimeVisibleTerminalState = {

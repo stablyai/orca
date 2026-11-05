@@ -239,6 +239,16 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
+        // The reflowed grid distrusts cells wrapped at an older width. Fresh output retires that
+        // distrust: a full screen of bytes at this size, or an explicit full-screen erase, proves
+        // every visible cell was painted on this grid (#38418).
+        if (state.reflowRepaintBytesOutstanding !== undefined) {
+          state.reflowRepaintBytesOutstanding -= chunk.length
+          if (state.reflowRepaintBytesOutstanding <= 0 || chunk.includes('[2J')) {
+            state.reflowRepaintBytesOutstanding = undefined
+            state.unrepaintedReflowGrid = undefined
+          }
+        }
         const pty = this.ptysById.get(ptyId)
         if (!pty || this.headlessTerminals.get(ptyId) !== state) {
           continue
