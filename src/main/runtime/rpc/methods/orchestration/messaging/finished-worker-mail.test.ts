@@ -7,6 +7,14 @@ import { testOrcaSessionId } from '../../../../../../shared/orca-session-address
 describe('a worker after its worker_done', () => {
   const harness = createOrchestrationRpcHarness()
   afterEach(() => harness.cleanup())
+  const sessionCaller = (id: string): OrchestrationSessionCaller => ({
+    address: 'term_worker',
+    terminalHandle: 'term_worker',
+    paneKey: 'tab_worker:leaf_worker',
+    orcaSessionId: testOrcaSessionId(id),
+    sessionId: testOrcaSessionId(id),
+    workspaceId: 'wt'
+  })
 
   it('still reaches its coordinator with every message, and none changes the finished Task', async () => {
     const { db, runtime, ctx, activeRunId } = harness.setup()
@@ -98,6 +106,14 @@ describe('a worker after its worker_done', () => {
 
     await expect(
       harness.call('orchestration.send', { from: 'term_worker', subject: 'Not mine' }, ctx)
+    ).rejects.toMatchObject({ code: 'run_required' })
+    // A chat in that pane is not the terminal worker either.
+    await expect(
+      harness.call(
+        'orchestration.send',
+        { from: 'term_worker', subject: 'Not mine either' },
+        { ...ctx, orchestrationCaller: sessionCaller('chat_other') }
+      )
     ).rejects.toMatchObject({ code: 'run_required' })
   })
 
@@ -210,14 +226,6 @@ describe('a worker after its worker_done', () => {
     const { db, runtime, ctx, activeRunId } = harness.setup()
     const task = db.createTask({ spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
-    const sessionCaller = (id: string): OrchestrationSessionCaller => ({
-      address: 'term_worker',
-      terminalHandle: 'term_worker',
-      paneKey: 'tab_worker:leaf_worker',
-      orcaSessionId: testOrcaSessionId(id),
-      sessionId: testOrcaSessionId(id),
-      workspaceId: 'wt'
-    })
     db.db
       .prepare('UPDATE dispatch_contexts SET assignee_orca_session_id = ? WHERE id = ?')
       .run(testOrcaSessionId('chat_worker'), dispatch.id)

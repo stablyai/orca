@@ -108,7 +108,7 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
 }
 
 /** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal.
- *  A local Dispatch the pane was given since then speaks for it instead. */
+ *  A local Dispatch the pane works on now, or was given after it, speaks for it instead; a tie refuses. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
   sender: { address: string; paneKey: string | undefined },
@@ -117,10 +117,13 @@ export function refuseFinishedRemoteWorker(
   const attachment = sender.paneKey
     ? db.findLatestRemoteAttachmentForPane(sender.paneKey)
     : undefined
-  const local = attachment && db.getLatestDispatchForTerminal(sender.address, sender.paneKey)
   if (
     attachment &&
-    !(local && local.created_at >= attachment.created_at) &&
+    !db.getActiveDispatchForIdentity(sender.address, sender.paneKey) &&
+    !(
+      (db.getLatestDispatchForTerminal(sender.address, sender.paneKey)?.created_at ?? '') >
+      attachment.created_at
+    ) &&
     (!to || to === `dispatch:${attachment.dispatch_id}`)
   ) {
     throw new OrchestrationError(
