@@ -90,7 +90,7 @@ describe('resolveLoginShellEnvironment', () => {
       await mkdir(join(testHome, '.config', 'powershell'), { recursive: true })
       await writeFile(
         join(testHome, '.config', 'powershell', 'profile.ps1'),
-        `$env:${SHELL_ONLY_VARIABLE} = 'pwsh-profile'\n`
+        `$env:${SHELL_ONLY_VARIABLE} = 'pwsh-profile'\n$env:Path = 'case-distinct'\n`
       )
       process.env.HOME = testHome
       delete process.env.XDG_CONFIG_HOME
@@ -104,6 +104,9 @@ describe('resolveLoginShellEnvironment', () => {
         timeoutMs: 20_000
       })
       expect(environment[SHELL_ONLY_VARIABLE]).toBe('pwsh-profile')
+      // Unix env names are case-sensitive: Path is its own variable beside PATH.
+      expect(environment.Path).toBe('case-distinct')
+      expect(environment.PATH).toContain('/')
     },
     30_000
   )

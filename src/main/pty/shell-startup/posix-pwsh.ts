@@ -17,7 +17,23 @@ export function isPosixPwshShell(shellPath: string | null | undefined): boolean 
 /** Only honoured as pwsh's first argument; on Unix it re-execs through `/bin/sh -l`. */
 export const POSIX_PWSH_LOGIN_ARG = '-Login'
 
-function posixPwshInstallCandidates(): string[] {
+function posixPwshInstallCandidates(name: string): string[] {
+  if (name === 'pwsh-preview') {
+    // Preview installs side by side under 7-preview, plus the pwsh-preview links Homebrew and deb/rpm/Snap add.
+    return process.platform === 'darwin'
+      ? [
+          '/opt/homebrew/bin/pwsh-preview',
+          '/usr/local/bin/pwsh-preview',
+          '/usr/local/microsoft/powershell/7-preview/pwsh'
+        ]
+      : process.platform === 'linux'
+        ? [
+            '/usr/bin/pwsh-preview',
+            '/opt/microsoft/powershell/7-preview/pwsh',
+            '/snap/bin/pwsh-preview'
+          ]
+        : []
+  }
   let home = ''
   try {
     home = homedir()
@@ -68,13 +84,14 @@ export function resolvePosixPaneShellPath(
     return shellPath
   }
   for (const dir of spawnPathValue.split(':')) {
-    const candidate = pathPosix.isAbsolute(dir) ? pathPosix.join(dir, shellPath) : null
-    if (candidate && isExecutableFile(candidate)) {
+    if (!pathPosix.isAbsolute(dir)) {
+      // Empty and relative entries resolve against the pane cwd, so execvp keeps that lookup.
+      return shellPath
+    }
+    const candidate = pathPosix.join(dir, shellPath)
+    if (isExecutableFile(candidate)) {
       return candidate
     }
   }
-  // Preview builds share no install location, so only stable pwsh gets the fallback search.
-  const installed =
-    shellPath === 'pwsh' ? posixPwshInstallCandidates().find(isExecutableFile) : null
-  return installed ?? shellPath
+  return posixPwshInstallCandidates(shellPath).find(isExecutableFile) ?? shellPath
 }

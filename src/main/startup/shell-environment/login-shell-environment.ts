@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
-import { isPosixPwshShell, POSIX_PWSH_LOGIN_ARG } from '../../pty/shell-startup/posix-pwsh'
+import {
+  isPosixPwshShell,
+  POSIX_PWSH_LOGIN_ARG,
+  resolvePosixPaneShellPath
+} from '../../pty/shell-startup/posix-pwsh'
 import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
@@ -62,13 +66,22 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
   )
 }
 
-const POWERSHELL_ENVIRONMENT_DUMP =
-  `$values = @{}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
-  `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
-  `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
-  `[Console]::Write('${START_MARKER}'); ` +
-  `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
-  `[Console]::Write('${END_MARKER}')`
+function powerShellEnvironmentDump(values: string): string {
+  return (
+    `$values = ${values}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
+    `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
+    `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
+    `[Console]::Write('${START_MARKER}'); ` +
+    `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
+    `[Console]::Write('${END_MARKER}')`
+  )
+}
+
+const POWERSHELL_ENVIRONMENT_DUMP = powerShellEnvironmentDump('@{}')
+// Unix env names are case-sensitive, and @{} would merge PATH and Path into one key.
+const POSIX_POWERSHELL_ENVIRONMENT_DUMP = powerShellEnvironmentDump(
+  '[System.Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)'
+)
 
 type ShellProbe = { args: string[]; output: 'posix' | 'powershell' }
 
@@ -82,7 +95,7 @@ function shellProbe(shell: string): ShellProbe | null {
           '-NoLogo',
           '-NonInteractive',
           '-Command',
-          POWERSHELL_ENVIRONMENT_DUMP
+          POSIX_POWERSHELL_ENVIRONMENT_DUMP
         ],
         output: 'powershell'
       }
@@ -161,7 +174,7 @@ function spawnShellAndReadEnvironment(
     let settled = false
     const chunks: Buffer[] = []
     const child = spawnProcess({
-      program: shell,
+      program: resolvePosixPaneShellPath(shell, env.PATH ?? ''),
       args: probe.args,
       env,
       detached: shellProbeDetached()
