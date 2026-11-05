@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import type { WorkflowPreset } from '../../../../shared/workflow/workflow-definition-schema'
 import { isWorkflowAgentNode } from '../../../../shared/workflow/workflow-definition-schema'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { workflowRpc } from './workflow-rpc'
 import { useWorkflowEditorStore } from './workflow-editor-store'
 import { useWorkflowRunViewStore } from './workflow-run-view-store'
@@ -34,15 +35,19 @@ type WorkspaceOption = { id: string; label: string; folder: boolean }
 function useWorkspaceOptions(): WorkspaceOption[] {
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const folders = useAppStore(selectFolderWorkspaces)
+  const repos = useAppStore((state) => state.repos)
   return useMemo(() => {
-    const worktrees = Object.values(worktreesByRepo ?? {})
-      .flat()
-      .filter((worktree) => !worktree.isArchived)
-      .map((worktree) => ({
-        id: worktree.id,
-        label: worktree.displayName || worktree.id,
-        folder: false
-      }))
+    // Folder projects list their workspace among worktrees too, and they cannot create worktrees.
+    const folderRepoIds = new Set(repos.filter(isFolderRepo).map((repo) => repo.id))
+    const worktrees = Object.entries(worktreesByRepo ?? {}).flatMap(([repoId, rows]) =>
+      rows
+        .filter((worktree) => !worktree.isArchived)
+        .map((worktree) => ({
+          id: worktree.id,
+          label: worktree.displayName || worktree.id,
+          folder: folderRepoIds.has(repoId)
+        }))
+    )
     const folderOptions = (folders ?? []).map((folder) => ({
       id: folder.id,
       label: translate(
@@ -53,7 +58,7 @@ function useWorkspaceOptions(): WorkspaceOption[] {
       folder: true
     }))
     return [...worktrees, ...folderOptions]
-  }, [worktreesByRepo, folders])
+  }, [worktreesByRepo, folders, repos])
 }
 
 export function WorkflowRunDialog({
@@ -82,6 +87,7 @@ export function WorkflowRunDialog({
   const needsGit = preset.definition.nodes.some(
     (node) => isWorkflowAgentNode(node) && node.agent.placement.worktree !== 'current'
   )
+  const folderBlocksIsolation = Boolean(chosenOption?.folder && needsGit)
 
   const start = async (): Promise<void> => {
     if (!chosenOption) {
@@ -189,14 +195,16 @@ export function WorkflowRunDialog({
               {translate(
                 'auto.components.workflows.WorkflowRunDialog.81554cce16',
                 'Agents set to the shared workspace work here; isolated agents get their own worktrees beside it.'
-              )}{' '}
-              {chosenOption?.folder && needsGit
-                ? translate(
-                    'auto.components.workflows.WorkflowRunDialog.82f5021c7c',
-                    'This is a folder workspace, so isolated worktrees will fail to start.'
-                  )
-                : ''}
+              )}
             </p>
+            {folderBlocksIsolation ? (
+              <p role="alert" className="text-xs text-destructive">
+                {translate(
+                  'auto.components.workflows.WorkflowRunDialog.3f1c9a7e52',
+                  'Folder projects cannot create worktrees. Pick a workspace from a Git project, or set every agent to the shared workspace.'
+                )}
+              </p>
+            ) : null}
           </div>
         </div>
         <DialogFooter>
@@ -205,7 +213,7 @@ export function WorkflowRunDialog({
           </Button>
           <Button
             onClick={() => void start()}
-            disabled={starting || !chosenOption || !objective.trim()}
+            disabled={starting || !chosenOption || !objective.trim() || folderBlocksIsolation}
           >
             {starting ? <Loader2 className="animate-spin" /> : <Play />}
             {translate('auto.components.workflows.WorkflowRunDialog.ed282070ff', 'Start run')}
