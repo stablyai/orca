@@ -94,6 +94,19 @@ export class RuntimeAgentSenderAssociations {
     try {
       this.refresh()
     } catch (error) {
+      this.terminal = {
+        ...this.terminal,
+        associations: this.terminal.associations.filter((row) => row.dispatchActor !== true)
+      }
+      const current = this.publisher.current()
+      if (current.associations.some((row) => row.dispatchActor === true)) {
+        // Unread custody cannot prove any worker, including historical aliases; a relevant change retries.
+        this.publisher.publish({
+          ...current,
+          associations: current.associations.filter((row) => row.dispatchActor !== true),
+          attachments: [...current.attachments]
+        })
+      }
       console.warn('[runtime] Sender identity publication failed', error)
     }
     return worktreeId ? this.publisher.scope(worktreeId) : this.publisher.current()
@@ -257,11 +270,6 @@ export class RuntimeAgentSenderAssociations {
         }
       }
     } catch (error) {
-      // A failed read cannot re-prove an invocation; ordinary endpoints keep their last good rows.
-      this.terminal = {
-        ...this.terminal,
-        associations: this.terminal.associations.map(({ dispatchActor: _proof, ...row }) => row)
-      }
       // The next identity change retries.
       this.failedKey = key
       throw error

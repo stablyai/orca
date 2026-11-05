@@ -524,17 +524,20 @@ it('keeps responses available after history cleanup fails and rebuilds tracking 
   })
 })
 
-it('keeps the last good publication when a read fails and retries on the next identity change', () => {
+it('withdraws worker aliases on a failed read and retries only on the next identity change', () => {
   const chats: ReturnType<typeof agentSessionConversationView>[] = []
-  const h = harness(3, {
+  const h = harness(4, {
     getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
     listRecords: () => chats
   })
   const first = h.worker(0)
+  const unaffected = h.worker(1)
+  h.handles.set('tab-0', 'term_reminted')
   const good = h.projection.build()
   expect(good.associations.find((r) => r.identity === `dispatch:${first.id}`)?.dispatchActor).toBe(
     true
   )
+  expect(good.associations.find((r) => r.identity === handle(0))?.dispatchActor).toBe(true)
   const prepare = h.db.db.prepare.bind(h.db.db)
   vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
     if (sql === AGENT_SENDER_PANE_READS.resources) {
@@ -543,13 +546,13 @@ it('keeps the last good publication when a read fails and retries on the next id
     return prepare(sql)
   })
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  h.worker(1)
+  h.worker(2)
   h.ptys[0].launchToken = null
   h.ptys[0].launchIncarnationId = null
   const safe = h.projection.build()
-  expect(safe.associations).toEqual(
-    good.associations.map(({ dispatchActor: _proof, ...row }) => row)
-  )
+  expect(safe.associations).toEqual(good.associations.filter((row) => row.dispatchActor !== true))
+  expect(safe.associations.some((r) => r.identity === handle(0))).toBe(false)
+  expect(safe.associations.some((r) => r.identity === `dispatch:${unaffected.id}`)).toBe(false)
   expect(h.projection.build()).toBe(safe)
   vi.mocked(h.db.db.prepare).mockRestore()
   // Restoring reads alone cannot reinstate expired proof at the same failed key.
@@ -578,13 +581,71 @@ it('keeps the last good publication when a read fails and retries on the next id
   // The failure still reaches the build's warning.
   expect(warn.mock.calls.length).toBe(warned + 1)
   vi.mocked(h.db.db.prepare).mockRestore()
-  const third = h.worker(2)
-  expect(h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
+  const fourth = h.worker(3)
+  expect(h.located(`dispatch:${fourth.id}`)).toBe(pane('tab-3'))
+  expect(h.located(`dispatch:${unaffected.id}`)).toBe(pane('tab-1'))
   expect(h.located(`orca_session_id:${chat}`)).toBeDefined()
   expect(h.projection.build().associations.some((r) => r.identity === `dispatch:${first.id}`)).toBe(
     false
   )
 })
+
+it.each([100, 1000])(
+  'withdraws proof once across repeated early read failures at %i panes',
+  (n) => {
+    const chats: ReturnType<typeof agentSessionConversationView>[] = []
+    const h = harness(n, {
+      getRecord: (id) => chats.find((r) => r.sessionId === id) ?? null,
+      listRecords: () => chats
+    })
+    const worker = h.worker(0)
+    h.handles.set('tab-0', 'term_reminted')
+    const good = h.projection.buildForFrame('workspace')
+    expect(good.associations.find((r) => r.identity === handle(0))?.dispatchActor).toBe(true)
+    h.ptys[0].launchToken = null
+    h.ptys[0].launchIncarnationId = null
+    const prepare = h.db.db.prepare.bind(h.db.db)
+    let generationReads = 0
+    let resourceReads = 0
+    const failure = vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
+      if (sql === 'SELECT history, principals FROM temp.agent_sender_generation') {
+        generationReads++
+        throw new Error('disk I/O error')
+      }
+      if (sql === AGENT_SENDER_PANE_READS.resources) {
+        resourceReads++
+      }
+      return prepare(sql)
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const safe = h.projection.buildForFrame('workspace')
+    expect(safe.revision).not.toEqual(good.revision)
+    expect(safe.associations).toEqual(good.associations.filter((row) => row.dispatchActor !== true))
+    expect(safe.associations.some((row) => row.identity === `dispatch:${worker.id}`)).toBe(false)
+    expect(safe.associations).toHaveLength(n)
+    expect(safe.attachments).toEqual(good.attachments)
+    expect(safe.principals).toEqual(good.principals)
+    expect(safe.peerFingerprint).toEqual(good.peerFingerprint)
+    h.projection.acknowledgeFrame('workspace', safe)
+    expect(h.projection.buildForFrame('workspace')).toBe(safe)
+    expect(h.projection.changedScopes(['workspace'])).toEqual([])
+    expect(generationReads).toBe(3)
+    expect(resourceReads).toBe(0)
+    failure.mockRestore()
+    const recovered = h.projection.buildForFrame('workspace')
+    expect(recovered.associations).toEqual(safe.associations)
+    const session = testOrcaSessionId('44444444-4444-4444-8444-444444444444')
+    chats.push(
+      agentSessionConversationView(
+        agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: session }))
+      )
+    )
+    const withChat = h.projection.build().associations
+    expect(withChat.some((row) => row.identity === handle(0))).toBe(false)
+    expect(withChat.some((row) => row.identity === `dispatch:${worker.id}`)).toBe(false)
+    expect(withChat.some((row) => row.identity === `orca_session_id:${session}`)).toBe(true)
+  }
+)
 
 it('publishes one principal per paired peer and attachments only while their worker runs there', () => {
   const h = harness()

@@ -420,12 +420,14 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
   const publish = (proved: boolean, revision: number) =>
     useAppStore.getState().setAgentSenderPublication('local', {
       associations: [
-        {
-          identity: 'dispatch:worker',
-          paneKey: status(0).paneKey,
-          worktreeId: 'workspace',
-          ...(proved ? { dispatchActor: true as const } : {})
-        },
+        ...(proved
+          ? ['dispatch:worker', 'term_old'].map((identity) => ({
+              identity,
+              paneKey: status(0).paneKey,
+              worktreeId: 'workspace',
+              dispatchActor: true as const
+            }))
+          : []),
         { identity: 'term_0', paneKey: status(0).paneKey, worktreeId: 'workspace' }
       ],
       principals: [],
@@ -453,11 +455,20 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
     </>
   )
   publish(true, 1)
-  const inputs = [{ sender: saved, worktreeId: 'workspace' }]
+  const ordinary = {
+    name: 'Worker',
+    agent: 'codex' as const,
+    party: { address: 'term_old', terminalHandle: 'term_old', orcaSessionId: null }
+  }
+  const inputs = [saved, ordinary].map((sender) => ({ sender, worktreeId: 'workspace' }))
+  const alias = renderHook(() =>
+    useAgentMessageSenderView(ordinary, 'workspace', { kind: 'local' })
+  )
   const single = renderHook(() => useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }))
   const list = renderHook(() => useAgentMessageSenderViews(inputs, { kind: 'local' }))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
   expect(list.result.current[0]).toMatchObject({ agentType: 'codex', dot: 'working' })
+  expect(alias.result.current).toMatchObject({ agentType: 'codex', dot: 'working' })
   const before = new Map(renders)
   act(() => publish(false, 2))
   expect(renders).toEqual(before)
@@ -465,9 +476,15 @@ it('shows only a proved Dispatch invocation and withdraws proof without changing
   expect(single.result.current.dot).toBeUndefined()
   expect(list.result.current[0].agentType).toBe('codex')
   expect(list.result.current[0].dot).toBeUndefined()
+  expect(alias.result.current.agentType).toBe('codex')
+  expect(alias.result.current.dot).toBeUndefined()
+  expect(list.result.current[1].dot).toBeUndefined()
+  act(() => publish(false, 3))
+  expect(renders).toEqual(before)
+  expect(alias.result.current.dot).toBeUndefined()
   // The current terminal alias must not bypass missing source proof.
   write(0, { state: 'waiting' })
   expect(single.result.current.dot).toBeUndefined()
-  act(() => publish(true, 3))
+  act(() => publish(true, 4))
   expect(single.result.current).toMatchObject({ agentType: 'codex', dot: 'waiting' })
 })
