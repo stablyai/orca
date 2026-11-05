@@ -1,15 +1,15 @@
 import { lstat } from 'node:fs/promises'
 import { probeDaemonProcessIdentity } from '../endpoint/identity/daemon-incarnation-evidence'
-import type { DaemonEvidenceSource } from '../../../shared/daemon-audit-eligibility'
+import type {
+  DaemonEvidenceSource,
+  DaemonAuditFailureTrigger,
+  DaemonAuditGoneReason
+} from '../../../shared/daemon-audit-eligibility'
 import type {
   DaemonEvidenceSources,
   DaemonProcessEvidence,
   ExactDaemonIncarnation
 } from '../endpoint/identity/daemon-incarnation-evidence-types'
-import type {
-  DaemonAuditFailureTrigger,
-  DaemonAuditGoneReason
-} from '../../../shared/daemon-audit-eligibility'
 
 export type DaemonAuditContext = {
   protocolGeneration: number

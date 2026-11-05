@@ -2,11 +2,14 @@ import {
   parseTerminalStartFailure,
   terminalStartError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import { DaemonConnectionLostError, DaemonProtocolError } from '../../protocol/daemon-errors'
+import {
+  DaemonConnectionLostError,
+  DaemonProtocolError,
+  decodeDaemonResponseError
+} from '../../protocol/daemon-errors'
 import type { RpcResponse } from '../../protocol/daemon-rpc-contract'
 
 import { addNodePtyRecoveryHint } from '../../pty-subprocess/node-pty-error-hints'
-import { decodeDaemonResponseError } from '../../protocol/daemon-errors'
 
 export type PendingRequest = {
   resolve: (value: unknown) => void

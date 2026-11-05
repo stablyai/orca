@@ -1,7 +1,7 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
-import type { Mock } from 'vitest'
+
 import type {
   DaemonInitMockState,
   MockAdapter,

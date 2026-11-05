@@ -3,7 +3,10 @@ import type {
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
 import { reportDaemonPtyCwdVerdict } from '../../observability/daemon-adoption-telemetry-event'
-import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
@@ -15,7 +18,7 @@ import {
 } from '../../shell-readiness/shell-ready'
 import { shellReadyMarkerComesFromLineEditor } from '../../../../shared/terminal/output/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from '../../history/seed-transfer/terminal-history-seed-segments'
-import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+
 import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../protocol/daemon-create-or-attach-result'
 import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from '../../pty-subprocess/wsl-session-context'

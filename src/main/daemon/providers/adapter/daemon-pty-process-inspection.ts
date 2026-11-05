@@ -1,11 +1,12 @@
-import { PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
-import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
-import { DaemonPtyBufferSnapshots } from '../checkpointing/daemon-pty-buffer-snapshots'
-import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
+  PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
+import { DaemonPtyBufferSnapshots } from '../checkpointing/daemon-pty-buffer-snapshots'
+import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
 import type { PtyProcessInspectionOptions } from '../../../providers/pty-process-inspection'

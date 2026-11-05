@@ -3,13 +3,16 @@ import {
   classifyDaemonAuditFailure,
   type DaemonAuditObservation
 } from '../../observability/daemon-audit-classifier'
-import type { DaemonAuditTrigger } from '../../../../shared/daemon-audit-eligibility'
+import type {
+  DaemonAuditTrigger,
+  DaemonEvidenceSource
+} from '../../../../shared/daemon-audit-eligibility'
 import {
   exactDaemonIncarnationForPidRecord,
   sameEndpointIdentity
 } from '../../endpoint/identity/daemon-endpoint-incarnation'
 import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
-import type { DaemonEvidenceSource } from '../../../../shared/daemon-audit-eligibility'
+
 import type { ExactDaemonIncarnation } from '../../endpoint/identity/daemon-incarnation-evidence-types'
 import { notifyDaemonAuditListeners } from '../../observability/daemon-listener-registry'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'

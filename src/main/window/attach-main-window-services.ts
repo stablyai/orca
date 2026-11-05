@@ -1,5 +1,5 @@
-import { ipcMain, nativeTheme } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { ipcMain, nativeTheme, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+
 import type { Store } from '../persistence/loading-store/store'
 import {
   acknowledgePendingTccPromptNotice,

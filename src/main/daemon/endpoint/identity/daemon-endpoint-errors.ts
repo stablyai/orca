@@ -1,6 +1,8 @@
 import { DAEMON_ENDPOINT_LOST_MESSAGE } from '../publication/daemon-endpoint-ownership'
-import { DaemonConnectionLostError } from '../../protocol/daemon-errors'
-import { DAEMON_UNAVAILABLE_RECONNECT_MESSAGE } from '../../protocol/daemon-errors'
+import {
+  DaemonConnectionLostError,
+  DAEMON_UNAVAILABLE_RECONNECT_MESSAGE
+} from '../../protocol/daemon-errors'
 
 /** Match the server's unknown-request reply; transient errors do not prove a missing capability. */
 export function isUnknownRequestTypeError(err: unknown): boolean {

@@ -3,7 +3,10 @@ import {
   type PtyFencedTerminationRequest,
   type PtyFencedTerminationOutcome
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import { FENCED_TERMINATION_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  FENCED_TERMINATION_PROTOCOL_VERSION,
+  supportsMode2031UnsubscribeFact
+} from '../../protocol/daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from '../../protocol/daemon-pty-router-events'
 import { logWslPaneDiagnostic } from '../wsl/daemon-wsl-diagnostic-log'
@@ -11,7 +14,7 @@ import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from '../wsl/daemon-
 import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
-import { supportsMode2031UnsubscribeFact } from '../../protocol/daemon-protocol-version'
+
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
 import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'

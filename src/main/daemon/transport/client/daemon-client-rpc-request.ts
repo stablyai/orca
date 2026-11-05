@@ -3,9 +3,10 @@ import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
 import {
   DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   DaemonConnectionLostError,
-  DaemonRequestTimeoutError
+  DaemonRequestTimeoutError,
+  isTerminalAttachCanceledMessage
 } from '../../protocol/daemon-errors'
-import { isTerminalAttachCanceledMessage } from '../../protocol/daemon-errors'
+
 import type { DaemonPendingRequests } from './daemon-client-pending-requests'
 
 type DaemonRpcRequestOptions = {

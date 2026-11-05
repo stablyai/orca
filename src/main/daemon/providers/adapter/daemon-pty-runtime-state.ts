@@ -6,16 +6,13 @@ import type {
   DaemonAuditContext,
   DaemonAuditObservation
 } from '../../observability/daemon-audit-classifier'
-import type { DaemonAuditTrigger } from '../../../../shared/daemon-audit-eligibility'
+import type {
+  DaemonAuditTrigger,
+  DaemonEvidenceSource
+} from '../../../../shared/daemon-audit-eligibility'
 import { CheckpointSessionQueue } from '../checkpointing/daemon-checkpoint-session-queue'
-import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
-import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
-import type { DaemonEvidenceSource } from '../../../../shared/daemon-audit-eligibility'
-import type { ExactDaemonIncarnation } from '../../endpoint/identity/daemon-incarnation-evidence-types'
-import { readDaemonPidRecord } from '../../endpoint/identity/daemon-endpoint-incarnation'
-import { removeDaemonListener } from '../../observability/daemon-listener-registry'
-import type { ParsedDaemonPid } from '../../endpoint/identity/daemon-pid-file-parse'
 import {
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
@@ -23,6 +20,13 @@ import {
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress
 } from '../../protocol/daemon-protocol-version'
+import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
+
+import type { ExactDaemonIncarnation } from '../../endpoint/identity/daemon-incarnation-evidence-types'
+import { readDaemonPidRecord } from '../../endpoint/identity/daemon-endpoint-incarnation'
+import { removeDaemonListener } from '../../observability/daemon-listener-registry'
+import type { ParsedDaemonPid } from '../../endpoint/identity/daemon-pid-file-parse'
+
 import type { TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
 import { ColdRestorePayloadCache } from '../../history/restoration/cold-restore-payload-cache'
 import { HistoryManager } from '../../history/storage/history-manager'

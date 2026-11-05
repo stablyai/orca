@@ -3,8 +3,12 @@ import { DaemonClient } from '../transport/client/daemon-client'
 import type { DaemonEndpointIdentity } from '../protocol/daemon-hello-protocol'
 import type { DaemonPtyAdapter } from '../providers/adapter/daemon-pty-adapter'
 import { readDaemonProcessIncarnation } from '../endpoint/identity/daemon-ready-identity'
-import type { DaemonPidFile, DaemonProcessHandle, DaemonSpawner } from './daemon-spawner'
-import { replaceDaemonPidFile } from './daemon-spawner'
+import {
+  type DaemonPidFile,
+  type DaemonProcessHandle,
+  type DaemonSpawner,
+  replaceDaemonPidFile
+} from './daemon-spawner'
 
 export class DaemonEndpointOwnershipError extends Error {}
 

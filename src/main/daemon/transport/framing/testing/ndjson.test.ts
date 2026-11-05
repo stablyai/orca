@@ -3,9 +3,9 @@ import {
   encodeNdjson,
   createNdjsonParser,
   NDJSON_MAX_LINE_BYTES,
-  NdjsonLineTooLongError
+  NdjsonLineTooLongError,
+  createIncrementalNdjsonFramer
 } from '../../../../../shared/main-process-ndjson-framer'
-import { createIncrementalNdjsonFramer } from '../../../../../shared/main-process-ndjson-framer'
 
 describe('encodeNdjson', () => {
   it('encodes an object as a JSON line ending with newline', () => {

@@ -14,9 +14,10 @@ import {
 import {
   getDaemonPidPath,
   getDaemonSocketPath,
-  getDaemonTokenPath
+  getDaemonTokenPath,
+  type DaemonSpawner
 } from '../../launch/daemon-spawner'
-import type { DaemonSpawner } from '../../launch/daemon-spawner'
+
 import {
   getMacDaemonTccAttributionHealth,
   type MacDaemonTccAttributionHealth

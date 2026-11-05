@@ -1,6 +1,6 @@
 // Keep hoisted vi.mock calls in each test file.
-import { afterEach, beforeEach, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
