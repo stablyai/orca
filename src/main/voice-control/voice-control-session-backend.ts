@@ -33,7 +33,7 @@ import {
   type OutstandingWorkItem
 } from './voice-control-watchdog'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /**
  * The live-session backend: the coordinator's orchestration run, reply pump, voice

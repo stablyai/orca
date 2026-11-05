@@ -1,7 +1,7 @@
 import type { MessageRow } from '../runtime/orchestration/types'
-import type { MessageWaitResult } from '../runtime/runtime-message-waiters'
-import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   VoiceControlAgentActivityEvent,
   VoiceControlSettings,
@@ -179,7 +179,7 @@ export function harness(options: HarnessOptions = {}) {
       waitForMessage: () => {
         if (!mailArmed && options.mail) {
           mailArmed = true
-          return Promise.resolve<MessageWaitResult>('notified')
+          return Promise.resolve<MessageWaitResult>(new MessageWake())
         }
         return new Promise<MessageWaitResult>(() => {})
       },
