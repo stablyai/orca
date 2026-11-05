@@ -85,6 +85,11 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     ]
   }),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
+  {
+    ...textPair('--chat-user-message', '--chat-link'),
+    drop: ['--chat-user-message'],
+    over: '--chat-canvas'
+  },
   ...GIT_DECORATIONS.map((status): ContrastRule => ({
     surface: '--sidebar',
     text: `--git-decoration-${status}`,
