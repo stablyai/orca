@@ -79,6 +79,15 @@ function completedTurnFields(
   }
 }
 
+// Why: program activity moves the PTY's status without a new title, so a title-only frame dated by
+// the title alone sorts behind rows the client accepted since (#25136).
+export function ptyStatusEvidenceAt(
+  pty: RuntimePtyWorktreeRecord,
+  titleEvidenceAt: number
+): number {
+  return Math.max(titleEvidenceAt, pty.lastAgentStatusStartedAtEpochMs ?? 0)
+}
+
 export function demoteRuntimeMobileAgentStatus(
   status: AgentStatusEntry,
   pty: RuntimePtyWorktreeRecord | null
@@ -86,7 +95,11 @@ export function demoteRuntimeMobileAgentStatus(
   return {
     state: 'done',
     prompt: '',
-    updatedAt: pty?.lastOscTitleEpochMs ?? status.updatedAt,
+    // A demotion supersedes the status it replaces, so it must never sort behind it.
+    updatedAt:
+      pty?.lastOscTitleEpochMs != null
+        ? Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, pty.lastOscTitleEpochMs))
+        : status.updatedAt,
     stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
     paneKey: status.paneKey,
     stateHistory: [],
@@ -180,7 +193,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
           : 'done'
     return buildTitleOnlyStatus(
       titleState,
-      titleEvidenceAt,
+      ptyStatusEvidenceAt(pty, titleEvidenceAt),
       pty.lastAgentStatusStartedAtEpochMs ?? titleEvidenceAt
     )
   }
@@ -196,7 +209,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   }
   const updatedAt = Math.max(status.updatedAt, titleEvidenceAt)
   if (!richStatusOwnsCurrentState) {
-    return buildTitleOnlyStatus(status.state, updatedAt, stateStartedAt)
+    return buildTitleOnlyStatus(status.state, ptyStatusEvidenceAt(pty, updatedAt), stateStartedAt)
   }
   return updatedAt === status.updatedAt && stateStartedAt === status.stateStartedAt
     ? status

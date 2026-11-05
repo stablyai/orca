@@ -291,6 +291,7 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChat.interruptedContinue
       : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
+    nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
