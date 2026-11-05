@@ -51,8 +51,14 @@ export function transferOrcaProfileProject(
   userDataPath: string
 ): TransferOrcaProfileProjectResult {
   // Refuse a linked move before the profile lookup, recovery or storage migration can write anything.
-  const index = readProfileIndex(getOrcaProfileIndexPath(userDataPath))
-  if (index?.profiles.some((profile) => profile.id === args.sourceProfileId)) {
+  const indexedIds = new Set(
+    readProfileIndex(getOrcaProfileIndexPath(userDataPath))?.profiles.map((profile) => profile.id)
+  )
+  if (
+    indexedIds.has(args.sourceProfileId) &&
+    indexedIds.has(args.targetProfileId) &&
+    args.sourceProfileId !== args.targetProfileId
+  ) {
     const unrecoveredSource = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
     assertRepoHasNoCrossStoreLinkedWorkspace(unrecoveredSource.state, args.repoId)
   }
