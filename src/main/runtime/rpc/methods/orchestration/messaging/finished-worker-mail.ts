@@ -107,8 +107,26 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   }
 }
 
+/** Whether the pane now holds a local worker rather than the remote one: by its custody, which every worker
+ *  start records, else by an active local Dispatch or one created strictly later; a tie stays remote. */
+function holdsLocalWorker(
+  db: OrchestrationDb,
+  address: string,
+  paneKey: string,
+  attachment: { dispatch_id: string; created_at: string }
+): boolean {
+  const custodian = db.getWorkerTerminalResourceByPane(paneKey)?.owner_dispatch_id
+  if (custodian) {
+    return custodian !== attachment.dispatch_id && Boolean(db.getDispatchContextById(custodian))
+  }
+  return (
+    Boolean(db.getActiveDispatchForIdentity(address, paneKey)) ||
+    (db.getLatestDispatchForTerminal(address, paneKey)?.created_at ?? '') > attachment.created_at
+  )
+}
+
 /** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal.
- *  A local Dispatch the pane works on now, or was given after it, speaks for it instead; a tie refuses. */
+ *  A local worker the pane holds now speaks for it instead. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
   sender: { address: string; paneKey: string | undefined },
@@ -118,12 +136,9 @@ export function refuseFinishedRemoteWorker(
     ? db.findLatestRemoteAttachmentForPane(sender.paneKey)
     : undefined
   if (
+    sender.paneKey &&
     attachment &&
-    !db.getActiveDispatchForIdentity(sender.address, sender.paneKey) &&
-    !(
-      (db.getLatestDispatchForTerminal(sender.address, sender.paneKey)?.created_at ?? '') >
-      attachment.created_at
-    ) &&
+    !holdsLocalWorker(db, sender.address, sender.paneKey, attachment) &&
     (!to || to === `dispatch:${attachment.dispatch_id}`)
   ) {
     throw new OrchestrationError(
