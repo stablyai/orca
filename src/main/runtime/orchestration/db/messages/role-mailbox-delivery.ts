@@ -1,3 +1,4 @@
+import { clearWorkerScheduledWaitForMessages } from '../worker-scheduled-waits'
 import type { DeliveryRow, MessageRow, MessageType } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
@@ -210,6 +211,7 @@ function markDeliveryAcknowledged(db: OrchestrationDb, delivery: DeliveryRow): D
          WHERE id IN (${placeholders})`
       )
       .run(...messageIds)
+    clearWorkerScheduledWaitForMessages(db, messageIds)
   }
   db.db
     .prepare(

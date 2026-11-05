@@ -240,6 +240,12 @@ export class InMemoryOrchestrationMessages {
     return []
   }
 
+  nextWorkerScheduledWaitAtMs(): null {
+    return null
+  }
+
+  clearWorkerScheduledWaitForPane(): void {}
+
   listWorkerTerminalReleaseBacklog(): never[] {
     return []
   }

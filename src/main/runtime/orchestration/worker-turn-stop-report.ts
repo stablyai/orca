@@ -4,11 +4,17 @@ import { dispatchReportMailbox } from './dispatch-report-mailbox'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from './types'
 import { escalateWorkerFailure } from './worker-failure-escalation'
 import { replaceDispatchCapabilities } from './worker-terminal-redaction'
+import { deferScheduledWorkerStop, clearWorkerScheduledWait } from './db/worker-scheduled-waits'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
 
-export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited'
+export type WorkerTurnStopReason =
+  | 'finished'
+  | 'errored'
+  | 'needs-input'
+  | 'exited'
+  | 'wait-expired'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -38,6 +44,7 @@ export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string
 
 const SUBJECTS: Record<WorkerTurnStopReason, string> = {
   finished: 'Worker stopped without reporting',
+  'wait-expired': 'Worker scheduled wait expired',
   errored: 'Worker stopped on an error without reporting',
   'needs-input': 'Worker is waiting on a prompt',
   exited: 'Worker exited without reporting'
@@ -47,9 +54,11 @@ function describeStop(stop: WorkerTurnStop, task: string, dispatchId: string): s
   const what =
     stop.reason === 'needs-input'
       ? `Worker ${stop.from} is stopped at a prompt that needs a person (approval or a question) while running task ${task}.`
-      : stop.reason === 'exited'
-        ? `Worker ${stop.from} exited (${stop.exitCause ?? 'process ended'}) without sending worker_done for task ${task}.`
-        : `Worker ${stop.from} ended its turn ${stop.reason === 'errored' ? 'on an error ' : ''}without sending worker_done for task ${task}.`
+      : stop.reason === 'wait-expired'
+        ? `Worker ${stop.from} missed its declared scheduled-wait deadline for task ${task}.`
+        : stop.reason === 'exited'
+          ? `Worker ${stop.from} exited (${stop.exitCause ?? 'process ended'}) without sending worker_done for task ${task}.`
+          : `Worker ${stop.from} ended its turn ${stop.reason === 'errored' ? 'on an error ' : ''}without sending worker_done for task ${task}.`
   // Agent prose can echo its injected capability; mail must never carry it.
   const output = stop.lastOutput && replaceDispatchCapabilities(stop.lastOutput).value.trim()
   return [
@@ -76,17 +85,24 @@ export function reportWorkerTurnStop(
   target: WorkerTurnStopDispatch,
   stop: WorkerTurnStop,
   deps: WorkerTurnStopReportDeps
-): void {
+): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
+  const scheduledWait = deferScheduledWorkerStop(db, dispatchId)
+  if (stop.reason === 'finished' && scheduledWait) {
+    return false
+  }
+  if (stop.reason !== 'finished' && stop.reason !== 'wait-expired') {
+    clearWorkerScheduledWait(db, dispatchId)
+  }
   // Waiting on mail, or a clean finish resting on its own question or helpers, is deliberate; an exit never is.
   if (
     stop.reason !== 'exited' &&
-    (deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
+    ((!scheduledWait && deps.isWaitingForMail(`dispatch:${dispatchId}`)) ||
       (stop.reason === 'finished' &&
         (db.awaitsAnswerToLatestQuestion(dispatchId) ||
           (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId)))))
   ) {
-    return
+    return false
   }
   const id = `msg_stop_${createHash('sha256')
     .update(JSON.stringify([dispatchId, stop.stopKey]))
@@ -95,7 +111,7 @@ export function reportWorkerTurnStop(
   const payload = { dispatchId, handle: stop.from, stopReason: stop.reason }
   if (target.kind === 'local') {
     const { dispatch } = target
-    escalateWorkerFailure(
+    const message = escalateWorkerFailure(
       db,
       dispatch,
       {
@@ -110,13 +126,22 @@ export function reportWorkerTurnStop(
       },
       deps.notify
     )
-    return
+    return message !== null || db.getMessageById(id) !== undefined
   }
   // The Run home imports relayed worker mail into the coordinator's Run and wakes it.
   const { attachment } = target
   // A worker_done the home has not acknowledged yet is still a report.
   if (db.hasPendingFederatedWorkerReport(dispatchId)) {
-    return
+    return false
+  }
+  if (
+    db.db
+      .prepare(
+        "SELECT 1 FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home' AND message_id = ?"
+      )
+      .get(dispatchId, id)
+  ) {
+    return true
   }
   // The stable message id makes a repeated report of the same stop a no-op on both sides.
   try {
@@ -136,7 +161,9 @@ export function reportWorkerTurnStop(
         payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
       })
     })
+    return true
   } catch (error) {
     console.warn('[orchestration] failed to relay a worker stop report', dispatchId, error)
+    return false
   }
 }

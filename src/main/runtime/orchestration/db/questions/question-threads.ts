@@ -1,3 +1,4 @@
+import { clearWorkerScheduledWait } from '../worker-scheduled-waits'
 import type { MessageRow, QuestionRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
@@ -51,6 +52,7 @@ export function createQuestion(
       .run(message.id, params.runId, params.dispatchId, params.askerHandle)
     const question = this.getQuestionRaw(message.id) as QuestionRow
     const storedMessage = this.getMessageById(message.id) as MessageRow
+    clearWorkerScheduledWait(this, params.dispatchId)
     this.db.exec('COMMIT')
     return { question: exposeQuestionTimestamps(question), message: storedMessage }
   } catch (error) {

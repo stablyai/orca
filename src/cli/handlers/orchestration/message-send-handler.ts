@@ -34,7 +34,10 @@ type SendRecipientWarning = {
   message: string
 }
 
-type OrchestrationSendResult = { next?: string } & (
+type OrchestrationSendResult = {
+  next?: string
+  scheduledWait?: { dispatchId: string; until: string; reason: string }
+} & (
   | {
       message: { id: string; run_id?: string }
       lifecycle?: LifecycleSendResult
@@ -84,7 +87,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       )
     }
     if (
-      (type === 'worker_done' || type === 'heartbeat') &&
+      (type === 'worker_done' || type === 'heartbeat' || flags.has('wait-until')) &&
       !getOptionalStringFlag(flags, 'from') &&
       !process.env.ORCA_TERMINAL_HANDLE &&
       !readInjectedAgentSessionId()
@@ -123,6 +126,12 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       // Workers report once before ending their turn; retry brief outages so worker_done is not lost.
       type === 'worker_done' ? WORKER_DONE_UNAVAILABLE_RETRY_MS : 0
     )
+    if (flags.has('wait-until') && !result.result.scheduledWait) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'The connected runtime did not confirm the scheduled wait. The status may have been sent; update the runtime before relying on idle-stop suppression.'
+      )
+    }
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
@@ -193,6 +202,7 @@ type SendFields = {
   autoReleaseAt?: string
   warnings?: string[]
   next?: string
+  scheduledWait?: { dispatchId: string; until: string; reason: string }
 }
 
 // The message row echoes what the caller just sent; only its id is new.
@@ -202,7 +212,8 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
     lifecycle: lifecycle?.action,
     autoReleaseAt: lifecycle && 'autoReleaseAt' in lifecycle ? lifecycle.autoReleaseAt : undefined,
     warnings: value.warnings?.length ? value.warnings.map((warning) => warning.message) : undefined,
-    next: value.next
+    next: value.next,
+    scheduledWait: value.scheduledWait
   }
   if ('message' in value) {
     return { messageId: value.message.id, ...common }

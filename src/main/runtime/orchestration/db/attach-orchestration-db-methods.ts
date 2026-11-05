@@ -1,3 +1,4 @@
+import { attachWorkerScheduledWaits } from './worker-scheduled-waits'
 import { attachCrewMutationNotifications } from '../crew/crew-mutation-notifications'
 import { attachAttemptObservationStore } from './attempt-observation-store'
 import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-store'
@@ -137,5 +138,6 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDecisionGateStore(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)
+  attachWorkerScheduledWaits(ctor)
   attachCrewMutationNotifications(ctor)
 }

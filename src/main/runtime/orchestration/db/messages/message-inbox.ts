@@ -1,34 +1,8 @@
+import { MESSAGE_ID_UPDATE_BATCH_SIZE, runBatchedMessageMutation } from './message-id-mutation'
 import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
-
-const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
-const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
-
-function runBatchedMessageMutation(
-  db: OrchestrationDb,
-  ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string,
-  leadingBindings: string[] = []
-): void {
-  if (ids.length === 0) {
-    return
-  }
-  db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
-  try {
-    for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
-      const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
-      const placeholders = batch.map(() => '?').join(',')
-      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingBindings, ...batch)
-    }
-    db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
-  } catch (error) {
-    db.db.exec(`ROLLBACK TO ${MESSAGE_MUTATION_SAVEPOINT}`)
-    db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
-    throw error
-  }
-}
 
 export function getUnreadMessages(
   this: OrchestrationDb,
@@ -165,7 +139,9 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
       `UPDATE messages
        SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    true
   )
 }
 
@@ -179,7 +155,8 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHan
        SET delivered_at = datetime('now'), pointer_enter_pending = 0,
            pointer_pty_id = NULL, pointer_process_incarnation = NULL
        WHERE to_handle = ? AND id IN (${placeholders})`,
-    [mailboxHandle]
+    [mailboxHandle],
+    true
   )
 }
 
@@ -222,7 +199,9 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
        SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')),
            pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    true
   )
 }
 

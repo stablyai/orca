@@ -92,6 +92,30 @@ describe('orchestration worker automatic release across turns and settings', () 
     await expectClosedAfterFreshGrace()
   })
 
+  it('still suspends auto-release when clearing a scheduled wait throws', () => {
+    setupWithFakeClock()
+    const suspend = vi.fn()
+    const db = {
+      clearWorkerScheduledWaitForPane(): void {
+        throw new Error('SQLITE_BUSY')
+      },
+      suspendWorkerTerminalAutoRelease: suspend,
+      restartWorkerTerminalAutoRelease: vi.fn()
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(() =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements only the clear and suspend methods this observation calls.
+      new WorkerAutoReleaseActivity(() => db as never).observePane(moved('done', 'working'))
+    ).not.toThrow()
+
+    expect(suspend).toHaveBeenCalledWith(h.workerPaneKey)
+    expect(warn).toHaveBeenCalledWith(
+      '[orchestration] worker scheduled wait clear failed',
+      expect.any(Error)
+    )
+  })
+
   it('refuses to stop a kept worker without touching it, and stops it once auto-close is allowed', async () => {
     setupWithFakeClock()
     const { dispatchId } = await h.startWorker()

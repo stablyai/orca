@@ -32,6 +32,7 @@ class OrchestrationDbCore {
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
   /** The runtime's auto-release timer, re-armed whenever a deadline moves. */
   workerTerminalAutoReleaseListener: (() => void) | undefined
+  workerScheduledWaitListener: ((event?: 'closed') => void) | undefined
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
 
@@ -86,6 +87,9 @@ class OrchestrationDbCore {
   }
 
   close(): void {
+    const waitListener = this.workerScheduledWaitListener
+    this.workerScheduledWaitListener = undefined
+    waitListener?.('closed')
     this.db.close()
   }
 }

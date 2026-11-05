@@ -49,7 +49,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
+      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--wait-until <iso|duration>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
@@ -68,7 +68,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'outcome',
       'files-modified',
       'report-path',
-      'phase'
+      'phase',
+      'wait-until'
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
@@ -78,6 +79,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'Run groups exclude their owning coordinator; send to run:<id> to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:<id> includes workspace coordinators.',
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
+      'An active worker may declare a scheduled wait with --type status --wait-until <ISO timestamp with timezone|30s|5m|4h|1d> --body <reason>; omit --to to reach its coordinator. It suppresses only a clean idle-stop alert until that deadline, does not schedule a wake, and alerts once on expiry without progress. A later turn or status without --wait-until clears it.',
       'worker_done requires --outcome succeeded or --outcome failed.',
       'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',
       'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
