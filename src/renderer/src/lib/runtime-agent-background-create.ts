@@ -6,7 +6,6 @@ import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { LaunchAgentBackgroundSessionArgs } from './agent-background-session-contract'
 import type { AgentBackgroundLaunchHost } from './agent-background-session-launch-host'
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -22,10 +21,11 @@ import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
-  callRuntimeRpc,
-  runtimeEnvironmentSupportsCapabilities
-} from '@/runtime/runtime-rpc-client'
+  agentSessionCreateCapabilities,
+  agentSessionCreateRequest
+} from '@/runtime/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
@@ -59,11 +59,7 @@ export async function createRuntimeAgentBackgroundTerminal(
 }
 
 export async function prepareRuntimeAgentBackgroundTerminal(environmentId: string) {
-  const [complete, choices] = await runtimeEnvironmentSupportsCapabilities(environmentId, [
-    AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY,
-    AGENT_LAUNCH_CHOICES_CAPABILITY
-  ])
-  const capable = complete || choices
+  const { complete, capable } = await agentSessionCreateCapabilities(environmentId)
   return (args: RuntimeAgentBackgroundCreateArgs): Promise<{ terminal: RuntimeTerminalCreate }> =>
     createPreparedRuntimeAgentBackgroundTerminal(args, capable, complete)
 }
@@ -105,26 +101,21 @@ async function createPreparedRuntimeAgentBackgroundTerminal(
                 withAgentSessionCreateOperationId(
                   {
                     ...(await keyboardOptions(args.environmentId)),
-                    worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                    agent: args.agent,
-                    ...(agentArgs !== undefined ? { agentArgs } : {}),
-                    ...(complete && args.sessionOptions !== undefined
-                      ? {
-                          sessionOptions: Object.fromEntries(
-                            Object.entries(args.sessionOptions).map(([key, value]) => [
-                              key,
-                              String(value)
-                            ])
-                          )
-                        }
-                      : {}),
-                    ...(complete && args.extraAgentArgs !== undefined
-                      ? { extraAgentArgs: args.extraAgentArgs }
-                      : {}),
-                    ...(args.prompt ? { prompt: args.prompt } : {}),
-                    // Follow-up prompts arrive after startup but still need an unattended launch.
-                    promptDelivery: 'auto-submit',
-                    ...(launchPreferences ? { launchPreferences } : {}),
+                    ...agentSessionCreateRequest({
+                      worktreeId: args.worktreeId,
+                      agent: args.agent,
+                      agentArgs,
+                      ...(complete
+                        ? {
+                            sessionOptions: args.sessionOptions,
+                            extraAgentArgs: args.extraAgentArgs
+                          }
+                        : {}),
+                      prompt: args.prompt,
+                      // Follow-up prompts arrive after startup but still need an unattended launch.
+                      promptDelivery: 'auto-submit',
+                      launchPreferences
+                    }),
                     placement: { tabId: args.tabId, leafId: args.leafId },
                     // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
                     presentation: 'background'

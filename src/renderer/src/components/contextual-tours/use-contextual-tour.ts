@@ -5,7 +5,10 @@ import {
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
-import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
+import {
+  isContextualTourSessionConsumed,
+  isContextualTourStartBlockedByProgress
+} from '@/store/slices/ui/ui-slice-tour-actions'
 
 const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
@@ -80,6 +83,7 @@ export function useContextualTour(
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
   )
+  const featureInteractions = useAppStore((s) => s.featureInteractions)
   const enabledInteractionSnapshotRef = useRef<{
     id: ContextualTourId
     source: string
@@ -172,6 +176,11 @@ export function useContextualTour(
       isContextualTourSessionConsumed(
         { contextualToursSeenIds, contextualToursStartedThisSession },
         id
+      ) ||
+      // Don't watch the page for a tour that can't start.
+      isContextualTourStartBlockedByProgress(
+        { featureInteractions, contextualToursStartedThisSession },
+        id
       )
     ) {
       return
@@ -256,6 +265,7 @@ export function useContextualTour(
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     enabled,
+    featureInteractions,
     id,
     persistedUIReady,
     requestContextualTour,

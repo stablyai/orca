@@ -44,7 +44,11 @@ report.host.bun = (await requireSuccess(bun, ['--version'], 'bun-version')).stdo
 if (report.host.bun !== readPinnedBunVersion(root)) {
   throw new Error(`Pin Bun ${readPinnedBunVersion(root)}`)
 }
-await requireSuccess(process.execPath, ['config/scripts/sync-anti-slop-plugin.mjs'], 'sync-plugin')
+await requireSuccess(
+  process.execPath,
+  ['config/scripts/static-analysis/oxlint-contracts/sync-anti-slop-plugin.mjs'],
+  'sync-plugin'
+)
 rmSync(baseline, { recursive: true, force: true })
 cpSync(path.join(root, '.anti-slop-plugin'), path.join(baseline, 'src'), { recursive: true })
 // Reverse the committed patch so both arms use the same pinned upstream package.

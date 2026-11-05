@@ -20,7 +20,7 @@ import { initDataPath } from '../persistence/loading-store/user-data-path'
 import { OrcaRuntimeService } from './orca-runtime'
 import * as worktreeChangeInvalidators from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { _resetTerminalModelQueryAuthorityForTest } from './terminal-model-query-authority'
-import { _resetTerminalViewAttributesForTest } from './terminal-view-attribute-store'
+import { _resetTerminalViewAttributesForTest } from './terminal/view/terminal-view-attribute-store'
 
 const testState = { dir: '' }
 let registrationSpy:

@@ -80,6 +80,26 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     expect(await rig.turn('t1')).toMatchObject({ state: 'interrupted', completedAt: 2_100 })
   })
 
+  it('leaves a request that outlives its turn pending through settlement until it is withdrawn', async () => {
+    const rig = await openProviderTimelineRig()
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    rig.assembler.apply({
+      type: 'request.open',
+      request: '7',
+      body: pendingApproval,
+      outlivesTurn: true
+    })
+    await stop(rig, 't1')
+    rig.assembler.apply({ type: 'activity', text: 'Thinking' })
+    rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_100, state: 'interrupted' })
+    rig.assembler.flush()
+    const request = async () => (await rig.row(providerItemId('request', '7')))?.body
+    expect(await request()).toMatchObject({ resolution: { state: 'pending' } })
+    rig.assembler.apply({ type: 'request.withdrawn', request: '7' })
+    rig.assembler.flush()
+    expect(await request()).toMatchObject({ resolution: { state: 'cancelled' } })
+  })
+
   it('cancels the prompt even when the next event writes nothing, and leaves the tool running', async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })

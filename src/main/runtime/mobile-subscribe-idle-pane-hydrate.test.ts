@@ -11,7 +11,7 @@ import {
   decodeTerminalStreamJson,
   decodeTerminalStreamText
 } from '../../shared/terminal/stream/terminal-stream-protocol'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 const PTY_ID = `${WORKTREE_ID}@@9c8d7e6f`

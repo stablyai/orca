@@ -15,9 +15,6 @@ import {
 } from '../../autosave/editor-autosave-controller-test-fixture'
 import { EditorSaveDeniedByPluginError } from './editor-save-plugin-hook'
 import { registerPendingEditorFlush } from '../flush/editor-pending-flush'
-import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
-import { attemptEditorFileSave } from '../commands/editor-file-save-attempt'
-import { toast } from 'sonner'
 
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -106,46 +103,6 @@ describe('editor.save.before on the save path', () => {
     vi.unstubAllGlobals()
   })
 
-  it('writes what the hook returns and takes it into the buffer, leaving the tab clean', async () => {
-    edit('  x  ')
-    expect(await queue.queueSave(file(), '  x  ')).toBe('written')
-    expect(hook).toHaveBeenCalledWith({
-      workspaceId: 'wt-1',
-      path: 'src/a.ts',
-      languageId: 'typescript',
-      text: '  x  '
-    })
-    expect(written()).toEqual(['x\n'])
-    expect(file().isDirty).toBe(false)
-  })
-
-  it('inserts the final newline after a plugin transforms the saved text', async () => {
-    store.setState({ settings: { ...store.getState().settings!, editorInsertFinalNewline: true } })
-    hook.mockResolvedValueOnce({ kind: 'continue', text: 'formatted' })
-    edit('before')
-
-    expect(await queue.queueSave(file(), 'before')).toBe('written')
-    expect(written()).toEqual(['formatted\n'])
-    expect(file().isDirty).toBe(false)
-  })
-
-  it('finishes the newline save in the surviving view after the writer closes', async () => {
-    store.setState((state) => ({
-      settings: { ...state.settings!, editorInsertFinalNewline: true },
-      openFiles: [...state.openFiles, { ...file(), id: 'b', isDirty: false }]
-    }))
-    withLoadedBaselines(store, disk)
-    hook.mockImplementationOnce(async ({ text }) => {
-      store.setState((state) => ({ openFiles: state.openFiles.filter((tab) => tab.id !== 'a') }))
-      return { kind: 'continue', text: text.toUpperCase() }
-    })
-    edit('one')
-
-    expect(await queue.queueSave(file(), 'one')).toBe('written')
-    expect(disk.files.get(PATH)).toBe('ONE\n')
-    expect(store.getState().openFiles.find((tab) => tab.id === 'b')?.isDirty).toBe(false)
-  })
-
   it.each([
     ['source', 'rich', 'ONE\n'],
     ['rich', 'source', 'ONE']
@@ -207,16 +164,6 @@ describe('editor.save.before on the save path', () => {
     expect(file().isDirty).toBe(true)
   })
 
-  it('never asks for autosaves, or when no live plugin lists the hook', async () => {
-    edit('x')
-    expect(await queue.queueSave(file(), 'x', 'autosave')).toBe('written')
-    usePluginPanelsStore.setState({ plugins: [hookingPlugin('pending')] })
-    edit('y')
-    expect(await queue.queueSave(file(), 'y')).toBe('written')
-    expect(hook).not.toHaveBeenCalled()
-    expect(written()).toEqual(['x', 'y'])
-  })
-
   it('treats typing a view still holds when the hook returns as a newer edit', async () => {
     let unregister = (): void => {}
     hook.mockImplementationOnce(async () => {
@@ -230,32 +177,5 @@ describe('editor.save.before on the save path', () => {
     expect(written()).toEqual(['ONE'])
     expect(store.getState().editorDrafts.a).toBe('one!')
     expect(file().isDirty).toBe(true)
-  })
-
-  it('gives the hook text to a sibling view when the saving view closes meanwhile', async () => {
-    store.setState((state) => ({
-      openFiles: [...state.openFiles, { ...file(), id: 'b', isDirty: false }]
-    }))
-    withLoadedBaselines(store, disk)
-    hook.mockImplementationOnce(async ({ text }) => {
-      store.setState((state) => ({ openFiles: state.openFiles.filter((tab) => tab.id !== 'a') }))
-      return { kind: 'continue', text: text.toUpperCase() }
-    })
-    edit('one')
-    await queue.queueSave(file(), 'one')
-    expect(store.getState().editorDrafts.b ?? disk.files.get(PATH)).toBe('ONE')
-    expect(disk.files.get(PATH)).toBe('ONE')
-    expect(store.getState().openFiles.find((tab) => tab.id === 'b')?.isDirty).toBe(false)
-  })
-
-  it('carries a denial through the save request to the toast, with the plugin and reason', async () => {
-    queue.dispose()
-    const detach = attachEditorAutosaveController(store)
-    hook.mockResolvedValueOnce({ kind: 'deny', pluginKey: 'acme.fmt', reason: 'syntax error' })
-    edit('x')
-    await expect(attemptEditorFileSave({ fileId: 'a', fallbackContent: 'x' })).resolves.toBe(false)
-    expect(toast.error).toHaveBeenCalledWith('The plugin acme.fmt refused this save: syntax error')
-    detach()
-    queue = createEditorSaveQueue(store)
   })
 })

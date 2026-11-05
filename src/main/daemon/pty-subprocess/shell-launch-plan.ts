@@ -44,10 +44,10 @@ import {
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../shared/claude-profile-routing'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
-import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
-import { resolveWslSessionContext } from '../wsl-session-context'
+import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-readiness/shell-ready'
+import { resolveWslSessionContext } from './wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
-import type { PtySubprocessOptions } from '../pty-subprocess'
+import type { PtySubprocessOptions } from './pty-subprocess'
 
 export type PtyShellLaunchPlan = {
   shellPath: string

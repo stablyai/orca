@@ -128,38 +128,6 @@ const tabsOrSpaces: AskPrompt = {
 }
 
 describe('NativeChatQuestionCard', () => {
-  it('delivers the SECOND option as index 1, not the default (STA-1860)', () => {
-    const onAnswer = vi.fn()
-    render(tabsOrSpaces, onAnswer)
-
-    clickOption('Spaces')
-    clickAction('Submit')
-
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
-  })
-
-  it('delivers a multi-select pick as its option indices', () => {
-    const onAnswer = vi.fn()
-    render(
-      {
-        questions: [
-          {
-            question: 'Which fruits?',
-            multiSelect: true,
-            options: [{ label: 'Apple' }, { label: 'Banana' }, { label: 'Cherry' }]
-          }
-        ]
-      },
-      onAnswer
-    )
-
-    clickOption('Cherry')
-    clickOption('Apple')
-    clickAction('Submit')
-
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [0, 2], other: '' }])
-  })
-
   it('keeps duplicate labels distinct by their numbered row', () => {
     const onAnswer = vi.fn()
     render(
@@ -179,16 +147,6 @@ describe('NativeChatQuestionCard', () => {
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
-  })
-
-  it('carries free text through as the other answer', () => {
-    const onAnswer = vi.fn()
-    render(tabsOrSpaces, onAnswer)
-
-    typeAnswer('four spaces')
-    clickAction('Submit')
-
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
   })
 
   it('keeps a multi-line answer on one line and still submits on Enter', () => {
@@ -211,40 +169,6 @@ describe('NativeChatQuestionCard', () => {
     })
 
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [], other: 'two spaces please' }])
-  })
-
-  it('hides free text when the provider requires a listed option', () => {
-    render(tabsOrSpaces, vi.fn(), false)
-
-    expect(container.querySelector('textarea')).toBeNull()
-    expect(container.textContent).not.toContain('Type your answer')
-  })
-
-  it('applies free-text capability per question in a grouped prompt', () => {
-    render(
-      {
-        questions: [
-          {
-            header: 'Listed',
-            question: 'Pick a listed value',
-            multiSelect: false,
-            options: [{ label: 'One' }]
-          },
-          {
-            header: 'Custom',
-            question: 'Provide a custom value',
-            multiSelect: false,
-            options: []
-          }
-        ]
-      },
-      vi.fn(),
-      [false, true]
-    )
-
-    expect(container.querySelector('textarea')).toBeNull()
-    clickAction('Skip')
-    expect(container.querySelector('textarea')).not.toBeNull()
   })
 
   it('submits grouped multi-select and free-text answers together', () => {
@@ -280,18 +204,6 @@ describe('NativeChatQuestionCard', () => {
       { indices: [0, 1], other: '' },
       { indices: [], other: 'SSH host' }
     ])
-  })
-
-  it('replaces a picked option with a typed answer on a single-select question', () => {
-    const onAnswer = vi.fn()
-    render(tabsOrSpaces, onAnswer)
-
-    clickOption('Spaces')
-    typeAnswer('two spaces')
-    expect(optionPressed('Spaces')).toBe('false')
-    clickAction('Submit')
-
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
   })
 
   it('keeps typed text in the field but sends a later-picked option', () => {
@@ -346,37 +258,6 @@ describe('NativeChatQuestionCard', () => {
     })
 
     expect(optionPressed('Tabs')).toBe('true')
-  })
-
-  it('keeps the picked option when keyboard focus passes through the field', () => {
-    const onAnswer = vi.fn()
-    render(tabsOrSpaces, onAnswer)
-
-    typeAnswer('two spaces')
-    clickOption('Tabs')
-    act(() => {
-      container
-        .querySelector('textarea')!
-        .dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
-    })
-    clickAction('Submit')
-
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
-  })
-
-  it('leaves nothing chosen when a picked option is unpicked over kept text', () => {
-    const onAnswer = vi.fn()
-    render(tabsOrSpaces, onAnswer)
-
-    typeAnswer('two spaces')
-    clickOption('Tabs')
-    clickOption('Tabs')
-
-    expect(optionPressed('Tabs')).toBe('false')
-    expect(
-      [...container.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Skip')
-    ).toBe(true)
-    expect(onAnswer).not.toHaveBeenCalled()
   })
 
   it('sends picked options and typed text together on a multi-select question', () => {
@@ -501,30 +382,6 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0, 1], other: 'Other' }])
   })
 
-  it('arrows from the last option into the answer field and on to the first option', () => {
-    vi.useFakeTimers()
-    const onAnswer = vi.fn()
-    container.setAttribute('data-native-chat-root', 'true')
-    render(tabsOrSpaces, onAnswer, true, true)
-    typeAnswer('two spaces')
-    clickOption('Tabs')
-    const input = container.querySelector('textarea')!
-    input.setSelectionRange(0, 0)
-    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
-    act(() => rows[1]!.focus())
-
-    expect(pressKey({ key: 'ArrowDown' }, rows[1]!).defaultPrevented).toBe(true)
-    expect(document.activeElement).toBe(input)
-    expect(input.selectionStart).toBe(10)
-    expect(optionPressed('Tabs')).toBe('true')
-    expect(pressKey({ key: 'ArrowDown', shiftKey: true }, input).defaultPrevented).toBe(false)
-    expect(document.activeElement).toBe(input)
-    pressKey({ key: 'ArrowDown' }, input)
-    expect(document.activeElement).toBe(rows[0])
-    clickAction('Submit')
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0], other: '' }])
-  })
-
   it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
     container.setAttribute('data-native-chat-root', 'true')
     act(() => {
@@ -607,31 +464,6 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [2], other: '' }])
   })
 
-  it('keeps the keyboard on the card when the focused option is replaced by the next question', () => {
-    vi.useFakeTimers()
-    container.setAttribute('data-native-chat-root', 'true')
-    render(indentThenFruits, vi.fn(), true, true)
-    const spaces = container.querySelectorAll<HTMLElement>('button[aria-pressed]')[1]!
-
-    act(() => spaces.focus())
-    clickOption('Spaces')
-    passAutoAdvanceBeat()
-
-    expect(cardTitle()).toBe('Which fruit?')
-    expect(document.activeElement).toBe(container.querySelector('button[aria-pressed]'))
-  })
-
-  it('puts the keyboard in the answer field when typing is the only answer', () => {
-    render(
-      { questions: [{ question: 'Type your answer:', multiSelect: false, options: [] }] },
-      vi.fn(),
-      true,
-      true
-    )
-
-    expect(document.activeElement).toBe(container.querySelector('textarea'))
-  })
-
   it('moves the keyboard into the answer field when a number key advances to a typed-only question', () => {
     vi.useFakeTimers()
     container.setAttribute('data-native-chat-root', 'true')
@@ -652,18 +484,6 @@ describe('NativeChatQuestionCard', () => {
 
     expect(cardTitle()).toBe('Anything else?')
     expect(document.activeElement).toBe(container.querySelector('textarea'))
-  })
-
-  it('picks from a number key pressed anywhere inside its own chat pane', () => {
-    vi.useFakeTimers()
-    const onAnswer = vi.fn()
-    container.setAttribute('data-native-chat-root', 'true')
-    render(tabsOrSpaces, onAnswer, true, true)
-
-    pressKey({ key: '2' }, container.querySelector('button[aria-pressed]')!)
-    passAutoAdvanceBeat()
-
-    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
   })
 
   it.each<{

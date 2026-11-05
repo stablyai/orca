@@ -30,6 +30,7 @@ export function useMobileStructuredOptionState(args: {
   optionCatalog: AgentSessionOptionCatalog | null
   sessionId: string | null
   turnId: string | null
+  unloadedTurnRevisions: number | undefined
 }) {
   const {
     agent,
@@ -39,6 +40,7 @@ export function useMobileStructuredOptionState(args: {
     optionCatalog,
     sessionId,
     turnId,
+    unloadedTurnRevisions,
     client,
     optionStamp,
     sendSelection,
@@ -121,7 +123,8 @@ export function useMobileStructuredOptionState(args: {
             conversationSupport: {
               sessionId: support.sessionId,
               commands: support.result.conversationCommands ?? [],
-              compactInstructions: support.result.compactInstructions === true
+              compactInstructions: support.result.compactInstructions === true,
+              contextUsage: support.result.contextUsage
             },
             imageSupport: {
               sessionId: support.sessionId,
@@ -185,7 +188,9 @@ export function useMobileStructuredOptionState(args: {
     ]
   )
   // A turn or host status change rereads within the same lease, as on desktop; it is not a new context.
-  const readStamp = JSON.stringify([optionStamp, turnId])
+  // So does a turn row leaving the loaded window, whose context facts only the host's answer still holds.
+  const contextRefresh = conversationSupport?.contextUsage ? (unloadedTurnRevisions ?? 0) : 0
+  const readStamp = JSON.stringify([optionStamp, turnId, contextRefresh])
   const seenReadStamp = useRef(readStamp)
   useEffect(() => {
     if (seenReadStamp.current !== readStamp) {

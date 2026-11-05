@@ -5,6 +5,7 @@ import {
   GitCompare,
   Globe,
   Loader2,
+  MessageSquare,
   Search,
   Smartphone,
   TerminalSquare
@@ -131,7 +132,7 @@ export function EntryActionRow({
 }
 
 function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
-  if (option.contentType === 'terminal' && option.source === 'workspace' && option.occupantAgent) {
+  if (option.source === 'workspace' && option.occupantAgent) {
     return (
       <span
         className="inline-flex shrink-0"
@@ -154,6 +155,9 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
   }
   if (contentType === 'editor') {
     return <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  if (contentType === 'agent-session') {
+    return <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
   return <GitCompare className="size-3.5 shrink-0" aria-hidden="true" />
 }

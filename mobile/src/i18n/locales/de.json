@@ -189,6 +189,11 @@
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
+    "contextUsage": {
+      "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
+      "title": "Kontext",
+      "estimated": "Anhand der letzten Antwort geschätzt."
+    },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
       "file": "Datei",
@@ -375,7 +380,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Standard",
-      "notReportedMarker": "Nicht gemeldet"
+      "notReportedMarker": "Nicht gemeldet",
+      "moreModels": "Weitere Modelle",
+      "fewerModels": "Weniger Modelle"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt"
@@ -778,7 +785,9 @@
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
-      "openImage": "Bild öffnen"
+      "openImage": "Bild öffnen",
+      "wrapLines": "Zeilen umbrechen",
+      "disableLineWrap": "Zeilenumbruch deaktivieren"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
@@ -1207,6 +1216,10 @@
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
       "unavailable": "Auf Mobilgeräten nicht verfügbar"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Namen kopieren",
+      "copyRelativePath": "Relativen Pfad kopieren"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",
@@ -1769,13 +1782,8 @@
       "noUpdate": "Seit {{value0}} keine Meldung"
     },
     "agentMessageAttribution": {
-      "from": "Von {{sender}}",
-      "fromMore": "Von {{sender}} +{{count}}",
-      "fromUnnamed": "Von einem Agenten",
-      "messageFrom": "Nachricht von {{sender}}",
-      "messageFromMore": "Nachricht von {{sender}} +{{count}}",
-      "messageFromUnnamed": "Nachricht von einem Agenten",
-      "unnamedSender": "einem Agenten"
+      "unnamedSender": "einem Agenten",
+      "fromSender": "Von"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Terminal konnte nicht erstellt werden.",
@@ -1800,6 +1808,7 @@
       "countWorkflows_one": "{{count}} Arbeitsablauf",
       "countWorkflows_other": "{{count}} Arbeitsabläufe",
       "detailsUnavailable": "Aufgabendetails sind für diese Sitzung nicht verfügbar.",
+      "outputFile": "Ausgabe: {{value0}}",
       "groupAgents": "Agenten",
       "groupMonitors": "Überwachungen",
       "groupShell": "Shell",
@@ -2143,8 +2152,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden.",
-      "editing": "Nachricht wird bearbeitet",
-      "editingAttributed": "Nachricht wird bearbeitet · {{attribution}}"
+      "editing": "Nachricht wird bearbeitet"
     },
     "quickCommandEditorForm": {
       "action": "Aktion",

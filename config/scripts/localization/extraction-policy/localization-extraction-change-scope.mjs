@@ -34,8 +34,12 @@ export function affectsLocalizationExtraction(paths) {
       path.startsWith('config/tsconfig') ||
       path.startsWith('config/patches/') ||
       path.startsWith('config/scripts/localization-') ||
+      path.startsWith('config/scripts/localization/source-extraction/localization-') ||
+      path.startsWith('config/scripts/localization/catalog-validation/localization-') ||
       path.startsWith('config/scripts/localization/extraction-policy/localization-') ||
       path.startsWith('config/scripts/verify-localization-') ||
+      path.startsWith('config/scripts/localization/catalog-validation/verify-localization-') ||
+      path.startsWith('config/scripts/localization/source-extraction/verify-localization-') ||
       path.startsWith('.github/actions/install-node-dependencies/')
   )
 }

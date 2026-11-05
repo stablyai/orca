@@ -24,6 +24,7 @@ import {
   type StructuredAgentSessionOptionRecord
 } from './structured-agent-session-option-state'
 import { withUnlistedEffort } from './structured-agent-session-unlisted-effort'
+import { listedModelDescribing } from './structured-agent-session-listed-model'
 import { structuredAgentSessionPermissionDescriptor } from './structured-agent-session-permission-option'
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 
@@ -72,10 +73,7 @@ export function structuredAgentSessionDescribedModel(
   state: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>,
   modelId: string
 ): CatalogModel | undefined {
-  const model = state.catalog?.models.find((entry) => entry.id === modelId)
-  return model && (!state.verifiedModelIds || state.verifiedModelIds.includes(modelId))
-    ? model
-    : undefined
+  return listedModelDescribing(state.catalog?.models ?? [], state.verifiedModelIds, modelId)
 }
 
 const tierChoices = (option: CatalogOption | undefined): string[] =>
@@ -119,20 +117,42 @@ export function structuredAgentSessionDrawnValues(
   return drawnModelControls(state)?.values ?? state.record.values
 }
 
+/** Current draft/catalog observations extend display authority without changing accepted input. */
+export function structuredAgentSessionDisplayCatalog(
+  state: StructuredAgentSessionOptionState
+): AgentSessionOptionCatalog | null {
+  const catalog = state.catalog
+  return catalog &&
+    state.catalogSource !== 'seed' &&
+    state.sessionNeverStarted === true &&
+    state.catalogNamesConfiguredModel === true &&
+    catalog.models.some((model) => model.isDefault)
+    ? { ...catalog, defaultModelIsCliDefault: true }
+    : catalog
+}
+
 function drawnModelControls(state: StructuredAgentSessionOptionState) {
   const { record } = state
+  const displayCatalog = structuredAgentSessionDisplayCatalog(state)
   if (
-    !state.catalog ||
+    !displayCatalog ||
     (state.catalogSource === 'seed' && structuredAgentSessionModelId(record, 'own') === null)
   ) {
     return null
   }
   // Before discovery, name only accepted input; static rows cannot supply installed capabilities.
-  const catalog = state.catalogSource === 'seed' ? { ...state.catalog, models: [] } : state.catalog
+  const catalog =
+    state.catalogSource === 'seed' ? { ...displayCatalog, models: [] } : displayCatalog
   const models = withTrackedNativeChatModel(catalog, catalog.models, { model: record.values.model })
   const shown = structuredAgentSessionShownModel(catalog, models, record)
+  // A listed row describes the chat's model by id or resolved name; stand-ins keep their own options.
   const controls = shown.controlsModelId
-    ? (models.find((model) => model.id === shown.controlsModelId)?.options ?? [])
+    ? (structuredAgentSessionDescribedModel(
+        { catalog, verifiedModelIds: state.verifiedModelIds },
+        shown.controlsModelId
+      )?.options ??
+      models.find((model) => model.id === shown.controlsModelId)?.options ??
+      [])
     : modellessControls(catalog, record)
   // Normalize only under the named model’s listed controls; stand-ins/unlisted models preserve host values.
   const normalises =

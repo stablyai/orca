@@ -1,17 +1,20 @@
 import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-prompt-submit'
-import {
-  CLAUDE_AGENT_PROMPT_RENDER_MARKER,
-  CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
-  CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS,
-  AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS
-} from '../../orca-runtime-core'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
+const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
+
+const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
+
+/** How long a composer must keep showing the whole paste before Enter, outlasting paste-burst windows. */
+const AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS = 300
+
+// Claude shows its cursor before composer rendering settles.
+const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(

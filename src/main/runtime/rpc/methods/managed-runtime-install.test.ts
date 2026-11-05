@@ -13,7 +13,7 @@ const host = vi.hoisted(() => ({ dataDirectory: '' }))
 vi.mock('../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => host.dataDirectory
 }))
-vi.mock('../../structured-agent-launch-support', () => ({
+vi.mock('../../agent-session/launch/structured-agent-launch-support', () => ({
   resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' })
 }))
 // The download never answers until its cancel.
