@@ -3111,7 +3111,18 @@
       "prompt": "Ask anything, @ to mention files, / for commands"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Close image"
+      "closeImage": "Close image",
+      "imageActions": "Image actions",
+      "copyImage": "Copy image",
+      "saveImage": "Save image",
+      "share": "Share…",
+      "imageCopied": "Image copied",
+      "imageSaved": "Image saved",
+      "copyFailed": "Couldn't copy image",
+      "saveFailed": "Couldn't save image",
+      "shareFailed": "Couldn't share image",
+      "photosAccessDenied": "Allow Orca to add photos in Settings",
+      "imageTooLarge": "This image is too large"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",
@@ -3190,6 +3201,22 @@
       "stopped": "{{hostName}} is stopped. Start it on your computer.",
       "server": "The server",
       "unavailable": "{{hostName}} isn't available from your phone. Open one of its projects on your computer."
+    },
+    "goal": {
+      "chip": "Goal",
+      "exitMode": "Exit goal mode",
+      "placeholder": "Describe your goal, define measurable outcomes for best results",
+      "pursuing": "Pursuing goal",
+      "set": "Goal set",
+      "paused": "Paused goal",
+      "blocked": "Goal blocked",
+      "limited": "Goal limited",
+      "clear": "Clear goal",
+      "expand": "Show full goal",
+      "collapse": "Hide full goal",
+      "attachmentsUnsupported": "Remove attachments before setting a goal.",
+      "pause": "Pause",
+      "resume": "Resume"
     }
   },
   "sourceControl": {

@@ -31,6 +31,9 @@ vi.mock('../../MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActi
 vi.mock('../visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
+vi.mock('../visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
+}))
 
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
 import { MobileNativeChatRowOverlaysHost } from './MobileNativeChatRowOverlaysHost'

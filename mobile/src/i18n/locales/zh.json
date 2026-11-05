@@ -228,7 +228,18 @@
       "selectText": "选择文本"
     },
     "nativeChatImageViewer": {
-      "closeImage": "关闭图片"
+      "closeImage": "关闭图片",
+      "imageActions": "图片操作",
+      "copyImage": "拷贝图片",
+      "saveImage": "存储图片",
+      "share": "共享…",
+      "imageCopied": "已拷贝图片",
+      "imageSaved": "已存储图片",
+      "copyFailed": "无法拷贝图片",
+      "saveFailed": "无法存储图片",
+      "shareFailed": "无法共享图片",
+      "photosAccessDenied": "请在“设置”中允许 Orca 添加照片",
+      "imageTooLarge": "图片过大"
     },
     "nativeChatProse": {
       "attachedImage": "附件图片",
@@ -567,6 +578,22 @@
       "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
       "server": "服务器",
       "unavailable": "无法从手机访问 {{hostName}}。请在你的电脑上打开它的一个项目。"
+    },
+    "goal": {
+      "chip": "目标",
+      "exitMode": "退出目标模式",
+      "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
+      "pursuing": "正在追求目标",
+      "set": "目标已设定",
+      "paused": "目标已暂停",
+      "blocked": "目标受阻",
+      "limited": "目标受限",
+      "clear": "清除目标",
+      "expand": "显示完整目标",
+      "collapse": "隐藏完整目标",
+      "attachmentsUnsupported": "在设定目标之前删除附件。",
+      "pause": "暂停",
+      "resume": "继续"
     }
   },
   "common": {
