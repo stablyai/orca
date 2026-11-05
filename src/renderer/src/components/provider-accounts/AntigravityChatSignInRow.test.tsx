@@ -4,10 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type {
   AntigravityChatAuth,
-  AntigravityChatSignInState
+  AntigravityChatSignInState,
+  AntigravityChatSignInStartResult
 } from '../../../../shared/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { callAntigravityChatSignIn } from '@/runtime/runtime-antigravity-accounts-client'
+import {
+  callAntigravityChatSignIn,
+  subscribeAntigravityChatSignIn
+} from '@/runtime/runtime-antigravity-accounts-client'
 import type * as ManagedRuntimeInstallModule from '@/runtime/managed-runtime-install-status'
 import { AgentChatRuntimeArea } from '../agent/launch-settings/AgentChatChoiceControls'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
@@ -34,6 +38,7 @@ import { TooltipProvider } from '../ui/tooltip'
 const url = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
 type FakeHost = {
   revision: number
+  runtimeId: string
   auth: AntigravityChatAuth
   flow: AntigravityChatSignInState | null
   streams: Set<(status: unknown) => void>
@@ -45,7 +50,13 @@ const fake = vi.hoisted(() => {
     const key = owner.kind === 'local' ? '' : owner.environmentId
     let host = hosts.get(key)
     if (!host) {
-      host = { revision: 0, auth: 'unknown', flow: null, streams: new Set() }
+      host = {
+        revision: 0,
+        runtimeId: 'fixture-runtime',
+        auth: 'unknown',
+        flow: null,
+        streams: new Set()
+      }
       hosts.set(key, host)
     }
     return host
@@ -53,7 +64,8 @@ const fake = vi.hoisted(() => {
   const status = (host: FakeHost) => ({
     revision: host.revision,
     auth: host.auth,
-    flow: host.flow
+    flow: host.flow,
+    runtimeId: host.runtimeId
   })
   const publish = (
     owner: RuntimeClientTarget,
@@ -68,7 +80,7 @@ const fake = vi.hoisted(() => {
     hostOf: typeof hostOf
     status: typeof status
     publish: typeof publish
-    start: Promise<{ flowId: string }> | null
+    start: Promise<AntigravityChatSignInStartResult> | null
   } = { hostOf, status, publish, start: null }
   return api
 })
@@ -76,11 +88,15 @@ const { publish } = fake
 vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
   callAntigravityChatSignIn: vi.fn(async (owner: RuntimeClientTarget, action: string) => {
     if (action === 'Start') {
-      if (fake.start) {
-        return fake.start
-      }
-      fake.publish(owner, { flowId: 'f', phase: 'starting' })
-      return { flowId: 'f' }
+      const runtimeId = fake.hostOf(owner).runtimeId
+      const result = fake.start
+        ? await fake.start
+        : (fake.publish(owner, { flowId: 'f', phase: 'starting' }),
+          {
+            flowId: 'f',
+            status: fake.status(fake.hostOf(owner))
+          })
+      return { id: 'start', ok: true, result, _meta: { runtimeId } }
     }
     return undefined
   }),
@@ -345,7 +361,7 @@ it('preserves moved setup owner, actions and failure states through collapse and
       new Error('Sign-in refused. Try again.')
     )
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(owner, 'Start')
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(owner, 'Start', { intent: 'signIn' })
     await screen.findByText('Sign-in refused. Try again.')
     const late = Promise.withResolvers<{ flowId: string }>()
     fake.start = late.promise
@@ -382,4 +398,240 @@ it('preserves moved setup owner, actions and failure states through collapse and
     })
     cleanup()
   }
+})
+
+it('carries the displayed action and preserves the accepted replacement intent through remount and changed auth', async () => {
+  const owner = { kind: 'environment', environmentId: 'intent-retry' } as const
+  publish(owner, null, 'signedIn')
+  const row = await showRow(owner)
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+  await act(async () =>
+    publish(owner, { flowId: 'f', phase: 'cancelled', intent: 'changeAccount' })
+  )
+  row.unmount()
+  await showRow(owner)
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+})
+
+it('retries a failed Start with its attempted action until a different host flow supersedes it', async () => {
+  const owner = { kind: 'environment', environmentId: 'intent-request-error' } as const
+  publish(owner, null, 'signedIn')
+  await showRow(owner)
+  vi.mocked(callAntigravityChatSignIn).mockRejectedValueOnce(new Error('Request failed.'))
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  await screen.findByText('Request failed.')
+  await act(async () => publish(owner, null, 'signedOut'))
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+  await act(async () =>
+    publish(owner, { flowId: 'new-check', phase: 'failed', intent: 'signIn' }, 'signedIn')
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', { intent: 'signIn' })
+})
+
+it('keeps a failed Change account request as Change account when Settings remounts', async () => {
+  const owner = { kind: 'environment', environmentId: 'intent-request-remount' } as const
+  publish(owner, null, 'signedIn')
+  const row = await showRow(owner)
+  vi.mocked(callAntigravityChatSignIn).mockRejectedValueOnce(new Error('Request disconnected.'))
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  await screen.findByText('Request disconnected.')
+  row.unmount()
+  await showRow(owner)
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+})
+
+it.each(['accepted', 'rejected'] as const)(
+  'settles a pending Change account request after its status stream reconnects (%s)',
+  async (outcome) => {
+    const owner = { kind: 'environment', environmentId: `pending-reconnect-${outcome}` } as const
+    const start = Promise.withResolvers<{ flowId: string }>()
+    fake.start = start.promise
+    const openUrl = vi.fn(async () => undefined)
+    Object.assign(window, { api: { shell: { openUrl } } })
+    publish(owner, null, 'signedIn')
+    await showRow(owner)
+    await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+    const subscription = vi.mocked(subscribeAntigravityChatSignIn).mock.calls.at(-1)
+    if (!subscription) {
+      throw new Error('Expected the Settings status subscription')
+    }
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        subscription[1].onError(new Error('Disconnected'))
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    await act(async () => {
+      if (outcome === 'accepted') {
+        start.resolve({ flowId: 'reconnected' })
+        publish(owner, { flowId: 'reconnected', phase: 'waiting', intent: 'changeAccount', url })
+      } else {
+        start.reject(new Error('Request disconnected.'))
+      }
+    })
+    fake.start = null
+    if (outcome === 'accepted') {
+      expect(openUrl).toHaveBeenCalledExactlyOnceWith(url)
+    } else {
+      await screen.findByText('Request disconnected.')
+      await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+      expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+        intent: 'changeAccount'
+      })
+    }
+  }
+)
+
+it.each(['reply-first', 'status-first'] as const)(
+  'uses the accepted replacement when an ordinary Retry rejoins it (%s)',
+  async (order) => {
+    const owner = { kind: 'environment', environmentId: `rejoin-${order}` } as const
+    const openUrl = vi.fn(async () => undefined)
+    Object.assign(window, { api: { shell: { openUrl } } })
+    publish(owner, { flowId: 'old-check', phase: 'failed', intent: 'signIn' })
+    await showRow(owner)
+    const host = fake.hostOf(owner)
+    const receipt = {
+      id: 'rejoin',
+      ok: true as const,
+      _meta: { runtimeId: host.runtimeId },
+      result: {
+        flowId: 'replacement',
+        status: {
+          revision: host.revision + 1,
+          auth: 'signedIn' as const,
+          flow: {
+            flowId: 'replacement',
+            phase: 'waiting' as const,
+            intent: 'changeAccount' as const,
+            url
+          }
+        }
+      }
+    }
+    const finish = () => {
+      host.revision = receipt.result.status.revision
+      publish(owner, { flowId: 'replacement', phase: 'failed', intent: 'changeAccount' })
+    }
+    vi.mocked(callAntigravityChatSignIn).mockImplementationOnce(async () => {
+      if (order === 'status-first') {
+        finish()
+      }
+      return receipt
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+    expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', { intent: 'signIn' })
+    if (order === 'reply-first') {
+      expect(openUrl).toHaveBeenCalledExactlyOnceWith(url)
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+      const delayed = { ...fake.status(host), revision: receipt.result.status.revision - 1 }
+      await act(async () => host.streams.forEach((emit) => emit(delayed)))
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+      await act(async () => finish())
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+    expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+      intent: 'changeAccount'
+    })
+  }
+)
+
+it('uses positive owner-flow metadata after a lost acknowledgement, including a legacy flow', async () => {
+  const owner = { kind: 'environment', environmentId: 'lost-ack' } as const
+  publish(owner, { flowId: 'old-check', phase: 'failed', intent: 'signIn' })
+  await showRow(owner)
+  vi.mocked(callAntigravityChatSignIn).mockRejectedValueOnce(new Error('Acknowledgement lost.'))
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  await act(async () =>
+    publish(owner, { flowId: 'accepted', phase: 'failed', intent: 'changeAccount' })
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+  await act(async () => publish(owner, { flowId: 'legacy', phase: 'failed' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', { intent: 'signIn' })
+})
+
+it('keeps an unaccepted replacement across a no-flow host restart and masked other-client failure', async () => {
+  const owner = { kind: 'environment', environmentId: 'unaccepted-restart' } as const
+  publish(owner, { flowId: 'old-own', phase: 'signedIn', intent: 'signIn' }, 'signedIn')
+  const row = await showRow(owner)
+  vi.mocked(callAntigravityChatSignIn).mockRejectedValueOnce(new Error('Host disconnected.'))
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  row.unmount()
+  Object.assign(fake.hostOf(owner), {
+    runtimeId: 'restarted',
+    revision: 0,
+    flow: null,
+    auth: 'unknown'
+  })
+  await showRow(owner)
+  vi.mocked(callAntigravityChatSignIn).mockRejectedValueOnce(
+    new Error('Another client is signing in.')
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+  await act(async () => publish(owner, { flowId: null, phase: 'failed' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', {
+    intent: 'changeAccount'
+  })
+})
+
+it('ignores an accepted reply from a runtime displaced while Start was pending', async () => {
+  const owner = { kind: 'environment', environmentId: 'displaced-reply' } as const
+  const start = Promise.withResolvers<AntigravityChatSignInStartResult>()
+  fake.start = start.promise
+  const openUrl = vi.fn(async () => undefined)
+  Object.assign(window, { api: { shell: { openUrl } } })
+  publish(owner, null, 'signedIn')
+  const row = await showRow(owner)
+  await userEvent.click(screen.getByRole('button', { name: 'Change account' }))
+  row.unmount()
+  Object.assign(fake.hostOf(owner), {
+    runtimeId: 'new-runtime',
+    revision: 0,
+    auth: 'unknown',
+    flow: { flowId: 'new-check', phase: 'failed', intent: 'signIn' }
+  })
+  await showRow(owner)
+  await act(async () =>
+    start.resolve({
+      flowId: 'old-replacement',
+      status: {
+        revision: 100,
+        auth: 'signedIn',
+        flow: {
+          flowId: 'old-replacement',
+          phase: 'waiting',
+          intent: 'changeAccount',
+          url
+        }
+      }
+    })
+  )
+  fake.start = null
+  expect(openUrl).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in' }))
+  expect(callAntigravityChatSignIn).toHaveBeenLastCalledWith(owner, 'Start', { intent: 'signIn' })
 })

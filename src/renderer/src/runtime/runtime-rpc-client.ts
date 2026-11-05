@@ -1,12 +1,12 @@
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
@@ -25,22 +25,33 @@ export {
   peekRuntimeEnvironmentCapability
 } from './runtime-compatibility-cache'
 
+type RuntimeRpcCallOptions = {
+  timeoutMs?: number
+  suppressFeatureInteraction?: boolean
+  reuseRecentCompatibilityFailure?: boolean
+  skipCompatibilityCheck?: boolean
+  signal?: AbortSignal
+  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
+  beforeSend?: () => void
+  paramsForStatus?: (status: RuntimeStatus | null) => unknown
+}
+
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: {
-    timeoutMs?: number
-    suppressFeatureInteraction?: boolean
-    reuseRecentCompatibilityFailure?: boolean
-    skipCompatibilityCheck?: boolean
-    signal?: AbortSignal
-    expectedEnvironmentPairingRevision?: number
-    expectedEnvironmentRuntimeId?: string
-    beforeSend?: () => void
-    paramsForStatus?: (status: RuntimeStatus | null) => unknown
-  } = {}
+  options: RuntimeRpcCallOptions = {}
 ): Promise<TResult> {
+  return (await callRuntimeRpcResponse<TResult>(target, method, params, options)).result
+}
+
+export async function callRuntimeRpcResponse<TResult>(
+  target: RuntimeClientTarget,
+  method: string,
+  params?: unknown,
+  options: RuntimeRpcCallOptions = {}
+): Promise<RuntimeRpcSuccess<TResult>> {
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
@@ -87,7 +98,11 @@ export async function callRuntimeRpc<TResult>(
             options.expectedEnvironmentRuntimeId ??
             (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
         })
-  return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  const envelope = response as RuntimeRpcResponse<TResult>
+  if (!envelope.ok) {
+    throw new RuntimeRpcCallError(envelope)
+  }
+  return envelope
 }
 
 export async function ensureRuntimeEnvironmentCompatible(

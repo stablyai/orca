@@ -1,11 +1,10 @@
 // One sign-in flow per host; only its initiating client receives the link or controls it.
 
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type {
+  AntigravityChatSignInIntent,
   AntigravityChatSignInState,
+  AntigravityChatSignInStartResult,
   AntigravityChatSignInStatus
 } from '../../shared/antigravity-account-types'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
@@ -14,14 +13,13 @@ import { acpPrivateTempConnect } from '../acp/acp-private-temp'
 import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
-import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
+import { AcpConnectionClosedError } from '../acp/acp-errors'
 import { captureSignInModelPublisher } from './antigravity-sign-in-models'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
 import {
   AntigravitySignInCloseUnprovenError,
-  AntigravitySignInSentence,
   antigravityChatSignIn,
+  answerAntigravityChatAuth,
   closeAntigravitySignInOwner
 } from './antigravity-chat-account'
 import {
@@ -29,24 +27,25 @@ import {
   sendAntigravitySignInCallback,
   type AntigravitySignInPending
 } from './antigravity-sign-in-callback'
-import { removeAntigravitySignInSessionFiles } from './antigravity-sign-in-session-files'
+import {
+  antigravitySignInHome,
+  antigravitySignInCredentialCommit
+} from './antigravity-sign-in-home'
 import { antigravitySignInUrl } from './antigravity-sign-in-url'
+import {
+  antigravitySignInFailure,
+  antigravitySignInSessionFailure,
+  SECOND_LINK
+} from './antigravity-sign-in-failure'
 
 // Match the server’s browser wait.
 const FLOW_DEADLINE_MS = 300_000
-const SIGN_IN_FAILED = 'Google sign-in for Antigravity failed. Start sign-in again.'
-const SECOND_LINK = {
-  phase: 'failed',
-  error: 'Antigravity started more than one Google sign-in request.'
-} as const
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
-const SESSION_FAILED =
-  'Antigravity authenticated, but could not initialize a session or load models.'
 
-type Phase = AntigravityChatSignInState['phase']
 type Flow = {
   id: string
   owner: string
+  intent: AntigravityChatSignInIntent
   ended: AbortController
   done: Promise<void>
   pending?: { url: string } & AntigravitySignInPending
@@ -64,7 +63,7 @@ export type AntigravityChatSignInHost = {
 // Retain the flow until cleanup finishes, even after publishing a terminal phase.
 let active: Flow | null = null
 
-const settled = (phase: Phase): boolean =>
+const settled = (phase: AntigravityChatSignInState['phase']): boolean =>
   phase !== 'starting' && phase !== 'waiting' && phase !== 'verifying'
 const running = (current: Flow | null): current is Flow => {
   const shown = antigravityChatSignIn.get().value.flow
@@ -81,7 +80,7 @@ function publish(
   if (shown?.flowId !== current.id || (settled(shown.phase) && !cleanupFailed)) {
     return
   }
-  const shownNext = { ...next, flowId: current.id, owner: current.owner }
+  const shownNext = { ...next, flowId: current.id, owner: current.owner, intent: current.intent }
   antigravityChatSignIn.set({ ...value, flow: shownNext })
   if (settled(next.phase)) {
     current.pending = undefined
@@ -91,8 +90,9 @@ function publish(
 
 export function startAntigravityChatSignIn(
   host: AntigravityChatSignInHost,
-  owner: string
-): { flowId: string } {
+  owner: string,
+  intent: AntigravityChatSignInIntent = 'signIn'
+): AntigravityChatSignInStartResult {
   if (ANTIGRAVITY_LAUNCH_SPEC.managedRuntime.pin() === null) {
     throw new Error(`Antigravity chats are not available on ${process.platform} ${process.arch}.`)
   }
@@ -103,19 +103,23 @@ export function startAntigravityChatSignIn(
     if (!running(active)) {
       throw new Error('The last Antigravity sign-in is still stopping. Try again in a moment.')
     }
-    return { flowId: active.id }
+    return { flowId: active.id, status: readAntigravityChatSignInStatus(owner) }
   }
   const current: Flow = {
     id: randomUUID(),
     owner,
+    intent,
     ended: new AbortController(),
     done: Promise.resolve()
   }
   active = current
   const { value } = antigravityChatSignIn.get()
-  antigravityChatSignIn.set({ ...value, flow: { flowId: current.id, owner, phase: 'starting' } })
+  antigravityChatSignIn.set({
+    ...value,
+    flow: { flowId: current.id, owner, intent, phase: 'starting' }
+  })
   current.done = runFlow(current, host)
-  return { flowId: current.id }
+  return { flowId: current.id, status: readAntigravityChatSignInStatus(owner) }
 }
 
 async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<void> {
@@ -126,7 +130,6 @@ async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<
       signingIn = true
       return signIn(current, host)
     })
-    publish(current, { phase: 'signedIn' })
   } catch (error) {
     const phase = antigravityChatSignIn.get().value.flow?.phase
     const expected =
@@ -171,28 +174,36 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     })
   // Reuse chat launch resolution without downloading a runtime.
   const launch = await prepareAcpLaunch(deps, resolve, closed)
-  const connect = await acpPrivateTempConnect(deps, closed)
   const home = launch.env.GEMINI_HOME
-  const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
+  const target = await antigravitySignInHome(home, current.intent)
+  const { cwd, replacement } = target
   let connection: AcpAgentConnection | null = null
-  // Wait for proven exit and session ownership before deleting files.
   const owned = { sessionId: '', exited: false, done: false, disposed: false }
   const disposeWhenGone = async (): Promise<void> => {
     if (!owned.exited || !owned.done || owned.disposed) {
       return
     }
     owned.disposed = true
-    const files = removeAntigravitySignInSessionFiles(home, owned.sessionId, cwd)
-    await Promise.all([files, rm(cwd, { recursive: true, force: true })]).catch((error: unknown) =>
-      console.warn('[antigravity] sign-in session files not removed:', error)
-    )
+    await target.remove(owned.sessionId)
   }
   try {
+    const selected = replacement
+      ? await prepareAcpLaunch(
+          deps,
+          async () => ({ ...launch, env: { ...launch.env, GEMINI_HOME: target.home } }),
+          closed
+        )
+      : launch
+    const connect = await acpPrivateTempConnect(deps, closed)
     connection = connect(
-      { ...launch, args: spec.args({ fullAccess: false, pluginDir: null }), cwd },
+      { ...selected, args: spec.args({ fullAccess: false, pluginDir: null }), cwd },
       {
         clientInfo: { name: 'orca', version: '1' },
-        signIn: { ...ANTIGRAVITY_LAUNCH_SPEC.signIn, link: (link) => receiveLink(current, link) }
+        signIn: {
+          ...ANTIGRAVITY_LAUNCH_SPEC.signIn,
+          link: (link) => receiveLink(current, link),
+          ...(replacement ? { answered: () => {} } : {})
+        }
       }
     )
     const server = connection
@@ -202,23 +213,34 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     })
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
+    let started: Awaited<ReturnType<AcpAgentConnection['start']>>
+    let connected = false
     try {
       await connection.authenticate('oauth-personal')
       publish(current, { phase: 'verifying' })
       // Authentication alone does not prove a chat can start.
-      const started = await connection.start({ cwd, mcpServers: [] }).catch((error: unknown) => {
-        const plain = error instanceof AcpAgentError && error.code === -32603
-        throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-          ? new AntigravitySignInSentence(SESSION_FAILED)
-          : error
-      })
+      started = await connection
+        .start({ cwd, mcpServers: [] })
+        .catch(antigravitySignInSessionFailure)
       owned.sessionId = started.sessionId
+      connected = !connection.exited
+      if (!replacement) {
+        publishModels(accountHome, started, connected)
+      }
       current.pending = undefined
-      publishModels(accountHome, started, !connection.exited)
     } finally {
       signal.removeEventListener('abort', stop)
       await closeAntigravitySignInOwner(home, server)
     }
+    if (replacement) {
+      const commit = await antigravitySignInCredentialCommit(target.home, home)
+      closed()
+      // Commit and publish in one turn so cancellation cannot relabel a replaced login.
+      commit()
+      publishModels(accountHome, started, connected)
+      answerAntigravityChatAuth(true)
+    }
+    publish(current, { phase: 'signedIn' })
   } finally {
     owned.done = true
     owned.exited ||= !connection || connection.exited
@@ -238,30 +260,6 @@ function receiveLink(current: Flow, link: string): void {
   }
   current.pending = parsed
   publish(current, { phase: 'waiting', url: link })
-}
-
-function antigravitySignInFailure(error: unknown): string {
-  const cause = isAgentSessionPreSpawnError(error) ? error.cause : error
-  if (cause instanceof AntigravitySignInSentence) {
-    return cause.message
-  }
-  if (isAgentSessionPreSpawnError(error) && error.reason === 'runtimeNotInstalled') {
-    return 'Antigravity is not installed on this host. Install it, then start sign-in again.'
-  }
-  if (error instanceof AcpAgentError) {
-    // Provider errors may put the reason in data instead of message.
-    const text = `${error.message} ${JSON.stringify(error.data ?? '')}`
-    if (text.includes('SUBSCRIPTION_REQUIRED')) {
-      return 'Google requires an eligible Antigravity subscription for this account.'
-    }
-    if (/onboarding failed|ineligible/i.test(text)) {
-      return "This Google account can't use Antigravity. Sign in with a different account."
-    }
-    if (/access_denied|denied access|cancelled/i.test(text)) {
-      return 'Google sign-in for Antigravity was not approved. Start sign-in again.'
-    }
-  }
-  return SIGN_IN_FAILED
 }
 
 function ownFlow(owner: string, flowId: string): Flow {

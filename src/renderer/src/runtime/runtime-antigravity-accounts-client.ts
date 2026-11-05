@@ -1,13 +1,20 @@
 import type {
   AntigravityAccountState,
+  AntigravityChatSignInIntent,
   AntigravityAccountTarget
 } from '../../../shared/antigravity-account-types'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
 } from '../../../shared/account-runtime-capabilities'
+import type { RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
+import {
+  assertRuntimeEnvironmentCapability,
+  callRuntimeRpc,
+  callRuntimeRpcResponse
+} from './runtime-rpc-client'
 import { subscribeRuntimeRpc, type RuntimeRpcSubscriptionHandlers } from './runtime-rpc-subscribe'
 
 export async function callAntigravityAccounts(
@@ -44,11 +51,20 @@ async function assertChatSignInHost(owner: RuntimeClientTarget): Promise<void> {
 export async function callAntigravityChatSignIn<TResult>(
   owner: RuntimeClientTarget,
   action: 'Start' | 'Cancel' | 'Complete',
-  params?: { flowId: string; callbackUrl?: string }
-): Promise<TResult> {
+  params?: { flowId: string; callbackUrl?: string } | { intent: AntigravityChatSignInIntent }
+): Promise<RuntimeRpcSuccess<TResult>> {
   await assertChatSignInHost(owner)
-  return callRuntimeRpc(owner, `accounts.antigravityChatSignIn${action}`, params, {
-    timeoutMs: 20_000
+  return callRuntimeRpcResponse(owner, `accounts.antigravityChatSignIn${action}`, params, {
+    timeoutMs: 20_000,
+    ...(action === 'Start'
+      ? {
+          paramsForStatus: (status) =>
+            owner.kind === 'local' ||
+            status?.capabilities?.includes(ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY)
+              ? params
+              : undefined
+        }
+      : {})
   })
 }
 
@@ -58,5 +74,8 @@ export async function subscribeAntigravityChatSignIn(
   handlers: RuntimeRpcSubscriptionHandlers
 ): Promise<{ unsubscribe: () => void }> {
   await assertChatSignInHost(owner)
-  return subscribeRuntimeRpc(owner, 'accounts.antigravityChatSignInSubscribe', null, handlers)
+  return subscribeRuntimeRpc(owner, 'accounts.antigravityChatSignInSubscribe', null, {
+    ...handlers,
+    onEvent: (result, runtimeId) => handlers.onEvent(Object.assign({}, result, { runtimeId }))
+  })
 }

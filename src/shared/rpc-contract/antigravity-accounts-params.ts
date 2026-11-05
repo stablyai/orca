@@ -14,6 +14,10 @@ export const AntigravityAccountMutationParams = z
   })
   .strict()
 
+export const AntigravityChatSignInStartParams = z.strictObject({
+  intent: z.enum(['signIn', 'changeAccount']).optional()
+})
+
 export const AntigravityChatSignInFlowParams = z.strictObject({
   flowId: z.string().min(1).max(64)
 })
