@@ -27,6 +27,8 @@ export type AgentModelCatalogWorkspaceDeps = {
     agent: string
     workspacePath: string
     accountHomePath: string | null
+    /** Ignore settings that can change only the effort. */
+    modelOnly?: boolean
   }) => Promise<boolean>
 }
 
@@ -34,7 +36,8 @@ export async function workspaceKeepsListedDefault(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
   workspacePath: string | null | undefined,
-  accountHomePath: string | null
+  accountHomePath: string | null,
+  modelOnly = false
 ): Promise<boolean> {
   if (workspacePath === undefined) {
     return true
@@ -43,7 +46,12 @@ export async function workspaceKeepsListedDefault(
     return false
   }
   try {
-    return !(await deps.workspaceMayOverrideDefaultModel({ agent, workspacePath, accountHomePath }))
+    return !(await deps.workspaceMayOverrideDefaultModel({
+      agent,
+      workspacePath,
+      accountHomePath,
+      ...(modelOnly ? { modelOnly } : {})
+    }))
   } catch {
     return false
   }
@@ -120,14 +128,18 @@ export async function projectAgentModelCatalogDefault(
   current: () => boolean
 ): Promise<void> {
   const accountHomePath = home && isLegacyAgentSessionAccountHome(home) ? home.path : null
-  const path =
-    bound.workspacePath === null && independentAgentModelCatalog(agent)
-      ? undefined
-      : bound.workspacePath
   try {
-    const keepDefault = await workspaceKeepsListedDefault(deps, agent, path, accountHomePath)
+    // One listing serves every folder on the account; the project decides only its own defaults,
+    // and settings that change only the effort leave the account's model standing.
+    const [keepEffort, keepDefault] = await Promise.all([
+      workspaceKeepsListedDefault(deps, agent, bound.workspacePath, accountHomePath),
+      independentAgentModelCatalog(agent)
+        ? workspaceKeepsListedDefault(deps, agent, bound.workspacePath, accountHomePath, true)
+        : undefined
+    ])
     if (current()) {
-      bound.keepDefault = keepDefault
+      bound.keepDefault = keepDefault ?? keepEffort
+      bound.keepEffort = keepEffort
     }
   } catch {
     /* A failed provenance read leaves the binding's conservative projection. */

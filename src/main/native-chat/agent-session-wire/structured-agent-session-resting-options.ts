@@ -43,11 +43,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
         sessionId,
         savedOnly: true,
         ...(!reader.readsWithoutModel ? { legacyOptionsDisplay: true as const } : {}),
-        ...(inSessionWorkspace
-          ? { inSessionWorkspace: true as const }
-          : independentAgentModelCatalog(record.provider)
-            ? { workspacePath: null }
-            : {})
+        ...(inSessionWorkspace ? { inSessionWorkspace: true as const } : {})
       })
       .catch(() => null)) ?? { origin: 'unknown' }
   if (!reader.readsWithoutModel) {
@@ -75,18 +71,20 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const folderDefault =
     scoped.origin === 'unknown' ? undefined : scoped.models.find((entry) => entry.isDefault)
   // Where the folder names none, a client that needs a model keeps the account default it got before.
+  // Claude and Codex already read the account's listing here; naming none means the project's
+  // settings pick the model, so the account's default would name the wrong one.
   const catalog =
     saved.model === undefined &&
     !folderDefault &&
     scoped.origin !== 'unknown' &&
-    !reader.readsWithoutModel
+    !reader.readsWithoutModel &&
+    !independentAgentModelCatalog(record.provider)
       ? (await deps.modelCatalog?.prepareSaved?.({
           ...scope,
           agent: record.provider,
           sessionId,
           deadline,
-          legacyOptionsDisplay: true,
-          ...(independentAgentModelCatalog(record.provider) ? { workspacePath: null } : {})
+          legacyOptionsDisplay: true
         }),
         await readCatalog(false))
       : scoped

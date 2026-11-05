@@ -28,7 +28,9 @@ export type AgentModelCatalogProbe = ((
     home: AgentSessionAccountHome,
     cwd: string,
     lookup?: AgentModelCatalogLookup,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    /** Where a chat would launch, for resolving the executable; the listing still runs in `cwd`. */
+    launchDirectory?: string
   ) => Promise<AgentModelCatalogResolvedProbe>
 }
 

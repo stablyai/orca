@@ -112,10 +112,11 @@ async function chatAtRest(repoConfig: {
     ...(repoConfig.complete
       ? {
           probes: {
+            // The listing runs from the account's folder and reports the account's config only.
             codex: async () => ({
               ...listing,
               complete: true,
-              configured: { model: 'gpt-5.5', effort: repoConfig.configured ? 'high' : 'medium' }
+              configured: { model: 'gpt-5.5', effort: 'medium' }
             })
           }
         }
@@ -231,21 +232,18 @@ describe('options at rest in a repo with no config of its own', () => {
   })
 })
 
-describe('completed discovery in the exact project scope', () => {
+describe('completed account discovery in a repo that sets its own effort', () => {
   it.each([OLDER_CLIENT, CURRENT_CLIENT])(
-    'shows what the project actually runs to $clientId',
+    'keeps the account model and shows no account effort to $clientId',
     async (client) => {
       await chatAtRest({ configured: true, complete: true })
       const reply = await readOptions(client)
-      expect(reply).toMatchObject({
-        ok: true,
-        result: {
-          current: { model: 'gpt-5.5' },
-          models: expect.arrayContaining([
-            expect.objectContaining({ id: 'gpt-5.5', declaredDefaultEffort: 'high' })
-          ])
-        }
-      })
+      expect(reply).toMatchObject({ ok: true, result: { current: { model: 'gpt-5.5' } } })
+      const row = (reply as { result: { models: { id: string }[] } }).result.models.find(
+        (model) => model.id === 'gpt-5.5'
+      )
+      expect(row).not.toHaveProperty('declaredDefaultEffort')
+      expect(row).not.toHaveProperty('defaultEffort')
       expect(reply).not.toHaveProperty('result.current.effort')
       expect(rig.adapter.acquire).not.toHaveBeenCalled()
     }

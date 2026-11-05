@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -65,7 +66,8 @@ function harness() {
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,
     recordWorkspacePath: async () => '/project',
-    workspaceMayOverrideDefaultModel: async () => true,
+    // The project names no model of its own, so the account's configured default holds there.
+    workspaceMayOverrideDefaultModel: async () => false,
     probes: { claude: probe }
   })
   return {
@@ -118,13 +120,14 @@ describe('independent installed CLI discovery', () => {
     expect(h.run).toHaveBeenCalledTimes(1)
     expect(h.resolve).toHaveBeenCalledWith(
       HOME,
-      '/project',
+      homedir(),
       'snapshot',
       expect.objectContaining({
         deadline: expect.any(Number),
         current: expect.any(Function),
         signal: expect.any(AbortSignal)
-      })
+      }),
+      '/project'
     )
     expect(h.service.peek('a', true)).toBe(h.service.peek('b', true))
     expect(await h.read('b')).toMatchObject({
@@ -133,7 +136,7 @@ describe('independent installed CLI discovery', () => {
     h.service.stop()
   })
 
-  it('discovers the project default before any chat has run and clears it when config names none', async () => {
+  it('names the account default in a folder without its own model settings, and clears it when config names none', async () => {
     const h = harness()
     expect(
       await h.service.read({ agent: 'claude', workspacePath: '/project', waitForListing: true })
@@ -233,7 +236,7 @@ it('prepares hydrated catalog evidence independently of launch permission and sh
   }
   const key = agentModelCatalogScopeFingerprint(
     agentModelCatalogFingerprintForRecord(first),
-    '/project',
+    homedir(),
     'saved-launch'
   )
   const saved = seed.recordSuccess(
@@ -271,13 +274,14 @@ it('prepares hydrated catalog evidence independently of launch permission and sh
   })
   expect(probe.resolve).toHaveBeenCalledWith(
     HOME,
-    '/project',
+    homedir(),
     'saved',
     expect.objectContaining({
       current: expect.any(Function),
       signal: expect.any(AbortSignal),
       deadline: expect.any(Number)
-    })
+    }),
+    '/project'
   )
   const resolutions = probe.resolve.mock.calls.length
   expect(

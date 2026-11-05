@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import {
   type AgentModelCatalogSuccess,
   AgentModelCatalogStore
@@ -28,7 +29,7 @@ function catalog(f: Awaited<ReturnType<typeof createReceivingCallerFixture>>) {
     store.recordSuccess(
       agentModelCatalogScopeFingerprint(
         agentModelCatalogFingerprint({ agent: 'claude', accountHome: home, wslDistro: null }),
-        f.rig.root
+        homedir()
       ),
       'claude',
       {
@@ -139,7 +140,7 @@ it('keeps newer public intent while discovery waits and reports a failed listing
       c.store.failureDetail(
         agentModelCatalogScopeFingerprint(
           agentModelCatalogFingerprint({ agent: 'claude', accountHome: f.homeB, wslDistro: null }),
-          f.rig.root
+          homedir()
         )
       )
     ).toContain('model/list unavailable')
@@ -172,7 +173,7 @@ it('keeps newer public intent while discovery waits and reports a failed listing
   }
 })
 
-it.each(['deadline', 'retirement', 'stop', 'workspace'] as const)(
+it.each(['deadline', 'retirement', 'stop'] as const)(
   'captures the original %s fence before awaiting the receiving scope',
   async (end) => {
     const f = await createReceivingCallerFixture()
@@ -185,27 +186,14 @@ it.each(['deadline', 'retirement', 'stop', 'workspace'] as const)(
       const c = catalog(f)
       service = c.service
       const selected = vi.spyOn(f.rig.host.deps, 'launchAccountHome').mockReturnValue(home.promise)
-      let workspaceIdentity = 'original'
       const now = 1_800_000_000_000
       vi.useFakeTimers({ now })
       const pending = f.rig.host.readModelCatalog({
         agent: 'claude',
         sessionId: PARENT,
-        deadline: now + 500,
-        ...(end === 'workspace'
-          ? {
-              workspace: {
-                selector: 'fixture',
-                identity: () => workspaceIdentity,
-                resolve: async () => f.rig.root
-              }
-            }
-          : {})
+        deadline: now + 500
       })
       await vi.waitFor(() => expect(selected).toHaveBeenCalledOnce())
-      if (end === 'workspace') {
-        workspaceIdentity = 'replacement'
-      }
       if (end === 'retirement') {
         c.store.expireAgent('claude')
       }

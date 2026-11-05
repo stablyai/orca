@@ -35,7 +35,12 @@ import {
 } from './agent-model-catalog-store'
 
 const HOME = { variable: 'CODEX_HOME', path: '/account' }
-const FOLDERS: Record<string, string> = { a: '/project-a', b: '/project-b', r: '/restricted' }
+const FOLDERS: Record<string, string> = {
+  a: '/project-a',
+  b: '/project-b',
+  e: '/project-effort',
+  r: '/restricted'
+}
 
 const listing = (ids: string[], model?: string): AgentModelCatalogSuccess => ({
   origin: 'probe',
@@ -73,16 +78,25 @@ function harness(
   const runs: string[] = []
   const scopeGate = Promise.withResolvers<void>()
   let holdScope = false
-  const resolveScope: NonNullable<AgentModelCatalogProbe['resolve']> = async (_home, cwd) => {
+  const resolveScope: NonNullable<AgentModelCatalogProbe['resolve']> = async (
+    _home,
+    cwd,
+    _lookup,
+    _operation,
+    launchDirectory
+  ) => {
     if (holdScope) {
       await scopeGate.promise
     }
+    // A project-local install resolves another CLI; every other folder shares the account's.
+    const local = launchDirectory === '/restricted'
     return {
-      identity: { command: agent, cwd },
+      identity: { command: local ? `./node_modules/.bin/${agent}` : agent, cwd },
       run: async () => {
-        runs.push(cwd)
-        await gates.get(cwd)?.promise
-        return byFolder[cwd]
+        const listed = local ? '/restricted' : cwd
+        runs.push(listed)
+        await gates.get(listed)?.promise
+        return byFolder[listed]
       }
     }
   }
@@ -139,38 +153,31 @@ function harness(
 const ids = (result: Awaited<ReturnType<ReturnType<typeof harness>['read']>>) =>
   result.origin === 'unknown' ? null : result.models.map((model) => model.id)
 
-describe('account model list for folders not yet listed', () => {
-  it('shows the account list at once in a new folder, then the folder’s own listing', async () => {
-    const h = harness()
+describe('one account listing for every folder', () => {
+  it('lists once for the account; a project whose settings may pick the model names no default', async () => {
+    const h = harness('codex', {
+      workspaceMayOverrideDefaultModel: async ({ workspacePath }) => workspacePath === '/project-a'
+    })
     await h.service.read({ agent: 'codex', waitForListing: true })
-    await vi.waitFor(() => expect(h.runs).toEqual([homedir()]))
-    const release = h.hold('/project-a')
-    void h.service.demand({ agent: 'codex', sessionId: 'a' })
-    const first = await h.read('a')
-    expect(ids(first)).toEqual(h.full)
-    // The account list stands in for the folder's; it names no default as the folder's own.
-    expect(first).toMatchObject({ listingInProgress: true })
-    expect(first.origin !== 'unknown' && first.models.some((model) => model.isDefault)).toBe(false)
-    release()
-    const settled = await h.read('a', { waitForListing: true })
-    expect(ids(settled)).toEqual(h.full)
-    expect(settled).not.toHaveProperty('listingInProgress')
-    expect(settled.origin !== 'unknown' && settled.models.find((m) => m.isDefault)?.id).toBe(
-      'gpt-b'
-    )
-    h.service.stop()
+    const project = await h.read('a', { waitForListing: true })
+    const plain = await h.read('b', { waitForListing: true })
+    expect(ids(project)).toEqual(h.full)
+    expect(ids(plain)).toEqual(h.full)
+    expect(project.origin !== 'unknown' && project.models.some((m) => m.isDefault)).toBe(false)
+    expect(plain.origin !== 'unknown' && plain.models.find((m) => m.isDefault)?.id).toBe('gpt-a')
+    expect(h.runs).toEqual([homedir()])
   })
 
-  it('never seeds other folders from a folder’s own listing', async () => {
+  it('lists a folder whose CLI resolves elsewhere on its own and never seeds other folders from it', async () => {
     const h = harness()
     await h.read('r', { waitForListing: true })
     expect(h.runs).toEqual(['/restricted'])
-    const release = h.hold('/project-b')
+    expect(ids(await h.read('r'))).toEqual(['local-only'])
+    const release = h.hold(homedir())
     void h.service.demand({ agent: 'codex', sessionId: 'b' })
     expect(ids(await h.read('b'))).toBeNull()
-    await h.service.read({ agent: 'codex', waitForListing: true })
-    await vi.waitFor(async () => expect(ids(await h.read('b'))).toEqual(h.full))
     release()
+    await vi.waitFor(async () => expect(ids(await h.read('b'))).toEqual(h.full))
     h.service.stop()
   })
 })
@@ -614,8 +621,12 @@ for (const agent of ['claude', 'codex'] as const) {
       await store.flushPersistence()
     })
 
-    it('keeps configured effort local through the shared displayed view and preserves an unlisted pick', async () => {
-      const h = harness(agent)
+    it('withholds the account’s configured model and effort where project settings may pick them, and preserves an unlisted pick', async () => {
+      const h = harness(agent, {
+        // '/project-a' may pick the model; '/project-effort' only the effort.
+        workspaceMayOverrideDefaultModel: async ({ workspacePath, modelOnly }) =>
+          workspacePath === '/project-a' || (workspacePath === '/project-effort' && !modelOnly)
+      })
       const efforts = ['low', 'medium', 'high'].map((value) => ({ value, label: value }))
       const raw = [
         {
@@ -627,29 +638,35 @@ for (const agent of ['claude', 'codex'] as const) {
           declaredDefaultEffort: 'medium'
         }
       ]
-      const configured = (effort: string): AgentModelCatalogSuccess => ({
+      h.byFolder[homedir()] = {
         origin: 'probe',
         complete: true,
-        configured: { model: h.full[0], effort },
+        configured: { model: h.full[0], effort: 'high' },
         // Codex folds configured defaults into rows before the catalog service sees them.
-        models: applyCodexConfiguredLaunchDefaults(raw, { model: h.full[0], effort })
-      })
-      h.byFolder[homedir()] = configured('high')
-      h.byFolder['/project-a'] = configured('low')
-      await h.service.read({ agent, waitForListing: true })
-      const release = h.hold('/project-a')
-      const demand = h.service.demand({ agent, sessionId: 'a' })
-      const fallback = await h.read('a')
-      expect(fallback).toMatchObject({
-        models: [{ isDefault: false }],
-        listingNamesConfiguredModel: false,
-        listingInProgress: true
-      })
-      if (fallback.origin === 'unknown') {
-        throw new Error('missing fallback')
+        models: applyCodexConfiguredLaunchDefaults(raw, { model: h.full[0], effort: 'high' })
       }
-      expect(fallback.models[0]).not.toHaveProperty('defaultEffort')
-      expect(fallback.models[0]).not.toHaveProperty('declaredDefaultEffort')
+      await h.service.read({ agent, waitForListing: true })
+      const row = (result: AgentSessionModelCatalogResult) =>
+        result.origin === 'unknown' ? null : result.models[0]
+      const expectDefaults = (result: AgentSessionModelCatalogResult, model: boolean) => {
+        expect(row(result)).toMatchObject({ isDefault: model })
+        expect(row(result)).not.toHaveProperty('defaultEffort')
+        expect(row(result)).not.toHaveProperty('declaredDefaultEffort')
+      }
+      const project = await h.read('a', { waitForListing: true })
+      expectDefaults(project, false)
+      expect(project).toMatchObject({ listingNamesConfiguredModel: false })
+      expect(row(await h.read('b', { waitForListing: true }))).toMatchObject({
+        isDefault: true,
+        defaultEffort: 'high'
+      })
+      expectDefaults(await h.read('e', { waitForListing: true }), true)
+      // A named workspace this host cannot inspect (remote, WSL, ambiguous) may pick its own too,
+      // for older clients as well.
+      for (const legacy of [false, true]) {
+        const read = { agent, workspacePath: null, legacy, waitForListing: true }
+        expectDefaults(await h.service.read(read), false)
+      }
       const seed = getAgentSessionOptionCatalog(agent)
       if (!seed) {
         throw new Error(`missing option catalog for ${agent}`)
@@ -664,39 +681,21 @@ for (const agent of ['claude', 'codex'] as const) {
           newLaunch: true,
           coherentCatalog: true
         })
-      const provisional = apply(initial, fallback)
-      expect(provisional.verifiedModelIds).toBeUndefined()
+      const shown = apply(initial, project)
       expect(
-        structuredAgentSessionShownSnapshot(provisional).find((row) => row.id === 'effort')
+        structuredAgentSessionShownSnapshot(shown).find((row) => row.id === 'effort')
       ).not.toMatchObject({ kind: { currentValue: 'high' }, valueSource: 'default' })
-      const picked = commitStructuredAgentSessionOptionValues(
-        { ...provisional, record: cloneStructuredAgentSessionOptionRecord(provisional.record) },
-        {
-          model: 'retired-custom',
-          effort: 'high'
-        }
+      const picked = apply(
+        commitStructuredAgentSessionOptionValues(
+          { ...shown, record: cloneStructuredAgentSessionOptionRecord(shown.record) },
+          { model: 'retired-custom', effort: 'high' }
+        ),
+        project
       )
-      const pickedFallback = apply(picked, fallback)
-      expect(pickedFallback.record.values.model).toEqual({
-        value: 'retired-custom',
-        source: 'dispatched'
-      })
-      expect(pickedFallback.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
-      release()
-      await demand
-      const folder = await h.read('a')
-      const authoritative = apply(provisional, folder)
-      expect(authoritative.verifiedModelIds).toEqual([h.full[0]])
-      expect(
-        structuredAgentSessionShownSnapshot(authoritative).find((row) => row.id === 'effort')
-      ).toMatchObject({ kind: { currentValue: 'low' }, valueSource: 'default' })
-      const after = apply(pickedFallback, folder)
-      expect(after.catalog?.models.map((model) => model.id)).toEqual([h.full[0]])
-      expect(after.record.values.model).toEqual({ value: 'retired-custom', source: 'dispatched' })
-      expect(after.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
-      expect(
-        structuredAgentSessionShownSnapshot(after).find((row) => row.id === 'model')
-      ).toMatchObject({ kind: { currentValue: 'retired-custom' } })
+      expect(picked.catalog?.models.map((model) => model.id)).toEqual([h.full[0]])
+      expect(picked.record.values.model).toEqual({ value: 'retired-custom', source: 'dispatched' })
+      expect(picked.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
+      expect(h.runs).toEqual([homedir()])
     })
   })
 }

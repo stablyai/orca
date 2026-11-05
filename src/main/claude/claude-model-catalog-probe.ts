@@ -23,6 +23,7 @@ import { readClaudeControlResponses } from './claude-control-responses'
 import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import { envWithPathRelativeTo } from '../../shared/node-cli-command-resolution'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
@@ -114,7 +115,8 @@ export function createClaudeModelCatalogProbe(
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
     lookup: AgentModelCatalogLookup = 'recover',
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    launchDirectory = cwd
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const configuredArgs = claudeStructuredLaunchArgs(
@@ -138,7 +140,7 @@ export function createClaudeModelCatalogProbe(
       operation,
       ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
-      ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
+      ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)
     assertStructuredAgentResolutionCurrent(operation)
@@ -178,7 +180,8 @@ export function createClaudeModelCatalogProbe(
               },
               {
                 site: 'claude-model-catalog-probe',
-                inheritedEnv: env,
+                // The listing runs from the account folder; relative PATH entries still mean the chat's.
+                inheritedEnv: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
                 signal,
                 partialOutput: {
                   timeoutMs: 2_000,

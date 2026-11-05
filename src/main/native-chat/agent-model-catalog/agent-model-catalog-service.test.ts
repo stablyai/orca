@@ -423,7 +423,21 @@ it.each(['cold', 'warm'] as const)(
       getRecord: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
-      probes: { codex: run }
+      // Each folder resolves its own CLI (a project-local install), so each lists separately.
+      probes: {
+        codex: Object.assign(run, {
+          resolve: async (
+            home: AgentSessionAccountHome,
+            _cwd: string,
+            _lookup?: unknown,
+            _operation?: unknown,
+            launchDirectory?: string
+          ) => ({
+            identity: launchDirectory,
+            run: (signal?: AbortSignal) => run(home, { signal, workspacePath: launchDirectory })
+          })
+        })
+      }
     })
     const read = (path: string, waitForListing = false) =>
       waitForListing

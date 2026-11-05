@@ -8,6 +8,7 @@ import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/r
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
+import { withoutDefaultEfforts } from './agent-model-catalog-account-list'
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
@@ -30,6 +31,8 @@ export type AgentModelCatalogBinding = {
   cwd?: string
   workspacePath?: string | null
   keepDefault: boolean
+  /** Whether the account's configured effort holds here; absent, as `keepDefault`. */
+  keepEffort?: boolean
   projecting?: Promise<void>
 }
 
@@ -76,7 +79,6 @@ export function agentModelCatalogRequestKey(
   const record = agentModelCatalogScopedRecord(deps, params)
   const inWorkspace =
     record &&
-    !params.workspace &&
     params.workspacePath === undefined &&
     (params.inSessionWorkspace ||
       deps.listsInChatFolder?.has(params.agent) ||
@@ -93,7 +95,6 @@ export function agentModelCatalogRequestKey(
       deps.drivesRecord(record)
     ],
     released: agentModelCatalogReleasedOwner(record),
-    selector: params.workspace?.selector,
     workspacePath: params.workspacePath,
     inSessionWorkspace:
       inWorkspace && record ? [record.location.workspaceId, record.launchDirectory] : undefined,
@@ -107,7 +108,6 @@ export function agentModelCatalogScopeIdentity(
 ): string {
   return JSON.stringify([
     deps.store.retirementRevision(params.agent),
-    params.workspace?.identity(),
     agentModelCatalogRequestKey(deps, params)
   ])
 }
@@ -130,9 +130,8 @@ export function agentModelCatalogMemoryBinding(
     return
   }
   // Pinned native account and cwd can reuse a scope another caller already proved.
-  const cwd = params.workspace
-    ? undefined
-    : params.workspacePath === undefined
+  const cwd =
+    params.workspacePath === undefined
       ? agentSessionPinnedLaunchDirectory(record)
       : params.workspacePath
   if (cwd && record.location.executionHostId === 'local' && record.location.wslDistro === null) {
@@ -140,7 +139,7 @@ export function agentModelCatalogMemoryBinding(
       if (
         bound.params.agent === params.agent &&
         !!bound.params.legacy === !!params.legacy &&
-        (bound.cwd ?? bound.folder ?? bound.workspacePath) === cwd &&
+        (bound.workspacePath ?? bound.folder ?? bound.cwd) === cwd &&
         (!bound.params.sessionId ||
           deps.getConversation(bound.params.sessionId)?.location.executionHostId === 'local') &&
         bound.base === agentModelCatalogFingerprintForRecord(record, bound.folder) &&
@@ -153,7 +152,6 @@ export function agentModelCatalogMemoryBinding(
   }
   if (
     deps.listsInChatFolder?.has(params.agent) ||
-    params.workspace ||
     (params.workspacePath !== null &&
       (independentAgentModelCatalog(params.agent) ||
         (deps.agentReadsProjectModelConfig?.(params.agent) === true && !params.legacy)))
@@ -216,7 +214,10 @@ export function projectAgentModelCatalogSnapshot(
   const display =
     listed ?? (bound.exact && !params.verifiedOnly ? deps.store.observation(bound.base) : null)
   const verified = bound.exact && listed !== null && deps.store.verified(listed)
-  const result = display
+  // One listing serves every folder on the account; where project settings may pick the effort,
+  // the account's configured effort is not shown (the model default follows `keepDefault`).
+  const projectDecides = independent && !(bound.keepEffort ?? bound.keepDefault)
+  const listing = display
     ? agentModelCatalogResultFromEntry(
         display,
         independent &&
@@ -224,11 +225,15 @@ export function projectAgentModelCatalogSnapshot(
           // The account's list stands in for this folder's; it names no default here.
           (display !== listed || !deps.store.verified(display) || (!bound.exact && !params.legacy))
           ? false
-          : verified || bound.keepDefault,
+          : bound.keepDefault || (!independent && verified),
         deps.listingNamesConfiguredModel?.has(params.agent) === true,
         !independent || verified
       )
     : null
+  const result =
+    listing && projectDecides
+      ? { ...listing, models: withoutDefaultEfforts(listing.models) }
+      : listing
   return {
     ...(result ?? { origin: 'unknown' }),
     ...(result?.listingNamesConfiguredModel &&

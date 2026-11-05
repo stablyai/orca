@@ -65,7 +65,7 @@ describe('options at rest', () => {
     }
   })
 
-  it('keeps the account model for an older client when the starting child has no folder default', async () => {
+  it('names no model for an older client when the chat’s project settings pick it', async () => {
     const record = restingRecord()
     const read = vi.fn(async (params: { inSessionWorkspace?: true }) => ({
       origin: 'probe' as const,
@@ -109,21 +109,11 @@ describe('options at rest', () => {
     const older = await readStructuredAgentSessionOptions(context, SESSION, {
       readsWithoutModel: false
     })
-    expect(older.current).toEqual({
-      acceptedInputSources: {},
-      model: 'gpt-account',
-      defaulted: ['model'],
-      permissionMode: 'ask'
-    })
-    expect(read).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'codex',
-        sessionId: SESSION,
-        savedOnly: true,
-        legacyOptionsDisplay: true,
-        workspacePath: null
-      })
-    )
+    // The account's listing already answered for this folder and names none: the account's default
+    // would be the wrong model, so the older client shows the model as not reported.
+    expect(older.current).toMatchObject({ defaulted: [], permissionMode: 'ask' })
+    expect(older.current.model).toBeUndefined()
+    expect(read).not.toHaveBeenCalledWith(expect.objectContaining({ workspacePath: null }))
   })
 
   it('keeps a saved Codex model when the host listing drops it', async () => {

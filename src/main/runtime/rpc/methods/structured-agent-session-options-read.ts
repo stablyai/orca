@@ -104,12 +104,8 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
             : worktree === undefined
               ? {}
               : {
-                  workspace: {
-                    selector: worktree,
-                    identity: () =>
-                      ctx.runtime.structuredAgentSessionCatalogWorkspaceIdentity(worktree),
-                    resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
-                  }
+                  workspacePath:
+                    await ctx.runtime.resolveStructuredAgentCatalogWorkspacePath(worktree)
                 })
         }
         if (host) {

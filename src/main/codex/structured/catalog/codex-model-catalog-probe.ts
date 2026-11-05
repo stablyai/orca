@@ -3,6 +3,7 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
+import { envWithPathRelativeTo } from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
@@ -51,7 +52,8 @@ export function createCodexModelCatalogProbe(
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
     lookup: AgentModelCatalogLookup = 'recover',
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    launchDirectory = cwd
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
@@ -63,7 +65,7 @@ export function createCodexModelCatalogProbe(
       operation,
       resolveEnvironment: async () => ({ ...(await readEnvironment?.()), ...overlay }),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
-      ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
+      ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     })
     assertStructuredAgentResolutionCurrent(operation)
     const args = [
@@ -72,7 +74,13 @@ export function createCodexModelCatalogProbe(
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
     ]
     assertStructuredAgentResolutionCurrent(operation)
-    const env = { ...definedEnv(environment), CODEX_HOME: accountHomePath }
+    // The listing runs from the account folder; relative PATH entries still mean the chat's folder.
+    const env = {
+      ...(launchDirectory
+        ? envWithPathRelativeTo(definedEnv(environment), launchDirectory)
+        : definedEnv(environment)),
+      CODEX_HOME: accountHomePath
+    }
     return {
       identity: { command, args, cwd, overlay: Object.entries(overlay).sort() },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {

@@ -26,6 +26,8 @@ const CLAUDE_MODEL_SETTINGS = [
   'modelOverrides'
 ] as const
 
+const CLAUDE_EFFORT_SETTINGS: readonly string[] = ['effortLevel', 'maxEffortLevel']
+
 function isClaudeModelEnvKey(key: string): boolean {
   return (
     key === 'ANTHROPIC_MODEL' ||
@@ -37,8 +39,8 @@ function isClaudeModelEnvKey(key: string): boolean {
   )
 }
 
-/** Treat malformed settings as possible model overrides. */
-export function claudeSettingsMayPickModel(text: string): boolean {
+/** Treat malformed settings as possible model overrides; `modelOnly` ignores effort-only keys. */
+export function claudeSettingsMayPickModel(text: string, modelOnly = false): boolean {
   let settings: Record<string, unknown> | null
   try {
     settings = record(JSON.parse(text))
@@ -48,24 +50,36 @@ export function claudeSettingsMayPickModel(text: string): boolean {
   if (!settings) {
     return true
   }
-  if (setsAny(settings, CLAUDE_MODEL_SETTINGS)) {
+  const keys = modelOnly
+    ? CLAUDE_MODEL_SETTINGS.filter((key) => !CLAUDE_EFFORT_SETTINGS.includes(key))
+    : CLAUDE_MODEL_SETTINGS
+  if (setsAny(settings, keys)) {
     return true
   }
   const env = record(settings.env)
-  return env !== null && Object.keys(env).some(isClaudeModelEnvKey)
+  return (
+    env !== null &&
+    Object.keys(env).some(
+      (key) => isClaudeModelEnvKey(key) && !(modelOnly && key === 'CLAUDE_CODE_EFFORT_LEVEL')
+    )
+  )
 }
 
 const CODEX_MODEL_KEYS = ['model', 'model_reasoning_effort', 'model_provider'] as const
 
-/** Treat malformed TOML and profile-based picks as possible model overrides. */
-export function codexConfigMayPickModel(text: string): boolean {
+/** Treat malformed TOML and profile-based picks as possible model overrides; `modelOnly` ignores
+ *  effort-only keys. */
+export function codexConfigMayPickModel(text: string, modelOnly = false): boolean {
   let config: Record<string, unknown>
   try {
     config = parseToml(text)
   } catch {
     return true
   }
-  if (setsAny(config, CODEX_MODEL_KEYS) || config.profile !== undefined) {
+  const keys = modelOnly
+    ? CODEX_MODEL_KEYS.filter((key) => key !== 'model_reasoning_effort')
+    : CODEX_MODEL_KEYS
+  if (setsAny(config, keys) || config.profile !== undefined) {
     return true
   }
   const profiles = record(config.profiles)
@@ -73,7 +87,7 @@ export function codexConfigMayPickModel(text: string): boolean {
     profiles !== null &&
     Object.values(profiles).some((profile) => {
       const table = record(profile)
-      return table === null || setsAny(table, CODEX_MODEL_KEYS)
+      return table === null || setsAny(table, keys)
     })
   )
 }

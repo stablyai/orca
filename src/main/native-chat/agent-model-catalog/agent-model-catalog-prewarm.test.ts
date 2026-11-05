@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { resolveAgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -521,7 +522,8 @@ describe('one account, one catalog key', () => {
         HOME('CLAUDE_CONFIG_DIR', router.accountHome('b')),
         expect.objectContaining({
           signal: expect.any(AbortSignal),
-          workspacePath: root,
+          // The account's listing runs from its own folder, whichever workspace asked.
+          workspacePath: homedir(),
           operation: expect.objectContaining({
             current: expect.any(Function),
             deadline: expect.any(Number),

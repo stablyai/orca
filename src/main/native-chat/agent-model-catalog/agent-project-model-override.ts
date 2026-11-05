@@ -46,7 +46,7 @@ async function projectConfigDirectories(cwd: string): Promise<string[]> {
 
 type ProjectModelFile = {
   path: string
-  mayPickModel: (text: string) => boolean
+  mayPickModel: (text: string, modelOnly?: boolean) => boolean
 }
 
 type ProjectModelLayers = {
@@ -59,7 +59,7 @@ type ProjectModelLayers = {
 
 const files = (
   paths: readonly string[],
-  mayPickModel: (text: string) => boolean
+  mayPickModel: ProjectModelFile['mayPickModel']
 ): ProjectModelFile[] => paths.map((path) => ({ path, mayPickModel }))
 
 // OpenCode 2.x reads every ancestor, including above the nearest .git root.
@@ -120,7 +120,8 @@ function isMissing(error: unknown): boolean {
 /** Unreadable files may override defaults; absent files cannot. */
 async function fileMayPickModel(
   path: string,
-  mayPickModel: (text: string) => boolean
+  mayPickModel: ProjectModelFile['mayPickModel'],
+  modelOnly = false
 ): Promise<boolean> {
   let text: string
   try {
@@ -128,7 +129,7 @@ async function fileMayPickModel(
   } catch (error) {
     return !isMissing(error)
   }
-  return mayPickModel(text)
+  return mayPickModel(text, modelOnly)
 }
 
 // Bound reads; catalogs over the cap remain conservatively capable of overriding defaults.
@@ -166,13 +167,14 @@ async function codeFolderMayPickModel(folder: string): Promise<boolean> {
 async function directoryMayOverride(
   dir: string,
   layers: ProjectModelLayers,
-  accountHomePath: string | null
+  accountHomePath: string | null,
+  modelOnly: boolean
 ): Promise<boolean> {
   const home = accountHomePath === null ? null : resolve(accountHomePath)
   const found = await Promise.all([
     ...layers.files
       .filter((file) => dirname(join(dir, file.path)) !== home)
-      .map((file) => fileMayPickModel(join(dir, file.path), file.mayPickModel)),
+      .map((file) => fileMayPickModel(join(dir, file.path), file.mayPickModel, modelOnly)),
     ...(layers.agentFolders ?? []).map((folder) =>
       agentFolderMayPickModel(join(dir, folder.path), folder.recursive)
     ),
@@ -198,10 +200,12 @@ export function agentReadsProjectModelConfig(agent: string): boolean {
   return agent !== 'grok'
 }
 
+/** `modelOnly` asks whether the project may pick the model itself, ignoring effort-only settings. */
 export async function workspaceMayOverrideDefaultModel(input: {
   agent: string
   workspacePath: string
   accountHomePath: string | null
+  modelOnly?: boolean
 }): Promise<boolean> {
   if (!agentReadsProjectModelConfig(input.agent)) {
     return false
@@ -215,7 +219,9 @@ export async function workspaceMayOverrideDefaultModel(input: {
     ? ancestry(input.workspacePath)
     : await projectConfigDirectories(input.workspacePath)
   const results = await Promise.all(
-    dirs.map((dir) => directoryMayOverride(dir, layers, input.accountHomePath))
+    dirs.map((dir) =>
+      directoryMayOverride(dir, layers, input.accountHomePath, input.modelOnly === true)
+    )
   )
   return results.some(Boolean)
 }

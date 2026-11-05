@@ -59,9 +59,7 @@ export function createAgentModelCatalogLookup(
     }
     const bindingKey = requestKey(params)
     const key = params.savedOnly ? `${bindingKey}:saved` : bindingKey
-    let identity = capture(params)
-    const workspaceIdentity = operation.workspaceIdentity
-    let coldWorkspace = params.workspace !== undefined && workspaceIdentity === null
+    const identity = capture(params)
     const retirement = operation.retirement
     const previous = claims.get(key)
     const selectedModel = usesModelSpecificAcpEfforts(params.agent)
@@ -90,7 +88,7 @@ export function createAgentModelCatalogLookup(
       operation.current() &&
       deps.store.retirementRevision(params.agent) === retirement &&
       requestKey(params) === bindingKey &&
-      (coldWorkspace || capture(params) === identity)
+      capture(params) === identity
     const current = (): boolean => valid() && claims.get(key)?.controller === controller
     const run = async (): Promise<void> => {
       if (!current()) {
@@ -102,43 +100,17 @@ export function createAgentModelCatalogLookup(
       }
       const { record, scoped } = records
       const savedOnly = params.savedOnly || records.savedOnly
-      let workspacePath: string | null | undefined
-      if (params.workspace) {
-        const resolved = await params.workspace.resolve().catch(() => undefined)
-        if (!current() || resolved === undefined) {
-          return
-        }
-        if (resolved !== null && typeof resolved === 'object') {
-          if (
-            resolved.identity === null ||
-            params.workspace.identity() !== resolved.identity ||
-            (!coldWorkspace && workspaceIdentity !== resolved.identity)
-          ) {
-            return
-          }
-          identity = capture(params)
-          const claim = claims.get(key)
-          if (claim?.controller !== controller) {
-            return
-          }
-          claim.identity = identity
-          workspacePath = resolved.path
-        } else {
-          workspacePath = resolved
-        }
-        coldWorkspace = false
-      } else {
-        workspacePath =
-          params.inSessionWorkspace ||
-          (record &&
-            params.workspacePath === undefined &&
-            !params.legacy &&
-            deps.agentReadsProjectModelConfig?.(params.agent) === true)
-            ? record
-              ? await sessionWorkspacePath(deps, record)
-              : null
-            : params.workspacePath
-      }
+      const workspacePath =
+        params.inSessionWorkspace ||
+        (record &&
+          params.workspacePath === undefined &&
+          !params.legacy &&
+          (independentAgentModelCatalog(params.agent) ||
+            deps.agentReadsProjectModelConfig?.(params.agent) === true))
+          ? record
+            ? await sessionWorkspacePath(deps, record)
+            : null
+          : params.workspacePath
       if (!current()) {
         return
       }
@@ -171,9 +143,9 @@ export function createAgentModelCatalogLookup(
         exact: false,
         folder,
         workspacePath,
-        keepDefault:
-          workspacePath === undefined ||
-          (workspacePath === null && independentAgentModelCatalog(params.agent))
+        // A workspace that was named but cannot be inspected here may pick its own model.
+        keepDefault: workspacePath === undefined,
+        keepEffort: workspacePath === undefined
       }
       // Prewarm proves the selected account before command/folder resolution can finish.
       if (

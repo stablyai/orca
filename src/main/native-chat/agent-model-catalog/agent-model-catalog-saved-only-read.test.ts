@@ -250,37 +250,6 @@ describe('a saved-only catalog read', () => {
   })
 })
 
-it('returns a snapshot before a cold worktree selector resolves', async () => {
-  const folder = Promise.withResolvers<string | null>()
-  const account = vi.fn(async () => HOME)
-  const service = createAgentModelCatalogService({
-    store: new AgentModelCatalogStore(),
-    getConversation: () => undefined,
-    getRecord: () => undefined,
-    drivesRecord: () => true,
-    resolveAccountHome: account
-  })
-  const request = {
-    agent: 'grok',
-    workspace: {
-      selector: 'folder',
-      identity: () => 1,
-      resolve: () => folder.promise
-    }
-  }
-  try {
-    expect(await service.read(request)).toEqual({ origin: 'unknown' })
-    expect(account).not.toHaveBeenCalled()
-    void service.demand(request)
-    expect(await service.read(request)).toEqual({ origin: 'unknown', listingInProgress: true })
-    expect(await service.read({ ...request, savedOnly: true })).toEqual({ origin: 'unknown' })
-    expect(account).not.toHaveBeenCalled()
-  } finally {
-    service.stop()
-    folder.resolve(null)
-  }
-})
-
 it('observes a bound scope immediately while another account and default writer are unresolved', async () => {
   const home = Promise.withResolvers<AgentSessionAccountHome>()
   const defaults = Promise.withResolvers<boolean>()
@@ -363,45 +332,6 @@ it.each(['success', 'failure'] as const)(
     }
   }
 )
-
-it('starts a new listing instead of joining a retired workspace invocation', async () => {
-  const stale = Promise.withResolvers<AgentModelCatalogSuccess>()
-  let revision = 0
-  const probe = vi.fn().mockReturnValueOnce(stale.promise).mockResolvedValue(listing('current'))
-  const store = new AgentModelCatalogStore()
-  const service = createAgentModelCatalogService({
-    store,
-    getConversation: () => undefined,
-    getRecord: () => undefined,
-    drivesRecord: () => true,
-    resolveAccountHome: async () => HOME,
-    probes: { grok: probe }
-  })
-  const request = {
-    agent: 'grok',
-    workspace: {
-      selector: 'folder',
-      identity: () => revision,
-      resolve: async () => '/folder'
-    }
-  }
-  try {
-    const first = service.demand(request)
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-    revision += 2
-    expect(service.snapshot({ ...request, savedOnly: true })).toEqual({ origin: 'unknown' })
-    await service.demand(request)
-    expect(probe).toHaveBeenCalledTimes(2)
-    stale.resolve(listing('retired'))
-    await first
-    expect(service.snapshot({ ...request, savedOnly: true })).toMatchObject({
-      models: [{ id: 'current' }]
-    })
-  } finally {
-    stale.resolve(listing('retired'))
-    service.stop()
-  }
-})
 
 it('keeps a readable retired conversation warm without listing or committing its delayed live report', async () => {
   const pinned = {

@@ -2,7 +2,7 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -202,9 +202,9 @@ function host(agent: string, record: AgentSessionRecord) {
     drivesRecord: () => true,
     resolveAccountHome: async (name) => HOMES[name]!,
     probes: {
-      codex: async (_home, options) => {
-        const project = existsSync(join(options?.workspacePath ?? '', '.codex/config.toml'))
-        const effort = project ? 'high' : 'medium'
+      // The listing runs from the account's folder, so it reports the account's config only.
+      codex: async () => {
+        const effort = 'medium'
         return {
           models: CODEX_LISTING.map((row) =>
             row.isDefault ? { ...row, defaultEffort: effort } : row

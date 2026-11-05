@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
@@ -72,7 +73,7 @@ describe('agentSession.modelCatalog', () => {
     )
   })
 
-  it('lists the local desktop catalog under its pinned account, folder and launch arguments', async () => {
+  it('lists the local desktop catalog under its pinned account and launch arguments, from the account folder', async () => {
     record = {
       ...agentSessionRecordFixture(),
       provider: 'codex',
@@ -84,7 +85,7 @@ describe('agentSession.modelCatalog', () => {
       listed(invocation)
       expect(invocation).toMatchObject({
         command: '/installed/codex',
-        cwd: '/repo/work',
+        cwd: homedir(),
         env: { CODEX_HOME: '/account/work' }
       })
       expect(invocation.args).toEqual(expect.arrayContaining(['-c', 'model_provider="work"']))
@@ -155,14 +156,14 @@ describe('agentSession.modelCatalog', () => {
       launchDirectory: '/home/me/floating-a'
     }
     // The floating setting has since moved to another folder.
-    const resolveStructuredAgentSessionLocalWorkspacePath = vi.fn(async () => '/home/me/floating-b')
+    const resolveStructuredAgentCatalogWorkspacePath = vi.fn(async () => '/home/me/floating-b')
     await call(
       'agentSession.modelCatalog',
       { agent: 'codex', sessionId: SESSION, worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}` },
       STRUCTURED_CLIENT,
-      { resolveStructuredAgentSessionLocalWorkspacePath }
+      { resolveStructuredAgentCatalogWorkspacePath }
     )
-    expect(resolveStructuredAgentSessionLocalWorkspacePath).not.toHaveBeenCalled()
+    expect(resolveStructuredAgentCatalogWorkspacePath).not.toHaveBeenCalled()
     expect(read).toHaveBeenCalledWith({
       agent: 'codex',
       sessionId: SESSION,
@@ -171,18 +172,18 @@ describe('agentSession.modelCatalog', () => {
   })
 
   it('reads the catalog for the directory the named worktree runs in on this host', async () => {
-    const resolveStructuredAgentSessionLocalWorkspacePath = vi.fn(async () => '/repo/wt')
+    const resolveStructuredAgentCatalogWorkspacePath = vi.fn(async () => '/repo/wt')
     await call(
       'agentSession.modelCatalog',
       { agent: 'codex', sessionId: SESSION, worktree: 'id:wt-1' },
       STRUCTURED_CLIENT,
-      { resolveStructuredAgentSessionLocalWorkspacePath }
+      { resolveStructuredAgentCatalogWorkspacePath }
     )
-    expect(resolveStructuredAgentSessionLocalWorkspacePath).not.toHaveBeenCalled()
+    expect(resolveStructuredAgentCatalogWorkspacePath).toHaveBeenCalledExactlyOnceWith('id:wt-1')
     expect(read).toHaveBeenCalledWith({
       agent: 'codex',
       sessionId: SESSION,
-      workspace: expect.objectContaining({ selector: 'id:wt-1', resolve: expect.any(Function) })
+      workspacePath: '/repo/wt'
     })
   })
 
@@ -191,16 +192,9 @@ describe('agentSession.modelCatalog', () => {
       'agentSession.modelCatalog',
       { agent: 'codex', worktree: 'id:missing' },
       STRUCTURED_CLIENT,
-      {
-        resolveStructuredAgentSessionLocalWorkspacePath: vi.fn(async () => {
-          throw new Error('selector_not_found')
-        })
-      }
+      { resolveStructuredAgentCatalogWorkspacePath: vi.fn(async () => null) }
     )
-    expect(read).toHaveBeenCalledWith({
-      agent: 'codex',
-      workspace: expect.objectContaining({ selector: 'id:missing', resolve: expect.any(Function) })
-    })
+    expect(read).toHaveBeenCalledWith({ agent: 'codex', workspacePath: null })
   })
 
   it('reads as before when no worktree is named', async () => {
@@ -226,7 +220,7 @@ describe('agentSession.modelCatalog', () => {
     const pinned = { ...agentSessionRecordFixture(), provider: 'claude' }
     const key = agentModelCatalogScopeFingerprint(
       agentModelCatalogFingerprintForRecord(pinned),
-      '/project',
+      homedir(),
       'saved-launch'
     )
     const seed = new AgentModelCatalogStore()
@@ -409,7 +403,7 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
     })
     // A new chat's read, which seeds the next new chat's list, and the account's name only the CLI's.
     const newChat = { ...forChat, worktree: 'id:wt-1' }
-    const runtime = { resolveStructuredAgentSessionLocalWorkspacePath: async () => '/repo' }
+    const runtime = { resolveStructuredAgentCatalogWorkspacePath: async () => '/repo' }
     for (const reply of [
       await call('agentSession.modelCatalog', newChat, STRUCTURED_CLIENT, runtime),
       await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)

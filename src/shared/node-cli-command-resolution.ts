@@ -44,6 +44,15 @@ export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): str
     .join(delimiter)
 }
 
+/** The environment for a child that runs elsewhere but must find what it would from `cwd`. */
+export function envWithPathRelativeTo<T extends Record<string, string | undefined>>(
+  env: T,
+  cwd: string
+): T {
+  const key = env.PATH !== undefined ? 'PATH' : env.Path !== undefined ? 'Path' : null
+  return key ? { ...env, [key]: pathEnvRelativeTo(env[key], cwd) } : env
+}
+
 function* firstRunnable(
   platform: NodeJS.Platform,
   directories: string[],

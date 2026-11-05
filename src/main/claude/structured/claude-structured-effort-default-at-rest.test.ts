@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -168,10 +169,7 @@ function restingRecord(
 }
 
 function exactKey(record: AgentSessionRecord): string {
-  return agentModelCatalogScopeFingerprint(
-    agentModelCatalogFingerprintForRecord(record),
-    '/work/repo'
-  )
+  return agentModelCatalogScopeFingerprint(agentModelCatalogFingerprintForRecord(record), homedir())
 }
 
 function catalogDefault(store: AgentModelCatalogStore, model: string): string | undefined {

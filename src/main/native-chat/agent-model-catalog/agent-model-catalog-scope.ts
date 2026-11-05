@@ -68,10 +68,14 @@ export async function resolveAgentModelCatalogScope(
   if (!cwd) {
     return { base, fingerprint: base, exact: false }
   }
+  // The list belongs to the account and the CLI a chat here would launch, not to this folder:
+  // resolve the executable where the chat runs, but list from the account's own folder so every
+  // workspace sharing that invocation shares one listing and its account default.
+  const listIn = homedir()
   const resolve = (lookup: AgentModelCatalogLookup) =>
-    probe?.resolve?.(home, cwd, lookup, operation).catch(() => null)
+    probe?.resolve?.(home, listIn, lookup, operation, cwd).catch(() => null)
   const scopeKey = (resolved: AgentModelCatalogResolvedProbe | null | undefined) =>
-    agentModelCatalogScopeFingerprint(base, cwd, resolved?.identity)
+    agentModelCatalogScopeFingerprint(base, listIn, resolved?.identity)
   let resolved = await resolve(savedOnly() ? 'saved' : 'snapshot')
   if (!current()) {
     return null
@@ -89,7 +93,7 @@ export async function resolveAgentModelCatalogScope(
     exact: true,
     // The account's own listing (prewarm names no folder or chat) seeds what unlisted folders show.
     accountListing: !record && params.workspacePath === undefined && !params.legacy,
-    cwd,
+    cwd: listIn,
     ...(resolved ? { resolved } : {})
   }
 }

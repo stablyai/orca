@@ -1,4 +1,7 @@
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionModelOption
+} from '../../../shared/agent-session/agent-session-wire'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
@@ -11,6 +14,15 @@ import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
+
+/** Configured effort may already be folded into rows; only the folder can declare its default. */
+export function withoutDefaultEfforts(
+  models: AgentSessionModelOption[]
+): AgentSessionModelOption[] {
+  return models.map(
+    ({ defaultEffort: _effort, declaredDefaultEffort: _declared, ...model }) => model
+  )
+}
 
 export function seedAccountList(
   deps: AgentModelCatalogServiceDeps,
@@ -25,13 +37,10 @@ export function seedAccountList(
     return
   }
   const listing = entry.discovered
-  // Configured effort may already be folded into rows; only the folder can declare its default.
-  const models = listing.models.map(
-    ({ defaultEffort: _effort, declaredDefaultEffort: _declared, ...model }) => ({
-      ...model,
-      isDefault: false
-    })
-  )
+  const models = withoutDefaultEfforts(listing.models).map((model) => ({
+    ...model,
+    isDefault: false
+  }))
   const discovered = { ...listing, models }
   const previous = deps.store.observation(scope.base)
   if (
