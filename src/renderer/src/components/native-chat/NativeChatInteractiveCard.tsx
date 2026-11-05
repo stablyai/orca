@@ -30,7 +30,7 @@ export function NativeChatInteractiveCard({
   /** Take focus when the card takes the input region from the composer. */
   shouldFocus?: boolean
   /** Paste target while the prompt card replaces the composer. */
-  answerInputRef?: React.RefObject<HTMLInputElement | null>
+  answerInputRef?: React.RefObject<HTMLTextAreaElement | null>
 } & Pick<NativeChatQuestionCardProps, 'onLinkClick'>): React.JSX.Element {
   const { sendAnswer, sendRawVerified, cancelPending, cancelAsk } = send
   // Keep paced multi-step answers visible until delivery settles; block duplicate submissions meanwhile.

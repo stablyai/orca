@@ -45,10 +45,15 @@ it('selects a launched terminal for the caller only, without spawning again', as
   const first = await createPane(runtime)
   const launched = await createPane(runtime)
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
+  const previous = caller.at(-1)!
 
   expect(runtime.selectCreatedMobileSessionTabForClient(WT, launched, 'device-caller')).toBe(true)
 
-  expect(caller.at(-1)?.activeTabId).toBe(launched.id)
+  const selected = caller.at(-1)!
+  expect(selected.activeTabId).toBe(launched.id)
+  // The client fences a frame from another publication or behind its last version.
+  expect(selected.publicationEpoch).toBe(previous.publicationEpoch)
+  expect(selected.snapshotVersion).toBe(previous.snapshotVersion + 1)
   expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')).activeTabId).toBe(
     launched.id
   )
