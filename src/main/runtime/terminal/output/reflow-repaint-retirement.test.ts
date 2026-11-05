@@ -100,27 +100,41 @@ describe('reflow distrust boundaries', () => {
     expect(runtime['readRuledScreen'](PTY_ID)).not.toBeNull()
   })
 
-  it('credits an erase that shares a chunk with a buffer toggle to neither buffer', async () => {
-    // The erase ran on the alternate screen; reading the buffer after the write would say normal.
-    const runtime = reflowed()
-    runtime.onPtyData(PTY_ID, `${ALT_ENTER}${ERASE}${ALT_LEAVE}`, 2)
-    await settle(runtime)
-    expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
-  })
+  it.each([
+    { mode: '47', enter: '\x1b[?47h', leave: '\x1b[?47l' },
+    { mode: '1047', enter: '\x1b[?1047h', leave: '\x1b[?1047l' },
+    { mode: '1049', enter: ALT_ENTER, leave: ALT_LEAVE }
+  ])(
+    'credits an erase that shares a chunk with a mode $mode toggle to neither buffer',
+    async ({ enter, leave }) => {
+      // The erase ran on the alternate screen; reading the buffer after the write would say normal.
+      const runtime = reflowed()
+      runtime.onPtyData(PTY_ID, `${enter}${ERASE}${leave}`, 2)
+      await settle(runtime)
+      expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
+    }
+  )
 
-  it('credits an erase after a toggle split across chunks to neither buffer', async () => {
-    // The toggle's last byte arrives with the erase, so the buffer read before the write is stale.
-    const runtime = reflowed()
-    runtime.onPtyData(PTY_ID, ALT_ENTER.slice(0, -1), 2)
-    runtime.onPtyData(PTY_ID, `${ALT_ENTER.slice(-1)}${ERASE}`, 3)
-    await settle(runtime)
-    const state = runtime['headlessTerminals'].get(PTY_ID)!
-    expect(state.reflowRepaintTrust?.normalRepainted).toBe(false)
-    runtime.onPtyData(PTY_ID, ALT_LEAVE, 4)
-    await settle(runtime)
-    // Back on the normal buffer, which the erase never painted.
-    expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
-  })
+  it.each([
+    { mode: '47', enter: '\x1b[?47h', leave: '\x1b[?47l' },
+    { mode: '1047', enter: '\x1b[?1047h', leave: '\x1b[?1047l' },
+    { mode: '1049', enter: ALT_ENTER, leave: ALT_LEAVE }
+  ])(
+    'credits an erase after a mode $mode toggle split across chunks to neither buffer',
+    async ({ enter, leave }) => {
+      // The toggle's last byte arrives with the erase, so the buffer read before the write is stale.
+      const runtime = reflowed()
+      runtime.onPtyData(PTY_ID, enter.slice(0, -1), 2)
+      runtime.onPtyData(PTY_ID, `${enter.slice(-1)}${ERASE}`, 3)
+      await settle(runtime)
+      const state = runtime['headlessTerminals'].get(PTY_ID)!
+      expect(state.reflowRepaintTrust?.normalRepainted).toBe(false)
+      runtime.onPtyData(PTY_ID, leave, 4)
+      await settle(runtime)
+      // Back on the normal buffer, which the erase never painted.
+      expect(runtime['readRuledScreen'](PTY_ID)).toBeNull()
+    }
+  )
 
   it('ignores output that was queued before the reflow boundary', async () => {
     const runtime = new RuledRuntime()

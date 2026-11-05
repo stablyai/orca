@@ -320,7 +320,15 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
 }
 
 const FULL_SCREEN_ERASE = '\u001b[2J'
-const ALTERNATE_SCREEN_TOGGLES = ['\u001b[?1049h', '\u001b[?1049l']
+// xterm.js switches buffers for modes 47, 1047 and 1049; 1048 only saves the cursor.
+const ALTERNATE_SCREEN_TOGGLES = [
+  '\u001b[?47h',
+  '\u001b[?47l',
+  '\u001b[?1047h',
+  '\u001b[?1047l',
+  '\u001b[?1049h',
+  '\u001b[?1049l'
+]
 
 /**
  * Suffix of `text` that begins a paint signal, so a signal split across chunks is still recognized
