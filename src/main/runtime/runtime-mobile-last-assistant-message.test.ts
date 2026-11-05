@@ -146,6 +146,7 @@ describe('mobile completion status projection', () => {
         ]),
         ptysById: new Map([[pty.ptyId, pty]]),
         getPtyAvailability: () => null,
+        isSessionTitlePublisher: () => false,
         getLiveBrowserTabs: () => new Map(),
         getProviderSessionRows: () => [],
         getProviderSessionSnapshot: () => [],

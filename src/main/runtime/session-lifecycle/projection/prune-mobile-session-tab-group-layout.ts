@@ -31,6 +31,7 @@ import {
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
+  protected abstract isSessionTitlePublisher(worktreeId: string, surfaceId: string): boolean
   constructor(
     ...args: ConstructorParameters<typeof OrcaRuntimeWithScheduleMobileSessionTabsChanged>
   ) {
@@ -132,6 +133,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       leaves: this.leaves,
       ptysById: this.ptysById,
       getPtyAvailability: (ptyId) => this.ptyController?.getPtyAvailability?.(ptyId) ?? null,
+      isSessionTitlePublisher: (worktreeId, surfaceId) =>
+        this.isSessionTitlePublisher(worktreeId, surfaceId),
       getLiveBrowserTabs: (worktreeId) => this.getListedBrowserTabsByPageId(worktreeId),
       isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),

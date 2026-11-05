@@ -1,12 +1,12 @@
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as TransitionGraphReloadToTerminalStateMethods } from './session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import type { OrcaRuntimeWithResolveWaiter as ResolveWaiterMethods } from '../orca-runtime-resolve-waiter'
-import { OrcaRuntimeWithStopTerminalsForProject } from '../terminal/stop/project-terminal-stop'
+import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
 import type { RuntimeRendererReloadFence } from '../orca-runtime-core'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 
-export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopTerminalsForProject {
+export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithSessionTitleAuthority {
   protected abstract assertStableReadyGraph(
     ...args: Parameters<TransitionGraphReloadToTerminalStateMethods['assertStableReadyGraph']>
   ): ReturnType<TransitionGraphReloadToTerminalStateMethods['assertStableReadyGraph']>
@@ -96,6 +96,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
   }
 
   protected beginGraphReload(windowId: number): number {
+    const titleAuthority = this.captureSessionTitleAuthority()
     // Compare incarnations against the rebuilt graph before staling proven process identities.
     this.terminalIdentity.advanceRendererEpoch()
     this.graphStatus = 'reloading'
@@ -112,6 +113,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.terminalIdentity.clearLeafBindings()
     // Preserve CLI handles and incarnation waiters across reload; graph adoption may rejoin the same PTY.
     this.refreshWritableFlags()
+    this.republishSessionTitleAuthorityChanges(titleAuthority)
     return revision
   }
 
@@ -128,6 +130,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
       return false
     }
     if (fence.recovery === 'renderer') {
+      const titleAuthority = this.captureSessionTitleAuthority()
       const restoresPublishedInventory =
         this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch - 1
       this.graphStatus = 'ready'
@@ -140,6 +143,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
       if (restoresPublishedInventory) {
         this.markSessionTabsInventoryPublished()
       }
+      this.republishSessionTitleAuthorityChanges(titleAuthority)
       return true
     }
     this.graphReloadLifecycle.begin(windowId)
@@ -175,6 +179,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
   }
 
   markGraphUnavailable(windowId: number): void {
+    const titleAuthority = this.captureSessionTitleAuthority()
     if (
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
       windowId === this.pendingHeadlessPromotionWindowId
@@ -194,6 +199,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
       this.republishBrowserSessionTabs()
+      this.republishSessionTitleAuthorityChanges(titleAuthority)
       return
     }
     // Without an authoritative graph, live-terminal operations must fail closed.
@@ -218,6 +224,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     // Keep pre-allocated CLI handles for reconnect adoption.
     this.rejectAllWaiters('terminal_handle_stale')
     this.republishBrowserSessionTabs()
+    this.republishSessionTitleAuthorityChanges(titleAuthority)
   }
 
   // Renderer browser rows are listed only while their window exists; a version bump lets every client apply the drop.

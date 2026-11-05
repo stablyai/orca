@@ -1,4 +1,5 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
+import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
@@ -177,6 +178,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       rendererVersion: number
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
+      titlePublisher?: SessionTitlePublisher
     }
   >()
 
