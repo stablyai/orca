@@ -841,8 +841,8 @@
 12 test-no-wall-clock:src/main/runtime/tui-idle-evidence.test.ts
 13 test-no-real-time-wait:tests/e2e/terminal-long-table-scroll-restore.spec.ts
 13 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
-13 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.test.tsx
-13 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-indicator.test.tsx
+3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.test.tsx
+3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-indicator.test.tsx
 13 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/surface/WorktreeCard.pr-display.test.tsx
 14 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts
 14 test-no-wall-clock:src/wsl-guest/agent-hook-integration.test.ts
@@ -1206,7 +1206,6 @@
 3 test-no-wall-clock:src/main/windows/windows-msys-job.win32.test.ts
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-status.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts

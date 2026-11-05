@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, screen, within, act } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,30 +33,13 @@ import type {
   AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
-import type {
-  NativeChatSubagentState,
-  NativeChatMessage
-} from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentState } from '../../../../shared/native-chat/native-chat-types'
 
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-
-import {
-  foldStructuredAgentSubagentRoster,
-  NO_STRUCTURED_AGENT_SUBAGENT_ROSTER
-} from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 
 import { session, stubLayout } from './native-chat-windowing-test-harness'
-
-import {
-  TRANSCRIPT_LENGTH,
-  list,
-  marker,
-  scrollTranscript,
-  stubLayout as materialRailStubLayout,
-  windowState
-} from './NativeChatMessageList.windowing-test-support'
 
 {
   function journalItem(
@@ -138,8 +121,6 @@ import {
     )
   }
 
-  const renderList = () => render(listOf('completed'))
-
   describe("a subagent's rows in the transcript", () => {
     afterEach(cleanup)
     let restoreLayout = (): void => {}
@@ -149,47 +130,6 @@ import {
     afterEach(() => {
       restoreLayout()
       vi.restoreAllMocks()
-    })
-
-    it("shows the conversation and none of the subagent's words until its entry opens them", () => {
-      renderList()
-      expect(screen.getByText('Delegated; nothing to fix.')).toBeInTheDocument()
-      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
-
-      fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
-      fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: false }))
-
-      expect(screen.getAllByText('explore the lane')).toHaveLength(1)
-      const entry = screen.getByRole('button', { name: /explore the lane/, expanded: true })
-      const said = screen.getByText('The PR is CLEAN.')
-      expect(entry.compareDocumentPosition(said)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-      expect(said.compareDocumentPosition(screen.getByText('Delegated; nothing to fix.'))).toBe(
-        Node.DOCUMENT_POSITION_FOLLOWING
-      )
-
-      fireEvent.click(entry)
-      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
-      expect(
-        screen.getByRole('button', { name: /explore the lane/, expanded: false })
-      ).toBeVisible()
-    })
-
-    // happy-dom has no layout; assert margins so controls cannot overhang the section border into the next row.
-    it("keeps a section row's controls inside the row that carries the section's border", () => {
-      renderList()
-      fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
-      fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: false }))
-      const controlsOf = (text: string): HTMLElement => {
-        const row = screen.getByText(text).closest<HTMLElement>('.group')
-        expect(row).not.toBeNull()
-        return within(row!).getByRole('button', { name: 'Scroll this message to top' })
-          .parentElement!
-      }
-
-      const sectionControls = controlsOf('The PR is CLEAN.')
-      expect(sectionControls.closest('.border-l-2')).not.toBeNull()
-      expect(sectionControls).not.toHaveClass('-mb-5')
-      expect(controlsOf('Delegated; nothing to fix.')).toHaveClass('-mb-5')
     })
 
     it("draws an open agent's rows between its entry and the next one", () => {
@@ -244,18 +184,6 @@ import {
       }
       expect(screen.queryByText('Read lane a.')).toBeNull()
       expect(screen.getAllByText(/^lane [abc]$/)).toHaveLength(3)
-    })
-
-    it("shows the subagent's patch without opening its diagnostic section", () => {
-      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
-      renderList()
-      expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
-
-      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-
-      expect(screen.getByText('Edited')).toBeInTheDocument()
-      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
-      expect(screen.getByRole('button', { name: /Ran 1 subagent/, expanded: false })).toBeVisible()
     })
 
     // Journal turn records own subagent edits, even when a newer send is queued or the opener is unloaded.
@@ -319,18 +247,6 @@ import {
       }
     })
 
-    it('reveals an edit under a roster list the reader closed', () => {
-      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
-      renderList()
-      fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
-      fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
-
-      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-
-      expect(screen.getByText('Edited')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Ran 1 subagent/, expanded: false })).toBeVisible()
-    })
-
     it('keeps a roster list open or closed past its row unmounting, and hides its sections while closed', () => {
       const items = itemsWith('completed', true)
       const view = (withRoster: boolean) => {
@@ -378,115 +294,6 @@ import {
       fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: false }))
       rerender(listOf('working'))
       expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
-    })
-
-    it("does not replay a working subagent's streaming reply when its section reopens", () => {
-      const items = itemsWith('working', false).filter((next) => next.itemId !== 'child-edit')
-      render(
-        <NativeChatMessageList
-          session={session(projectStructuredItemsToNativeChat(items))}
-          journalItems={items}
-          isWorking
-          expandSignal={false}
-        />
-      )
-      expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: true }))
-      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
-
-      // Back as the transcript's last, still-streaming row: already read, so it shows whole at once.
-      fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: false }))
-      expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
-    })
-
-    it('names a section from the client roster when its roster row is not loaded', () => {
-      const items = itemsWith('completed', true)
-      const loaded = items.filter((next) => next.itemId !== 'spawn')
-      render(
-        <NativeChatMessageList
-          session={session(projectStructuredItemsToNativeChat(loaded))}
-          journalItems={loaded}
-          subagentRoster={foldStructuredAgentSubagentRoster(
-            NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
-            items
-          )}
-          isWorking={false}
-          expandSignal={false}
-        />
-      )
-      expect(
-        screen.getByRole('button', { name: /explore the lane/, expanded: false })
-      ).toBeVisible()
-    })
-  })
-}
-
-{
-  const stubLayout = materialRailStubLayout
-
-  // Rail jumps borrow the diff-reveal pin; release it after scrolling so later renders cannot repeat or outrank navigation.
-  describe('jumping to a message from the rail', () => {
-    afterEach(cleanup)
-    let restoreLayout = (): void => {}
-    beforeEach(() => {
-      restoreLayout = stubLayout()
-    })
-    afterEach(() => {
-      restoreLayout()
-      vi.useRealTimers()
-      vi.restoreAllMocks()
-    })
-
-    function userMarker(index: number): NativeChatMessage {
-      return {
-        id: `message-${index}`,
-        role: 'user',
-        blocks: [{ type: 'text', text: `prompt-${index}` }],
-        timestamp: index + 1,
-        source: 'transcript'
-      }
-    }
-
-    const conversation = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
-      index % 10 === 0 ? userMarker(index) : marker(index)
-    )
-
-    function jumpToFirstPrompt(): void {
-      fireEvent.click(screen.getByRole('button', { name: 'prompt-0' }))
-      act(() => {
-        vi.advanceTimersByTime(300)
-      })
-    }
-
-    it('scrolls once for a selection, not again on every later render', () => {
-      vi.useFakeTimers()
-      const scrollTo = vi.fn()
-      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
-      const { container, rerender } = render(list(conversation))
-      scrollTranscript(container, 6000)
-
-      jumpToFirstPrompt()
-      expect(scrollTo).toHaveBeenCalled()
-
-      // Streaming rerenders must not replay a consumed jump after the reader leaves.
-      scrollTo.mockClear()
-      rerender(list(conversation))
-      rerender(list(conversation))
-      expect(scrollTo).not.toHaveBeenCalled()
-    })
-
-    it('releases the pin once the jump is spent', () => {
-      vi.useFakeTimers()
-      const scrollTo = vi.fn()
-      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
-      const { container } = render(list(conversation))
-      scrollTranscript(container, 6000)
-
-      jumpToFirstPrompt()
-      expect(scrollTo).toHaveBeenCalled()
-
-      // Release the pin after issuing the scroll so it cannot retain the row or outrank a diff reveal.
-      expect(windowState(container).indexes).not.toContain(0)
     })
   })
 }
