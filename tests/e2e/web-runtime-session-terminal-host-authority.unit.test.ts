@@ -97,6 +97,7 @@ afterEach(() => resetWebSessionCloseIntentForTests())
 describe('createWebRuntimeSessionTerminal', () => {
   beforeEach(() => {
     stubTerminalCreateEnvironment(mocks)
+    mocks.getState().runtimeStatusByEnvironmentId = new Map()
   })
 
   afterEach(() => {
@@ -140,6 +141,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             submitPastedPrompt: false
           }),
           prompt: 'Fix checks',
+          sessionOptions: { effort: 'high' },
           promptDelivery: 'auto-submit',
           activate: false
         })

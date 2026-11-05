@@ -108,6 +108,7 @@ vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'tab-1' }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: async () => false,
+  runtimeEnvironmentSupportsCapabilities: async () => [false, false],
   callRuntimeRpc: vi.fn()
 }))
 vi.mock('@/store', () => ({

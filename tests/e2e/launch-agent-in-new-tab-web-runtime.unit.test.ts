@@ -4,7 +4,6 @@ import { mocks, store } from './launch-agent-web-terminal.test-fixture'
 import { createElement, useState } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useTabAgentMenuLaunch } from '@/components/tab-bar/QuickLaunchButton'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agent-session-registered-agents'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
@@ -25,7 +24,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
       vi.useFakeTimers()
       try {
         mocks.actualOperation = true
-        mocks.capability.mockResolvedValue(route !== 'old')
+        mocks.capability.mockImplementation(
+          async (_environmentId, capability) =>
+            route !== 'old' && capability !== 'agent-session.create-options.v1'
+        )
         store.runtimeStatusByEnvironmentId.get('web-runtime')!.status.capabilities =
           route === 'old' ? [] : [AGENT_LAUNCH_CHOICES_CAPABILITY]
         store.settings.agentLaunchChoices = { claude: { options: { effort: 'low' } } }
@@ -198,10 +200,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
     render(createElement(QuickLaunch))
     store.settings.agentDefaultArgs = { claude: "--model 'opus" }
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch Claude' })))
-    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/Claude.*try again/)
-    )
-    expect(dispatch).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(
+      dispatch.mock.calls.find(([r]) => r.method === 'session.tabs.createTerminal')?.[0].params
+    ).not.toHaveProperty('command')
+    dispatch.mockClear()
     mocks.toastError.mockClear()
     store.settings.agentDefaultArgs = {}
     store.settings.agentCmdOverrides = { claude: 'claude --model sonnet' }
@@ -219,19 +222,18 @@ describe('launchAgentInNewTab paired web runtime', () => {
     expect(
       dispatch.mock.calls.find(([r]) => r.method === 'session.tabs.createTerminal')?.[0].params
         .command
-    ).toContain('sonnet')
+    ).toBeUndefined()
     expect(mocks.toastError).not.toHaveBeenCalled()
     mocks.capability.mockRejectedValueOnce(new Error('private transport detail'))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Launch Claude' })))
-    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/Claude.*try again/)
-    )
+    expect(mocks.toastError).not.toHaveBeenCalled()
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
   it.each(['submit-after-ready', 'draft'] as const)(
     'retains the %s prompt with one preparation notice',
     async (promptDelivery) => {
+      mocks.actualOperation = true
       store.settings.agentDefaultArgs = { claude: "--model 'opus" }
       const handoff = vi.fn()
       function PromptLaunch() {
@@ -275,7 +277,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     }
   )
 
-  it.each(['created', 'cancelled', 'late-answer'] as const)(
+  it.each(['created', 'late-answer'] as const)(
     'runs the real host wait and single terminal re-entry through %s settlement',
     async (mode) => {
       vi.useFakeTimers()
@@ -292,11 +294,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
         ]
       }
       const listing = Promise.withResolvers<{ agents: [] }>()
-      const settings = Promise.withResolvers<{
-        settings: ReturnType<typeof projectAgentLaunchSettings>
-      }>()
       mocks.hostRpc.mockImplementation((_target, method) =>
-        method === AGENT_SESSION_AGENTS_METHOD ? listing.promise : settings.promise
+        method === AGENT_SESSION_AGENTS_METHOD
+          ? listing.promise
+          : Promise.reject(new Error('Host-owned launches need no desktop settings'))
       )
       const dispatch = vi.fn(async (request) => ({
         ok: true,
@@ -329,33 +330,19 @@ describe('launchAgentInNewTab paired web runtime', () => {
         listing.resolve({ agents: [] })
       }
       await vi.advanceTimersByTimeAsync(0)
-      expect(
-        mocks.hostRpc.mock.calls.filter(([, method]) => method !== AGENT_SESSION_AGENTS_METHOD)
-      ).toHaveLength(1)
-      if (mode === 'cancelled') {
-        replaceRuntimeEnvironmentRevisions([{ id: 'web-runtime', createdAt: 2 }])
-      } else {
-        settings.resolve({
-          settings: projectAgentLaunchSettings({
-            agentLaunchChoices: { opencode: { model: 'provider/model' } }
-          })
-        })
-      }
-      await vi.advanceTimersByTimeAsync(0)
       await expect(result?.structuredSettlement).resolves.toMatchObject({
-        kind: mode === 'cancelled' ? 'cancelled' : 'terminal'
+        kind: 'terminal'
       })
       expect(result?.promptDeliveryResult).toBeDefined()
       await expect(result?.promptDeliveryResult).resolves.toMatchObject({
-        delivered: mode !== 'cancelled'
+        delivered: true
       })
       const creates = () =>
         dispatch.mock.calls.filter(([r]) => r.method === 'terminal.createAgentSession')
-      expect(creates()).toHaveLength(mode === 'cancelled' ? 0 : 1)
+      expect(creates()).toHaveLength(1)
       listing.resolve({ agents: [] })
-      settings.resolve({ settings: projectAgentLaunchSettings({ agentLaunchChoices: {} }) })
       await vi.advanceTimersByTimeAsync(4_000)
-      expect(creates()).toHaveLength(mode === 'cancelled' ? 0 : 1)
+      expect(creates()).toHaveLength(1)
       expect(mocks.toastError).not.toHaveBeenCalled()
       expect(mocks.createTab).not.toHaveBeenCalled()
     }

@@ -9,6 +9,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/term
 import { startStoppedWslHostForUserAct, stoppedWslHostMessage } from '../lib/wsl-host-user-start'
 import type {
   CreateWebRuntimeSessionTerminalArgs,
+  CreatedWebRuntimeSessionTerminal,
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
 
@@ -51,18 +52,10 @@ export async function createWebRuntimeAgentSessionTerminal(
   promptDelivered: boolean
 }> {
   const created = await createWebRuntimeSessionTerminalResult(args)
-  if (created.outcome.status === 'failed' || !created.hostTabId) {
-    return { outcome: created.outcome, promptDelivered: false }
+  return {
+    outcome: created.outcome,
+    promptDelivered: await deliverCreatedWebRuntimeAgentSessionPrompt(created, args)
   }
-
-  const promptDelivered = await deliverLaunchPromptToAgentTab({
-    tabId: toWebTerminalSurfaceTabId(created.hostTabId),
-    content: args.promptAfterReady,
-    agent: args.agent,
-    submit: args.submitPrompt,
-    forcePaste: args.forcePromptPaste
-  }).catch(() => false)
-  return { outcome: created.outcome, promptDelivered }
 }
 
 /** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */
@@ -73,15 +66,41 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
   }
 ): Promise<{ outcome: WebRuntimeTerminalCreateOutcome; promptDelivered: boolean }> {
   const created = await createWebRuntimeSessionTerminalResult(args)
-  if (created.outcome.status !== 'failed' && created.hostTabId) {
+  return {
+    outcome: created.outcome,
+    promptDelivered: await deliverCreatedWebRuntimeAgentSessionPrompt(created, args)
+  }
+}
+
+/** Deliver only after the selected create route has settled its startup recipe. */
+export async function deliverCreatedWebRuntimeAgentSessionPrompt(
+  created: CreatedWebRuntimeSessionTerminal,
+  args: {
+    agent: TuiAgent
+    promptAfterReady?: string
+    submitPrompt?: boolean
+    forcePromptPaste?: boolean
+    launchDraft?: string
+  }
+): Promise<boolean> {
+  if (created.outcome.status === 'failed' || !created.hostTabId) {
+    return false
+  }
+  if (args.promptAfterReady !== undefined) {
+    return await deliverLaunchPromptToAgentTab({
+      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      content: args.promptAfterReady,
+      agent: args.agent,
+      submit: args.submitPrompt === true,
+      forcePaste: args.forcePromptPaste === true
+    }).catch(() => false)
+  }
+  if (args.launchDraft !== undefined) {
     seedNativeChatLaunchDraftForAgentTab({
       tabId: toWebTerminalSurfaceTabId(created.hostTabId),
       agent: args.agent,
       text: args.launchDraft
     })
   }
-  return {
-    outcome: created.outcome,
-    promptDelivered: created.outcome.status === 'created'
-  }
+  return true
 }

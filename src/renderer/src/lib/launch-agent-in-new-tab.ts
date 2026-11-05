@@ -167,7 +167,9 @@ export function launchAgentInNewTabWithOutcome(
       sessionOptions,
       prompt: trimmedPrompt,
       promptDelivery,
-      agentArgs,
+      agentArgs: args.actionAgentArgs === undefined ? agentArgs : undefined,
+      actionAgentArgs: args.actionAgentArgs,
+      launchPlatform: resolvedLaunchPlatform,
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
       onPromptDelivered

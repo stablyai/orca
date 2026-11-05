@@ -191,6 +191,9 @@ export function projectSelectedSourceControlActionLaunch(
     ).trim(),
     ...optionViews,
     ...('agentArgs' in views ? { agentArgs: agentArgs?.trim() } : {}),
+    ...(selectedActionExecutionArgs(recipe, agent) !== undefined
+      ? { actionAgentArgs: selectedActionExecutionArgs(recipe, agent)?.trim() }
+      : {}),
     requestedSurface:
       liveChoice?.requestedSurface ?? resolveSourceControlActionRequestedSurface(recipe, agent),
     preferredSurface: liveChoice?.requestedSurface
