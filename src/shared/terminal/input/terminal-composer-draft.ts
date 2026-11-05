@@ -1,5 +1,3 @@
-import { detectOpenCodeComposer } from './opencode-composer'
-
 export type TerminalCursorContext = {
   rows: string[]
   typedRows: string[]
@@ -24,7 +22,7 @@ export type TerminalComposerDraft = {
   promptRow: number
   cursorRow: number
   endRow: number
-  promptGlyph: '❯' | '›' | '»' | '┃'
+  promptGlyph: '❯' | '›' | '»'
 }
 
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
@@ -290,10 +288,6 @@ export function detectTerminalComposerDraft(
   if (boxed) {
     return boxed
   }
-  const openCode = context ? detectOpenCodeComposer(context) : null
-  if (openCode) {
-    return openCode.text ? openCode : null
-  }
   const match = detectTerminalComposer(context)
   if (!match || match.placeholder) {
     return null
@@ -313,16 +307,6 @@ export function readTerminalComposerTypedText(
 ): string | null {
   const boxed = context ? detectBoxedComposerDraft(context) : null
   return boxed ? boxed.text : (detectTerminalComposer(context, true)?.text ?? null)
-}
-
-/** Whether the user has typed into the composer. Unlike readTerminalComposerTypedText this also covers
- *  OpenCode, whose screen copy is not faithful enough to hand back as the draft itself. */
-export function hasTerminalComposerTypedText(
-  context: TerminalCursorContext | null | undefined
-): boolean {
-  return (
-    !!readTerminalComposerTypedText(context) || !!(context && detectOpenCodeComposer(context)?.text)
-  )
 }
 
 export function hasTerminalComposerPlaceholder(

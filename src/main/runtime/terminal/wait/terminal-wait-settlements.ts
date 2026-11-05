@@ -16,7 +16,11 @@ import {
 import { ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { hasTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
+import {
+  readTerminalComposerTypedText,
+  type TerminalCursorContext
+} from '../../../../shared/terminal/input/terminal-composer-draft'
+import { readOpenCodeComposerText } from '../../../../shared/terminal/input/opencode-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
@@ -155,8 +159,16 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       lastInputAt !== null &&
       Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
       !!state &&
-      hasTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      !!this.readComposerDraft(ptyId, state.emulator.getCursorLineContext())
     )
+  }
+
+  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  private readComposerDraft(ptyId: string, context: TerminalCursorContext | null): string | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    return (agent === 'opencode' || agent === 'opencode2') && context
+      ? readOpenCodeComposerText(context)
+      : readTerminalComposerTypedText(context)
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {

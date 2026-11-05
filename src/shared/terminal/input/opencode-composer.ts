@@ -1,4 +1,4 @@
-import type { TerminalComposerDraft, TerminalCursorContext } from './terminal-composer-draft'
+import type { TerminalCursorContext } from './terminal-composer-draft'
 
 // Why: OpenCode draws no prompt glyph. Its composer is a `┃` gutter block (closed by `╹▀…` only on
 // opaque themes) laid out as a padding row, the textarea, a spacer row and a metadata row (agent,
@@ -15,11 +15,10 @@ function isOpenCodePlaceholder(line: string): boolean {
   )
 }
 
-/** OpenCode's composer around the cursor. Its text is the screen copy, so a soft-wrapped draft reads
- *  with a newline at each wrap: it says whether the user typed something, not exactly what. */
-export function detectOpenCodeComposer(
-  context: TerminalCursorContext
-): TerminalComposerDraft | null {
+/** What the user typed into OpenCode's composer: '' when it is empty, null when the cursor is not in it.
+ *  This is the screen copy, so a soft-wrapped draft has a newline at each wrap; it shows that the user
+ *  typed something, not exactly what. Callers check that OpenCode is the pane's agent. */
+export function readOpenCodeComposerText(context: TerminalCursorContext): string | null {
   const cursorIndex = context.rows.length - 1
   const column = (context.rows[cursorIndex] ?? '').indexOf(OPENCODE_BOX_GUTTER)
   const inBox = (row: string | undefined): boolean =>
@@ -61,13 +60,5 @@ export function detectOpenCodeComposer(
     cursorLine === 1 &&
     !unpad(context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length)) &&
     isOpenCodePlaceholder(lines[0] ?? '')
-  const text = first === -1 || placeholder ? '' : lines.slice(first, last + 1).join('\n')
-  const textareaTop = context.cursorViewportRow - cursorLine + 1
-  return {
-    text,
-    promptRow: textareaTop + Math.max(first, 0),
-    cursorRow: context.cursorViewportRow,
-    endRow: textareaTop + Math.max(last, first, 0),
-    promptGlyph: OPENCODE_BOX_GUTTER
-  }
+  return first === -1 || placeholder ? '' : lines.slice(first, last + 1).join('\n')
 }
