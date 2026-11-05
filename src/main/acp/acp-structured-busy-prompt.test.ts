@@ -9,6 +9,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { CancelParams } from '../../shared/rpc-contract/structured-agent-session-params'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 import { message, openHostRig, stop } from './acp-structured-host.test-support'
@@ -175,8 +176,11 @@ it('Cancel on a card from OMP own work, with no message running, cancels that re
     .agent.request('own-cancel', 'session/request_permission', ownPermission('own-cancel'))
   const card = await pendingCard(host)
   const fields = { prompt: { itemId: card.itemId, expectedRevision: card.revision } }
-  expect(
-    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
-  ).toMatchObject({ ok: true, value: { cancelled: true } })
+  // Clients send exactly this over RPC, so it must pass the wire schema.
+  const params = CancelParams.parse({
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
+  expect(await host.cancel(CALLER, params)).toMatchObject({ ok: true, value: { cancelled: true } })
   expect(await asked).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
 })
