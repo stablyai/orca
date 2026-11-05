@@ -1,12 +1,12 @@
 // List failed-delete leftovers with their error; refuse retry until the leftover is gone.
 import { existsSync } from 'node:fs'
-import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { readFile, realpath, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { join } from 'node:path'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+
 import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import { scanLocalRepoWorktreesForResolutionMock } from '../orca-runtime-test-mocks/setup.spec'
 import { tmpdir } from 'node:os'

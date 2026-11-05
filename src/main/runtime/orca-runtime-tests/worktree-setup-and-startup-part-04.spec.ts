@@ -1,13 +1,14 @@
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
-import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
-import './runtime-test-module-registration.spec'
-import { OrcaRuntimeService } from '../orca-runtime'
 import {
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../shared/setup-agent-sequencing'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+
 import {
   computeWorktreePathMock,
   detectInstalledAgentsWithShellPathHydrationMock,

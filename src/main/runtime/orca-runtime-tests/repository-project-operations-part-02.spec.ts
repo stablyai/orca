@@ -1,5 +1,5 @@
 import * as gitSpawn from '../../git/command-runner/git-spawn'
-import { realpath } from 'node:fs/promises'
+import { realpath, lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
@@ -16,7 +16,7 @@ import {
   prepareLocalWorktreeRootForRepoMock
 } from '../orca-runtime-test-mocks/setup.spec'
 import { join } from 'node:path'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+
 import { mkdirSync } from 'node:fs'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { tmpdir } from 'node:os'
