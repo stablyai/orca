@@ -21,6 +21,8 @@ const unitHarnesses = [
   'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts'
 ]
 const supportBridges = new Set([
+  // Launch request suites' store rig; it takes the terminal harness's workspace layout.
+  'src/renderer/src/runtime/web-runtime-agent-launch-options.test-fixture.ts',
   'src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts',
   'src/renderer/src/components/editor/model-lifetime/retention/editor-model-lifetime-fixture.ts',
   // Autosave suites' store rig; it takes the editor harness's tab-layout maps.

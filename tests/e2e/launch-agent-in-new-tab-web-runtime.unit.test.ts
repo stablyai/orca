@@ -14,11 +14,12 @@ import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/c
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fixture'
 import '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { composeAgentLaunchProfile } from '../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
 
 describe('launchAgentInNewTab paired web runtime', () => {
-  it.each(['deadline', 'prepared', 'authoritative', 'old'] as const)(
+  it.each(['deadline', 'edited', 'authoritative', 'old'] as const)(
     'delivers the actual %s operation once with the correct model owner and final result',
     async (route) => {
       vi.useFakeTimers()
@@ -35,10 +36,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
         store.settings.agentDefaultEnv = { claude: { KEEP: 'caller' } }
         store.settings.agentCmdOverrides = { claude: 'cx' }
         const hostSettings = {
+          agentCmdOverrides: { claude: '/host/claude' },
           agentPermissionDefault: 'own' as const,
           agentLaunchChoices: {
             claude: {
-              ...(route === 'prepared' ? {} : { model: 'opus' }),
+              model: 'opus',
               options: { effort: 'high' }
             }
           },
@@ -47,10 +49,15 @@ describe('launchAgentInNewTab paired web runtime', () => {
         const pending = Promise.withResolvers<{
           settings: ReturnType<typeof projectAgentLaunchSettings>
         }>()
-        mocks.hostRpc.mockImplementation(() =>
+        mocks.hostRpc.mockImplementation((_target, method) =>
           route === 'deadline'
             ? pending.promise
-            : Promise.resolve({ settings: projectAgentLaunchSettings(hostSettings) })
+            : Promise.resolve({
+                settings:
+                  method === 'settings.get'
+                    ? { ...hostSettings, ...composeAgentLaunchProfile(hostSettings) }
+                    : projectAgentLaunchSettings(hostSettings)
+              })
         )
         const host = new OrcaRuntimeService(
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the final startup owner reads only this settings store.
@@ -103,7 +110,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
           groupId: 'group-1',
           activate: false,
           agentArgs: '--verbose',
-          ...(route === 'prepared' ? { sessionOptions: { effort: 'high' } } : {})
+          ...(route === 'edited' ? { sessionOptions: { effort: 'high' } } : {})
         })
         await vi.advanceTimersByTimeAsync(route === 'deadline' ? 3_000 : 0)
         await expect(result?.terminalCompletion).resolves.toMatchObject({
@@ -115,10 +122,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
             ['terminal.createAgentSession', 'session.tabs.createTerminal'].includes(request.method)
           )
         expect(creates()).toHaveLength(1)
-        if (route === 'deadline' || route === 'authoritative') {
+        if (route !== 'old') {
           expect(creates()[0][0]).toMatchObject({
             method: 'terminal.createAgentSession',
-            params: { agent: 'claude', agentArgs: '--verbose', presentation: 'background' }
+            params: {
+              agent: 'claude',
+              agentArgs: route === 'edited' ? '--model opus --effort high --verbose' : '--verbose',
+              presentation: 'background'
+            }
           })
           expect(creates()[0][0].params).not.toHaveProperty('launchPreferences')
           expect(spawn).toHaveBeenCalledTimes(1)
@@ -126,8 +137,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
           expect(plan).toMatchObject({
             command: expect.stringContaining("'opus'"),
             env: { KEEP: 'host' },
-            launchConfig: { agentArgs: '--verbose' }
+            launchConfig: {
+              agentArgs: route === 'edited' ? '--model opus --effort high --verbose' : '--verbose'
+            }
           })
+          expect(plan?.command).toContain('/host/claude')
           expect(plan?.command).toContain("'high'")
           expect(plan?.command).not.toContain("'low'")
           expect(prepared).not.toHaveBeenCalled()
@@ -135,20 +149,24 @@ describe('launchAgentInNewTab paired web runtime', () => {
           expect(creates()[0][0]).toMatchObject({
             method: 'session.tabs.createTerminal',
             params: {
-              command: `cx '--verbose' '--effort' '${route === 'old' ? 'low' : 'high'}'`,
-              env: { KEEP: 'caller' },
-              launchConfig: { agentCommand: "cx '--verbose'", agentArgs: '--verbose' },
+              command: expect.stringContaining('/host/claude'),
+              env: { KEEP: 'host' },
+              launchConfig: { agentCommand: "/host/claude '--verbose'", agentArgs: '--verbose' },
               targetGroupId: 'group-1',
               activate: false,
               select: false,
               navigation: 'caller'
             }
           })
+          expect(creates()[0][0].params.command).toContain("'opus'")
+          expect(creates()[0][0].params.command).not.toContain('desktop')
           expect(prepared).toHaveBeenCalledTimes(1)
           expect(await prepared.mock.results[0].value).toMatchObject({
             command: creates()[0][0].params.command,
-            env: { KEEP: 'caller' },
-            launchConfig: { agentArgs: '--verbose' }
+            env: { KEEP: 'host' },
+            launchConfig: {
+              agentArgs: route === 'edited' ? '--model opus --effort high --verbose' : '--verbose'
+            }
           })
           expect(spawn).not.toHaveBeenCalled()
         }

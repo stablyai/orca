@@ -1,3 +1,9 @@
+import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { sourceControlActionAgentArgs } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { readLaunchPermissionChoice } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { AgentLaunchChoices } from '../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
@@ -65,6 +71,11 @@ export async function launchAgentInWebHostTab(args: {
   )
   const hasPrompt = prompt.length > 0
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
+  const runtimeId = environmentId
+    ? lastVerifiedRuntimeStatus(
+        useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+      )?.runtimeId
+    : undefined
   let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
   let launch: CreateWebRuntimeSessionTerminalArgs
@@ -87,7 +98,7 @@ export async function launchAgentInWebHostTab(args: {
     if (environmentId && getRuntimeEnvironmentRevision(environmentId) !== pairingRevision) {
       throw new DOMException('Agent launch cancelled', 'AbortError')
     }
-    // Why: only prompt delivery is client-owned; desktop launch settings belong to legacy preparation.
+    // Why: prompt delivery is client-owned; the host supplies launch settings.
     startup = planLaunchAgentStartupPrompt({
       base: {
         agent,
@@ -130,17 +141,78 @@ export async function launchAgentInWebHostTab(args: {
         ) {
           return hasPrompt && startup.pasteDraftAfterLaunch === null ? { agentPrompt: prompt } : {}
         }
-        const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-          kind: 'git-worktree',
-          worktreeId
-        }).catch((error: unknown) => {
+        try {
+          const owner = environmentId ? { environmentId, pairingRevision, runtimeId } : null
+          const hostSettings = owner
+            ? await readHostAgentStartupSettings(owner).catch((error: unknown) => {
+                if (error instanceof Error && error.name === 'AbortError') {
+                  throw error
+                }
+                return null
+              })
+            : null
+          const status = environmentId
+            ? lastVerifiedRuntimeStatus(
+                useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+              )
+            : undefined
+          if (
+            environmentId &&
+            (getRuntimeEnvironmentRevision(environmentId) !== pairingRevision ||
+              (runtimeId && status?.runtimeId !== runtimeId))
+          ) {
+            throw new DOMException('Agent launch cancelled', 'AbortError')
+          }
+          if (hostSettings) {
+            const platform = args.launchPlatform ?? status?.hostPlatform ?? 'linux'
+            const shell =
+              args.launchShell ??
+              resolveHostAgentStartupShell({
+                platform,
+                isRemote: true,
+                hostTerminalWindowsShell: status?.terminalWindowsShell
+              })
+            const permissionMode = readLaunchPermissionChoice(args.sessionOptions)
+            const authoredArgs =
+              args.actionAgentArgs !== undefined
+                ? sourceControlActionAgentArgs(
+                    {
+                      agentArgs: args.actionAgentArgs,
+                      ...(permissionMode
+                        ? { launchPreferences: { agentId: agent, permissionMode } }
+                        : {})
+                    },
+                    agent,
+                    hostSettings,
+                    shell
+                  )
+                : agentArgs
+            startup = planLaunchAgentStartupPrompt({
+              base: resolveAgentStartupPlanInputs({
+                agent,
+                settings: hostSettings,
+                agentArgs: authoredArgs,
+                sessionOptions: args.sessionOptions,
+                platform,
+                shell,
+                isRemote: true
+              }),
+              prompt,
+              promptDelivery,
+              isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+            })
+          } else {
+            // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
+            const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
+              kind: 'git-worktree',
+              worktreeId
+            })
+            startup = args.buildStartup(preferences.agentLaunchChoices)
+          }
+        } catch (error) {
           legacyPreparationCancelled = error instanceof Error && error.name === 'AbortError'
           throw error
-        })
-        startup = args.buildStartup(
-          preferences.agentLaunchChoices ??
-            (capable ? {} : useAppStore.getState().settings?.agentLaunchChoices)
-        )
+        }
         const plan = startup.startupPlan
         if (!plan) {
           throw new Error(failureMessage)

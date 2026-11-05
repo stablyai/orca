@@ -186,6 +186,7 @@ export function resetBrowserTabCreateEnvironment(): void {
 export function stubTerminalCreateEnvironment(mocks: WebRuntimeSessionMocks): void {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
   mocks.getState.mockReturnValue({
+    runtimeStatusByEnvironmentId: new Map(),
     settings: {
       activeRuntimeEnvironmentId: ENVIRONMENT_ID
     },

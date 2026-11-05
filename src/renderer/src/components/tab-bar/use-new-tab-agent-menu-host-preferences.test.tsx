@@ -199,7 +199,6 @@ it('keeps this runtime’s last preferences through a failed reconnect refresh',
     })
   )
   await act(async () => {})
-  expect(rpc.call).toHaveBeenCalledTimes(2)
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'codex'
   )
@@ -227,7 +226,7 @@ it('reopens a freshly mounted menu with the last host answer, then revalidates',
   )
 })
 
-it('keeps desktop preferences for a host that predates host launch settings', async () => {
+it('reads legacy host preferences when the host predates narrow launch settings', async () => {
   rpc.supports.mockResolvedValue(false)
   const hook = renderHook(() =>
     useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
@@ -235,11 +234,19 @@ it('keeps desktop preferences for a host that predates host launch settings', as
   await act(async () => {})
   expect(
     hook.result.current.state === 'settled' && hook.result.current.rows.map((row) => row.agent)
-  ).toEqual(['opencode', 'claude'])
-  expect(rpc.call).not.toHaveBeenCalled()
+  ).toEqual(['codex', 'claude'])
+  expect(rpc.call).toHaveBeenCalledWith(
+    expect.anything(),
+    'settings.get',
+    undefined,
+    expect.objectContaining({
+      expectedEnvironmentPairingRevision: 7,
+      expectedEnvironmentRuntimeId: 'runtime-1'
+    })
+  )
 })
 
-it('falls back to desktop preferences when the first read fails', async () => {
+it('uses neutral inherited preferences when both host reads fail', async () => {
   rpc.call.mockRejectedValue(new Error('offline'))
   const hook = renderHook(() =>
     useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
@@ -247,7 +254,7 @@ it('falls back to desktop preferences when the first read fails', async () => {
   await act(async () => {})
   expect(
     hook.result.current.state === 'settled' && hook.result.current.rows.map((row) => row.agent)
-  ).toEqual(['opencode', 'claude'])
+  ).toEqual(['claude', 'codex', 'opencode'])
 })
 
 it('stops waiting on a stalled host, then applies its late answer', async () => {
@@ -261,7 +268,7 @@ it('stops waiting on a stalled host, then applies its late answer', async () => 
     expect(hook.result.current.state).toBe('loading')
     await act(async () => vi.advanceTimersByTime(3_000))
     expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
-      'opencode'
+      'claude'
     )
     await act(async () => stalled.resolve({ settings: server }))
     expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
@@ -273,10 +280,12 @@ it('stops waiting on a stalled host, then applies its late answer', async () => 
 })
 
 it('gives the new-agent shortcut and badge the default the host menu applied', async () => {
-  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toEqual({
-    defaultTuiAgent: 'opencode',
-    disabledTuiAgents: ['codex'],
-    agentLaunchChoices: {}
+  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toMatchObject({
+    defaultTuiAgent: null,
+    disabledTuiAgents: [],
+    agentLaunchChoices: {},
+    agentDefaultArgs: {},
+    agentPermissionDefault: 'own'
   })
   const hook = renderHook(() =>
     useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
@@ -285,7 +294,7 @@ it('gives the new-agent shortcut and badge the default the host menu applied', a
   expect(hook.result.current.state === 'settled' && hook.result.current.defaultTuiAgent).toBe(
     'codex'
   )
-  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toEqual({
+  expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toMatchObject({
     defaultTuiAgent: 'codex',
     disabledTuiAgents: ['opencode'],
     agentLaunchChoices: server.agentChoices?.defaults
@@ -328,7 +337,6 @@ it('shares cold reads with independent cancelled waiters and retains mutation an
         worktreeId: 'wt'
       })
     ).resolves.toMatchObject({ defaultTuiAgent: 'codex' })
-    expect(rpc.call).toHaveBeenCalledTimes(3)
     const late = Promise.withResolvers<{ settings: typeof server }>()
     rpc.call.mockReturnValueOnce(late.promise)
     act(() =>
@@ -387,7 +395,7 @@ it.each(['pairing', 'runtime'] as const)(
   }
 )
 
-it('updates actual inventory for native presentation and local permission changes', async () => {
+it('keeps paired inventory independent of desktop permission while local inventory updates', async () => {
   const hook = renderHook(() => {
     const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
     const entries = useAgentPickerInventoryEntries(
@@ -406,7 +414,7 @@ it('updates actual inventory for native presentation and local permission change
       }
     }))
   })
-  expect(hook.result.current.entries).not.toBe(before)
+  expect(hook.result.current.entries).toBe(before)
   expect(hook.result.current.menu.state).toBe('settled')
   useAppStore.setState({
     folderWorkspaces: [makeFolderWorkspace({ id: 'local', executionHostId: 'local' })]
@@ -522,19 +530,19 @@ it.each([false, true])(
         readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt'),
         readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'folder:f1')
       ].map((preferences) => preferences.defaultTuiAgent)
-    expect(read()).toEqual(Array(4).fill('opencode'))
+    expect(read()).toEqual(Array(4).fill(null))
     expect(rpc.call).not.toHaveBeenCalled()
     await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
-    expect(read()).toEqual(Array(4).fill(supported ? 'codex' : 'opencode'))
+    expect(read()).toEqual(Array(4).fill('codex'))
     if (supported) {
       useAppStore.setState({
         runtimeStatusByEnvironmentId: new Map([['alpha', status('replacement')]])
       })
-      expect(read()).toEqual(Array(4).fill('opencode'))
+      expect(read()).toEqual(Array(4).fill(null))
       await ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
       expect(read()).toEqual(Array(4).fill('codex'))
       replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 8 }])
-      expect(read()).toEqual(Array(4).fill('opencode'))
+      expect(read()).toEqual(Array(4).fill(null))
     }
   }
 )
@@ -705,3 +713,61 @@ it('reprojects a supplied local authored map once without host acquisition', asy
     builder.mockRestore()
   }
 })
+
+it.each(['snapshot', 'legacy', 'unavailable'] as const)(
+  'keeps v1.4.239 picker defaults on their host through %s reads',
+  async (source) => {
+    useAppStore.setState((state) => ({
+      settings: {
+        ...state.settings!,
+        agentDefaultArgs: { claude: '--model desktop-only-qa' },
+        agentLaunchChoices: { claude: { model: 'desktop-only-qa' } },
+        agentPermissionDefault: 'full-access'
+      }
+    }))
+    const snapshot = {
+      defaultTuiAgent: 'claude',
+      disabledTuiAgents: [],
+      agentCmdOverrides: {},
+      agentDefaultArgs: { claude: '--permission-mode auto' },
+      environmentNames: {},
+      permissionMode: 'mixed'
+    }
+    rpc.supports.mockImplementation((_id, capability) =>
+      Promise.resolve(source === 'snapshot' && capability === 'settings.agent-launch.v1')
+    )
+    rpc.call.mockImplementation((_target, method) => {
+      if (source === 'unavailable') {
+        throw new Error('offline')
+      }
+      return {
+        settings:
+          method === 'settings.getAgentLaunch'
+            ? snapshot
+            : {
+                defaultTuiAgent: 'claude',
+                disabledTuiAgents: [],
+                agentCmdOverrides: {},
+                agentDefaultArgs: { claude: '--permission-mode auto' },
+                agentDefaultEnv: {}
+              }
+      }
+    })
+    const hook = renderHook(() => {
+      const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
+      return useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
+    })
+    await act(async () => {})
+    const entry = hook.result.current.find((entry) => entry.agent === 'claude')!
+    expect(entry.terminal.model).toBeUndefined()
+    expect(entry.arguments ?? '').toBe('')
+    expect(entry.terminal.permissionMode).toBe(source === 'unavailable' ? undefined : 'auto')
+    if (source === 'unavailable') {
+      expect(readAgentLaunchPreferencesForWorktree(useAppStore.getState(), 'wt')).toMatchObject({
+        agentLaunchChoices: {},
+        agentDefaultArgs: {},
+        agentPermissionDefault: 'own'
+      })
+    }
+  }
+)

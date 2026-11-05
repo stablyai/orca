@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store'
-import { readHostAgentLaunchSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
+import {
+  readHostAgentLaunchSettings,
+  hostAgentLaunchSettingsSource
+} from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
@@ -67,10 +70,9 @@ export async function pairedAgentLaunchInputs(args: {
   }
   // Why: old paired servers keep their prepared launch for inputs they cannot express.
   if (
-    (needsArguments && args.agentArgs !== undefined) ||
-    (!args.complete &&
-      Object.hasOwn(YOLO_TUI_AGENT_ENV, agent) &&
-      readLaunchPermissionChoice(sessionOptions))
+    !args.complete &&
+    Object.hasOwn(YOLO_TUI_AGENT_ENV, agent) &&
+    readLaunchPermissionChoice(sessionOptions)
   ) {
     return { preparedAgentCommand: true }
   }
@@ -122,17 +124,7 @@ export async function pairedAgentLaunchInputs(args: {
   ) {
     return { preparedAgentCommand: true }
   }
-  const settings = {
-    agentDefaultArgs: snapshot.agentChoices?.userArgs ??
-      snapshot.agentPermission?.userArgs ?? {
-        ...snapshot.agentDefaultArgs,
-        ...(permissionMode ? { [agent]: legacyPermission.args } : {})
-      },
-    agentLaunchChoices: snapshot.agentChoices?.defaults,
-    agentCmdOverrides: snapshot.agentCmdOverrides,
-    agentPermissionDefault: snapshot.agentPermission?.default ?? legacyPermission.choice ?? 'own',
-    agentPermissionOverrides: snapshot.agentPermission?.overrides
-  }
+  const settings = hostAgentLaunchSettingsSource(snapshot, platform)
   const agentArgs = hasActionArgs
     ? sourceControlActionAgentArgs(
         {

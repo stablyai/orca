@@ -1,3 +1,4 @@
+import { composeAgentLaunchProfile } from '../../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from '../../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import * as startupInputs from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveBaselineAgentStartupPlanInputs } from '../../../src/shared/agent-launch/startup/agent-startup-plan-inputs-baseline-test-fixture'
@@ -127,6 +128,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     { agent: 'goose', mode: 'own', hostMode: 'full-access', authority: true, fail: true }
   ] as const)('preserves a complete launch at the pinned old spawn boundary: %j', async (test) => {
     const settings = {
+      agentCmdOverrides: { [test.agent]: '/host/agent-cli' },
       agentPermissionDefault: test.hostMode,
       agentDefaultEnv:
         test.mode === 'own' && !('userMode' in test)
@@ -159,9 +161,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     if (!plan) {
       throw new Error('Missing startup plan')
     }
-    vi.spyOn(startupInputs, 'resolveAgentStartupPlanInputs').mockImplementation(
-      resolveBaselineAgentStartupPlanInputs
-    )
     const spawn = vi.fn(
       async (_args: Parameters<NonNullable<RuntimePtyController['spawn']>>[0]) => ({
         id: 'baseline-pty'
@@ -187,7 +186,13 @@ describe('createWebRuntimeSessionTerminal', () => {
     mocks.getState.mockReturnValue({
       ...state,
       setActiveTabType: vi.fn(),
-      activeTabTypeByWorktree: {}
+      activeTabTypeByWorktree: {},
+      settings: {
+        ...state.settings,
+        agentCmdOverrides: { [test.agent]: '/desktop/agent-cli' },
+        agentDefaultArgs: { [test.agent]: '--model desktop-only-qa' },
+        agentDefaultEnv: { [test.agent]: { DESKTOP_ENV: 'desktop' } }
+      }
     })
     const creates: string[] = []
     const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
@@ -201,6 +206,18 @@ describe('createWebRuntimeSessionTerminal', () => {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
             capabilities: test.authority ? ['agent-session.host-authority.v1'] : []
+          }
+        }
+      }
+      if (request.method === 'settings.get') {
+        return {
+          id: 'settings',
+          ok: true,
+          result: {
+            settings: {
+              agentCmdOverrides: settings.agentCmdOverrides,
+              ...composeAgentLaunchProfile(settings, 'linux')
+            }
           }
         }
       }
@@ -227,6 +244,9 @@ describe('createWebRuntimeSessionTerminal', () => {
               })
         })
       }
+      vi.spyOn(startupInputs, 'resolveAgentStartupPlanInputs').mockImplementation(
+        resolveBaselineAgentStartupPlanInputs
+      )
       const response = await dispatcher.dispatch(
         { id: 'create', authToken: 'test', method: request.method, params: request.params },
         { clientKind: 'runtime', clientId: 'paired-client' }

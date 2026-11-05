@@ -1,107 +1,17 @@
 // @vitest-environment happy-dom
+import { mocks, host, call, launch, params } from './web-runtime-agent-launch-options.test-fixture'
 import { createElement } from 'react'
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import type { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
+import { expect, it, vi } from 'vitest'
 import {
   WORKTREE_ID,
-  FOCUS_LEAF_ID,
   ENVIRONMENT_ID,
-  makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
-
-const mocks = vi.hoisted(() => ({
-  launched: vi.fn<typeof launch>(),
-  observation: vi.fn(),
-  picker: vi.fn(),
-  getState: vi.fn(),
-  setState: vi.fn(),
-  subscribe: vi.fn(),
-  setActiveWorktree: vi.fn(),
-  createBrowserTab: vi.fn(),
-  closeEmptyGroup: vi.fn(),
-  moveUnifiedTabToGroup: vi.fn(),
-  setRemoteBrowserPageHandle: vi.fn(),
-  focusBrowserTabInWorktree: vi.fn(),
-  applyWebSessionTabsSnapshot: vi.fn(),
-  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
-  getWebSessionTabsTrackingGeneration: vi.fn(() => 0),
-  acceptReplayedWebSessionTabsSnapshot: vi.fn(),
-  resolveHostSessionTabIdForWebSessionTab: vi.fn(),
-  trackTerminalPaneSplit: vi.fn(),
-  deliverLaunchPromptToAgentTab: vi.fn(),
-  seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  hasMaterializedWebRuntimeBrowserPage: vi.fn(),
-  toastError: vi.fn()
-}))
-
-vi.mock('../store', () => ({
-  useAppStore: Object.assign((select: (state: unknown) => unknown) => select(mocks.getState()), {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  })
-}))
-
-vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', () => ({
-  useAgentMenuObservation: mocks.observation
-}))
-vi.mock('@/hooks/useAgentDetectionTarget', () => ({
-  useAgentDetectionTargetForWorktree: () => null
-}))
-vi.mock('@/components/agent/AgentLaunchPicker', () => ({ AgentLaunchPicker: mocks.picker }))
-vi.mock('@/lib/host-chat-program', () => ({ agentsOfferedForLaunch: () => ['claude'] }))
-vi.mock('@/lib/host-chat-program-acquisition', () => ({
-  acquireAgentLaunchChoices: async () => ({ detected: ['claude'], offered: ['claude'] })
-}))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: (input: Parameters<typeof launch>[0]) => {
-    const terminalCompletion = mocks.launched(input)
-    return { surface: { kind: 'host-published' }, terminalCompletion }
-  }
-}))
-
-vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
-}))
-vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
-}))
-vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
-}))
-vi.mock('./web-session-tabs-sync/store-patch', () => ({
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
-    return () => {}
-  }
-}))
-vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
-  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
-}))
-
-vi.mock('@/lib/feature-education-telemetry', () => ({
-  trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
-  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
-  seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
-}))
-
-vi.mock('./web-runtime-browser-materialization', () => ({
-  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
-}))
-
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } }))
-
-afterEach(() => resetWebSessionCloseIntentForTests())
 
 import {
   agentPickerDraft,
@@ -113,112 +23,14 @@ import {
   applyAgentPickerEdit,
   acceptAgentPickerArguments
 } from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
-import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
-import * as preferences from './agent-launch-settings/use-host-agent-launch-preferences'
 import * as settingsTransport from './agent-launch-settings/agent-launch-settings-transport'
 import * as sessionRequests from './agent-session-create-request'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-
-let capabilities: string[]
-let refusal: string | undefined
-const call = vi.fn(async (request: { method: string; params?: Record<string, unknown> }) => {
-  if (request.method === 'status.get') {
-    return {
-      ok: true,
-      result: { runtimeProtocolVersion: 3, minCompatibleRuntimeClientVersion: 2, capabilities }
-    }
-  }
-  if (request.method === 'terminal.createAgentSession' && refusal) {
-    return { ok: false, error: { code: refusal, message: 'Use legacy creation' } }
-  }
-  return {
-    ok: true,
-    result:
-      request.method === 'session.tabs.list'
-        ? makeSnapshot()
-        : {
-            tab: { id: 'host-options', leafId: FOCUS_LEAF_ID },
-            terminal: { handle: 'term-options', tabId: 'host-options', leafId: FOCUS_LEAF_ID }
-          }
-  }
-})
-
-beforeEach(() => {
-  stubTerminalCreateEnvironment(mocks)
-  mocks.getState().runtimeStatusByEnvironmentId = new Map([
-    [ENVIRONMENT_ID, { status: { hostPlatform: 'linux' } }]
-  ])
-  capabilities = ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
-  refusal = undefined
-  vi.spyOn(preferences, 'ensureAgentLaunchPreferences').mockResolvedValue({
-    defaultTuiAgent: undefined,
-    disabledTuiAgents: undefined,
-    agentLaunchChoices: {}
-  })
-  vi.spyOn(settingsTransport, 'readHostAgentLaunchSettings').mockResolvedValue(
-    projectAgentLaunchSettings(
-      {
-        agentPermissionDefault: 'full-access',
-        agentPermissionOverrides: { claude: 'auto' },
-        agentDefaultArgs: { claude: '--add-dir /host-tools' }
-      },
-      'linux'
-    )
-  )
-  stubRuntimeEnvironmentBridge({ call })
-})
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-  resetTerminalCreateEnvironment()
-})
-
-function launch(input: Partial<Parameters<typeof launchAgentInWebHostTab>[0]> = {}) {
-  const agent = input.agent ?? 'claude'
-  const prompt = input.prompt ?? ''
-  const promptDelivery = input.promptDelivery ?? 'auto-submit'
-  return launchAgentInWebHostTab({
-    agent,
-    worktreeId: WORKTREE_ID,
-    environmentId: ENVIRONMENT_ID,
-    activate: false,
-    prompt,
-    promptDelivery,
-    ...input,
-    buildStartup:
-      input.buildStartup ??
-      (() =>
-        planLaunchAgentStartupPrompt({
-          base: resolveAgentStartupPlanInputs({
-            agent,
-            settings: {
-              agentPermissionDefault: 'own',
-              agentDefaultArgs: { claude: '--add-dir /desktop-only' },
-              agentCmdOverrides: { claude: 'desktop-claude' }
-            },
-            agentArgs: input.actionAgentArgs ?? input.agentArgs,
-            sessionOptions: input.sessionOptions,
-            platform: 'linux',
-            isRemote: true,
-            shell: 'posix'
-          }),
-          prompt,
-          promptDelivery,
-          isFollowupPath: agent === 'goose'
-        }))
-  })
-}
-function params(method: string) {
-  const request = call.mock.calls.find(([request]) => request.method === method)?.[0]
-  expect(request).toBeDefined()
-  return request!.params!
-}
 
 it.each(['capabilities', 'snapshot', 'cancelled probe'])(
   'cancels a launch whose pairing changes during %s without dispatching creation',
@@ -230,7 +42,7 @@ it.each(['capabilities', 'snapshot', 'cancelled probe'])(
       >()
     replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 1 }])
     if (phase === 'snapshot') {
-      capabilities = ['agent-session.host-authority.v1']
+      host.capabilities = ['agent-session.host-authority.v1']
       vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockReturnValue(snapshot.promise)
     } else {
       vi.spyOn(sessionRequests, 'agentSessionCreateCapabilities').mockReturnValue(
@@ -312,7 +124,7 @@ it('keeps paired + defaults host-owned and sends complete picks and action Argum
 })
 
 it('keeps host authority on older hosts and composes inexpressible picks only from the host snapshot', async () => {
-  capabilities = ['agent-session.host-authority.v1']
+  host.capabilities = ['agent-session.host-authority.v1']
   await launch({
     sessionOptions: { model: 'sonnet', effort: 'high', permissionMode: 'accept-edits' }
   })
@@ -327,7 +139,7 @@ it('keeps host authority on older hosts and composes inexpressible picks only fr
   )
   expect(params('terminal.createAgentSession')).not.toHaveProperty('launchPreferences')
   call.mockClear()
-  capabilities.push('settings.agent-launch.choices.v1')
+  host.capabilities.push('settings.agent-launch.choices.v1')
   await launch({ sessionOptions: { model: 'sonnet', permissionMode: 'accept-edits' } })
   expect(params('terminal.createAgentSession')).toMatchObject({
     launchPreferences: { model: 'sonnet', mode: 'accept-edits' }
@@ -366,7 +178,7 @@ it('keeps host authority on older hosts and composes inexpressible picks only fr
 })
 
 it('keeps picker-seeded desktop Arguments off a v1.4.239 host and retains explicit Arguments edits', async () => {
-  capabilities = ['agent-session.host-authority.v1']
+  host.capabilities = ['agent-session.host-authority.v1']
   vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue({
     defaultTuiAgent: 'claude',
     disabledTuiAgents: [],
@@ -428,13 +240,14 @@ it('keeps picker-seeded desktop Arguments off a v1.4.239 host and retains explic
       entry
     )
   )
-  const command = params('session.tabs.createTerminal').command
-  expect(command).toContain("'--model' 'launch-only'")
-  expect(command).toContain("'--add-dir' '/launch-tools'")
-  expect(command).toContain("'--dangerously-skip-permissions'")
-  expect(command).not.toContain('desktop-only-qa')
+  const edited = params('terminal.createAgentSession')
+  expect(edited.agentArgs).toBe(
+    '--model launch-only --dangerously-skip-permissions --add-dir /launch-tools'
+  )
+  expect(edited).not.toHaveProperty('command')
+  expect(edited).not.toHaveProperty('launchPreferences')
   call.mockClear()
-  capabilities.push('agent-session.create-options.v1')
+  host.capabilities.push('agent-session.create-options.v1')
   await launch(
     agentPickerFreshLaunchInputs(
       draft,
@@ -448,8 +261,67 @@ it('keeps picker-seeded desktop Arguments off a v1.4.239 host and retains explic
   expect(params('terminal.createAgentSession')).not.toHaveProperty('agentArgs')
 })
 
+it.each([
+  {
+    agentArgs: '--add-dir /tmp',
+    expected: '--effort high --permission-mode default --add-dir /tmp'
+  },
+  { agentArgs: '', expected: '--effort high --permission-mode default' },
+  { agentArgs: null, expected: '--effort high --permission-mode default' }
+])(
+  'compiles explicit picker Arguments $agentArgs with historical host defaults',
+  async ({ agentArgs, expected }) => {
+    host.capabilities = ['agent-session.host-authority.v1']
+    await launch({ agentArgs, sessionOptions: { effort: 'high', permissionMode: 'ask' } })
+    expect(params('terminal.createAgentSession').agentArgs).toBe(expected)
+    expect(params('terminal.createAgentSession')).not.toHaveProperty('launchPreferences')
+    expect(params('terminal.createAgentSession')).not.toHaveProperty('command')
+  }
+)
+
+it.each(['legacy', 'agent_session_legacy_required'])(
+  'prepares edited drafts from the historical host recipe through %s',
+  async (fallback) => {
+    host.capabilities =
+      fallback === 'legacy'
+        ? []
+        : ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
+    host.refusal = fallback === 'legacy' ? undefined : fallback
+    const read = vi
+      .spyOn(settingsTransport, 'readHostAgentStartupSettings')
+      .mockImplementation(async () => {
+        mocks.getState().runtimeStatusByEnvironmentId.set(ENVIRONMENT_ID, {
+          status: { hostPlatform: 'linux', runtimeId: 'resolved-host' }
+        })
+        return {
+          agentCmdOverrides: { claude: '/host/claude' },
+          agentDefaultArgs: { claude: '' },
+          agentDefaultEnv: { claude: { HOST_ENV: 'host' } },
+          agentPermissionDefault: 'auto',
+          agentLaunchChoices: {}
+        }
+      })
+    await launch({
+      agentArgs: '--add-dir /tmp',
+      sessionOptions: { permissionMode: 'ask' },
+      prompt: 'Keep this draft',
+      promptDelivery: 'draft'
+    })
+    expect(params('session.tabs.createTerminal')).toMatchObject({
+      command:
+        "/host/claude '--add-dir' '/tmp' '--permission-mode' 'default' --prefill 'Keep this draft'",
+      env: { HOST_ENV: 'host' }
+    })
+    expect(params('session.tabs.createTerminal')).not.toHaveProperty('agentPrompt')
+    expect(read).toHaveBeenCalledWith(expect.objectContaining({ environmentId: ENVIRONMENT_ID }))
+    expect(mocks.seedNativeChatLaunchDraftForAgentTab).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Keep this draft' })
+    )
+  }
+)
+
 it('requests a host-authoritative v1.4.239 continuation through the real Start handler', async () => {
-  capabilities = ['agent-session.host-authority.v1']
+  host.capabilities = ['agent-session.host-authority.v1']
   mocks.launched.mockImplementation(launch)
   const api = window.api
   vi.stubGlobal('window', document.defaultView)
@@ -533,7 +405,7 @@ it.each([
 ])(
   'uses the host execution platform and shell for snapshot arguments ($hostShell)',
   async ({ launchPlatform, hostShell, expected }) => {
-    capabilities = ['agent-session.host-authority.v1']
+    host.capabilities = ['agent-session.host-authority.v1']
     mocks.getState().runtimeStatusByEnvironmentId = new Map([
       [ENVIRONMENT_ID, { status: { hostPlatform: 'win32', terminalWindowsShell: hostShell } }]
     ])
@@ -559,7 +431,7 @@ it.each([
 )
 
 it('replaces recognized permission text from a historical host snapshot and retains ambiguous launches', async () => {
-  capabilities = ['agent-session.host-authority.v1']
+  host.capabilities = ['agent-session.host-authority.v1']
   const snapshot = {
     defaultTuiAgent: 'claude' as const,
     disabledTuiAgents: [],
@@ -675,7 +547,7 @@ it.each([undefined, ''])(
 it.each([false, true])(
   'compiles a no-flag Ask action pick to empty Arguments on an older host (choices=%s)',
   async (choices) => {
-    capabilities = [
+    host.capabilities = [
       'agent-session.host-authority.v1',
       ...(choices ? ['settings.agent-launch.choices.v1'] : [])
     ]
@@ -725,7 +597,7 @@ it('preserves empty action text and inherits permission from text-only host snap
 it.each<Record<string, string>>([{ effort: 'high' }, { permissionMode: 'full-access' }])(
   'keeps the prepared launch when an older host snapshot is unavailable (%j)',
   async (sessionOptions) => {
-    capabilities = ['agent-session.host-authority.v1']
+    host.capabilities = ['agent-session.host-authority.v1']
     vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(null)
     await launch({ sessionOptions })
     expect(params('session.tabs.createTerminal').command).toContain('desktop-claude')
@@ -736,7 +608,7 @@ it.each<Record<string, string>>([{ effort: 'high' }, { permissionMode: 'full-acc
 )
 
 it('keeps the prepared permission environment for an older host', async () => {
-  capabilities = ['agent-session.host-authority.v1']
+  host.capabilities = ['agent-session.host-authority.v1']
   await launch({ agent: 'goose', sessionOptions: { permissionMode: 'full-access' } })
   expect(params('session.tabs.createTerminal')).toMatchObject({
     env: { GOOSE_MODE: 'auto' }
@@ -750,9 +622,9 @@ it.each(['legacy', 'agent_session_legacy_required', 'method_not_found'])(
   'lets the host plan plain prompted launches through %s fallback',
   async (fallback) => {
     if (fallback === 'legacy') {
-      capabilities = []
+      host.capabilities = []
     } else {
-      refusal = fallback
+      host.refusal = fallback
     }
     await launch({ prompt: 'Inspect this change' })
     const legacy = params('session.tabs.createTerminal')
@@ -773,7 +645,7 @@ it.each(['legacy', 'agent_session_legacy_required', 'method_not_found'])(
 )
 
 it('retains legacy drafts and submit-after-ready suppression and delivery', async () => {
-  capabilities = []
+  host.capabilities = []
   await launch({ prompt: 'Edit this draft', promptDelivery: 'draft' })
   expect(params('session.tabs.createTerminal').command).toContain('--prefill')
   expect(params('session.tabs.createTerminal')).not.toHaveProperty('agentPrompt')
@@ -781,7 +653,7 @@ it('retains legacy drafts and submit-after-ready suppression and delivery', asyn
     expect.objectContaining({ text: 'Edit this draft' })
   )
   call.mockClear()
-  capabilities = ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
+  host.capabilities = ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
   resetTerminalCreateEnvironment()
   stubTerminalCreateEnvironment(mocks)
   stubRuntimeEnvironmentBridge({ call })
