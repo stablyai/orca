@@ -140,7 +140,11 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     })
 
     // A reread that fails after the first parse keeps the transcript in the cache, so a later request classifies it.
-    const unclassified = { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' }
+    const unclassified = {
+      agent: 'claude' as const,
+      sessionId: 'session-1',
+      title: 'Login cleanup'
+    }
     cached.set('session-1', { ...unclassified, transcriptPath: path })
     parseAgentSessionFileCached
       .mockResolvedValueOnce(unclassified)
