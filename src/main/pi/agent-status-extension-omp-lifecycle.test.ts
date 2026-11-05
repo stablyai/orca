@@ -1,3 +1,4 @@
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -378,17 +379,16 @@ describe('OMP auto-learn capture', () => {
     await harness.callHook('tool_execution_start', { toolName: 'learn', args: {} })
     await harness.callHook('tool_call', { toolName: 'learn', input: {} })
     await harness.callHook('tool_execution_end', { toolName: 'learn' })
-    await vi.waitFor(() =>
-      expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
-    )
+    // Delivery is a promise chain, so one event-loop turn sends every queued post. The latest-only
+    // queue sends the newest post last, so no capture tool post followed agent_end.
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
 
     // A user turn started before the capture settles is primary work again.
     await harness.callHook('agent_start')
     await harness.callHook('tool_execution_start', { toolName: 'read', args: {} })
     await harness.callHook('autolearn_capture_end', { outcome: 'completed' })
-    // The post queue may coalesce agent_start into the newer tool post.
-    await vi.waitFor(() =>
-      expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_start')
-    )
+    await nextTurn()
+    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('tool_execution_start')
   })
 })

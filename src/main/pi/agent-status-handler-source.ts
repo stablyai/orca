@@ -15,6 +15,7 @@ import {
   getAgentStatusSessionBoundaryHandlerSourceLines
 } from './agent-status-session-boundary-source'
 
+/** Source lines that register the status handlers and post each lifecycle change to Orca. */
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
     kind !== 'omp'
