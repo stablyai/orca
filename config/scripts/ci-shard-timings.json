@@ -7180,7 +7180,6 @@
       "src/renderer/src/components/editor/use-preserve-section-during-external-edit.test.tsx": 268,
       "src/renderer/src/components/editor/use-quick-open-history-visit.test.tsx": 259,
       "src/renderer/src/components/editor/rich-markdown/tables/use-rich-markdown-table-context-menu.test.tsx": 2238,
-      "src/renderer/src/components/editor/save/commands/useEditorCmdSaveRequest.test.tsx": 732,
       "src/renderer/src/components/editor/useEditorPanelContentState.test.tsx": 3214,
       "src/renderer/src/components/editor/external-changes/useEditorPanelExternalContentEvents.test.tsx": 2018,
       "src/renderer/src/components/editor/useEditorPanelFileLoadRetry.host-connection.test.tsx": 2075,
