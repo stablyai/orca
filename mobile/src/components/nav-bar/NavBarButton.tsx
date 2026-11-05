@@ -1,5 +1,5 @@
 import type { ComponentType, Ref } from 'react'
-import { Pressable, type View } from 'react-native'
+import { ActivityIndicator, Pressable, type View } from 'react-native'
 import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -16,6 +16,8 @@ type NavBarButtonProps = {
   /** The screen or panel this button opens is showing. */
   active?: boolean
   disabled?: boolean
+  /** Shows a spinner in place of the icon while the button's action runs. */
+  loading?: boolean
 }
 
 // A round top-bar button; the bar floats over content like the composer, so its buttons are round too.
@@ -25,7 +27,8 @@ export function NavBarButton({
   accessibilityLabel,
   onPress,
   active = false,
-  disabled = false
+  disabled = false,
+  loading = false
 }: NavBarButtonProps) {
   useMobileColorScheme()
   return (
@@ -44,7 +47,11 @@ export function NavBarButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled, selected: active }}
     >
-      <Icon size={18} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.textPrimary} />
+      ) : (
+        <Icon size={18} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
+      )}
     </Pressable>
   )
 }

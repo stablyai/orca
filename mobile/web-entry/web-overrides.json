@@ -142,6 +142,10 @@
       "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
     {
+      "file": "src/platform/file-saver.web.ts",
+      "reason": "Saving a file means a native folder picker and a streamed write to the device's storage, which a page cannot do: the shell's CSP and sandbox give it no file-system access. This one asks the shell through native.file.save, which lets the user pick a folder, downloads the file into it a chunk at a time, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview hides its Download button."
+    },
+    {
       "file": "src/platform/media-picker.web.ts",
       "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
     },

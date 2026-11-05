@@ -19,8 +19,10 @@ import {
 import {
   clipboardReadResultSchema,
   clipboardWriteResultSchema,
+  fileSaveResultSchema,
   pdfViewResultSchema,
   type BridgeClipboardMime,
+  type BridgeFileSaveParams,
   type BridgeNativeVerb,
   type BridgePdfOpenParams
 } from './bridge-native-verbs'
@@ -47,6 +49,10 @@ export type NativeVerbs = {
   canOpenPdf: boolean
   openPdf: (params: BridgePdfOpenParams) => Promise<void>
   cancelPdf: () => Promise<void>
+  canSaveFile: boolean
+  // Resolves false when the user dismisses the folder picker.
+  saveFile: (params: BridgeFileSaveParams) => Promise<boolean>
+  cancelFileSave: () => Promise<void>
 }
 
 // Expose stable reason codes, including local ungranted and frame refusals. Unknown newer-shell codes floor to unreported so caller switches remain exhaustive.
@@ -81,6 +87,7 @@ export const NATIVE_VERB_REASONS = [
   'native_audio_not_capturing',
   'native_pdf_no_viewer',
   'native_pdf_host_outdated',
+  'native_file_save_host_outdated',
   'native_verb_not_a_verb',
   'bridge_cap_exceeded',
   'bridge_host_disposed',
@@ -163,6 +170,12 @@ export function useNativeVerbs(): NativeVerbs {
       },
       cancelPdf: async () => {
         await call('native.pdf.view', { action: 'cancel' }, pdfViewResultSchema)
+      },
+      canSaveFile: has('native.file.save'),
+      saveFile: async (params) =>
+        (await call('native.file.save', { action: 'save', ...params }, fileSaveResultSchema)).saved,
+      cancelFileSave: async () => {
+        await call('native.file.save', { action: 'cancel' }, fileSaveResultSchema)
       }
     }
   }, [client])

@@ -22,6 +22,16 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     textAlign: 'center'
   },
+  downloadNotice: {
+    color: colors.statusGreen,
+    fontSize: typography.bodySize,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm
+  },
+  downloadNoticeError: {
+    color: colors.statusRed
+  },
   errorText: {
     color: colors.statusRed,
     fontSize: typography.bodySize,

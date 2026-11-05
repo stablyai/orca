@@ -65,13 +65,14 @@ export async function downloadMobileFileMedia(
   media: MobileFileMedia,
   sink: MobileMediaSink,
   signal: AbortSignal,
-  onProgress: (bytes: number, total: number) => void
+  onProgress: (bytes: number, total: number) => void,
+  options: { allowEmpty?: boolean } = {}
 ): Promise<string> {
   const params = { worktree: `id:${media.worktreeId}`, relativePath: media.relativePath }
-  const options = { failWhenDisconnected: true, timeoutMs: 30_000 }
+  const rpcOptions = { failWhenDisconnected: true, timeoutMs: 30_000 }
   try {
     checkDownloadActive(signal)
-    const statReply = await statRead.request(client, params, options)
+    const statReply = await statRead.request(client, params, rpcOptions)
     if (
       !statReply.ok &&
       isMobileMethodUnavailableError(statReply.error.code, statReply.error.message)
@@ -80,7 +81,7 @@ export async function downloadMobileFileMedia(
     }
     const stat = statRead.interpret(statReply)
     checkDownloadActive(signal)
-    if (stat.isDirectory || stat.size === 0) {
+    if (stat.isDirectory || (stat.size === 0 && !options.allowEmpty)) {
       throw new Error('This file has no playable media')
     }
     if (stat.size > MOBILE_MEDIA_MAX_BYTES) {
@@ -91,7 +92,7 @@ export async function downloadMobileFileMedia(
       checkDownloadActive(signal)
       const length = Math.min(MOBILE_MEDIA_CHUNK_BYTES, stat.size - offset)
       const chunk = chunkRead.interpret(
-        await chunkRead.request(client, { ...params, offset, length }, options)
+        await chunkRead.request(client, { ...params, offset, length }, rpcOptions)
       )
       checkDownloadActive(signal)
       const decoded = Buffer.from(chunk.contentBase64, 'base64')
@@ -109,7 +110,7 @@ export async function downloadMobileFileMedia(
       offset += chunk.bytesRead
       onProgress(offset, stat.size)
     }
-    const latest = statRead.interpret(await statRead.request(client, params, options))
+    const latest = statRead.interpret(await statRead.request(client, params, rpcOptions))
     checkDownloadActive(signal)
     if (
       latest.isDirectory ||
