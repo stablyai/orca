@@ -73,8 +73,9 @@ function makeHostSnapshot(args: {
         parentTabId: HOST_TAB_ID,
         leafId: LEAF_ID,
         isActive: true,
-        status: args.status ?? 'ready',
-        terminal: 'terminal-1',
+        ...(args.status === 'pending-handle'
+          ? { status: 'pending-handle' as const, terminal: null }
+          : { status: 'ready' as const, terminal: 'terminal-1' }),
         ...(args.aiVaultTitle !== undefined ? { aiVaultTitle: args.aiVaultTitle } : {}),
         ...(args.resolvesSessionTitle ? { resolvesSessionTitle: true as const } : {}),
         ...(args.includeAgentStatus
