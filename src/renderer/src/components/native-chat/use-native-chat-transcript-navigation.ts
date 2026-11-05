@@ -8,6 +8,7 @@ import type {
   NativeChatDiffReveal,
   NativeChatDiffTarget
 } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatRailItem } from './native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import {
@@ -47,8 +48,8 @@ export type NativeChatNavigationRequest = {
 /** Read before the window mounts rows, so the request's slot stays drawn. */
 export function useNativeChatNavigationRequest(
   slots: readonly NativeChatTranscriptSlot[],
-  sections: NativeChatSubagentSections,
-  roster: StructuredAgentSubagentRoster | undefined
+  conversation: readonly NativeChatMessage[],
+  sections: NativeChatSubagentSections
 ): NativeChatNavigationRequest {
   const [request, issue] = useState<NavigationRequest | null>(null)
   const sequence = useRef(0)
@@ -60,7 +61,7 @@ export function useNativeChatNavigationRequest(
   const railJump = request?.kind === 'rail' ? request : null
   const subagentJump = request?.kind === 'subagent' ? request : null
   const subagentLanding = subagentJump
-    ? nativeChatSubagentLanding(slots, sections, roster, subagentJump.agentId)
+    ? nativeChatSubagentLanding(slots, conversation, sections, subagentJump.agentId)
     : null
   const revealIndex =
     subagentLanding?.index ??
@@ -80,6 +81,7 @@ export function useNativeChatNavigation({
   request,
   rail,
   slots,
+  conversation,
   sections,
   roster,
   journalItems,
@@ -96,6 +98,7 @@ export function useNativeChatNavigation({
   request: NativeChatNavigationRequest
   rail: { items: readonly NativeChatRailItem[]; onActivate: (id: string) => void }
   slots: readonly NativeChatTranscriptSlot[]
+  conversation: readonly NativeChatMessage[]
   sections: NativeChatSubagentSections
   roster: StructuredAgentSubagentRoster | undefined
   journalItems: readonly AgentJournalRenderItem[] | undefined
@@ -123,6 +126,7 @@ export function useNativeChatNavigation({
       }
       const place = nativeChatSubagentPlace({
         agentId: target.agentId,
+        conversation,
         sections,
         roster,
         slots,

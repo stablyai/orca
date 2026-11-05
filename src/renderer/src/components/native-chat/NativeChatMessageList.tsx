@@ -204,7 +204,7 @@ export function NativeChatMessageList({
       ),
     [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
-  const navigationRequest = useNativeChatNavigationRequest(slots, subagentSections, subagentRoster)
+  const navigationRequest = useNativeChatNavigationRequest(slots, messages, subagentSections)
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
     slots,
@@ -248,6 +248,7 @@ export function NativeChatMessageList({
     request: navigationRequest,
     rail,
     slots,
+    conversation: messages,
     sections: subagentSections,
     roster: subagentRoster,
     journalItems,

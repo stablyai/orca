@@ -89,7 +89,9 @@ const agent = (id: string, label: string): NativeChatSubagentEntry => ({
 
 function rosterOf(item: AgentJournalRenderItem): StructuredAgentSubagentRoster {
   const block = item.body.kind === 'message' ? item.body.blocks[0] : undefined
-  const agents = block?.type === 'subagent-group' ? block.agents : []
+  // A legacy group names every agent; a current host writes one roster item per agent.
+  const agents =
+    block?.type === 'subagent-group' ? block.agents : block?.type === 'subagent' ? [block] : []
   return new Map(
     agents.map((entry) => [
       entry.id,
@@ -114,13 +116,13 @@ function Transcript({
   items: AgentJournalRenderItem[]
   initiallyLoaded?: number
   roster?: StructuredAgentSubagentRoster
-  loadEarlier?: () => void
+  /** Called per page; a returned promise holds the page in flight until it settles. */
+  loadEarlier?: () => void | Promise<void>
   handle: React.Ref<NativeChatMessageListHandle>
 }): React.JSX.Element {
   const [loaded, setLoaded] = useState(initiallyLoaded)
   const loadEarlier = useCallback(async (): Promise<NativeChatOlderPageResult> => {
-    onLoadEarlier?.()
-    await Promise.resolve()
+    await onLoadEarlier?.()
     setLoaded((current) => Math.min(items.length, current + 2))
     return 'applied'
   }, [items.length, onLoadEarlier])
@@ -261,7 +263,13 @@ describe('revealing a subagent named by the agents strip', () => {
     expect(loads).toHaveBeenCalledTimes(3)
     unmount()
 
-    const abandoned = vi.fn()
+    let releasePage = (): void => {}
+    const abandoned = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releasePage = resolve
+        })
+    )
     render(
       <Transcript
         items={items}
@@ -271,19 +279,55 @@ describe('revealing a subagent named by the agents strip', () => {
         handle={handle}
       />
     )
+    await reveal(handle, 'grok-1')
+    await waitFor(() => expect(abandoned).toHaveBeenCalledTimes(1))
+    fireEvent.wheel(screen.getByLabelText('Conversation'), { deltaY: -40 })
     await act(async () => {
-      handle.current?.revealSubagent('grok-1')
-      fireEvent.wheel(screen.getByLabelText('Conversation'), { deltaY: -40 })
+      releasePage()
       await Promise.resolve()
     })
-    // Long enough for the three pages an unabandoned reveal needs to land.
-    await act(async () => {
-      for (let tick = 0; tick < 20; tick += 1) {
-        await Promise.resolve()
-      }
-    })
-    expect(abandoned.mock.calls.length).toBeLessThanOrEqual(1)
+
+    expect(abandoned).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('search the docs')).toBeNull()
+  })
+
+  it("finds a later sibling's entry in the row its roster folds into, without paging", async () => {
+    const sibling = (itemId: string, id: string, label: string, sequence: number) =>
+      journalItem(
+        itemId,
+        {
+          kind: 'message',
+          role: 'system',
+          blocks: [{ type: 'subagent', id, label, state: 'working', groupId: 'turn-1' }]
+        },
+        sequence
+      )
+    const first = sibling('spawn-1', 'grok-1', 'search the docs', 3)
+    const second = sibling('spawn-2', 'grok-2', 'read the tests', 4)
+    const items = [
+      say('older', 'assistant', 'Earlier work.', 1),
+      say('ask', 'user', 'Look it up', 2),
+      first,
+      second,
+      say('answer', 'assistant', 'Started both.', 5)
+    ]
+    const loads = vi.fn()
+    const handle = createRef<NativeChatMessageListHandle>()
+    render(
+      <Transcript
+        items={items}
+        initiallyLoaded={4}
+        roster={new Map([...rosterOf(first), ...rosterOf(second)])}
+        loadEarlier={loads}
+        handle={handle}
+      />
+    )
+    expect(screen.queryByText('read the tests')).toBeNull()
+
+    await reveal(handle, 'grok-2')
+
+    await waitFor(() => expect(screen.getByText('read the tests')).toBeInTheDocument())
+    expect(loads).not.toHaveBeenCalled()
   })
 
   it('does not page for a child spawned before the latest /clear', async () => {
