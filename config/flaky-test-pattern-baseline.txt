@@ -1,7 +1,6 @@
 # Flaky-test pattern findings per rule and file (config/ast-grep/rules/flaky-tests).
 # This is a RATCHET: counts may only go DOWN. Run `pnpm lint:ast-grep:flaky-tests` to list them.
 # Prune after a fix: pnpm check:flaky-test-pattern-ratchet --prune
-
 1 test-no-in-test-import-actual:src/cli/runtime/launch-serve-replaced-app-restart.test.ts
 1 test-no-in-test-import-actual:src/main/agent-hooks/server-status-persist-nonblocking.test.ts
 1 test-no-in-test-import-actual:src/main/bitbucket/credential-connection.test.ts
@@ -31,8 +30,6 @@
 1 test-no-in-test-import-actual:src/main/ssh/orcad-snapshot-room.test.ts
 1 test-no-in-test-import-actual:src/main/window/dropped-path-preparation.test.ts
 1 test-no-in-test-import-actual:src/main/workspaces/removal/local-worktree-removal-recovery.test.ts
-1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/sidebar-feedback/SidebarFeedbackDialog.test.tsx
-1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/workspace-card/activity/WorktreeCardAgents.activation.test.tsx
 1 test-no-in-test-import-actual:src/renderer/src/components/terminal-pane/pty-connection-hook-idle-arbitration.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useIpcEvents-agent-status-pane-teardown.test.ts
@@ -292,7 +289,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatModelCombobox.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-lifecycle.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/sidebar/sidebar-feedback/SidebarFeedbackDialog.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/status-bar/NativeChatResumeStatusSegment.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/issue-12112-agent-pane-startup-color-reply-leak.repro.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/remote-runtime-connect-failure-recovery.test.ts
@@ -654,7 +650,6 @@
 1 test-timeout-needs-reason:src/main/windows/windows-administrator-restart.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-host-job.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-msys-job.win32.test.ts
-1 test-timeout-needs-reason:src/renderer/src/components/sidebar/workspace-card/activity/WorktreeCardAgents.test.tsx
 1 test-timeout-needs-reason:src/renderer/src/hooks/agent-hook-completion-notifications.test.ts
 1 test-timeout-needs-reason:src/renderer/src/lib/check-run-details-log-normalization-performance.test.ts
 1 test-timeout-needs-reason:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
@@ -1305,7 +1300,7 @@
 5 test-no-wall-clock:src/main/runtime/orca-runtime-migrated-pane-restore-cwd.test.ts
 5 test-no-wall-clock:src/main/runtime/rpc/methods/agent-launch-restart-replay.test.ts
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx
-5 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
+4 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
 4 test-timeout-needs-reason:src/main/agent-hooks/server-transport-interference.test.ts
 5 test-timeout-needs-reason:src/main/browser/identity/browser-session-ua-wire-identity.electron.test.ts
 5 test-timeout-needs-reason:src/main/claude-usage/scanner-incremental-reader.test.ts

@@ -38,7 +38,7 @@ import {
   pluginPolicyBlockError,
   snapshotPluginConsentLists
 } from './plugin-activation-policy'
-import { PluginContentPackRegistry } from './contributions/plugin-content-pack-registry'
+import { createPluginContentPacks } from './contributions/plugin-content-pack-registry'
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
@@ -52,7 +52,7 @@ export class PluginService {
   private readonly audit: PluginAuditLog
   private readonly workerController: PluginWorkerController
   private readonly contentVerifier = new PluginContentVerifier()
-  readonly contentPacks: PluginContentPackRegistry
+  readonly contentPacks: ReturnType<typeof createPluginContentPacks>
   readonly panels: PluginPanelController
   readonly panelBridge: PluginPanelBridge
   private readonly hostCall: PluginServiceHostCall
@@ -71,9 +71,7 @@ export class PluginService {
 
   constructor(options: PluginServiceOptions) {
     this.options = options
-    this.contentPacks = new PluginContentPackRegistry(this.contentVerifier, (pluginKey) =>
-      Boolean(this.options.getPluginKillListEntry?.(pluginKey))
-    )
+    this.contentPacks = createPluginContentPacks(this.contentVerifier, options)
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
     const resolveApproved = (pluginKey: string, allowRefreshPause = false) =>
       this.findApprovedPlugin(pluginKey, allowRefreshPause)
@@ -95,6 +93,7 @@ export class PluginService {
         desktop: this.options.getDesktopFrameServices?.(),
         panels: pluginPanelBridgeServices(this.panelBridge),
         statusBar: this.options.statusBar,
+        appearance: this.options.appearance,
         audit: this.audit,
         log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
       })
@@ -127,6 +126,8 @@ export class PluginService {
   setRuntimeDelegate(delegate: PluginRuntimeDelegate | null): void {
     this.runtimeDelegate = delegate
   }
+
+  readonly notifyAppearanceChanged = () => this.notifyChanged(true)
 
   onChanged(listener: (event: PluginChangeEvent) => void): () => void {
     this.changeListeners.add(listener)
