@@ -138,18 +138,26 @@ export function normalizeTerminalChunk(
       textStart = index + 1
       continue
     }
-    if (code === 0x0d && index + 1 === combined.length) {
-      // A final CR may be half of CRLF; keep the painted row until the next byte decides.
-      appendTerminalNormalizedSpan(parts, combined, textStart, index)
-      return { text: parts.join(''), pendingAnsi: '\r' }
-    }
-    if (code === 0x0d && combined.charCodeAt(index + 1) === 0x0a) {
-      // CRLF keeps only its LF, which starts the next span.
-      appendTerminalNormalizedSpan(parts, combined, textStart, index)
-      textStart = index + 1
+    if (code === 0x0d) {
+      // Repeated CRs land on the same column, so a run acts as one CR; raw-mode output ends lines with CR CR LF.
+      let runEnd = index + 1
+      while (combined.charCodeAt(runEnd) === 0x0d) {
+        runEnd += 1
+      }
+      if (runEnd === combined.length) {
+        // A final CR may be half of CRLF; keep the painted row until the next byte decides.
+        appendTerminalNormalizedSpan(parts, combined, textStart, index)
+        return { text: parts.join(''), pendingAnsi: '\r' }
+      }
+      if (combined.charCodeAt(runEnd) === 0x0a) {
+        // CRLF keeps only its LF, which starts the next span.
+        appendTerminalNormalizedSpan(parts, combined, textStart, index)
+        textStart = runEnd
+      }
+      index = runEnd - 1
       continue
     }
-    if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0d) {
+    if (code === 0x08 || code === 0x09 || code === 0x0a) {
       continue
     }
     if (!isTerminalPreviewPrintableCodeUnit(code)) {

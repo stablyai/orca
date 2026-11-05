@@ -47,6 +47,21 @@ describe('terminal tail CRLF chunk boundaries', () => {
     }
   )
 
+  it('ends lines at CR CR LF, the sequence raw-mode programs emit', async () => {
+    const ptyId = 'pty-cr-cr-lf'
+    const { runtime, leaf } = runtimeWithLeaf(ptyId)
+    try {
+      runtime.onPtyData(ptyId, 'first\r\r\nsecond\r\r\nthird\r', 1)
+      runtime.onPtyData(ptyId, '\r', 2)
+      runtime.onPtyData(ptyId, '\n', 3)
+      expect(readPtyTail(runtime, ptyId)).toEqual(['first', 'second', 'third'])
+      expect(leaf.tailTranscriptBuffer).toEqual(['first', 'second', 'third'])
+      expect(leaf.tailPendingAnsi).toBe('')
+    } finally {
+      await runtime.onPtyExit(ptyId, 0)
+    }
+  })
+
   it('does not erase the final partial line on process exit', async () => {
     const ptyId = 'pty-crlf-exit'
     const { runtime, leaf } = runtimeWithLeaf(ptyId)
