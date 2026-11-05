@@ -17,6 +17,7 @@ function requiredAdapterMethods(
   adapter: StructuredAgentSessionAdapter
 ): AdapterMethod[] {
   return [
+    ...(capabilities.fork ? (['copyConversation'] as const) : []),
     ...(capabilities.compact ? (['compact'] as const) : []),
     ...(capabilities.threadGoal ? (['changeThreadGoal'] as const) : []),
     ...(capabilities.rewind && !adapter.forkForRewind ? (['rewind', 'recoverRewind'] as const) : [])

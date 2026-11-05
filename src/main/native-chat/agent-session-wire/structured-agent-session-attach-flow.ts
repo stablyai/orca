@@ -1,3 +1,4 @@
+import { readForkMarker, withForkMarker } from './agent-session-fork-marker'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -266,7 +267,7 @@ export async function performAttach(
         record: acquired,
         openConversation: input.openConversation
       })
-      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
+      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, { store })
       await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
@@ -299,7 +300,12 @@ export async function performAttach(
       fence,
       get page() {
         return (page ??= withPublishedWork(
-          readAgentSessionHydrationPage(attached.journal, fence, undefined, view.currentSnapshot()),
+          readAgentSessionHydrationPage(
+            attached.journal,
+            fence,
+            withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId)),
+            view.currentSnapshot()
+          ),
           work
         ))
       },

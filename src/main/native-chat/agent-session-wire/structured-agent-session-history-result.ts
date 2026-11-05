@@ -1,3 +1,4 @@
+import { withForkMarker, type ForkMarker } from './agent-session-fork-marker'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -28,6 +29,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   record: AgentSessionConversationView | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
+  forkMarker?: ForkMarker
   reader?: HistoryReader
   replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
@@ -36,7 +38,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   const result = withPublishedWorkResult(
     readAgentSessionHistory(input.journal, input.request, {
       scope: input.scope,
-      reader: input.reader,
+      reader: withForkMarker(input.reader, () => input.forkMarker),
       rowReplay: input.replaceNormalizedHistory === false
     }),
     input.work

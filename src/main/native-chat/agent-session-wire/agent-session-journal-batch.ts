@@ -1,3 +1,4 @@
+import { FORK_MARKER_ITEM_ID } from './agent-session-fork-marker'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type {
@@ -101,6 +102,19 @@ export function projectJournalBatch(input: {
   }
   const snapshot = input.readSnapshot?.(touchedItemIds) ?? input.snapshot
   const live = liveItemsById(snapshot.items)
+  const removed = [...touchedItemIds].some((id) => !live.has(id))
+  const marker = live.get(FORK_MARKER_ITEM_ID)
+  if (
+    marker &&
+    ([...touchedItemIds].some((id) => live.get(id)?.sequence === marker.sequence) || removed)
+  ) {
+    touchedItemIds.add(FORK_MARKER_ITEM_ID)
+    for (const item of snapshot.items) {
+      if (item.sequence === marker.sequence) {
+        touchedItemIds.add(item.itemId)
+      }
+    }
+  }
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)

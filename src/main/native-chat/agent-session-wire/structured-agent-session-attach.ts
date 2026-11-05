@@ -49,6 +49,7 @@ export type AgentSessionAttachParams = {
   /** Retain native in params because fingerprints include it. */
   runtimeKind: 'native'
   /** Host-only create defaults; remote schemas reject these. */
+  fork?: { sessionId: string; itemId: string; title: string; revalidate: () => Promise<void> }
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string

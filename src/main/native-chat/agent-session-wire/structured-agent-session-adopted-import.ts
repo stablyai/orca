@@ -1,3 +1,5 @@
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError,
@@ -7,10 +9,7 @@ import {
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
-import {
-  importLegacyTranscriptIntoJournal,
-  prepareLegacyTranscriptImport
-} from '../agent-session-journal/journal-legacy-import'
+import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 
@@ -91,7 +90,7 @@ export async function importAdoptedTranscript(
   attached: AttachedJournal,
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
-  options: { uncommittedCreate?: true } = {}
+  options: { uncommittedCreate?: true; store?: AgentSessionRecordStore } = {}
 ): Promise<void> {
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
@@ -105,14 +104,15 @@ export async function importAdoptedTranscript(
     return
   }
   // Failed import must not close the conversation-owned journal.
-  await applyAdoptedTranscript(params, attached, record, prepared)
+  await applyAdoptedTranscript(params, attached, record, prepared, options.store)
 }
 
 async function applyAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null
+  prepared: JournalReplacementItem[] | null,
+  store?: AgentSessionRecordStore
 ): Promise<void> {
   const adopt = params.adopt
   // Preserve durable writes after the initial epoch row.
@@ -120,7 +120,29 @@ async function applyAdoptedTranscript(
     return
   }
   if (prepared) {
-    await attached.journal.replaceEpochItems('legacy_import', record.lease.runtimeFence, prepared)
+    await params.fork?.revalidate()
+    const fork = params.fork
+    const last = prepared.at(-1)
+    const receipt =
+      fork && store
+        ? store.conversationReceipts.forkBoundary(
+            record.sessionId,
+            {
+              sessionId: fork.sessionId,
+              itemId: fork.itemId,
+              childBoundary: last
+                ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
+                : { kind: 'start' }
+            },
+            fork.title
+          )
+        : undefined
+    await attached.journal.replaceEpochItems(
+      'legacy_import',
+      record.lease.runtimeFence,
+      prepared,
+      receipt ? () => receipt : undefined
+    )
     return
   }
   if (!adopt.transcriptPath) {
@@ -128,20 +150,11 @@ async function applyAdoptedTranscript(
       reason: 'transcriptNotFound'
     })
   }
-  const imported = await importLegacyTranscriptIntoJournal({
-    journal: attached.journal,
-    agent: params.agent,
-    sessionId: adopt.providerHandle.nativeId,
-    fence: record.lease.runtimeFence,
-    options: { filePath: adopt.transcriptPath, source: adopt.source }
-  })
-  if (!imported.ok) {
-    throw new Error(imported.error)
-  }
-  // Empty decode contradicts the adopted provider conversation; refuse rather than show an empty chat.
-  if (!imported.replaced) {
+  const read = await readAdoptedTranscript(params)
+  if (!read?.length) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptUnreadable'
     })
   }
+  await applyAdoptedTranscript(params, attached, record, read, store)
 }

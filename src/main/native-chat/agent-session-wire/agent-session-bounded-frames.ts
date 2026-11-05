@@ -1,3 +1,4 @@
+import { withForkMarker, type ForkMarker } from './agent-session-fork-marker'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
@@ -22,17 +23,21 @@ const BOUNDED_FRAME_READER: HistoryReader = {
 /** How a subscriber's rows are read, and so how its pages are sized. */
 export function subscriberHistoryReader(subscriber: {
   boundedFrames: boolean
+  readForkMarker?: () => ForkMarker | undefined
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
 }): HistoryReader {
   const reader = subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
-  return subscriber.readHistorySnapshot
-    ? {
-        ...reader,
-        snapshot: subscriber.readHistorySnapshot,
-        queueSourceIds: subscriber.readQueueSourceIds
-      }
-    : reader
+  return withForkMarker(
+    subscriber.readHistorySnapshot
+      ? {
+          ...reader,
+          snapshot: subscriber.readHistorySnapshot,
+          queueSourceIds: subscriber.readQueueSourceIds
+        }
+      : reader,
+    subscriber.readForkMarker
+  )
 }
 
 /** Omit oversized metadata rather than exceeding the envelope; readers treat absence as unspecified. */
