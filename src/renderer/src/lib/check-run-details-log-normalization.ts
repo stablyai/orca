@@ -1,5 +1,5 @@
 import type { PRCheckRunDetails } from '../../../shared/github/check-types'
-import { sanitizeCheckJobLogExcerpt } from '../../../shared/check-job-log-excerpt'
+import { sanitizeCheckJobLogExcerpt } from '../../../shared/source-control/checks/logs/check-job-log-excerpt'
 
 export function normalizeCheckRunDetailsLogTails(
   details: PRCheckRunDetails | null

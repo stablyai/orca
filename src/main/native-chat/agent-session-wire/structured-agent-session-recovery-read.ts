@@ -2,14 +2,16 @@ import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/nativ
 import {
   structuredSessionRecoveryOptions,
   type RecoveryContextCache
-} from '../../runtime/structured-session-recovery-options'
+} from '../../runtime/agent-session/lifecycle/structured-session-recovery-options'
 import { withoutInheritedClaudeConfigDir } from '../../claude/claude-config-dir-pin'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 
-type RecoverySession = { journal: Pick<StructuredAgentSessionHostSession['journal'], 'snapshot'> }
+type RecoverySession = {
+  journal: Pick<StructuredAgentSessionHostSession['journal'], 'statusRead' | 'cursor'>
+}
 type RecoveryDeps = Pick<
   StructuredAgentSessionHostDeps,
   'resolveLaunchEnv' | 'resolveWorkspacePath'
@@ -19,12 +21,12 @@ type RecoveryDeps = Pick<
 const contexts = new WeakMap<RecoverySession, RecoveryContextCache>()
 
 function recoveryIdentity(session: RecoverySession, deps: RecoveryDeps, sessionId: string) {
-  const snapshot = session.journal.snapshot()
+  const snapshot = session.journal.statusRead()
   const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
   const record = deps.store.getRecord(sessionId)
   return cut && record
     ? JSON.stringify([
-        snapshot.cursor,
+        session.journal.cursor(),
         cut.turnItemId,
         record.provider,
         record.providerHandleChain,

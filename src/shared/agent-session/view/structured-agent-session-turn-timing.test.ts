@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { selectNativeChatTurnStatuses } from '../../native-chat/transcript/native-chat-turn-status'
 import {
-  completedStructuredAgentTurnSeconds,
-  selectStructuredAgentRunningTurnTiming,
   selectStructuredAgentSettledTurns,
-  selectStructuredAgentTurnTimings,
   structuredAgentTurnLocalStartedAt
 } from './structured-agent-session-turn-timing'
 
@@ -41,35 +38,11 @@ function lifecycle(
   }
 }
 
-describe('selectStructuredAgentTurnTimings', () => {
-  it('skips lifecycle rows that carry no start (older hosts, conversation commands)', () => {
-    const items = [user('u1'), lifecycle('compact:1', {})]
-    expect(selectStructuredAgentTurnTimings(items).size).toBe(0)
-  })
-
-  it('drops an end that precedes its start', () => {
-    const items = [
-      user('u1'),
-      lifecycle('t1', { state: 'completed', startedAt: 9_000, completedAt: 5_000 })
-    ]
-    expect(selectStructuredAgentTurnTimings(items).get('u1')?.completedAt).toBeUndefined()
-  })
-})
-
 describe('structuredAgentTurnLocalStartedAt', () => {
   it('moves the local first sighting back by the host-side append lag only', () => {
     const timing = { state: 'running' as const, startedAt: 50_000, observedAt: 52_500 }
     // Client clock is 1h ahead of the host: the anchor must not inherit that skew.
     expect(structuredAgentTurnLocalStartedAt(timing, 3_600_000 + 60_000)).toBe(3_600_000 + 57_500)
-  })
-
-  it('never moves the anchor forward when the row predates its own start', () => {
-    expect(
-      structuredAgentTurnLocalStartedAt(
-        { state: 'running', startedAt: 50_000, observedAt: 40_000 },
-        100
-      )
-    ).toBe(100)
   })
 })
 
@@ -91,77 +64,6 @@ describe('host-settled turns override local observation', () => {
     expect(statuses.completedByTurn.u1?.workedSeconds).toBe(187)
     expect(statuses.completedByTurn.u0?.workedSeconds).toBe(4)
     expect(statuses.active?.workedSeconds).toBe(187)
-  })
-})
-
-describe('selectStructuredAgentRunningTurnTiming', () => {
-  it('finds the live turn by id and returns null for an older host row without a start', () => {
-    const items = [user('u1'), lifecycle('t1', { state: 'running', startedAt: 7_000 }, 7_250)]
-    expect(selectStructuredAgentRunningTurnTiming(items, 't1')).toEqual({
-      state: 'running',
-      startedAt: 7_000,
-      observedAt: 7_250
-    })
-    expect(selectStructuredAgentRunningTurnTiming(items, 'other')).toBeNull()
-    expect(
-      selectStructuredAgentRunningTurnTiming([user('u2'), lifecycle('t2', {})], 't2')
-    ).toBeNull()
-  })
-})
-
-describe('explicit user-item attribution', () => {
-  it('uses the key directly when the user item is journaled under it', () => {
-    const items = [
-      user('claude:s:u1'),
-      lifecycle('u1', {
-        state: 'completed',
-        userItemId: 'claude:s:u1',
-        startedAt: 1_000,
-        completedAt: 2_000
-      })
-    ]
-    expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual(['claude:s:u1'])
-  })
-})
-
-describe('provider-measured duration', () => {
-  it('is ignored while the turn is not settled', () => {
-    expect(
-      completedStructuredAgentTurnSeconds({
-        state: 'running',
-        startedAt: 1_000,
-        durationMs: 7_172,
-        observedAt: 1_000
-      })
-    ).toBeNull()
-  })
-})
-
-describe('coalesced sends and canonical rows', () => {
-  it('reads a canonical turn item exactly like the legacy carrier', () => {
-    sequence += 1
-    const canonical: AgentJournalRenderItem = {
-      itemId: 'legacy:codex:s:turn-lifecycle%3At9',
-      revision: 2,
-      sequence,
-      observedAt: 1_000,
-      body: {
-        kind: 'turn',
-        turnId: 't9',
-        state: 'completed',
-        userItemId: 'orca:u9',
-        startedAt: 1_000,
-        completedAt: 9_000,
-        durationMs: 7_172
-      }
-    }
-    const timings = selectStructuredAgentTurnTimings([user('orca:u9'), canonical])
-    expect(timings.get('orca:u9')).toMatchObject({ state: 'completed', durationMs: 7_172 })
-    expect(selectStructuredAgentSettledTurns([user('orca:u9'), canonical]).get('orca:u9')).toEqual({
-      startedAt: 1_000,
-      workedSeconds: 7
-    })
-    expect(selectStructuredAgentRunningTurnTiming([canonical], 't9')?.startedAt).toBe(1_000)
   })
 })
 

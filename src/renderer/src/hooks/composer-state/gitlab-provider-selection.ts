@@ -30,11 +30,12 @@ type GitLabProviderSelectionInput = Pick<
 
 import { useCallback } from 'react'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
-  toGitLabLinkedWorkItem,
-  getLinkedItemDisplayName
-} from '@/components/sidebar/folder-workspace-composer-helpers'
-import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
+  buildGitLabWorkspaceSource as toGitLabLinkedWorkItem,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../../shared/new-workspace/workspace-source'
+import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitPushTarget } from '../../../../shared/worktree/types'

@@ -1,8 +1,8 @@
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
-import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
+import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
 import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
@@ -27,8 +27,12 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
-import { addWorktree, addSparseWorktree } from '../git/worktree'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
@@ -36,7 +40,7 @@ import {
 import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
+import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
 import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
@@ -58,8 +62,8 @@ import {
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
 } from '../workspace-hooks/effective-hook-config'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -87,7 +91,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { BranchPrefixSettings } from '../../shared/branch-prefix'
+import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {
@@ -95,20 +99,20 @@ import {
   sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
-} from './worktree-push-target-cleanup'
-import { reconcileOrphanedPrRemotes } from './worktree-push-target-reconciliation'
+} from '../git/remotes/worktree-push-target-cleanup'
+import { reconcileOrphanedPrRemotes } from '../git/remotes/worktree-push-target-reconciliation'
 import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec,
   remoteAlreadyMatchesUrl,
   restoreUpstreamAfterMaterialize
-} from './worktree-push-target-setup'
+} from '../git/remotes/worktree-push-target-setup'
 import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly,
   forkRemoteTrackingRefExists
-} from '../git/fork-remote-refspec'
-import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
+} from '../git/refs/fork-remotes/fork-remote-refspec'
+import { migrateForkRemoteRefspecs } from '../git/remotes/worktree-push-target-refspec-migration'
 import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
@@ -119,8 +123,8 @@ import {
   createWorktreeSharedPaths
 } from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { attributedSparsePresetId } from './sparse-preset-attribution'
 import {

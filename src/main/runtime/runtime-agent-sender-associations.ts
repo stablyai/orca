@@ -4,7 +4,7 @@ import type {
   AgentSenderRevision
 } from '../../shared/agent-sender-associations'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import {
   readAgentSenderPrincipals,
@@ -18,7 +18,10 @@ import {
 } from './runtime-agent-sender-worker-history'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from './orchestration/db'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
 /** The handles terminals already hold, read without issuing one: display bookkeeping never

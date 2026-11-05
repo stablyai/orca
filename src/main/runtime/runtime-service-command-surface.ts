@@ -1,4 +1,4 @@
-import type { RuntimeAccountController } from './runtime-account-controller'
+import type { RuntimeAccountController } from './agent-session/environment/runtime-account-controller'
 import type { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import type { RuntimeBrowserDriverController } from './runtime-browser-driver-controller'
 import type { RuntimeClientEventBus } from './runtime-client-event-bus'
@@ -9,6 +9,7 @@ import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
+import type { NotificationAttentionAcknowledgement } from '../../shared/notification-settings-types'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
@@ -38,7 +39,8 @@ export type RuntimeServiceCommandSurface = {
   reconcileDismissedPushes: RuntimeMobileNotificationController['reconcileDismissedPushes']
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
-  retireStructuredAttention: RuntimeMobileNotificationController['retireStructuredAttention']
+  retireNotificationAttention: RuntimeMobileNotificationController['acknowledgeAttention']
+  acknowledgeNotificationAttention(acknowledgement: NotificationAttentionAcknowledgement): void
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
   setMobilePushRegistrar: RuntimeMobileNotificationController['setPushRegistrar']
@@ -149,7 +151,11 @@ export function installRuntimeServiceCommandSurface(
     reconcileDismissedPushes: notifications.reconcileDismissedPushes.bind(notifications),
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
-    retireStructuredAttention: notifications.retireStructuredAttention.bind(notifications),
+    retireNotificationAttention: notifications.acknowledgeAttention.bind(notifications),
+    acknowledgeNotificationAttention: (acknowledgement: NotificationAttentionAcknowledgement) => {
+      notifications.acknowledgeAttention(acknowledgement)
+      events.emit({ type: 'notificationAttentionAcknowledged', acknowledgement })
+    },
     reconcileStructuredPromptAttention:
       notifications.reconcileStructuredPromptAttention.bind(notifications),
     dispatchPluginNotification: notifications.dispatchPlugin.bind(notifications),

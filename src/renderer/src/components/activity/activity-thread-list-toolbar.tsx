@@ -14,7 +14,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ActivityThreadOptionsMenu } from './activity-thread-controls'
-import type { ActivityGroupBy, ThreadReadFilter } from './activity-thread-types'
+import type {
+  ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../shared/agents-view-thread-filters'
 
 export function ActivityThreadListToolbar({
   activityFilterInputRef,

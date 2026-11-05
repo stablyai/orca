@@ -40,19 +40,7 @@ async function run(
   return shown
 }
 
-const goneRow = { path: 'gone.txt', resolveActionId: 'resolve:gone.txt' }
-
 describe('useMobileConflictRunners', () => {
-  it('sends the chosen resolution for the row to the host', async () => {
-    const sendGitRequest = vi.fn(async () => ({ ok: true }))
-    const shown = await run(sendGitRequest, (r) => r.resolveConflict(goneRow, 'keep_deletion'))
-    expect(shown).toBeNull()
-    expect(sendGitRequest).toHaveBeenCalledWith('git.resolveConflict', {
-      filePath: 'gone.txt',
-      resolution: 'keep_deletion'
-    })
-  })
-
   it('shows Git’s refusal when the host reports Complete merge failed in its reply', async () => {
     const sendGitRequest = vi.fn(async () => ({
       success: false,

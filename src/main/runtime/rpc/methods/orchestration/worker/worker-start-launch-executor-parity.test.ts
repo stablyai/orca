@@ -6,15 +6,13 @@ import {
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
-import {
-  downgradeAgentLaunchModeForHost,
-  type AgentLaunchModeReceipt
-} from '../../../../../agent-launch/agent-launch-mode'
+import { downgradeAgentLaunchModeForHost } from '../../../../../agent-launch/agent-launch-mode'
+import type { AgentLaunchModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
-import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
+import { structuredWorkerIdentities } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { WorkerEffect } from './worker-topology'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 

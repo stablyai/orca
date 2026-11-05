@@ -7,7 +7,10 @@ import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 import { DiffCommentCard } from './DiffCommentCard'
 import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
-import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
+import {
+  NotesSendMenu,
+  type NotesSendMenuScope
+} from '../editor/review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 
 export function getRenderSignature(

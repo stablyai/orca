@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import type {
   SleepingAgentSessionRecord,
   TerminalLaunchResult
@@ -12,11 +14,11 @@ import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+} from './orca-runtime-test-fixtures.spec'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
-import { deterministicAgentSessionUuid } from '../runtime-agent-launch-resolution'
-import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
+import { deterministicAgentSessionUuid } from '../terminal/launch/runtime-agent-launch-resolution'
+import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../runtime-pty-controller-contract'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'

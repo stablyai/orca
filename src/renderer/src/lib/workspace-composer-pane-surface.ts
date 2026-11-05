@@ -1,6 +1,6 @@
 import type { TopLevelView } from '../../../shared/ui-chrome-types'
 import type { AppState } from '@/store/types'
-import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/worktree-creation-surface'
 
 type WorkspaceComposerPaneSurfaceInput = {
   activeView: TopLevelView
@@ -48,12 +48,6 @@ export function selectWorkspaceComposerPaneActive(
     activeModal: s.activeModal,
     composerParked: s.parkedComposerModalData !== null,
     promptFirstComposer: s.settings?.promptFirstComposer === true,
-    creationSurfaceActive: shouldShowWorktreeCreationSurface({
-      activeView: s.activeView,
-      activePendingCreationId: s.activePendingCreationId,
-      hasActivePendingCreation:
-        s.activePendingCreationId !== null &&
-        s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
-    })
+    creationSurfaceActive: selectWorktreeCreationSurfaceShown(s)
   })
 }

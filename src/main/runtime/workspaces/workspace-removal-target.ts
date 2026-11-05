@@ -1,11 +1,11 @@
-import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
+import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
+import { OrcaRuntimeWithRemoveManagedWorktree } from './removal/workspace-removal'
 import type {
   RemoveManagedWorktreeOptions,
   RuntimeWorktreeRemovalTarget
-} from '../runtime-worktree-selection'
-import { resolveRuntimeWorktreeRemovalTarget } from '../runtime-worktree-removal-target'
+} from './catalog/runtime-worktree-selection'
+import { resolveRuntimeWorktreeRemovalTarget } from './removal/runtime-worktree-removal-target'
 import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
@@ -15,8 +15,8 @@ import {
   pruneRemovedWorktreeSnapshots
 } from '../../workspaces/removal/worktree-removal-process-cleanup'
 import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-attachment'
-import { closeClientHostedBrowserPagesForWorktree } from '../worktree-browser-client-page-close'
-import { teardownStops } from '../owned-session-teardown-policy'
+import { closeClientHostedBrowserPagesForWorktree } from './removal/worktree-browser-client-page-close'
+import { teardownStops } from './removal/owned-session-teardown-policy'
 import { deleteRemovedOwnerBrowserProfile } from '../browser-host/managed-browser-profile-removal'
 import type {
   ForceDeleteWorktreeBranchResult,
@@ -26,7 +26,7 @@ import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../shared/runtime-types'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from '../runtime-terminal-contracts'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -39,14 +39,14 @@ import {
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from '../../workspaces/removal/worktree-background-removal'
-import { interruptedLocalWorktreeRemovalJob } from '../runtime-interrupted-local-worktree-removal'
+import { interruptedLocalWorktreeRemovalJob } from './removal/runtime-interrupted-local-worktree-removal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   resolveAgentTerminalCreateOptions,
-  withHostAccountLaunchEnv
-} from '../runtime-agent-terminal-startup'
+  prepareHostAgentTerminalLaunch
+} from '../terminal/launch/runtime-agent-terminal-startup'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
 
 export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
@@ -307,22 +307,19 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
 
   async resolveAgentTerminalCreateOptions(
     workspace: TerminalWorkspaceLaunchScope,
-    opts: TerminalCreateOptions
+    opts: TerminalCreateOptions,
+    sessionOptions: Readonly<Record<string, SessionOptionValue>> | undefined = opts.sessionOptions
   ): Promise<TerminalCreateOptions> {
-    const resolvedLaunch = await resolveAgentTerminalCreateOptions(workspace, opts, {
-      store: this.store,
-      hostIdentity: this.runtimeId,
-      toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-    })
-    const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
-    // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
-    if (workspace.connectionId) {
-      return launch
-    }
-    if (launch.launchAgent) {
-      await this.accounts.prepareHostAgentLaunch(launch.launchAgent)
-    }
-    const hostLaunchEnv = this.accounts.hostLaunchEnvFor(launch.launchAgent)
-    return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
+    const resolvedLaunch = await resolveAgentTerminalCreateOptions(
+      workspace,
+      opts,
+      {
+        store: this.store,
+        hostIdentity: this.runtimeId,
+        toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
+      },
+      sessionOptions
+    )
+    return prepareHostAgentTerminalLaunch(workspace, opts, resolvedLaunch, this.accounts)
   }
 }

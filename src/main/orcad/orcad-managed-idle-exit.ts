@@ -2,7 +2,7 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import {

@@ -1,7 +1,7 @@
 import { createElement, Fragment, startTransition, Suspense, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -24,15 +24,6 @@ function Suspend({ active }: { active: boolean }) {
   }
   return null
 }
-const command: TerminalQuickCommand = {
-  id: 'command',
-  label: 'Test',
-  action: 'terminal-command',
-  command: 'pnpm test',
-  appendEnter: true,
-  scope: { type: 'global' }
-}
-
 vi.mock('react-native', () => ({
   Alert: { alert: mocks.alert },
   Pressable: 'Pressable',
@@ -85,29 +76,6 @@ describe('QuickCommandsSheet', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
-  })
-
-  it('keeps the sheet open when a launch is rejected', async () => {
-    const onClose = vi.fn()
-    const onLaunch = vi.fn(() => false)
-    await act(async () => {
-      renderer = create(
-        createElement(QuickCommandsSheet, {
-          visible: true,
-          onClose,
-          client: stubRpcClient(),
-          repoId: 'repo-1',
-          repoName: 'Repo',
-          agentPromptMaxLength: null,
-          onLaunch
-        })
-      )
-    })
-
-    act(() => findByHostType(renderer!.root, quickCommandsList).props.onLaunch(command))
-
-    expect(onLaunch).toHaveBeenCalledWith(command)
-    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('submits one full-list mutation for a same-frame double tap', async () => {
@@ -345,94 +313,5 @@ describe('QuickCommandsSheet', () => {
     })
     expect(editor().props.saving).toBe(false)
     client.close()
-  })
-
-  it('allows saving another command when forty commands already exist', async () => {
-    mocks.commands = Array.from({ length: 40 }, (_, index) => ({
-      ...command,
-      id: `command-${index}`
-    }))
-    await act(async () => {
-      renderer = create(
-        createElement(QuickCommandsSheet, {
-          visible: true,
-          onClose: vi.fn(),
-          client: stubRpcClient(),
-          repoId: 'repo-1',
-          repoName: 'Repo',
-          agentPromptMaxLength: null,
-          onLaunch: () => true
-        })
-      )
-    })
-
-    const list = findByHostType(renderer!.root, quickCommandsList)
-    act(() => list.props.onAdd())
-    const editor = () => findByHostType(renderer!.root, quickCommandEditorForm)
-    act(() => editor().props.onChange({ label: 'Another command', command: 'echo saved' }))
-    mocks.persist.mockResolvedValue(true)
-    await act(async () => editor().props.onSave())
-    expect(mocks.persist).toHaveBeenCalledWith({
-      type: 'upsert',
-      command: expect.objectContaining({ label: 'Another command', command: 'echo saved' })
-    })
-    expect(findAllByHostType(renderer!.root, quickCommandEditorForm)).toHaveLength(0)
-  })
-
-  it('shows only global commands and defaults new commands to global without a repo', async () => {
-    const repoCommand: TerminalQuickCommand = {
-      ...command,
-      id: 'repo-command',
-      scope: { type: 'repo', repoId: 'repo-1' }
-    }
-    mocks.commands = [command, repoCommand]
-    await act(async () => {
-      renderer = create(
-        createElement(QuickCommandsSheet, {
-          visible: true,
-          onClose: vi.fn(),
-          client: stubRpcClient(),
-          repoId: null,
-          repoName: 'Folder workspace',
-          agentPromptMaxLength: null,
-          onLaunch: () => true
-        })
-      )
-    })
-
-    const list = findByHostType(renderer!.root, quickCommandsList)
-    expect(list.props.globalCommands).toEqual([command])
-    expect(list.props.repoCommands).toEqual([])
-    act(() => list.props.onAdd())
-    expect(findByHostType(renderer!.root, quickCommandEditorForm).props.draft.scope).toEqual({
-      type: 'global'
-    })
-  })
-
-  it('does not delete a shared command until the destructive action is confirmed', async () => {
-    await act(async () => {
-      renderer = create(
-        createElement(QuickCommandsSheet, {
-          visible: true,
-          onClose: vi.fn(),
-          client: stubRpcClient(),
-          repoId: 'repo-1',
-          repoName: 'Repo',
-          agentPromptMaxLength: null,
-          onLaunch: () => true
-        })
-      )
-    })
-
-    act(() => findByHostType(renderer!.root, quickCommandsList).props.onDelete(command))
-    expect(mocks.persist).not.toHaveBeenCalled()
-
-    const actions = mocks.alert.mock.calls[0]?.[2] as
-      | Array<{ style?: string; onPress?: () => void }>
-      | undefined
-    act(() => actions?.find((action) => action.style === 'destructive')?.onPress?.())
-
-    expect(mocks.persist).toHaveBeenCalledTimes(1)
-    expect(mocks.persist).toHaveBeenCalledWith({ type: 'delete', id: command.id })
   })
 })

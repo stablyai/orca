@@ -6,11 +6,11 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
-import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { withDurableRuntimeStore } from './orca-runtime-tests/runtime-durable-store-fixture'
+import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'

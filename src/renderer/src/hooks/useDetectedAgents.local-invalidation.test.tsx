@@ -8,7 +8,7 @@ import { useNewTabAgentMenuRows } from '@/components/tab-bar/use-new-tab-agent-m
 import {
   useSourceControlActionAgent,
   useSourceControlActionAgentInventory
-} from '@/components/settings/use-source-control-action-agent'
+} from '@/components/settings/source-control/use-source-control-action-agent'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import { useHostStructuredAgentsSync } from '@/runtime/host-structured-agents-sync'
 import {

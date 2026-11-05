@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeEnvironmentStore from '../../../shared/runtime-environment-store'
+import type * as RuntimeEnvironmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { WslHostServerStop } from '../../../shared/wsl-host-types'
 
 type WslServiceFake = { connect: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> }
@@ -27,11 +27,14 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   ipcMain: { handle: mocks.handle, removeHandler: vi.fn() }
 }))
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
-  removeEnvironment: mocks.removeEnvironment,
-  resolveEnvironment: mocks.resolveEnvironment
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    removeEnvironment: mocks.removeEnvironment,
+    resolveEnvironment: mocks.resolveEnvironment
+  })
+)
 vi.mock('./runtime-environment-removal-cleanup', () => ({
   retireRemovedRuntimeEnvironment: mocks.retire
 }))
@@ -57,12 +60,12 @@ vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
 vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
 vi.mock('../../ssh/orcad-terminal-census-client', () => ({ requestOrcadTerminalCensus: vi.fn() }))
 
-import { registerWslHostHandlers } from '../wsl-host-handlers'
+import { registerWslHostHandlers } from '../wsl/wsl-host-handlers'
 import { registerRuntimeEnvironmentConnectivityHandlers } from './runtime-environment-connectivity-handlers'
 import {
   findWslHostDeployment,
   setWslHostPendingStop
-} from '../../../shared/runtime-environment-wsl-host-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
 import {
   UBUNTU,
@@ -74,7 +77,7 @@ import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-g
 
 const { resolveEnvironment: resolveActualEnvironment } = await vi.importActual<
   typeof RuntimeEnvironmentStore
->('../../../shared/runtime-environment-store')
+>('../../../shared/remote-runtime/host-store/runtime-environment-store')
 
 const endpoints = [
   {

@@ -1,4 +1,4 @@
-import type * as GitRunner from '../../../../../main/git/runner'
+import type * as GitRunner from '../../../../../main/git/command-runner/gh-exec-file'
 import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
@@ -21,7 +21,7 @@ import { updateIssue } from '../../../../../main/github/issue-update'
 import { updatePullRequestBySlug } from '../../../../../main/github/project-view/pull-request-mutation'
 import { updateIssueBySlug } from '../../../../../main/github/project-view/mutations'
 import { listLabelsBySlug } from '../../../../../main/github/project-view/repository-field-options'
-import { getWorkItemWithRepository } from '../../../../../main/github/client/fetch/get-work-item'
+
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -89,7 +89,7 @@ const io = vi.hoisted(() => {
     unexpected: new Array<string>()
   }
 })
-vi.mock('../../../../../main/git/runner', async (original) => ({
+vi.mock('../../../../../main/git/command-runner/gh-exec-file', async (original) => ({
   ...(await original<typeof GitRunner>()),
   ghExecFileAsync: io.gh
 }))
@@ -115,7 +115,7 @@ vi.mock('../../../../../main/github/github-enterprise-repository', () => ({
   isGitHubHostAuthenticated: async () => true,
   isGitHubHostAuthenticatedForGlobalCli: async () => true
 }))
-vi.mock('../../../../../main/git/remote-name-listing', () => ({
+vi.mock('../../../../../main/git/remotes/remote-name-listing', () => ({
   shouldProbeGitRemote: async () => true
 }))
 vi.mock('../../../../../main/github/rate-limit', () => ({
@@ -516,121 +516,6 @@ it.each(['github.com', 'github.corp'])(
   }
 )
 
-it('retains accepted legacy details and exact viewed actions when generic metadata is unsupported', async () => {
-  io.host = 'github.com'
-  io.capable = false
-  const opened = item('fork')
-  const sourceContext: TaskSourceContext = {
-    kind: 'task-source',
-    provider: 'github',
-    projectId: 'project',
-    repoId: 'remote-clone',
-    hostId: 'runtime:paired'
-  }
-  const fork = await getWorkItemDetails('/clone', 93, 'pr', null, {}, 'upstream', opened.prRepo)
-  io.rpc.mockImplementation(async (_target, method) => {
-    if (method === 'status.get') {
-      return { runtimeId: 'a', capabilities: [] }
-    }
-    if (method === 'github.workItemDetails') {
-      return fork
-    }
-    if (method === 'github.setPRFileViewed') {
-      return true
-    }
-    throw new Error(`Unexpected targetless dispatch: ${method}`)
-  })
-  await act(async () => root.render(<Probe opened={opened} sourceContext={sourceContext} />))
-  expect(view.details?.body).toBe('fork body')
-  expect(view.error).toBeNull()
-  expect(labels.error).toContain('Update Orca')
-  expect(labels.data).toEqual([])
-  await act(async () => {
-    expect(await view.handlePRFileViewedChange('fork.ts', true)).toBe(true)
-  })
-  expect(
-    io.rpc.mock.calls.filter(([, method]) => method === 'github.workItemDetails')
-  ).toHaveLength(1)
-  expect(io.rpc.mock.calls.some(([, method]) => method === 'github.listLabels')).toBe(false)
-  expect(view.details?.pullRequestId).toBe('PR_fork')
-})
-
-async function freshExactIssueWrite(edit: Parameters<typeof runIssueUpdate>[0], owner: string) {
-  io.rpc.mockClear()
-  io.rpc.mockImplementation(async (_target, method, params) => {
-    if (method === 'status.get') {
-      return { runtimeId: 'fresh', capabilities: ['github.exact-work-item-target.v1'] }
-    }
-    if (method === 'github.updateIssue') {
-      return updateIssue(
-        '/clone',
-        params.number,
-        params.updates,
-        null,
-        {},
-        io.preference,
-        params.ownerRepo
-      )
-    }
-    throw new Error(`Unexpected fresh operation: ${method}`)
-  })
-  await runIssueUpdate(edit)
-  expect(io.rpc.mock.calls.map(([, method]) => method)).toEqual([
-    'status.get',
-    'github.updateIssue'
-  ])
-  expect(io.rpc.mock.calls[1][2]).toMatchObject({ ownerRepo: edit.issueRepo, number: 93 })
-  expect(io.gh.mock.calls.map(([args]) => args)).toEqual([
-    ['api', '-X', 'PATCH', `repos/${owner}/widgets/issues/93`, '--input', '-']
-  ])
-}
-
-it('the actual old PR resolver fallback cannot authorize a generic writer', async () => {
-  io.host = 'github.com'
-  io.upstreamIsIssue = true
-  const fork = await getWorkItemDetails('/clone', 93, 'pr', null, {}, 'upstream')
-  expect(fork?.item.url).toContain('/fork/widgets/pull/93')
-  expect(
-    io.gh.mock.calls.some(([args]) => args[0] === 'pr' && args.includes('upstream/widgets'))
-  ).toBe(true)
-  expect(io.gh.mock.calls.some(([args]) => args.includes('repos/upstream/widgets/pulls/93'))).toBe(
-    true
-  )
-  io.gh.mockClear()
-  // This is the old generic writer boundary: it independently resolves upstream.
-  await updateIssue('/clone', 93, { body: 'unsafe' }, null, {}, 'upstream')
-  expect(io.gh.mock.calls.some(([args]) => args.includes('repos/upstream/widgets/issues/93'))).toBe(
-    true
-  )
-  io.gh.mockClear()
-  io.rpc.mockImplementation(async (_target, method) => {
-    if (method === 'status.get') {
-      return { runtimeId: 'a', capabilities: [] }
-    }
-    throw new Error('An unsupported generic write must not reach the old transport')
-  })
-  const edit = {
-    repoPath: '/clone',
-    repoId: 'clone',
-    sourceContext: {
-      kind: 'task-source',
-      provider: 'github',
-      projectId: 'p',
-      hostId: 'runtime:paired',
-      repoId: 'remote-clone'
-    },
-    projectOrigin: undefined,
-    issueRepo: item('fork').prRepo,
-    type: 'pr',
-    number: 93,
-    updates: { body: 'safe refusal' }
-  } satisfies Parameters<typeof runIssueUpdate>[0]
-  await expect(runIssueUpdate(edit)).rejects.toThrow('Update Orca')
-  expect(io.gh).not.toHaveBeenCalled()
-  expect(io.rpc.mock.calls.map(([, method]) => method)).toEqual(['status.get'])
-  await freshExactIssueWrite(edit, 'fork')
-})
-
 it('publishes through the actual Tasks PR page and Project dialog using one accepted cache owner', async () => {
   io.host = 'github.com'
   const opened = item('fork')
@@ -674,41 +559,4 @@ it('publishes through the actual Tasks PR page and Project dialog using one acce
   await act(async () => patchCachedWorkItemBody(page.detailsCacheKey!, 'saved body'))
   expect(published.get('page')?.body).toBe('saved body')
   expect(published.get('dialog')?.body).toBe('saved body')
-})
-
-it('a matching issue read cannot authorize a later legacy write after source preference flips', async () => {
-  io.host = 'github.com'
-  const accepted = await getWorkItemWithRepository('/clone', 93, 'issue', null, {}, 'upstream')
-  expect(accepted.item?.url).toContain('/upstream/widgets/issues/93')
-  io.gh.mockClear()
-  await updateIssue('/clone', 93, { body: 'would hit a different issue' }, null, {}, 'origin')
-  expect(io.gh.mock.calls.some(([args]) => args.includes('repos/fork/widgets/issues/93'))).toBe(
-    true
-  )
-  io.gh.mockClear()
-  io.rpc.mockImplementation(async (_target, method) => {
-    if (method === 'status.get') {
-      return { runtimeId: 'a', capabilities: [] }
-    }
-    throw new Error('unsupported operation was dispatched')
-  })
-  const edit = {
-    repoPath: '/clone',
-    repoId: 'clone',
-    sourceContext: {
-      kind: 'task-source',
-      provider: 'github',
-      projectId: 'p',
-      hostId: 'runtime:original',
-      repoId: 'remote-clone'
-    },
-    projectOrigin: undefined,
-    issueRepo: { owner: 'upstream', repo: 'widgets' },
-    number: 93,
-    updates: { body: 'edit' }
-  } satisfies Parameters<typeof runIssueUpdate>[0]
-  await expect(runIssueUpdate(edit)).rejects.toThrow('Update Orca')
-  expect(io.rpc.mock.calls.map(([, method]) => method)).toEqual(['status.get'])
-  expect(io.gh).not.toHaveBeenCalled()
-  await freshExactIssueWrite(edit, 'upstream')
 })

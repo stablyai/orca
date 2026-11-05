@@ -12,7 +12,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
 import { STATUS_METHODS } from '../status'
 import { eraseRpcMethods } from '../../core'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -38,7 +38,7 @@ import {
   projectStructuredItemToNativeChat
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { latestStructuredAgentSessionPrompt } from '../../../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
+import { isOrcaDispatchPrompt } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
 import {

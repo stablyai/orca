@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 const { snapshotWriteSpy, userDataDirHolder } = vi.hoisted(() => ({
   snapshotWriteSpy: vi.fn(),

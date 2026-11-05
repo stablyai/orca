@@ -1,6 +1,9 @@
 import { getCatalogPlatform } from './agent-catalog-platform'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import {
+  getTuiAgentLaunchCommand,
+  TUI_AGENT_CONFIG
+} from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { translate } from '@/i18n/i18n'
 import type { AgentCatalogEntry } from './agent-catalog'
 

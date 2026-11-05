@@ -5,12 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import { gitExecFileAsync } from '../git/runner'
-import { addSparseWorktree, addWorktree } from '../git/worktree'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
 import { openWorktreeCreatePathClaim } from '../workspaces/creation/worktree-create-in-flight'
 import { WorktreeCreate } from '../../shared/rpc-contract/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from './rpc/methods/worktree-create-args'
-import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
-import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
+import { RuntimeRemoteFetchController } from './repositories/runtime-remote-fetch-controller'
+import { resolveRuntimeLocalWorktreeCreateCandidate } from './workspaces/creation/runtime-local-worktree-create-candidate'
 
 const roots: string[] = []
 afterEach(async () => {

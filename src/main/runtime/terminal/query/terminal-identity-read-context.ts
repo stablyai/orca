@@ -5,8 +5,8 @@ import {
   captureStructuredWorkerReadInputs,
   createStructuredWorkerReadContext,
   type StructuredWorkerReadContext
-} from '../../structured-worker-authority'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   OrchestrationCompatibilitySshTerminal,
   TerminalHandleRecord
@@ -14,7 +14,7 @@ import type {
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { PtyPane, PtyPaneOf, PtyPaneSource } from '../surface/pty-pane-query'
 
 type IdentitySources = {

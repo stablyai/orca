@@ -1,7 +1,7 @@
 import { ptyIncarnationById, ptyOwnership } from '../../../../main/ipc/pty/provider/ownership-state'
 import { createLaunchRaceRuntime } from '../../../../main/ipc/pty/pty-launch-race-test-fixture'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import { setupPtyIpcSuite } from '../../../../main/ipc/pty/pty-ipc-test-harness'
 import { classifyErrorMock, statSyncMock } from '../../../../main/ipc/pty/pty-ipc-mock-registry'
 import { registerPtyHandlers } from '../../../../main/ipc/pty/register-handlers'
@@ -10,13 +10,15 @@ import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests
 } from '../../../../main/agent-launch/agent-launch-pane-attachment'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from '../../../../main/ipc/pty/pane/spawn-reservation'
-import { acquireWatcherRemovalGate } from '../../../../main/ipc/watcher-removal-gate'
+import { acquireWatcherRemovalGate } from '../../../../main/workspaces/removal/watcher-removal-gate'
+import { planQueuedPaneAgentLaunch } from '../../../../main/ipc/pty/pane-agent-launch.test-fixture'
+import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 const renderer = vi.hoisted(() => {
   const ptyIdsByTabId: Record<string, string[]> = {}
@@ -128,12 +130,12 @@ vi.mock('../../../../main/agent-hooks/migration-unsupported-pty-state', () =>
     m.migrationUnsupportedPtyModuleMock()
   )
 )
-vi.mock('../../../../main/codex/codex-pane-account-registry', () =>
+vi.mock('../../../../main/codex/configuration/homes/codex-pane-account-registry', () =>
   import('../../../../main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexPaneAccountRegistryModuleMock()
   )
 )
-vi.mock('../../../../main/codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../../../main/codex/history/index/codex-state-db-backfill-recovery', () =>
   import('../../../../main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexBackfillRecoveryModuleMock()
   )
@@ -235,9 +237,90 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true })
+      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true }),
+      undefined
     )
   })
+
+  it('compiles an Automation submit on the host with its full options, raw Args and separate extras', async () => {
+    const prompt = `Review 'the changes'\n${'Keep every requested detail. '.repeat(1200)}`.trim()
+    const planned = await planQueuedPaneAgentLaunch(
+      {
+        launch: {
+          ...AI_BUTTON.launch,
+          prompt: { text: prompt, delivery: 'submit' },
+          agentArgs: `  --add-dir '/authored path' --model raw-model --effort low  `,
+          sessionOptions: {
+            model: 'private/sonnet',
+            effort: 'high',
+            fastMode: 'true',
+            permissionMode: 'accept-edits'
+          }
+        },
+        extraAgentArgs: `--add-dir '/extra path' --model extra-model --effort medium`,
+        startupPromptCarry: 'force-line',
+        suppressStartupUpdatePrompt: true,
+        returnLaunchFailure: true
+      },
+      {
+        agentCmdOverrides: { claude: 'claude-host' },
+        agentDefaultArgs: { claude: '--add-dir /host-default' },
+        agentDefaultEnv: { claude: { PANE_HOST_SENTINEL: 'host' } },
+        agentPermissionDefault: 'own'
+      },
+      PANE_ADDRESS
+    )
+
+    const parsed = tokenizeStartupCommand(planned.command ?? '', 'posix')
+    expect(parsed.ok && parsed.tokens).toEqual([
+      'claude-host',
+      '--add-dir',
+      '/authored path',
+      '--add-dir',
+      '/extra path',
+      '--model',
+      'private/sonnet',
+      '--effort',
+      'high',
+      '--settings',
+      '{"fastMode":true}',
+      '--permission-mode',
+      'acceptEdits',
+      prompt
+    ])
+    expect(planned).toMatchObject({
+      launchAgent: 'claude',
+      env: { PANE_HOST_SENTINEL: 'host', ORCA_AGENT_LAUNCH_TOKEN: expect.any(String) },
+      launchConfig: { agentEnv: { PANE_HOST_SENTINEL: 'host' } }
+    })
+    expect(planned.launchConfig?.agentCommand).not.toContain(prompt)
+    expect(planned.launchConfig?.agentArgs).not.toContain('/host-default')
+    expect(planned.agentLaunch).toBeUndefined()
+  })
+
+  it.each([
+    { connectionId: 'ssh-fixture', expected: 'shell-ready' },
+    { connectionId: null, expected: undefined }
+  ] as const)(
+    'preserves caller shell-ready delivery only for a connection-scoped adapter ($connectionId)',
+    async ({ connectionId, expected }) => {
+      const planned = await planQueuedPaneAgentLaunch(
+        AI_BUTTON,
+        { agentPermissionDefault: 'own' },
+        PANE_ADDRESS,
+        {
+          connectionId,
+          commandDelivery: 'provider',
+          startupCommandDelivery: 'shell-ready'
+        }
+      )
+
+      expect(planned.command).toBe('claude')
+      expect(planned.commandDelivery).toBe('provider')
+      expect(planned.connectionId).toBe(connectionId)
+      expect(planned.startupCommandDelivery).toBe(expected)
+    }
+  )
 
   // Planned command quoting requires the planner's runtime shell; an inferred tab shell can reject WSL-share repos.
   it("runs the plan's runtime shell, not the tab's, as a host launch does", async () => {
@@ -256,7 +339,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.not.objectContaining({ shellOverride: expect.anything() })
+      expect.not.objectContaining({ shellOverride: expect.anything() }),
+      undefined
     )
     expect(providerSpawn.mock.calls[0]?.[0].shellOverride).toBe('/bin/planned-shell')
   })
@@ -313,20 +397,26 @@ describe('a pane that starts its own agent launch', () => {
     expect(providerSpawn).toHaveBeenCalledOnce()
   })
 
-  it('starts no shell when the plan fails, and the pane says why', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-shell' }))
-    const runtime = register(providerSpawn, async () => {
-      throw new Error('agent_launch_agent_disabled')
-    })
+  it.each([
+    { returnLaunchFailure: false, error: AGENT_LAUNCH_PANE_REFUSED_CODE },
+    { returnLaunchFailure: true, error: 'agent_launch_agent_disabled' }
+  ])(
+    'starts no shell on plan failure (original failure: $returnLaunchFailure)',
+    async ({ returnLaunchFailure, error }) => {
+      const providerSpawn = vi.fn(async () => ({ id: 'pty-shell' }))
+      const runtime = register(providerSpawn, async () => {
+        throw new Error('agent_launch_agent_disabled')
+      })
 
-    await expect(spawnPane()).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
+      await expect(spawnPane({ ...AI_BUTTON, returnLaunchFailure })).rejects.toThrow(error)
 
-    expect(providerSpawn).not.toHaveBeenCalled()
-    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
-      kind: 'not-started',
-      code: 'agent_launch_agent_disabled'
-    })
-  })
+      expect(providerSpawn).not.toHaveBeenCalled()
+      expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
+        kind: 'not-started',
+        code: 'agent_launch_agent_disabled'
+      })
+    }
+  )
 
   it('cannot confirm a start whose provider answer was lost', async () => {
     const providerSpawn = vi.fn(async () => {

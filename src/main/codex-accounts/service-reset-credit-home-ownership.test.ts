@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { join } from 'node:path'
 import { realpathSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'

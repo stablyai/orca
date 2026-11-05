@@ -2,12 +2,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { committingSpawn } from './bind-first-pane.test-fixture'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

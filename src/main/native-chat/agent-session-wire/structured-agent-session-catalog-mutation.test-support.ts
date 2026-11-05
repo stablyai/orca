@@ -2,7 +2,7 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { modelCatalogHostDeps } from '../../runtime/structured-agent-model-catalog-wiring'
+import { modelCatalogHostDeps } from '../../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint
@@ -104,13 +104,10 @@ export async function createCatalogMutationFixture(
       host: () => rig.host,
       deps: {
         stateDirectory,
-        hostId: 'local',
-        claimKeyId: 'key-1',
         resolveWorkspacePath: async () => rig.root,
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
-        resolveAgentAccountHome: async () => home,
-        logger: rig.host.deps.logger
+        resolveAgentAccountHome: async () => home
       },
       environment: {
         resolveBaseEnvironment: async () => ({}),

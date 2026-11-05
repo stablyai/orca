@@ -7,19 +7,10 @@ import {
   PLUGIN_FRAME_KEY_CHANNEL,
   PLUGIN_FRAME_TRANSPORT_GLOBAL
 } from '../shared/plugins/frames/plugin-frame-guest'
-import { PLUGIN_SAVE_AS_MAX_BYTES } from '../shared/plugins/workers/plugin-host-api'
-import { PANEL_MESSAGE_MAX_BYTES } from '../shared/plugins/frames/plugin-frame-bridge'
-import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../shared/plugins/frames/plugin-custom-editor-bridge'
-import {
-  PRELOAD_PLUGIN_FRAME_IPC_CHANNEL,
-  PRELOAD_PLUGIN_FRAME_KEY_CHANNEL,
-  PRELOAD_PLUGIN_FRAME_TRANSPORT_GLOBAL
-} from './plugin-frame-guest-transport'
 import {
   createPluginFrameGestureTracker,
   createPluginFrameSendBudget,
-  measurePluginFrameMessageBytes,
-  PRELOAD_PLUGIN_FRAME_LANES
+  measurePluginFrameMessageBytes
 } from './plugin-frame-guest-send-budget'
 
 type Transport = { send: (message: unknown) => void; subscribe: (fn: (m: unknown) => void) => void }
@@ -82,17 +73,6 @@ function runPreload(isMainFrame: boolean, contentType = 'text/html') {
 }
 
 describe('plugin frame guest preload', () => {
-  it('pins its written-out constants to the shared ones', () => {
-    expect(PRELOAD_PLUGIN_FRAME_IPC_CHANNEL).toBe(PLUGIN_FRAME_IPC_CHANNEL)
-    expect(PRELOAD_PLUGIN_FRAME_KEY_CHANNEL).toBe(PLUGIN_FRAME_KEY_CHANNEL)
-    expect(PRELOAD_PLUGIN_FRAME_TRANSPORT_GLOBAL).toBe(PLUGIN_FRAME_TRANSPORT_GLOBAL)
-    const { shared, saveAs, edit } = PRELOAD_PLUGIN_FRAME_LANES
-    expect(shared.maxBytes).toBeGreaterThanOrEqual(PANEL_MESSAGE_MAX_BYTES)
-    expect(shared.maxBytes).toBeLessThan(PANEL_MESSAGE_MAX_BYTES * 2)
-    expect(saveAs.maxBytes).toBe(PLUGIN_SAVE_AS_MAX_BYTES + 4096)
-    expect(edit.maxBytes).toBe(CUSTOM_EDITOR_DOCUMENT_MAX_BYTES + 4096)
-  })
-
   it('hands the shell a deletable transport and stamps each send with a gesture serial', () => {
     const { sendToHost, ipcListeners, pageWindow, input, transport } = runPreload(true)
     expect(

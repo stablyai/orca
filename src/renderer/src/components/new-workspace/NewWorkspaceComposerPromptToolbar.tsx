@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -34,8 +34,6 @@ type NewWorkspaceComposerPromptToolbarProps = Pick<
   | 'quickAgent'
   | 'agentSurfaceRows'
   | 'onQuickAgentChange'
-  | 'quickSetupOnly'
-  | 'onQuickSetupOnlySelect'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'creating'
@@ -90,8 +88,6 @@ export function NewWorkspaceComposerPromptToolbar({
   quickAgent,
   agentSurfaceRows,
   onQuickAgentChange,
-  quickSetupOnly = false,
-  onQuickSetupOnlySelect,
   onOpenAgentSettings,
   visibleQuickAgents,
   defaultTuiAgent,
@@ -104,6 +100,14 @@ export function NewWorkspaceComposerPromptToolbar({
   onToggleAdvanced,
   submitShortcutModifierLabel
 }: NewWorkspaceComposerPromptToolbarProps): React.JSX.Element {
+  const agentFieldRef = React.useRef<HTMLDivElement>(null)
+  const openAgentSettings = (): void => {
+    const trigger =
+      agentFieldRef.current?.querySelector<HTMLButtonElement>('button[role="combobox"]')
+    if (trigger) {
+      onOpenAgentSettings(trigger)
+    }
+  }
   return (
     <fieldset
       disabled={disabled}
@@ -158,21 +162,20 @@ export function NewWorkspaceComposerPromptToolbar({
             />
           </div>
         ) : null}
-        <div className="min-w-0" data-contextual-tour-target="workspace-creation-agent">
+        <div
+          ref={agentFieldRef}
+          className="min-w-0"
+          data-contextual-tour-target="workspace-creation-agent"
+        >
           <AgentCombobox
             agents={visibleQuickAgents}
             value={quickAgent}
             onValueChange={(agent: TuiAgent | null) => onQuickAgentChange(agent)}
             surfaceRows={agentSurfaceRows}
             allowBlankTerminal
-            onOpenManageAgents={onOpenAgentSettings}
+            onOpenManageAgents={openAgentSettings}
             defaultAgent={defaultTuiAgent}
             onSetDefault={handleSetDefaultAgent}
-            clearSelection={
-              onQuickSetupOnlySelect
-                ? { cleared: quickSetupOnly, onClear: onQuickSetupOnlySelect }
-                : undefined
-            }
             allowNarrowTrigger
             triggerClassName="h-7 w-auto border-transparent bg-transparent text-chat-foreground-faint shadow-none hover:bg-accent dark:bg-transparent"
             onTriggerEnter={createDisabled ? undefined : onCreate}

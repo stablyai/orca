@@ -6,7 +6,7 @@ import {
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../terminal-authority/structured-sessions/structured-worker-identity'
 import { deriveWorkerTerminalListState } from '../worker-terminal-ownership'
 import type { createLineageRunningSessionResolver } from '../structured-session-lineage'
 import { sessionPartyFromWorkerIdentity } from '../orchestration-party'

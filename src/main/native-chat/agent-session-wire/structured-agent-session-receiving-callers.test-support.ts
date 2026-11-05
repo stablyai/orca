@@ -21,8 +21,8 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../runtime/structured-worker-identity'
-import { structuredWorkerOwesWork } from '../../runtime/structured-worker-custody'
+} from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerOwesWork } from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { createRestTestRig, REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
 import {
   hostTestAttachParams,

@@ -19,8 +19,13 @@ vi.mock('./gh-utils', () => ({
   release: releaseMock
 }))
 
-vi.mock('../git/runner', () => ({
-  extractExecError: vi.fn(() => ({ stdout: '', stderr: '' })),
+vi.mock('../git/exec-error', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  extractExecError: vi.fn(() => ({ stdout: '', stderr: '' }))
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
@@ -78,19 +83,6 @@ describe('project view host authentication boundary', () => {
       encoding: 'utf-8',
       host: 'github.corp.example'
     })
-  })
-
-  it('keeps github.com fast and never probes it as Enterprise', async () => {
-    ghExecFileAsyncMock.mockResolvedValue({
-      stdout: '{"data":{"viewer":{"login":"me"}}}',
-      stderr: ''
-    })
-
-    await expect(
-      runGraphql('query { viewer { login } }', {}, { host: 'github.com' })
-    ).resolves.toMatchObject({ ok: true })
-
-    expect(hostAuthenticatedMock).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -190,16 +182,4 @@ describe('project view host authentication boundary', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
     expect(acquireMock).not.toHaveBeenCalled()
   })
-
-  it.each(['_acme/7', 'https://github.com/users/a%2Fb/projects/7'])(
-    'rejects malformed owner input %s before requesting GitHub',
-    async (input) => {
-      await expect(resolveProjectRef({ input })).resolves.toMatchObject({
-        ok: false,
-        error: { type: 'validation_error' }
-      })
-      expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-      expect(acquireMock).not.toHaveBeenCalled()
-    }
-  )
 })

@@ -4,8 +4,8 @@ import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
-import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
-import { shouldShowWorkspaceComposerPane } from '@/lib/workspace-composer-pane-surface'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/worktree-creation-surface'
+import { selectWorkspaceComposerPaneActive } from '@/lib/workspace-composer-pane-surface'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
@@ -26,14 +26,6 @@ export function useAppChromeLayout() {
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
-  const activeModal = useAppStore((s) => s.activeModal)
-  const composerParked = useAppStore((s) => s.parkedComposerModalData !== null)
-  // Pending creation owns the tab strip immediately; a delayed loader gate swaps it mid-create.
-  const activePendingCreationExists = useAppStore(
-    (s) =>
-      s.activePendingCreationId !== null &&
-      s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
-  )
   // Booleans only: App owns this hook, and raw active ids would re-render the whole app on every workspace switch.
   const { hasActiveWorktree, hasTabBar, activeTabCanExpand, effectiveActiveTabExpanded } =
     useAppStore(
@@ -69,19 +61,9 @@ export function useAppChromeLayout() {
   // Lazy-mount for tabs, then retain hidden panes through temporary null selection during sleep/shutdown.
   const shouldMountTerminalWorkbench = canMountTerminalWorkbenchNow || hasMountedTerminalWorkbench
   // Creation owns faux chrome throughout; retain the previous workspace without its real chrome.
-  const creationLayoutActive = shouldShowWorktreeCreationSurface({
-    activeView,
-    activePendingCreationId,
-    hasActivePendingCreation: activePendingCreationExists
-  })
+  const creationLayoutActive = useAppStore(selectWorktreeCreationSurfaceShown)
   // Why: the prompt-first composer replaces the center pane, so the workbench and its chrome step aside like during creation.
-  const composerPaneActive = shouldShowWorkspaceComposerPane({
-    activeView,
-    activeModal,
-    composerParked,
-    promptFirstComposer: settings?.promptFirstComposer === true,
-    creationSurfaceActive: creationLayoutActive
-  })
+  const composerPaneActive = useAppStore(selectWorkspaceComposerPaneActive)
   const workspaceChromeActive =
     activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive && !composerPaneActive
   // Activity/Space own full pages and hide the workspace sidebar.

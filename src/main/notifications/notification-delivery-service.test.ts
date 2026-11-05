@@ -5,9 +5,12 @@ import {
 } from '../runtime/push/push-dispatcher.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { createNotificationDeliveryService } from './notification-delivery-service'
-import { toWebTerminalSurfaceTabId } from '../../shared/terminal-surface-id'
-import type { NotificationDeliveryDependencies } from './notification-delivery-service'
+import {
+  createNotificationDeliveryService,
+  type NotificationDeliveryDependencies
+} from './notification-delivery-service'
+import { toWebTerminalSurfaceTabId } from '../../shared/workspace-layout/terminal-surface-id'
+
 import type {
   NotificationDispatchRequest,
   NotificationSettings

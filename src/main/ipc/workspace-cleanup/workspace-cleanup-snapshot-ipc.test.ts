@@ -259,7 +259,7 @@ describe('workspace cleanup snapshot IPC', () => {
     expect(vi.mocked(ipcMain.removeHandler)).toHaveBeenCalledWith('workspaceCleanup:getCachedScan')
   })
 
-  it('persists same-id dismissals by host and prunes every key by worktree id', async () => {
+  it('persists same-id dismissals by host, restores one host, and prunes every key by worktree id', async () => {
     let dismissals = {}
     const store = {
       ...makeEmptyStore(),
@@ -289,6 +289,12 @@ describe('workspace cleanup snapshot IPC', () => {
     expect(Object.keys(dismissals).sort()).toEqual(
       ['local\0repo-1::/same', 'ssh:ssh-1\0repo-1::/same'].sort()
     )
+
+    await handler?.({} as never, {
+      dismissals: [],
+      restoredDismissalKeys: ['local\0repo-1::/same']
+    })
+    expect(Object.keys(dismissals)).toEqual(['ssh:ssh-1\0repo-1::/same'])
 
     await handler?.({} as never, { dismissals: [], removedWorktreeIds: [base.worktreeId] })
     expect(dismissals).toEqual({})

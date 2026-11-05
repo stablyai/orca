@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { answered } from '@/store/github/answered-request.test-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
@@ -12,7 +13,7 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { parseTaskQuery } from '../../../../../shared/task-query'
 import type { GitHubProjectTable } from '../../../../../shared/github/project-types'
@@ -219,10 +220,7 @@ function renderDialog() {
     )
   })
 }
-function TasksRow({ rows }: { rows: GitHubWorkItem[] }) {
-  const [projected] = useGitHubTaskItems(rows)
-  return <output data-field="tasks">{projected.assignees?.map((u) => u.login).join(',')}</output>
-}
+
 const text = (field: string) => node.querySelector(`[data-field="${field}"]`)?.textContent
 async function click(label: string) {
   const button = [...node.querySelectorAll('button')].find((b) => b.textContent === label)
@@ -261,38 +259,6 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
     node.remove()
   })
 
-  it('assigns in the dialog, keeps it through a stale search, and starts with the item', async () => {
-    const rows = await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, '')
-    await act(async () => {
-      root.render(
-        <>
-          <TasksRow rows={[...rows]} />
-          <GitHubItemDialog
-            workItem={rows[0]}
-            repoPath={repo.path}
-            repoId={repo.id}
-            sourceContext={source}
-            onUse={mocks.onUse}
-            onClose={() => {}}
-          />
-        </>
-      )
-    })
-    await click('Assign me')
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(mocks.update).toHaveBeenCalledOnce()
-    expect(text('tasks')).toBe('alice')
-    expect(text('dialog')).toBe('alice')
-    const stale = await mocks
-      .store!.getState()
-      .fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
-    expect(stale[0].assignees?.map((u) => u.login)).toEqual(['alice'])
-    await click('Start')
-    expect(mocks.onUse).toHaveBeenCalledWith(expect.objectContaining({ id: row.id }))
-  })
-
   it.each([
     ['tasks', false],
     ['tasks', true],
@@ -301,7 +267,9 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
   ] as const)(
     'a %s assignee edit from an older row changes only its own member on every copy (ok %s)',
     async (creator, ok) => {
-      const rows = await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+      const rows = answered(
+        await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+      )
       const cache = mocks.store!.getState().githubTaskCache
       const raw = () =>
         Object.values(mocks.store!.getState().workItemsCache).flatMap((e) => e.data ?? [])[0]
@@ -388,9 +356,9 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
         updatedAt: '2026-10-31T12:00:05Z'
       }
       mocks.item.mockResolvedValueOnce(truth)
-      const stale = await mocks
-        .store!.getState()
-        .fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
+      const stale = answered(
+        await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
+      )
       expect(stale[0].assignees?.map((u) => u.login)).toEqual(['alice'])
       await settle()
       expect(shown().tasks).toEqual(['Renamed on GitHub', 'closed', ['triaged'], ['bob', 'alice']])

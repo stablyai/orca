@@ -6,10 +6,12 @@ import type {
 
 const initialState: {
   settings: { activeRuntimeEnvironmentId: string | null }
+  repos: []
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
   activePendingCreationId: string | null
 } = {
   settings: { activeRuntimeEnvironmentId: null },
+  repos: [],
   pendingWorktreeCreations: {},
   activePendingCreationId: 'creation-shown'
 }

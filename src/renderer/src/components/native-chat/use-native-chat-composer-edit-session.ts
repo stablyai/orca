@@ -9,7 +9,7 @@ import {
   type RefObject
 } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { prepareQueuedMessageEditText } from '../../../../shared/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
@@ -71,17 +71,21 @@ export function useNativeChatComposerEditSession({
 
   useLayoutEffect(() => {
     const element = root.current
-    const destination = captureNativeChatEditDraftDestination(draftScopeKey)
-    if (!element || !destination) {
+    if (!element) {
       return
     }
+    const destination = captureNativeChatEditDraftDestination(draftScopeKey)
     return registerDictationComposerTarget(element, (text) => {
-      if (!destination.active) {
+      if (destination?.active === false) {
         return
       }
-      insertNativeChatComposerDraftText(destination.scopeKey, text)
+      const focused = element.ownerDocument.activeElement
+      insertNativeChatComposerDraftText(destination?.scopeKey ?? draftScopeKey, text, {
+        // The mounted editor takes focus; don't pull it from a field the user moved to mid-dictation.
+        draftOnly: !!focused && focused !== element.ownerDocument.body && !element.contains(focused)
+      })
     })
-  }, [draftScopeKey, root, handle])
+  }, [draftScopeKey, root])
 
   const refuseEditCommand = useCallback(
     (text: string): boolean => {

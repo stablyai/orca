@@ -12,6 +12,7 @@ const store = vi.hoisted(() => {
   return {
     pendingWorktreeCreations,
     removePendingWorktreeCreation: vi.fn(),
+    updatePendingWorktreeCreation: vi.fn(),
     setActivePendingWorktreeCreation: vi.fn(),
     setActiveView: vi.fn(),
     setSidebarOpen: vi.fn()

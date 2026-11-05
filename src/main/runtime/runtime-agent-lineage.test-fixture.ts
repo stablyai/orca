@@ -1,9 +1,9 @@
 import { OrchestrationDb } from './orchestration/db'
 import type { RuntimeAgentLineageTestModule } from '../../shared/runtime-agent-lineage-consumer.test-fixture'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
-import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
+import { attachRuntimeWorktreeAgentRows } from './workspaces/process-listing/runtime-worktree-agent-rows'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
-import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import type { RuntimeWorktreeAgentSource } from './workspaces/process-listing/runtime-worktree-agent-source'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import {
   structuredAgentSessionPaneKey,
@@ -13,7 +13,7 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 export const LINEAGE_PARENT = testOrcaSessionId('ca1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 export const LINEAGE_CHILD = testOrcaSessionId('ce3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')

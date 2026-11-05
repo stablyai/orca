@@ -23,12 +23,12 @@ import {
   newWorktreeLaunchScope,
   resolveAgentLaunchRuntime,
   resolveStartupAgentLaunchRuntime
-} from '../agent-launch-scope-runtime'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentLaunchRuntime } from '../../../shared/agent-launch-runtime'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+} from '../terminal/launch/agent-launch-scope-runtime'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchRuntime } from '../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import type { PtyProcessInspection } from '../../providers/pty-process-inspection'
+import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 export type AgentLaunchScope = Parameters<
   OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce['getAgentLaunchPlatformForWorkspace']

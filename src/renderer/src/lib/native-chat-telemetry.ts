@@ -2,7 +2,7 @@
 
 import { track, tuiAgentToAgentKind } from './telemetry'
 import type { NativeChatRuntime } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 /** Accept broad chat identities and narrow unknowns to telemetry other; callers need no unsafe TuiAgent cast. */
 export type NativeChatTelemetryAgent = TuiAgent | (string & {}) | null | undefined

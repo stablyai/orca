@@ -8,7 +8,7 @@ import {
   RUNTIME_RELEASE_RECEIPT,
   writeRuntimeReleaseReceipt
 } from '../node-runtime/managed-runtime-release'
-import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { GROK, openAcpAdapterRig } from './acp-structured-adapter.test-support'
 
 afterEach(() => closeProviderTimelineRigs())

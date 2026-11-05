@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
-import type { LaunchedAgentForeground } from '../../../../launched-agent-foreground'
+import type { LaunchedAgentForeground } from '../../../../terminal/wait/launched-agent-foreground'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 

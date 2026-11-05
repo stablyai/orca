@@ -1,9 +1,9 @@
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
-  agentPickerLaunchInputs,
+  agentPickerFreshLaunchInputs,
   type AgentPickerEntry,
   type AgentPickerDraft
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -11,7 +11,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
-import { Settings as SettingsIcon } from 'lucide-react'
+import { AgentSettingsMenuItem } from '@/components/agent/AgentSettingsMenuItem'
 import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
 import {
   DropdownMenuItem,
@@ -23,12 +23,12 @@ import { useAppStore } from '@/store'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
-import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
@@ -95,7 +95,16 @@ export function useTabAgentMenuLaunch({
             }
           : {}),
         agent,
-        ...(draft ? agentPickerLaunchInputs(draft, pickerEntry) : {}),
+        ...(draft
+          ? agentPickerFreshLaunchInputs(
+              draft,
+              {
+                surface: row.kind === 'chat' ? 'chat' : 'terminal',
+                executionHostId: row.executionHostId
+              },
+              pickerEntry
+            )
+          : {}),
         worktreeId,
         groupId,
         // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.
@@ -411,18 +420,6 @@ function SurfaceChoiceRow({
           }
         }}
       />
-    </DropdownMenuItem>
-  )
-}
-
-function AgentSettingsMenuItem({ onSelect }: { onSelect: () => void }): React.JSX.Element {
-  return (
-    <DropdownMenuItem
-      onSelect={onSelect}
-      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
-    >
-      <SettingsIcon className="size-4" />
-      {translate('auto.components.tab.bar.QuickLaunchButton.348a04c1ad', 'Agent settings…')}
     </DropdownMenuItem>
   )
 }

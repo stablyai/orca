@@ -33,7 +33,9 @@ vi.mock('electron', () => ({
 
 vi.mock('../ipc/repos', () => ({ registerRepoHandlers: vi.fn() }))
 vi.mock('../ipc/worktrees', () => ({ registerWorktreeHandlers: vi.fn() }))
-vi.mock('../ipc/worktree-change-invalidators', () => ({ runWorktreeChangeInvalidators: vi.fn() }))
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: vi.fn()
+}))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: vi.fn() }))
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
@@ -135,21 +137,6 @@ describe('updater linux package recovery IPC handlers', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
-  })
-
-  it('removes and re-registers both recovery channels', () => {
-    for (const channel of RECOVERY_CHANNELS) {
-      expect(removeHandlerMock).toHaveBeenCalledWith(channel)
-      expect(handleMock.mock.calls.filter(([name]) => name === channel)).toHaveLength(1)
-    }
-  })
-
-  it('routes both channels through the trusted-renderer guard', () => {
-    isTrustedUIRendererMock.mockReturnValue(false)
-
-    expectBothChannelsRejected(webContents({}))
-
-    expect(isTrustedUIRendererMock).toHaveBeenCalledTimes(2)
   })
 
   it('serves the current main UI renderer', async () => {

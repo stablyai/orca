@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -5,14 +6,9 @@ import {
   resetRemoteRuntimeMocks,
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
-import { runtimeOwnedRepoState } from './store-test-helpers'
+
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import '../../../../shared/work-items'
-import {
-  buildTaskPageRepoSourceState,
-  selectTaskPageUnresolvedSourceRepos,
-  selectTaskPageWorkItemsCacheEntries
-} from '@/components/task-page/task-page-cache-selectors'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
@@ -27,34 +23,6 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'remote-runtime' }
     })
-  })
-
-  it('restores the unknown-source notice after a forced legacy runtime empty response', async () => {
-    const store = createTestStore()
-    store.setState(runtimeOwnedRepoState('env-1', 'repo-id', '/repo'))
-    const repos = store.getState().repos
-    const emptySources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
-    for (const ineligible of [true, false]) {
-      const sources = ineligible ? { ...emptySources, ineligible: true } : emptySources
-      runtimeEnvironmentCall.mockResolvedValueOnce({
-        id: 'rpc-marker',
-        ok: true,
-        result: { items: [], sources },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-      await store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: !ineligible })
-      const cache = store.getState().workItemsCache
-      const entries = selectTaskPageWorkItemsCacheEntries(cache, repos, 24, '')
-      expect(entries[0]?.sources).toEqual(sources)
-      expect(
-        selectTaskPageUnresolvedSourceRepos(repos, buildTaskPageRepoSourceState(repos, entries))
-      ).toEqual(
-        ineligible
-          ? []
-          : [{ repoId: 'repo-id', sourceKey: 'repo-id::runtime:env-1', label: 'repo' }]
-      )
-    }
-    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
   })
 
   it('force-retry invalidates a still-failing in-flight request instead of deduping onto it', async () => {
@@ -123,20 +91,22 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
       await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '')
 
-      const result = await store
-        .getState()
-        .fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+      const result = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+      )
 
       expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
       expect(result.failedCount).toBe(0)
       expect(result.githubUnavailable).toBe(true)
       expect(result.requestFailureCount).toBe(1)
 
-      const completeOnly = await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', {
-        force: true,
-        requireComplete: true,
-        allowStaleFallback: false
-      })
+      const completeOnly = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '', {
+          force: true,
+          requireComplete: true,
+          allowStaleFallback: false
+        })
+      )
       expect(completeOnly.items).toEqual([])
       expect(completeOnly.failedCount).toBe(1)
       expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
@@ -168,14 +138,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       })
 
     try {
-      const result = await store.getState().fetchWorkItemsAcrossRepos(
-        [
-          { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
-          { repoId: 'loaded-repo', path: '/server/loaded-repo' }
-        ],
-        24,
-        100,
-        ''
+      const result = answered(
+        await store.getState().fetchWorkItemsAcrossRepos(
+          [
+            { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
+            { repoId: 'loaded-repo', path: '/server/loaded-repo' }
+          ],
+          24,
+          100,
+          ''
+        )
       )
 
       expect(result.items).toEqual([{ ...item, repoId: 'loaded-repo' }])

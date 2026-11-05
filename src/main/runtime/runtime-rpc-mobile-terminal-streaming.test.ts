@@ -1,7 +1,7 @@
-import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { z } from 'zod'
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   TerminalStreamOpcode,
@@ -19,7 +19,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 import { sendRequest } from './runtime-rpc-test-harness'
 import {
   authenticateMobileWsSession,
@@ -27,38 +27,42 @@ import {
   createEncryptedWsResponseReader
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
-vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
-    listWorktrees: facade.listWorktrees
+    listWorktrees: listings.listWorktrees
   }
 })
 
-vi.mock('../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: facade.listWorktreesStrict
+    listWorktreesStrict: listings.listWorktreesStrict
   }
 })
 
-vi.mock('../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
     }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 describe('OrcaRuntimeRpcServer', () => {

@@ -1,30 +1,31 @@
+import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  OrcaRuntimeService,
-  addWorktree,
-  assertWorktreeCleanForRemoval,
   closeLocalWatcherForWorktreePathMock,
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
-  describeCreatedWorktree,
   ensurePathWithinWorkspaceMock,
   findExistingWorktreeSymlinkPathsMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  getBranchConflictKind,
-  getEffectiveHooks,
   getPRForBranchMock,
-  gitRunner,
   invalidateAuthorizedRootsCacheMock,
-  listWorktrees,
-  loadHooks,
-  registerLocalPtyMemoryRow,
-  removeWorktree,
   removeWorktreeLinkedPathsMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  runHook,
-  setPlatform,
-  unregisterLocalPtyMemoryRow
-} from '../orca-runtime-test-mocks.spec'
+  setPlatform
+} from '../orca-runtime-test-mocks/setup.spec'
+import { describeCreatedWorktree } from '../../git/worktrees/catalog/worktree-listing'
+import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import { getEffectiveHooks, loadHooks, runHook } from '../../workspace-hooks/hooks'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import {
+  registerPty as registerLocalPtyMemoryRow,
+  unregisterPty as unregisterLocalPtyMemoryRow
+} from '../../memory/pty-registry'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -33,8 +34,8 @@ import {
   createStaleRuntimeWorktreeStore,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
@@ -330,7 +331,7 @@ describe('OrcaRuntimeService', () => {
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(describeCreatedWorktree).mockResolvedValue(createdWorktree)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
         return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
       }

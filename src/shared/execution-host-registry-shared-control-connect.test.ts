@@ -5,8 +5,8 @@ import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from './runtime-host-status'
-import { RuntimeHostStatusOwner } from './runtime-host-status-owner'
+} from './remote-runtime/host-status/runtime-host-status'
+import { RuntimeHostStatusOwner } from './remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from './runtime-types'
 
 const STATUS: RuntimeStatus = {

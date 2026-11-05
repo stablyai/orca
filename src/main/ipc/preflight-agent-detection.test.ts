@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as LocalCommandResolver from './command-path-resolver'
+import type * as LocalCommandResolver from './command-path/command-path-resolver'
 
 const {
   handleMock,
@@ -59,7 +59,7 @@ vi.mock('child_process', () => {
   }
 })
 
-vi.mock('../runtime/structured-agent-shell-environment', () => ({
+vi.mock('../runtime/agent-session/environment/structured-agent-shell-environment', () => ({
   captureHostShellEnvironment: vi.fn(async (beforeCapture?: () => Promise<unknown>) =>
     beforeCapture?.()
   )
@@ -75,7 +75,7 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 }))
 
 // Route filesystem PATH resolution through the existing command-lookup mock.
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('./command-path/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,

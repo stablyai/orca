@@ -8,7 +8,7 @@ import {
   type Tray,
   type WebContents
 } from 'electron'
-import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { isNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { AppMenuQuitHandlers } from '../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
@@ -41,8 +41,8 @@ import {
   confirmQuitAndStopAllSessions,
   explainStopAllSessionsUnavailable
 } from './quit-and-stop-all-sessions-prompt'
-import { isHoldingForNewerProtocolDaemon } from '../daemon/daemon-newer-protocol-hold'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
+import { isHoldingForNewerProtocolDaemon } from '../daemon/providers/routing/daemon-newer-protocol-hold'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { confirmNoDaemonSessionsRemain } from '../ipc/pty/pty-management'
 
 // Inject the opener to avoid an actions/lifecycle import cycle.

@@ -12,18 +12,21 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
 import { OrchestrationDb } from '../orchestration/db'
-import { storeRepo } from '../runtime-store-partial-fixture'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
-import { chatTabCommandsSettled } from '../session-layout-apply.test-fixture'
+import { storeRepo } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { chatTabCommandsSettled } from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   AuthorityRuntime,
   authorityProfile,
   root,
   savedIds
-} from '../structured-agent-session-tab-authority.test-support'
+} from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
-import { fakeCodex, resetProviderFaults } from '../structured-chat-coordinator-fake-codex-fixture'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import {
+  fakeCodex,
+  resetProviderFaults
+} from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { releaseStructuredWorkerSession } from './methods/orchestration-structured-worker-session'
 import { AGENT_LAUNCH_METHODS } from './methods/agent-launch'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'

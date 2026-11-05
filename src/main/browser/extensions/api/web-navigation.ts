@@ -1,23 +1,23 @@
 /// <reference types="chrome" />
 import { webFrameMain } from 'electron'
 import { z } from 'zod'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   extensionHasPermission,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   forgetBrowserExtensionDocuments,
   getBrowserExtensionDocumentId,
   startBrowserExtensionDocument
-} from '../browser-extension-document-ids'
+} from '../tabs-and-windows/browser-extension-document-ids'
 import {
   listBrowserExtensionTabs,
   resolveBrowserExtensionTab
-} from '../browser-extension-tab-model'
+} from '../tabs-and-windows/browser-extension-tab-model'
 
 /**
  * Chrome frame ids: 0 for a tab's main frame, the frame-tree-node id otherwise. Electron's own

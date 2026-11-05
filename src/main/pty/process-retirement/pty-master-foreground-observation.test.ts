@@ -5,10 +5,10 @@ import {
   readPtyForegroundGroup,
   resolvePtyForegroundMembers
 } from './pty-master-foreground-observation'
-import { isTerminalForegroundObservation } from '../../../shared/terminal-foreground-observation'
+import { isTerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { judgeTerminalForeground } from '../../runtime/terminal-foreground-group'
 import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 const mocks = vi.hoisted(() => ({ rows: vi.fn(), tty: vi.fn(), ps: vi.fn() }))
 vi.mock('./terminal-process-rows', async (importOriginal) => ({
   ...(await importOriginal<typeof ForegroundModule>()),

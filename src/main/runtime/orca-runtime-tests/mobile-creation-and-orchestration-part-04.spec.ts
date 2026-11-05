@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  basename,
-  join,
-  listWorktrees,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { basename, join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { tmpdir } from 'node:os'
+import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -16,7 +15,7 @@ import {
   makeWorktreeMeta,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {

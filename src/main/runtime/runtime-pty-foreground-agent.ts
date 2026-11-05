@@ -1,5 +1,5 @@
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import type { TerminalAgent } from '../../shared/terminal-agent'
+import { recognizeAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
+import type { TerminalAgent } from '../../shared/agent-status/identity/terminal-agent'
 import { withTimeoutResult } from './runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
@@ -8,7 +8,7 @@ import type {
   PtyForegroundProcessRead,
   PtyForegroundProcessReadEntry
 } from './runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 type Dependencies = {
   getController(): RuntimePtyController | null

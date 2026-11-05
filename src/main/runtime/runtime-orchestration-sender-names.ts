@@ -4,11 +4,11 @@ import type { AgentMessageSender } from '../../shared/agent-session/agent-sessio
 import {
   getAgentRowConversationName,
   type ConversationNameTab
-} from '../../shared/agent-row-conversation-name'
-import type { AgentType } from '../../shared/agent-status-types'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+} from '../../shared/agent-status/presentation/agent-row-conversation-name'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
-import type { TerminalTab } from '../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
   observeOrchestrationSender,
@@ -28,7 +28,7 @@ import {
   readAgentSessionRecordStore
 } from './orchestration/structured-session-lineage'
 import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
-import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import type { RuntimeWorktreeAgentSource } from './workspaces/process-listing/runtime-worktree-agent-source'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null

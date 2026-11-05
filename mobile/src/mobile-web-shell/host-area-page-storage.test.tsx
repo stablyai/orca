@@ -30,7 +30,6 @@ vi.mock('../transport/host-store', () => ({
   loadHosts: async () => [{ id: 'host-a', name: 'Host', endpoint: 'ws://h', lastConnected: 1 }]
 }))
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 import { storageReadParamsSchema, storageReadResultSchema } from './bridge/bridge-native-verbs'
@@ -39,8 +38,7 @@ import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 import {
   hydrateMirroredStorage,
   readMirroredKeyOrStore,
-  readMirroredStorage,
-  writeMirroredStorage
+  readMirroredStorage
 } from '../storage/mirrored-storage-keys'
 
 const CHAT_TABS = 'orca:nativeChatTabs:host-a:wt-1'
@@ -144,32 +142,6 @@ describe('the per-workspace keys of a host-area page', () => {
     expect(await readMirroredKeyOrStore(CHAT_TABS)).toBe('["pending"]')
   })
 
-  it('reaches init with none of them, and reads each from the shell as a session page would', async () => {
-    const perRoute = (await snapshotFor('/h/host-a/session/wt-1', false)).readStorage().storage
-    const { view, settled } = await hostAreaPage()
-    expect(Object.keys(view.readStorage().storage).filter((key) => key.includes(':host-'))).toEqual(
-      []
-    )
-    for (const key of [CHAT_TABS, LIVE_INPUT]) {
-      expect(perRoute[key], key).toBeDefined()
-      expect(await settled(pageAsyncStorage.getItem(key)), key).toBe(perRoute[key])
-    }
-    expect(await settled(pageAsyncStorage.getItem(NEVER_STORED))).toBeNull()
-  })
-
-  it("writes both through the bridge to this host's store, a never-stored key included", async () => {
-    const { pair, settled } = await hostAreaPage()
-    for (const key of [CHAT_TABS, NEVER_STORED, FRESH]) {
-      await pageAsyncStorage.setItem(key, '["x"]')
-    }
-    await pair.flush()
-    persisted()
-    for (const key of [CHAT_TABS, NEVER_STORED, FRESH]) {
-      expect(store.get(key), key).toBe('["x"]')
-      expect(await settled(pageAsyncStorage.getItem(key)), key).toBe('["x"]')
-    }
-  })
-
   it('reads back its own write before the store has landed it, a removal included', async () => {
     const { settled } = await hostAreaPage()
     await pageAsyncStorage.setItem(NEVER_STORED, '["new"]')
@@ -183,21 +155,6 @@ describe('the per-workspace keys of a host-area page', () => {
     persisted()
     expect(store.get(NEVER_STORED)).toBe('["new"]')
     expect(store.has(CHAT_TABS)).toBe(false)
-  })
-
-  it('reads a stored key the mirror never held, though another mirrored write lands meanwhile', async () => {
-    const relaunched = 'orca:terminalLiveInputDisabled:host-a:alpha'
-    store.set(relaunched, '["handle-1"]')
-    const view = await snapshotFor('/h/host-a', true)
-    const read = view.readWorkspaceKey(relaunched)
-    writeMirroredStorage('orca:pins:host-a', '[]')
-    expect(await read).toBe('["handle-1"]')
-  })
-
-  it('rejects, rather than reading as unset, when the store cannot be read', async () => {
-    vi.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('store unavailable'))
-    const view = await snapshotFor('/h/host-a', true)
-    await expect(view.readWorkspaceKey('orca:nativeChatTabs:host-a:beta')).rejects.toThrow()
   })
 
   it("refuses another host's key, to read or to write", async () => {

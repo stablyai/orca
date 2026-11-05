@@ -6,7 +6,10 @@ import { createRuntimeAgentProjections } from './construction/runtime-agent-proj
 import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
 import { AgentSenderWorkerHistory } from './runtime-agent-sender-worker-history'
 import { AgentSenderLineageGraph } from './runtime-agent-sender-lineage'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'

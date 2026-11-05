@@ -3,10 +3,8 @@ import { MessageSquare } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
-import {
-  WorkspaceComposerBody,
-  type ComposerModalData
-} from '@/components/NewWorkspaceComposerModal'
+import { WorkspaceComposerBody } from '@/components/NewWorkspaceComposerModal'
+import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
 
 function PaneComposerHeading({
   title,

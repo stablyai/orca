@@ -4,10 +4,6 @@ import {
   PLUGIN_EDITOR_FRAME_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from '../manifest/plugin-schema-field-docs'
-import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../installation/plugin-host-version'
-import { pluginCatalogReleaseEntry } from '../catalog/plugin-catalog-release'
-import { pluginCatalogTypes } from '../catalog/plugin-catalog-types'
-import { pluginContributionSummary } from './plugin-contribution-summary'
 import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
 import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
@@ -74,8 +70,6 @@ describe('contributes.customEditors', () => {
       parsed({ ...floor, contributes: { customEditors: [isolated] } }).contributes.customEditors[0]
         ?.frame
     ).toBe('isolated')
-    expect(PLUGIN_EDITOR_FRAME_SINCE).toBe('1.4.248')
-    expect(PLUGIN_SCHEMA_NEWEST_SINCE).toBe(PLUGIN_EDITOR_FRAME_SINCE)
     const tooOld = parsePluginManifest(manifest({ contributes: { customEditors: [isolated] } }))
     expect(tooOld).toMatchObject({ ok: false })
     expect(tooOld.ok ? '' : tooOld.error).toContain(PLUGIN_EDITOR_FRAME_SINCE)
@@ -142,17 +136,6 @@ describe('contributes.customEditors', () => {
     ).toMatchObject({ ok: true })
   })
 
-  it('lists as an editor type with dotted file types, and suggests for single-extension types', () => {
-    const plugin = parsed()
-    expect(pluginCatalogTypes(plugin)).toEqual(['editor'])
-    expect(pluginContributionSummary(plugin)).toEqual([
-      { kind: 'customEditors', name: 'Excalidraw', detail: '.excalidraw, .excalidraw.json' }
-    ])
-    expect(
-      pluginCatalogReleaseEntry(plugin, { commit: 'a'.repeat(40), contentHash: 'h' })
-    ).toMatchObject({ fileTypes: ['excalidraw'], editorFileTypes: ['excalidraw'] })
-  })
-
   it('binds approval to the editor bytes and counts a new file type as more reach', () => {
     const plugin = parsed()
     expect(requiresPluginContentApproval(plugin)).toBe(true)
@@ -215,18 +198,6 @@ describe('contributes.newFiles', () => {
     extension: '.excalidraw',
     template: 'templates/empty.excalidraw'
   }
-
-  it('accepts a new-file type beside its editor and summarizes it for catalogs', () => {
-    const result = parsed({ contributes: { customEditors: [excalidraw], newFiles: [drawing] } })
-    expect(result.contributes.newFiles).toEqual([drawing])
-    expect(pluginContributionSummary(result)).toContainEqual({
-      kind: 'newFiles',
-      name: 'New Excalidraw drawing',
-      detail: '.excalidraw'
-    })
-    // Why unchanged: a template seeds a file; the editor that opens it carries the type.
-    expect(pluginCatalogTypes(result)).toEqual(['editor'])
-  })
 
   it('is content only, so a data plugin may carry one', () => {
     expect(

@@ -2,14 +2,14 @@ import type { WorktreeGitCopy } from '@/lib/worktree-git-copy'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../../../../../shared/hosted-review-refs'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { summarizeCommitFailure } from '../commit/commit-failure-summary'
-import { getStageAllPaths } from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import { summarizeCommitFailure } from '../../../../../../shared/source-control/recovery/source-control-commit-failure'
+import { getStageAllPaths } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -139,13 +139,6 @@ export function shouldAttemptCreateHostedReviewForIntent(
       eligibility.blockedReason === null &&
       Boolean(eligibility.head?.trim()))
   )
-}
-
-export function shouldGenerateHostedReviewDetailsForIntent(
-  eligibility: HostedReviewCreationEligibility
-): boolean {
-  // Generate before main rechecks unavailable lookups so recovered creates never submit fallback fields.
-  return shouldAttemptCreateHostedReviewForIntent(eligibility)
 }
 
 export function resolveCreatePrIntentGeneratedReviewFields(

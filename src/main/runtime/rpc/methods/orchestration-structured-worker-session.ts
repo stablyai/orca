@@ -19,7 +19,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
@@ -28,7 +28,7 @@ import { sendAgentTurn, type StructuredAgentTurnHost } from '../../orchestration
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
-} from '../../structured-worker-authority'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { OrchestrationDb } from '../../orchestration/db'
 import {
   mintStructuredWorkerHandle,
@@ -37,7 +37,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 // The worker's handle, keyed by its root session: a reused worker outlives the Dispatch that created it.

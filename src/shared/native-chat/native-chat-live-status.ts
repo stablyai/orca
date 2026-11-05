@@ -1,7 +1,11 @@
 // Reconcile live working state with provider turn boundaries so a dropped final hook cannot leave Stop stuck.
 
-import type { AgentStatusEntry, AgentStatusState, AgentType } from '../agent-status-types'
-import { isAgentStatusFresh } from '../agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState,
+  AgentType
+} from '../agent-status/contracts/agent-status-types'
+import { isAgentStatusFresh } from '../agent-status/contracts/agent-status-freshness'
 import type {
   NativeChatMessage,
   NativeChatSession,
@@ -31,7 +35,10 @@ export type NativeChatLiveMergeInput = {
   error?: string
 }
 
-export type NativeChatLiveMergedSession = NativeChatSession & { hookAwaitingInput: boolean }
+export type NativeChatLiveMergedSession = NativeChatSession & {
+  hookAwaitingInput: boolean
+  hookWorking: boolean
+}
 
 /** Errors win; working hooks override loading until their turn ends, with provider lifecycle settling dropped Stop hooks. */
 export function mergeNativeChatLiveSession(
@@ -54,10 +61,6 @@ export function mergeNativeChatLiveSession(
     stateStartedAt,
     transcriptLifecycle
   )
-  if (error) {
-    return { messages, status: 'error', sessionId, agent, error, hookAwaitingInput }
-  }
-
   const status = liveStatusOverride(
     agent,
     hookState,
@@ -66,16 +69,20 @@ export function mergeNativeChatLiveSession(
     transcriptLifecycle,
     hookHasWorkingSubagents ?? false
   )
+  const activity = { hookAwaitingInput, hookWorking: status === 'working' }
+  if (error) {
+    return { messages, status: 'error', sessionId, agent, error, ...activity }
+  }
   // Keep Stop/activity live while loading; view-state selection separately holds empty transcripts on their loading surface.
   if (loading && status !== 'working') {
-    return { messages, status: 'loading', sessionId, agent, hookAwaitingInput }
+    return { messages, status: 'loading', sessionId, agent, ...activity }
   }
   return {
     messages,
     status: status ?? (messages.length === 0 ? 'empty' : 'ready'),
     sessionId,
     agent,
-    hookAwaitingInput
+    ...activity
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createRuntime } from '../orca-runtime-test-fixtures.spec'
+import { createRuntime } from './orca-runtime-test-fixtures.spec'
 import {
   registerManagedServerActions,
   type ManagedServerActions
