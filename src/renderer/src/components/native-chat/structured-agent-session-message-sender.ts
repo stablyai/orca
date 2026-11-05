@@ -1,5 +1,6 @@
 import { settleStructuredLaunchFirstMessageFromJournal } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'
 import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -9,9 +10,9 @@ import {
   structuredAgentSessionSettledSends
 } from '../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { dispatchStructuredAgentSessionSend } from './structured-agent-session-send-dispatch'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 import {
-  attemptStructuredAgentSessionSend,
   forgetStructuredAgentSessionFence,
   resetStructuredAgentSessionFencesForTests
 } from './structured-agent-session-send-attempt'
@@ -48,63 +49,47 @@ export type {
   StructuredAgentSessionSent
 } from './structured-agent-session-send-runtime'
 
-async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> {
-  const runtime = runtimes.get(entry.clientMessageId)
-  if (!runtime) {
-    return
-  }
-  const outcome = await attemptStructuredAgentSessionSend({
-    entry,
-    target: runtime.target,
-    reconcile: runtime.activity.settle,
-    beforeIssue: () => {
-      runtime.activity.issue()
-      updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, {
-        issued: true
-      })
-    },
-    abandoned: () => runtime.abort.signal.aborted || runtimes.get(entry.clientMessageId) !== runtime
-  })
-  const current = findStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId)
-  if (!outcome || !current) {
-    return
-  }
-  if (outcome.kind === 'not-sent') {
-    handBack(current, outcome.parts)
-  } else if (outcome.evidence.kind === 'recorded') {
-    settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
-  } else if (outcome.evidence.kind === 'not-recorded') {
-    handBackRefused(current, outcome.evidence.failure)
-  } else {
-    retainUnconfirmed(current)
-  }
-}
-
-function dispatch(
-  entry: StructuredAgentSessionPendingSend,
-  target: RuntimeClientTarget
-): StructuredAgentSessionSent {
-  const sent = beginSend(entry, target)
-  void attempt(entry)
-  return sent
-}
+const reservations = new Map<string, { stop: () => void; drop: () => void }>()
 
 /** Reserve one chat send; resolve as recorded, returned, unconfirmed or dropped, and return null while another is outstanding. */
 export function sendStructuredAgentSessionMessage(
   input: StructuredAgentSessionSendInput & { target: RuntimeClientTarget }
 ): StructuredAgentSessionSent | null {
+  if (input.prepareAttachments) {
+    const reservation = reserveStructuredAgentSessionSend(input)
+    if (!reservation) {
+      return null
+    }
+    input.onCreated?.(reservation.clientMessageId)
+    reservation.legacy()
+    void input.prepareAttachments(input, reservation.active).then(
+      (prepared) => {
+        if (reservation.prepare({ ...prepared, skills: input.skills })) {
+          reservation.send(input.target)
+        }
+      },
+      (error) => reservation.fail(error instanceof Error ? error.message : String(error))
+    )
+    return reservation
+  }
   const entry = takeStructuredAgentSessionSendSlot(input)
   if (!entry) {
     return null
   }
   input.onCreated?.(entry.clientMessageId)
-  return dispatch(entry, input.target)
+  return dispatchStructuredAgentSessionSend(entry, input.target)
 }
 
 export type StructuredAgentSessionReservedSend = {
+  clientMessageId: string
+  fail: (notice: string) => void
   outcome: Promise<StructuredAgentSessionSendOutcome>
   /** Older creates wait for acquisition; their send budget still begins at send. */
   legacy: () => void
+  active: () => boolean
+  prepare: (
+    input: Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
+  ) => boolean
   /** Sends it once the chat exists; null when the reservation was released or dropped meanwhile. */
   send: (target: RuntimeClientTarget) => StructuredAgentSessionSent | null
   /** The same message, owned by create instead of a later send request. */
@@ -135,7 +120,10 @@ export function reserveStructuredAgentSessionSend(
   let sent = false
   let settleReservation = (_outcome: StructuredAgentSessionSendOutcome): void => {}
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
-    settleReservation = resolve
+    settleReservation = (outcome) => {
+      reservations.delete(entry.clientMessageId)
+      resolve(outcome)
+    }
   })
   const held = (): StructuredAgentSessionPendingSend | undefined =>
     sent ? undefined : findStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId)
@@ -146,14 +134,55 @@ export function reserveStructuredAgentSessionSend(
       settleReservation('returned')
     }
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
+  const release = (): void => {
+    clearTimeout(deadline)
+    if (held()) {
+      updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, null)
+      settleReservation('dropped')
+    }
+  }
+  reservations.set(entry.clientMessageId, {
+    stop: () => {
+      const current = held()
+      if (current) {
+        clearTimeout(deadline)
+        handBack(current, null)
+        settleReservation('returned')
+      }
+    },
+    drop: release
+  })
   return {
+    clientMessageId: entry.clientMessageId,
+    fail: (notice) => {
+      const current = held()
+      if (current) {
+        clearTimeout(deadline)
+        handBack(current, null)
+        publishStructuredAgentSessionSends(entry.sessionId, { notice })
+        settleReservation('returned')
+      }
+    },
     outcome,
+    active: () => held() !== undefined,
     legacy: () => clearTimeout(deadline),
+    prepare: (input) => {
+      const current = held()
+      if (!current) {
+        return false
+      }
+      updateStructuredAgentSessionPendingSend(current.sessionId, current.clientMessageId, {
+        body: structuredAgentSessionSendBody(input.text, input.attachments ?? [], input.skills),
+        previewUris: (input.attachments ?? []).map((image) => image.previewUri)
+      })
+      return true
+    },
     send: (target) => {
       const current = held()
       sent = true
+      reservations.delete(entry.clientMessageId)
       clearTimeout(deadline)
-      const sending = current ? dispatch(current, target) : null
+      const sending = current ? dispatchStructuredAgentSessionSend(current, target) : null
       if (sending) {
         void sending.outcome.then(settleReservation)
       }
@@ -165,6 +194,7 @@ export function reserveStructuredAgentSessionSend(
         return null
       }
       sent = true
+      reservations.delete(entry.clientMessageId)
       clearTimeout(deadline)
       const remaining = STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS - (Date.now() - current.queuedAt)
       if (remaining <= 0) {
@@ -209,13 +239,7 @@ export function reserveStructuredAgentSessionSend(
         }
       }
     },
-    release: () => {
-      clearTimeout(deadline)
-      if (held()) {
-        updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, null)
-        settleReservation('dropped')
-      }
-    }
+    release
   }
 }
 
@@ -252,6 +276,9 @@ export function settleStructuredAgentSessionSendsFromJournal(
 export function stopStructuredAgentSessionSends(sessionId: string): void {
   for (const entry of getStructuredAgentSessionPendingSends(sessionId)) {
     const runtime = runtimes.get(entry.clientMessageId)
+    if (!runtime) {
+      reservations.get(entry.clientMessageId)?.stop()
+    }
     if (runtime && !entry.issued) {
       runtime.abort.abort()
       handBack(entry, null)
@@ -262,6 +289,7 @@ export function stopStructuredAgentSessionSends(sessionId: string): void {
 export function dropStructuredAgentSessionSends(sessionId: string): void {
   for (const entry of getStructuredAgentSessionPendingSends(sessionId)) {
     const runtime = runtimes.get(entry.clientMessageId)
+    reservations.get(entry.clientMessageId)?.drop()
     runtime?.abort.abort()
     if (runtime) {
       runtime.activity.settle(false)

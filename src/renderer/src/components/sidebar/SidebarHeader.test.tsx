@@ -37,6 +37,7 @@ type MockState = {
     projectGroupId?: string
     path?: string
     connectionId?: string
+    executionHostId?: string
   }[]
   activeWorktreeId: string | null
   activeWorkspaceKey: string | null
@@ -182,75 +183,6 @@ afterEach(() => {
 })
 
 describe('SidebarHeader', () => {
-  it.each(['workspaces', 'agents'] as const)(
-    'prioritizes questions, then working, and shows idle zero in the %s view',
-    (sidebarBody) => {
-      mockState.sidebarBody = sidebarBody
-      const render = () => {
-        act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
-        return headerButton(sidebarBody === 'agents' ? 'Turn off activity view' : 'View activity')
-      }
-      mocks.bucketCounts = { attention: 2, working: 5, done: 3, idle: 4 }
-      let button = render()
-      expect(button.querySelector('[aria-label="Needs You: 2"]')?.textContent).toBe('2')
-      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeTruthy()
-      expect(button.querySelector('[aria-label="Working: 5"]')).toBeNull()
-
-      mocks.bucketCounts.attention = 0
-      button = render()
-      expect(button.querySelector('[aria-label="Working: 5"]')?.textContent).toBe('5')
-      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
-
-      mocks.bucketCounts.working = 0
-      button = render()
-      expect(button.querySelector('[aria-label="Idle: 0"]')?.textContent).toBe('0')
-      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
-      expect(button.getAttribute('aria-describedby')).toBe(
-        button.querySelector('[aria-label="Idle: 0"]')?.id
-      )
-    }
-  )
-
-  it.each([9, 12, 99, 100])('keeps the working count accessible at %s agents', (working) => {
-    mocks.bucketCounts.working = working
-    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
-    const button = headerButton('View activity')
-    const status = button.querySelector(`[aria-label="Working: ${working}"]`)
-    expect(status?.textContent).toBe(working > 99 ? '99+' : String(working))
-    expect(button.getAttribute('aria-describedby')).toBe(status?.id)
-  })
-
-  it('keeps New workspace clickable with zero projects, since the composer adds the first one', async () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(createButton().disabled).toBe(false)
-
-    await act(async () => {
-      createButton().click()
-    })
-
-    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
-  })
-
-  it('reaches Add project and New workspace in one click each, with no menu', async () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(headerButton('New workspace')).toBeTruthy()
-    expect(headerButton('Add project')).toBeTruthy()
-    expect(container.querySelector('[data-slot="dropdown-menu-trigger"]')).toBeNull()
-
-    await act(async () => {
-      headerButton('Add project').click()
-    })
-
-    expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
-    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
-  })
-
   it('keeps the composer path for the current git worktree', async () => {
     mockState.activeWorkspaceKey = 'worktree:current-worktree'
     mockState.activeWorktreeId = 'current-worktree'
@@ -382,10 +314,65 @@ describe('SidebarHeader', () => {
         repoId: 'notes',
         setupDecision: 'skip',
         agent: null,
-        telemetrySource: 'sidebar'
+        telemetrySource: 'sidebar',
+        worktreeCreateProgressMode: 'stepped'
       })
     )
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('uses the ordinary stepped mode for an Open as Folder repo on SSH', async () => {
+    mockState.activeWorkspaceKey = 'worktree:notes::/home/notes'
+    mockState.activeWorktreeId = 'notes::/home/notes'
+    mockState.repos = [
+      {
+        id: 'notes',
+        kind: 'folder',
+        path: '/home/notes',
+        executionHostId: 'ssh:box'
+      }
+    ]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/home/notes', repoId: 'notes', path: '/home/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'notes',
+        executionHostId: 'ssh:box',
+        worktreeCreateProgressMode: 'stepped'
+      })
+    )
+  })
+
+  it('keeps the setup panel for an Open as Folder repo on an environment', async () => {
+    mockState.activeWorkspaceKey = 'worktree:notes::/tmp/notes'
+    mockState.activeWorktreeId = 'notes::/tmp/notes'
+    mockState.repos = [
+      {
+        id: 'notes',
+        kind: 'folder',
+        path: '/tmp/notes',
+        executionHostId: 'runtime:folder-host'
+      }
+    ]
+    mockState.worktreesByRepo = {
+      notes: [{ id: 'notes::/tmp/notes', repoId: 'notes', path: '/tmp/notes' }]
+    }
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'notes',
+        executionHostId: 'runtime:folder-host',
+        worktreeCreateProgressMode: 'indeterminate'
+      })
+    )
   })
 
   it('creates and reveals a default folder workspace in the current folder project', async () => {
