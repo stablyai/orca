@@ -325,7 +325,7 @@ export function MobileSessionActiveContent({
               scopeKey={nativeChatImageSource}
               open={openSender}
             >
-              <MobileNativeChatForkProvider controller={controller} navigate={navigateToSender}>
+              <MobileNativeChatForkProvider controller={controller}>
                 <MobileNativeChatOverlay
                   controller={nativeChatController}
                   imageSource={nativeChatImageSource}
