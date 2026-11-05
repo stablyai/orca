@@ -272,7 +272,7 @@
     "auto.components.settings.PluginInstallTrustDialog.title",
     "auto.components.settings.PluginInstallTrustDialog.titleFolder",
     "auto.components.settings.PluginInstallTrustDialog.translations",
-    "auto.components.settings.PluginLinkRouteConsentPreview.conflict",
+    "auto.components.settings.PluginLinkRouteConsentPreview.conflictWithEnabled",
     "auto.components.settings.PluginLinkRouteConsentPreview.heading",
     "auto.components.settings.PluginLinkRouteConsentPreview.orcaBrowser",
     "auto.components.settings.PluginLinkRouteConsentPreview.systemBrowser",

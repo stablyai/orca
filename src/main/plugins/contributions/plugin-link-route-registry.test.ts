@@ -118,9 +118,6 @@ describe('PluginLinkRouteRegistry', () => {
   })
 
   it('warns a pending plugin that its route collides with an approved one', () => {
-    // The consent-time case: b is being reviewed right now, so this warning is the only chance the
-    // user has to see that the route will not take effect. Computing conflicts from approved routes
-    // alone would leave b's card silently clean.
     const registry = new PluginLinkRouteRegistry()
     registry.reconcile(
       [
@@ -131,8 +128,22 @@ describe('PluginLinkRouteRegistry', () => {
     )
 
     expect(conflicted(registry, 'orca-samples.b')).toEqual(['*-sharedhost.test'])
-    expect(conflicted(registry, 'orca-samples.a')).toEqual(['*-sharedhost.test'])
-    // a is the only approved claimant, so its route still publishes.
+    // a is the only approved claimant, so its route publishes and must not read as inactive.
+    expect(conflicted(registry, 'orca-samples.a')).toEqual([])
     expect(hostnames(registry)).toEqual(['*-sharedhost.test'])
+  })
+
+  it('ignores a claimant that cannot publish, such as a disabled or unapproved plugin', () => {
+    const registry = new PluginLinkRouteRegistry()
+    registry.reconcile(
+      [
+        routePlugin('a', [{ hostname: '*-sharedhost.test' }]),
+        routePlugin('b', [{ hostname: '*-sharedhost.test' }])
+      ],
+      approveNone
+    )
+
+    expect(conflicted(registry, 'orca-samples.a')).toEqual([])
+    expect(conflicted(registry, 'orca-samples.b')).toEqual([])
   })
 })

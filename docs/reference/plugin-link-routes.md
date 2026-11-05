@@ -64,8 +64,11 @@ over it. Exact hosts first, then longer literal tails, then plugin key, then dec
 order is total and independent of install order. Do not re-sort in the renderer.
 
 Two approved plugins claiming the same hostname: **neither** wins. The contested route is dropped
-from the active table and annotated with a `conflict` flag on each plugin's declared route, which
-the consent page renders.
+from the active table. A declared route is flagged `conflict` when another _approved_ plugin
+(enabled, consented, not kill-listed) claims its hostname; the consent page renders that flag. Only
+approved plugins count, because a disabled or pending claimant cannot publish: an approved route
+shared only with a pending plugin is still live and is not flagged, while the pending plugin's copy
+is, because approving it would take both offline.
 
 ## Three views of the table
 

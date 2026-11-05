@@ -56,8 +56,8 @@ export function PluginLinkRouteConsentPreview({
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {translate(
-                  'auto.components.settings.PluginLinkRouteConsentPreview.conflict',
-                  'Another plugin already claims this hostname, so this route stays inactive.'
+                  'auto.components.settings.PluginLinkRouteConsentPreview.conflictWithEnabled',
+                  'Another enabled plugin claims this hostname, so neither route works while both are enabled.'
                 )}
               </span>
             </p>

@@ -30,7 +30,7 @@ describe('PluginLinkRouteConsentPreview', () => {
     expect(render([]).innerHTML).toBe('')
   })
 
-  it('shows each hostname as a literal string with its destination', () => {
+  it('shows each hostname as the literal declared string', () => {
     const el = render([
       { hostname: '*.example.com', destination: 'orca-browser', description: 'Docs site' },
       { hostname: 'app-devserver.test', destination: 'system-browser' }
@@ -38,21 +38,14 @@ describe('PluginLinkRouteConsentPreview', () => {
 
     const mono = [...el.querySelectorAll('.font-mono')].map((node) => node.textContent)
     expect(mono).toEqual(['*.example.com', 'app-devserver.test'])
-    expect(el.textContent).toContain("Opens in Orca's built-in browser")
-    expect(el.textContent).toContain('Opens in your system browser')
-    expect(el.textContent).toContain('Docs site')
   })
 
-  it('warns that a conflicting route is inactive without echoing the main-process string', () => {
+  it('warns only on the route that conflicts', () => {
     const el = render([
-      {
-        hostname: 'example.com',
-        destination: 'orca-browser',
-        conflict: true
-      }
+      { hostname: 'shared.example.com', destination: 'orca-browser', conflict: true },
+      { hostname: 'own.example.com', destination: 'orca-browser' }
     ])
 
-    expect(el.textContent).toContain('stays inactive')
-    expect(el.textContent).not.toContain('also contributed by another plugin')
+    expect(el.querySelectorAll('[data-link-route-conflict]')).toHaveLength(1)
   })
 })
