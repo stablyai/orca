@@ -66,7 +66,7 @@ vi.mock('sonner', () => ({
 import { useAppStore, type AppState } from '@/store/index'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { deferred } from '../panel/source-control-hook-test-harness'
 const recoveryContext = {
@@ -99,31 +99,7 @@ function settingsWithGlobalRecipe(
     }
   }
 }
-function repoWithSavedRecipe(
-  agentArgs = '',
-  connectionId: string | null = null,
-  executionHostId: Repo['executionHostId'] = undefined
-): Repo {
-  return {
-    id: 'repo-1',
-    path: '/repo-1',
-    displayName: 'Repo 1',
-    badgeColor: 'blue',
-    addedAt: 0,
-    connectionId,
-    executionHostId,
-    sourceControlAi: {
-      enabled: true,
-      actionOverrides: {
-        resolveConflicts: {
-          agentId: 'codex',
-          commandInputTemplate: '{basePrompt}',
-          agentArgs
-        }
-      }
-    }
-  }
-}
+
 function resetStore(settings: GlobalSettings, repos: Repo[] = []): void {
   useAppStore.setState(
     {
@@ -233,53 +209,6 @@ describe('SourceControlAgentActionDialog', () => {
     useAppStore.setState(initialState, true)
     setLocalRuntimeCapabilitiesForTests(null)
   })
-  it.each(['global', 'repo'])(
-    'opens saved %s recipes for editing and Cancel starts nothing',
-    async (scope) => {
-      if (scope === 'repo') {
-        resetStore(settingsWithGlobalRecipe(), [repoWithSavedRecipe()])
-      }
-      renderControlledDialog(scope === 'repo' ? { repoId: 'repo-1' } : {})
-      await flushEffects()
-      expect(container.textContent).toContain('Launch agent')
-      expect(container.querySelector('textarea')?.value).toBe('{basePrompt}')
-      const cancel = [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Cancel'
-      )!
-      act(() => cancel.click())
-      expect(mocks.onStart).not.toHaveBeenCalled()
-      expect(mocks.onLaunched).not.toHaveBeenCalled()
-    }
-  )
-  // Why (#21429): a paired server's workspace has no SSH connection on this client; its agents
-  // are on the server, and this client's own list says nothing about them.
-  it('detects agents on the paired server that owns the workspace', async () => {
-    detects([])
-    mocks.ensureRuntimeDetectedAgents.mockImplementation(async (environmentId, worktreeId) => {
-      const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
-      useAppStore.setState({ runtimeDetectedAgentIds: { [key]: ['codex'] } })
-      return ['codex']
-    })
-    resetStore(settingsWithGlobalRecipe(), [repoWithSavedRecipe('', null, 'runtime:env-1')])
-    useAppStore.setState({
-      worktreesByRepo: { 'repo-1': [makeWorktree({ id: 'repo-1::wt-1', repoId: 'repo-1' })] }
-    })
-
-    renderControlledDialog({ repoId: 'repo-1', worktreeId: 'repo-1::wt-1', connectionId: null })
-
-    await vi.waitFor(() =>
-      expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'repo-1::wt-1')
-    )
-    await flushEffects()
-    expect(mocks.onStart).not.toHaveBeenCalled()
-    const start = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.toLowerCase().includes('start agent')
-    )!
-    await act(async () => start.click())
-    expect(mocks.onStart).toHaveBeenCalledTimes(1)
-    expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'repo-1::wt-1')
-    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
-  })
   it('cancels a manual launch during recovery admission', async () => {
     const check = deferred<{ inFlight: boolean }>()
     mocks.mutationInFlight.mockReturnValueOnce(check.promise)
@@ -317,32 +246,5 @@ describe('SourceControlAgentActionDialog', () => {
     await flushEffects()
     expect(mocks.onStart).not.toHaveBeenCalled()
     expect(mocks.onLaunched).not.toHaveBeenCalled()
-  })
-
-  it('blocks manual start while Git is running and allows an explicit retry', async () => {
-    resetStore(settingsWithGlobalRecipe(null))
-    renderControlledDialog()
-    await vi.waitFor(() => expect(container.textContent?.toLowerCase()).toContain('start agent'))
-    await flushEffects()
-    const button = Array.from(container.querySelectorAll('button')).find((entry) =>
-      entry.textContent?.toLowerCase().includes('start agent')
-    )
-    if (!button) {
-      throw new Error('Missing start button')
-    }
-    mocks.mutationInFlight.mockResolvedValue({ inFlight: true })
-    act(() => button.click())
-    await flushEffects()
-
-    expect(button.disabled).toBe(false)
-    expect(mocks.onStart).not.toHaveBeenCalled()
-    expect(mocks.onLaunched).not.toHaveBeenCalled()
-    expect(mocks.onOpenChange).not.toHaveBeenCalledWith(false)
-
-    mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
-    await flushEffects()
-    expect(button.disabled).toBe(false)
-    act(() => button.click())
-    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
   })
 })

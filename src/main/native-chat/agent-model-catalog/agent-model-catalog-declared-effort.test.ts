@@ -67,14 +67,14 @@ it('keeps recorded declarations separate from accepted host input and ACP contro
         .currentValue
     ).toBe(display ?? undefined)
     const selection = structuredAgentSessionMessageSelection(installed)
-    expect(selection).toEqual({ model })
+    expect(selection).toEqual({})
     const agents = declaredEffortAgents(agent, declaredEffortReadAdapter(source.options))
     const captured = captureStructuredExecutionOptions(
       { agents, agent, persistedOptions: {} },
       undefined,
       selection
     )
-    expect(captured).toEqual({ options: { model } })
+    expect(captured).toEqual({ options: {} })
     const unused = (): never => {
       throw new Error('setter contract accessed an unrelated session port')
     }
@@ -108,8 +108,8 @@ it('keeps recorded declarations separate from accepted host input and ACP contro
       throw new Error('unexpected refusal')
     }
     expect(await applyAcpMessageOptions(session, captured.options, set, () => true)).toBe(true)
-    expect(set.mock.calls).toEqual([['model', model]])
-    expect(launch.current).toMatchObject({ model, acceptedInputSources: { model: 'policy' } })
+    expect(set.mock.calls).toEqual([])
+    expect(launch.current).toMatchObject({ model, acceptedInputSources: {} })
     expect(launch.current.effort).toBeUndefined()
     expect(launch.current.acceptedInputSources).not.toHaveProperty('effort')
     expect(live.listedModelIds).toBeUndefined()
@@ -198,7 +198,7 @@ it('uses fresh configured declarations for every supported source without revivi
 
 // The model JSON is recorded; configured effort and control presence vary the regression shape.
 it.each([true, false])(
-  'delivers unpicked configured effort through the real setter (native control: %s)',
+  'leaves unpicked configured model and effort to the agent through the real setter (native control: %s)',
   async (nativeControl) => {
     const source = recordedEffortSource('low')
     const seed = structuredAgentSessionSeedCatalog(source.agent)
@@ -292,7 +292,8 @@ it.each([true, false])(
       ).resolves.toEqual({ state: 'admitted' })
       rig.child().agent.reply(await rig.frame('session/prompt', index), { stopReason: 'end_turn' })
       await waitFor(() => expect(rig.adapter.holdsDispatch(SESSION)).toBe(false))
-      expect(selection).toEqual({ model: source.model })
+      // Only an older host's policy answer still names the model as input.
+      expect(selection).toEqual(index === 2 ? { model: source.model } : {})
     }
     expect(rig.sent('session/set_config_option')).toEqual([])
     if (!nativeControl) {

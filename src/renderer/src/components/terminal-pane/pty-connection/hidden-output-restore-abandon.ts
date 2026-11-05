@@ -1,7 +1,5 @@
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
-import { advanceTerminalEscapeBoundary } from '../../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { admitResumedAppChunk } from './resume-escape-admission'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -99,15 +97,16 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
         }
       }
     }
-    // One coalesced write; track the parser boundary locally so each admission sees the bytes queued before it.
-    let parserEscape: string = session.idleCursorReset.parserEscape
+    // One coalesced write; each admission advances the stream position past the chunk before it.
     let pendingData = ''
     for (const { data, chunk } of pendingWrites) {
       if (data) {
-        // A reset above aborted any open escape; admission skips the tail a resuming chunk would print (#33766).
-        const admitted = admitResumedAppChunk(session, data, chunk, parserEscape)
-        parserEscape = advanceTerminalEscapeBoundary(parserEscape, admitted)
-        pendingData += admitted
+        // A reset above moved xterm off the stream; resume only where xterm is or at a proven boundary (#33766).
+        // The abandon already disclosed the loss or deferred to the post-flood repaint.
+        const admitted = session.admitStreamBytes(data, chunk, { repairsOwnSkips: true })
+        if (admitted !== null) {
+          pendingData += admitted
+        }
       }
       session.recordRendererOrderedSeq(chunk)
     }

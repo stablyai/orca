@@ -4,9 +4,10 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import type { UISlice } from '@/store/slices/ui'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
-import type {
-  WorktreeCreationRequest,
-  PendingWorktreeCreation
+import {
+  pendingWorktreeCreationIsVisible,
+  type WorktreeCreationRequest,
+  type PendingWorktreeCreation
 } from '@/lib/pending-worktree-creation'
 
 export function isInstantFolderWorktreeCreation(
@@ -56,6 +57,19 @@ export function shouldShowWorktreeCreationSurface({
   hasActivePendingCreation
 }: WorktreeCreationSurfaceInput): boolean {
   return activeView === 'terminal' && activePendingCreationId !== null && hasActivePendingCreation
+}
+
+export function selectWorktreeCreationSurfaceShown(
+  state: Pick<AppState, 'activeView' | 'activePendingCreationId' | 'pendingWorktreeCreations'>
+): boolean {
+  const { activeView, activePendingCreationId } = state
+  return shouldShowWorktreeCreationSurface({
+    activeView,
+    activePendingCreationId,
+    hasActivePendingCreation:
+      activePendingCreationId !== null &&
+      pendingWorktreeCreationIsVisible(state.pendingWorktreeCreations[activePendingCreationId])
+  })
 }
 
 // Why: the created row is listed before completion, so a user may already have opened it.

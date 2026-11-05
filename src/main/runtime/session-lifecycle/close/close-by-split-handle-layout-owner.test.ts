@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   withDurableRuntimeStore,
   withRuntimePaneAdmission
-} from '../../runtime-durable-store-fixture'
+} from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -14,7 +14,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

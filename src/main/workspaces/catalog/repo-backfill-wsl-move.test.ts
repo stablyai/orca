@@ -18,14 +18,14 @@ import {
   flushRepoGitRemoteIdentityEnrichmentForTests,
   resetRepoGitRemoteIdentityEnrichmentForTests
 } from './repo-git-remote-identity-enrichment'
-import { RuntimeRepositoryForkBackfill } from '../../runtime/runtime-repository-fork-backfill'
+import { RuntimeRepositoryForkBackfill } from '../../runtime/repositories/runtime-repository-fork-backfill'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }))
-vi.mock('../../github/client', () => ({
+vi.mock('../../github/client/fetch/repo-slug-upstream', () => ({
   getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
 }))
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({

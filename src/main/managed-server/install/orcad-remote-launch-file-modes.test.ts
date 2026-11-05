@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,6 +19,7 @@ import {
 } from './orcad-remote-host-support'
 import { orcadLaunchCommand } from './orcad-remote-launch'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 // Pairing tokens in readiness require owner-only launch artifacts even under login umask 022.
 
@@ -120,5 +122,29 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
 
     expect(mode(home)).toBe(0o755)
     expect(mode(slotDir)).toBe(0o700)
+  })
+
+  // Artifact paths are relative to the slot, so a failed cd must not launch from the login cwd.
+  it('creates nothing in the login directory when the slot is missing', async () => {
+    rmSync(slotDir, { recursive: true, force: true })
+    const command = orcadLaunchCommand(posix, {
+      remoteInstallDir: slotDir,
+      nodePath: process.execPath,
+      fullVersion: '0.2.0+bb01',
+      userDataDir: join(home, '.orca'),
+      bindHost: '127.0.0.1',
+      port: 7777,
+      activationRoot: join(baseDir, '.orcad-activation-transaction')
+    })
+
+    const result = await runProcess({
+      program: '/bin/sh',
+      args: ['-c', `cd ${quotePosixShell(home)}; ${command}`],
+      timeoutMs: 10_000
+    })
+
+    expect(result.code).not.toBe(0)
+    expect(existsSync(join(home, ORCAD_READINESS_FILENAME))).toBe(false)
+    expect(existsSync(join(home, ORCAD_LOG_FILENAME))).toBe(false)
   })
 })

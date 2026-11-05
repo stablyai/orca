@@ -5,10 +5,10 @@ import nacl from 'tweetnacl'
 import type { WebSocket } from 'ws'
 import { describe, expect, it, vi } from 'vitest'
 import { encodeDeviceProofMessage } from '../../../shared/remote-runtime/pairing/device-key-proof'
-import { DeviceRegistry } from '../device-registry'
-import { EPHEMERAL_DEVICE_IDLE_MS } from '../ephemeral-device-rows'
+import { DeviceRegistry } from './server/pairing/device-registry'
+import { EPHEMERAL_DEVICE_IDLE_MS } from './server/pairing/ephemeral-device-rows'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
-import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
+import { registerSocketDeviceKey } from './server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,

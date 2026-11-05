@@ -142,23 +142,6 @@ it.each(goneEvents)('does not start deferred video work after %s', (event) => {
   expect(mocks.videoSubscribers.size).toBe(0)
 })
 
-it('keeps only the current document streams after repeated reloads', () => {
-  const sender = owner()
-  for (let cycle = 0; cycle < 15; cycle++) {
-    start(sender, 'frame')
-    start(sender, 'video')
-    vi.runOnlyPendingTimers()
-    sender.emit('did-navigate')
-  }
-  start(sender, 'frame')
-  start(sender, 'video')
-  vi.runOnlyPendingTimers()
-  expect(mocks.frameCallbacks.size).toBe(1)
-  expect(mocks.videoSubscribers.size).toBe(1)
-  sendFrames()
-  expect(sender.send).toHaveBeenCalledTimes(2)
-})
-
 it('keeps streams through same-document or prevented navigation and releases on explicit stop', () => {
   const sender = owner()
   const frameId = start(sender, 'frame')

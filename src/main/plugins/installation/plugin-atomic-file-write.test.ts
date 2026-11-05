@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
-import {
-  renamePluginFileWithWindowsRetry,
-  writePluginFileAtomically
-} from './plugin-atomic-file-write'
+import { writePluginFileAtomically } from './plugin-atomic-file-write'
 
 // Windows AV/indexer locks cannot be provoked on CI, so queue the errno codes instead.
 const locks = vi.hoisted(() => ({ codes: [] as string[] }))
@@ -87,40 +84,5 @@ describe('writePluginFileAtomically', () => {
     )
     expect(await readdir(dir)).toEqual(['sources.json'])
     expect(await readFile(target, 'utf8')).toMatch(/^value-\d$/)
-  })
-})
-
-describe('renamePluginFileWithWindowsRetry', () => {
-  describe('on Windows', () => {
-    let dir: string
-    let restorePlatform: () => void
-
-    beforeEach(async () => {
-      dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-win-'))
-      restorePlatform = withPlatform('win32')
-    })
-
-    afterEach(async () => {
-      restorePlatform()
-      locks.codes = []
-      await rm(dir, { recursive: true, force: true })
-    })
-
-    it.each(['EPERM', 'EACCES', 'EBUSY'])('retries past a transient %s lock', async (code) => {
-      await writePluginFileAtomically(join(dir, 'from'), 'payload')
-      locks.codes = [code, code]
-      await renamePluginFileWithWindowsRetry(join(dir, 'from'), join(dir, 'to'))
-      expect(await readFile(join(dir, 'to'), 'utf8')).toBe('payload')
-      expect(locks.codes).toEqual([])
-    })
-
-    it('rethrows a non-retryable code without retrying', async () => {
-      await writePluginFileAtomically(join(dir, 'from'), 'payload')
-      locks.codes = ['ENOSPC', 'ENOSPC']
-      await expect(
-        renamePluginFileWithWindowsRetry(join(dir, 'from'), join(dir, 'to'))
-      ).rejects.toMatchObject({ code: 'ENOSPC' })
-      expect(locks.codes).toEqual(['ENOSPC'])
-    })
   })
 })

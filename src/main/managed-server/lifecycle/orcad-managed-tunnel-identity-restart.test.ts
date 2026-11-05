@@ -17,7 +17,7 @@ import {
 } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
 import { verifyManagedOrcadTunnelIdentity } from './orcad-managed-tunnel-identity'
 import {

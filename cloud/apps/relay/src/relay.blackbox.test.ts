@@ -8,11 +8,8 @@ import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { exportJWK, generateKeyPair, jwtVerify, SignJWT } from 'jose'
-import {
-  ASSIGNMENT_LIMITS,
-  buildHostProofMacInput,
-  HOST_CHALLENGE_PLAINTEXT_DOMAIN
-} from '@orca-cloud/relay-contract'
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
+import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract/host-proof-transcript'
 import nacl from 'tweetnacl'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
@@ -22,8 +19,8 @@ import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership
-} from './cell-admission-selector.js'
-import { openRelayDatabase } from './database.js'
+} from './cell/admission/cell-admission-selector.js'
+import { openRelayDatabase } from './database/database.js'
 
 const appDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const assignmentKey = 'test-assignment-key-with-at-least-32-bytes'

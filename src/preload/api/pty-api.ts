@@ -253,7 +253,7 @@ export type PtyApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
-      gapEscapeState?: string
+      midEscape?: true | 'unknown'
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

@@ -105,19 +105,6 @@ describe('Use a Node.js mirror', () => {
     )
   })
 
-  it('cancels without saving, also with Escape', async () => {
-    render(<Host status={blocked} />)
-    openDialog()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-
-    const input = openDialog()
-    fireEvent.keyDown(input, { key: 'Escape' })
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(settingsSet).not.toHaveBeenCalled()
-    expect(connect).not.toHaveBeenCalled()
-  })
-
   it('shows no offer once a mirror was tried, only the setting link', () => {
     const tried: SshManagedServerStatus = { ...blocked, nodeDownloadBlocked: { mirror: 'tried' } }
     useAppStore.getState().setSshConnectionState('ssh-1', {

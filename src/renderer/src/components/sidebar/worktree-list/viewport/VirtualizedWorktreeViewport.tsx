@@ -118,15 +118,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
   )
-  const folderBackedProjectGroupIds = useMemo(
-    () =>
-      new Set(
-        projectGroups
-          .filter((group) => group.createdFrom === 'folder-scan')
-          .map((group) => group.id)
-      ),
-    [projectGroups]
-  )
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
     rows,
@@ -353,7 +344,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     settings,
     projectActions,
     newCardStyle,
-    folderBackedProjectGroupIds,
     projectGroups,
     session,
     runtime,

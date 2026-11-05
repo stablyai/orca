@@ -62,7 +62,7 @@ export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController):
       layout: restoredLayout,
       closePane: (paneId, leafId, kind) => {
         if (kind === 'user') {
-          closePaneLocally(paneId, leafId)
+          closePaneLocally(paneId, leafId, 'user')
         } else {
           // An exited pane closes as the window's exit path closes it: no user-close clean-up.
           manager.closePane(paneId)

@@ -80,34 +80,52 @@ describe('agent-implemented commands pass through to the agent', () => {
   const PASSED_THROUGH = { handled: false, accepted: false, error: null }
 
   it('sets the goal through the host where the host can, instead of sending prose', async () => {
-    const setThreadGoalObjective = vi.fn(async () => true)
+    const changeThreadGoal = vi.fn(async () => true)
     expect(
       await dispatchStructuredAgentSessionComposerCommand('/goal  ship the fix ', {
         ...controller,
         agent: 'codex',
-        setThreadGoalObjective
+        changeThreadGoal
       })
     ).toEqual({ handled: true, accepted: true, error: null })
-    expect(setThreadGoalObjective).toHaveBeenCalledWith('ship the fix')
+    expect(changeThreadGoal).toHaveBeenCalledWith({ kind: 'set', objective: 'ship the fix' })
 
     // A refused goal keeps the draft; the session error surface explains why.
-    setThreadGoalObjective.mockResolvedValueOnce(false)
+    changeThreadGoal.mockResolvedValueOnce(false)
     expect(
       await dispatchStructuredAgentSessionComposerCommand('/goal ship the fix', {
         ...controller,
         agent: 'codex',
-        setThreadGoalObjective
+        changeThreadGoal
       })
     ).toEqual({ handled: true, accepted: false, error: null })
   })
 
+  it('pauses, resumes or clears the current goal; any other word is the objective', async () => {
+    const changeThreadGoal = vi.fn(async () => true)
+    const goalHost = { ...controller, agent: 'codex' as const, changeThreadGoal }
+    for (const text of ['/goal pause', '/goal Resume', '/goal clear', '/goal constructor']) {
+      expect(await dispatchStructuredAgentSessionComposerCommand(text, goalHost)).toEqual({
+        handled: true,
+        accepted: true,
+        error: null
+      })
+    }
+    expect(changeThreadGoal.mock.calls).toEqual([
+      [{ kind: 'status', status: 'paused' }],
+      [{ kind: 'status', status: 'active' }],
+      [{ kind: 'clear' }],
+      [{ kind: 'set', objective: 'constructor' }]
+    ])
+  })
+
   it('asks for an objective when a goal-capable host gets a bare /goal', async () => {
-    const setThreadGoalObjective = vi.fn(async () => true)
+    const changeThreadGoal = vi.fn(async () => true)
     expect(
       await dispatchStructuredAgentSessionComposerCommand('/goal', {
         ...controller,
         agent: 'codex',
-        setThreadGoalObjective
+        changeThreadGoal
       })
     ).toEqual({
       handled: true,
@@ -115,7 +133,7 @@ describe('agent-implemented commands pass through to the agent', () => {
       error: 'Describe the goal after /goal.',
       errorCode: 'goalObjectiveMissing'
     })
-    expect(setThreadGoalObjective).not.toHaveBeenCalled()
+    expect(changeThreadGoal).not.toHaveBeenCalled()
   })
 
   it('leaves provider text independent of the optional inventory', async () => {

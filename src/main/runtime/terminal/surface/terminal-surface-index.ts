@@ -25,7 +25,7 @@ import {
   type ProjectedSessionTabs
 } from '../../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
 import { projectRuntimeSurfaces } from '../../runtime-leaf-record-projection'
-import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
+import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 
 type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
 

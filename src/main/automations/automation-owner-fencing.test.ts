@@ -14,7 +14,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 let hasCreatedStoreInCase = false
 

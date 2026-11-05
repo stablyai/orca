@@ -6,8 +6,8 @@ import { getPtyIpc } from '../pty-host-bindings'
 import {
   CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION,
   CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION
-} from '../../../daemon/daemon-protocol-version'
-import { isTerminalOnLegacyDaemon } from '../../../daemon/daemon-provider-state'
+} from '../../../daemon/protocol/daemon-protocol-version'
+import { isTerminalOnLegacyDaemon } from '../../../daemon/providers/lifecycle/daemon-provider-state'
 
 // v42 shipped this function; only earlier protocols and the v43 revert lack it.
 function lacksClaudeFunction(protocolVersion: number): boolean {

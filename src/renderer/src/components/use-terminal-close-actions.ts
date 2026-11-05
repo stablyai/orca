@@ -2,14 +2,15 @@ import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { isProvenProcessExit } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import type { TerminalTabCloseIntent } from './terminal/terminal-tab-close-intent'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-pane/terminal-parked-tab-watchers'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { TerminalCreateController } from './use-terminal-create-actions'
 
 export function useTerminalCloseActions(controller: TerminalCreateController) {
   const { consumeSuppressedPtyExit } = controller
-  const handleCloseTab = useCallback((tabId: string) => {
-    closeTerminalTab(tabId)
+  const handleCloseTab = useCallback((tabId: string, reason: TerminalTabCloseIntent) => {
+    closeTerminalTab(tabId, { reason })
   }, [])
 
   const handleCloseBrowserTab = useCallback((tabId: string) => {
