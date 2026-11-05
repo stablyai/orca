@@ -221,7 +221,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             from,
             message: params
           })
-          const routed = route.kind === 'start' ? await route.start() : route
+          const routed = route.kind === 'start' ? route.finish(await route.start()) : route
           // A dispatch: address carries no recipient warnings, so `next` stays last.
           if (routed.kind === 'started') {
             return routed.receipt

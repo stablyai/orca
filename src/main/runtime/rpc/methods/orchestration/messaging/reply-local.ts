@@ -39,7 +39,7 @@ export async function replyToMessage(args: {
       from: fields.from,
       message: fields
     })
-    const routed = route.kind === 'start' ? await route.start() : route
+    const routed = route.kind === 'start' ? route.finish(await route.start()) : route
     if (routed.kind === 'started') {
       db.markAsRead([original.id])
       const followUp = routed.receipt.dispatchId
