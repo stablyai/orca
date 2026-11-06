@@ -65,7 +65,8 @@ export function pullRequestEventText(
   return `${lead} ${pr.repo}#${pr.number} at ${pullRequestEventShortSha(pr.headSha)}`
 }
 
-function isPullRequestEventRow(message: NativeChatMessage): boolean {
+/** A CI result line: a client that doesn't show them drops the whole row. */
+export function isPullRequestEventMessage(message: NativeChatMessage): boolean {
   return (
     message.role === 'system' &&
     message.blocks.some(
@@ -79,13 +80,13 @@ export function withoutPullRequestEventRows(rows: {
   messages: readonly NativeChatMessage[]
   turnKeys: readonly (string | undefined)[]
 }): { messages: readonly NativeChatMessage[]; turnKeys: readonly (string | undefined)[] } {
-  if (!rows.messages.some(isPullRequestEventRow)) {
+  if (!rows.messages.some(isPullRequestEventMessage)) {
     return rows
   }
   const messages: NativeChatMessage[] = []
   const turnKeys: (string | undefined)[] = []
   rows.messages.forEach((message, index) => {
-    if (!isPullRequestEventRow(message)) {
+    if (!isPullRequestEventMessage(message)) {
       messages.push(message)
       turnKeys.push(rows.turnKeys[index])
     }

@@ -33,6 +33,32 @@ function build(
   }).data
 }
 
+describe('foldMobileNativeChatMessages', () => {
+  it('leaves CI result lines out of the transcript', () => {
+    const ciLine: NativeChatMessage = {
+      id: 'orca:pr-event:github.com/acme/repo#3:8d5f74b:1',
+      role: 'system',
+      blocks: [
+        {
+          type: 'text',
+          text: 'CI failing on repo#3 at 8d5f74b',
+          presentation: 'pull-request-event',
+          tone: 'failure'
+        }
+      ],
+      timestamp: 0,
+      source: 'transcript'
+    }
+    const folded = fold([
+      assistant('a1', 'Opened the PR'),
+      ciLine,
+      assistant('a2', 'Pushed the fix')
+    ])
+    expect(folded.map((message) => message.id)).toEqual(['a1', 'a2'])
+    expect(JSON.stringify(folded)).not.toContain('CI failing on repo#3 at 8d5f74b')
+  })
+})
+
 describe('buildMobileNativeChatTransientData', () => {
   it('places an idle send before the streaming reply it caused', () => {
     const data = build([assistant('a1', 'Earlier answer')], 'Starting the tests', [

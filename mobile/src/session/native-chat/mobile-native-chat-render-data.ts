@@ -3,6 +3,7 @@ import { describeLoadError } from '../../components/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../src/shared/native-chat/native-chat-noise'
+import { isPullRequestEventMessage } from '../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { nativeChatStreamingMessage } from '../../../../src/shared/native-chat/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {
@@ -100,6 +101,7 @@ export function foldMobileNativeChatMessages(
   agent: AgentType
 ): NativeChatMessage[] {
   // Filter child/noise rows before folding so they cannot split tool runs; project plan updates afterward so they cannot consume another call’s result.
+  // CI result lines stay hidden until the phone reads the desktop's setting for them.
   return projectNativeChatTaskListFrames(
     stripNoiseMessages(
       foldToolMessages(
@@ -107,7 +109,9 @@ export function foldMobileNativeChatMessages(
           prepareNativeChatMessages(
             messages.filter(
               (message) =>
-                isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
+                isRootAgentJournalItem(message) &&
+                !isUndrawnProviderFrameMessage(message) &&
+                !isPullRequestEventMessage(message)
             ),
             agent
           )
