@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { DatabaseSync } from 'node:sqlite'
+import type Database from '../sqlite/sync-database'
 import { FollowUpEngine } from './engine'
 import { harness } from './engine.test-fixture'
 
@@ -351,9 +353,10 @@ describe('follow-up recovery and instance lifecycle', () => {
   })
 })
 
-it.each([false, true])(
-  'cleans a refused action’s abandoned owner through restart and final retirement (shared owner: %s)',
-  async (shared) => {
+it.each([0, 10, 100])(
+  'cleans a refused action’s abandoned owner through restart and final retirement with %i shared evidence rows',
+  async (count) => {
+    const shared = count > 0
     const h = harness()
     await h.observe([])
     if (shared) {
@@ -377,6 +380,63 @@ it.each([false, true])(
           .get(instance)?.count
       )
     expect(rows('i1')).toBeGreaterThan(0)
+    for (let index = rows('i1'); index < count; index++) {
+      h.store.appendActivity('i1', 'auto-1', 'idle', h.now - index)
+    }
+    let ownerVisits = 0
+    let historyCursors = 0
+    const ownerPlans: string[] = []
+    const sqlite: DatabaseSync = Reflect.get(h.db, 'db')
+    sqlite.function('followup_owner_visit', () => {
+      ownerVisits++
+      return 1
+    })
+    const historyRoots = new Set(
+      h.db
+        .prepare("SELECT rootpage FROM sqlite_schema WHERE tbl_name = 'followup_activity'")
+        .all()
+        .map((row) => Number(row.rootpage))
+    )
+    const prepare = h.db.prepare.bind(h.db)
+    const probe = vi.spyOn(h.db, 'prepare').mockImplementation((query) => {
+      const ownership =
+        query.startsWith('SELECT 1 FROM followup_action') && query.includes('$.instanceId')
+      const cleanup = query.startsWith('DELETE FROM followup_activity')
+      if (!ownership && !cleanup) {
+        return prepare(query)
+      }
+      // Count visits inside SQLite, and check the VM opens no journal cursor on the shared path.
+      const measured = ownership
+        ? query.replace('SELECT 1 FROM', 'SELECT followup_owner_visit() FROM')
+        : query
+      const statement = prepare(measured)
+      return new Proxy(statement, {
+        get(owner, field) {
+          if (field !== 'get' && field !== 'run') {
+            return Reflect.get(owner, field)
+          }
+          return (...args: Database.BindValue[]) => {
+            if (args[0] === 'i1') {
+              if (ownership) {
+                ownerPlans.push(
+                  ...prepare(`EXPLAIN QUERY PLAN ${measured}`)
+                    .all(...args)
+                    .map((row) => String(row.detail))
+                )
+              }
+              historyCursors += prepare(`EXPLAIN ${measured}`)
+                .all(...args)
+                .filter(
+                  (row) =>
+                    (row.opcode === 'OpenRead' || row.opcode === 'OpenWrite') &&
+                    historyRoots.has(Number(row.p2))
+                ).length
+            }
+            return statement[field](...args)
+          }
+        }
+      })
+    })
     second.lastActiveAt = 10
     h.engine.targetChanged(second)
     await h.observe(['unit'])
@@ -384,6 +444,15 @@ it.each([false, true])(
       instanceId: 'i2',
       status: 'accepted'
     })
+    probe.mockRestore()
+    if (shared) {
+      expect(ownerVisits).toBe(1)
+      expect(ownerPlans.some((detail) => /SEARCH.*followup_action_instance/.test(detail))).toBe(
+        true
+      )
+      expect(historyCursors).toBe(0)
+      expect(rows('i1')).toBe(count)
+    }
     expect(rows('i1') > 0).toBe(shared)
     await h.restart()
     expect(rows('i1') > 0).toBe(shared)

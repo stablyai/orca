@@ -21,11 +21,14 @@ export class FollowUpActivityStore {
   }
 
   protected pruneActivity(instance: string): void {
-    this.db
+    const owned = this.db
       .prepare(
-        "DELETE FROM followup_activity WHERE instance_id = ? AND NOT EXISTS (SELECT 1 FROM followup_action WHERE json_extract(payload, '$.instanceId') = ?)"
+        "SELECT 1 FROM followup_action WHERE json_extract(payload, '$.instanceId') = ? LIMIT 1"
       )
-      .run(instance, instance)
+      .get(instance)
+    if (!owned) {
+      this.db.prepare('DELETE FROM followup_activity WHERE instance_id = ?').run(instance)
+    }
   }
 
   reconcileActivity(
