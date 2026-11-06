@@ -6,12 +6,18 @@ afterEach(() => {
   takeRealAgentCliCalls()
 })
 
-describe.skipIf(process.platform === 'win32')('vitest real-agent-cli guard', () => {
-  it('blocks and records an agent CLI resolved from the inherited PATH', () => {
+describe.skipIf(!globalThis.orcaRealAgentCliGuard)('vitest real-agent-cli guard', () => {
+  it('blocks version discovery without treating an absent agent as a test failure', () => {
     const result = spawnSync('claude', ['--version'], { encoding: 'utf8', env: process.env })
     expect(result.status).toBe(127)
+    expect(takeRealAgentCliCalls()).toEqual([])
+  })
+
+  it('blocks and records an agent CLI resolved from the inherited PATH', () => {
+    const result = spawnSync('claude', ['-p', 'hello'], { encoding: 'utf8', env: process.env })
+    expect(result.status).toBe(127)
     expect(result.stderr).toMatch(/real-agent-cli guard/)
-    expect(takeRealAgentCliCalls()).toEqual(['claude --version'])
+    expect(takeRealAgentCliCalls()).toEqual(['claude -p hello'])
   })
 
   it('records calls from a shell that keeps the inherited PATH', () => {

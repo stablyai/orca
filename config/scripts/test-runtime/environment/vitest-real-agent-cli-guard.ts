@@ -49,6 +49,8 @@ function install(): GuardState | null {
   writeFileSync(log, '')
   const script = [
     '#!/bin/sh',
+    // Discovery is expected in daemon tests; report the CLI as unavailable.
+    'if [ "$#" -eq 1 ] && [ "$1" = "--version" ]; then exit 127; fi',
     `printf '%s %s\\n' "\${0##*/}" "$*" >> ${quoteSh(log)}`,
     `echo "[vitest real-agent-cli guard] blocked real \${0##*/}; give the test its own stub on PATH" >&2`,
     'exit 127',

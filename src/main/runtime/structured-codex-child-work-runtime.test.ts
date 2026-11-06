@@ -30,9 +30,6 @@ import {
   type StructuredCodexRpcHarness
 } from './structured-codex-session-rpc-test-harness'
 
-// Side reads (at-rest `/` commands) spawn the CLI directly; a missing binary keeps them off a real codex.
-const MISSING_CODEX = '/nonexistent/orca-test-codex'
-
 const THREAD = 'thread-runtime-child-work'
 const CHILD = 'thread-runtime-reviewer'
 const ROUTES: Record<string, unknown> = {
@@ -90,7 +87,7 @@ describe('structured Codex child work through the production runtime', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => ({ command: MISSING_CODEX, prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: join(root!, 'codex-not-installed'), prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection),
       statusSink: {
