@@ -35,7 +35,7 @@ function stateText(view: FollowUpView): string {
       return 'Handled for this commit'
     case 'paused':
       if (view.pauseReason === 'generation') {
-        return `Auto follow-ups paused (${view.used} of ${view.limit} used). A new push from you resets it.`
+        return `Auto follow-ups paused (${view.used} of ${view.limit} used). A new push from you resets it, unless an automatic agent is still working there.`
       }
       if (view.pauseReason === 'daily') {
         return `Auto follow-ups paused (6 in 24 h). Resumes at ${new Date(view.resumesAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`

@@ -123,12 +123,6 @@ export function followUpView(
   if (latestAction?.status === 'unconfirmed' && latestAction.headSha === observation?.headSha) {
     return { ...base, state: 'unconfirmed', action }
   }
-  if (observation?.failingCheckNames.some((name) => pr.baselineNames.includes(name))) {
-    return { ...base, state: 'baseline' }
-  }
-  if (observation?.failingCheckNames.length && !fresh) {
-    return { ...base, state: 'handled', action }
-  }
   if (
     latestAction?.status === 'accepted' &&
     latestAction.promptUnconfirmed &&
@@ -137,6 +131,13 @@ export function followUpView(
   ) {
     return { ...base, state: 'prompt-unconfirmed', action }
   }
+  if (observation?.failingCheckNames.some((name) => pr.baselineNames.includes(name))) {
+    return { ...base, state: 'baseline' }
+  }
+  if (observation?.failingCheckNames.length && !fresh) {
+    return { ...base, state: 'handled', action }
+  }
+
   return {
     ...base,
     state: 'armed',

@@ -185,7 +185,7 @@ describe('follow-up recovery and instance lifecycle', () => {
     await h.engine.instanceDeleted('replacement')
     expect(h.store.pr(h.target.prKey)).toBeUndefined()
   })
-  it.each(['recipe', 'prepare'])(
+  it.each(['inputs', 'recipe', 'prepare'])(
     'continues to the next project after a %s failure and recovers only the repaired effective recipe',
     async (failure) => {
       const h = harness()
@@ -195,7 +195,12 @@ describe('follow-up recovery and instance lifecycle', () => {
       const engine = new FollowUpEngine({
         ...h.dependencies(),
         targets: () => [h.target, other],
-        launchInputs: (target) => ({ key: `${target.instanceId}:${broken}`, agent: 'codex' }),
+        launchInputs: (target) => {
+          if (broken && failure === 'inputs' && target.worktreeId === 'w1') {
+            throw new Error('Unsafe adapter details')
+          }
+          return { key: `${target.instanceId}:${broken}`, agent: 'codex' }
+        },
         recipe: (target) => {
           if (broken && failure === 'recipe' && target.worktreeId === 'w1') {
             throw new Error('Invalid global recipe')
@@ -223,10 +228,19 @@ describe('follow-up recovery and instance lifecycle', () => {
       await engine.reconcile()
       expect(h.store.latestAction(h.target.prKey)).toMatchObject({
         status: 'failed',
-        failureReason: failure === 'recipe' ? 'Invalid global recipe' : 'Check logs unavailable'
+        failureReason:
+          failure === 'inputs'
+            ? 'Codex could not prepare the check fix. Review the Fix checks recipe in Source Control AI settings, then use Fix checks.'
+            : failure === 'recipe'
+              ? 'Codex could not prepare the check fix. Review the Fix checks recipe in Source Control AI settings, then use Fix checks.'
+              : 'Codex could not load the check-fix prompt. Check your connection, then use Fix checks.'
       })
       expect(engine.forWorkspace('w1')?.view.failureReason).toBe(
-        failure === 'recipe' ? 'Invalid global recipe' : 'Check logs unavailable'
+        failure === 'inputs'
+          ? 'Codex could not prepare the check fix. Review the Fix checks recipe in Source Control AI settings, then use Fix checks.'
+          : failure === 'recipe'
+            ? 'Codex could not prepare the check fix. Review the Fix checks recipe in Source Control AI settings, then use Fix checks.'
+            : 'Codex could not load the check-fix prompt. Check your connection, then use Fix checks.'
       )
       expect(h.store.latestAction(other.prKey)?.status).toBe('accepted')
       expect(h.launch).toHaveBeenCalledTimes(1)
@@ -239,6 +253,30 @@ describe('follow-up recovery and instance lifecycle', () => {
       await engine.dispose()
     }
   )
+  it('keeps the receipt failure explanation through settlement and parked reconciliation', async () => {
+    const h = harness()
+    await h.observe([])
+    h.launch.mockResolvedValueOnce({ status: 'unconfirmed' })
+    await h.observe(['unit'])
+    h.recover.mockResolvedValueOnce({
+      status: 'absent',
+      failureReason:
+        'Codex could not open this workspace. Reopen the workspace, then use Fix checks.'
+    })
+    await h.engine.reconcile([h.target.prKey])
+    expect(h.engine.view(h.target.prKey)).toMatchObject({
+      state: 'failed',
+      workingAgent: 'codex',
+      failureReason:
+        'Codex could not open this workspace. Reopen the workspace, then use Fix checks.'
+    })
+    await h.engine.reconcile([h.target.prKey])
+    expect(h.prepare).toHaveBeenCalledOnce()
+    expect(h.store.latestAction(h.target.prKey)?.failureReason).toBe(
+      'Codex could not open this workspace. Reopen the workspace, then use Fix checks.'
+    )
+  })
+
   it('reserves the rolling daily allowance for uncertain launches even across independent heads', async () => {
     const h = harness()
     await h.observe([])

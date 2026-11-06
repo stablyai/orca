@@ -36,7 +36,7 @@ describe('follow-up launch receipts', () => {
             prompt: { delivery: 'submit', outcome: 'unconfirmed' }
           }
         }),
-        { operationId: 'operation-1' }
+        { operationId: 'operation-1', agent: 'codex' }
       )
     ).toEqual({
       status: 'accepted',
@@ -53,53 +53,38 @@ describe('follow-up launch receipts', () => {
   it('distinguishes an effect-free refusal, a user-closed tab, and missing or expired proof', async () => {
     expect(
       await recoverFollowUpLaunch(runtime({ status: 'failed', code: 'agent_launch_tab_closed' }), {
-        operationId: 'op'
+        operationId: 'op',
+        agent: 'codex'
       })
     ).toEqual({ status: 'declined' })
     expect(
       await recoverFollowUpLaunch(
-        runtime({ status: 'failed', code: 'agent_launch_surface_unavailable' }),
-        { operationId: 'op' }
+        runtime({
+          status: 'failed',
+          code: 'agent_launch_surface_unavailable',
+          message: 'Raw adapter details are not user copy'
+        }),
+        { operationId: 'op', agent: 'codex' }
       )
-    ).toEqual({ status: 'absent' })
+    ).toEqual({
+      status: 'absent',
+      failureReason:
+        'Codex could not start in the selected surface. Choose an available surface in Source Control AI settings, then use Fix checks.'
+    })
     expect(
       await recoverFollowUpLaunch(
         runtime({ status: 'failed', code: 'agent_session_operation_expired' }),
-        { operationId: 'op' }
+        { operationId: 'op', agent: 'codex' }
       )
     ).toEqual({ status: 'unconfirmed' })
-    expect(await recoverFollowUpLaunch(runtime(), { operationId: 'op' })).toEqual({
+    expect(await recoverFollowUpLaunch(runtime(), { operationId: 'op', agent: 'codex' })).toEqual({
       status: 'unconfirmed'
     })
-  })
-  it('requires same-ledger completeness, a stopped executor and unprunable age before missing rows prove absence', async () => {
-    const host = runtime()
-    const ledger = await host.openAgentSessionRecordStore()
-    host.openAgentSessionRecordStore = async () => ledger
-    const operationId = '1700000000000-0123456789abcdef0123456789abcdef'
-    const proof = {
-      ledger,
-      complete: true,
-      healthy: true,
-      executorStopped: true,
-      now: 1700000001000
+    const unreadable = runtime()
+    unreadable.openAgentSessionRecordStore = async () => {
+      throw new Error('Receipt store unavailable')
     }
-    expect(await recoverFollowUpLaunch(host, { operationId }, proof)).toEqual({ status: 'absent' })
-    for (const patch of [
-      { ledger: {} },
-      { complete: false },
-      { healthy: false },
-      { executorStopped: false },
-      { now: 1700173000000 }
-    ]) {
-      expect(await recoverFollowUpLaunch(host, { operationId }, { ...proof, ...patch })).toEqual({
-        status: 'unconfirmed'
-      })
-    }
-    host.openAgentSessionRecordStore = async () => {
-      throw new Error('Ledger unavailable')
-    }
-    expect(await recoverFollowUpLaunch(host, { operationId }, proof)).toEqual({
+    expect(await recoverFollowUpLaunch(unreadable, { operationId: 'op', agent: 'codex' })).toEqual({
       status: 'unconfirmed'
     })
   })

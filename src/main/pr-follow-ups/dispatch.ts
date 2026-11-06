@@ -6,6 +6,7 @@ import type {
   FollowUpPr,
   FollowUpTarget
 } from '../../shared/pr-follow-ups/contracts'
+import { followUpFailureCopy } from './failure'
 import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
 import type { FollowUpEngineDependencies, FollowUpReceipt } from './engine-contract'
 import { eligibleFollowUpTargets, followUpPause, FOLLOW_UP_DAY } from './follow-up-state'
@@ -58,29 +59,90 @@ export async function dispatchFollowUp(
   if (previous && !['absent', 'failed'].includes(previous.status)) {
     return
   }
-  const inputs = deps.launchInputs(target)
-  const retryKey = JSON.stringify([target.instanceId, target.worktreeId, inputs.key])
-  const retryCount = previous?.retryKey === retryKey ? (previous.retryCount ?? 1) : 0
-  if (
-    retryCount >= 3 ||
-    (retryCount > 0 &&
-      observation.observedAt <= (previous?.retryObservedAt ?? previous!.attemptStartedAt))
-  ) {
-    return
-  }
   const instanceId = target.instanceId
   const attempt = (previous?.attempt ?? 0) + 1
   const attemptStartedAt = deps.now?.() ?? Date.now()
   const operationId = followUpOperationId(actionKey, attempt, attemptStartedAt)
   let launch: AgentLaunchParams
+  let inputs = { key: 'unavailable', agent: previous?.agent ?? 'Agent' }
+  let retryKey = JSON.stringify([target.instanceId, target.worktreeId, inputs.key])
+  let retryCount = previous?.retryKey === retryKey ? (previous.retryCount ?? 1) : 0
+  const allowed = () =>
+    retryCount < 3 &&
+    (retryCount === 0 ||
+      observation.observedAt > (previous?.retryObservedAt ?? previous!.attemptStartedAt))
+  let stage: 'recipe' | 'prepare' = 'recipe'
+  const admitted = () => {
+    retryKey = JSON.stringify([target.instanceId, target.worktreeId, inputs.key])
+    retryCount = previous?.retryKey === retryKey ? (previous.retryCount ?? 1) : 0
+    return allowed()
+  }
   try {
-    // Background terminals reach a desktop tab only through renderer publication.
-    if (deps.recipe(target).surface === 'terminal' && !deps.canPublishAgentLaunchTab()) {
-      lifecycle.hold(deps.recipe(target).agent)
+    inputs = deps.launchInputs(target)
+    if (!admitted()) {
       return
     }
+    const recipe = deps.recipe(target)
+    // Background terminals reach a desktop tab only through renderer publication.
+    if (recipe.surface === 'terminal' && !deps.canPublishAgentLaunchTab()) {
+      lifecycle.hold(recipe.agent)
+      return
+    }
+    stage = 'prepare'
     launch = await deps.prepare(observation, names, target)
+    // Prompt/log loading can await network I/O; all launch authority is read again after it.
+    const latest = deps.source.latest(pr.prKey)
+    const current = eligibleFollowUpTargets(deps, pr.prKey)[0]
+    const saved = store.pr(pr.prKey)
+    const original = deps.targets(pr.prKey).find((item) => item.worktreeId === target.worktreeId)
+    if (saved && original && original.instanceId !== instanceId) {
+      saved.needsBaseline = true
+      store.savePr(saved)
+    }
+    if (
+      lifecycle.isDisposed() ||
+      !latest ||
+      !current ||
+      !saved ||
+      current.instanceId !== instanceId ||
+      current.worktreeId !== target.worktreeId ||
+      current.workingAgent ||
+      saved.stoppedAt !== null ||
+      saved.needsBaseline ||
+      latest.state === 'closed' ||
+      latest.state === 'merged' ||
+      !latest.readComplete ||
+      !latest.checksFinal ||
+      latest.headSha !== observation.headSha ||
+      names.some(
+        (name) => !latest.failingCheckNames.includes(name) || saved.handled.includes(name)
+      ) ||
+      paused(saved, resolvePrFollowUps(deps.globalSettings(), current.settings).maxAutoRunsPerPr)
+    ) {
+      return
+    }
+    stage = 'recipe'
+    if (
+      JSON.stringify([current.instanceId, current.worktreeId, deps.launchInputs(current).key]) !==
+      retryKey
+    ) {
+      return
+    }
+    if (launch.surface === 'terminal' && !deps.canPublishAgentLaunchTab()) {
+      lifecycle.hold(launch.agent)
+      return
+    }
   } catch (error) {
+    if (inputs.agent === 'Agent') {
+      try {
+        inputs.agent = deps.recipe(target).agent
+      } catch {
+        /* Keep a generic label when both adapters fail. */
+      }
+    }
+    if (!admitted()) {
+      return
+    }
     store.saveAction({
       actionKey,
       prKey: pr.prKey,
@@ -95,51 +157,11 @@ export async function dispatchFollowUp(
       operationId,
       status: 'failed',
       agent: inputs.agent,
-      failureReason:
-        error instanceof Error ? error.message : 'Could not prepare Fix failing checks',
+      failureReason: followUpFailureCopy(inputs.agent, error, stage),
       retryKey,
       retryCount: retryCount + 1,
       retryObservedAt: observation.observedAt
     })
-    return
-  }
-  // Prompt/log loading can await network I/O; all launch authority is read again after it.
-  const latest = deps.source.latest(pr.prKey)
-  const current = eligibleFollowUpTargets(deps, pr.prKey)[0]
-  const saved = store.pr(pr.prKey)
-  if (current && saved && current.instanceId !== instanceId) {
-    saved.needsBaseline = true
-    store.savePr(saved)
-  }
-  if (
-    lifecycle.isDisposed() ||
-    !latest ||
-    !current ||
-    !saved ||
-    current.instanceId !== instanceId ||
-    current.workingAgent ||
-    saved.stoppedAt !== null ||
-    saved.needsBaseline ||
-    latest.state === 'closed' ||
-    latest.state === 'merged' ||
-    !latest.readComplete ||
-    !latest.checksFinal ||
-    latest.headSha !== observation.headSha ||
-    names.some(
-      (name) => !latest.failingCheckNames.includes(name) || saved.handled.includes(name)
-    ) ||
-    paused(saved, resolvePrFollowUps(deps.globalSettings(), current.settings).maxAutoRunsPerPr)
-  ) {
-    return
-  }
-  if (
-    JSON.stringify([current.instanceId, current.worktreeId, deps.launchInputs(current).key]) !==
-    retryKey
-  ) {
-    return
-  }
-  if (launch.surface === 'terminal' && !deps.canPublishAgentLaunchTab()) {
-    lifecycle.hold(launch.agent)
     return
   }
   const action: FollowUpAction = {
@@ -150,7 +172,7 @@ export async function dispatchFollowUp(
     mode: 'new-agent',
     worktreeId: target.worktreeId,
     instanceId: target.instanceId,
-    generation: saved.generation,
+    generation: pr.generation,
     attempt,
     attemptStartedAt,
     operationId,
@@ -182,6 +204,9 @@ export function settleFollowUpReceipt(
 ): void {
   deps.store.transaction(() => {
     action.status = receipt.status
+    if (receipt.status === 'absent') {
+      action.failureReason = receipt.failureReason ?? followUpFailureCopy(action.agent, undefined)
+    }
     if (receipt.status === 'accepted') {
       Object.assign(action, receipt.identity)
       action.sessionStartedAt ??= action.attemptStartedAt

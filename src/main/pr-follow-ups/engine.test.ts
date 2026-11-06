@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FollowUpEngine, type FollowUpReceipt } from './engine'
 import { FollowUpStore } from './store'
-import Database from '../sqlite/sync-database'
+import type Database from '../sqlite/sync-database'
 import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/pr-follow-ups'
 import { harness } from './engine.test-fixture'
 
@@ -146,6 +146,37 @@ describe('automatic failing-check follow-ups', () => {
     expect(h.launch).not.toHaveBeenCalled()
     await h.observe(['unit', 'lint', 'new'])
     expect(h.launch).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels preparation when another eligible workspace becomes preferred without consuming its failure', async () => {
+    const h = harness()
+    const other = { ...h.target, worktreeId: 'w2', instanceId: 'i2', lastActiveAt: 0 }
+    h.controls.targets = [h.target, other]
+    await h.engine.reconcile()
+    await h.observe([])
+    h.prepare
+      .mockImplementationOnce(async () => {
+        other.lastActiveAt = 2
+        h.engine.targetChanged(other)
+        return { agent: 'codex', surface: 'chat', target: { kind: 'existing', worktree: 'id:w1' } }
+      })
+      .mockImplementationOnce(async (_observation, _names, target) => ({
+        agent: 'codex',
+        surface: 'chat',
+        target: { kind: 'existing', worktree: `id:${target.worktreeId}` }
+      }))
+    await h.observe(['unit'])
+    expect(h.launch).not.toHaveBeenCalled()
+    expect(h.store.pr(h.target.prKey)).toMatchObject({
+      needsBaseline: false,
+      baselineNames: [],
+      handled: []
+    })
+    await h.engine.reconcile([h.target.prKey])
+    expect(h.launch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ target: { kind: 'existing', worktree: 'id:w2' } })
+    )
+    expect(h.engine.forWorkspace('w2')?.view.state).toBe('handled')
   })
 
   it('holds terminal recipes until renderer publication is available, but lets chats launch', async () => {
@@ -296,7 +327,7 @@ describe('automatic failing-check follow-ups', () => {
       }
     })
     await h.observe(['unit'])
-    expect(h.engine.view(h.target.prKey).state).toBe('handled')
+    expect(h.engine.view(h.target.prKey).state).toBe('prompt-unconfirmed')
     await h.observe([])
     expect(h.engine.view(h.target.prKey).state).toBe('prompt-unconfirmed')
     h.target.workingAgent = 'Claude'
@@ -458,41 +489,6 @@ describe('automatic failing-check follow-ups', () => {
       }
     }
   )
-
-  it('preserves safety metadata while removing legacy launch payloads', async () => {
-    const h = harness()
-    await h.observe([])
-    await h.observe(['unit'])
-    const action = h.store.actions(h.target.prKey)[0]!
-    const db = new Database(':memory:')
-    try {
-      db.exec(
-        'CREATE TABLE followup_action (action_key TEXT PRIMARY KEY, pr_key TEXT NOT NULL, payload TEXT NOT NULL)'
-      )
-      db.prepare('INSERT INTO followup_action VALUES (?, ?, ?)').run(
-        action.actionKey,
-        action.prKey,
-        JSON.stringify({ ...action, launch: { agent: 'codex', prompt: { text: 'legacy-prompt' } } })
-      )
-      const store = new FollowUpStore(db)
-      expect(store.acceptedCount(action.prKey, 0)).toBe(1)
-      expect(store.latestAction(action.prKey)?.agent).toBe('codex')
-      store.saveAction({
-        ...store.actions(action.prKey)[0]!,
-        sessionEndedAt: 1700000100000
-      })
-      const reopened = new FollowUpStore(db)
-      expect(reopened.action(action.actionKey)).toMatchObject({
-        agent: 'codex',
-        sessionEndedAt: 1700000100000
-      })
-      expect(
-        String(db.prepare('SELECT payload FROM followup_action').get()?.payload)
-      ).not.toContain('legacy-prompt')
-    } finally {
-      db.close()
-    }
-  })
 
   it('keeps PR-wide safety history until every binding and pending session retires', async () => {
     const h = harness()

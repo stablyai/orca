@@ -25,7 +25,8 @@ export type FollowUpReceipt =
         >
       >
     }
-  | { status: 'absent' | 'unconfirmed' | 'declined' }
+  | { status: 'absent'; failureReason?: string }
+  | { status: 'unconfirmed' | 'declined' }
 
 export type FollowUpEngineDependencies = {
   source: FollowUpObservationSource
