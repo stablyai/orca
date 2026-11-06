@@ -17529,6 +17529,8 @@
               "25349b66fc": "New Markdown File",
               "784812ca24": "Open a browser tab in the active workspace.",
               "892bfa9339": "New Browser Tab",
+              "splitChatRight": "Split Chat Right",
+              "splitChatDown": "Split Chat Down",
               "verbs": {
                 "newBrowser": "new browser",
                 "newBrowserTab": "new browser tab",
@@ -17542,6 +17544,10 @@
                 "newTerminal": "new terminal",
                 "newTerminalTab": "new terminal tab",
                 "newShell": "new shell",
+                "splitChatRight": "split chat right",
+                "splitChatDown": "split chat down",
+                "chatPaneRight": "chat pane right",
+                "chatPaneBelow": "chat pane below",
                 "terminalTab": "terminal tab",
                 "createWorktree": "create worktree",
                 "addWorktree": "add worktree",
@@ -17552,20 +17558,10 @@
                 "trashWorktree": "trash worktree",
                 "addQuickCommand": "add quick command",
                 "newQuickCommand": "new quick command",
-                "splitChatRight": "split chat right",
-                "newChatRight": "new chat right",
-                "chatPaneRight": "chat pane right",
-                "splitChatDown": "split chat down",
-                "newChatBelow": "new chat below",
-                "chatPaneBelow": "chat pane below",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
                 "browserSplit": "browser split"
               },
-              "splitChatRight": "Split Chat Right",
-              "splitChatRightDescription": "Open a new chat in a split pane to the right.",
-              "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open a new chat in a split pane below.",
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
               "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
             }
@@ -21068,7 +21064,7 @@
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message. Messages with images wait as cards too.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message, and with nothing typed steers the first waiting card into the running turn. Messages with images wait as cards too.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -21287,10 +21283,8 @@
           "body": "Click + to start an agent, a terminal, or a browser tab."
         },
         "splitChat": {
-          "title": "Run two chats side by side",
           "body": "Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.",
-          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs.",
-          "action": "Split chat"
+          "bodyWithoutShortcut": "Click the split button at the top of the chat. Each side gets its own tabs."
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."

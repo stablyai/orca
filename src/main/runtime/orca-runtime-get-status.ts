@@ -39,6 +39,11 @@ import {
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
 } from '../../shared/runtime-session-contracts'
+import {
+  TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY,
+  TERMINAL_PERSISTENCE_UNAVAILABLE_CODE,
+  TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
+} from '../../shared/runtime-capability-degradation'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { loadBundledMobileWebBundle } from './bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
@@ -145,6 +150,14 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     const terminalDegradation = runtimeTerminalDegradation()
     if (terminalDegradation) {
       degradations.push(terminalDegradation)
+    }
+    // Hosts that never wire this check default to true and claim nothing.
+    if (!this.canRecoverPersistentLocalPtysFn()) {
+      degradations.push({
+        code: TERMINAL_PERSISTENCE_UNAVAILABLE_CODE,
+        capability: TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY,
+        message: TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
+      })
     }
     return {
       runtimeId: this.runtimeId,

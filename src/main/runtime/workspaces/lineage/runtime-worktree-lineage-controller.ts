@@ -1,4 +1,10 @@
-import type { WorktreeLineage, WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
+import {
+  isCrossStoreInferredSource,
+  type CrossStoreInferredSource,
+  type CrossStoreParentRef,
+  type WorktreeLineage,
+  type WorkspaceLineage
+} from '../../../../shared/worktree/lineage-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
@@ -17,6 +23,9 @@ import {
 } from '../../../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
+import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
+import { assertParentInAnotherStore } from './cross-store-parent-store-check'
+import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,
@@ -87,6 +96,9 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
+    if (resolution.kind === 'crossStore') {
+      await assertParentInAnotherStore(resolution.parent, () => this.readStoreInstallationId())
+    }
     const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
     if (
       retained.kind === 'lineage' &&
@@ -96,6 +108,55 @@ export class RuntimeWorktreeLineageController {
       throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
     }
     return retained
+  }
+
+  /** The parent a same-store create would infer from this caller context, as a ref for a child in
+   * another store. `installationId` is the runtime's published identity, never created here. A
+   * reason replaces the ref when none is valid or contexts conflict. */
+  async resolveCallerParentForAnotherStore(
+    input: Pick<
+      WorktreeLineageInput,
+      'envParentWorkspace' | 'callerTerminalHandle' | 'cwdParentWorktree' | 'cwdParentAmbiguous'
+    >,
+    installationId: string | undefined
+  ): Promise<
+    { parent: CrossStoreParentRef; source: CrossStoreInferredSource } | { reason: string }
+  > {
+    let resolution: WorktreeLineageResolution
+    try {
+      resolution = await this.resolveCreate(input)
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (resolution.kind !== 'lineage') {
+      const conflict =
+        resolution.kind === 'none' &&
+        resolution.warnings.some((warning) => warning.code === 'LINEAGE_PARENT_CONTEXT_CONFLICT')
+      return {
+        reason: conflict
+          ? "this terminal's contexts name different workspaces."
+          : "Orca couldn't find this terminal's workspace."
+      }
+    }
+    const { parent, capture } = resolution
+    if (parent.type !== 'worktree') {
+      return { reason: "a folder workspace can't parent a workspace on another machine yet." }
+    }
+    if (!parent.instanceId || !installationId) {
+      return { reason: "Orca couldn't confirm this workspace's identity." }
+    }
+    if (!isCrossStoreInferredSource(capture.source)) {
+      return { reason: "Orca couldn't tell which workspace this command runs in." }
+    }
+    return {
+      parent: { installationId, workspaceKey: parent.workspaceKey, instanceId: parent.instanceId },
+      source: capture.source
+    }
+  }
+
+  /** This store's identity; the published descriptor reads the same file at the canonical path. */
+  async readStoreInstallationId(): Promise<string | undefined> {
+    return await readStoreInstallationId(null, getCanonicalUserDataPath())
   }
 
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {
@@ -208,6 +269,8 @@ export class RuntimeWorktreeLineageController {
     for (const worktree of await this.deps.listResolvedWorktrees()) {
       if (
         store.getWorktreeLineage(worktree.id) ||
+        // An inferred parent must not replace an explicit one on another machine.
+        store.getCrossStoreWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id)) ||
         !worktree.instanceId ||
         isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
       ) {

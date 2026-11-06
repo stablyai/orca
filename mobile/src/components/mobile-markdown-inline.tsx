@@ -11,6 +11,7 @@ import { routeMarkdownHref } from './markdown-href-routing'
 import { styles, type MarkdownTone } from './mobile-markdown-styles'
 import { MarkdownText } from './mobile-markdown-text'
 import { plainText } from './mobile-markdown-tree'
+import { MobileMarkdownMath } from './MobileMarkdownMath'
 
 export type MarkdownInlineContext = {
   // File targets call this when viewer exists; omit to keep paths plain.
@@ -21,6 +22,8 @@ export type MarkdownInlineContext = {
   filePathsLinkedInTree?: boolean
   tone: MarkdownTone
   textScale: number
+  /** Chat text: desktop chat's math delimiters and sizes; otherwise GitHub's. */
+  chatMath: boolean
 }
 
 type SpanStyle = TextProps['style']
@@ -158,6 +161,17 @@ function renderPhrasing(
         ? renderInlineCode(key, only.value, ctx, outer, () => openMarkdownHref(node.url, ctx))
         : renderLink(key, plainText(node), node.url, ctx, outer)
     }
+    case 'inlineMath':
+      return (
+        <MobileMarkdownMath
+          key={key}
+          value={node.value}
+          source={node.source}
+          display={false}
+          githubSizes={!ctx.chatMath}
+          style={outer}
+        />
+      )
     case 'image':
       return renderLink(key, node.alt || 'image', node.url, ctx, outer)
     case 'footnoteReference':

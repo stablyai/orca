@@ -20,6 +20,7 @@ import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { collectActiveRowKeys } from './active-workspace'
 import {
   buildFeedHostOptions,
+  feedPairedDeviceIdsByEnvironment,
   indexSidebarFeed,
   rankSidebarFeedWorktrees,
   type SidebarFeedIndex
@@ -146,14 +147,7 @@ export function planSidebarFeedRows(
   const retained = new Set(domains.retention?.retainedIds)
   const rankByIdentity = new Map(rankedIdentities.map((identity, rank) => [identity, rank]))
   const factsOf = (worktree: Worktree) => byIdentity.get(getWorktreeHostIdentity(worktree))?.facts
-  const pairedDeviceIdsByEnvironment = new Map(
-    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
-      const environmentId = parseExecutionHostId(hostId)
-      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
-        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
-        : []
-    })
-  )
+  const pairedDeviceIdsByEnvironment = feedPairedDeviceIdsByEnvironment(domains)
 
   const visibleWorktrees = selectVisibleSidebarWorktrees({
     rows: allWorktrees,
@@ -182,6 +176,7 @@ export function planSidebarFeedRows(
       }
     },
     worktreeLineageById: lineageById,
+    lineageParentIdentities: index.lineageParentIdentities,
     filterRepoIds: view.filters.filterRepoIds,
     preserveLineageParentOrder: view.sortBy === 'manual',
     forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds
@@ -236,6 +231,7 @@ export function planSidebarFeedRows(
     workspaceStatuses: view.workspaceStatuses,
     projectOrderBy: view.projectOrderBy,
     lineageById,
+    lineageParentIdentities: index.lineageParentIdentities,
     worktreeMap,
     nestLineage: true,
     projectGroups: visibleProjectGroups,

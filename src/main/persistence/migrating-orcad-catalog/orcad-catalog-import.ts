@@ -53,6 +53,7 @@ import {
   pruneOrcadMigrationBlobStaging,
   stageOrcadMigrationBlobChunk
 } from './orcad-migration-blob-staging'
+import { withStagedAutomationRunHistory } from './orcad-staged-automation-run-history'
 import { assertOrcadMigrationBlobContentsValid } from './orcad-migration-blob-installers'
 import {
   abortOrcadMigrationCatalogByReference,
@@ -166,7 +167,6 @@ export class OrcadCatalogImportPersistence {
     if (current.state !== 'staged') {
       throw new Error('orcad_migration_catalog_not_staged')
     }
-    const prepared = prepareOrcadMigrationCatalog(manifest, context.runtime.state)
     const blobRoot = context.runtime.orcadMigrationBlobRoot
     assertOrcadMigrationSnapshotsReady(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     if (options.expectedBlobs) {
@@ -174,6 +174,10 @@ export class OrcadCatalogImportPersistence {
     }
     assertOrcadMigrationBlobsReady(manifest, blobRoot)
     assertOrcadMigrationBlobContentsValid(manifest, blobRoot)
+    const prepared = prepareOrcadMigrationCatalog(
+      withStagedAutomationRunHistory(manifest, blobRoot),
+      context.runtime.state
+    )
     commitOrcadMigrationSnapshots(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     commitOrcadMigrationBlobs(manifest, blobRoot)
     const receipt = commitPreparedCatalog(context, manifest, prepared, options.now)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { link, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, open, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { renameMock, resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
 import {
@@ -11,7 +11,10 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
-import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './files/file-preview-budget'
+import {
+  LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
+  RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
+} from './files/file-preview-budget'
 import type { RuntimeFileCommands } from './orca-runtime-files'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
@@ -236,6 +239,68 @@ describe('RuntimeFileCommands', () => {
         )
       ).rejects.toThrow('terminal_file_grant_stale')
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":true}')
+    })
+
+    it('pages a granted binary file whole, beyond the text read cap, for its client only', async () => {
+      const bytes = Buffer.alloc(3 * 1024 * 1024 + 7, 0xab)
+      bytes[0] = 0
+      const artifactPath = await tempFile('teste.mp4', '')
+      await writeFile(artifactPath, bytes)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const readPage = (offset: number, clientId = 'client-a') =>
+        commands.readTerminalArtifactChunk(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          offset,
+          512 * 1024,
+          clientId
+        )
+
+      const pages: Buffer[] = []
+      for (let offset = 0, eof = false; !eof;) {
+        const page = await readPage(offset)
+        pages.push(Buffer.from(page.contentBase64, 'base64'))
+        offset += page.bytesRead
+        eof = page.eof
+      }
+
+      expect(Buffer.concat(pages).equals(bytes)).toBe(true)
+      await expect(readPage(0, 'client-b')).rejects.toThrow()
+    })
+
+    // Why: files above the digest cap are pinned by stat alone; utimes can restore mtime but never ctime.
+    it('rejects a page of a large granted file rewritten in place with its mtime restored', async () => {
+      const artifactPath = await tempFile('render.mp4', '')
+      await writeFile(artifactPath, Buffer.alloc(LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1, 0xab))
+      // Whole seconds, so restoring them reproduces the granted mtime exactly.
+      const pinnedSeconds = 1_700_000_000
+      await utimes(artifactPath, pinnedSeconds, pinnedSeconds)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+
+      const handle = await open(artifactPath, 'r+')
+      const grantedCtimeMs = (await handle.stat()).ctimeMs
+      // Why: coarse-tick filesystems can stamp a quick rewrite with the granted ctime; rewrite until it moves.
+      do {
+        await handle.write(Buffer.alloc(16, 0xcd), 0, 16, 0)
+        await handle.utimes(pinnedSeconds, pinnedSeconds)
+      } while ((await handle.stat()).ctimeMs === grantedCtimeMs)
+      await handle.close()
+
+      await expect(
+        commands.readTerminalArtifactChunk(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          0,
+          512 * 1024,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
     })
 
     it('rejects stale absolute terminal artifact reads before returning changed content', async () => {

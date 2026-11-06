@@ -58,7 +58,7 @@ export function assertTerminalArtifactContentUnchanged(
   }
 }
 
-// Remote peers recompute this identity; changes require capability negotiation.
+// Host-local: grants never leave this process. ctime catches rewrites that keep size and mtime, which utimes can reset but ctime cannot.
 export function terminalFileStatIdentity(stats: RuntimeFileStatLike): string | null {
   const dev = typeof stats.dev === 'number' ? stats.dev : null
   const ino = typeof stats.ino === 'number' ? stats.ino : null
@@ -70,11 +70,12 @@ export function terminalFileStatIdentity(stats: RuntimeFileStatLike): string | n
       : typeof stats.mtime === 'number'
         ? stats.mtime
         : null
+  const ctimeMs = typeof stats.ctimeMs === 'number' ? stats.ctimeMs : 'unknown'
   if (dev !== null && ino !== null && size !== null && mtimeMs !== null) {
-    return `${dev}:${ino}:${nlink ?? 'unknown'}:${size}:${mtimeMs}`
+    return `${dev}:${ino}:${nlink ?? 'unknown'}:${size}:${mtimeMs}:${ctimeMs}`
   }
   if (size !== null && mtimeMs !== null) {
-    return `${size}:${mtimeMs}`
+    return `${size}:${mtimeMs}:${ctimeMs}`
   }
   return null
 }
