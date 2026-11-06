@@ -30,6 +30,8 @@ import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-acc
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
+import { getAccountsTextRecoverySearchEntries } from './accounts-text-recovery-search'
+import { TextGenerationAccountRecoverySetting } from './TextGenerationAccountRecoverySetting'
 import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
@@ -325,6 +327,13 @@ export function AccountsPane({
     recordOpenCodeSettingEdit
   }
   const visibleSections = [
+    matchesSettingsSearch(searchQuery, getAccountsTextRecoverySearchEntries()) ? (
+      <TextGenerationAccountRecoverySetting
+        key="text-account-recovery"
+        model={usageHostSettings}
+        remote={accountOwner.kind === 'environment'}
+      />
+    ) : null,
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={accountOwnerKey} className="space-y-8">
         <ManagedDataAccountsSection provider="opencode" target={accountOwner} />

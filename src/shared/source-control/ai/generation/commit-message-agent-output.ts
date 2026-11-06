@@ -261,3 +261,11 @@ function collectExcerptLinesFromEnd(text: string, max: number): string[] {
   }
   return collected
 }
+
+export type AgentGenerationOutputFormat =
+  | 'opencode-json'
+  | 'antigravity-stream-json'
+  | 'kimi-stream-json'
+  | 'claude-subscription-stream-json'
+  | 'codex-subscription-json'
+  | 'opencode-subscription-json'

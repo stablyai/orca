@@ -1,3 +1,7 @@
+import {
+  claudeSubscriptionIdentity,
+  observeClaudeSubscription
+} from './claude-subscription-observation'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   readClaudeOAuthCredentials,
@@ -60,7 +64,30 @@ export async function fetchActiveClaudeRateLimits(
     )
   }
   try {
-    return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+    const home = options?.authPreparation?.envPatch.CLAUDE_CONFIG_DIR
+    const before = home
+      ? await claudeSubscriptionIdentity(home, credentials.token).catch(() => null)
+      : null
+    let windowsComplete = false
+    const limits = await fetchClaudeOAuthUsage(credentials.token, options?.signal, (complete) => {
+      windowsComplete = complete
+    })
+    const currentCredentials = before
+      ? await readClaudeOAuthCredentials(
+          resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
+        )
+      : null
+    const after =
+      home && currentCredentials?.token
+        ? await claudeSubscriptionIdentity(home, currentCredentials.token).catch(() => null)
+        : null
+    return before && after && JSON.stringify(before) === JSON.stringify(after)
+      ? observeClaudeSubscription(limits, {
+          ...after,
+          observedAt: limits.updatedAt,
+          windowsComplete
+        })
+      : limits
   } catch (error) {
     const { failureKind } = classifyClaudeOAuthUsageError(error)
     if (failureKind === 'stale-token' && !canClaudeRenewLogin(credentials, error)) {

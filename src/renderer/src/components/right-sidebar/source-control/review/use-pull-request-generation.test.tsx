@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeGitGenerationClient from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/runtime-git-client-context'
@@ -33,6 +33,59 @@ afterEach(() => {
 })
 
 describe('useSourceControlPullRequestGeneration outcome', () => {
+  it("Stop cancels exactly its own request id and drops that request's late result", async () => {
+    const generationKey = JSON.stringify(['repo-1', 'wt-1', 'feature'])
+    let answer: (result: RuntimeGeneratePullRequestFieldsResult) => void = () => {}
+    runtime.generate.mockImplementation(
+      () =>
+        new Promise<RuntimeGeneratePullRequestFieldsResult>((resolve) => {
+          answer = resolve
+        })
+    )
+    const state = useAppStore.getState()
+    const { result } = renderHook(() =>
+      useSourceControlPullRequestGeneration({
+        activeRepo: makeRepo(),
+        activeRepoTarget: { kind: 'local' },
+        activeWorktreeId: 'wt-1',
+        allocatePullRequestGenerationRequestId: () => 5,
+        branchName: 'feature',
+        hostedReviewCreateProvider: 'github',
+        prGenerationRecords: useAppStore((s) => s.pullRequestGenerationRecords),
+        refreshGitStatusAfterPullRequestGeneration: vi.fn(),
+        resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
+        setPullRequestGenerationRecord: state.setPullRequestGenerationRecord,
+        updatePullRequestGenerationRecord: state.updatePullRequestGenerationRecord,
+        worktreePath: '/repo'
+      })
+    )
+    let outcome: Promise<unknown> = Promise.resolve()
+    act(() => {
+      outcome = result.current.handleGeneratePullRequestFieldsForActive(
+        { base: 'main', title: 'Feature', body: '', draft: false },
+        { base: 0, title: 0, body: 0, draft: 0 },
+        undefined,
+        { autoSubmit: true }
+      )
+    })
+    const { generationId } =
+      useAppStore.getState().pullRequestGenerationRecords[generationKey].context
+    const isCanceled = runtime.generate.mock.calls[0][3]
+    expect(isCanceled()).toBe(false)
+
+    act(() => result.current.handleCancelGeneratePullRequestFieldsForActive())
+
+    expect(isCanceled()).toBe(true)
+    expect(runtime.cancel).toHaveBeenCalledTimes(1)
+    expect(runtime.cancel).toHaveBeenCalledWith(expect.objectContaining({ generationId }))
+    await expect(outcome).resolves.toEqual({ result: null })
+    answer({ success: true, fields: { base: 'main', title: 'Late', body: '', draft: false } })
+    await act(async () => {})
+    expect(useAppStore.getState().pullRequestGenerationRecords[generationKey]).toMatchObject({
+      status: 'canceled',
+      result: null
+    })
+  })
   it('captures the owning host’s Jira key before a background generation outlives a workspace switch', async () => {
     const workspace = makeWorktree('wt-1', 'Jira task', {
       linkedWorkItem: {

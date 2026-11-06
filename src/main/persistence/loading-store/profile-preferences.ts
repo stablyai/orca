@@ -15,6 +15,10 @@ import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
 } from '../applying-settings/settings-update'
+import {
+  readSettingsKeyRevision,
+  recordSettingsReplacement
+} from '../applying-settings/settings-key-revisions'
 import { getPersistedUI } from '../applying-settings/ui-state-read'
 import { updatePersistedUI, type UIUpdateOperations } from '../applying-settings/ui-state-update'
 import {
@@ -55,6 +59,10 @@ export class ProfilePreferences {
 
   getSettings(): GlobalSettings {
     return this[profilePreferencesContext].runtime.state.settings
+  }
+
+  getSettingsKeyRevision(key: keyof GlobalSettings): number {
+    return readSettingsKeyRevision(this.getSettings(), key) ?? 0
   }
 
   onSettingsChanged(
@@ -125,6 +133,7 @@ export class ProfilePreferences {
             restoredUpdates,
             restoredSettings
           )
+          recordSettingsReplacement(runtime.state.settings, restoredSettings)
           runtime.state.settings = restoredSettings
           retireAtRestCommandSettings(updateKeys)
         }

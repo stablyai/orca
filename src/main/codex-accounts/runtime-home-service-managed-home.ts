@@ -97,6 +97,26 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     return homes
   }
 
+  private syncManagedHomeResources(runtimeHomePath: string): void {
+    syncSystemCodexResourcesIntoManagedHome(runtimeHomePath)
+    const systemHomePath = getSystemCodexHomePath()
+    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+  }
+
+  prepareManagedAccountForTextGeneration(
+    accountId: string,
+    validate?: (home: string) => boolean
+  ): string | null {
+    const accounts = this.store.getSettings().codexManagedAccounts
+    const account = accounts.find((a) => a.id === accountId && a.managedHomeRuntime !== 'wsl')
+    const resolved = account ? this.resolveSelfContainedManagedHome(account) : null
+    if (resolved?.kind !== 'owned' || (validate && !validate(resolved.homePath))) {
+      return null
+    }
+    this.syncManagedHomeResources(resolved.homePath)
+    return resolved.homePath
+  }
+
   protected prepareSelfContainedManagedHomeForLaunch(
     account: CodexManagedAccount,
     unavailableManagedHomePath?: string
@@ -128,11 +148,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.lastHostAccountUsedSelfContainedHome = true
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
-    syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: perAccountHome,
-      systemHomePath: getSystemCodexHomePath()
-    })
+    this.syncManagedHomeResources(perAccountHome)
     this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
     return perAccountHome
   }

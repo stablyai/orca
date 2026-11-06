@@ -58,6 +58,7 @@ export type GitOperationApi = {
   }) => Promise<{ success: boolean; error?: string }>
   generateCommitMessage: (args: {
     worktreePath: string
+    generationId?: string
     /** Raw (unstripped) worktree meta key; validated against worktreePath in main. */
     worktreeId?: string
     repoId?: string
@@ -71,10 +72,12 @@ export type GitOperationApi = {
   >
   cancelGenerateCommitMessage: (args: {
     worktreePath: string
+    generationId?: string
     connectionId?: string
   }) => Promise<void>
   generatePullRequestFields: (args: {
     worktreePath: string
+    generationId?: string
     /** Raw (unstripped) worktree meta key; validated against worktreePath in main. */
     worktreeId?: string
     repoId?: string
@@ -103,6 +106,7 @@ export type GitOperationApi = {
   >
   cancelGeneratePullRequestFields: (args: {
     worktreePath: string
+    generationId?: string
     connectionId?: string
   }) => Promise<void>
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }) => Promise<void>

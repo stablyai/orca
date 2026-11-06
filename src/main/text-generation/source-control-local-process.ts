@@ -1,22 +1,17 @@
 import { textGenerationFailure } from '../../shared/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { wslDistroForCommand } from '../../shared/wsl-paths'
-import { prepareWslPrompt, stageLocalPromptFiles } from './source-control-prompt-files'
+import * as promptFiles from './source-control-prompt-files'
 import { producePromptRecords } from './source-control-prompt-producer'
+import { scheduleStdioCloseGrace } from './source-control-stdio-close-grace'
 import { argumentBudgetFailure } from './source-control-command-line-budget'
 export { fitsLocalCommandLine } from './source-control-command-line-budget'
-import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { WindowsCmdLineBreakError } from '@orca/process-host'
-import { WindowsCommandLineBudgetError } from '../../shared/windows-command-line-budget'
+import { localSpawnFailureResult } from './source-control-spawn-failure'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
+import { finalizeFromAgentOutput } from './source-control-agent-failure'
 import {
-  finalizeFromAgentOutput,
-  userFacingUnsafeWindowsBatchArgs
-} from './source-control-agent-failure'
-import {
-  clearLocalGenerationCancelToken,
-  localGenerationLaneKey,
-  setLocalGenerationCancelToken
+  localGenerationCanceledResult,
+  installLocalGenerationCancel
 } from './source-control-generation-lanes'
 import {
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
@@ -37,7 +32,7 @@ export function runLocalSourceControlPlan(
   let { plan } = input
   const { cwd, operation } = input
   const distro = plan.promptFile ? wslDistroForCommand(cwd, input.wslDistro) : null
-  const guest = distro ? prepareWslPrompt(plan, distro) : undefined
+  const guest = distro ? promptFiles.prepareWslPrompt(plan, distro) : undefined
   let closed = false
   let promptDirectory: string | undefined
   let markProcessClosed!: () => void
@@ -47,11 +42,10 @@ export function runLocalSourceControlPlan(
       if (promptDirectory) {
         const directory = promptDirectory
         promptDirectory = undefined
-        void removeTree(directory).catch((error: unknown) => {
-          console.error('[commit-message] Failed to remove generation prompt:', error)
-        })
+        void promptFiles.removeLocalPromptDirectory(directory).finally(resolve)
+      } else {
+        resolve()
       }
-      resolve()
     }
   })
   const labelValue = { label: plan.label }
@@ -61,7 +55,7 @@ export function runLocalSourceControlPlan(
     try {
       plan =
         guest?.plan ??
-        stageLocalPromptFiles(plan, (directory) => {
+        promptFiles.stageLocalPromptFiles(plan, (directory) => {
           promptDirectory = directory
         })
       // Reject oversized argv before opaque E2BIG spawn failure so users can act on the prompt-size limit.
@@ -84,24 +78,12 @@ export function runLocalSourceControlPlan(
       })
     } catch (error) {
       markProcessClosed()
-      if (error instanceof WindowsCommandLineBudgetError) {
-        resolve({
-          success: false,
-          ...textGenerationFailure('promptTooLargeForWindows', labelValue)
-        })
-        return
-      }
-      if (error instanceof WindowsCmdLineBreakError) {
-        resolve({ success: false, ...userFacingUnsafeWindowsBatchArgs(plan.label) })
-        return
-      }
-      console.error('[commit-message] Failed to spawn local generator:', error)
-      resolve({ success: false, ...couldNotStart })
+      resolve(localSpawnFailureResult(error, plan.label))
       return
     }
 
     const stop = new AbortController()
-    const deadline = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+    const deadline = Date.now() + (input.timeoutMs ?? SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     let stdout = ''
     let stderr = ''
     let stdoutBytes = 0
@@ -109,10 +91,11 @@ export function runLocalSourceControlPlan(
     let outputLimitExceeded = false
     let settled = false
     let canceledByUser = false
-    const laneKey = localGenerationLaneKey(operation, cwd)
     let timer: ReturnType<typeof setTimeout> | null = null
+    let cancelStdioGrace: (() => void) | undefined
     let terminal = false
     let terminationComplete: Promise<void> | null = null
+    let removeCancel = (): void => {}
     let detachChildListeners = (): void => {}
     const active = (): boolean =>
       !settled && !terminal && !stop.signal.aborted && Date.now() < deadline
@@ -138,20 +121,16 @@ export function runLocalSourceControlPlan(
         timer = null
       }
       detachChildListeners()
-      clearLocalGenerationCancelToken(laneKey, cancel)
+      removeCancel()
       resolve(value)
       markClosedAfterTermination()
     }
     const cancel = (): void => {
       canceledByUser = true
       startTermination()
-      finalize({
-        success: false,
-        error: 'Generation canceled.',
-        canceled: true
-      })
+      finalize(localGenerationCanceledResult())
     }
-    setLocalGenerationCancelToken(laneKey, cancel)
+    // timeoutMs is the remainder of the one request budget, so the copy reports that whole budget.
     timer = setTimeout(() => {
       startTermination()
       finalize({
@@ -160,8 +139,7 @@ export function runLocalSourceControlPlan(
           seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
         })
       })
-    }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
-
+    }, input.timeoutMs ?? SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength
       if (stdoutBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
@@ -205,14 +183,11 @@ export function runLocalSourceControlPlan(
     const onClose = (code: number | null): void => {
       terminal = true
       stop.abort()
+      cancelStdioGrace?.()
       child.off?.('close', onClose)
       markClosedAfterTermination()
       if (canceledByUser) {
-        finalize({
-          success: false,
-          error: 'Generation canceled.',
-          canceled: true
-        })
+        finalize(localGenerationCanceledResult())
         return
       }
       if (outputLimitExceeded) {
@@ -236,6 +211,7 @@ export function runLocalSourceControlPlan(
           stderr,
           label: plan.label,
           outputFormat: plan.outputFormat,
+          subscriptionQuotaExhausted: plan.subscriptionQuotaExhausted,
           operation,
           includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
         })
@@ -280,13 +256,34 @@ export function runLocalSourceControlPlan(
     child.on('error', onError)
     child.on('close', onClose)
     child.on('exit', () => {
-      terminal = true
       stop.abort()
-      markClosedAfterTermination()
+      if (!input.request) {
+        terminal = true
+        markClosedAfterTermination()
+        return
+      }
+      // Kill the pipe holders before closing so processClosed (and any home lock) outlives them.
+      cancelStdioGrace ??= scheduleStdioCloseGrace(child, () => {
+        startTermination()
+        onClose(child.exitCode)
+      })
     })
     detachChildListeners = () => {
       child.stdout?.off?.('data', onStdoutData)
       child.stderr?.off?.('data', onStderrData)
+    }
+    removeCancel = installLocalGenerationCancel(
+      operation,
+      cwd,
+      cancel,
+      input.request,
+      input.generationRequest
+    )
+    if (input.request && !input.request.current()) {
+      cancel()
+    }
+    if (settled) {
+      return
     }
     try {
       if (!guest) {

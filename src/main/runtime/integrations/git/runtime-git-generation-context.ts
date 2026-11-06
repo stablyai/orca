@@ -10,6 +10,8 @@ import type { SourceControlAiOperation } from '../../../../shared/source-control
 import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../../text-generation/source-control-text-generation-types'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
+import { hasSameRepoRegistration } from '../../../persistence/tracking-repos/repo-registration-identity'
+import type { LocalGenerationRequest } from '../../../text-generation/source-control-generation-lanes'
 import {
   localGitOptionsForTarget,
   type RuntimeGitCommandHost,
@@ -70,14 +72,16 @@ export function localAgentRuntimeTargetForTarget(
 
 export function localTextGenerationTargetForTarget(
   target: RuntimeGitTarget,
-  env?: NodeJS.ProcessEnv
+  env?: NodeJS.ProcessEnv,
+  generationRequest?: LocalGenerationRequest
 ): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
   const wslDistro = localGitOptionsForTarget(target).wslDistro
   return {
     kind: 'local',
     cwd: target.worktree.path,
     ...(wslDistro ? { wslDistro } : {}),
-    ...(env ? { env } : {})
+    ...(env ? { env } : {}),
+    ...(generationRequest ? { generationRequest } : {})
   }
 }
 
@@ -103,5 +107,25 @@ export function linkedIssueMetaForTarget(
     linkedIssue: liveGitHubIssue === undefined ? target.worktree.linkedIssue : liveGitHubIssue,
     linkedGitLabIssue: target.worktree.linkedGitLabIssue,
     linkedWorkItem: target.worktree.linkedWorkItem
+  }
+}
+
+export async function runtimeGitGenerationTargetCurrent(
+  host: RuntimeGitCommandHost,
+  selector: string,
+  target: RuntimeGitTarget
+): Promise<boolean> {
+  try {
+    const latest = await host.resolveRuntimeGitTarget(selector)
+    return (
+      hasSameRepoRegistration(latest.repo, target.repo) &&
+      latest.worktree.id === target.worktree.id &&
+      latest.worktree.path === target.worktree.path &&
+      latest.executionHostId === target.executionHostId &&
+      JSON.stringify(localGitOptionsForTarget(latest)) ===
+        JSON.stringify(localGitOptionsForTarget(target))
+    )
+  } catch {
+    return false
   }
 }

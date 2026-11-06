@@ -2,7 +2,8 @@ import {
   JIRA_PAYLOAD_CHUNK_CHARS,
   JIRA_PAYLOAD_MAX_CHARS
 } from '../../../../shared/jira/jira-payload-stream'
-import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
+import { generationOwner } from '../authenticated-generation-owner'
 import { JIRA_ATTACHMENT_IMAGE_METHODS } from './jira-attachment-image'
 import { JiraFavouriteFilterParams } from '../../../../shared/rpc-contract/jira-favourite-filter-params'
 import {
@@ -35,20 +36,6 @@ function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void 
     emit({ type: 'chunk', content: payload.slice(offset, offset + JIRA_PAYLOAD_CHUNK_CHARS) })
   }
   emit({ type: 'end' })
-}
-
-function generationOwner(context: Pick<RpcContext, 'pairedDeviceId' | 'caller'>): string {
-  // One-shot RPCs use different sockets for Generate and Stop.
-  if (context.pairedDeviceId) {
-    return `device:${context.pairedDeviceId}`
-  }
-  if (context.caller?.kind === 'paired-device') {
-    return `device:${context.caller.deviceId}`
-  }
-  if (context.caller?.kind === 'local-cli') {
-    return 'local-cli'
-  }
-  throw new Error('A title generation request needs an authenticated connection.')
 }
 
 export const JIRA_METHODS = [

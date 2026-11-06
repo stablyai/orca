@@ -1,5 +1,23 @@
 import { AGENT_OUTPUT_FAILURE_COPY } from './agent-output-failure-copy'
 
+export const TEXT_GENERATION_SETTLEMENT_FAILURE_COPY = {
+  generationCanceled: 'Generation canceled.',
+  generationAttemptBudgetEnded: 'Generation attempt budget ended.',
+  generationRequestChanged: 'Generation request changed.',
+  generationAccountChanged: 'Generation account changed.',
+  subscriptionAccountsExhausted:
+    'All {{attempted}} eligible accounts reached their subscription limit. Try again after a limit resets, or choose another account in Settings.',
+  subscriptionAttemptLimit:
+    '{{attempted}} accounts reached their subscription limit, the most Orca tries for one request. Try again later, or choose another account in Settings.',
+  subscriptionNoEligibleAlternate:
+    'Subscription limits were reached and no other eligible account was available. Try again after a limit resets, or choose another account in Settings.',
+  subscriptionBudgetEnded:
+    'The account reached its subscription limit and the generation budget ended before another account could finish. Try again.'
+} as const
+
+export type TextGenerationSettlementFailureCode =
+  keyof typeof TEXT_GENERATION_SETTLEMENT_FAILURE_COPY
+
 // One English table for AI text-generation failures: main builds the wire `error`, the renderer translates by code.
 export const TEXT_GENERATION_FAILURE_COPY = {
   promptTooLargeForWindows:
@@ -62,7 +80,8 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   planModelUnavailable: 'Model "{{model}}" is not available for {{label}}.',
   planModelWithoutThinking: 'Model "{{model}}" does not support a thinking effort level.',
   planThinkingLevelInvalid: 'Thinking level "{{level}}" is not valid for {{model}}.',
-  ...AGENT_OUTPUT_FAILURE_COPY
+  ...AGENT_OUTPUT_FAILURE_COPY,
+  ...TEXT_GENERATION_SETTLEMENT_FAILURE_COPY
 } as const
 
 export type TextGenerationFailureCode = keyof typeof TEXT_GENERATION_FAILURE_COPY

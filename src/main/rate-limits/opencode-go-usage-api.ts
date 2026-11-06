@@ -1,3 +1,4 @@
+import { parseUsageRetryAfterMs } from './usage-retry-after'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { getMainHttpClient } from '../network/http-client'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
@@ -17,7 +18,7 @@ export type OpenCodeGoUsageApiOutcome =
   | { kind: 'ok'; windows: OpenCodeGoUsageWindows }
   | { kind: 'unauthorized' }
   | { kind: 'no-subscription' }
-  | { kind: 'failed'; message: string; failureKind?: UsageRateLimitFailureKind }
+  | { kind: 'failed'; message: string; failureKind?: UsageRateLimitFailureKind; retryAtMs?: number }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -54,7 +55,8 @@ function classifyFailure(status: number, body: string): OpenCodeGoUsageApiOutcom
 /** Fetch via the default Electron session for app-wide proxy handling; the key stays in Authorization, never logs/results/telemetry. */
 export async function fetchOpenCodeGoUsageWithApiKey(
   apiKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  observeWindows?: (complete: boolean) => void
 ): Promise<OpenCodeGoUsageApiOutcome> {
   await ensureElectronProxyFromEnvironment({
     probeUrl: OPENCODE_GO_USAGE_API_URL
@@ -81,7 +83,31 @@ export async function fetchOpenCodeGoUsageWithApiKey(
 
   const body = await response.text().catch(() => '')
   if (!response.ok) {
-    return classifyFailure(response.status, body)
+    const failure = classifyFailure(response.status, body)
+    const retryAfter =
+      response.status === 429 ? parseUsageRetryAfterMs(response.headers.get('retry-after')) : null
+    return failure.kind === 'failed' && retryAfter
+      ? { ...failure, retryAtMs: Date.now() + retryAfter }
+      : failure
+  }
+  if (observeWindows) {
+    try {
+      const raw = JSON.parse(body).usage
+      const windows = [raw?.rolling, raw?.weekly, ...(raw?.monthly ? [raw.monthly] : [])]
+      observeWindows(
+        windows.every(
+          (window) =>
+            typeof window?.percent === 'number' &&
+            Number.isFinite(window.percent) &&
+            window.percent >= 0 &&
+            window.percent <= 100 &&
+            (window.resetsAt == null ||
+              (typeof window.resetsAt === 'string' && Number.isFinite(Date.parse(window.resetsAt))))
+        )
+      )
+    } catch {
+      observeWindows(false)
+    }
   }
   const windows = parseOpenCodeGoUsageApiPayload(body)
   if (!windows) {

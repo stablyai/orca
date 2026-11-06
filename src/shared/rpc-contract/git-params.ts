@@ -170,12 +170,18 @@ export const ResolvedSourceControlAiGenerationParams = z.object({
 })
 
 export const GitGenerateCommitMessage = WorktreeSelector.extend({
+  // Optional: older peers keep their path-based cancellation behavior.
+  generationId: z.string().min(1).max(128).optional(),
   commitMessageAi: CommitMessageAiSettings.optional(),
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
   defaultTuiAgent: OptionalTuiAgent.nullable(),
   commitMessageDiscoveryHostKey: z.string().optional()
+})
+
+export const GitCancelGeneration = WorktreeSelector.extend({
+  generationId: z.string().min(1).max(128).optional()
 })
 
 export const GitDiscoverCommitMessageModels = WorktreeSelector.extend({

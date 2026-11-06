@@ -365,13 +365,14 @@ it.each(['below', 'at', 'above', 'multibyte', 'BOM run', 'GIF', 'RIFF', 'interna
 )
 
 it.each(['success', 'spawn failure', 'permanent failure'] as const)(
-  'settles independently of bounded async cleanup after %s',
+  'publishes the executor result before bounded cleanup settles after %s',
   async (outcome) => {
     const originalPlatform = process.platform
     const rmMock = vi.mocked(rm)
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     const locked = Object.assign(new Error('EPERM: prompt handle held'), { code: 'EPERM' })
     let directory = ''
+    let settlement: Promise<void> | undefined
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     rmMock.mockClear()
     rmMock.mockImplementationOnce(async () => {
@@ -402,12 +403,17 @@ it.each(['success', 'spawn failure', 'permanent failure'] as const)(
           return child
         }
       })
+      settlement = execution.processClosed
       if (outcome !== 'spawn failure') {
         child.stdout.emit('data', Buffer.from('Lighthouse Signal Trace'))
         child.emit('close', 0)
       }
+      let cleanupSettled = false
+      void execution.processClosed.then(() => {
+        cleanupSettled = true
+      })
       expect((await execution.result).success).toBe(outcome !== 'spawn failure')
-      await execution.processClosed
+      expect(cleanupSettled).toBe(false)
       expect(rmMock).toHaveBeenCalledTimes(1)
       expect(existsSync(directory)).toBe(true)
       if (outcome === 'permanent failure') {
@@ -426,7 +432,10 @@ it.each(['success', 'spawn failure', 'permanent failure'] as const)(
         await vi.waitFor(() => expect(existsSync(directory)).toBe(false), { timeout: 2000 })
         expect(rmMock).toHaveBeenCalledTimes(2)
       }
+      await execution.processClosed
+      expect(cleanupSettled).toBe(true)
     } finally {
+      await settlement
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
       rmMock.mockImplementation(actualFs.rm)
       if (directory) {

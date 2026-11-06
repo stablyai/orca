@@ -182,9 +182,6 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         return null
       }
       await (deps.wait ?? waitFor)(delay)
-      if (!stillCurrent()) {
-        return null
-      }
     }
     return null
   }
@@ -206,6 +203,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     const current = store.getRecord(record.sessionId)
     return (
       current !== null &&
+      current.provider === record.provider &&
+      JSON.stringify(current.location) === JSON.stringify(record.location) &&
+      JSON.stringify(current.accountHome) === JSON.stringify(record.accountHome) &&
       current.conversationNameSource !== 'user' &&
       current.conversationName === record.conversationName &&
       contextId(current) === contextId(record)

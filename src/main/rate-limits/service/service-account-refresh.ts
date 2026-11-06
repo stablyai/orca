@@ -1,5 +1,6 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
-import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
+import { CallerJoinedSharedTasks } from '../../lib/caller-joined-shared-task'
+import { RateLimitServiceOpenCodeTextAccounts } from './service-opencode-text-accounts'
 import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -11,7 +12,31 @@ import {
   type CodexRateLimitResetResult
 } from './service-types'
 
-export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
+export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceOpenCodeTextAccounts {
+  private readonly textSubscriptionRefreshes = new CallerJoinedSharedTasks<'claude' | 'codex'>()
+
+  refreshTextSubscriptionAccounts(
+    provider: 'claude' | 'codex',
+    signal: AbortSignal
+  ): Promise<void> {
+    return this.textSubscriptionRefreshes.join(provider, signal, async (shared) => {
+      await this.waitForFetchIdle()
+      if (shared.aborted) {
+        return
+      }
+      await (provider === 'claude'
+        ? this.fetchClaudeOnly({ signal: shared })
+        : this.fetchCodexOnly({ signal: shared }))
+      await this.waitForFetchIdle()
+      if (shared.aborted) {
+        return
+      }
+      await (provider === 'claude'
+        ? this.fetchInactiveClaudeAccountsOnOpen(shared)
+        : this.fetchInactiveCodexAccountsOnOpen(shared))
+    })
+  }
+
   async refresh(): Promise<RateLimitState> {
     // User refresh must bypass recent poll/focus throttles.
     await this.fetchAll({ force: true })

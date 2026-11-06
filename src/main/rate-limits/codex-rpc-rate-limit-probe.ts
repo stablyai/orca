@@ -1,3 +1,4 @@
+import { observeCodexSubscriptionWindows } from './codex-subscription-observation'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { extractCodexAuthError } from '../../shared/codex-auth-errors'
 import { codexSpawnEnoent, isSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
@@ -226,7 +227,11 @@ export function readCodexRateLimitsViaRpc(
             return
           }
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared mapper reads only optional fields from the Codex rate-limit reply.
-          settle(mapCodexRpcRateLimits(message.result as RpcRateLimitsResponse), { kill: true })
+          const wrapper = message.result as RpcRateLimitsResponse
+          settle(
+            observeCodexSubscriptionWindows(mapCodexRpcRateLimits(wrapper), wrapper?.rateLimits),
+            { kill: true }
+          )
         } catch {
           // Non-JSON output from the RPC server is not part of the protocol stream.
         }

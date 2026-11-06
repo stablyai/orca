@@ -1,3 +1,4 @@
+import { hostTextSubscriptionResolvers } from '../text-generation/text-subscription-failover'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -32,7 +33,6 @@ import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -183,6 +183,11 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-    resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+    ...hostTextSubscriptionResolvers({
+      home: state.codexRuntimeHome!,
+      store,
+      auth: state.claudeRuntimeAuth!,
+      rateLimits
+    })
   })
 }

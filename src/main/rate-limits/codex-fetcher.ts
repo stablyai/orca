@@ -1,3 +1,7 @@
+import {
+  observeCodexSubscription,
+  readCodexSubscriptionIdentity
+} from './codex-subscription-observation'
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
@@ -156,7 +160,7 @@ async function fetchBackendUsage(
   }
 }
 
-export async function fetchCodexRateLimits(
+async function fetchCodexRateLimitsInternal(
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
@@ -239,4 +243,16 @@ export async function fetchCodexRateLimits(
     return abortedCodexRateLimitResult()
   }
   return backendResult ?? rpcFailure
+}
+
+export async function fetchCodexRateLimits(
+  options?: FetchCodexRateLimitsOptions
+): Promise<ProviderRateLimits> {
+  const home = options?.codexHomePath
+  const before = home && !parseWslUncPath(home) ? readCodexSubscriptionIdentity(home) : null
+  const limits = await fetchCodexRateLimitsInternal(options)
+  const after = home && before ? readCodexSubscriptionIdentity(home) : null
+  return after && JSON.stringify(before) === JSON.stringify(after)
+    ? observeCodexSubscription(limits, after)
+    : limits
 }

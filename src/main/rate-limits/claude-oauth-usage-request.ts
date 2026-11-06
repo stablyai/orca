@@ -66,7 +66,8 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
 
 export async function fetchClaudeOAuthUsage(
   token: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  observeWindows?: (windowsComplete: boolean) => void
 ): Promise<ProviderRateLimits> {
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
@@ -102,6 +103,22 @@ export async function fetchClaudeOAuthUsage(
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+  observeWindows?.(
+    [data.five_hour, data.seven_day].every((window) => {
+      const percent = window?.utilization ?? window?.used_percentage
+      const reset = window?.resets_at
+      return (
+        typeof percent === 'number' &&
+        Number.isFinite(percent) &&
+        percent >= 0 &&
+        percent <= 100 &&
+        (reset == null ||
+          (typeof reset === 'string'
+            ? Number.isFinite(Date.parse(reset))
+            : typeof reset === 'number' && Number.isFinite(reset)))
+      )
+    })
+  )
   const session = mapClaudeUsageWindow(data.five_hour, 300)
   const weekly = mapClaudeUsageWindow(data.seven_day, 10080)
   return {

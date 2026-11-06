@@ -41,6 +41,7 @@ export function buildDefaultSettings(args: {
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: true,
+    textGenerationSubscriptionFailoverEnabled: false,
     autoRenameBranchFromWorkDefaultedOn: true,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',

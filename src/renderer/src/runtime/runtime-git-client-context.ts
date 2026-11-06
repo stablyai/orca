@@ -62,7 +62,11 @@ export type RuntimeGitContext = {
   worktreeId: string | null | undefined
   worktreePath: string
   connectionId?: string
+  generationId?: string
+  generationCancellation?: SourceControlGenerationCancellation
 }
+
+export type SourceControlGenerationCancellation = { canceled: boolean }
 
 export type RuntimeGenerateCommitMessageOverrides = {
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams

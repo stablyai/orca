@@ -2372,6 +2372,10 @@
         "emptyJiraSummaryWithDetail": "{{label}} returned an empty summary. CLI output: {{detail}}",
         "emptyPullRequestDetails": "{{label}} returned an empty details.",
         "emptyPullRequestDetailsWithDetail": "{{label}} returned an empty details. CLI output: {{detail}}",
+        "generationAccountChanged": "Generation account changed.",
+        "generationAttemptBudgetEnded": "Generation attempt budget ended.",
+        "generationCanceled": "Generation canceled.",
+        "generationRequestChanged": "Generation request changed.",
         "jiraAccountDisconnected": "Reconnect the selected Jira account on this host.",
         "jiraDescriptionRequired": "Description is required.",
         "jiraSummaryBusyInOtherDraft": "A Jira title is already being generated in another draft.",
@@ -2420,6 +2424,10 @@
         "sourceControlAgentUnsupported": "Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. Supported agents: {{agents}}, or Custom command.",
         "sourceControlCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Git -> Source Control AI.",
         "stagedChangesReadFailed": "Failed to read staged changes.",
+        "subscriptionAccountsExhausted": "All {{attempted}} eligible accounts reached their subscription limit. Try again after a limit resets, or choose another account in Settings.",
+        "subscriptionAttemptLimit": "{{attempted}} accounts reached their subscription limit, the most Orca tries for one request. Try again later, or choose another account in Settings.",
+        "subscriptionBudgetEnded": "The account reached its subscription limit and the generation budget ended before another account could finish. Try again.",
+        "subscriptionNoEligibleAlternate": "Subscription limits were reached and no other eligible account was available. Try again after a limit resets, or choose another account in Settings.",
         "timedOut": "Generation timed out after {{seconds}}s.",
         "windowsBatchUnsafeArguments": "{{label}} runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin."
       }

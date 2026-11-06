@@ -44,12 +44,19 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
     this.activeFetchAbortControllers.delete(controller)
   }
 
+  /** Returns the internal signal: a caller's external abort must not stop queued cycles. */
   protected async runWithFetchAbortSignal(
-    fn: (signal: AbortSignal) => Promise<void>
+    fn: (signal: AbortSignal) => Promise<void>,
+    externalSignal?: AbortSignal
   ): Promise<AbortSignal> {
     const controller = this.beginFetchCycle()
     try {
-      await fn(controller.signal)
+      const signal = externalSignal
+        ? AbortSignal.any([controller.signal, externalSignal])
+        : controller.signal
+      if (!signal.aborted) {
+        await fn(signal)
+      }
       return controller.signal
     } finally {
       this.finishFetchCycle(controller)

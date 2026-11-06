@@ -1,0 +1,2 @@
+{"type": "assistant", "parent_tool_use_id": null, "error": "rate_limit", "api_error": "usage_limit_reached", "api_error_status": 429, "api_error_params": {"rate_limit_info": {"status": "rejected", "resetsAt": 1793786964, "rateLimitType": "five_hour", "isUsingOverage": false}}}
+{"type": "result", "subtype": "success", "is_error": true, "terminal_reason": "api_error", "api_error_status": 429, "api_error": "usage_limit_reached", "result": "You've hit your 5-hour limit \u00b7 resets 5:09am (UTC)"}

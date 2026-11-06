@@ -1,0 +1,1 @@
+{"type": "error", "error": {"name": "APIError", "data": {"message": "Subscription quota exceeded", "statusCode": 429, "isRetryable": true, "responseBody": "{\"type\":\"error\",\"error\":{\"type\":\"QuotaError\",\"message\":\"Subscription quota exceeded\"}}"}}}

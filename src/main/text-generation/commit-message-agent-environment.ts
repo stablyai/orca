@@ -1,9 +1,13 @@
+import { getManagedDataAccountService } from '../managed-data-accounts/service'
+import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
+import type { PrepareTextSubscriptionFailover } from './text-subscription-failover'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { readShellStartupEnvVar } from '../pty/shell-startup/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
+  prepareTextSubscriptionFailover?: PrepareTextSubscriptionFailover
   prepareForCodexLaunch?: (
     target?: CommitMessageAgentRuntimeTarget
   ) => string | null | Promise<string | null>
@@ -112,6 +116,23 @@ export async function prepareLocalCommitMessageAgentEnv(
   const shellConfigEnv =
     target?.runtime === 'wsl' ? null : prepareShellConfigDirEnv(agentId, hostBase)
   if (shellConfigEnv) {
+    if (agentId === 'opencode' || agentId === 'opencode2') {
+      const environment = { ...(shellConfigEnv.env ?? hostBase ?? cloneProcessEnv()) }
+      const accounts = getManagedDataAccountService()
+      if (
+        accounts.list('opencode').activeAccountId ||
+        environment.ORCA_DATA_ACCOUNT_PROVIDER ||
+        environment.ORCA_DATA_ACCOUNT_ID
+      ) {
+        const defined = Object.fromEntries(
+          Object.entries(environment).filter(
+            (entry): entry is [string, string] => entry[1] !== undefined
+          )
+        )
+        applyManagedDataAccountEnvironment(defined, { launchAgent: agentId })
+        return { ok: true, env: defined }
+      }
+    }
     return shellConfigEnv
   }
   if (!resolvers) {
@@ -140,7 +161,13 @@ export async function prepareLocalCommitMessageAgentEnv(
       return {
         ok: true,
         env: codexHomePath
-          ? { ...base, CODEX_HOME: codexHomePath }
+          ? {
+              ...base,
+              CODEX_HOME: codexHomePath,
+              ...(!base.CODEX_HOME || base.CODEX_HOME === base.ORCA_CODEX_HOME
+                ? { ORCA_CODEX_HOME: codexHomePath }
+                : {})
+            }
           : withoutOrcaCodexHomeOverride(base)
       }
     }

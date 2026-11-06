@@ -5,8 +5,11 @@ import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './s
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
-  async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+  async fetchInactiveClaudeAccountsOnOpen(externalSignal?: AbortSignal): Promise<void> {
+    if (
+      externalSignal?.aborted ||
+      Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveClaudeState()
@@ -21,7 +24,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
-    const signal = controller.signal
+    const signal = externalSignal
+      ? AbortSignal.any([controller.signal, externalSignal])
+      : controller.signal
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -65,7 +70,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         } catch {
           // Isolate each account's Keychain/network failure so siblings continue.
           if (
-            signal.aborted ||
+            controller.signal.aborted ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
@@ -84,8 +89,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
   }
 
-  async fetchInactiveCodexAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+  async fetchInactiveCodexAccountsOnOpen(externalSignal?: AbortSignal): Promise<void> {
+    if (
+      externalSignal?.aborted ||
+      Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveCodexState()
@@ -99,7 +107,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     // Switching can activate a previewed account mid-fetch; ignore its stale preview result.
     const fetchGeneration = this.inactiveCodexAccountsGeneration
     const controller = this.beginFetchCycle()
-    const signal = controller.signal
+    const signal = externalSignal
+      ? AbortSignal.any([controller.signal, externalSignal])
+      : controller.signal
     this.inactiveCodexFetchInFlight = true
 
     let staggerNextProbe = false
@@ -133,7 +143,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
         }
         const home = await account.resolveHome()
-        if (home.kind === 'skip') {
+        if (signal.aborted || home.kind === 'skip') {
           continue
         }
         staggerNextProbe = true
@@ -163,7 +173,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         } catch {
           // Isolate per-account failures so sibling previews continue.
           if (
-            signal.aborted ||
+            controller.signal.aborted ||
             fetchGeneration !== this.inactiveCodexAccountsGeneration ||
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {

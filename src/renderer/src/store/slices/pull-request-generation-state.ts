@@ -1,5 +1,6 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { SourceControlGenerationCancellation } from '@/runtime/runtime-git-client-context'
 
 export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
 export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
@@ -16,6 +17,8 @@ export type PullRequestGenerationContext = {
   worktreePath: string
   connectionId?: string
   requestId: number
+  generationId?: string
+  generationCancellation?: SourceControlGenerationCancellation
   repoId: string
   branch: string
   jiraIssueKey?: string | null

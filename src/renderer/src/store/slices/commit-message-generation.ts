@@ -1,12 +1,15 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { SourceControlGenerationCancellation } from '@/runtime/runtime-git-client-context'
 
 export type CommitMessageGenerationContext = {
   worktreeId: string
   worktreePath: string
   connectionId?: string
   requestId: number
+  generationId?: string
+  generationCancellation?: SourceControlGenerationCancellation
   /** The worktree owner's transport, captured when the request started. */
   runtimeTarget: RuntimeClientTarget
 }
