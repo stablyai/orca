@@ -11,7 +11,7 @@ describe('scan22: disposed mid-spawn SSH transport vs successor on the same PTY'
   afterEach(() => restorePtySpecWindow(originalWindow))
 
   it('does not kill the PTY the remounted successor is bound to', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     let resolveFirst: (value: { id: string }) => void = () => {}
     const spawn = vi.mocked(window.api.pty.spawn)
     spawn.mockImplementationOnce(

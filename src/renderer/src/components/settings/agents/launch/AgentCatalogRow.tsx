@@ -29,7 +29,7 @@ import {
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
 } from '../../../agent/launch-settings/AgentPermissionChoiceControls'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
 

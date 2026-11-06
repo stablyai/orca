@@ -250,6 +250,14 @@ export function reduceMobileWebShellSession(
         session.state.kind === 'ready' ? [{ kind: 'cancel-deadlines' }] : []
       )
     case 'page-painted':
+      // A painted remount refills the renderer-loss budget; only a loss before paint walls.
+      // The page-failure budget stays spent: a page that paints and then faults would otherwise remount forever.
+      return step(
+        session,
+        session.state.kind === 'ready'
+          ? { ...pageDocumentStatePatch(session, event), remountedOnce: false }
+          : {}
+      )
     case 'page-back-claim':
       return step(session, pageDocumentStatePatch(session, event))
     case 'layout-changed':

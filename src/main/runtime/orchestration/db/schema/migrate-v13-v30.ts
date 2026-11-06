@@ -1,4 +1,4 @@
-import { migrateMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { migrateMutationReceiptCapacity } from '../mutation-receipts/mutation-receipt-capacity'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
   REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL

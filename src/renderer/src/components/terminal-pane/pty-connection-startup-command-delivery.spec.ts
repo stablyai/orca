@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_PASTE_CHUNK_MAX_BYTES,
   TERMINAL_PASTE_DIRECT_MAX_BYTES
-} from './terminal-paste-limits'
+} from './input/paste/terminal-paste-limits'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { flushAsyncTicks } from './pty-connection-test-async'

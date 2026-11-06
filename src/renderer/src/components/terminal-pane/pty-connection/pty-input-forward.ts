@@ -1,7 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
-import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
+import { installTerminalImeCompositionRoute } from '../input/ime/terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'

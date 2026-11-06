@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CreateAgentSessionParams } from '../../src/shared/rpc-contract/agent-session-params'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { createRuntimeAgentBackgroundTerminal } from '../../src/renderer/src/lib/runtime-agent-background-create'
+import { createRuntimeAgentBackgroundTerminal } from '../../src/renderer/src/lib/agent-session/launch/background/runtime-agent-background-create'
 import {
   createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded

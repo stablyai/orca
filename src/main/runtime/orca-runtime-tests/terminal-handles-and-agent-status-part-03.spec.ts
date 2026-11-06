@@ -654,9 +654,11 @@ describe('OrcaRuntimeService', () => {
         browserPageId: 'browser-page-live',
         url: 'https://live.example/',
         title: 'Live Browser',
-        isActive: true
+        isActive: false
       })
     ])
+    expect(headlessResult.activeTabId).toBeNull()
+    expect(headlessResult.activeTabType).toBeNull()
     expect([...runtime['collectPublicMobileSessionTabIds'](headlessSnapshot)]).toEqual([
       'browser-unified-live',
       'browser-workspace-live'

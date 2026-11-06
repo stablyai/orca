@@ -10,8 +10,8 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { isTwinWorkspace, namedHostForOwnerRef, resolveOwner } from '@/lib/resolve-owner'
 import { authorityKey } from '../../../shared/host-authority'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'

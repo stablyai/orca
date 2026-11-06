@@ -29,10 +29,12 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   waitForTerminalOutputParsed: fixture.parsed
 }))
-vi.mock('../terminal-startup-command-paste', () => ({
+vi.mock('../input/paste/terminal-startup-command-paste', () => ({
   executeTerminalStartupCommandPaste: fixture.paste
 }))
-vi.mock('../terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: () => ({}) }))
+vi.mock('../input/paste/terminal-paste-runtime', () => ({
+  resolveTerminalPasteRuntime: () => ({})
+}))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
 vi.mock('./command-inferred-pane-agent', () => ({ installCommandInferredPaneAgent: vi.fn() }))
 

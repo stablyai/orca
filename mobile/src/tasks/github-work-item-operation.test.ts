@@ -127,6 +127,49 @@ it('a disconnect/reconnect cannot regain authority with an identical connected-a
   expect(a.writes).toEqual([])
   expect(a.client.stateListeners()).toBe(0)
 })
+it.each([
+  ['sends the ordinary update when its lookup lands on this issue', '1.4.247', 'fork', 1],
+  ['refuses when its lookup lands on another repository', '1.4.247', 'upstream', 0],
+  ['refuses before its writes followed its lookup', '1.4.220', 'fork', 0]
+])('a server without exact targets %s', async (_name, appVersion, owner, sent) => {
+  const frames: { method: string; params?: unknown; envelope?: unknown }[] = []
+  const client = createFakeRpcClient()
+  client.sendRequest = async (method, params, options) => {
+    frames.push({ method, params, envelope: options?.envelope })
+    const result =
+      method === 'status.get'
+        ? {
+            runtimeId: 'old',
+            hostDescriptor: { installationId: 'old' },
+            appVersion,
+            capabilities: []
+          }
+        : method === 'github.workItem'
+          ? {
+              type: 'issue',
+              number: 93,
+              url: `https://github.corp/${owner}/widgets/issues/93`,
+              labels: []
+            }
+          : { ok: true }
+    return { id: String(frames.length), ok: true, result, _meta: { runtimeId: 'old' } }
+  }
+  const params = { repo: 'id:clone', number: 93, updates: { state: 'closed' as const } }
+  const pending = withGitHubTargetOperation({
+    client,
+    params,
+    ownerRepo: repository,
+    issueTarget: { repository, type: 'issue', number: 93 },
+    send: (selected, exact, options) =>
+      githubIssueUpdate.request(selected, { ...params, ...exact }, options)
+  })
+  await (sent
+    ? expect(pending).resolves.toBeDefined()
+    : expect(pending).rejects.toThrow('Update Orca on the executing server'))
+  expect(frames.filter((frame) => frame.method === 'github.updateIssue')).toEqual(
+    sent ? [{ method: 'github.updateIssue', params, envelope: undefined }] : []
+  )
+})
 it('names the relaying desktop when only it lacks the exact-target check', async () => {
   const desktop = physical('d', false),
     server = physical('s')

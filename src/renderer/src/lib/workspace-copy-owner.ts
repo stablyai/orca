@@ -30,8 +30,8 @@ import { resolveUnstampedRecordHost } from './worktree-operation-catalog-route'
 import { resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwners
-} from './worktree-runtime-owner-index'
+  findIndexedWorktrees as findIndexedWorktreeOwners
+} from './workspace/ownership/worktree-runtime-owner-index'
 import type {
   WorktreeOperationOwnerRecord,
   WorktreeOperationRouteState

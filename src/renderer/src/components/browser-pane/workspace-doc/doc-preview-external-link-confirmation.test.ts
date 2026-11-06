@@ -6,7 +6,7 @@ import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-previe
 import {
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener
-} from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-routing'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn(), toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))

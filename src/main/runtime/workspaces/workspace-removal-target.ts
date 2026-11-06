@@ -26,6 +26,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
+import { dropOrcaCreatedAgentTrustForRemovedWorktree } from '../worktree-removal-agent-trust-cleanup'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
@@ -130,24 +131,34 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
   }
 
   // Host state every removal path drops once Git has let go of the checkout.
-  protected purgeRemovedWorktree(
+  // Resolves after the pretrust deletion so a removal ack cannot precede it.
+  protected async purgeRemovedWorktree(
     store: RuntimeStore,
     worktreeId: string,
     repoId: string,
     removalHostId?: ExecutionHostId
-  ): void {
+  ): Promise<void> {
     this.clearOptimisticReconcileToken(worktreeId)
-    this.removeWorktreeMetadataAndHistory(store, worktreeId, removalHostId)
+    // Only checkout-deleting paths purge here, so the directory itself is gone.
+    const metadataAndHistory = this.removeWorktreeMetadataAndHistory(
+      store,
+      worktreeId,
+      removalHostId,
+      { dropAgentTrust: true }
+    )
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repoId)
     invalidateAuthorizedRootsCacheForRepo(store, repoId)
+    await metadataAndHistory
   }
 
-  removeWorktreeMetadataAndHistory(
+  async removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
-    hostId?: ExecutionHostId
-  ): void {
+    hostId?: ExecutionHostId,
+    // Why: folder sessions and forgotten orphans keep the directory on disk for siblings.
+    options: { dropAgentTrust?: boolean } = {}
+  ): Promise<void> {
     // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
     const repoId = splitWorktreeId(worktreeId)?.repoId
@@ -162,6 +173,10 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     // Retire only this host's panes even when a same-id owner survives.
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
+      // Why: path-derived ids are reused; a stale pretrust entry would pre-trust the next occupant.
+      const pretrustDrop = options.dropAgentTrust
+        ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
+        : undefined
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
@@ -185,6 +200,8 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
       this.notifyMobileSessionTabsRemoved(worktreeId)
       dropRemovedWorktreeProcessState(worktreeId)
       this.releaseRemovedWorktreeHostSessions(worktreeId, 'worktree-removal')
+      // Awaited last so the in-memory invalidations above stay synchronous.
+      await pretrustDrop
     }
     const snapshotDirectory = store.getProfileStorageDirectory?.()
     if (snapshotDirectory) {

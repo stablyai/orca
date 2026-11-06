@@ -25,6 +25,21 @@ describe('a failed document', () => {
     expect(lost.session.state.kind).toBe('ready')
   })
 
+  // Refilling on paint would loop a page that paints and then faults: remount, paint, fault, forever.
+  it('fails visibly when the remounted page paints and then faults again', () => {
+    const painted = { type: 'page-painted' } as const
+    const failed = run(
+      readySession().session,
+      painted,
+      DOCUMENT_FAILED,
+      REMOUNTED,
+      painted,
+      DOCUMENT_FAILED
+    )
+    expect(failed.effects).toEqual([])
+    expect(failed.session.state).toMatchObject({ kind: 'failed', reason: 'document-load-failed' })
+  })
+
   it('still remounts a failed document after a renderer-loss remount', () => {
     const failed = run(readySession().session, RENDERER_GONE, REMOUNTED, DOCUMENT_FAILED)
     expect(failed.effects).toEqual([{ kind: 'remount' }])

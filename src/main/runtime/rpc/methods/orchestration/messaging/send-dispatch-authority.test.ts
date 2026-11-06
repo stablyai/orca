@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
-import { openDecisionGateFromMessage } from '../../../../orchestration/coordinator-decision-gates'
-import { applyEscalationToDispatch } from '../../../../orchestration/coordinator-escalation-triage'
+import { openDecisionGateFromMessage } from '../../../../orchestration/coordinator/decision-gates/coordinator-decision-gates'
+import { applyEscalationToDispatch } from '../../../../orchestration/coordinator/escalation/coordinator-escalation-triage'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ALL_TUI_AGENTS } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { CliWorktreeBuilder } from '../../rpc/methods/agent-launch-cwd-cli.test-fixture'
+import type { CliWorktreeBuilder } from '../../rpc/methods/agent-launch/agent-launch-cwd-cli.test-fixture'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 import { WorktreeCreate as PreObservationCreate } from '../../../../shared/rpc-contract/worktree-create-params.pre-observation.test-fixture'
@@ -19,7 +19,7 @@ import {
   makeRuntimeOrchestrationDb,
   taskLineageRow
 } from '../../orca-runtime-tests/runtime-orchestration-db.test-fixture'
-import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/worktree-create-args'
+import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { mapRuntimeError } from '../../rpc/errors'
 
 const fixturesPath = '../../../../cli/test-fixtures'

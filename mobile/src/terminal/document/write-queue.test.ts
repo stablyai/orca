@@ -134,14 +134,30 @@ describe('terminal WebView write queue', () => {
     expect(shipped.codeUnits).toBe((backlog - dequeues) * 64)
   })
 
-  it('drains writes in FIFO order', () => {
+  it('joins queued strings up to a boundary into one write', () => {
     const queue = createWriteQueue()
     queue.enqueue('a')
     queue.enqueue('b')
     queue.enqueue('c')
+    queue.enqueueBoundary(() => {})
+    queue.enqueue('d')
     drain(queue)
 
-    expect(queue.writes).toEqual(['a', 'b', 'c'])
+    expect(queue.writes).toEqual(['abc', 'd'])
+  })
+
+  it('hands xterm a 100 KB write as ordered slices of at most 16 KB', () => {
+    const queue = createWriteQueue()
+    const input = Array.from({ length: 100 * 1024 }, (_v, i) =>
+      String.fromCharCode(0x61 + (i % 26))
+    ).join('')
+    queue.enqueue(input)
+    drain(queue)
+
+    expect(queue.writes.map((write) => write.length)).toEqual([
+      16_384, 16_384, 16_384, 16_384, 16_384, 16_384, 4_096
+    ])
+    expect(queue.writes.join('')).toBe(input)
   })
 
   it('runs boundary callbacks between writes', () => {
@@ -179,8 +195,8 @@ describe('terminal WebView write queue', () => {
   it('discards pending writes after a reset mid-flight', () => {
     const queue = createWriteQueue()
     queue.enqueue('first')
-    queue.enqueue('dropped')
     queue.pump()
+    queue.enqueue('dropped')
     expect(queue.writes).toEqual(['first'])
 
     queue.reset()
@@ -193,8 +209,8 @@ describe('terminal WebView write queue', () => {
   it('stops the pump for a stale generation', () => {
     const queue = createWriteQueue()
     queue.enqueue('first')
-    queue.enqueue('second')
     queue.pump()
+    queue.enqueue('second')
     queue.setGeneration(1)
     queue.flushWrite()
 
@@ -208,7 +224,7 @@ describe('terminal WebView write queue', () => {
     queue.enqueue('second')
     drain(queue)
 
-    expect(queue.writes).toEqual(['first', 'second', 'reentrant'])
+    expect(queue.writes).toEqual(['first', 'secondreentrant'])
   })
 
   it('compacts consumed slots and keeps order', () => {

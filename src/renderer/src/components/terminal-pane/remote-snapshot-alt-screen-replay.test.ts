@@ -10,7 +10,7 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import type { PtyReplayDataMeta } from './pty-transport-types'
+import type { PtyReplayDataMeta } from './pty-transport/pty-transport-types'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -67,7 +67,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {

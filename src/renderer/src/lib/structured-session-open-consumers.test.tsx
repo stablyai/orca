@@ -8,7 +8,7 @@ import { useAiVaultSessionLaunchActions } from '@/components/right-sidebar/ai-va
 import { useAiVaultOriginalPaneActions } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-original-pane-actions'
 import { reportCliChatResumeFailure } from '@/components/tab-bar/cli-chat-resume-feedback'
 import AiVaultSessionDropLayer from '@/components/tab-group/AiVaultSessionDropLayer'
-import { writeAiVaultSessionDragData } from './ai-vault-session-drag'
+import { writeAiVaultSessionDragData } from './agent-session/resume/history/ai-vault-session-drag'
 const transport = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: transport.toast, success: vi.fn() } }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({

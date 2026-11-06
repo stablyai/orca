@@ -93,7 +93,8 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
     claudeTarget: partial.claudeTarget ?? { runtime: 'host', wslDistro: null },
     codexTarget: partial.codexTarget ?? { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: partial.inactiveClaudeAccounts ?? [],
-    inactiveCodexAccounts: partial.inactiveCodexAccounts ?? []
+    inactiveCodexAccounts: partial.inactiveCodexAccounts ?? [],
+    antigravityAccounts: partial.antigravityAccounts ?? []
   }
 }
 

@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/runtime-terminal-contracts'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type {
   LegacyWorkerRecoveryCandidate,
