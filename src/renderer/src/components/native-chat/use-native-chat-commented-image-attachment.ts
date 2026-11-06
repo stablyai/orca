@@ -10,6 +10,7 @@ export function useNativeChatCommentedImageAttachment({
   startImageChip,
   saveClipboardImage,
   insertCapturedText,
+  insertCommentText,
   removeImageAttachment
 }: {
   canPaste: () => boolean
@@ -24,6 +25,7 @@ export function useNativeChatCommentedImageAttachment({
     dataUrl?: string,
     retainAfterUnmount?: boolean
   ) => Promise<boolean>
+  insertCommentText?: (text: string) => Promise<boolean>
   insertCapturedText: (text: string) => boolean
   removeImageAttachment?: (id: string) => void
 }): (dataUrl: string, text: string) => Promise<boolean> {
@@ -49,11 +51,20 @@ export function useNativeChatCommentedImageAttachment({
       if (!saved) {
         return false
       }
-      if (!insertCapturedText(`\n\n${text}\n`)) {
-        removeImageAttachment(id)
-        return false
+      try {
+        const commentText = `\n\n${text}\n`
+        if (
+          await (insertCommentText
+            ? insertCommentText(commentText)
+            : insertCapturedText(commentText))
+        ) {
+          return true
+        }
+      } catch {
+        // Keep the editor retryable and remove its image when text insertion fails.
       }
-      return true
+      removeImageAttachment(id)
+      return false
     },
     [
       canPaste,
@@ -62,6 +73,7 @@ export function useNativeChatCommentedImageAttachment({
       startImageChip,
       saveClipboardImage,
       insertCapturedText,
+      insertCommentText,
       removeImageAttachment
     ]
   )

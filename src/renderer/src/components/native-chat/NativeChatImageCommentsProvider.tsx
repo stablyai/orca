@@ -67,6 +67,7 @@ export function NativeChatImageCommentsProvider({
     image: NativeChatCopyImage
     title: string
     destination: NativeChatComposerHandle
+    draftKey?: string
   } | null>(null)
   const open = useCallback<OpenImageComments>(
     (image, title) => {
@@ -80,10 +81,20 @@ export function NativeChatImageCommentsProvider({
         )
         return
       }
-      setRequest({ image, title, destination })
+      setRequest({ image, title, destination, draftKey: destination.draftKey })
     },
     [composerRef]
   )
+  const resolveDestination = (): NativeChatComposerHandle | null => {
+    const current = composerRef.current
+    return request &&
+      current &&
+      (request.draftKey !== undefined
+        ? current.draftKey === request.draftKey
+        : current === request.destination)
+      ? current
+      : null
+  }
   return (
     <NativeChatImageCommentsContext.Provider value={open}>
       <div {...rootProps}>{children}</div>
@@ -93,10 +104,10 @@ export function NativeChatImageCommentsProvider({
           title={request.title}
           onClose={() => {
             setRequest(null)
-            requestAnimationFrame(() => request.destination.focus())
+            requestAnimationFrame(() => resolveDestination()?.focus())
           }}
           onDone={async (dataUrl, text) => {
-            const attached = await request.destination.attachCommentedImage?.(dataUrl, text)
+            const attached = await resolveDestination()?.attachCommentedImage?.(dataUrl, text)
             if (!attached) {
               throw new Error(
                 translate(
@@ -106,7 +117,7 @@ export function NativeChatImageCommentsProvider({
               )
             }
             setRequest(null)
-            requestAnimationFrame(() => request.destination.focus())
+            requestAnimationFrame(() => resolveDestination()?.focus())
           }}
         />
       ) : null}

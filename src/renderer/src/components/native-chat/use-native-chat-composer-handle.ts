@@ -1,4 +1,4 @@
-import { useImperativeHandle, type ForwardedRef } from 'react'
+import { useCallback, useImperativeHandle, type ForwardedRef } from 'react'
 import type { ClipboardEventLike } from './native-chat-clipboard-payload'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import {
@@ -40,18 +40,29 @@ export function useNativeChatComposerHandle(
     insertTypedText: insertPastedText,
     setNotice: args.setNotice
   })
+  const insertCommentText = useCallback(
+    (text: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        insertPastedTextOrFile(text, resolve)
+      }),
+    [insertPastedTextOrFile]
+  )
   const {
     handlePaste: handlePasteEvent,
     pasteFromClipboard,
     attachCommentedImage
   } = useNativeChatComposerPaste({
     ...pasteArgs,
-    insertTypedText: insertPastedTextOrFile
+    insertTypedText: insertPastedTextOrFile,
+    insertCommentText
   })
 
   useImperativeHandle(
     ref,
     () => ({
+      draftKey: args.attachmentScopeKey
+        ? JSON.stringify([args.attachmentScopeKey, args.targetKey])
+        : undefined,
       insertAgentReferences: (references) => {
         const input = textareaRef.current
         if (!input || input.disabled || !input.insertAgentReferences || isComposing()) {
@@ -74,6 +85,8 @@ export function useNativeChatComposerHandle(
       contains
     }),
     [
+      args.attachmentScopeKey,
+      args.targetKey,
       textareaRef,
       isComposing,
       focus,

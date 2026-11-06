@@ -60,11 +60,13 @@ function Probe({
   owner,
   onReady,
   declineText = false,
-  refuseSettlement = false
+  refuseSettlement = false,
+  insertCommentText
 }: {
   acceptsImages: boolean
   declineText?: boolean
   refuseSettlement?: boolean
+  insertCommentText?: (text: string) => Promise<boolean>
   owner: () => NativeChatAttachmentOwner
   onReady: (api: Api) => void
 }): React.JSX.Element {
@@ -102,6 +104,7 @@ function Probe({
     revealPendingImageAttachment: attachments.revealPendingImageAttachment,
     dropPendingImageAttachment: attachments.dropPendingImageAttachment,
     removeImageAttachment: attachments.removeImageAttachment,
+    insertCommentText,
     insertTypedText: (text) => {
       if (declineText) {
         return false
@@ -124,7 +127,8 @@ async function render(
   owner: () => NativeChatAttachmentOwner,
   acceptsImages = true,
   declineText = false,
-  refuseSettlement = false
+  refuseSettlement = false,
+  insertCommentText?: (text: string) => Promise<boolean>
 ): Promise<() => Api> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -137,6 +141,7 @@ async function render(
         owner,
         declineText,
         refuseSettlement,
+        insertCommentText,
         onReady: (next) => (api = next)
       })
     )
@@ -365,5 +370,39 @@ it('refuses comment insertion when an enabled composer cannot settle its pending
   })
   expect(result).toBe(false)
   expect(latest().attachments.imageAttachments).toEqual([])
+  expect(latest().draft).toBe('')
+})
+
+it('waits for comment text and rolls back the saved image when text saving fails', async () => {
+  let finish!: (saved: boolean) => void
+  let entered!: () => void
+  const textSave = new Promise<boolean>((resolve) => {
+    finish = resolve
+  })
+  const started = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const latest = await render(
+    () => SERVER_OWNER,
+    true,
+    false,
+    false,
+    () => {
+      entered()
+      return textSave
+    }
+  )
+  let result!: Promise<boolean>
+  await act(async () => {
+    result = latest().paste.attachCommentedImage('data:image/png;base64,cG5n', 'Long comments')
+    await started
+  })
+  expect(latest().attachments.imageAttachments).toHaveLength(1)
+  expect(latest().draft).toBe('')
+  await act(async () => {
+    finish(false)
+    expect(await result).toBe(false)
+  })
+  expect(latest().attachments.imageAttachments).toHaveLength(0)
   expect(latest().draft).toBe('')
 })

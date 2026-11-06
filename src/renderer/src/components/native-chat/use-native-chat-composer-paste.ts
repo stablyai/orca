@@ -41,6 +41,7 @@ export function useNativeChatComposerPaste({
   dropPendingImageAttachment,
   removeImageAttachment,
   insertTypedText,
+  insertCommentText,
   setCaret,
   setNotice
 }: UseNativeChatComposerPasteArgs) {
@@ -273,6 +274,7 @@ export function useNativeChatComposerPaste({
     startImageChip,
     saveClipboardImage,
     insertCapturedText,
+    insertCommentText,
     removeImageAttachment
   })
 

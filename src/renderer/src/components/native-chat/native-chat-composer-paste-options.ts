@@ -34,6 +34,7 @@ export type UseNativeChatComposerPasteArgs = {
   revealPendingImageAttachment?: (id: string, previewUrl?: string) => void
   removeImageAttachment?: (id: string) => void
   dropPendingImageAttachment: (id: string) => void
+  insertCommentText?: (text: string) => Promise<boolean>
   insertTypedText: (text: string) => boolean
   setCaret: (caret: number) => void
   setNotice: (notice: string | null, errorText?: string) => void
