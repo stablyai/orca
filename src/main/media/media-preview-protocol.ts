@@ -172,16 +172,21 @@ async function handleRemotePreviewRequest(
   }
   try {
     // Re-stat (at most once a second) like a local file re-opens per request, so a growing recording keeps playing.
-    const { size } = await remoteSnapshot(grant)
+    const snapshot = await remoteSnapshot(grant)
+    const { size } = snapshot
     // The file can change after mint; check the bytes this response serves.
-    await callRemotePreview(grant, (remote) =>
-      assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
+    await callRemotePreview(
+      grant,
+      (remote) => assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal),
+      snapshot
     )
     return await createMediaRangeResponse(request, grant.mimeType, {
       size,
       read: (offset, length) =>
-        callRemotePreview(grant, (remote) =>
-          readRemotePreviewChunk(remote, offset, length, controller.signal)
+        callRemotePreview(
+          grant,
+          (remote) => readRemotePreviewChunk(remote, offset, length, controller.signal),
+          snapshot
         ),
       close: async () => {
         request.signal.removeEventListener('abort', forwardAbort)

@@ -44,9 +44,11 @@ export async function readPreviewGrantRange(
     // A closed window stops its remote chunk reads instead of draining them.
     const lifetime = abortWhenRendererGone(sender)
     try {
-      const { size } = await remoteSnapshot(grant)
-      return await callRemotePreview(grant, (remote) =>
-        readRemotePreviewRange(remote, offset, length, size, lifetime.signal)
+      const snapshot = await remoteSnapshot(grant)
+      return await callRemotePreview(
+        grant,
+        (remote) => readRemotePreviewRange(remote, offset, length, snapshot.size, lifetime.signal),
+        snapshot
       )
     } catch (error) {
       if (error instanceof RemotePreviewPairingChangedError) {

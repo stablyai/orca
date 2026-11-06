@@ -21,6 +21,10 @@ import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-
 import { MAX_FILE_RANGE_READ_BYTES } from '../../../shared/file-range-read'
 import type { RuntimeFileReadArgs } from './runtime-file-client-types'
 import { remoteFilePath, remoteFileRequest } from '../../../shared/remote-file-locator'
+import {
+  isRenewableGrantError,
+  renewTerminalArtifactGrant
+} from './runtime-terminal-artifact-grant'
 
 // Why: under files.readChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
 const PAGED_READ_CHUNK_BYTES = 384 * 1024
@@ -130,7 +134,37 @@ export async function readRemoteBinaryFile(
  * owning runtime (SSH and paired hosts), pinned to one pairing. Chunks stay within the local
  * `fs:readFileChunk` cap; the stat bracket refuses a file rewritten mid-read.
  */
-export function readRuntimeFileBytes(
+export async function readRuntimeFileBytes(
+  args: RuntimeFileReadArgs,
+  maxBytes: number
+): Promise<PagedRemoteFileRead> {
+  try {
+    return await readFileBytesOnce(args, maxBytes)
+  } catch (error) {
+    const { target, worktreeId, terminalArtifactGrantId } = args
+    if (
+      target.kind !== 'environment' ||
+      !worktreeId ||
+      !terminalArtifactGrantId ||
+      !isRenewableGrantError(error)
+    ) {
+      throw error
+    }
+    // Why: a viewer outlives its grant; the whole read restarts at its first stat, so versions never mix.
+    const renewed = await renewTerminalArtifactGrant({
+      target,
+      worktreeId,
+      absolutePath: args.filePath,
+      expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+    })
+    if (!renewed) {
+      throw new Error(`File not found on its host: ${args.filePath}`)
+    }
+    return readFileBytesOnce({ ...args, terminalArtifactGrantId: renewed.grantId }, maxBytes)
+  }
+}
+
+function readFileBytesOnce(
   args: RuntimeFileReadArgs,
   maxBytes: number
 ): Promise<PagedRemoteFileRead> {

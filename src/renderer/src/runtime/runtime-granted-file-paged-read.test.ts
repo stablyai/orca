@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readRuntimeFileContent } from './runtime-file-read-client'
+import { readRuntimeFileBytes } from './runtime-paged-file-read'
 import {
   runtimeEnvironmentCall,
   fsGrantRuntimeFilePreview,
@@ -147,5 +148,67 @@ describe('a granted host file outside every workspace', () => {
 
     expect(read).toMatchObject({ content: 'ok', terminalArtifactGrantId: 'g-2' })
     expect(read).not.toHaveProperty('readOnly')
+  })
+
+  // Why: a bytes editor opened after its grant expired must renew it, as the content read does.
+  it('renews an expired grant before paging a bytes editor', async () => {
+    const meta = { runtimeId: 'remote-runtime' }
+    const bytes = Uint8Array.from([1, 2, 3])
+    runtimeEnvironmentCall.mockImplementation(
+      async (args: { method: string; params?: unknown }) => {
+        if (args.method === 'files.resolveTerminalPath') {
+          return {
+            id: 'rpc',
+            ok: true,
+            result: {
+              worktree: 'wt-1',
+              relativePath: null,
+              absolutePath: '/tmp/model.bin',
+              exists: true,
+              isDirectory: false,
+              openTarget: {
+                kind: 'absolute-file',
+                provider: 'local',
+                absolutePath: '/tmp/model.bin',
+                grantId: 'g-2'
+              }
+            },
+            _meta: meta
+          }
+        }
+        if (grantIdOf(args.params) === 'g-1') {
+          return {
+            id: 'rpc',
+            ok: false,
+            error: { code: 'runtime_error', message: 'terminal_file_grant_expired' },
+            _meta: meta
+          }
+        }
+        return args.method === 'files.statTerminalArtifact'
+          ? {
+              id: 'rpc',
+              ok: true,
+              result: { size: bytes.length, isDirectory: false, mtime: 1, ctime: 1 },
+              _meta: meta
+            }
+          : {
+              id: 'rpc',
+              ok: true,
+              result: {
+                contentBase64: Buffer.from(bytes).toString('base64'),
+                bytesRead: bytes.length,
+                eof: true
+              },
+              _meta: meta
+            }
+      }
+    )
+
+    const read = await readRuntimeFileBytes(
+      { ...granted, filePath: '/tmp/model.bin', relativePath: '/tmp/model.bin' },
+      1024
+    )
+
+    expect(read).toEqual({ kind: 'ok', bytes })
   })
 })

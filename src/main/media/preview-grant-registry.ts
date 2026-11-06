@@ -160,11 +160,13 @@ export function previewGrantForSender(
 /**
  * Runs one host call for a remote preview on its current address. A paused or reconnected viewer
  * outlives its grant, so a lapsed one is renewed once, as the editor's reads do, wherever the call
- * happens: a stat, a streamed chunk or a PDF range.
+ * happens: a stat, a streamed chunk or a PDF range. A call serving bytes of a version it already
+ * started (`served`) continues only if the renewed grant still sees that version.
  */
 export async function callRemotePreview<T>(
   grant: PreviewGrant,
-  call: (remote: RemoteFilePreviewAddress) => Promise<T>
+  call: (remote: RemoteFilePreviewAddress) => Promise<T>,
+  served?: RemotePreviewFileSnapshot
 ): Promise<T> {
   if (!('remote' in grant.target)) {
     throw new Error('Preview is not a remote file')
@@ -176,8 +178,16 @@ export async function callRemotePreview<T>(
     if (!(error instanceof RemotePreviewGrantLapsedError) || remote.grantId === undefined) {
       throw error
     }
-    return call(await renewedRemoteTarget(grant, remote))
+    const renewed = await renewedRemoteTarget(grant, remote)
+    if (served && !sameFileVersion(await remoteSnapshot(grant), served)) {
+      throw new Error('The file changed on its host while it was being read.')
+    }
+    return call(renewed)
   }
+}
+
+function sameFileVersion(a: RemotePreviewFileSnapshot, b: RemotePreviewFileSnapshot): boolean {
+  return a.size === b.size && a.mtime === b.mtime && a.ctime === b.ctime
 }
 
 /** The preview's address under a fresh grant, shared by every request that found the old one lapsed. */
