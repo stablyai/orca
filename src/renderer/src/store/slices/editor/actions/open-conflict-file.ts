@@ -1,5 +1,8 @@
 import { editorPlacementIntent } from '../tabs/editor-placement-intent'
-import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
+import {
+  buildEditorActiveResult,
+  resolveEditorOpenTargetGroupId
+} from '../tabs/editor-open-target-group'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
@@ -7,7 +10,6 @@ import { editorOpenOwner } from '../git/editor-open-owner'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '../types/open-file'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
-import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,

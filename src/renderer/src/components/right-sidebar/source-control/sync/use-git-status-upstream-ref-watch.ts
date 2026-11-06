@@ -7,12 +7,12 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 
 export function useGitStatusUpstreamRefWatch(args: {
   enabled: boolean
-  executionHostId: string | null | undefined
+  executionHostId: ExecutionHostId | null | undefined
   worktreeId: string | null
   worktreePath: string | null
 }): (status: GitStatusResult) => void {
   const copy = args.worktreeId
-    ? resolveWorktreeGitCopyNow(args.worktreeId, args.executionHostId as ExecutionHostId)
+    ? resolveWorktreeGitCopyNow(args.worktreeId, args.executionHostId)
     : null
   const owner = copy?.transport
   // Key by primitive identity so new target objects cannot rearm the effect.

@@ -14,7 +14,7 @@ export function useWorktreeFiles(
       renderedActiveWorktreeId
         ? workspaceEditorFiles(
             {
-              openFiles: openFiles as OpenFile[],
+              openFiles,
               unifiedTabsByWorktree: { [renderedActiveWorktreeId]: tabs ?? [] }
             },
             renderedActiveWorktreeId

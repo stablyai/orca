@@ -3,7 +3,7 @@ import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
-type PlacementState = Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree'>
+type PlacementState = Pick<AppState, 'unifiedTabsByWorktree'> & { openFiles: readonly OpenFile[] }
 const indexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile>>()
 export function openFileIndex(files: readonly OpenFile[]): ReadonlyMap<string, OpenFile> {
   let index = indexes.get(files)
