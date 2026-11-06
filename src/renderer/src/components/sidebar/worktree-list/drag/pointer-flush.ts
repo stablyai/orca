@@ -12,6 +12,7 @@ import type {
   ShouldShowWorkspaceBoardDropIndicator,
   WorktreeDropCommitContext
 } from './drop-commit-context'
+import { isFolderWorkspaceDragGroupKey } from './groups'
 import {
   applyWorktreeDropPreview,
   applyWorktreeLineageDropPreview,
@@ -95,6 +96,10 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     ctx.clearWorktreeDrag()
     return
   }
+  if (isFolderWorkspaceDragGroupKey(drag.sourceGroupKey)) {
+    flushWorktreeReorderFrame(args, NO_WORKTREE_SIDEBAR_DROP_TARGET)
+    return
+  }
   // Expose the board drop target when dragging starts, before the pointer reaches the sidebar edge.
   if (
     !drag.workspaceBoardDragPreviewRequested &&
@@ -174,7 +179,15 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
     return
   }
+  flushWorktreeReorderFrame(args, preferredStatusTarget)
+}
 
+// Show the reorder slot under the pointer, or the hovered status/pin section when there is none.
+function flushWorktreeReorderFrame(
+  args: WorktreePointerDragFrameArgs,
+  preferredStatusTarget: WorktreeSidebarLineageDropTarget
+): void {
+  const { drag, ctx } = args
   const drop = ctx.computeWorktreeDrop(drag.currentY)
   if (!drop) {
     drag.reorderIntent = null

@@ -1,8 +1,11 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { getFolderWorkspaceRowDragGroupKey } from './groups'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -20,7 +23,13 @@ type WorktreeDragUnitRow =
   | { type: 'imported-worktrees-card' }
   | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
-  | { type: 'folder-workspace' }
+  | {
+      type: 'folder-workspace'
+      folderWorkspace: Pick<
+        FolderWorkspace,
+        'id' | 'projectGroupId' | 'executionHostId' | 'connectionId'
+      >
+    }
 
 /** Unit members are host identities, matching getWorktreeDragGroups. */
 export function getWorktreeDragUnitGroups(
@@ -28,11 +37,13 @@ export function getWorktreeDragUnitGroups(
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
   let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  let currentFolderUnits: WorktreeDragUnitGroup['units'] | null = null
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
   for (const row of rows) {
     if (row.type === 'header') {
       current = { key: row.key, units: [] }
+      currentFolderUnits = null
       groups.push({
         key: current.key,
         units: current.units,
@@ -40,12 +51,27 @@ export function getWorktreeDragUnitGroups(
       })
       continue
     }
+    if (row.type === 'folder-workspace') {
+      const key = getFolderWorkspaceRowDragGroupKey(
+        current?.key ?? ALL_GROUP_KEY,
+        row.folderWorkspace
+      )
+      if (!key) {
+        continue
+      }
+      if (!currentFolderUnits) {
+        currentFolderUnits = []
+        groups.push({ key, units: currentFolderUnits, worktreeIds: [] })
+      }
+      const worktreeId = getFolderWorkspaceHostIdentity(row.folderWorkspace)
+      currentFolderUnits.push({ worktreeId, worktreeIds: [worktreeId] })
+      continue
+    }
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
-      row.type === 'pending-creation' ||
-      row.type === 'folder-workspace'
+      row.type === 'pending-creation'
     ) {
       continue
     }
