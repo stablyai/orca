@@ -8,6 +8,16 @@ type AccountsBlock = {
     host: string | null
     wsl: Record<string, string | null>
   }
+  /** Claude only: whether the host switches accounts before a usage limit (absent from older hosts). */
+  autoSwitchEnabled?: boolean
+  /** Claude only: live sessions billed to each account (absent from older hosts). */
+  assignedSessions?: readonly { accountId: string; count: number }[]
+  /** Claude only: whether launches bill through the local auth proxy. */
+  authProxy?: 'on' | 'off'
+  /** Claude only: Windows view of WSL guest billing. */
+  wslAuthProxy?: 'on' | 'unsupported:wsl'
+  /** Claude only: panes whose billed account differs from the folder they launched in. */
+  paneAssignments?: readonly { ptyId: string; accountId: string }[]
 }
 
 export function formatDataAccounts(label: string, state: ManagedDataAccountsState): string {
@@ -34,13 +44,31 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
     block.activeAccountIdsByRuntime?.host,
     ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
   ])
-  // Why the id: `orca account select --account` needs it when one email signs into several orgs.
-  const lines = block.accounts.map(
-    (account) =>
-      `  ${account.id}  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
-        account.needsSignIn ? ' (sign in again in Orca Settings > AI Provider Accounts)' : ''
-      }`
+  const sessionCountByAccount = new Map(
+    (block.assignedSessions ?? []).map((row) => [row.accountId, row.count])
   )
+  // Why the id: `orca account select --account` needs it when one email signs into several orgs.
+  const lines = block.accounts.map((account) => {
+    const sessions =
+      block.assignedSessions !== undefined
+        ? `  sessions: ${sessionCountByAccount.get(account.id) ?? 0}`
+        : ''
+    return `  ${account.id}  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
+      account.needsSignIn ? ' (sign in again in Orca Settings > AI Provider Accounts)' : ''
+    }${sessions}`
+  })
+  if (block.autoSwitchEnabled !== undefined) {
+    lines.push(`  auto-switch: ${block.autoSwitchEnabled ? 'on' : 'off'}`)
+  }
+  for (const assignment of block.paneAssignments ?? []) {
+    lines.push(`  pane ${assignment.ptyId}: account ${assignment.accountId}`)
+  }
+  if (block.authProxy !== undefined) {
+    lines.push(`  auth-proxy: ${block.authProxy}`)
+  }
+  if (block.wslAuthProxy !== undefined) {
+    lines.push(`  wsl auth-proxy: ${block.wslAuthProxy}`)
+  }
   return `Managed ${label} accounts (${block.accounts.length}):\n${system}\n${lines.join('\n')}`
 }
 

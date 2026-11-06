@@ -12,7 +12,11 @@ function normalizeFolder(path: string): string {
 /** The host's Claude folders and logins as main read them at the switch; WSL guests' are never read. */
 export type ClaudeHostFolders = Pick<
   ClaudeRateLimitAccountsState,
-  'accounts' | 'systemDefaultHome' | 'systemDefaultEmail' | 'systemDefaultOrganizationUuid'
+  | 'accounts'
+  | 'systemDefaultHome'
+  | 'systemDefaultEmail'
+  | 'systemDefaultOrganizationUuid'
+  | 'paneAssignments'
 >
 
 /** Where a pane's Claude keeps its config, read from its transcript path. */
@@ -78,4 +82,25 @@ export function isClaudePaneOnAccount(
     account.organizationUuid === host.systemDefaultOrganizationUuid &&
     account.email.trim().toLowerCase() === host.systemDefaultEmail.trim().toLowerCase()
   )
+}
+
+/** The registry's live assignment for a pane, when the host reports one. */
+export function assignedClaudePaneAccount(
+  ptyId: string,
+  host?: ClaudeHostFolders
+): string | undefined {
+  return host?.paneAssignments?.find((entry) => entry.ptyId === ptyId)?.accountId
+}
+
+/** A live assignment wins over the transcript folder; without one the folder decides. */
+export function isClaudePaneOnAssignedAccount(
+  ptyId: string,
+  folder: ClaudePaneFolder | undefined,
+  accountId: string | null,
+  host?: ClaudeHostFolders
+): boolean {
+  const assigned = assignedClaudePaneAccount(ptyId, host)
+  return assigned !== undefined
+    ? assigned === accountId
+    : isClaudePaneOnAccount(folder, accountId, host)
 }

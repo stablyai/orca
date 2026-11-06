@@ -1,3 +1,4 @@
+import { claudeAuthProxyEnabled } from '../../shared/claude-account-switch-settings'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
@@ -6,6 +7,9 @@ import type {
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitService } from '../rate-limits/service'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
+import { claudeListedPaneAccounts } from './claude-listed-pane-accounts'
+import { listClaudePaneAccounts } from './claude-pane-account-registry'
+import { wslAuthProxyStatus } from './wsl-auth-proxy-status'
 import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
@@ -31,6 +35,8 @@ export type ClaudeAccountSettings = Pick<
   | 'claudeManagedAccounts'
   | 'activeClaudeManagedAccountId'
   | 'activeClaudeManagedAccountIdsByRuntime'
+  | 'claudeAutoSwitchEnabled'
+  | 'claudeAuthProxy'
 >
 
 export type ClaudeAccountStore = {
@@ -67,6 +73,11 @@ export class ClaudeAccountSelection {
     private readonly runtimeAuth: ClaudeAccountRuntime
   ) {}
 
+  setAuthProxy(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAuthProxy: enabled })
+    return this.list()
+  }
+
   list(): ClaudeRateLimitAccountsState {
     this.pruneSelection()
     const settings = this.store.getSettings()
@@ -81,14 +92,29 @@ export class ClaudeAccountSelection {
         }
       })
       .sort((a, b) => b.updatedAt - a.updatedAt)
+    const paneRecords = listClaudePaneAccounts()
+    const { paneAccounts, assignedSessions } = claudeListedPaneAccounts(accounts, paneRecords)
+    const paneAssignments = paneRecords.flatMap((record) =>
+      record.assignedAccountId && record.assignedAccountId !== record.accountId
+        ? [{ ptyId: record.ptyId, accountId: record.assignedAccountId }]
+        : []
+    )
     const userConfigDir = this.runtimeAuth.router.userConfigDir()
     // Throttle parsing of the large, frequently rewritten personal state file.
     const systemDefault =
       accounts.length > 0 ? readClaudeFolderLogin(claudeStateFile(userConfigDir), 5_000) : null
+    const wslAuthProxy =
+      process.platform === 'win32' ? wslAuthProxyStatus(settings.claudeManagedAccounts) : undefined
     return {
       accounts,
       activeAccountId: selection.host,
       activeAccountIdsByRuntime: selection,
+      autoSwitchEnabled: settings.claudeAutoSwitchEnabled === true,
+      authProxy: claudeAuthProxyEnabled(settings) ? 'on' : 'off',
+      ...(wslAuthProxy ? { wslAuthProxy } : {}),
+      assignedSessions,
+      paneAccounts,
+      ...(paneAssignments.length > 0 ? { paneAssignments } : {}),
       ...(accounts.length > 0
         ? { systemDefaultHome: this.runtimeAuth.router.systemDefaultHome() }
         : {}),
@@ -224,6 +250,11 @@ export class ClaudeAccountSelection {
       throw error
     }
     this.refreshUsage(outgoingAccountId, effectiveTarget)
+    return this.list()
+  }
+
+  setAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAutoSwitchEnabled: enabled })
     return this.list()
   }
 

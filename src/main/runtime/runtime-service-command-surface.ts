@@ -1,3 +1,4 @@
+import type { RuntimeClaudePolicyController } from './agent-session/environment/runtime-account-claude-policy'
 import type { RuntimeAccountController } from './agent-session/environment/runtime-account-controller'
 import type { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import type { RuntimeBrowserDriverController } from './browser/driver/runtime-browser-driver-controller'
@@ -58,6 +59,10 @@ export type RuntimeServiceCommandSurface = {
   refreshAccountsForMobile: RuntimeAccountController['refreshForMobile']
   refreshAccountsForMobileSubscriber: RuntimeAccountController['refreshForMobileSubscriber']
   selectClaudeAccount: RuntimeAccountController['selectClaude']
+  setClaudeAuthProxy: RuntimeClaudePolicyController['setAuthProxy']
+  claudeAuthProxyStatus: RuntimeClaudePolicyController['authProxyStatus']
+  assignClaudePane: RuntimeClaudePolicyController['assignPane']
+  setClaudeAutoSwitch: RuntimeClaudePolicyController['setAutoSwitch']
   selectCodexAccount: RuntimeAccountController['selectCodex']
   selectCodexAccountForTarget: RuntimeAccountController['selectCodexForTarget']
   consumeCodexRateLimitResetCredit: RuntimeAccountController['consumeCodexResetCredit']
@@ -175,7 +180,11 @@ export function installRuntimeServiceCommandSurface(
     requireUsageRateLimits: accounts.requireUsageRateLimits.bind(accounts),
     refreshAccountsForMobile: accounts.refreshForMobile.bind(accounts),
     refreshAccountsForMobileSubscriber: accounts.refreshForMobileSubscriber.bind(accounts),
+    setClaudeAuthProxy: accounts.claudePolicy.setAuthProxy.bind(accounts.claudePolicy),
+    claudeAuthProxyStatus: accounts.claudePolicy.authProxyStatus.bind(accounts.claudePolicy),
+    assignClaudePane: accounts.claudePolicy.assignPane.bind(accounts.claudePolicy),
     selectClaudeAccount: accounts.selectClaude.bind(accounts),
+    setClaudeAutoSwitch: accounts.claudePolicy.setAutoSwitch.bind(accounts.claudePolicy),
     selectCodexAccount: accounts.selectCodex.bind(accounts),
     selectCodexAccountForTarget: accounts.selectCodexForTarget.bind(accounts),
     consumeCodexRateLimitResetCredit: accounts.consumeCodexResetCredit.bind(accounts),

@@ -5,6 +5,11 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 const fakes = vi.hoisted(() => ({
   host: {
     prepareLaunch: async () => ({ runtime: 'host' }),
+    preparation: async () => ({
+      configDir: '/host/.claude',
+      envPatch: {},
+      provenance: 'system'
+    }),
     publish: () => {},
     systemDefaultHome: () => '/host/.claude'
   },
@@ -38,6 +43,7 @@ vi.mock('./claude-profile-installed-router', () => ({
   installClaudeWslProfileRouter: () => {}
 }))
 
+import * as claudeAuthProxyHost from './claude-auth-proxy/claude-auth-proxy-host'
 import { ClaudeRuntimeAuthService } from './runtime-auth-service'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -60,6 +66,26 @@ afterEach(() => {
 })
 
 describe('ClaudeRuntimeAuthService', () => {
+  it('releases the proxy slot a quota poll allocated', async () => {
+    const release = vi
+      .spyOn(claudeAuthProxyHost, 'releaseOwnClaudeAuthProxySlot')
+      .mockImplementation(() => {})
+    vi.spyOn(claudeAuthProxyHost, 'claudeAuthProxyListeningPort').mockReturnValue(4010)
+    vi.spyOn(fakes.host, 'preparation').mockResolvedValue({
+      configDir: '/host/.claude',
+      envPatch: {
+        CLAUDE_CONFIG_DIR: '/host/.claude',
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:4010/p/poll-slot/'
+      },
+      provenance: 'profile:a'
+    })
+    const auth = service('darwin')
+    await expect(auth.prepareForRateLimitFetch()).resolves.toMatchObject({
+      envPatch: { CLAUDE_CONFIG_DIR: '/host/.claude' }
+    })
+    expect(release).toHaveBeenCalledWith('poll-slot')
+  })
+
   it('never fails a select over a failed guest publish, and publishes one pass at a time', async () => {
     const auth = service('win32')
     vi.spyOn(fakes.wsl, 'publish').mockRejectedValue(new Error('distro is gone'))

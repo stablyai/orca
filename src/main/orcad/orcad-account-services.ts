@@ -12,12 +12,17 @@ import type {
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
+import { createClaudeUsagePollingSwitch } from '../claude-accounts/claude-usage-polling-policy'
 import { createCodexRuntimeHomeLaunchPreparation } from '../codex/configuration/homes/codex-runtime-home-launch-preparation'
 import { createCodexSessionResumeLaunchPreparation } from '../codex/history/resume/codex-session-resume-launch-preparation'
 import { prepareCodexAiVaultSessionResume } from '../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
+import {
+  startClaudeAuthProxy,
+  stopClaudeAuthProxy
+} from '../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
 type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }
@@ -59,13 +64,27 @@ export function createOrcadAccountServices(args: {
   isWslHost?: () => boolean
 }): OrcadAccountServices | null {
   if ((args.isWslHost ?? isWslHostOrcadProcess)()) {
+    // The guest bills through its own loopback listener. Account services stay on the desktop.
+    void startClaudeAuthProxy()
+    args.registerCleanup(async () => {
+      await stopClaudeAuthProxy()
+    })
     return null
   }
   const { store, clientCodexHomes } = args
   const services = createProviderAccountServices(store, {
     setClaudeStatusLineListener: args.setClaudeStatusLineListener
   })
-  args.registerCleanup(() => {
+  // Headless auto-switch needs readings even without a window requesting them.
+  const polling = createClaudeUsagePollingSwitch(services.rateLimits, () => store.getSettings())
+  polling.apply()
+  const unsubscribePolling = store.onSettingsChanged((updates) => {
+    polling.apply(updates)
+  })
+  void startClaudeAuthProxy()
+  args.registerCleanup(async () => {
+    unsubscribePolling()
+    await stopClaudeAuthProxy()
     services.rateLimits.stop()
     args.setClaudeStatusLineListener(null)
   })

@@ -1,4 +1,4 @@
-import { LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
+import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
 
 // Terminal login lets headless hosts manage accounts without the desktop login UI.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
@@ -64,6 +64,39 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Deletes the credentials Orca saved for that account (and, for OpenCode and Devin, the conversation data in its profile). Stop its running agents first. System credentials are never removed.',
       'Select another Antigravity account before removing the one in use.'
+    ]
+  },
+  {
+    path: ['account', 'auto-switch'],
+    summary: 'Turn automatic Claude account switching before a usage limit on or off',
+    usage:
+      'orca account auto-switch --agent claude (--on | --off) [--environment <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'on', 'off'],
+    notes: [
+      'Writes the host setting behind Settings › Accounts › Claude › "Switch accounts before a usage limit" (accounts.setClaudeAutoSwitch). Default off.',
+      'With --environment the setting is written on that paired Orca server, whose accounts the switch then rotates.',
+      'Lines: 5-hour window 95 %, weekly and Fable-weekly windows 90 %; the switch applies to the next Claude started.'
+    ],
+    examples: [
+      'orca account auto-switch --agent claude --on',
+      'orca account auto-switch --agent claude --on --environment build-box'
+    ]
+  },
+  {
+    path: ['account', 'auth-proxy'],
+    summary: 'Bill Claude through a local auth proxy so a running session can change accounts',
+    usage:
+      'orca account auth-proxy --agent claude (--on | --off | --status) [--environment <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'on', 'off', 'status'],
+    notes: [
+      'Writes the host setting behind Settings › Accounts › Claude › "Bill Claude through a local auth proxy" (accounts.setClaudeAuthProxy). Default off.',
+      '--status reads the live listener (accounts.claudeAuthProxyStatus): port, slots, requests in the last hour, and the last error. It does not change the setting.',
+      'A user-set ANTHROPIC_BASE_URL is left unchanged. With --environment the setting is written on that paired Orca server.'
+    ],
+    examples: [
+      'orca account auth-proxy --agent claude --off',
+      'orca account auth-proxy --agent claude --on --environment build-box',
+      'orca account auth-proxy --agent claude --status'
     ]
   }
 ]
