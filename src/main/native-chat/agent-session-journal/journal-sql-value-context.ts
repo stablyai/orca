@@ -12,20 +12,19 @@ import {
 import { JournalSqlValueObjects } from './journal-sql-value-objects'
 import { JournalSqlValueReferences } from './journal-sql-value-references'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
+import { JournalSqlValueBulkLoad } from './journal-sql-value-bulk-load'
+import { JournalSqlValueChanges } from './journal-sql-value-changes'
 
 /** One command owns these objects; SAVEPOINT rollback discards the context, never adopts a mirror. */
 export class JournalSqlValueContext {
   changed?: (collection: string, key: string) => void
   private readonly objects = new JournalSqlValueObjects((location) => this.touch(location))
   private readonly reader: JournalSqlValueReader
-  private readonly pending = new Map<
-    string,
-    { location: JournalSqlValueLocation; reinsert: boolean }
-  >()
-  private readonly accessed = new Set<string>()
+  private readonly entries = new JournalSqlValueChanges()
   private readonly collections = new Set<string>()
 
   private readonly references: JournalSqlValueReferences
+  private bulk?: JournalSqlValueBulkLoad
   constructor(
     readonly scope: JournalSqlScope,
     readonly items?: JournalSqlItemValues
@@ -67,6 +66,16 @@ export class JournalSqlValueContext {
     return journalSqlIndexScope(this)
   }
 
+  bulkLoad(write: () => void): void {
+    this.bulk = new JournalSqlValueBulkLoad(this.scope, this.items)
+    try {
+      write()
+      this.bulk.finish()
+    } finally {
+      this.bulk = undefined
+    }
+  }
+
   readReference(location: JournalSqlValueLocation): unknown {
     const value = this.reader.load(location)
     this.objects.observe(value, location)
@@ -85,11 +94,14 @@ export class JournalSqlValueContext {
   }
 
   access(collection: string): void {
-    this.accessed.add(collection)
+    this.entries.accessed.add(collection)
   }
 
   size(collection: string): number {
     this.access(collection)
+    if (this.bulk) {
+      return this.bulk.size(collection)
+    }
     const row = this.scope.db
       .prepare(`SELECT size FROM journal_proj_collections
       WHERE session_id=? AND generation=? AND collection=?`)
@@ -102,6 +114,9 @@ export class JournalSqlValueContext {
 
   header(collection: string, key: string): SqliteRow | undefined {
     this.access(collection)
+    if (this.bulk) {
+      return this.bulk.header(collection, key)
+    }
     const row = this.scope.db
       .prepare(`SELECT ordinal, incarnation FROM journal_proj_values
       WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
@@ -110,6 +125,9 @@ export class JournalSqlValueContext {
   }
 
   read<V>(collection: string, key: string, observe = true): V | undefined {
+    if (this.bulk) {
+      return this.bulk.read<V>(collection, key)
+    }
     const row = this.header(collection, key)
     if (!row) {
       return undefined
@@ -124,6 +142,11 @@ export class JournalSqlValueContext {
   }
 
   write(collection: string, key: string, value: unknown): void {
+    if (this.bulk) {
+      this.bulk.write(collection, key, value)
+      this.changed?.(collection, key)
+      return
+    }
     this.collection(collection)
     const before = this.header(collection, key)
     const previous = before && {
@@ -244,33 +267,12 @@ export class JournalSqlValueContext {
   }
 
   changes(reset = false): JournalEntryChange[] {
-    const entries = [...this.pending.values()]
-    const changes = [...this.accessed]
-      .flatMap((collection) => entries.filter((entry) => entry.location.collection === collection))
-      .map(({ location, reinsert }) => {
-        const present = !!this.header(location.collection, location.key)
-        return {
-          path: location.collection,
-          key: JSON.parse(location.key),
-          deleted: !present,
-          reinsert,
-          value: this.read(location.collection, location.key)
-        }
-      })
-    if (reset) {
-      this.pending.clear()
-    }
-    return changes
+    return this.entries.read(this, reset)
   }
 
   private touch(location: JournalSqlValueLocation, reinsert = false, deleted = false): void {
     this.changed?.(location.collection, location.key)
-    const key = JSON.stringify([location.collection, location.key])
-    if (reinsert) {
-      this.pending.delete(key)
-    }
-    const before = this.pending.get(key)
-    this.pending.set(key, { location, reinsert: deleted ? false : reinsert || !!before?.reinsert })
+    this.entries.touch(location, reinsert, deleted)
   }
 
   private flushLocation(location: JournalSqlValueLocation): void {

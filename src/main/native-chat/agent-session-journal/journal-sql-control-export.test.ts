@@ -87,8 +87,10 @@ it.each([
       finish
     )
     const exported = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'exported'), 'epoch')
-    exportJournalControlState(memory, exported.state, { items: true })
-    exported.flush()
+    exported.context.bulkLoad(() => {
+      exportJournalControlState(memory, exported.state, { items: true })
+      exported.flush()
+    })
     const reload = (generation: string) =>
       new JournalSqlReducer(new JournalSqlScope(db, 'session', generation), 'epoch').state
     expect(snapshot(reload('exported'))).toEqual(snapshot(reload('built')))

@@ -33,54 +33,64 @@ function maps(context: JournalSqlValueContext) {
   }
 }
 
-it('preserves nested writes through submission aliases across commands and keeps replaced snapshots separate', () => {
-  const f = fixture()
-  let command = f.context()
-  let { source, alias } = maps(command)
-  source.set('send', send('pending'))
-  alias.set('send', source.get('send')!)
-  expect(alias.get('send')).toBe(source.get('send'))
-  command.flush()
+it.each([false, true])(
+  'preserves submission aliases and replaced snapshots after bulk import=%s',
+  (bulk) => {
+    const f = fixture()
+    let command = f.context()
+    let { source, alias } = maps(command)
+    const seed = () => {
+      source.set('send', send('pending'))
+      alias.set('send', source.get('send')!)
+      expect(alias.get('send')).toBe(source.get('send'))
+    }
+    if (bulk) {
+      command.bulkLoad(seed)
+    } else {
+      seed()
+    }
+    command.flush()
 
-  command = f.context()
-  ;({ source, alias } = maps(command))
-  const candidate = alias.get('send')!
-  expect(candidate).toBe(source.get('send'))
-  candidate.status = 'unknown'
-  candidate.flags.recovered = true
-  candidate.coverage = ['first']
-  candidate.coverage.push('second')
-  command.flush()
-  expect(command.changes().map((change) => change.path)).toEqual([
-    'inputs.candidates',
-    'submissions'
-  ])
+    command = f.context()
+    ;({ source, alias } = maps(command))
+    const candidate = alias.get('send')!
+    expect(candidate).toBe(source.get('send'))
+    candidate.status = 'unknown'
+    candidate.flags.recovered = true
+    candidate.coverage = ['first']
+    candidate.coverage.push('second')
+    command.flush()
+    expect(command.changes().map((change) => change.path)).toEqual([
+      'inputs.candidates',
+      'submissions'
+    ])
 
-  command = f.context()
-  ;({ source, alias } = maps(command))
-  expect(source.get('send')).toEqual({
-    status: 'unknown',
-    flags: { recovered: true },
-    coverage: ['first', 'second']
-  })
-  source.set('send', send('accepted'))
-  expect(alias.get('send')).toEqual({
-    status: 'unknown',
-    flags: { recovered: true },
-    coverage: ['first', 'second']
-  })
-  alias.get('send')!.status = 'old-attempt'
-  command.flush()
+    command = f.context()
+    ;({ source, alias } = maps(command))
+    expect(source.get('send')).toEqual({
+      status: 'unknown',
+      flags: { recovered: true },
+      coverage: ['first', 'second']
+    })
+    source.set('send', send('accepted'))
+    expect(alias.get('send')).toEqual({
+      status: 'unknown',
+      flags: { recovered: true },
+      coverage: ['first', 'second']
+    })
+    alias.get('send')!.status = 'old-attempt'
+    command.flush()
 
-  command = f.context()
-  ;({ source, alias } = maps(command))
-  expect(source.get('send')!.status).toBe('accepted')
-  expect(alias.get('send')!.status).toBe('old-attempt')
-  alias.set('send', source.get('send')!)
-  command.flush()
-  expect(alias.get('send')).toBe(source.get('send'))
-  expect(f.db.prepare('SELECT incarnation FROM journal_proj_value_snapshots').all()).toEqual([])
-})
+    command = f.context()
+    ;({ source, alias } = maps(command))
+    expect(source.get('send')!.status).toBe('accepted')
+    expect(alias.get('send')!.status).toBe('old-attempt')
+    alias.set('send', source.get('send')!)
+    command.flush()
+    expect(alias.get('send')).toBe(source.get('send'))
+    expect(f.db.prepare('SELECT incarnation FROM journal_proj_value_snapshots').all()).toEqual([])
+  }
+)
 
 it('keeps a source captured before replacement when a later alias first refers to it', () => {
   const f = fixture()
@@ -96,14 +106,21 @@ it('keeps a source captured before replacement when a later alias first refers t
   expect(next.alias.get('old')!.status).toBe('first')
 })
 
-it('keeps nested shared objects when a replacement reuses part of the old source', () => {
+it.each([false, true])('keeps nested shared objects after bulk import=%s', (bulk) => {
   const f = fixture()
   let command = f.context()
   let { source } = maps(command)
-  source.set('send', send('first'))
-  const first = source.get('send')!
-  const flags = first.flags
-  source.set('other', { status: 'second', flags })
+  const seed = () => {
+    source.set('send', send('first'))
+    const first = source.get('send')!
+    const flags = first.flags
+    source.set('other', { status: 'second', flags })
+  }
+  if (bulk) {
+    command.bulkLoad(seed)
+  } else {
+    seed()
+  }
   command.flush()
 
   command = f.context()

@@ -16,7 +16,8 @@ export function journalSqlLocationKey(value: JournalSqlValueLocation): string {
 export function encodeJournalSqlValue(
   value: unknown,
   owner: JournalSqlValueLocation,
-  locate: (value: object) => JournalSqlValueLocation | undefined
+  locate: (value: object) => JournalSqlValueLocation | undefined,
+  placed?: (value: object, path: string[]) => void
 ): EncodedJournalSqlValue {
   const refs: JournalSqlValueReference[] = []
   const paths = new WeakMap<object, string[]>()
@@ -35,6 +36,7 @@ export function encodeJournalSqlValue(
       refs.push({ path, source })
       return null
     }
+    placed?.(child, path)
     paths.set(child, path)
     return child
   })
