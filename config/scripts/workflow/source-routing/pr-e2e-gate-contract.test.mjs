@@ -48,6 +48,24 @@ describe('paired HTML preview E2E routing', () => {
   })
 })
 
+describe('preview address-bar convergence E2E routing', () => {
+  const spec = 'tests/e2e/paired-preview-address-bar-convergence.spec.ts'
+  it.each([
+    'src/renderer/src/components/browser-pane/workspace-doc/doc-preview-address-edit.tsx',
+    'src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.ts',
+    'src/renderer/src/lib/workspace-doc-address-input.ts',
+    'src/renderer/src/store/slices/browser/browser-page-conversion-actions.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it.each([
+    'src/renderer/src/store/slices/browser-page-conversion.test.ts',
+    'src/renderer/src/components/browser-pane/assemble-chrome/BrowserAddressBar.tsx'
+  ])('does not route %s', (path) => {
+    expect(selectPrE2eSpecs([path])).not.toContain(spec)
+  })
+})
+
 describe('PR E2E gate contract', () => {
   it('routes only core xterm patches to both IME lanes across version updates', () => {
     for (const file of [
