@@ -29,7 +29,7 @@ import type { AppState } from '../../src/renderer/src/store/types'
 import type {
   IpcPtyTransportOptions,
   PtyTransport
-} from '../../src/renderer/src/components/terminal-pane/pty-transport-types'
+} from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
 import { createTestStore, makeTab } from '../../src/renderer/src/store/slices/store-test-helpers'
 import {
   existsSyncMock,
@@ -58,13 +58,13 @@ vi.mock('@/components/terminal-pane/terminal-pane-recovery', async (importOrigin
   ...(await importOriginal<Record<string, unknown>>()),
   requestTerminalPaneRecovery: vi.fn(async () => true)
 }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: (options: IpcPtyTransportOptions) => {
     mountedOptions = options
     const transport = createMockTransport()
     const connect = vi.fn<PtyTransport['connect']>(async (connectOptions) => {
       const { spawnIpcPty } =
-        await import('../../src/renderer/src/components/terminal-pane/ipc-pty-spawn-request')
+        await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/ipc-pty-spawn-request')
       const result = await spawnIpcPty(
         options,
         connectOptions,

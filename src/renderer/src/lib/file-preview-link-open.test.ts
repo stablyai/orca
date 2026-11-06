@@ -20,7 +20,7 @@ import {
   releaseDocPreviewGrant
 } from './doc-preview-grants'
 import type { BrowserOpenOutcome } from './browser/navigation/browser-link-destination'
-import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/terminal-file-link-browser-open'
+import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/links/files/terminal-file-link-browser-open'
 import {
   detectedListingFixture,
   terminalTabFixture

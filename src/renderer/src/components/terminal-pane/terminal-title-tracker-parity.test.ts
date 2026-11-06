@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
-import { createPtyOutputProcessor } from './pty-output-processor'
+import { createPtyOutputProcessor } from './pty-transport/output/pty-output-processor'
 
 const ESC = '\x1b'
 const BEL = '\x07'

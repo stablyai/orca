@@ -1,4 +1,4 @@
-import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
+import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import {
   collectParkedTerminalWatcherPtyIds,

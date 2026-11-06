@@ -1,4 +1,4 @@
-import { preserveSavedHistoryPayload } from './codex-history-projection'
+import { projectCodexHistoryItem } from './codex-history-projection'
 import { isDeepStrictEqual } from 'node:util'
 import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
 import {
@@ -9,7 +9,6 @@ import {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
@@ -211,15 +210,16 @@ export function createCodexHistoryImportPlan(input: {
       } else if (item.type === 'subAgentActivity') {
         continue
       } else {
-        translated = codexJournalItem(
+        translated = projectCodexHistoryItem(
           item,
+          saved,
+          false,
           (id) => helpers.label(id) ?? input.subagentExecutions?.label(id) ?? null
-        ).body
+        )
       }
       if (!translated) {
         continue
       }
-      translated = preserveSavedHistoryPayload(item, translated, saved)
       if (
         append(
           chosenIdentity,

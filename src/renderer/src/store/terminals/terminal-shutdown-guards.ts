@@ -1,10 +1,11 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-dispatcher'
-import type { PtyDataHandlerShutdownSnapshot } from '@/components/terminal-pane/pty-shutdown-data-suspension'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
+import type { PtyDataHandlerShutdownSnapshot } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
 import { disposeParkedTerminalWatchersForPtyIds } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
   clearCommittedPtyShutdownSettlements,
@@ -12,7 +13,7 @@ import {
   markCommittedPtyShutdowns,
   noteCommittedPtyShutdownSettlements,
   settleDeferredPtyShutdownExits
-} from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { copyOnWriteRecord } from '../copy-on-write-record'
 

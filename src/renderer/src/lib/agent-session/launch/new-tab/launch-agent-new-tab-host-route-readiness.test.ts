@@ -36,7 +36,7 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/lib/agent-session/launch/pane/agent-launch-through-host', () => ({
   launchAgentThroughHost: testState.launchAgentThroughHost
 }))
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (ptyId: string, watcher: (data: string) => void) => {
     testState.ptyWatchers.set(ptyId, watcher)
     return () => testState.ptyWatchers.delete(ptyId)
@@ -73,7 +73,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 const { launchNewTabPromptThroughHost } = await import('./launch-agent-new-tab-host-route')
 const { bufferPreHandlerPtyData, drainPreHandlerPtyData, clearPreHandlerPtyState } =
-  await import('@/components/terminal-pane/pty-pre-handler-buffer')
+  await import('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer')
 
 function attachHostPty(ptyId: string): void {
   testState.appState.ptyIdsByTabId = { [TAB]: [ptyId] }

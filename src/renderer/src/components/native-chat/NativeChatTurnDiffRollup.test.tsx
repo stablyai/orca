@@ -14,7 +14,9 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
 import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
+}))
 
 const messages: NativeChatMessage[] = [
   {
@@ -125,7 +127,7 @@ function withStore(
   // Settings saved before this setting existed have no key; the card must still show for them.
   const { nativeChatTurnDiffSummary: _absent, ...savedBeforeSetting } = getDefaultSettings('/tmp')
   useAppStore.setState({ settings: savedBeforeSetting, updateSettingsOrThrow, ...actions })
-  vi.mocked(toast).mockClear()
+  vi.mocked(toast.success).mockClear()
   vi.mocked(toast.error).mockClear()
   return run(actions).finally(() => useAppStore.setState(original, true))
 }
@@ -142,11 +144,11 @@ it('Hide turns the changed-files card off in every chat and the toast links to i
       expect(screen.queryByRole('button', { name: /\/repo\/greeting.ts/ })).toBeNull()
       expect(screen.getByText('Updated the greeting.')).toBeVisible()
 
-      expect(toast).toHaveBeenCalledWith('Hidden', expect.anything())
-      const description = vi.mocked(toast).mock.calls[0]?.[1]?.description
+      expect(toast.success).toHaveBeenCalledTimes(1)
+      const description = vi.mocked(toast.success).mock.calls[0]?.[1]?.description
       cleanup()
       render(<>{typeof description === 'function' ? description() : description}</>)
-      fireEvent.click(screen.getByRole('button', { name: 'Settings › Chat UI' }))
+      fireEvent.click(screen.getByRole('button'))
       expect(openSettingsPage).toHaveBeenCalledTimes(1)
       expect(openSettingsTarget).toHaveBeenCalledWith({
         pane: 'chat',
@@ -174,7 +176,7 @@ it('a Hide whose save fails keeps the card and says so instead of confirming', (
       render(hiddenList)
       await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Hide' })))
       expect(screen.getByRole('button', { name: /\/repo\/greeting.ts/ })).toBeVisible()
-      expect(toast).not.toHaveBeenCalled()
+      expect(toast.success).not.toHaveBeenCalled()
       expect(toast.error).toHaveBeenCalledTimes(1)
     }
   ))

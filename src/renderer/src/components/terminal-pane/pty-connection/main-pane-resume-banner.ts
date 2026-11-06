@@ -5,7 +5,7 @@ import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state
 import { mainStartsPane } from './main-starts-pane'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
-import type { PtyConnectResult } from '../pty-transport-types'
+import type { PtyConnectResult } from '../pty-transport/pty-transport-types'
 
 type Outcomes = Record<string, TerminalPaneResumeOutcome>
 

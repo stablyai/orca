@@ -47,8 +47,10 @@ vi.mock('@/store', () => ({
     }
   }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({ ensurePtyDispatcher: () => {} }))
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
+  ensurePtyDispatcher: () => {}
+}))
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (id: string, listener: (data: string) => void) => {
     renderer.watchers.set(id, listener)
     return () => renderer.watchers.delete(id)
@@ -509,7 +511,8 @@ describe('a pane that starts its own agent launch', () => {
   ] as const)(
     'settles %s from actual main spawn through renderer connect and owned prompt delivery',
     async (scenario) => {
-      const { connectIpcPty } = await import('@/components/terminal-pane/ipc-pty-connect')
+      const { connectIpcPty } =
+        await import('@/components/terminal-pane/pty-transport/ipc/ipc-pty-connect')
       const { awaitAgentLaunchPaneStart } =
         await import('@/lib/agent-session/launch/pane/agent-launch-pane-start')
       const { noteAgentLaunchPaneClosedByUser } =
