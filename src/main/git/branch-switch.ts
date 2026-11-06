@@ -176,6 +176,7 @@ async function firstHiddenSubmoduleEdit(
 async function readRefusal(
   worktreePath: string,
   branch: string,
+  creating: boolean,
   options: GitRuntimeOptions,
   deps: BranchSwitchDeps
 ): Promise<{ refusal: string | null; previousBranch: string | null }> {
@@ -213,19 +214,21 @@ async function readRefusal(
       'Another git action is still running in this checkout. Try again when it finishes.'
     )
   }
-  if (status.entries.length > 0) {
-    return refuse(changedFilesReason(status))
-  }
-  const hiddenSubmodule = await firstHiddenSubmoduleEdit(worktreePath, options)
-  if (hiddenSubmodule) {
-    return refuse(
-      `Commit, stash or clean the changes inside submodule ${hiddenSubmodule} before switching branches.`
-    )
+  if (!creating) {
+    if (status.entries.length > 0) {
+      return refuse(changedFilesReason(status))
+    }
+    const hiddenSubmodule = await firstHiddenSubmoduleEdit(worktreePath, options)
+    if (hiddenSubmodule) {
+      return refuse(
+        `Commit, stash or clean the changes inside submodule ${hiddenSubmodule} before switching branches.`
+      )
+    }
   }
   return refuse(await deps.getAgentBlocker())
 }
 
-/** Switch an existing local branch in place, refusing when the checkout is not safe to switch. */
+/** Switch or create a branch in place, refusing when the checkout is not safe to switch. */
 export async function switchBranchGuarded(
   worktreePath: string,
   target: string | BranchSwitchTarget,
@@ -238,11 +241,18 @@ export async function switchBranchGuarded(
         ? { branch: target }
         : await resolveBranchSwitchTarget(worktreePath, target, options)
     const { branch } = resolved
-    const { refusal, previousBranch } = await readRefusal(worktreePath, branch, options, deps)
+    const creating = typeof target !== 'string' && target.kind === 'new'
+    const { refusal, previousBranch } = await readRefusal(
+      worktreePath,
+      branch,
+      creating,
+      options,
+      deps
+    )
     if (refusal !== null) {
       throw new BranchSwitchRefusedError(refusal)
     }
-    if (previousBranch === null && !(typeof target !== 'string' && target.kind === 'new')) {
+    if (previousBranch === null && !creating) {
       return { branch, previousBranch }
     }
     let skippedPaths: string[]

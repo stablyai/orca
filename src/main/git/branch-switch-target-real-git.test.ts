@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -104,11 +104,9 @@ it('creates from HEAD without tracking despite autoSetupMerge and an exact remot
 it('refusals leave no new branch or tracking config behind', async () => {
   await remote('origin')
   await writeFile(join(directory, 'draft.txt'), 'draft')
-  await expect(switchTo({ kind: 'new', name: 'draft' })).rejects.toThrow('Commit or discard')
   await expect(switchTo({ kind: 'remote', name: 'origin/topic' })).rejects.toThrow(
     'Commit or discard'
   )
-  await rm(join(directory, 'draft.txt'))
   await expect(
     switchTo({ kind: 'new', name: 'draft' }, 'Codex is working in this workspace.')
   ).rejects.toThrow('Codex')
@@ -116,6 +114,21 @@ it('refusals leave no new branch or tracking config behind', async () => {
     await git('for-each-ref', '--format=%(refname)', 'refs/heads/draft', 'refs/heads/topic')
   ).toBe('')
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('main')
+})
+it('carries uncommitted changes onto a new branch but refuses an existing branch', async () => {
+  const commit = await git('rev-parse', 'HEAD')
+  await git('branch', 'feature')
+  await writeFile(join(directory, 'file.txt'), 'work in progress\n')
+  await writeFile(join(directory, 'draft.txt'), 'draft\n')
+  await expect(switchTo({ kind: 'local', name: 'feature' })).rejects.toThrow('Commit or discard')
+  expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('main')
+  await switchTo({ kind: 'new', name: 'draft' })
+  expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('draft')
+  expect(await git('rev-parse', 'HEAD')).toBe(commit)
+  expect(await git('diff', '--name-only')).toBe('file.txt')
+  expect(await readFile(join(directory, 'file.txt'), 'utf8')).toBe('work in progress\n')
+  expect(await git('ls-files', '--others', '--exclude-standard')).toBe('draft.txt')
+  expect(await readFile(join(directory, 'draft.txt'), 'utf8')).toBe('draft\n')
 })
 it('offers direct local collision recovery without relying on discovery', async () => {
   await git('branch', 'topic')

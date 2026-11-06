@@ -84,6 +84,7 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       key={`${activeWorktree.hostId}:${activeWorktreeId}`}
       branch={branchName}
       blocker={blocker}
+      dirtyOnlyBlocker={showDirtyBlocker}
       agentHint={<BranchAgentHint worktreeId={activeWorktreeId} />}
       context={{
         target: requireGitOwnerTarget(activeRepoTarget),

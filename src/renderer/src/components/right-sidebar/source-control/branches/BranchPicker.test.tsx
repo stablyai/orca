@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type * as BranchClient from '@/runtime/runtime-git-branch-client'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { BranchPicker, type BranchPickerProps } from './BranchPicker'
 import { i18n } from '@/i18n/i18n'
@@ -78,6 +79,7 @@ it('keeps disk blockers authoritative in the UI while agent hints stay advisory'
   const props: BranchPickerProps = {
     branch: 'main',
     blocker: 'Commit or discard 2 changed files before switching.',
+    dirtyOnlyBlocker: true,
     context: { target: { kind: 'local' }, worktreeId: 'repo::/repo', worktreePath: '/repo' },
     repoId: 'repo',
     hostId: 'local',
@@ -131,6 +133,29 @@ it('keeps disk blockers authoritative in the UI while agent hints stay advisory'
   expect(switchRuntimeGitBranch).toHaveBeenLastCalledWith(
     props.context,
     { kind: 'local', name: 'hidden' },
+    'This computer'
+  )
+  await act(async () => root.render(<BranchPicker {...props} />))
+  await act(async () => container.querySelector('button')?.click())
+  const input = container.querySelector('input')
+  if (!input) {
+    throw new Error('Branch search input missing')
+  }
+  await act(async () => fireEvent.change(input, { target: { value: 'draft' } }))
+  const create = Array.from(container.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Create branch draft from main'
+  )
+  expect(create?.disabled).toBe(false)
+  expect(container.textContent).toContain('Commit or discard 2 changed files')
+  await act(async () =>
+    root.render(<BranchPicker {...props} dirtyOnlyBlocker={false} blocker="Finish the merge." />)
+  )
+  expect(create?.disabled).toBe(true)
+  await act(async () => root.render(<BranchPicker {...props} />))
+  await act(async () => create?.click())
+  expect(switchRuntimeGitBranch).toHaveBeenLastCalledWith(
+    props.context,
+    { kind: 'new', name: 'draft' },
     'This computer'
   )
 })

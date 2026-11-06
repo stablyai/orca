@@ -12,9 +12,16 @@ import { useBranchPicker, type BranchPickerOptions } from './use-branch-picker'
 export type BranchPickerProps = BranchPickerOptions & {
   branch: string
   blocker: string | null
+  dirtyOnlyBlocker?: boolean
   agentHint?: ReactNode
 }
-export function BranchPicker({ branch, blocker, agentHint, ...options }: BranchPickerProps) {
+export function BranchPicker({
+  branch,
+  blocker,
+  dirtyOnlyBlocker = false,
+  agentHint,
+  ...options
+}: BranchPickerProps) {
   useUiLanguageRevision()
   const picker = useBranchPicker(options)
   const disabled = blocker !== null || picker.pending
@@ -48,7 +55,7 @@ export function BranchPicker({ branch, blocker, agentHint, ...options }: BranchP
                 branch={branch}
                 openedAt={picker.openedAt}
                 pending={picker.pending}
-                disabled={disabled}
+                disabled={row.target.kind === 'new' && dirtyOnlyBlocker ? picker.pending : disabled}
                 onSelect={picker.select}
               />
             ))}
