@@ -51,11 +51,26 @@ export function exportJournalControlState(
   for (const [key, card] of memoryJournalMap(memory.queue.cards)) {
     sql.queue.cards.set(key, card)
   }
+  for (const [key, entry] of memoryJournalMap(memory.inputEntries)) {
+    sql.inputEntries.set(key, entry)
+  }
+  for (const [key, card] of memoryJournalMap(memory.inputCards)) {
+    sql.inputCards.set(key, card)
+  }
+  for (const [key, source] of memoryJournalMap(memory.inputs.sources)) {
+    sql.inputs.sources.set(key, source)
+  }
   for (const { path, value, container } of journalControlStateEntries(memory)) {
     if (
-      ['state.items', 'state.submissions', 'state.receipts', 'state.queue.cards'].includes(
-        path.join('.')
-      )
+      [
+        'state.items',
+        'state.submissions',
+        'state.receipts',
+        'state.queue.cards',
+        'state.inputEntries',
+        'state.inputCards',
+        'state.inputs.sources'
+      ].includes(path.join('.'))
     ) {
       continue
     }

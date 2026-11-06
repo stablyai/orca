@@ -1,12 +1,6 @@
-import type {
-  AgentJournalAcceptanceReceipt,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation } from './journal-sql-value-codec'
+import { writeJournalSqlInputEntityColumns } from './journal-sql-input-entity-columns'
 
 const INPUT_ENTITIES = {
   submissions: {
@@ -15,7 +9,10 @@ const INPUT_ENTITIES = {
     counter: 'submissions'
   },
   receipts: { table: 'journal_proj_receipts', id: 'client_message_id', counter: 'receipts' },
-  'queue.cards': { table: 'journal_proj_queue_cards', id: 'message_id', counter: 'cards' }
+  'queue.cards': { table: 'journal_proj_queue_cards', id: 'message_id', counter: 'cards' },
+  inputEntries: { table: 'journal_proj_input_entries', id: 'input_id', counter: 'entries' },
+  inputCards: { table: 'journal_proj_lineage_cards', id: 'message_id', counter: 'lineage' },
+  'inputs.sources': { table: 'journal_proj_input_sources', id: 'input_id', counter: 'sources' }
 } as const
 type InputEntity = keyof typeof INPUT_ENTITIES
 
@@ -94,6 +91,13 @@ export class JournalSqlInputEntity {
         SET ${counter}_count=?, ${counter}_ordinal=?, ${counter}_incarnation=?
         WHERE session_id=? AND epoch=?`)
       .run(size, size, size, ...this.scope.prefix)
+    if (this.collection === 'inputEntries') {
+      this.scope.db
+        .prepare(`UPDATE journal_proj_input_entity_counters SET legacy_entries_count=(
+          SELECT COUNT(*) FROM journal_proj_input_entries WHERE session_id=? AND epoch=? AND current=1 AND basis='legacy')
+          WHERE session_id=? AND epoch=?`)
+        .run(...this.scope.prefix, ...this.scope.prefix)
+    }
   }
 
   store(
@@ -104,6 +108,7 @@ export class JournalSqlInputEntity {
     ordinal: number
   ): void {
     if (current) {
+      this.legacyDelta(-1, location.key)
       this.scope.db
         .prepare(`UPDATE ${this.table.table} SET current=0
           WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND current=1`)
@@ -122,77 +127,25 @@ export class JournalSqlInputEntity {
         ordinal,
         json
       )
-    this.columns(location, value)
+    writeJournalSqlInputEntityColumns(this.scope, location, value)
+    this.legacyDelta(1, location.key, location.incarnation)
   }
 
   update(location: JournalSqlValueLocation, json: string, value: unknown): boolean {
+    this.legacyDelta(-1, location.key, location.incarnation)
     const result = this.scope.db
       .prepare(`UPDATE ${this.table.table} SET payload_json=?
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
       .run(json, ...this.scope.prefix, this.id(location.key), location.incarnation)
     if (result.changes) {
-      this.columns(location, value)
+      writeJournalSqlInputEntityColumns(this.scope, location, value)
+      this.legacyDelta(1, location.key, location.incarnation)
     }
     return !!result.changes
   }
 
-  private columns(location: JournalSqlValueLocation, value: unknown): void {
-    if (value === undefined) {
-      return
-    }
-    const key = [...this.scope.prefix, this.id(location.key), location.incarnation]
-    if (this.collection === 'submissions') {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the submission map owns these payloads.
-      const send = value as AgentJournalSubmission
-      this.scope.db
-        .prepare(`UPDATE journal_proj_submissions SET item_key=?, fingerprint=?, submitted_seq=?,
-          submitted_at=?, accepted_seq=?, fence=?, dispatch_state=?, write_failure=?, recovered=?, queued_message_id=?
-          WHERE session_id=? AND epoch=? AND client_message_id=? AND incarnation=?`)
-        .run(
-          JSON.stringify(agentJournalSubmissionKey(send.clientMessageId)),
-          send.payloadFingerprint,
-          send.submittedSequence ?? null,
-          send.submittedAt,
-          send.acceptedSequence ?? null,
-          send.fence,
-          send.dispatchState,
-          Number(isWriteFailureSubmission(send)),
-          Number(!!send.recovered),
-          send.queuedMessageId ?? null,
-          ...key
-        )
-    } else if (this.collection === 'receipts') {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt map owns these payloads.
-      const receipt = value as AgentJournalAcceptanceReceipt
-      this.scope.db
-        .prepare(`UPDATE journal_proj_receipts SET provider_item_id=?, cursor_epoch=?, cursor_seq=?, accepted_at=?
-          WHERE session_id=? AND epoch=? AND client_message_id=? AND incarnation=?`)
-        .run(
-          receipt.providerItemId,
-          receipt.cursor.epoch,
-          receipt.cursor.sequence,
-          receipt.acceptedAt,
-          ...key
-        )
-    } else {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the queue card map owns these payloads.
-      const card = value as QueuedMessageRow
-      this.scope.db
-        .prepare(`UPDATE journal_proj_queue_cards SET position=?, state=?, hold_reason=?, consumed_as=?,
-          queued_epoch=?, queued_seq=? WHERE session_id=? AND epoch=? AND message_id=? AND incarnation=?`)
-        .run(
-          card.position,
-          card.state,
-          card.holdReason,
-          card.consumedAs,
-          card.queuedAt?.epoch ?? null,
-          card.queuedAt?.sequence ?? null,
-          ...key
-        )
-    }
-  }
-
   delete(key: string): void {
+    this.legacyDelta(-1, key)
     this.scope.db
       .prepare(`UPDATE ${this.table.table} SET current=0
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND current=1`)
@@ -204,6 +157,7 @@ export class JournalSqlInputEntity {
   }
 
   remove(location: JournalSqlValueLocation): boolean {
+    this.legacyDelta(-1, location.key, location.incarnation)
     return !!this.scope.db
       .prepare(`DELETE FROM ${this.table.table}
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
@@ -216,5 +170,23 @@ export class JournalSqlInputEntity {
         WHERE session_id=? AND epoch=? AND current=1 ORDER BY ordinal LIMIT ?`)
       .all(...this.scope.prefix, limit)
       .map((row) => JSON.stringify(this.scope.examined(row).id))
+  }
+
+  private legacyDelta(delta: number, key: string, incarnation?: number): void {
+    if (this.collection !== 'inputEntries') {
+      return
+    }
+    this.scope.db
+      .prepare(`UPDATE journal_proj_input_entity_counters SET legacy_entries_count=legacy_entries_count+?
+        WHERE session_id=? AND epoch=? AND EXISTS (SELECT 1 FROM journal_proj_input_entries
+          WHERE session_id=? AND epoch=? AND input_id=? AND current=1 AND basis='legacy'
+          ${incarnation === undefined ? '' : 'AND incarnation=?'})`)
+      .run(
+        delta,
+        ...this.scope.prefix,
+        ...this.scope.prefix,
+        this.id(key),
+        ...(incarnation === undefined ? [] : [incarnation])
+      )
   }
 }

@@ -103,11 +103,13 @@ export function sqlJournalStateQueries(
     legacyInputEntryCount() {
       facts.flush()
       const row = scope.db
-        .prepare(`SELECT COUNT(*) AS count FROM journal_proj_native_entries
-        WHERE session_id=? AND generation=? AND basis='legacy'`)
-        .get(...scope.prefix)!
-      scope.work.rows += Number(row.count)
-      return Number(row.count)
+        .prepare(`SELECT legacy_entries_count FROM journal_proj_input_entity_counters
+        WHERE session_id=? AND epoch=?`)
+        .get(...scope.prefix)
+      if (row) {
+        scope.examined(row)
+      }
+      return Number(row?.legacy_entries_count ?? 0)
     },
     latestAcceptedUnopened(state) {
       facts.flush()

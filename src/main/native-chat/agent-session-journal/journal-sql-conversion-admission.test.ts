@@ -11,12 +11,11 @@ import {
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal } from './journal-open'
-import { JournalOutcomeItemProvenance } from './journal-outcome-item-provenance'
-import { DirectJournalControl } from './journal-sql-direct-control.test-fixture'
-import { stageDirectJournalRecords } from './journal-sql-direct-stage.test-fixture'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { exportJournalControlState } from './journal-sql-control-export'
+import { convertJournalSqlProjection } from './journal-sql-conversion'
+import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './journal-outcome-table'
@@ -30,7 +29,7 @@ import { encodeJournalState } from './journal-state-codec'
 let root: string
 let database: JournalHostDatabase
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-direct-restore-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-conversion-admission-'))
   database = openTestJournalHostDatabase(root)
 })
 afterEach(async () => {
@@ -71,7 +70,7 @@ it.each([
   { name: 'lifecycle', rows: journalSqlLifecycleRows() },
   { name: 'native retry', rows: journalSqlRetryRows(false) },
   { name: 'legacy retry', rows: journalSqlRetryRows(true) }
-])('streams actual outcome restore and its next command: $name', async ({ rows }) => {
+])('converts actual outcome restore and continues its next command: $name', ({ rows }) => {
   const head = rows.slice(0, -1)
   const last = rows.at(-1)!
   database.transaction((db) => {
@@ -79,43 +78,21 @@ it.each([
     publishJournalOutcomeEpoch(db, 'session', 'epoch', head)
   })
   const ordinary = restoreJournal(database.db, 'session')!
-  const provenance = new JournalOutcomeItemProvenance()
-  const loaded = restoreJournal(database.db, 'session', {
-    admitItem: provenance.capture,
-    selection: 'recursive'
-  })!
-  expect(loaded).toMatchObject({ newer: null, damage: null })
-  const encoder = new DirectJournalControl(loaded.state, provenance)
-  await stageDirectJournalRecords(
-    new JournalSqlScope(database.db, 'session', 'direct'),
-    encoder.records(),
-    { maxRows: 2 }
-  )
-  const reducer = (generation: string) =>
-    new JournalSqlReducer(new JournalSqlScope(database.db, 'session', generation), 'epoch')
-  const bulk = reducer('bulk')
-  bulk.context.bulkLoad(() => {
-    exportJournalControlState(ordinary.state, bulk.state, { items: true })
-    bulk.flush()
-  })
-  expect(journalSqlControlSnapshot(reducer('direct').state)).toEqual(
+  database.transaction((db) => convertJournalSqlProjection(db, 'session'))
+  const reducer = () =>
+    new JournalSqlReducer(new JournalSqlScope(database.db, 'session', 'epoch'), 'epoch')
+  expect(journalSqlControlSnapshot(reducer().state)).toEqual(
     journalSqlControlSnapshot(ordinary.state)
   )
-  for (const row of database.db
-    .prepare(`SELECT collection,entry_key FROM journal_proj_values
-    WHERE session_id='session' AND generation='bulk' ORDER BY collection,ordinal`)
-    .all()) {
-    expect(
-      reducer('direct').context.read(String(row.collection), String(row.entry_key)),
-      `${row.collection}:${row.entry_key}`
-    ).toEqual(bulk.context.read(String(row.collection), String(row.entry_key)))
+  for (const [key, value] of memoryJournalMap(ordinary.state.items)) {
+    expect(reducer().state.items.get(key)).toEqual(value)
   }
   const source = journalOutcomeSource(database.db, 'session', 'epoch')!
   database.db
     .prepare(`INSERT INTO journal_outcomes SELECT 1000,seq,field,entry_key,format,ordinal,value_json,deleted
     FROM journal_outcomes WHERE generation=?`)
     .run(source.generation)
-  const finish = (state: typeof loaded.state) => journalInputOrder(state).cards.ensure(state)
+  const finish = (state: typeof ordinary.state) => journalInputOrder(state).cards.ensure(state)
   const expected = persistJournalOutcomeRows(
     database.db,
     ordinary.state,
@@ -127,7 +104,7 @@ it.each([
   )
   persistJournalOutcomeTransition(
     database.db,
-    reducer('direct').transition(),
+    reducer().transition(),
     source,
     [last],
     100,
@@ -140,34 +117,33 @@ it.each([
     FROM journal_outcomes WHERE generation=? AND seq=? ORDER BY field,entry_key`)
       .all(generation, last.seq)
   expect(records(source.generation)).toEqual(records(1000))
-  expect(journalSqlControlSnapshot(reducer('direct').state)).toEqual(
+  expect(journalSqlControlSnapshot(reducer().state)).toEqual(
     journalSqlControlSnapshot(expected.adopt())
   )
 })
 
-it('preserves item and nested aliases across chunks, replacement, deletion and rollback', async () => {
+it('preserves item and nested aliases across export, replacement, deletion and rollback', () => {
   const rows = journalSqlLifecycleRows().slice(0, 8)
   database.transaction((db) => {
     publishTestJournalEpoch(db, 'session', 'epoch')
     publishJournalOutcomeEpoch(db, 'session', 'epoch', rows)
   })
-  const provenance = new JournalOutcomeItemProvenance()
-  const loaded = restoreJournal(database.db, 'session', {
-    admitItem: provenance.capture,
-    selection: 'recursive'
-  })!
+  const loaded = restoreJournal(database.db, 'session')!
   const item = [...memoryJournalMap(loaded.state.items).values()].find(
     (value) => value.body.kind === 'message'
   )!
   loaded.state.itemEchoes.set('shared', { item, body: item.body })
-  const encoder = new DirectJournalControl(loaded.state, provenance)
-  await stageDirectJournalRecords(
-    new JournalSqlScope(database.db, 'session', 'direct'),
-    encoder.records(),
-    { maxRows: 1 }
+  database.db.exec(journalSqlProjectionSchema())
+  const exported = new JournalSqlReducer(
+    new JournalSqlScope(database.db, 'session', 'exported'),
+    'epoch'
   )
+  exported.context.bulkLoad(() => {
+    exportJournalControlState(loaded.state, exported.state, { items: true })
+    exported.flush()
+  })
   const reducer = () =>
-    new JournalSqlReducer(new JournalSqlScope(database.db, 'session', 'direct'), 'epoch')
+    new JournalSqlReducer(new JournalSqlScope(database.db, 'session', 'exported'), 'epoch')
   const alias = (command: JournalSqlReducer) =>
     z
       .custom<{ item: AgentJournalRenderItem; body: AgentJournalRenderItem['body'] }>()

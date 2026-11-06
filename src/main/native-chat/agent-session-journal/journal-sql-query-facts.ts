@@ -5,7 +5,6 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalDispatchRow } from './journal-row-schema'
 import type { JournalInputSource } from './journal-input-source-schema'
-import type { JournalInputEntry } from './journal-input-lineage'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 import { journalSqlEntryKey } from './journal-sql-keyed-values'
 
@@ -26,8 +25,7 @@ export class JournalSqlQueryFacts {
           'inputs.handovers',
           'inputs.rejections',
           'inputs.presentations',
-          'aliases',
-          'inputEntries'
+          'aliases'
         ].includes(collection)
       ) {
         this.pending.set(JSON.stringify([collection, key]), [collection, key])
@@ -57,8 +55,6 @@ export class JournalSqlQueryFacts {
         this.candidate(key)
       } else if (collection === 'aliases') {
         this.alias(key)
-      } else {
-        this.nativeEntry(key)
       }
     }
   }
@@ -164,23 +160,5 @@ export class JournalSqlQueryFacts {
         journalSqlEntryKey(value),
         Number(context.header('aliases', key)?.ordinal)
       )
-  }
-
-  private nativeEntry(key: string): void {
-    const { context } = this
-    const { scope } = context
-    const entry = context.read<JournalInputEntry>('inputEntries', key, false)
-    if (!entry) {
-      scope.db
-        .prepare(`DELETE FROM journal_proj_native_entries
-        WHERE session_id=? AND generation=? AND entry_key=?`)
-        .run(...scope.prefix, key)
-      return
-    }
-    scope.db
-      .prepare(`INSERT INTO journal_proj_native_entries
-      (session_id, generation, entry_key, basis) VALUES (?, ?, ?, ?)
-      ON CONFLICT(session_id, generation, entry_key) DO UPDATE SET basis=excluded.basis`)
-      .run(...scope.prefix, key, entry.context.basis)
   }
 }

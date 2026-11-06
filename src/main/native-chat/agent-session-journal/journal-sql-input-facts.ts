@@ -9,7 +9,7 @@ import type {
   JournalInputLineageFacts
 } from './journal-input-facts-storage'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
-import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
+import type { JournalInputCard } from './journal-input-lineage'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import {
   JournalSqlKeyedMap,
@@ -280,18 +280,20 @@ export function sqlJournalInputLineageFacts(
   const facts: Omit<JournalInputLineageFacts, 'base' | 'clock'> = {
     cards,
     // Callers: epoch publish over its new generation's rows; actual opens restore in memory.
-    frontier(entries: JournalKeyedMap<string, JournalInputEntry>) {
-      let frontier = 0
-      for (const entry of journalSqlOrderedValues<JournalInputEntry>(
-        context,
-        sqlCollection(entries)
-      )) {
-        frontier = Math.max(frontier, entry.context.cut)
-      }
-      for (const card of journalSqlOrderedValues<JournalInputCard>(context, sqlCollection(cards))) {
-        frontier = Math.max(frontier, card.introduced)
-      }
-      return frontier
+    frontier() {
+      context.flush()
+      const { scope } = context
+      const entry = scope.db
+        .prepare(`SELECT MAX(cut) AS frontier FROM journal_proj_input_entries
+          WHERE session_id=? AND epoch=? AND current=1`)
+        .get(...scope.prefix)!
+      const card = scope.db
+        .prepare(`SELECT MAX(introduced) AS frontier FROM journal_proj_lineage_cards
+          WHERE session_id=? AND epoch=? AND current=1`)
+        .get(...scope.prefix)!
+      scope.examined(entry)
+      scope.examined(card)
+      return Math.max(Number(entry.frontier ?? 0), Number(card.frontier ?? 0))
     },
     // Lineage cards exist only while legacy places did; the walk deletes or trims each.
     cardsForRelease: () => orderedEntries<string, JournalInputCard>(context, sqlCollection(cards))

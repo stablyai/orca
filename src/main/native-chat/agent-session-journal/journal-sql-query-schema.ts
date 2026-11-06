@@ -24,14 +24,5 @@ CREATE TABLE IF NOT EXISTS journal_proj_aliases (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_aliases_target
   ON journal_proj_aliases(session_id, generation, target_key, ordinal);
-CREATE TABLE IF NOT EXISTS journal_proj_native_entries (
-  session_id TEXT NOT NULL,
-  generation TEXT NOT NULL,
-  entry_key TEXT NOT NULL,
-  basis TEXT NOT NULL,
-  PRIMARY KEY (session_id, generation, entry_key)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS journal_proj_native_entries_basis
-  ON journal_proj_native_entries(session_id, generation, basis);
 `
 }

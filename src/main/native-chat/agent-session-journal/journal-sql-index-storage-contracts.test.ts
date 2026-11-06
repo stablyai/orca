@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import Database from '../../sqlite/sync-database'
 import type { JournalIndexStorageFactory } from './journal-index-storage'
-import type { JournalInputCard } from './journal-input-lineage'
+import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 import { memoryJournalStateQueries } from './journal-memory-state-queries'
 import { journalSqlIndexSchema } from './journal-sql-index-schema'
@@ -172,13 +172,14 @@ it('compares pause keys by stored value and keeps per-open lineage facts', () =>
   cards.initialized = true
   cards.replaceClearMembers(['m1', 'm2'])
   const lineageCards = c.storage.map<string, JournalInputCard>('inputCards')
-  const entries = c.storage.map<string, { context: { cut: number } }>('inputEntries')
+  const entries = c.storage.map<string, JournalInputEntry>('inputEntries')
   lineageCards.set('card-1', { introduced: 9, baseline: { coordinate: null } })
   lineageCards.set('card-2', { introduced: 3 })
-  entries.set('send-1', { context: { cut: 11 } })
+  entries.set('send-1', {
+    context: { cut: 11, basis: 'observed', source: { epoch: 'epoch', sequence: 1 } }
+  })
   let lineage = c.storage.lineageFacts(lineageCards)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: frontier reads only context.cut.
-  expect(lineage.frontier(entries as never)).toBe(11)
+  expect(lineage.frontier(entries)).toBe(11)
   lineage.base = 5
   c.finish()
 

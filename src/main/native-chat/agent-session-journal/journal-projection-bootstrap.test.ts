@@ -21,21 +21,10 @@ import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { JournalOutcomeItemProvenance } from './journal-outcome-item-provenance'
 import { decodeJournalOutcomeItem } from './journal-outcome-codec'
 import { encodeJournalState } from './journal-state-codec'
-import { DirectJournalControl } from './journal-sql-direct-control.test-fixture'
-import {
-  stageDirectJournalRecords,
-  stageJournalProjectionRecords
-} from './journal-sql-direct-stage.test-fixture'
-import {
-  CompactJournalItems,
-  compactJournalItemColumns,
-  createCompactJournalItemSchema,
-  readCompactJournalItems
-} from './journal-sql-compact-items.test-fixture'
+import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
-import { exportJournalControlState } from './journal-sql-control-export'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import {
   projectionBase as base,
@@ -310,59 +299,16 @@ it.each(['raw', 'prefix', 'marker5', 'outcome'] as const)(
     })!
     expect(tracked).toMatchObject({ newer: null, damage: null })
     expect(encodeJournalState(tracked.state)).toEqual(encodeJournalState(ordinary.state))
-    const compactScope = new JournalSqlScope(database.db, sessionId, 'compact')
-    createCompactJournalItemSchema(compactScope)
-    await stageJournalProjectionRecords(
-      compactScope,
-      new CompactJournalItems(tracked.state, provenance).records(),
-      compactJournalItemColumns,
-      { maxRows: 2 }
-    )
-    expect([...readCompactJournalItems(compactScope)]).toEqual([
-      ...memoryJournalMap(ordinary.state.items)
-    ])
-    const plainEncoder = new CompactJournalItems(tracked.state, provenance, { diagnostics: false })
-    expect([...plainEncoder.records()]).toEqual([
-      ...new CompactJournalItems(tracked.state, provenance).records()
-    ])
-    const plainScope = new JournalSqlScope(database.db, sessionId, 'compact-plain')
-    await stageJournalProjectionRecords(
-      plainScope,
-      plainEncoder.records(),
-      compactJournalItemColumns,
-      { maxRows: 2, diagnostics: false }
-    )
-    expect([...readCompactJournalItems(plainScope)]).toEqual([
-      ...readCompactJournalItems(compactScope)
-    ])
-    const direct = new DirectJournalControl(tracked.state, provenance)
-    await stageDirectJournalRecords(
-      new JournalSqlScope(database.db, sessionId, 'direct'),
-      direct.records(),
-      { maxRows: 2 }
-    )
-    const stage = new JournalSqlReducer(
-      new JournalSqlScope(database.db, sessionId, 'direct'),
+    database.transaction((db) => convertJournalSqlProjection(db, sessionId))
+    const converted = new JournalSqlReducer(
+      new JournalSqlScope(database.db, sessionId, epoch),
       epoch
     )
-    const bulk = new JournalSqlReducer(new JournalSqlScope(database.db, sessionId, 'bulk'), epoch)
-    bulk.context.bulkLoad(() => {
-      exportJournalControlState(ordinary.state, bulk.state, { items: true })
-      bulk.flush()
-    })
-    expect(journalSqlControlSnapshot(stage.state)).toEqual(
+    expect(journalSqlControlSnapshot(converted.state)).toEqual(
       journalSqlControlSnapshot(ordinary.state)
     )
-    // Materialize every stored value through the real incarnation/reference/item reader.
-    for (const row of database.db
-      .prepare(`SELECT collection,entry_key FROM journal_proj_values
-      WHERE session_id=? AND generation='bulk' ORDER BY collection,ordinal`)
-      .all(sessionId)) {
-      const collection = String(row.collection)
-      const key = String(row.entry_key)
-      expect(stage.context.read(collection, key), `${collection}:${key}`).toEqual(
-        bulk.context.read(collection, key)
-      )
+    for (const [key, value] of memoryJournalMap(ordinary.state.items)) {
+      expect(converted.state.items.get(key)).toEqual(value)
     }
     let qualified = 0
     for (const [id, value] of memoryJournalMap(tracked.state.items)) {
