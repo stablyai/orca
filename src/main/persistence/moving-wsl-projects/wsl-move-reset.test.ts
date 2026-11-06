@@ -115,6 +115,10 @@ function host(
       },
       stageChunk: async () => {
         throw new Error('not used')
+      },
+      readCapabilities: async () => [],
+      stageBlobChunk: async () => {
+        throw new Error('not used')
       }
     }
   }

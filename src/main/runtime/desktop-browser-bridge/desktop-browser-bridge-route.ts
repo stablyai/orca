@@ -9,7 +9,7 @@ import {
 import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../../shared/browser/client-hosting/browser-expected-url'
 import { browserWaitRequestTimeoutMs } from '../../../shared/browser-wait-timeout'
 import type { RpcCallerIdentity } from '../rpc/rpc-caller-identity'
-import { assertClientOpenableUrl } from '../browser/browser-client-page-opening'
+import { assertClientOpenableUrl } from '../browser/client-pages/browser-client-page-opening'
 import type { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-registry'
 
 export type DesktopBrowserBridgeRoute = { handled: false } | { handled: true; result: unknown }

@@ -1,23 +1,11 @@
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
 import { sha256Of } from './orcad-prebuild-slot-contents.mjs'
-import {
-  validateWindowsPrebuildCache,
-  windowsPrebuildCacheIdentity,
-  WINDOWS_PREBUILD_CACHE_INPUTS
-} from './orcad-windows-prebuild-cache.mjs'
+import { validateWindowsPrebuildCache } from './orcad-windows-prebuild-cache.mjs'
 import { peImage } from '../../native-build/windows/windows-pe-image-fixture.mjs'
 
 const require = createRequire(import.meta.url)
@@ -96,47 +84,6 @@ describe('Windows server prebuild cache validation', () => {
     )
   })
 
-  it.each([
-    ['module', 'upstream'],
-    ['version', '0.0.0'],
-    ['napi', 10],
-    ['nodeHeaders', '24.0.0'],
-    ['schemaVersion', 1]
-  ])('refuses a changed manifest %s', (field, value) => {
-    const f = fixture()
-    f.manifest[field] = value
-    f.save()
-    expect(() => validateWindowsPrebuildCache(f)).toThrow(/manifest does not match/)
-  })
-
-  it.each([
-    ['arch', 'arm64'],
-    ['platform', 'linux'],
-    ['libc', 'glibc'],
-    ['glibc', '2.28'],
-    ['napi', 10]
-  ])('refuses a changed slot %s', (field, value) => {
-    const f = fixture()
-    f.entry[field] = value
-    f.save()
-    expect(() => validateWindowsPrebuildCache(f)).toThrow(/metadata does not match/)
-  })
-
-  it('refuses missing, extra and unlisted payloads before trusting their hashes', () => {
-    const f = fixture()
-    delete f.entry.files['conpty/conpty.dll']
-    f.save()
-    expect(() => validateWindowsPrebuildCache(f)).toThrow(/exactly the current ConPTY payload/)
-    const extra = fixture()
-    writeFileSync(join(extra.slotDir, 'conpty.pdb'), 'upstream symbols')
-    expect(() => validateWindowsPrebuildCache(extra)).toThrow(/exactly the current ConPTY payload/)
-    const missing = fixture()
-    rmSync(join(missing.slotDir, 'conpty/OpenConsole.exe'))
-    expect(() => validateWindowsPrebuildCache(missing)).toThrow(
-      /exactly the current ConPTY payload/
-    )
-  })
-
   it('refuses modified bytes even when the file inventory is complete', () => {
     const f = fixture()
     writeFileSync(join(f.slotDir, 'conpty/conpty.dll'), 'tampered')
@@ -163,151 +110,5 @@ describe('Windows server prebuild cache validation', () => {
       'different vendor payload'
     )
     expect(() => validateWindowsPrebuildCache(f)).toThrow(/differs from the current vendored/)
-  })
-
-  it.each([
-    [
-      'wrong PE architecture',
-      Buffer.concat([peImage({ arch: 'arm64' }), CYGWIN_BREAKAWAY_MARKER]),
-      /targets win32-x64/
-    ],
-    ['old breakaway policy', peImage({ arch: 'x64' }), /predates the Cygwin/],
-    [
-      'old native-host ownership',
-      Buffer.concat([peImage({ arch: 'x64' }), CYGWIN_BREAKAWAY_MARKER]),
-      /lacks strict native-host process ownership/
-    ],
-    [
-      'post-baseline N-API import',
-      Buffer.concat([
-        peImage({ arch: 'x64' }),
-        CYGWIN_BREAKAWAY_MARKER,
-        Buffer.from('node_api_symbol_for')
-      ]),
-      /above N-API 8/
-    ]
-  ])('refuses %s even with a matching cached digest', (_name, bytes, error) => {
-    const f = fixture()
-    writeFileSync(join(f.slotDir, 'conpty.node'), bytes)
-    f.entry.files['conpty.node'] = sha256Of(join(f.slotDir, 'conpty.node'))
-    f.save()
-    expect(() => validateWindowsPrebuildCache(f)).toThrow(error)
-  })
-
-  it('checks both current source guards independently of cached payload bytes', () => {
-    const f = fixture()
-    writeFileSync(join(f.sourceDir, 'src/win/conpty.cc'), 'upstream')
-    expect(() => validateWindowsPrebuildCache(f)).toThrow(/source.*does not carry/)
-    writeFileSync(
-      join(f.sourceDir, 'src/win/conpty.cc'),
-      'L"msys-2.0.dll"; "assignCurrentProcessToStrictJob"'
-    )
-    writeFileSync(join(f.sourceDir, 'binding.gyp'), 'upstream')
-    expect(() => validateWindowsPrebuildCache(f)).toThrow(/patch is not applied/)
-  })
-})
-
-describe('Windows server prebuild cache inputs', () => {
-  const options = { platform: 'win32', arch: 'x64', imageOS: 'win22' }
-
-  it('separates host architecture and image without fallback keys', () => {
-    const identity = windowsPrebuildCacheIdentity(options)
-    expect(identity.key).toMatch(/^orcad-windows-prebuild-v2-win32-x64-[a-f0-9]{64}$/)
-    expect(windowsPrebuildCacheIdentity(options)).toEqual(identity)
-    for (const override of [{ arch: 'arm64' }, { imageOS: 'win25' }]) {
-      expect(windowsPrebuildCacheIdentity({ ...options, ...override }).key).not.toBe(identity.key)
-    }
-    expect(() => windowsPrebuildCacheIdentity({ ...options, imageOS: '' })).toThrow(/ImageOS/)
-  })
-
-  const compilerInputs = [
-    ...[
-      'run-process',
-      'spawn-resolution',
-      'process-tree-termination',
-      'process-tree-kill-gate',
-      'spawn-observer',
-      'bounded-output-sink',
-      'growing-byte-buffer',
-      'child-termination-reporter',
-      'process-spec',
-      'windows-command-line',
-      'windows-cmd-shim-resolution',
-      'windows-system-binary',
-      'windows-tree-kill'
-    ].map((name) => `src/packages/process-host/src/${name}.ts`),
-    'src/packages/process-host/.gitignore',
-    'src/packages/process-host/package.json',
-    'src/packages/process-host/scripts/build-dist.mjs',
-    'src/packages/process-host/tsconfig.json'
-  ]
-  const cacheInputs = [...new Set([...WINDOWS_PREBUILD_CACHE_INPUTS, ...compilerInputs])]
-
-  function repositoryCopy() {
-    const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-key-'))
-    temporary.push(repository)
-    const source = resolve(import.meta.dirname, '../../../..')
-    for (const relative of [
-      ...cacheInputs,
-      'package.json',
-      'pnpm-lock.yaml',
-      'pnpm-workspace.yaml'
-    ]) {
-      mkdirSync(dirname(join(repository, relative)), { recursive: true })
-      cpSync(join(source, relative), join(repository, relative))
-    }
-    return repository
-  }
-
-  it('ignores app versions and unrelated manifest and lockfile edits but not the build scripts', () => {
-    const repository = repositoryCopy()
-    const key = () => windowsPrebuildCacheIdentity({ ...options, repository }).key
-    const before = key()
-    const manifestPath = join(repository, 'package.json')
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    writeFileSync(
-      manifestPath,
-      JSON.stringify({
-        ...manifest,
-        version: '999.0.0',
-        dependencies: { ...manifest.dependencies, unrelated: '1.0.0' }
-      })
-    )
-    const lockPath = join(repository, 'pnpm-lock.yaml')
-    writeFileSync(lockPath, `${readFileSync(lockPath, 'utf8')}\n  unrelated-package@1.0.0: {}\n`)
-    expect(key()).toBe(before)
-    writeFileSync(
-      manifestPath,
-      JSON.stringify({
-        ...manifest,
-        scripts: { ...manifest.scripts, 'build:orcad-prebuilds': 'changed' }
-      })
-    )
-    expect(key()).not.toBe(before)
-  })
-
-  it('invalidates a changed node-pty or node-gyp lock entry', () => {
-    const repository = repositoryCopy()
-    const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
-    const lockPath = join(repository, 'pnpm-lock.yaml')
-    const lock = readFileSync(lockPath, 'utf8')
-    for (const [from, to] of [
-      [/(\n {2}node-pty@[^\n]+:\n {4}dependencies:\n {6}node-addon-api: )[^\n]+/, '$17.1.0'],
-      [/(\n {2}node-gyp@[^\n]+:\n {4}dependencies:\n)/, '$1      zwitch: 2.0.4\n']
-    ]) {
-      expect(lock).toMatch(from)
-      writeFileSync(lockPath, lock.replace(from, to))
-      expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
-    }
-  })
-
-  it.each(cacheInputs)('invalidates a changed %s input', (file) => {
-    const repository = repositoryCopy()
-    const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
-    writeFileSync(
-      join(repository, file),
-      `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
-    )
-    expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
   })
 })

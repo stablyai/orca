@@ -12,9 +12,10 @@ const entryPath = join(repoRoot, 'out', 'main', 'daemon-entry.js')
 
 // Read incumbent exit code from source; launcher adoption depends on this exact value.
 const DAEMON_EXIT_ENDPOINT_OCCUPIED = Number(
-  readFileSync(join(repoRoot, 'src/main/daemon/daemon-endpoint-ownership.ts'), 'utf8').match(
-    /DAEMON_EXIT_ENDPOINT_OCCUPIED = (\d+)/
-  )?.[1]
+  readFileSync(
+    join(repoRoot, 'src/main/daemon/endpoint/publication/daemon-endpoint-ownership.ts'),
+    'utf8'
+  ).match(/DAEMON_EXIT_ENDPOINT_OCCUPIED = (\d+)/)?.[1]
 )
 const READY_TIMEOUT_MS = 20_000
 const EXIT_TIMEOUT_MS = 15_000
@@ -23,7 +24,10 @@ const REACHABILITY_TIMEOUT_MS = 2_000
 const log = (msg) => console.log(`[endpoint-handover-smoke] ${msg}`)
 
 function readProtocolVersion() {
-  const source = readFileSync(join(repoRoot, 'src/main/daemon/daemon-protocol-version.ts'), 'utf8')
+  const source = readFileSync(
+    join(repoRoot, 'src/main/daemon/protocol/daemon-protocol-version.ts'),
+    'utf8'
+  )
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {
     throw new Error('could not read daemon protocol version')

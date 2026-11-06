@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   applyAgentStatusHooksEnabledMock,
-  electronMocks
-} from '../orca-runtime-test-mocks.spec'
-import { deferred, store } from '../orca-runtime-test-fixtures.spec'
-import { RuntimeClientSettingsController } from '../runtime-client-settings'
-import { reconcileClaudeAgentViewMock } from '../orca-runtime-test-mocks/setup.spec'
+  electronMocks,
+  reconcileClaudeAgentViewMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { deferred, store } from './orca-runtime-test-fixtures.spec'
+import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 
 describe('OrcaRuntimeService', () => {
   it.each([true, false])(

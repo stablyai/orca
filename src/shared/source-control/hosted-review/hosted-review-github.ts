@@ -1,8 +1,9 @@
+import { projectPRCheckOwner } from '../../github/complete-pr-check-owner'
 import type { HostedReviewInfo } from './hosted-review-contracts'
 import type { PRInfo } from '../../github/pull-request-types'
 
 export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
-  return {
+  const review: HostedReviewInfo = {
     provider: 'github',
     number: pr.number,
     title: pr.title,
@@ -24,4 +25,5 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
       : {}),
     ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
   }
+  return projectPRCheckOwner(pr, review)
 }

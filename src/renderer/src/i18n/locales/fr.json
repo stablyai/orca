@@ -17100,6 +17100,8 @@
               "25349b66fc": "Nouveau fichier markdown",
               "784812ca24": "Ouvrir un onglet de navigateur dans l'espace de travail actif.",
               "892bfa9339": "Nouvel onglet de navigateur",
+              "splitChatRight": "Diviser le chat à droite",
+              "splitChatDown": "Diviser la discussion",
               "verbs": {
                 "newBrowser": "nouveau navigateur",
                 "newBrowserTab": "nouvel onglet de navigateur",
@@ -17113,6 +17115,10 @@
                 "newTerminal": "nouveau terminal",
                 "newTerminalTab": "nouvel onglet de terminal",
                 "newShell": "nouveau shell",
+                "splitChatRight": "diviser le chat à droite",
+                "splitChatDown": "diviser la discussion",
+                "chatPaneRight": "volet de discussion à droite",
+                "chatPaneBelow": "volet de discussion ci-dessous",
                 "terminalTab": "onglet de terminal",
                 "createWorktree": "créer un worktree",
                 "addWorktree": "ajouter un worktree",
@@ -17122,18 +17128,8 @@
                 "removeWorktree": "retirer le worktree",
                 "trashWorktree": "mettre le worktree à la corbeille",
                 "addQuickCommand": "ajouter une commande rapide",
-                "newQuickCommand": "nouvelle commande rapide",
-                "splitChatRight": "diviser le chat à droite",
-                "newChatRight": "nouveau chat à droite",
-                "chatPaneRight": "volet de discussion à droite",
-                "splitChatDown": "diviser la discussion",
-                "newChatBelow": "nouveau chat en bas",
-                "chatPaneBelow": "volet de discussion ci-dessous"
-              },
-              "splitChatRight": "Diviser le chat à droite",
-              "splitChatRightDescription": "Ouvrez un nouveau chat dans un volet divisé à droite.",
-              "splitChatDown": "Diviser la discussion",
-              "splitChatDownDescription": "Ouvrez un nouveau chat dans un volet divisé ci-dessous."
+                "newQuickCommand": "nouvelle commande rapide"
+              }
             }
           },
           "palette": {

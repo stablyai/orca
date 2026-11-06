@@ -38,7 +38,7 @@ const watchdog = setTimeout(() => {
 try {
   const probeModule = join(dir, 'probe.mjs')
   await build({
-    entryPoints: [resolve('src/main/daemon/daemon-async-io-probe.ts')],
+    entryPoints: [resolve('src/main/daemon/health/daemon-async-io-probe.ts')],
     bundle: true,
     platform: 'node',
     format: 'esm',

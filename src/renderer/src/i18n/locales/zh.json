@@ -16468,6 +16468,8 @@
               "25349b66fc": "新的 Markdown 文件",
               "784812ca24": "在活动工作区中打开浏览器选项卡。",
               "892bfa9339": "新浏览器选项卡",
+              "splitChatRight": "右侧拆分聊天",
+              "splitChatDown": "拆分聊天",
               "verbs": {
                 "newBrowser": "新浏览器",
                 "newBrowserTab": "新的浏览器页",
@@ -16481,6 +16483,10 @@
                 "newTerminal": "新终端",
                 "newTerminalTab": "新的终端选项卡",
                 "newShell": "新shell",
+                "splitChatRight": "拆分聊天权限",
+                "splitChatDown": "拆分聊天",
+                "chatPaneRight": "聊天窗格右侧",
+                "chatPaneBelow": "下面的聊天窗格",
                 "terminalTab": "终端选项卡",
                 "createWorktree": "创建工作树",
                 "addWorktree": "添加工作树",
@@ -16490,18 +16496,8 @@
                 "removeWorktree": "删除工作树",
                 "trashWorktree": "垃圾工作树",
                 "addQuickCommand": "添加快捷命令",
-                "newQuickCommand": "新的快捷命令",
-                "splitChatRight": "拆分聊天权限",
-                "newChatRight": "在右侧新建聊天",
-                "chatPaneRight": "聊天窗格右侧",
-                "splitChatDown": "拆分聊天",
-                "newChatBelow": "在下方新建聊天",
-                "chatPaneBelow": "下面的聊天窗格"
-              },
-              "splitChatRight": "右侧拆分聊天",
-              "splitChatRightDescription": "在右侧的拆分窗格中打开新聊天。",
-              "splitChatDown": "拆分聊天",
-              "splitChatDownDescription": "在下面的拆分窗格中打开新聊天。"
+                "newQuickCommand": "新的快捷命令"
+              }
             }
           },
           "palette": {

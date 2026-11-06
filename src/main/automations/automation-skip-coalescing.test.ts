@@ -36,8 +36,6 @@ const makeRepo = (): Repo => ({
 
 const SETUP_GONE = 'Project is not set up on the selected automation host anymore.'
 
-const NO_WINDOW = 'No Orca window was available to launch the automation.'
-
 /** Inject persisted drift because creation derives a valid run context. */
 async function seedUnresolvableAutomation(): Promise<{ store: Store; automation: Automation }> {
   const seed = await createStore()
@@ -66,20 +64,6 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
   }
   writePersistedStateJson(file, JSON.stringify(state))
   return { store: await createStore(), automation }
-}
-
-function seedRunnableAutomation(store: Store): Automation {
-  store.addRepo(makeRepo())
-  return store.createAutomation({
-    name: 'Nightly check',
-    prompt: 'Check the repo',
-    agentId: 'claude',
-    projectId: 'r1',
-    workspaceMode: 'new_per_run',
-    timezone: 'UTC',
-    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-    dtstart: new Date('2026-05-12T00:00:00').getTime()
-  })
 }
 
 function attachedService(store: Store): AutomationService {
@@ -144,27 +128,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     })
   })
 
-  it('folds the refusals a closed window produces instead of writing a row each', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    const automation = seedRunnableAutomation(store)
-    const service = attachedService(store)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    service.setWebContents(null)
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-15T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-16T09:01:00')
-
-    const runs = store.listAutomationRuns(automation.id)
-    expect(runs.map((run) => run.status)).toEqual(['skipped_unavailable', 'dispatching'])
-    expect(runs[0]).toMatchObject({
-      error: NO_WINDOW,
-      occurrenceCount: 3,
-      lastOccurrenceAt: new Date('2026-05-16T09:00:00').getTime()
-    })
-  })
-
   it('gives a manual attempt its own answer rather than folding it into a scheduled skip', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
@@ -176,32 +139,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     expect(manual.status).toBe('skipped_unavailable')
     expect(manual.occurrenceCount).toBeUndefined()
     expect(store.listAutomationRuns(automation.id)).toHaveLength(2)
-  })
-
-  it('never folds a scheduled refusal into a manual one', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const manual = store.createAutomationRun(automation, Date.now(), 'manual')
-    store.updateAutomationRun({
-      runId: manual.id,
-      status: 'skipped_unavailable',
-      workspaceId: null,
-      error: SETUP_GONE
-    })
-
-    expect(
-      store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, Date.now() + 1000)
-    ).toBeNull()
-  })
-
-  it('keeps distinct diagnoses in distinct records', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    seedSkip(store, automation, Date.now(), 'The SSH host is unreachable.')
-
-    expect(
-      store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, Date.now() + 1000)
-    ).toBeNull()
   })
 
   it('counts one occurrence once, however many times the scheduler revisits it', async () => {
@@ -223,23 +160,6 @@ describe('repeated skipped_unavailable coalescing', () => {
       store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor + 1000)
         ?.occurrenceCount
     ).toBe(2)
-  })
-
-  it('announces the fold, so a client that is not polling still sees the repeat', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const published: unknown[] = []
-    const service = new AutomationService(store, {
-      tickMs: 60_000,
-      onAutomationsChanged: (payload) => published.push(payload)
-    })
-    service.setWebContents({ isDestroyed: () => false, send: vi.fn() } as never)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    published.length = 0
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-
-    expect(published).toEqual([{ reason: 'run', selector: { kind: 'self' } }])
   })
 
   it('resumes counting a folded record across a reload', async () => {

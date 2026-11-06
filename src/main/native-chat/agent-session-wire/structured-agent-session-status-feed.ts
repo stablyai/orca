@@ -212,7 +212,7 @@ export class StructuredAgentSessionStatusFeed {
     const reportOnly = !inputChanged && permissionReportOnly(previous, summary)
     if (!summaryChanged && !inputChanged) {
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, session.params.location)
+        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
       }
       return
     }
@@ -222,7 +222,7 @@ export class StructuredAgentSessionStatusFeed {
     })
     if (summaryChanged) {
       if (!reportOnly || !this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, session.params.location)
+        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
       }
       this.broadcast({ type: 'status', session: summary })
     }

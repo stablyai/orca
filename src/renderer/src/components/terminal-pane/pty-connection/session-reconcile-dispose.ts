@@ -249,6 +249,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         session.agentTaskCompleteSettingsUnsubscribe()
         session.agentTaskCompleteSettingsUnsubscribe = null
       }
+      session.windowsPtyModel.dispose()
       if (session.unsubscribeWindowsDoneTerminalModeReset !== null) {
         session.unsubscribeWindowsDoneTerminalModeReset()
         session.unsubscribeWindowsDoneTerminalModeReset = null

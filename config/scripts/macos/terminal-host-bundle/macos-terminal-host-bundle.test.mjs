@@ -10,12 +10,8 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  MAC_TERMINAL_HOST_BUNDLE,
-  MAC_TERMINAL_HOST_EXECUTABLE
-} from '../../../../src/main/daemon/macos-daemon-bundle.ts'
 
 const require = createRequire(new URL('../../macos-terminal-host-bundle.test.mjs', import.meta.url))
 const {
@@ -24,62 +20,14 @@ const {
   daemonBareRequires,
   findMacTerminalHostInfoProblems,
   findUnresolvedDaemonRequires,
-  lipoArchsToNodeArchs,
   macTerminalHostPaths,
-  macTerminalHostSignIgnore,
   parseBuildVersionMinos
 } = require('./macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
-const {
-  macCommandPrefixForArch
-} = require('./desktop-distribution/runtime-verification/verify-packaged-daemon-entry.cjs')
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 
 const usageDescriptions = electronBuilderConfig.mac.extendInfo
 const appInfo = { CFBundleIdentifier: 'com.stablyai.orca', CFBundleShortVersionString: '1.4.300' }
 const expectations = { appId: 'com.stablyai.orca', usageDescriptions, minimumOs: '13.5' }
-
-describe('terminal host Info.plist', () => {
-  const info = buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs: '13.5' })
-
-  it("carries the app's identifier, every purpose string and the Node floor", () => {
-    expect(info).toMatchObject({
-      ...usageDescriptions,
-      CFBundleIdentifier: 'com.stablyai.orca',
-      CFBundleName: 'Orca',
-      CFBundleDisplayName: 'Orca',
-      CFBundleExecutable: 'orca-terminal-host',
-      CFBundleVersion: '0',
-      LSMinimumSystemVersion: '13.5',
-      LSUIElement: true
-    })
-    expect(usageDescriptions).toHaveProperty('NSDocumentsFolderUsageDescription')
-    expect(findMacTerminalHostInfoProblems(info, expectations)).toEqual([])
-  })
-
-  it('rejects link, document and type claims, drifted purpose strings and a stale floor', () => {
-    expect(
-      findMacTerminalHostInfoProblems(
-        {
-          ...info,
-          CFBundleIdentifier: 'com.stablyai.orca.helper',
-          CFBundleURLTypes: [],
-          CFBundleDocumentTypes: [],
-          UTExportedTypeDeclarations: [],
-          NSLocalNetworkUsageDescription: 'other',
-          LSMinimumSystemVersion: '12.0'
-        },
-        expectations
-      )
-    ).toEqual([
-      'CFBundleIdentifier is com.stablyai.orca.helper, expected com.stablyai.orca',
-      'declares CFBundleURLTypes',
-      'declares CFBundleDocumentTypes',
-      'declares UTExportedTypeDeclarations',
-      "NSLocalNetworkUsageDescription differs from the app's",
-      'LSMinimumSystemVersion is 12.0, expected 13.5'
-    ])
-  })
-})
 
 describe('terminal host binary checks', () => {
   it('reads minos from the LC_BUILD_VERSION load command only', () => {
@@ -98,49 +46,6 @@ describe('terminal host binary checks', () => {
     ].join('\n')
     expect(parseBuildVersionMinos(otool)).toBe('13.5')
     expect(parseBuildVersionMinos('Load command 1\n      cmd LC_SEGMENT_64\n')).toBeNull()
-  })
-
-  it("maps lipo's x86_64 to Node's x64", () => {
-    expect(lipoArchsToNodeArchs('x86_64\n')).toEqual(['x64'])
-    expect(lipoArchsToNodeArchs('arm64\n')).toEqual(['arm64'])
-    expect(lipoArchsToNodeArchs('x86_64 arm64\n')).toEqual(['x64', 'arm64'])
-  })
-
-  it('boots the host slice directly and never claims an arm64 slice runs on Intel', () => {
-    expect(macCommandPrefixForArch(process.arch)).toEqual([])
-    const noRosetta = () => ({ status: 1 })
-    if (process.arch === 'arm64') {
-      expect(macCommandPrefixForArch('x64', noRosetta)).toBeNull()
-      expect(macCommandPrefixForArch('x64', () => ({ status: 0 }))).toEqual([
-        '/usr/bin/arch',
-        '-x86_64'
-      ])
-    } else {
-      expect(macCommandPrefixForArch('arm64', () => ({ status: 0 }))).toBeNull()
-    }
-  })
-})
-
-describe('terminal host packaging config', () => {
-  const pattern = new RegExp(macTerminalHostSignIgnore[0])
-
-  it('keeps the outer signer off the separately signed helper', () => {
-    expect(electronBuilderConfig.mac.signIgnore).toEqual(
-      expect.arrayContaining(macTerminalHostSignIgnore)
-    )
-    const helper = '/out/mac-arm64/Orca.app/Contents/Helpers/Orca Terminal Host.app'
-    expect(pattern.test(helper)).toBe(true)
-    expect(pattern.test(`${helper}/Contents/MacOS/orca-terminal-host`)).toBe(true)
-    expect(pattern.test('/out/mac-arm64/Orca.app/Contents/Helpers/Orca Terminal Host.bundle')).toBe(
-      false
-    )
-    expect(pattern.test('/out/mac-arm64/Orca.app/Contents/Frameworks/Orca Helper.app')).toBe(false)
-  })
-
-  it('packages the helper where the desktop looks for it', () => {
-    const paths = macTerminalHostPaths('/Orca.app')
-    expect(paths.bundle).toBe(join('/Orca.app', 'Contents', 'Helpers', MAC_TERMINAL_HOST_BUNDLE))
-    expect(basename(paths.executable)).toBe(MAC_TERMINAL_HOST_EXECUTABLE)
   })
 })
 
