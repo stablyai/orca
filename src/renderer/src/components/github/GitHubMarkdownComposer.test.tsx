@@ -9,6 +9,7 @@ import { GHCommentComposer } from '@/components/github-item-dialog/discuss-item/
 import type { AppState } from '@/store/types'
 import type { GitHubCommentResult, PRComment } from '../../../../shared/github/comment-types'
 import { GitHubMarkdownComposer } from './GitHubMarkdownComposer'
+import type { GitHubImageUploadAddress } from './github-image-upload'
 
 type ComposerStoreState = { settings: Partial<AppState['settings']> }
 
@@ -396,8 +397,17 @@ it('shows a failed hosted image as its filename link without changing the upload
     .mockReset()
     .mockResolvedValue('https://github.com/user-attachments/assets/private')
   const onChange = vi.fn()
+  const imageUploadAddress: GitHubImageUploadAddress = {
+    runtime: { kind: 'local' },
+    target: { kind: 'repo', repo: 'repo', source: 'issue' }
+  }
   const view = render(
-    <GitHubMarkdownComposer value="" onChange={onChange} placeholder="Private image" />
+    <GitHubMarkdownComposer
+      value=""
+      onChange={onChange}
+      placeholder="Private image"
+      imageUploadAddress={imageUploadAddress}
+    />
   )
   await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
   const editor = getComposerEditor(view.container)
@@ -431,6 +441,7 @@ it('shows a failed hosted image as its filename link without changing the upload
       value="![renamed.png](https://github.com/user-attachments/assets/private)"
       onChange={onChange}
       placeholder="Private image"
+      imageUploadAddress={imageUploadAddress}
     />
   )
   await waitFor(() => expect(view.getByRole('link', { name: 'renamed.png' })).toBe(link))
