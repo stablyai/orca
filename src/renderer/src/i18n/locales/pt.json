@@ -20078,7 +20078,6 @@
       "composer": {
         "buildMode": "Implementar",
         "planMode": "Planejar",
-        "modeNextTurn": "Aplica-se ao próximo turno",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
         "previewQueue": "Colocar na fila",

@@ -18646,7 +18646,6 @@
       "composer": {
         "buildMode": "구현",
         "planMode": "계획",
-        "modeNextTurn": "다음 차례에 적용됩니다",
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
         "previewQueue": "대기열에 추가",

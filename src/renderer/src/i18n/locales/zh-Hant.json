@@ -19104,7 +19104,6 @@
       "composer": {
         "buildMode": "建置",
         "planMode": "規劃",
-        "modeNextTurn": "套用至下一輪對話",
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
         "previewQueue": "加入佇列",

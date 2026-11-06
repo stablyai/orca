@@ -19364,7 +19364,6 @@
         "send": "Senden",
         "buildMode": "Umsetzen",
         "planMode": "Planen",
-        "modeNextTurn": "Gilt für den nächsten Gesprächsschritt",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
         "previewQueue": "Einreihen",
         "previewSteer": "Steuern",

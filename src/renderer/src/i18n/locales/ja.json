@@ -18646,7 +18646,6 @@
       "composer": {
         "buildMode": "実装",
         "planMode": "計画",
-        "modeNextTurn": "次のターンに適用されます",
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",
         "previewQueue": "キューに入れる",

@@ -19063,7 +19063,6 @@
       "composer": {
         "buildMode": "Implementar",
         "planMode": "Planificar",
-        "modeNextTurn": "Se aplica al siguiente turno",
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",

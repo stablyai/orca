@@ -19350,7 +19350,6 @@
       "composer": {
         "buildMode": "Uygula",
         "planMode": "Planla",
-        "modeNextTurn": "Sonraki tura uygulanır",
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
         "previewQueue": "Sıraya al",

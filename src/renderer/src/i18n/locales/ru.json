@@ -19941,7 +19941,6 @@
       "composer": {
         "buildMode": "Реализация",
         "planMode": "Планирование",
-        "modeNextTurn": "Применяется к следующему ходу",
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
         "previewQueue": "В очередь",

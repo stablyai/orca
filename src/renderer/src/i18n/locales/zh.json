@@ -18587,7 +18587,6 @@
       "composer": {
         "buildMode": "构建",
         "planMode": "规划",
-        "modeNextTurn": "应用于下一轮对话",
         "send": "发送",
         "alternateSteerHint": "{{shortcut}} 立即发送",
         "previewQueue": "加入队列",
