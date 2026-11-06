@@ -331,6 +331,7 @@ export class StructuredAgentSessionHost {
   /** Republish row-free changes to held work. */
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
 
+  publishForegroundTasks = (id: string): void => this.backgroundTasks.publish(id)
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
 
