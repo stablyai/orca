@@ -162,8 +162,8 @@ export class StructuredAgentSessionHost {
     this.eventRecovery.handle(event)
 
   // Keep inference so publishStatus stays required in the attach-context spread.
-  private lifetimeContext() {
-    return {
+  private lifetimeContext = () =>
+    ({
       deps: this.deps,
       runtimeState: this.runtimeState,
       sessions: this.sessions,
@@ -172,8 +172,7 @@ export class StructuredAgentSessionHost {
       generationEnded: this.clientDelivery.publishGenerationEnded,
       wakeDelivery: (sessionId: string) => this.conversationDelivery.loop.wake(sessionId),
       endExitedChild: this.eventRecovery.endExitedChildUnderSerialize
-    } satisfies StructuredAgentSessionLifetimeContext
-  }
+    }) satisfies StructuredAgentSessionLifetimeContext
 
   private attachContext = (): StructuredAgentSessionAttachContext => ({
     ...this.lifetimeContext(),
@@ -266,6 +265,8 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       now: () => this.now()
     })
+
+  readonly quotaContinuation = usageLimit.quotaLease(this, this.clientDelivery)
 
   send = this.conversationCommands.send
 

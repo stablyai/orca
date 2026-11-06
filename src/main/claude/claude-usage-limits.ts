@@ -45,6 +45,7 @@ function messageText(message: Record<string, unknown>): string {
 
 export type ClaudeUsageLimitEvidence = {
   cause: 'quota' | 'other' | 'untyped'
+  explicitProviderCode?: true
 }
 
 // Account observations outlive turns because unchanged rejection notifications are throttled.
@@ -79,9 +80,14 @@ export class ClaudeUsageLimits {
     const root = message.parent_tool_use_id == null
     const decision = !typed && root ? (turn?.usageLimitEvidence?.cause ?? cause) : cause
     const row =
-      decision !== 'other' && refused ? this.row(messageText(message), decision === 'quota') : null
+      decision !== 'other' && refused
+        ? this.row(messageText(message), decision === 'quota', typed === 'usage_limit_reached')
+        : null
     if (root && turn?.isOpen && (cause !== 'untyped' || (refused && decision === 'untyped'))) {
-      turn.usageLimitEvidence = { cause: row ? 'quota' : cause }
+      turn.usageLimitEvidence = {
+        cause: row ? 'quota' : cause,
+        ...(typed === 'usage_limit_reached' ? { explicitProviderCode: true as const } : {})
+      }
     }
     return row
   }
@@ -112,7 +118,8 @@ export class ClaudeUsageLimits {
     }
     return this.row(
       compactionFailure?.detail?.text ?? claudeText(message.result) ?? '',
-      evidence?.cause === 'quota'
+      evidence?.cause === 'quota',
+      evidence?.explicitProviderCode === true
     )
   }
 
@@ -166,7 +173,11 @@ export class ClaudeUsageLimits {
     return { ...(window ? { window } : {}), ...(resetsAt ? { resetsAt } : {}) }
   }
 
-  private row(providerText: string, typed = false): ClaudeUsageLimitRow | null {
+  private row(
+    providerText: string,
+    typed = false,
+    explicitProviderCode = typed
+  ): ClaudeUsageLimitRow | null {
     const limit = this.limit()
     if (!limit && !typed) {
       return null
@@ -176,7 +187,14 @@ export class ClaudeUsageLimits {
       tone: 'warning',
       ...agentSessionFailureWords(
         agentSessionFailureFact('usageLimitReached', {
-          ...(limit && (limit.window || limit.resetsAt) ? { usageLimit: limit } : {}),
+          ...((limit && (limit.window || limit.resetsAt)) || typed
+            ? {
+                usageLimit: {
+                  ...limit,
+                  ...(explicitProviderCode ? { providerCode: 'usage_limit_reached' as const } : {})
+                }
+              }
+            : {}),
           detail: providerDiagnostic(providerText, 'person')
         }),
         { agentName: 'Claude', provider: 'claude', surface: 'row' }

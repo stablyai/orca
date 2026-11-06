@@ -1,3 +1,4 @@
+import { quotaContinuationRefusal } from '../quota-fallback-native-guard'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -81,6 +82,14 @@ export function sendStructuredAgentSessionTurn(
       {
         ...plan,
         run: async (ctx) => {
+          const quotaRefusal = quotaContinuationRefusal(
+            context.deps,
+            caller.callerKey,
+            params.envelope
+          )
+          if (quotaRefusal) {
+            return { ok: false as const, refusal: quotaRefusal }
+          }
           const record = context.deps.store.getRecord(ctx.sessionId)
           const blocked = structuredAgentSessionSendBlock(record)
           if (blocked) {

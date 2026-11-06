@@ -34,3 +34,5 @@ export function opened(
   limit?.forget(id)
   queued.onOpened(id)
 }
+
+export { nativeQuotaLeaseForHost as quotaLease } from '../quota-fallback-native-lease'

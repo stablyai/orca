@@ -55,7 +55,11 @@ describe('a Codex usage limit', () => {
         text: 'Codex hit its weekly limit.',
         failure: {
           kind: 'usageLimitReached',
-          usageLimit: { window: 'weekly', resetsAt: RESETS_AT_S * 1000 },
+          usageLimit: {
+            window: 'weekly',
+            resetsAt: RESETS_AT_S * 1000,
+            providerCode: 'usageLimitExceeded'
+          },
           detail: { text: CODEX_WORDS, audience: 'person' }
         }
       })
@@ -78,7 +82,10 @@ describe('a Codex usage limit', () => {
       limitId: null,
       primary: { usedPercent: 100, windowDurationMins: 43200, resetsAt: RESETS_AT_S + 3600 }
     })
-    expect(failure()?.usageLimit).toEqual({ resetsAt: (RESETS_AT_S + 3600) * 1000 })
+    expect(failure()?.usageLimit).toEqual({
+      resetsAt: (RESETS_AT_S + 3600) * 1000,
+      providerCode: 'usageLimitExceeded'
+    })
     observe({ secondary: { usedPercent: 100, windowDurationMins: 10080 } })
     expect(failure('rateLimitExceeded')?.usageLimit).toBeUndefined()
     observe({
@@ -86,8 +93,11 @@ describe('a Codex usage limit', () => {
       planType: 'free',
       primary: { usedPercent: 100, resetsAt: RESETS_AT_S }
     })
-    expect(failure()?.usageLimit).toEqual({ resetsAt: RESETS_AT_S * 1000 })
+    expect(failure()?.usageLimit).toEqual({
+      resetsAt: RESETS_AT_S * 1000,
+      providerCode: 'usageLimitExceeded'
+    })
     observe({ primary: null })
-    expect(failure()?.usageLimit).toBeUndefined()
+    expect(failure()?.usageLimit).toEqual({ providerCode: 'usageLimitExceeded' })
   })
 })

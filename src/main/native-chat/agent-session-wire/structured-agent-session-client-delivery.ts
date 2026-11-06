@@ -1,4 +1,4 @@
-import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
+import { createQuotaJournalObservers } from '../quota-fallback-journal-cut'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from './structured-agent-session-host-request-failures'
@@ -46,14 +46,7 @@ export class StructuredAgentSessionClientDelivery {
   private readonly turnCompletionFeed
   readonly requestFailures
   private readonly sendSettlement
-  private readonly journalObservers = new StructuredAgentSessionJournalObservers(
-    (sessionId, error) =>
-      this.deps().logger.warn('observing a journal publication failed', {
-        scope: 'journal-delivery',
-        sessionId,
-        error
-      })
-  )
+  private readonly journalObservers = createQuotaJournalObservers(() => this.deps(), this)
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,

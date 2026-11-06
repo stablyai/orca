@@ -1,3 +1,4 @@
+import { NativeQuotaContinuationController } from '../../../native-chat/quota-fallback-native-controller'
 // Loaded on first host install: the host, router and every provider adapter stay out of startup.
 
 import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/at-rest-command-context'
@@ -33,6 +34,12 @@ export async function installOnJournal(
 ): Promise<InstalledRuntime> {
   const envResolvers = catalogOwner.environment
   let host: StructuredAgentSessionHost | null = null
+  const quotaFallback = new NativeQuotaContinuationController({
+    stateDirectory: deps.stateDirectory,
+    hostId: deps.hostId,
+    host: () => host,
+    config: deps.quotaFallback
+  })
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
     logger: deps.logger,
@@ -44,6 +51,8 @@ export async function installOnJournal(
     }
   })
   const context: StructuredAgentAdapterContext = {
+    resolveQuotaApiCredential: quotaFallback.credentials,
+    restoreQuotaOpenaiSubscription: quotaFallback.restoreOpenaiSubscription,
     deps,
     store,
     journalDatabase,
@@ -82,6 +91,14 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+    ...(deps.quotaFallback?.enabled
+      ? {
+          onConfirmedQuotaCut: quotaFallback.onCut,
+          quotaFallbackShouldInspect: quotaFallback.shouldInspect
+        }
+      : {}),
+    quotaFallbackSendAllowed: quotaFallback.sendAllowed,
+    quotaFallbackDeliveryAllowed: quotaFallback.deliveryAllowed,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
@@ -146,6 +163,7 @@ export async function installOnJournal(
     setStructuredAgentSessionHost(host)
   } catch (error) {
     detachCatalog?.()
+    quotaFallback.dispose()
     stopCommands()
     stopVisualsSweep?.()
     await providerNaming.stop()
@@ -159,6 +177,7 @@ export async function installOnJournal(
     stopBackgroundWork: () => {
       const namingStopped = providerNaming.stop()
       detachCatalog?.()
+      quotaFallback.dispose()
       stopCommands()
       stopVisualsSweep?.()
       return namingStopped
