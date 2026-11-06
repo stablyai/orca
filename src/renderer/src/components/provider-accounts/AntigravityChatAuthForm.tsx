@@ -217,6 +217,7 @@ function AuthForm({
         }
         reads.current++
         edited.current = false
+        setError(null)
         setMethod(next.method)
         setProject(next.gcpProject ?? '')
         setLocation(next.gcpLocation ?? '')
@@ -224,6 +225,7 @@ function AuthForm({
       })
       .catch((cause: unknown) => {
         if (mounted.current) {
+          reads.current++
           setError({
             message:
               isAntigravityChatAuthUnconfirmed(cause) && cause instanceof Error

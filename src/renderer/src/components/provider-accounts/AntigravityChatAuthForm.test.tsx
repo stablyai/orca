@@ -483,3 +483,60 @@ it('keeps an ordinary failed save draft retryable through the existing sign-in a
   await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
+
+it.each(['success', 'failure'] as const)(
+  'keeps restart recovery when an overlapping Get settles with %s after Apply',
+  async (outcome) => {
+    const target = { kind: 'environment', environmentId: `late-read-${outcome}` } as const
+    let finishSave!: (cause: Error) => void
+    const save = new Promise<AntigravityChatAuthConfig>((_resolve, reject) => {
+      finishSave = reject
+    })
+    let finishRead!: (value: AntigravityChatAuthConfig) => void
+    let rejectRead!: (cause: Error) => void
+    const read = new Promise<AntigravityChatAuthConfig>((resolve, reject) => {
+      finishRead = resolve
+      rejectRead = reject
+    })
+    let refreshing = false
+    vi.mocked(callAntigravityChatAuthConfig).mockImplementation((_owner, config) =>
+      config ? save : refreshing ? read : Promise.resolve(enterprise)
+    )
+    const user = userEvent.setup()
+    renderSurface('accounts', target)
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+    await user.type(screen.getByLabelText('Google Cloud project'), '-new')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    refreshing = true
+    await act(async () => {
+      streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
+    })
+    await act(async () => {
+      finishSave(
+        new RuntimeRpcCallError({
+          id: 'save',
+          ok: false,
+          error: {
+            code: 'antigravity_account_settings_unconfirmed',
+            message: 'Restart Orca to save your Antigravity settings.'
+          }
+        })
+      )
+    })
+    await act(async () => {
+      if (outcome === 'success') {
+        finishRead(personal)
+      } else {
+        rejectRead(new Error('Host unreachable'))
+      }
+    })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Restart Orca to save your Antigravity settings.'
+    )
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project-new')
+    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+  }
+)
