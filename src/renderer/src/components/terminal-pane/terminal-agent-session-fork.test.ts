@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/headless'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
@@ -65,13 +66,23 @@ vi.mock('sonner', () => ({
   toast: mockToast
 }))
 
-function makePane(capturedText: string): ManagedPane {
+const testTerminals: Terminal[] = []
+afterEach(() => {
+  for (const terminal of testTerminals.splice(0)) {
+    terminal.dispose()
+  }
+})
+
+async function makePane(capturedText: string): Promise<ManagedPane> {
+  const terminal = new Terminal({ cols: 120, rows: 8, allowProposedApi: true })
+  testTerminals.push(terminal)
+  await new Promise<void>((resolve) =>
+    terminal.write(capturedText.replaceAll('\n', '\r\n'), resolve)
+  )
   return {
     leafId: LEAF_ID,
-    serializeAddon: {
-      serialize: vi.fn(() => capturedText)
-    },
     terminal: {
+      buffer: terminal.buffer,
       focus: vi.fn()
     }
   } as unknown as ManagedPane
@@ -136,7 +147,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
+      pane: await makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
@@ -194,7 +205,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
+      pane: await makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
@@ -233,7 +244,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     const forking = forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
+      pane: await makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
@@ -280,7 +291,7 @@ describe('forkAgentSessionFromPane', () => {
         await import('./terminal-agent-session-fork')
 
       const prepared = prepareAgentSessionForkFromPane({
-        pane: makePane('User: compare OAuth options'),
+        pane: await makePane('User: compare OAuth options'),
         tabId: 'tab-1',
         worktreeId: 'wt-1',
         groupId: null
@@ -311,7 +322,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
+      pane: await makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -339,7 +350,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
+      pane: await makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -374,7 +385,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
+      pane: await makePane('User: compare OAuth options'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -390,7 +401,7 @@ describe('forkAgentSessionFromPane', () => {
   })
 
   it('creates a top-level workspace fork and copies context when the source agent cannot be resolved', async () => {
-    const pane = makePane('Assistant: here is the current plan')
+    const pane = await makePane('Assistant: here is the current plan')
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
@@ -437,7 +448,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('Assistant: plan'),
+      pane: await makePane('Assistant: plan'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -453,7 +464,7 @@ describe('forkAgentSessionFromPane', () => {
       displayName: 'scratch',
       branch: ''
     })
-    const pane = makePane('User: summarize this scratch plan')
+    const pane = await makePane('User: summarize this scratch plan')
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
@@ -485,7 +496,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: fork this blocked workspace'),
+      pane: await makePane('User: fork this blocked workspace'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -509,7 +520,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: fork this folder workspace'),
+      pane: await makePane('User: fork this folder workspace'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -532,7 +543,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: fork this floating terminal'),
+      pane: await makePane('User: fork this floating terminal'),
       tabId: 'tab-1',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       groupId: null
@@ -550,7 +561,7 @@ describe('forkAgentSessionFromPane', () => {
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
-      pane: makePane('User: carry this context forward'),
+      pane: await makePane('User: carry this context forward'),
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: null
@@ -566,7 +577,7 @@ describe('forkAgentSessionFromPane', () => {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
     mockLaunchAgentInNewTab.mockReturnValueOnce(null)
-    const pane = makePane('Assistant: current implementation notes')
+    const pane = await makePane('Assistant: current implementation notes')
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
@@ -588,7 +599,7 @@ describe('forkAgentSessionFromPane', () => {
 
   it('surfaces clipboard failures instead of closing the fallback path silently', async () => {
     mockWriteClipboardText.mockRejectedValueOnce(new Error('clipboard denied'))
-    const pane = makePane('Assistant: copy fallback context')
+    const pane = await makePane('Assistant: copy fallback context')
     const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
 
     await forkAgentSessionFromPane({
@@ -614,7 +625,7 @@ describe('copyAgentSessionContextFromPane', () => {
   })
 
   it('copies the bounded transcript without the fork prompt framing', async () => {
-    const pane = makePane('User: standalone copy\nAssistant: acknowledged')
+    const pane = await makePane('User: standalone copy\nAssistant: acknowledged')
     const { copyAgentSessionContextFromPane } = await import('./terminal-agent-session-fork')
 
     const copied = await copyAgentSessionContextFromPane(pane)
@@ -634,7 +645,7 @@ describe('copyAgentSessionContextFromPane', () => {
   })
 
   it('shows a copy-specific empty-context error without writing the clipboard', async () => {
-    const pane = makePane('\x1b[0m\r\n\x1bc\x07')
+    const pane = await makePane('\x1b[0m\r\n\x1bc\x07')
     const { copyAgentSessionContextFromPane } = await import('./terminal-agent-session-fork')
 
     const copied = await copyAgentSessionContextFromPane(pane)
@@ -647,7 +658,7 @@ describe('copyAgentSessionContextFromPane', () => {
 
   it('surfaces clipboard write failures', async () => {
     mockWriteClipboardText.mockRejectedValueOnce(new Error('clipboard denied'))
-    const pane = makePane('User: copy this')
+    const pane = await makePane('User: copy this')
     const { copyAgentSessionContextFromPane } = await import('./terminal-agent-session-fork')
 
     const copied = await copyAgentSessionContextFromPane(pane)
