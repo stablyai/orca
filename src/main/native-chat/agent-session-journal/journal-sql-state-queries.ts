@@ -21,12 +21,15 @@ export function sqlJournalStateQueries(
   ): AgentJournalSubmission[] => {
     facts.flush()
     return scope.db
-      .prepare(`SELECT entry_key FROM journal_proj_input_candidates
-      WHERE session_id=? AND generation=? AND ${column}=? ORDER BY ordinal`)
+      .prepare(`SELECT input_id FROM journal_proj_input_candidates
+      WHERE session_id=? AND epoch=? AND current=1 AND ${column}=? ORDER BY ordinal`)
       .all(...scope.prefix, fence)
       .map((row) => {
         scope.examined(row)
-        return context.read<AgentJournalSubmission>('inputs.candidates', String(row.entry_key))!
+        return context.read<AgentJournalSubmission>(
+          'inputs.candidates',
+          JSON.stringify(row.input_id)
+        )!
       })
   }
   const latestClear = (): number => {

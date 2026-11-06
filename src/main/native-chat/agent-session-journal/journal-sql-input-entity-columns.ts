@@ -12,13 +12,22 @@ import type { JournalInputSource } from './journal-input-source-schema'
 import type { JournalDispatchRow } from './journal-row-schema'
 import type { JournalQueueRow } from './journal-queue-events'
 import type { JournalInputEnd } from './journal-input-obligations'
+import { writeJournalSqlSubmissionMemberColumns } from './journal-sql-submission-member-columns'
+import { writeJournalSqlCardMemberColumns } from './journal-sql-card-member-columns'
 
 export function writeJournalSqlInputEntityColumns(
   scope: JournalSqlScope,
   location: JournalSqlValueLocation,
-  value: unknown
+  value: unknown,
+  json: string
 ): void {
   if (value === undefined) {
+    return
+  }
+  if (
+    writeJournalSqlSubmissionMemberColumns(scope, location, value, json) ||
+    writeJournalSqlCardMemberColumns(scope, location, value, json)
+  ) {
     return
   }
   const key = [...scope.prefix, String(JSON.parse(location.key)), location.incarnation]

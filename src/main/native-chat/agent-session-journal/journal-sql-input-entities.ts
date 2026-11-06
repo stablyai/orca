@@ -1,8 +1,25 @@
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation } from './journal-sql-value-codec'
 import { writeJournalSqlInputEntityColumns } from './journal-sql-input-entity-columns'
+import { journalSqlSubmissionMemberTables } from './journal-sql-submission-member-tables'
 
 const INPUT_ENTITIES = {
+  'cards.current': {
+    table: 'journal_proj_current_cards',
+    id: 'message_id',
+    counter: 'current_cards'
+  },
+  'cards.overlays': {
+    table: 'journal_proj_overlay_cards',
+    id: 'message_id',
+    counter: 'overlay_cards'
+  },
+  'cards.indexed': {
+    table: 'journal_proj_indexed_cards',
+    id: 'message_id',
+    counter: 'indexed_cards'
+  },
+  ...journalSqlSubmissionMemberTables,
   'inputs.rejections': {
     table: 'journal_proj_input_rejections',
     id: 'input_id',
@@ -142,7 +159,7 @@ export class JournalSqlInputEntity {
         ordinal,
         json
       )
-    writeJournalSqlInputEntityColumns(this.scope, location, value)
+    writeJournalSqlInputEntityColumns(this.scope, location, value, json)
     this.legacyDelta(1, location.key, location.incarnation)
   }
 
@@ -153,7 +170,7 @@ export class JournalSqlInputEntity {
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
       .run(json, ...this.scope.prefix, this.id(location.key), location.incarnation)
     if (result.changes) {
-      writeJournalSqlInputEntityColumns(this.scope, location, value)
+      writeJournalSqlInputEntityColumns(this.scope, location, value, json)
       this.legacyDelta(1, location.key, location.incarnation)
     }
     return !!result.changes

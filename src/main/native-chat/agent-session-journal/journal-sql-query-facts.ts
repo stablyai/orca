@@ -112,26 +112,18 @@ export class JournalSqlQueryFacts {
     const { scope } = context
     const send = context.read<AgentJournalSubmission>('inputs.candidates', key, false)
     if (!send) {
-      scope.db
-        .prepare(`DELETE FROM journal_proj_input_candidates
-        WHERE session_id=? AND generation=? AND entry_key=?`)
-        .run(...scope.prefix, key)
       return
     }
     const handover = context.read<JournalDispatchRow>('inputs.handovers', key, false)
     const source = context.read<JournalInputSource>('inputs.sources', key, false)
     scope.db
-      .prepare(`INSERT INTO journal_proj_input_candidates
-      (session_id, generation, entry_key, ordinal, effective_fence, handover_fence)
-      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(session_id, generation, entry_key)
-      DO UPDATE SET ordinal=excluded.ordinal, effective_fence=excluded.effective_fence,
-      handover_fence=excluded.handover_fence`)
+      .prepare(`UPDATE journal_proj_input_candidates SET effective_fence=?, handover_fence=?
+        WHERE session_id=? AND epoch=? AND input_id=? AND current=1`)
       .run(
-        ...scope.prefix,
-        key,
-        Number(context.header('inputs.candidates', key)?.ordinal),
         handover?.fence ?? source?.fence ?? send.fence,
-        handover?.fence ?? null
+        handover?.fence ?? null,
+        ...scope.prefix,
+        String(JSON.parse(key))
       )
   }
 }

@@ -28,7 +28,7 @@ const send = (status: string): Send => ({ status, flags: { recovered: false } })
 function maps(context: JournalSqlValueContext) {
   return {
     source: new JournalSqlKeyedMap<string, Send>(context, 'fixture.sends'),
-    alias: new JournalSqlKeyedMap<string, Send>(context, 'inputs.candidates')
+    alias: new JournalSqlKeyedMap<string, Send>(context, 'fixture.aliases')
   }
 }
 
@@ -60,7 +60,7 @@ it.each([false, true])(
     candidate.coverage.push('second')
     command.flush()
     expect(command.changes().map((change) => change.path)).toEqual([
-      'inputs.candidates',
+      'fixture.aliases',
       'fixture.sends'
     ])
 
@@ -201,6 +201,15 @@ it('materializes indexed cards through their source incarnation across commands'
     returnedRejection: null,
     consumedAs: null
   })
+  new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.current').set(
+    'card',
+    cards.get('card')!
+  )
+  new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.overlays').set('card', {
+    ...cards.get('card')!,
+    position: 99,
+    returnedReason: 'overlay'
+  })
   new JournalSqlPlaceIndex(command.indexScope(), 'cards').set(cards.get('card')!, true, false)
   command.flush()
 
@@ -220,6 +229,13 @@ it('materializes indexed cards through their source incarnation across commands'
   expect([restored.allPlaces().head!.returnedReason, cards.get('card')!.returnedReason]).toEqual([
     'late',
     'replacement'
+  ])
+  const current = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.current')
+  const overlays = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.overlays')
+  expect(current.get('card')?.returnedReason).toBe('late')
+  expect([overlays.get('card')?.returnedReason, overlays.get('card')?.position]).toEqual([
+    'overlay',
+    99
   ])
   restored.set(cards.get('card')!, true, false)
   command.flush()
