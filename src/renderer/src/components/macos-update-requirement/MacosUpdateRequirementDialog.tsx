@@ -86,7 +86,7 @@ export function MacosUpdateRequirementDialog({
                 : cannotUpgrade
                   ? translate(
                       'macosUpdateRequirement.unsupportedDescription',
-                      'Apple doesn’t support macOS {{macos}} on this Mac. Tell us how you use Orca so we can help.',
+                      'Apple doesn’t support macOS {{macos}} on this Mac.',
                       { macos }
                     )
                   : translate(

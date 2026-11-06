@@ -23938,7 +23938,7 @@
     "description": "Orca {{version}} requires macOS {{macos}} or later. This version keeps working, but it won’t get new updates on this Mac.",
     "checking": "Checking whether this Mac can upgrade…",
     "upgradeDescription": "Your Mac can upgrade. Update macOS to get the latest Orca.",
-    "unsupportedDescription": "Apple doesn’t support macOS {{macos}} on this Mac. Tell us how you use Orca so we can help.",
+    "unsupportedDescription": "Apple doesn’t support macOS {{macos}} on this Mac.",
     "unknownDescription": "We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.",
     "whyTitle": "Why is this changing?",
     "whyIntro": "We updated Electron, the foundation Orca runs on, to bring:",
