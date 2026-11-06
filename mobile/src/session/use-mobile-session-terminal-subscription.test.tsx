@@ -525,17 +525,15 @@ describe('two visible terminal subscriptions', () => {
 })
 
 describe('terminal output credit', () => {
-  function creditedTerminal(opts: { reportsParsing: boolean }) {
+  function creditedTerminal() {
     const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
     const parsed: Array<() => void> = []
-    if (opts.reportsParsing) {
-      harness.replaceTerminal({
-        ...harness.terminal,
-        writeWithParseAck: vi.fn((_data: string, onParsed: () => void) => {
-          parsed.push(onParsed)
-        })
+    harness.replaceTerminal({
+      ...harness.terminal,
+      writeWithParseAck: vi.fn((_data: string, onParsed: () => void) => {
+        parsed.push(onParsed)
       })
-    }
+    })
     harness.subscribe()
     return { harness, parsed }
   }
@@ -550,8 +548,7 @@ describe('terminal output credit', () => {
 
   it('acks received output units only after xterm has parsed them', () => {
     vi.useFakeTimers()
-    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
-    expect(capabilities(harness)).toEqual({ terminalBinaryStream: 1, outputAck: 1 })
+    const { harness, parsed } = creditedTerminal()
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     harness.event(0, { type: 'data', chunk: 'hello' })
@@ -567,7 +564,7 @@ describe('terminal output credit', () => {
 
   it('acks output dropped unwritten while native chat covers the terminal', () => {
     vi.useFakeTimers()
-    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    const { harness, parsed } = creditedTerminal()
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.fields.showNativeChatRef.current = true
     harness.event(0, { type: 'data', chunk: 'dropped' })
@@ -578,7 +575,7 @@ describe('terminal output credit', () => {
 
   it('retries an ack the bridge refused before sending it on the next tick, not at once', async () => {
     vi.useFakeTimers()
-    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    const { harness, parsed } = creditedTerminal()
     harness.fields.client.sendRequest.mockRejectedValueOnce(new Error('bridge request cap'))
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.scrollback(0, PHONE.cols, PHONE.rows)
@@ -592,26 +589,15 @@ describe('terminal output credit', () => {
     ])
   })
 
-  it('never acks a host that did not echo credit', () => {
+  it('asks for credit but acks nothing to a host that did not echo it', () => {
     vi.useFakeTimers()
-    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    const { harness, parsed } = creditedTerminal()
+    expect(capabilities(harness)).toEqual({ terminalBinaryStream: 1, outputAck: 1 })
     harness.event(0, { type: 'subscribed' })
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     harness.event(0, { type: 'data', chunk: 'hello' })
     act(() => parsed.forEach((onParsed) => onParsed()))
     act(() => vi.advanceTimersByTime(500))
-    expect(acks(harness)).toEqual([])
-  })
-
-  it('does not ask for credit from a terminal that cannot report parsing', () => {
-    vi.useFakeTimers()
-    const { harness } = creditedTerminal({ reportsParsing: false })
-    expect(capabilities(harness)).toEqual({ terminalBinaryStream: 1 })
-    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
-    harness.scrollback(0, PHONE.cols, PHONE.rows)
-    harness.event(0, { type: 'data', chunk: 'hello' })
-    act(() => vi.advanceTimersByTime(500))
-    expect(harness.terminal.write).toHaveBeenCalledWith('hello')
     expect(acks(harness)).toEqual([])
   })
 })
