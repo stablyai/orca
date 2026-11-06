@@ -360,7 +360,38 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
           state: 'completed'
         },
         l('root1')
-      )
+      ),
+      row(
+        l('settled-helper'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'subagent', id: 'C', label: 'Audit', groupId: 'T1', state: 'completed' }]
+        },
+        l('root1')
+      ),
+      {
+        ...row(
+          l('settled-goal'),
+          { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } },
+          l('root1')
+        ),
+        agentId: 'C',
+        producerKind: 'agent'
+      },
+      {
+        ...row(
+          l('settled-answer'),
+          {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'Completed audit' }]
+          },
+          l('root1')
+        ),
+        agentId: 'C',
+        producerKind: 'agent'
+      }
     ]
   }
   const original = structuredClone(snapshot)
@@ -376,7 +407,9 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
     'legacy:codex:source:root1',
     'codex:child:T1:1',
     'legacy:codex:source:late',
-    'legacy:codex:source:tool'
+    'legacy:codex:source:tool',
+    'legacy:codex:source:settled-helper',
+    'legacy:codex:source:settled-answer'
   ])
   expect(copied[1]?.body).toEqual({
     kind: 'turn',

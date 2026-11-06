@@ -7,15 +7,15 @@ import {
   AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH
 } from '../../../../shared/agent-session/agent-session-conversation-name'
 import { sliceAtCodeUnitLimit } from '../../../../shared/surrogate-safe-text-slice'
-import { AgentConversationCopyError } from '../../agent-conversation-copy-error'
+import {
+  AgentConversationCopyError,
+  agentConversationCopyRefusal
+} from '../../agent-conversation-copy-error'
 import { structuredAgentSessionForkBoundary } from './structured-agent-session-fork-boundary'
 import { acpAgentName } from '../../../acp/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import {
-  agentSessionRefusalError,
-  isAgentSessionRefusalError
-} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
@@ -40,7 +40,7 @@ export async function prepareStructuredAgentSessionFork(input: {
   const { host } = input
   const name = acpAgentName(input.agent)
   if (host.deps.store.selectWritableRecord(input.sessionId).kind === 'missing') {
-    throw agentSessionRefusalError(
+    throw agentConversationCopyRefusal(
       'agent_session_identity_required',
       { reason: 'recordMissing' },
       `${name} could not find the source chat. Open the chat again, then try again.`
@@ -60,10 +60,10 @@ export async function prepareStructuredAgentSessionFork(input: {
       | 'providerRejected'
       | 'launchFolderMissing' = 'savedConversationMissing'
   ): never => {
-    throw agentSessionRefusalError('agent_session_operation_invalid', { reason }, message)
+    throw agentConversationCopyRefusal('agent_session_operation_invalid', { reason }, message)
   }
   if (!capability || !metadata?.transcriptImport || !host.deps.adapter.copyConversation) {
-    throw agentSessionRefusalError(
+    throw agentConversationCopyRefusal(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },
       `${name} cannot copy a chat. Update ${name}, then try again.`
@@ -280,7 +280,7 @@ export async function resolveStructuredAgentSessionForkIntent(input: {
 }): Promise<AgentSessionAttachParams> {
   const { host } = input
   if (!host) {
-    throw agentSessionRefusalError(
+    throw agentConversationCopyRefusal(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },
       `${acpAgentName(input.agent)} could not reach the execution host. Reconnect to the host, then try again.`

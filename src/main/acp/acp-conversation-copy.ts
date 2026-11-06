@@ -1,4 +1,4 @@
-import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import { agentConversationCopyRefusal } from '../native-chat/agent-conversation-copy-error'
 import type { StructuredAgentSessionConversationCopyInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { NativeCopyCoverage } from '../native-chat/agent-session-journal/context-epochs/journal-history-origin'
@@ -142,7 +142,7 @@ export async function copyAcpConversation(
         return { ...result, coverage: { unit: 'acp-user-message', ids } }
       }
     } catch {
-      throw agentSessionRefusalError(
+      throw agentConversationCopyRefusal(
         'agent_session_identity_required',
         { reason: 'transcriptUnreadable' },
         `${name} could not read the copied chat. Check that its conversation store is available, then try again.`

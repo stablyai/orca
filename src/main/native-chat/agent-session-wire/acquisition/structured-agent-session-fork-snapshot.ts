@@ -87,13 +87,15 @@ export function prepareForkSnapshot(input: {
     }
     if (item.agentId !== undefined) {
       depend(`agent:${item.agentId}`, item.itemId)
-      depend(item.itemId, `agent:${item.agentId}`)
       if (item.parentAgentId !== undefined) {
         depend(`agent:${item.parentAgentId}`, `agent:${item.agentId}`)
       }
     }
     if (item.providerParentRef !== undefined) {
       depend(`tool:${item.providerParentRef}`, item.itemId)
+      if (item.agentId !== undefined) {
+        depend(`tool:${item.providerParentRef}`, `agent:${item.agentId}`)
+      }
     }
     const body = item.body
     const calls =

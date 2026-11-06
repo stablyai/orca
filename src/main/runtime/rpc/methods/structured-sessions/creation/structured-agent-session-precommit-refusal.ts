@@ -10,6 +10,7 @@ import {
   type AgentSessionWireRefusalCode
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { AgentConversationCopyError } from '../../../../../native-chat/agent-conversation-copy-error'
 import { tuiAgentDisplayName } from '../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
@@ -41,9 +42,9 @@ function precommitRefusal(error: unknown, agent?: string): AgentSessionWireRefus
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalFromReference(
       error.refusal,
-      error.refusal.message === error.refusal.code
-        ? PRECOMMIT_REFUSAL_MESSAGE
-        : error.refusal.message
+      error.cause instanceof AgentConversationCopyError
+        ? error.cause.message
+        : PRECOMMIT_REFUSAL_MESSAGE
     )
   }
   const code = wireRefusalCode(error)
