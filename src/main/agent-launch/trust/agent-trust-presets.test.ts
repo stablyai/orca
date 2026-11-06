@@ -91,6 +91,14 @@ describe('markCursorWorkspaceTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.platform === 'win32')('uses the project directory cursor-agent reads', () => {
+    // Name computed by cursor-agent 2026.11.05 for this path.
+    markCursorWorkspaceTrusted('/orca-missing/My_Repo/feature--1.2', testState.fakeHomeDir)
+    expect(readdirSync(join(testState.fakeHomeDir, '.cursor', 'projects'))).toEqual([
+      'orca-missing-My-Repo-feature-1-2'
+    ])
+  })
 })
 
 describe('markKimiWorkspaceTrusted', () => {
