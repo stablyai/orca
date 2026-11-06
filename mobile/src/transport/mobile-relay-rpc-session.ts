@@ -1,8 +1,13 @@
 import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../src/shared/abort-signal-reason'
+import { sharedPromiseSettlementWaiters } from '../../../src/shared/promise-settlement-waiters'
+import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
   type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
@@ -16,31 +21,28 @@ import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-re
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
-import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
+import { MobileRelayConnectWaiters } from './mobile-relay-connect-waiters'
+import {
+  DECISIVE_PROBE_TIMEOUT_MS,
+  livenessProbeFrame,
+  RpcSessionLivenessWatchdog
+} from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
-// Why: a relay kept through the background grace may have died while the app was
-// suspended; one miss redials instead of two. Not shorter: the first packet after
-// resume can pay radio wake-up plus a TCP retransmit.
-const RELAY_RESUME_PROBE_MS = 4_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
   RelayDialStageSource & {
-    // The cell's attach-reservation deadline (~10s). Diagnostics only — never
-    // schedule anything from it; rotation keys off getResumeExpiresAt().
+    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
     getAttachDeadlineAt(): number | null
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
     getFailure(): Error | null
-    // One decisive probe for a relay retained through a real background stay.
-    probeAfterBackground(): void
   }
 
 export function connectMobileRelayRpcSession(args: {
@@ -72,7 +74,7 @@ export function connectMobileRelayRpcSession(args: {
   const streams = new MobileRelayRpcStreams({
     nextId: () => pending.nextId(),
     sendFrame,
-    waitForConnected: () => waitForConnected()
+    waitForConnected: () => connectWaiters.wait(requestTimeoutMs)
   })
 
   const link = new MobileRelayE2eeLink({
@@ -104,17 +106,24 @@ export function connectMobileRelayRpcSession(args: {
     },
     onBinary: (plaintext) => {
       livenessWatchdog.noteAuthenticatedInbound(livenessIdentity)
-      handleBinary(plaintext)
+      streams.handleBinary(plaintext)
     },
     onError: fail
   })
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
+      if (options?.failWhenDisconnected && state !== 'connected') {
+        throw new Error(`Not connected: ${method}`)
+      }
+      throwIfSignalAborted(options?.signal)
       const budget = openRpcRequestBudget(options)
-      await waitForConnected(budget.timeoutMs)
+      const connectTimeoutMs = budget.timeoutMs ?? requestTimeoutMs
+      await waitForPromiseWithSignal(connectWaiters.wait(connectTimeoutMs), options?.signal)
+      throwIfSignalAborted(options?.signal)
       const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
-      return sendRpc(method, params, timeoutMs, false, options?.envelope)
+      options?.beforeSend?.()
+      return sendRpc(method, params, timeoutMs, false, options?.envelope, options?.signal)
     },
 
     subscribe(method, params, listener, options) {
@@ -135,12 +144,20 @@ export function connectMobileRelayRpcSession(args: {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
     },
-    notifyForeground: (reason) => {
-      if (state === 'connected' && reason !== 'network-change') {
-        livenessWatchdog.probeNow(livenessIdentity)
+    notifyForeground: (reason = 'focus') => {
+      if (state === 'connected') {
+        if (reason === 'app-resume') {
+          livenessWatchdog.probeAfterBackground(livenessIdentity)
+        } else {
+          livenessWatchdog.probeNow(
+            livenessIdentity,
+            reason === 'network-change' ? DECISIVE_PROBE_TIMEOUT_MS : null
+          )
+        }
       }
     },
     close() {
+      connectWaiters.releaseAll()
       if (closed) {
         return
       }
@@ -157,18 +174,16 @@ export function connectMobileRelayRpcSession(args: {
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure,
-    probeAfterBackground: () =>
-      state === 'connected' && livenessWatchdog.probeNow(livenessIdentity, RELAY_RESUME_PROBE_MS)
+    probeLivenessNow: () => state === 'connected' && livenessWatchdog.probeCurrentDecisively()
   }
+  const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
     idleProbeMs: null,
-    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
+    probeTimeoutMs: 4_000,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
-    sendProbe: () =>
-      state === 'connected' &&
-      sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
+    sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),
     onTimeout: (evidence) => {
       args.onLog?.({
         id: `relay-liveness-${logSessionId}-${++logSequence}`,
@@ -219,16 +234,18 @@ export function connectMobileRelayRpcSession(args: {
     params: unknown,
     timeoutMs = requestTimeoutMs,
     beforeConnected = false,
-    envelope?: RpcEnvelopeFields
+    envelope?: RpcEnvelopeFields,
+    signal?: AbortSignal
   ): Promise<RpcResponse> {
     if (closed || (!beforeConnected && state !== 'connected')) {
       return Promise.reject(new Error('relay session not connected'))
     }
     const id = pending.nextId()
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout>
+    const response = new Promise<RpcResponse>((resolve, reject) => {
+      timer = setTimeout(() => {
         pending.drop(id)
-        // Why: the frame was written long ago — the desktop may have processed it.
+        // Written requests may already have committed; timeout remains delivery-unknown.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.track(id, { resolve, reject, timer, written: false })
@@ -240,6 +257,15 @@ export function connectMobileRelayRpcSession(args: {
       }
       pending.markWritten(id)
     })
+    return signal
+      ? sharedPromiseSettlementWaiters(response).wait({
+          signal,
+          onAbandon: () => {
+            pending.drop(id)
+            clearTimeout(timer)
+          }
+        })
+      : response
   }
 
   function sendFrame({ envelope, ...request }: RpcRequestFrame): boolean {
@@ -254,45 +280,12 @@ export function connectMobileRelayRpcSession(args: {
     } catch {
       return
     }
-    if (!isRpcResponse(value)) {
-      return
-    }
-    if (pending.settle(value)) {
-      return
-    }
-    streams.handleResponse(value)
-  }
-
-  function handleBinary(bytes: Uint8Array): void {
-    streams.handleBinary(bytes)
-  }
-
-  function waitForConnected(timeoutMs = requestTimeoutMs): Promise<void> {
-    if (state === 'connected') {
-      return Promise.resolve()
-    }
-    return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const unsubscribe = client.onStateChange((next) => {
-        if (next === 'connected') {
-          finish()
-          resolve()
-        } else if (next === 'disconnected' || next === 'auth-failed') {
-          finish()
-          reject(new Error(`relay session ${next}`))
-        }
-      })
-      timer = setTimeout(() => {
-        finish()
-        reject(new Error('relay session connection timed out'))
-      }, timeoutMs)
-      function finish(): void {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        unsubscribe()
+    if (isRpcResponse(value)) {
+      livenessWatchdog.noteProbeReply(livenessIdentity, value.id)
+      if (!pending.settle(value)) {
+        streams.handleResponse(value)
       }
-    })
+    }
   }
 
   function publishState(next: ConnectionState): void {

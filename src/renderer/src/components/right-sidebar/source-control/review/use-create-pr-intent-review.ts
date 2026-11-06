@@ -2,26 +2,29 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorkspaceJiraIssueKey,
   prefixJiraReviewTitle
-} from '../../../../../../shared/jira-review-title'
+} from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { operationGitContext } from '../listing/operation-target'
 import { translate } from '@/i18n/i18n'
 import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generation-client'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
-import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
-import { resolveCreateReviewSeedText } from '../../create-review-draft-title'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { localizedCreateFailure } from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
+import {
+  normalizeHostedReviewHeadRef,
+  normalizeHostedReviewBaseRef as stripBaseRef
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import { resolveCreateReviewSeedText } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   createPrIntentRunTokenMatches,
   resolveCreatePrIntentGeneratedReviewFields,
   resolveCreatePrIntentReviewBase,
   shouldAttemptCreateHostedReviewForIntent,
-  shouldGenerateHostedReviewDetailsForIntent,
+  shouldAttemptCreateHostedReviewForIntent as shouldGenerateHostedReviewDetailsForIntent,
   type CreatePrIntentRunToken
 } from './create-pr-intent-flow'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
-import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -29,11 +32,9 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
-/**
- * Create-PR intent's unattended review step: it must resolve its own base/title/body (no composer to
- * read) and only reveal the result when the run still owns the foreground worktree.
- */
+/** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({
   activeRepo,
   createHostedReview,
@@ -230,7 +231,7 @@ export function useSourceControlCreatePrIntentReview({
             }
           )
           if (openChecks && resolvedPrCreationDefaults.openAfterCreate) {
-            window.api.shell.openUrl(result.url)
+            openAppHttpLink(result.url, { worktreeId: token.worktreeId })
           }
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
           return true
@@ -258,7 +259,7 @@ export function useSourceControlCreatePrIntentReview({
 
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: result.error
+          message: localizedCreateFailure(result, eligibility.provider)
         })
         return false
       } catch (error) {

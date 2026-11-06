@@ -23,30 +23,21 @@ export type BuildConnectConfigOptions = {
   skippedIdentityFiles?: SkippedIdentityFiles
 }
 
-// Why: ssh2 tries privateKey before agent, but parses encrypted privateKey
-// values before any agent auth can run. Keep unencrypted explicit keys first
-// while deferring encrypted keys until the post-agent passphrase path.
+// ssh2 parses privateKey before agent auth; defer encrypted keys until the post-agent passphrase path.
 export function buildConnectConfig(
   target: SshTarget,
   resolved: SshResolvedConfig | null,
   options: BuildConnectConfigOptions = {}
 ): ConnectConfig {
-  const effectiveHost = resolveEffectiveHost(target, resolved)
-  const effectivePort = resolveEffectivePort(target, resolved)
-  const effectiveUser =
-    isOpenSshConfigBackedTarget(target) && resolved
-      ? (resolved.user ?? target.username)
-      : target.username || resolved?.user || ''
+  const endpoint = resolveEffectiveSshEndpoint(target, resolved)
 
   const config: Record<string, unknown> = {
-    host: effectiveHost,
-    port: effectivePort,
-    username: effectiveUser,
+    host: endpoint.host,
+    port: endpoint.port,
+    username: endpoint.username,
     readyTimeout: CONNECT_TIMEOUT_MS,
     keepaliveInterval: 15_000,
-    // Why: lets servers deliver keyboard-interactive challenges (RFC 4256,
-    // commonly MFA after a partial password success). SshConnection answers
-    // them through the credential prompt callback.
+    // Allow RFC4256 keyboard-interactive challenges, including MFA after partial password success.
     tryKeyboard: true
   }
 
@@ -73,14 +64,7 @@ export function buildConnectConfig(
     keys,
     findEncryptedPrivateKeyPath(keys),
     {
-      // Why: SshConnection retries with the deferred keys only after an attempt that carried none,
-      // so only that attempt holds the host's password challenge back for them. An encrypted key
-      // would swap that dialog for a passphrase one, and a file that is no usable private key
-      // aborts the retry before any auth, so hold it back only if no deferred key needs input.
-      // One key only: each rejected key spends the host's MaxAuthTries, so several could exhaust
-      // the retry before it reaches the challenge this attempt skipped.
-      // Decided lazily so the deferred files are read only once the agent has failed, as the retry
-      // would read them anyway, never on an agent login that needs no file.
+      // Defer the host challenge only for one usable unencrypted post-agent key; multiple attempts risk MaxAuthTries. Read deferred files lazily only after agent failure.
       deferKeyboardInteractive:
         keys.length === 0 && !options.keyboardInteractiveOnly
           ? () => {
@@ -98,6 +82,21 @@ export function buildConnectConfig(
   return config as ConnectConfig
 }
 
+/** Where a target connects once its stored fields are merged with `ssh -G`. */
+export function resolveEffectiveSshEndpoint(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): { host: string; port: number; username: string } {
+  return {
+    host: resolveEffectiveHost(target, resolved),
+    port: resolveEffectivePort(target, resolved),
+    username:
+      isOpenSshConfigBackedTarget(target) && resolved
+        ? (resolved.user ?? target.username)
+        : target.username || resolved?.user || ''
+  }
+}
+
 function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
   if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
     return resolved.hostname
@@ -112,8 +111,7 @@ function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | n
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.port || target.port || 22
   }
-  // Why: imported config aliases store 22 as the schema default even when an
-  // included/wildcard OpenSSH rule later resolves a different effective Port.
+  // Config aliases persist default22 even when Include/wildcard rules resolve a different port.
   if (target.configHost && target.port === 22 && resolved?.port) {
     return resolved.port
   }

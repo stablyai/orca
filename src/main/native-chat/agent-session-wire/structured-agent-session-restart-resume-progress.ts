@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionRestartOfferSession } from './structured-agent-session-restart-offer-withdrawal'
 
 type Phase = NonNullable<AgentSessionStatusSummary['restartResume']>['phase']
 
-/** Progress belongs to the action, never to the durable recovery obligation. */
+/** Progress belongs to one live action, independent of durable recovery records. */
 export function createRestartResumeProgress(
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartOfferSession>,
   publish: ((sessionId: string) => void) | undefined
@@ -34,7 +34,7 @@ export function createRestartResumeProgress(
         return
       }
       if (phase === 'queued' || phase === 'skipped') {
-        // Excluding a request cannot take progress away from an admitted action.
+        // Excluded requests cannot replace an admitted action’s progress.
         if (
           session.restartResume &&
           (phase === 'skipped' || session.restartResume.phase !== 'skipped')

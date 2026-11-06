@@ -1,17 +1,16 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isStructuredAgentSessionCommandTurnId } from './structured-agent-session-command-turn'
 
-/** What a settlement read needs: the journal's sends and position, and the live generation's
- *  running turn as the host's projection reads it (`structuredAgentSessionCurrentWork`), so a send
- *  never reads as waiting behind a command an ended generation left. */
-export type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor'> & {
+/** Scope active turns to the live generation so ended commands cannot hold delivery waits. */
+export type SendSettlementJournal = Pick<AgentSessionJournal, 'submission' | 'cursor'> & {
+  attemptEnded?: (clientMessageId: string) => boolean
   activeTurnId: () => string | null
+  behindCommand?: (clientMessageId: string) => boolean
 }
 
 type SettledSend = {
@@ -21,13 +20,10 @@ type SettledSend = {
 
 type SendSettlement = SettledSend | 'pending' | 'missing'
 
-/** What ends a wait: the provider's answer, the host handing the message over, or either that or
- *  the message waiting behind a running command, which hands nothing over until it ends. */
 export type SendSettlementPoint = 'answered' | 'handed-over' | 'handed-over-or-behind-command'
 
 export type SendSettlementWaitOptions = {
   signal?: AbortSignal
-  /** How long to observe; unanswered by then resolves undefined. */
   budgetMs?: number
   until?: SendSettlementPoint
 }
@@ -44,7 +40,7 @@ type SendSettlementWaiter = {
 
 // Known legacy clients abandon the RPC after 15s without cancelling its socket dispatch.
 const SEND_SETTLEMENT_WAIT_TIMEOUT_MS = 30_000
-/** Long enough for a cold provider start; a longer one replays through the same wait. */
+/** Longer cold starts retry through the same wait. */
 export const STRUCTURED_AGENT_SESSION_START_WAIT_MS = 120_000
 const MAX_SEND_SETTLEMENT_WAITERS_PER_SESSION = 64
 const MAX_SEND_SETTLEMENT_WAITERS = 1_024
@@ -53,19 +49,24 @@ function settledSend(
   journal: SendSettlementJournal,
   clientMessageId: string,
   until: SendSettlementPoint,
-  submission: AgentJournalSubmission | undefined = journal
-    .submissions()
-    .find((candidate) => candidate.clientMessageId === clientMessageId)
+  submission: AgentJournalSubmission | undefined = journal.submission(clientMessageId)
 ): SendSettlement {
   if (!submission) {
     return 'missing'
   }
+  const ended = submission.dispatchState === 'pending' && journal.attemptEnded?.(clientMessageId)
+  const observed = ended ? { ...submission, dispatchState: 'unknown' as const } : submission
   const waiting =
     until === 'answered'
-      ? submission.dispatchState === 'pending'
+      ? submission.dispatchState === 'pending' && !ended
       : isQueuedAgentJournalSubmission(submission) &&
-        !(until === 'handed-over-or-behind-command' && runningCommand(journal))
-  return waiting ? 'pending' : { cursor: journal.cursor(), value: { clientMessageId, submission } }
+        !(
+          until === 'handed-over-or-behind-command' &&
+          (runningCommand(journal) || journal.behindCommand?.(clientMessageId))
+        )
+  return waiting
+    ? 'pending'
+    : { cursor: journal.cursor(), value: { clientMessageId, submission: observed } }
 }
 
 function runningCommand(journal: SendSettlementJournal): boolean {
@@ -79,7 +80,6 @@ function abortError(signal: AbortSignal): Error {
     : new Error('agent session send settlement wait aborted')
 }
 
-/** Best-effort settlement observation for clients that predate admitted pending replies. */
 export class StructuredAgentSessionSendSettlement {
   private readonly waiters = new Map<string, Set<SendSettlementWaiter>>()
   private waiterCount = 0
@@ -146,15 +146,12 @@ export class StructuredAgentSessionSendSettlement {
     if (!waiters) {
       return
     }
-    const submissions = new Map(
-      journal.submissions().map((submission) => [submission.clientMessageId, submission])
-    )
     for (const waiter of waiters) {
       const result = settledSend(
         journal,
         waiter.clientMessageId,
         waiter.until,
-        submissions.get(waiter.clientMessageId)
+        journal.submission(waiter.clientMessageId)
       )
       if (result !== 'pending') {
         this.remove(sessionId, waiter)
@@ -196,5 +193,19 @@ export class StructuredAgentSessionSendSettlement {
     if (session?.size === 0) {
       this.waiters.delete(sessionId)
     }
+  }
+}
+
+/** Canonical attempt-end evidence completes unanswered waits without changing delivery truth. */
+export function sendSettlementReading(
+  journal: AgentSessionJournal,
+  work: () => StructuredAgentSessionCurrentWork
+): SendSettlementJournal {
+  return {
+    submission: (id) => journal.submission(id),
+    attemptEnded: (id) => journal.queuedMessages.attemptEnded(id),
+    cursor: () => journal.cursor(),
+    activeTurnId: () => work().activeTurnId(),
+    behindCommand: (id) => journal.inputOrder.forced(id)
   }
 }

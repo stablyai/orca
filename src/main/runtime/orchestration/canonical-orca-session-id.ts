@@ -5,26 +5,50 @@ import {
   type AgentSessionRecordReader
 } from './structured-session-lineage'
 
-/**
- * The Orca session id orchestration addresses a session by: the first session of its `/clear`
- * lineage, so a cleared chat keeps the address, Runs and mail it had. Every session-to-party step
- * calls this. Without a record store there is no lineage to read, and the id stands for itself.
- */
+/** Address by the /clear root to preserve Runs and mail; without records, retain the supplied id. */
 export function canonicalOrcaSessionId(
   orcaSessionId: OrcaSessionId,
-  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+  store: Pick<
+    AgentSessionRecordReader,
+    'listRecords' | 'lineageRevision'
+  > | null = readAgentSessionRecordStore()
 ): OrcaSessionId {
+  return createCanonicalOrcaSessionResolver(store)(orcaSessionId)
+}
+
+/** Clear edges per lineage revision: mail checks ask per message, and must not rescan every record each time. */
+const clearEdgesByRevision = new WeakMap<object, ReadonlyMap<string, string>>()
+
+export function createCanonicalOrcaSessionResolver(
+  store: Pick<AgentSessionRecordReader, 'listRecords' | 'lineageRevision'> | null
+): (id: OrcaSessionId) => OrcaSessionId {
   if (!store) {
-    return orcaSessionId
+    return (id) => id
   }
-  const clearedFrom = new Map<string, string>()
-  for (const record of store.listRecords()) {
-    const next = clearedInto(record)
-    if (next) {
-      clearedFrom.set(next, record.sessionId)
+  const revision = store.lineageRevision?.()
+  let clearedFrom = revision ? clearEdgesByRevision.get(revision) : undefined
+  if (!clearedFrom) {
+    const edges = new Map<string, string>()
+    for (const record of store.listRecords()) {
+      const next = clearedInto(record)
+      if (next) {
+        edges.set(next, record.sessionId)
+      }
+    }
+    clearedFrom = edges
+    if (revision) {
+      clearEdgesByRevision.set(revision, edges)
     }
   }
-  // A clear chain is acyclic by construction; the visited set only bounds a corrupt store.
+  const edges = clearedFrom
+  return (id) => canonicalOrcaSessionFromEdges(id, edges)
+}
+
+export function canonicalOrcaSessionFromEdges(
+  orcaSessionId: OrcaSessionId,
+  clearedFrom: ReadonlyMap<string, string>
+): OrcaSessionId {
+  // The visited set bounds corrupt chains; valid clear lineage is acyclic.
   let root: string = orcaSessionId
   const earlier = new Set([root])
   let prior = clearedFrom.get(root)

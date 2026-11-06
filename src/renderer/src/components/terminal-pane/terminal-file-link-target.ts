@@ -2,9 +2,10 @@ import { useAppStore } from '@/store'
 import {
   isPathInsideWorktree,
   resolveTerminalFileLink,
-  type ParsedTerminalFileLink
-} from '@/lib/terminal-links'
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+  type ParsedTerminalFileLink,
+  type ResolvedTerminalFileLink
+} from '../../../../shared/terminal/links/terminal-links'
+import { normalizeAbsolutePath } from '../../../../shared/file-links/file-link-path-normalization'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
 import {
@@ -17,8 +18,10 @@ import {
 import type { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import {
   getTerminalPathExistsCacheKey,
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
+  readTerminalPathExistence,
+  writeTerminalPathExistence,
+  startTerminalPathExistsProbe,
+  type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
@@ -34,6 +37,8 @@ export type FileLinkHost = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
+  /** A terminal's host expands its own `~`; chats still resolve it here. */
+  homeOnHost?: boolean
 }
 
 export type FileLinkTarget = {
@@ -45,16 +50,58 @@ export type FileLinkTarget = {
   isRemoteRuntimePath: boolean
   cacheKey: string
   isKnownWorktreeRoot: boolean
+  /** A folder link only its host can expand, such as `~/proj/`: it links only to a workspace root. */
+  hostWorkspaceRootOnly?: true
 }
 
 export type FileLinkPathExistence = ReturnType<typeof createTerminalPathExistenceBatch>
+
+/** Without the pane's own HOME, a paired server's home beats a guess from the cwd, which can name another user's file. WSL and SSH homes stay client-expanded: the server knows neither. */
+function hostExpandsTilde(
+  pathText: string,
+  host: FileLinkHost,
+  connectionId: string | null | undefined
+): boolean {
+  return (
+    /^~[\\/]/.test(pathText) &&
+    host.homeOnHost === true &&
+    !host.homePath &&
+    Boolean(host.runtimeEnvironmentId) &&
+    !connectionId &&
+    !parseWslUncPath(host.worktreePath)
+  )
+}
+
+/** Detected path text to the path to check; a paired terminal's `~` stays for its host to expand. */
+export function resolveFileLinkPath(
+  parsed: ParsedTerminalFileLink,
+  host: FileLinkHost,
+  connectionId = getTerminalFileContext(
+    host.worktreeId,
+    host.worktreePath,
+    host.runtimeEnvironmentId
+  ).connectionId
+): ResolvedTerminalFileLink | null {
+  if (hostExpandsTilde(parsed.pathText, host, connectionId)) {
+    // Why: hosts join what follows `~/` onto home, so a doubled separator would make it absolute.
+    const homeRelative = parsed.pathText.replace(/^(~[\\/])[\\/]+/, '$1')
+    return { absolutePath: homeRelative, line: parsed.line, column: parsed.column }
+  }
+  return host.cwd ? resolveTerminalFileLink(parsed, host.cwd, host.homePath) : null
+}
 
 /** Detected path text to the host path it names; null when it cannot be a link. */
 export function resolveFileLinkTarget(
   parsed: ParsedTerminalFileLink,
   host: FileLinkHost
 ): FileLinkTarget | null {
-  const resolved = host.cwd ? resolveTerminalFileLink(parsed, host.cwd, host.homePath) : null
+  const fileContext = getTerminalFileContext(
+    host.worktreeId,
+    host.worktreePath,
+    host.runtimeEnvironmentId
+  )
+  const expandsOnHost = hostExpandsTilde(parsed.pathText, host, fileContext.connectionId)
+  const resolved = resolveFileLinkPath(parsed, host, fileContext.connectionId)
   if (!resolved) {
     return null
   }
@@ -63,15 +110,11 @@ export function resolveFileLinkTarget(
     host.worktreePath,
     terminalLinkWslDistro(host.wslDistro, host.runtimeEnvironmentId)
   )
-  const fileContext = getTerminalFileContext(
-    host.worktreeId,
-    host.worktreePath,
-    host.runtimeEnvironmentId
-  )
   const isKnownWorktreeRoot = Boolean(
     resolveKnownWorktreeRootPathLink(absolutePath, useAppStore.getState(), fileContext)
   )
-  if (/[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot) {
+  const folderText = /[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot
+  if (folderText && !expandsOnHost) {
     return null
   }
   const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, absolutePath)
@@ -87,15 +130,12 @@ export function resolveFileLinkTarget(
       isRemoteRuntimePath,
       runtimeEnvironmentId: host.runtimeEnvironmentId
     }),
-    isKnownWorktreeRoot
+    isKnownWorktreeRoot,
+    ...(folderText ? { hostWorkspaceRootOnly: true as const } : {})
   }
 }
 
-/**
- * Whether this target may be checked with no click or hover. A network share outside the workspace
- * may not, on any host: on Windows (this machine or an SSH host) that stat opens SMB to the named
- * server and can send the user's credentials. The workspace's own WSL distro is not a share.
- */
+/** Unprompted external-share stats can send credentials over SMB on local or SSH Windows hosts; permit the workspace’s own WSL distro. */
 export function mayCheckFileLinkTargetUnprompted(
   target: FileLinkTarget,
   host: FileLinkHost
@@ -121,12 +161,11 @@ export function mayCheckFileLinkTargetUnprompted(
 /** Rejects when the host cannot answer, so callers never mistake an outage for a missing file. */
 export async function fileLinkTargetExists(
   target: FileLinkTarget,
-  cache: Map<string, boolean>,
+  cache: TerminalPathExistsCache,
   pathExists: FileLinkPathExistence,
   terminalHandle?: string | null
 ): Promise<boolean> {
-  // Why: exact known workspace roots must stay clickable for SSH or
-  // stale local paths even when filesystem probing says "missing".
+  // Known workspace roots remain clickable even when SSH/stale local probing reports missing.
   if (target.isKnownWorktreeRoot) {
     return true
   }
@@ -138,9 +177,16 @@ export async function fileLinkTargetExists(
     // Why: a local stat here would answer for this computer, not the server that printed the path.
     return hostFileLinkTargetExists(target, cache, terminalHandle)
   }
-  const exists =
-    readTerminalPathExistsCache(cache, target.cacheKey) ??
-    (await pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath))
-  writeTerminalPathExistsCache(cache, target.cacheKey, exists)
+  const cached = readTerminalPathExistence(cache, target.cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const probe = startTerminalPathExistsProbe()
+  const exists = await pathExists(
+    target.fileContext,
+    target.absolutePath,
+    target.isRemoteRuntimePath
+  )
+  writeTerminalPathExistence(cache, target.cacheKey, exists, probe)
   return exists
 }

@@ -11,7 +11,7 @@ import {
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BundledSkillInstallResult, BundledSkillPlan } from '../shared/bundled-skill-plan'
 
@@ -38,7 +38,7 @@ vi.mock('../main/skills/bundled-skill-install/local-host', async (importOriginal
   return {
     localBundledSkillInput: async (...args: Parameters<typeof actual.localBundledSkillInput>) => ({
       ...(await actual.localBundledSkillInput(...args)),
-      lockTimeoutMs: 50
+      lockTimeoutMs: 0
     })
   }
 })
@@ -311,7 +311,9 @@ describe('orca skills install/update', () => {
     const projectShared = join(project, '.agents', 'skills', NAME)
     expect(await skillText(projectShared)).toBe(NEW_TEXT)
     expect(await realpath(join(project, '.claude', 'skills', NAME))).toBe(projectShared)
-    expect((await readlink(join(project, '.claude', 'skills', NAME))).startsWith('/')).toBe(false)
+    expect(isAbsolute(await readlink(join(project, '.claude', 'skills', NAME)))).toBe(
+      process.platform === 'win32'
+    )
     expect(await readdir(project)).toEqual(['.agents', '.claude'])
     expect(await lstat(paths.shared).catch(() => null)).toBeNull()
   })

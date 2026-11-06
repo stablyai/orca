@@ -3,7 +3,7 @@ import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
-} from '../../shared/folder-workspace-execution-host'
+} from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 
 export function getVerifiedLocalFolderWorkspaceKeys(state: FolderWorkspaceHostState): Set<string> {
@@ -26,7 +26,7 @@ export function getVerifiedLocalFolderWorkspaceKeys(state: FolderWorkspaceHostSt
     if (resolveFolderWorkspaceHost(state, workspace.id).kind !== 'local') {
       continue
     }
-    // The shared legacy resolver projects runtime ownership as local; attribution cannot.
+    // Legacy resolution can project remote ownership as local; memory attribution must reject it.
     if (
       findFolderWorkspaceCandidateRepos(state, workspace.id).some(
         (repo) => getRepoExecutionHostId(repo) !== 'local'

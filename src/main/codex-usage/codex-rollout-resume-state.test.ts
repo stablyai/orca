@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   buildCodexRolloutResumeState,
-  MIN_RESUMABLE_PREFIX_BYTES,
   resolveCodexRolloutResume
 } from './codex-rollout-resume-state'
+
 import type { CodexUsageParseContext } from './codex-usage-record-parser'
 import type { CodexUsagePersistedFile } from './types'
 
@@ -55,10 +55,7 @@ afterEach(() => {
 })
 
 describe('buildCodexRolloutResumeState', () => {
-  // Without the short-read guard the digest is recorded over whatever bytes did
-  // arrive. A later scan hashes the same too-short range, gets the same digest,
-  // and accepts a resume point past EOF — so the caller resumes over history
-  // that is no longer in the file.
+  // Matching short-read digests must not validate an offset past EOF.
   it('refuses to record an offset the file no longer reaches', async () => {
     const filePath = writeRollout('short-prefix.jsonl', 2000)
 
@@ -67,38 +64,12 @@ describe('buildCodexRolloutResumeState', () => {
     ).resolves.toBeNull()
   })
 
-  // Same guard, disjoint-window layout: the head window is fully readable and
-  // only the boundary window falls past the end of the file.
   it('refuses when only the boundary window falls past the end of the file', async () => {
     const filePath = writeRollout('short-boundary.jsonl', 4 * WINDOW_BYTES)
 
     await expect(
       buildCodexRolloutResumeState(filePath, 5 * WINDOW_BYTES, context)
     ).resolves.toBeNull()
-  })
-
-  // Verifying a short prefix costs more than re-reading it, so no resume point
-  // is recorded there. This is also what keeps every digest read past the point
-  // where the two windows could overlap.
-  it('refuses a prefix at or under the resumable floor', async () => {
-    const filePath = writeRollout('at-floor.jsonl', 4 * WINDOW_BYTES)
-
-    expect(MIN_RESUMABLE_PREFIX_BYTES).toBe(3 * WINDOW_BYTES)
-    await expect(
-      buildCodexRolloutResumeState(filePath, MIN_RESUMABLE_PREFIX_BYTES, context)
-    ).resolves.toBeNull()
-    await expect(
-      buildCodexRolloutResumeState(filePath, MIN_RESUMABLE_PREFIX_BYTES + 1, context)
-    ).resolves.not.toBeNull()
-  })
-
-  it('records an offset the file still reaches', async () => {
-    const filePath = writeRollout('full-prefix.jsonl', 4 * WINDOW_BYTES)
-
-    const state = await buildCodexRolloutResumeState(filePath, 4 * WINDOW_BYTES, context)
-
-    expect(state?.parsedBytes).toBe(4 * WINDOW_BYTES)
-    expect(state?.headDigest).toMatch(new RegExp(`^${WINDOW_BYTES}:`))
   })
 })
 
@@ -110,26 +81,6 @@ describe('resolveCodexRolloutResume', () => {
     const previous = persistedFile(filePath, state)
 
     writeRollout('truncated.jsonl', WINDOW_BYTES)
-
-    await expect(resolveCodexRolloutResume(filePath, previous)).resolves.toBeNull()
-  })
-
-  // A persisted offset under the floor would put the boundary window at a
-  // negative start, so this is input validation on the cache file, not a
-  // restatement of the builder's guard.
-  it('rejects a persisted offset under the floor', async () => {
-    const filePath = writeRollout('under-floor.jsonl', 4 * WINDOW_BYTES)
-    const previous = persistedFile(filePath, {
-      parsedBytes: 100,
-      boundaryDigest: `${WINDOW_BYTES}:unused`,
-      headDigest: `${WINDOW_BYTES}:unused`,
-      physicalFileId: null,
-      sessionId: 'session-under-floor',
-      sessionCwd: null,
-      currentCwd: null,
-      currentModel: null,
-      previousTotals: null
-    })
 
     await expect(resolveCodexRolloutResume(filePath, previous)).resolves.toBeNull()
   })

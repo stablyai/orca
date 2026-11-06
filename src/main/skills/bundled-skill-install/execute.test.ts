@@ -30,7 +30,7 @@ async function npxShared(home: SkillHome, agents: ('claude' | 'cursor')[] = ['cl
   return serviceInput(home, { agents })
 }
 
-/** Dies like a killed process: from the `crashAt`-th rename or move on, every write throws, rollback included. */
+/** After crashAt, all writes fail, including rollback, to model a killed transaction. */
 function crashingFilesystem(crashAt: number): BundledSkillFilesystem {
   let renames = 0
   let dead = false
@@ -38,7 +38,7 @@ function crashingFilesystem(crashAt: number): BundledSkillFilesystem {
     dead = true
     throw Object.assign(new Error('crashed'), { code: 'ECRASH' })
   }
-  // Moves into backups count as renames: they are the same step of a swap.
+  // Backup moves are swap steps too.
   const step = () => {
     renames += 1
     if (dead || renames >= crashAt) {
@@ -114,7 +114,7 @@ describe('interrupted swaps', () => {
 
   it('deletes the released old copy once the new one is in', async () => {
     const home = await makeSkillHome()
-    // The third step is the old copy's delete, which goes through `remove`, not `rename`.
+    // The old copy is removed on the third step; inject failure in remove, not rename.
     const input = await npxShared(home)
     const plan = await previewBundledSkillInstall(input)
     const filesystem: BundledSkillFilesystem = {

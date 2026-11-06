@@ -10,7 +10,7 @@ beforeEach(() => {
 })
 
 describe('published artifact link client', () => {
-  it('returns the locally persisted public link', async () => {
+  it('returns the public link from the local runtime RPC', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({
       status: 'ok',
       value: { shareUrl: 'https://share.onorca.dev/a/artifact-a' }

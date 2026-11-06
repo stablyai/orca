@@ -5,15 +5,13 @@ const INTENT_MS = 1_000
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' '])
 type Moved = { by: 'own' | 'layout' | 'reader' | 'none'; moved: number }
 
-/** WebKit (every iOS browser, and Safari) stops a fling on any scroll write and has no scroll
- *  anchoring; other engines keep momentum, and their anchoring keeps a parked reader's place. */
+// WebKit scroll writes stop flings and it lacks anchoring; other engines preserve momentum and anchor parked readers.
 export function scrollWritesStopMomentum(): boolean {
   const agent = globalThis.navigator?.userAgent ?? ''
   return /AppleWebKit/.test(agent) && !/Chrome|Chromium|Android/.test(agent)
 }
 
-/** Whether a scroll box keeps a parked place itself: on WebKit, which has no scroll anchoring, and at the
- *  very top, where Chromium's anchoring never adjusts (rows measured above would push the reader). */
+// Keep place manually on WebKit and at top, where Chromium anchoring does not adjust.
 export function scrollKeepsPlace(scrollTop: number): boolean {
   return scrollWritesStopMomentum() || scrollTop < 0.5
 }
@@ -24,8 +22,6 @@ type Listened = {
   removeEventListener: (type: string, listener: Listener) => void
 }
 
-/** Which way a scroll key the page scrolls by moves it (1 down, -1 up); 0 for any other key, or one
- *  typed into the composer. */
 function keyWay(event: unknown): number {
   if (typeof KeyboardEvent === 'undefined' || !(event instanceof KeyboardEvent)) {
     return 0
@@ -53,34 +49,27 @@ function touchY(event: unknown): number | undefined {
   return typeof y === 'number' ? y : undefined
 }
 
-/** Whether the reader is moving an inner scroll box, told apart from its own writes: on WebKit a
- *  correction waits until the box settles. */
 export class MobileNativeChatScrollMotion {
   private touching = false
   private pointing = false
   private lastInput = 0
-  /** Which way the reader's last input moves the page: 1 down, -1 up, 0 unknown (the scrollbar). */
   private way = 0
   private lastTouchY: number | undefined
   private lastReaderScroll = 0
-  /** The browser moves the scroll too (its anchoring), so only input makes a move the reader's. */
+  // Where browser anchoring also scrolls, require reader input to attribute movement to the reader.
   private readonly browserMoves = !scrollWritesStopMomentum()
-  /** Where the page last accounted for the scroll: its write, an observed scroll, a resize. */
   private seen = 0
   private seenMax = Infinity
-  /** A commit changed what is drawn and its resize callback hasn't run: a move now is layout's. */
+  // Until post-commit resize reconciliation, attribute movement to layout.
   private unreconciled = false
   private drawn = ''
   private layouts = 0
-  /** Where the page's own writes put the scroller, until their scroll event arrives. */
   private own: number[] = []
 
   constructor(initialTop = 0) {
     this.seen = initialTop
   }
 
-  /** Follows the reader's hand on the scroller (touch, wheel, scroll keys, the scrollbar); returns
-   *  the detach. */
   attach(scroller: Listened, acceptsKey: (event: unknown) => boolean = () => true): () => void {
     const input = (way: number) => {
       ;[this.lastInput, this.way] = [Date.now(), way]
@@ -94,7 +83,6 @@ export class MobileNativeChatScrollMotion {
     const move = (event: unknown) => {
       const [from, y] = [this.lastTouchY, touchY(event)]
       this.lastTouchY = y
-      // A finger moving up scrolls the page down.
       input(from !== undefined && y !== undefined && y !== from ? Math.sign(from - y) : this.way)
     }
     const start = (event: unknown) => {
@@ -102,7 +90,6 @@ export class MobileNativeChatScrollMotion {
       input(0)
       this.touch(true)
     }
-    // The scrollbar, which is the scroller's own; a press on a row inside is no scroll.
     const point = (event: unknown) => {
       if (
         typeof event === 'object' &&
@@ -114,7 +101,6 @@ export class MobileNativeChatScrollMotion {
         this.way = 0
       }
     }
-    // Released, or moving with no button down: a pointerup lost after a scrollbar drag can't stick.
     const up = (event: unknown) => {
       if (!(typeof event === 'object' && event !== null && 'buttons' in event && event.buttons)) {
         this.pointing = false
@@ -128,7 +114,7 @@ export class MobileNativeChatScrollMotion {
       [scroller, 'wheel', (event) => input(wheelWay(event))],
       [scroller, 'pointerdown', point]
     ]
-    // A scrollbar drag can end, and a scroll key arrive, outside the scroller.
+    // Scrollbar release and scroll keys may arrive outside the scroller.
     if ('addEventListener' in globalThis) {
       listeners.push([globalThis, 'pointerup', up], [globalThis, 'pointercancel', up])
       listeners.push([globalThis, 'pointermove', up], [globalThis, 'keydown', key])
@@ -145,8 +131,7 @@ export class MobileNativeChatScrollMotion {
     }
   }
 
-  /** A commit drew `drawn`. When that changed, a move is layout's until its resize callback (or the
-   *  next frame, when nothing resized); scroll events run before that frame's resize callbacks. */
+  // Scroll events precede resize callbacks; treat changed draws as unreconciled layout until resize or next frame.
   laidOut(drawn: string): void {
     if (drawn === this.drawn) {
       return
@@ -161,16 +146,11 @@ export class MobileNativeChatScrollMotion {
     })
   }
 
-  /** The resize callback reconciled layout: what moved the scroll since the page last accounted
-   *  for it is now told apart (a scroll event may not have reported it yet). */
   reconciled(scrollTop: number, max: number): Moved {
     this.unreconciled = false
     return this.account(scrollTop, max)
   }
 
-  /** What moved the scroll to `scrollTop` since the page last accounted for it, and by how much. The
-   *  page's write; layout while a commit is unreconciled or rows above the reading place moved
-   *  (`placeMoved`), left for the resize callback to tell apart; else as `account`. */
   scrolled(scrollTop: number, max: number, placeMoved: () => boolean): Moved {
     const moved = scrollTop - this.seen
     const at = this.own.findIndex((target) => Math.abs(target - scrollTop) <= 1)
@@ -185,15 +165,14 @@ export class MobileNativeChatScrollMotion {
     return this.account(scrollTop, max)
   }
 
-  /** A clamp onto a shorter end is layout's; any other move is the reader's (a finger makes it so),
-   *  except where the browser moves the scroll too: there only input (or the fling it started) does. */
+  // Distinguish shorter-content clamps from reader motion; browser anchoring requires recent input moving in the same direction.
   private account(scrollTop: number, max: number): Moved {
     const [from, fromMax, moved] = [this.seen, this.seenMax, scrollTop - this.seen]
     ;[this.seen, this.seenMax] = [scrollTop, max]
     if (Math.abs(moved) < 0.5) {
       return { by: 'none', moved }
     }
-    // Pulled back onto a shorter end from where the old one allowed; iOS bouncing past an end is not.
+    // A shorter-end clamp is layout movement; iOS overscroll beyond the old end is not.
     const clamped = Math.abs(scrollTop - max) < 0.5 && from > max + 0.5 && from <= fromMax + 0.5
     if ((clamped && !this.touching) || (this.browserMoves && !this.intended(moved))) {
       return { by: 'layout', moved }
@@ -202,8 +181,7 @@ export class MobileNativeChatScrollMotion {
     return { by: 'reader', moved }
   }
 
-  /** Input is recent (a fling counts from the finger's release) and the move goes its way: the
-   *  browser's anchoring moving against it is the browser's, so it can't detach the reader. */
+  // Match recent input direction so opposing browser-anchor corrections cannot detach a following reader.
   private intended(moved: number): boolean {
     const recent = this.touching || this.pointing || Date.now() - this.lastInput <= INTENT_MS
     return recent && (this.way === 0 || Math.sign(moved) === this.way)
@@ -218,8 +196,6 @@ export class MobileNativeChatScrollMotion {
     return !this.touching && Date.now() - this.lastReaderScroll >= REST_MS
   }
 
-  /** A place correction may be written now: at once where a write keeps momentum (as the common
-   *  list does), else only at rest. */
   readonly mayCorrect = scrollWritesStopMomentum() ? () => this.settled() : () => true
 
   release(): void {

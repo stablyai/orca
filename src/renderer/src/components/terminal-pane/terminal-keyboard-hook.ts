@@ -52,15 +52,12 @@ export function useTerminalKeyboardShortcuts({
     const isWindows = navigator.userAgent.includes('Windows')
     const shortcutPlatform: KeybindingPlatform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
-    // Why: kitty Option-chord encoding resolves base keys through the async
-    // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
+    // Prefetch async KeyboardLayoutMap before kitty Option encoding needs the base key.
     if (isMac) {
       prefetchLayoutCharacters()
     }
 
-    // Why: KeyboardEvent.location on a character key (e.g. Period) always
-    // reports that key's own position (0 = standard), not which modifier is
-    // held. Track each Option key independently and clear stale state on blur.
+    // Character-key location cannot identify held Option side; track each modifier separately and clear on blur.
     const runtime = createTerminalKeyboardRuntime({
       tabId,
       worktreeId,

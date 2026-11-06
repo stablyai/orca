@@ -1,11 +1,8 @@
-// Where a tab the window asks main to open goes, resolved as today's create resolves it: the
-// requested live group, else the anchor's, else the active one, else the workspace's first (a
-// workspace with none gets its root group). An open to the side names a new group beside its
-// source, and an empty group only the window holds names the split that made it.
+// Resolve placement like create: requested live group, anchor, active, then first/root; side opens carry their split, including window-only empty groups.
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { NewGroupSplit } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../../types'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'

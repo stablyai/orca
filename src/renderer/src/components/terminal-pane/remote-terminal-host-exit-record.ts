@@ -4,11 +4,7 @@ type HostTerminalExitFacts = Partial<
   Pick<RuntimeTerminalSummary, 'verdict' | 'exitCause' | 'connected'>
 >
 
-/**
- * True only when the execution host itself recorded this terminal's exit. A host's verdict wins;
- * a host that sends no verdict still counts when it records an observed exit for a terminal
- * it reports disconnected. Anything else (no answer, unverifiable, an older host) proves nothing.
- */
+/** Trust host exit verdicts or recorded observed exit on a disconnected terminal; missing/unverifiable/legacy answers prove no death. */
 export function hostRecordsTerminalExit(
   terminal: HostTerminalExitFacts | null | undefined
 ): boolean {
@@ -24,6 +20,13 @@ export function hostRecordsTerminalExit(
   }
   // Why: stop_unverified is a stop nobody saw land, so the process may still run.
   return !(cause.kind === 'unknown' && cause.reason === 'stop_unverified')
+}
+
+export function hostRecordedExitCode(
+  terminal: HostTerminalExitFacts | null | undefined
+): number | undefined {
+  const cause = terminal?.exitCause
+  return cause?.kind === 'exited' ? cause.exitCode : undefined
 }
 
 /** A same-handle restart shows up only as a new PTY or incarnation, so a known mismatch is a replacement. */

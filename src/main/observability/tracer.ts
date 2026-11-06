@@ -1,23 +1,4 @@
-// A small, plain-TS span recorder modeled on a local-first
-// `LocalFileTracer` / `TraceSink` pair. Orca does not use Effect, so we
-// port the *behavior* — span lifecycle, attribute capture, exit-status
-// recording — rather than the Effect Tracer.Tracer interface, and emit the
-// same NDJSON record shape our local sink expects (`type: 'effect-span'`,
-// `traceId`, `spanId`, `parentSpanId?`, `attributes`, `events`, `exit`).
-// The compact shape keeps local diagnostic files readable and cheap to
-// collect for user-reviewed support uploads.
-//
-// Concurrency model: in-process span tree maintained via Node's
-// `AsyncLocalStorage`, so a child span created inside an `await` chain
-// inherits its caller's parent without explicit threading. The tree itself
-// is single-threaded — Electron's main process is one v8 isolate, no
-// worker_threads in this layer — so plain in-memory state is enough.
-//
-// All spans hand off through `redactSpan()` before serialization. The
-// redactor is run at sink-write time, again at bundle-collection time, and
-// a third time on the server (see redactor.ts) — three locations of one
-// idempotent function. The runtime cost is dominated by `redactString` on
-// the exit cause string and is negligible at the span volume we expect.
+// AsyncLocalStorage propagates span parents across awaits; redact completed records before sink writes.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes } from 'node:crypto'
@@ -35,21 +16,13 @@ export type SpanContext = {
 }
 
 export type ActiveSpan = SpanContext & {
-  /** Set or overwrite an attribute on this span. Free-form values are fine
-   *  — they pass through `redactValue` at serialization time. */
+  /** Attribute values are redacted on serialization. */
   setAttribute(key: string, value: unknown): void
-  /** Record a span event (an embedded log message). `attributes` are
-   *  redacted with the same blocklist as span attributes. */
+  /** Event attributes use the span-attribute redaction rules. */
   addEvent(name: string, attributes?: Record<string, unknown>): void
-  /** Mark the span complete with a Failure exit. `cause` typically holds
-   *  the formatted stack chain. */
   fail(cause: string | Error): void
-  /** Mark the span complete with an Interrupted exit (user cancellation,
-   *  process abort). */
   interrupt(cause?: string): void
-  /** Mark the span complete with a Success exit. Idempotent — calling end()
-   *  twice is a no-op so wrappers can call it from a finally block without
-   *  worrying about a prior fail()/interrupt() race. */
+  /** End successfully; repeated end/fail/interrupt calls have no effect. */
   end(): void
 }
 
@@ -69,28 +42,16 @@ type PendingSpan = {
 const noopSpan: ActiveSpan = {
   traceId: '',
   spanId: '',
-  setAttribute() {
-    /* no-op */
-  },
-  addEvent() {
-    /* no-op */
-  },
-  fail() {
-    /* no-op */
-  },
-  interrupt() {
-    /* no-op */
-  },
-  end() {
-    /* no-op */
-  }
+  setAttribute() {},
+  addEvent() {},
+  fail() {},
+  interrupt() {},
+  end() {}
 }
 
 let activeSink: TracerSink | null = null
 const contextStorage = new AsyncLocalStorage<SpanContext>()
 
-// 16-byte traceId / 8-byte spanId — compact hex IDs keep local NDJSON
-// records close to standard trace shapes without introducing UUID dashes.
 function genTraceId(): string {
   return randomBytes(16).toString('hex')
 }
@@ -99,15 +60,10 @@ function genSpanId(): string {
 }
 
 function nowUnixNano(): bigint {
-  // Date.now() is millisecond-precision; Effect's NativeSpan uses
-  // process.hrtime.bigint() but the boot-time offset is annoying to align.
-  // Millisecond × 1e6 is fine for the scope of "did span A start before
-  // span B" comparisons within one process.
+  // Convert epoch milliseconds to the NDJSON nanosecond representation without claiming higher precision.
   return BigInt(Date.now()) * 1_000_000n
 }
 
-/** Install the active sink. Called by `index.ts` from the composition root.
- *  Multiple installs are not supported — `setActiveSink(null)` clears. */
 export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
@@ -116,33 +72,19 @@ export function hasActiveTraceSink(): boolean {
   return activeSink !== null
 }
 
-/** Force records already handed to the tracer onto disk. Reserve this for
- * crash boundaries where the process may not survive the normal batch window. */
+/** Flush at crash boundaries that may not survive the normal batch window. */
 export function flushActiveSink(): void {
   try {
     activeSink?.flush()
   } catch {
-    // Why: a disk/rotation failure in optional local diagnostics must never
-    // turn a recoverable renderer crash into a main-process crash.
+    // Optional diagnostics must not turn a recoverable crash into a main-process crash.
   }
 }
 
-/** Get the current parent context, or `undefined` if we are at the top of
- *  the trace tree. Renderer-IPC entry points capture this, embed it in
- *  span-event attributes (so cross-process spans can be visually linked
- *  later in v2), and start a new trace. */
 export function getActiveSpanContext(): SpanContext | undefined {
   return contextStorage.getStore()
 }
 
-/**
- * Start a span and run `fn` inside its context. The returned promise
- * resolves to `fn`'s return value; `fn`'s thrown errors propagate after
- * the span has been recorded as a Failure.
- *
- * This is the function 90% of call sites should reach for: it keeps span
- * lifetime scoped to the async work it measures.
- */
 type SpanRecordDecision = (record: RedactableSpan) => boolean
 
 export async function withSpan<T>(
@@ -167,15 +109,7 @@ export async function withSpan<T>(
   }
 }
 
-/**
- * Start a span without binding it to a context. Use when the lifecycle is
- * not naturally scoped to a function — long-running PTY sessions, agent
- * lifecycles. The caller is responsible for calling `end()` / `fail()`;
- * forgetting to end leaks memory in the pending map until the next
- * `clearPending()`.
- *
- * Hot path is `withSpan`; this is the escape hatch.
- */
+/** Start without binding context; callers must end, fail or interrupt the span themselves. */
 export function startSpan(
   name: string,
   options?: {
@@ -233,14 +167,11 @@ export function startSpan(
     }
 
     const redacted = redactSpan(record, 'client')
-    // Wrap in a `type: 'effect-span'` envelope so the NDJSON file is
-    // compatible with Effect-style span output. Effect-oriented consumers
-    // (the LGTM stack, jq cookbooks) can read the file unchanged.
+    // Keep the Effect-compatible envelope expected by existing NDJSON consumers.
     try {
       activeSink?.push({ type: 'effect-span', ...redacted })
     } catch {
-      // Why: tracing is optional; a local file rotation failure must not turn
-      // the instrumented operation into an application failure.
+      // Optional tracing failures must not fail the instrumented operation.
     }
   }
 
@@ -270,17 +201,12 @@ export function startSpan(
   }
 }
 
-/** Pretty-print an Error including stack, for the Failure cause field. The
- *  redactor handles the in-string secret stripping. */
 function formatError(err: Error): string {
   const head = `${err.name}: ${err.message}`
   return err.stack ? `${head}\n${err.stack}` : head
 }
 
-// ── Test-only ────────────────────────────────────────────────────────────
-
 export function _resetTracerForTests(): void {
   activeSink = null
-  // No way to clear the AsyncLocalStorage without a fresh one; tests that
-  // assert on context should run inside their own `withSpan` block.
+  // Context tests should create their own withSpan scope.
 }

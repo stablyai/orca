@@ -3,7 +3,7 @@
  * any of them is ambiguous until the user removes one entry.
  */
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
 import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from '@/store/slices/worktrees/listing/worktree-slice-constants'
@@ -28,7 +28,6 @@ export type DuplicateServerState = {
   projectGroups?: readonly { id: string; executionHostId?: string | null }[]
 }
 
-/** Other saved servers carrying this one's host key, by name. */
 export function duplicatePairedServerNames(
   environments: readonly DuplicateServerEnvironment[],
   environmentId: string
@@ -64,7 +63,6 @@ function publisherOf(row: PublisherRow): Publisher {
     : { publisher: `host:${row.hostId ?? 'unstamped'}`, place }
 }
 
-/** Every host whose rows publish this workspace, and the places they publish it at. */
 function workspacePublishers(
   state: DuplicateServerState,
   workspaceId: string
@@ -103,11 +101,7 @@ function workspacePublishers(
   return { publishers, places }
 }
 
-/**
- * The two names when every host publishing this workspace is a saved server with one host key, or
- * null. Why every host and one place: if another host publishes it, or the twins proxy two targets
- * holding the same id, removing a twin would not end the refusal, so naming them would mislead.
- */
+/** Name twins only if every publisher shares one server host key and one target; removing a twin must actually resolve the ambiguity. */
 export function findDuplicatePairedServersForWorkspace(
   state: DuplicateServerState,
   workspaceId: string
@@ -129,10 +123,7 @@ export function findDuplicatePairedServersForWorkspace(
     : null
 }
 
-/**
- * Why a specific message: refreshing never resolves a server paired twice, so the generic advice
- * leaves the user stuck. Every other ambiguity keeps the generic text.
- */
+// Refreshing cannot fix a server paired twice; name that remedy while retaining generic advice for other ambiguity.
 export function ambiguousWorkspaceOwnerMessage(
   state: DuplicateServerState,
   workspaceId: string

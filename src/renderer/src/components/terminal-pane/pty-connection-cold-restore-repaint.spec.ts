@@ -4,10 +4,10 @@ import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
   RELEASE_SYNCHRONIZED_OUTPUT
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Terminal } from '@xterm/headless'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 import {
   flushAsyncTicks,
   writeHeadlessTerminal,
@@ -15,13 +15,20 @@ import {
 } from './pty-connection-test-async'
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -64,6 +71,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
     })
     it('paints only the daemon snapshot when reattach result includes both snapshot and replay', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -90,18 +99,26 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}snapshot-payload`,
         expect.any(Function)
       )
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('replay-payload', expect.any(Function))
+      expect(
+        pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data)).join('')
+      ).not.toContain('replay-payload')
     })
 
     it('paints only relay replay when reattach result has replay and coldRestore but no snapshot', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -128,16 +145,21 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(20)
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}replay-payload`,
         expect.any(Function)
       )
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('cold-payload', expect.any(Function))
-      // Why: the replay branch supersedes cold-restore but must still ack, or the daemon redelivers the cold-restore payload next reattach.
-      // A layout-owner window names the pane it painted, so main releases only its current terminal.
+      expect(
+        pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data)).join('')
+      ).not.toContain('cold-payload')
+      // Replay still owes a cold-restore ack to prevent redelivery; identify the painted pane so main releases only its current terminal.
       expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith(
         'tab-pty',
         ...(ORCA_LAYOUT_OWNER_IS_MAIN
@@ -148,6 +170,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
 
     it('blanks restored scrollback before fresh shell output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       const written: string[] = []
       transport.connect.mockImplementation(
@@ -174,7 +198,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       const pane = createPane(1)
       pane.terminal.rows = 4
       pane.terminal.cols = 20
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         written.push(data)
         callback?.()
       })
@@ -183,7 +208,11 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         restoredViewportBlankingPanesRef: { current: new Set([1]) }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(20)
 
       const blankViewport = buildFreshShellViewportBlankingSequence(4)
@@ -202,6 +231,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
 
     it('cold-restores at the recovered grid and clears only the dirty viewport before blanking', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('fresh-pty')
       const written: string[] = []
       const operations: (
@@ -242,12 +273,13 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       pane.terminal.cols = destinationCols
       let sawViewportClear = false
       const preResizeBarrier = { release: null as (() => void) | null }
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         written.push(data)
         operations.push({ kind: 'write', data })
         if (data === viewportClear) {
           sawViewportClear = true
-        } else if (sawViewportClear && data === '' && preResizeBarrier.release === null) {
+        } else if (sawViewportClear && data.length === 0 && preResizeBarrier.release === null) {
           preResizeBarrier.release = callback ?? (() => {})
           return
         }
@@ -271,7 +303,11 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(20)
       expect(preResizeBarrier.release).not.toBeNull()
       expect(pane.terminal.resize).not.toHaveBeenCalledWith(recoveredCols, recoveredRows)

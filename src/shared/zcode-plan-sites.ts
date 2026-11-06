@@ -1,11 +1,6 @@
 import type { SecretAtRestProtection } from './secret-at-rest-protection'
 
-/**
- * GLM Coding Plan site table shared by the zcode credential store, the usage
- * fetcher, and the Accounts settings section. The provider id stays `zcode`;
- * the two sites are the international Z.AI console and Zhipu's mainland
- * BigModel platform.
- */
+/** GLM Coding Plan sites share provider ID zcode: international Z.AI and mainland BigModel. */
 export type ZcodePlanSite = 'zai' | 'bigmodel'
 
 export const ZCODE_PLAN_SITE_BASE_URLS: Record<ZcodePlanSite, string> = {

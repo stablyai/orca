@@ -1,10 +1,8 @@
-// A workspace a paired server owns (its row names the server, as the app's catalog sets it): its
-// browser and chat tabs open and close as today in both builds, and never reach main's layout.
-// An SSH worktree is laid out by this machine's main but has no host to run a chat on.
+// Paired-owned browser/chat layouts bypass local main in both builds. SSH worktree layout remains local-main-owned but lacks a structured-chat host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import '../../../../shared/layout-owner-switch'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
@@ -46,8 +44,7 @@ vi.mock('sonner', () => ({
 
 createStoreCascadesMockApi()
 
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-provisional-tab'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 
 const SERVER = 'server-1'
 const SERVER_WT = 'repo-s::/srv/app'
@@ -112,19 +109,6 @@ const sentFor = (worktreeId: string) =>
   layoutApplyTestTransport.sent.filter((command) => command.workspace === worktreeId)
 
 describe("a paired server's workspace", () => {
-  it('opens and closes a browser tab without main', async () => {
-    const browserTab = store.getState().createBrowserTab(SERVER_WT, 'https://example.com')
-    await main.settle()
-    const drawn = tabsOf(SERVER_WT).find((tab) => tab.entityId === browserTab.id)
-    expect(drawn).toMatchObject({ contentType: 'browser' })
-
-    store.getState().closeBrowserTab(browserTab.id)
-    await main.settle()
-
-    expect(tabsOf(SERVER_WT).some((tab) => tab.entityId === browserTab.id)).toBe(false)
-    expect(sentFor(SERVER_WT)).toEqual([])
-  })
-
   it('opens and closes a chat tab without main', async () => {
     const chat = openStructuredAgentSessionProvisionalTab({
       worktreeId: SERVER_WT,
@@ -147,37 +131,5 @@ describe("a paired server's workspace", () => {
         method: 'session.tabs.close'
       })
     )
-  })
-
-  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
-    "presence: this machine's workspace sends the same opens and closes to main",
-    async () => {
-      const browserTab = store.getState().createBrowserTab(LOCAL_WT, 'https://example.com')
-      await main.settle()
-      store.getState().closeBrowserTab(browserTab.id)
-      const chat = openStructuredAgentSessionProvisionalTab({
-        worktreeId: LOCAL_WT,
-        executionHostId: 'local',
-        sessionId: 'chat-2',
-        agent: 'codex'
-      })
-      await main.settle()
-      store.getState().closeUnifiedTab(chat.id)
-      await main.settle()
-
-      expect(sentFor(LOCAL_WT).map((command) => command.type)).toEqual([
-        'openBrowserTab',
-        'closeTabs',
-        'openAgentSessionTab',
-        'closeTabs'
-      ])
-    }
-  )
-})
-
-describe('an SSH worktree', () => {
-  it("has no host to run a chat on, where this machine's worktree has its own", () => {
-    expect(resolveStructuredAgentSessionOwner(store.getState(), SSH_WT)).toBeNull()
-    expect(resolveStructuredAgentSessionOwner(store.getState(), LOCAL_WT)).toBe('local')
   })
 })

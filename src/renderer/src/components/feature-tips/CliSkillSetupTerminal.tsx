@@ -7,17 +7,14 @@ import { OnboardingInlineCommandTerminal } from '@/components/onboarding/Onboard
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
-} from '@/components/settings/CliSkillRuntimeSetup'
+} from '@/lib/skill-runtime-command'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  // Why: a repair-required runtime resolves to a WSL distro that is missing, so
-  // drop back to the host runtime. This terminal auto-pastes with no install
-  // gate, and repair-required only happens on Windows, so it still needs the
-  // npx preflight.
+  // Missing WSL distros fall back to the Windows host; this ungated auto-paste still needs npx preflight.
   const skillCommand = buildSkillCommandForRuntime(
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
     activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime

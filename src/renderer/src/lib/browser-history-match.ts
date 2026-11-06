@@ -1,6 +1,3 @@
-// Tiered matching over `state.browserUrlHistory`, shared by the browser address
-// bar and the new-tab omnibox. Pure: no store, no React.
-
 import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
@@ -25,9 +22,7 @@ export type PreparedBrowserHistoryEntry = {
   entry: BrowserHistoryEntry
   lowerUrl: string
   lowerTitle: string
-  /** Host with scheme and a leading "www." stripped, lowercased. */
   lowerHost: string
-  /** visitCount contribution, fixed at prepare time. */
   frecencyBase: number
 }
 
@@ -43,7 +38,6 @@ const preparedHistoryCache = new WeakMap<
   readonly PreparedBrowserHistoryEntry[]
 >()
 
-/** Host with scheme and a leading "www." stripped, lowercased; empty when the URL won't parse. */
 export function historyHost(url: string): string {
   try {
     return new URL(url).host.toLowerCase().replace(/^www\./, '')
@@ -52,13 +46,11 @@ export function historyHost(url: string): string {
   }
 }
 
-/** Detail text for a history row: host, path, query and fragment, no scheme or "www.". */
 export function formatBrowserHistoryUrl(url: string): string {
   return formatBrowserPaletteUrl(url).replace(/^www\./, '')
 }
 
-// Why prepare: the naive scorer lowercases every url and title on every
-// keystroke. Hoisting it to once-per-open mirrors what the palette engines do.
+// Prepare lowercased URL/title once per open instead of rescanning them on every keystroke.
 export function prepareBrowserHistoryEntries(
   entries: readonly BrowserHistoryEntry[]
 ): readonly PreparedBrowserHistoryEntry[] {
@@ -90,11 +82,9 @@ function matchTier(
   prepared: PreparedBrowserHistoryEntry,
   lowerQuery: string
 ): BrowserHistoryMatchTier | null {
-  // A workspace-doc entry's url is a filesystem path, so it has no host: a path
-  // prefix is as deliberate as a host prefix and earns the same top tier.
+  // Workspace-doc URLs are filesystem paths; their deliberate path prefixes deserve the host-prefix tier.
   const prefixTarget = prepared.lowerHost === '' ? prepared.lowerUrl : prepared.lowerHost
-  // Preserve the address-bar's long-standing behavior for fully-qualified
-  // input (e.g. `https://github.com`), while still ranking bare hosts by host.
+  // Preserve full-URL matching while ranking bare hosts by host.
   if (prefixTarget.startsWith(lowerQuery) || prepared.lowerUrl.startsWith(lowerQuery)) {
     return 'host-prefix'
   }
@@ -136,8 +126,7 @@ export function matchBrowserHistory({
   if (matches.length === 0) {
     return NO_MATCHES
   }
-  // Why the url last: ordering must not wobble between renders when a snapshot
-  // reorders two entries that also tie on tier, score and recency.
+  // Break ties by URL so reordered snapshots cannot wobble otherwise-equal results.
   matches.sort(
     (a, b) =>
       TIER_RANK[a.tier] - TIER_RANK[b.tier] ||

@@ -1,10 +1,11 @@
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import type { PanePtyBinding } from './pty-connection/pane-pty-binding'
 import type { IDisposable } from '@xterm/xterm'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PaneExternalDropHandler,
   PaneExternalDropResolver,
@@ -50,14 +51,15 @@ export type UseTerminalPaneLifecycleDeps = {
   expandedStyleSnapshotRef: React.MutableRefObject<
     Map<HTMLElement, { display: string; flex: string }>
   >
-  paneFontSizesRef: React.RefObject<Map<number, number>>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   /** Per-pane live cwd (from the OSC 7 handler). */
   paneCwdRef: React.RefObject<PaneCwdMap>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
-  panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
+  panePtyBindingsRef: React.RefObject<
+    Map<number, IDisposable & Partial<Pick<PanePtyBinding, 'getOwnerContext'>>>
+  >
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
@@ -97,6 +99,8 @@ export type UseTerminalPaneLifecycleDeps = {
   clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
   /** Settles the captured one-shot startup only after a pane owns a concrete PTY. */
   onStartupBound?: () => void
+  /** Re-renders mobile lock overlays for fit/driver state that arrived before a pane bound its PTY. */
+  refreshMobileOverlays?: () => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void

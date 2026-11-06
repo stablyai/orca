@@ -6,11 +6,13 @@ vi.mock('electron', async () =>
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
@@ -32,11 +34,11 @@ import { RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS } from './renderer-launch-failu
 const LAUNCH_FAILED: Electron.RenderProcessGoneDetails = { reason: 'launch-failed', exitCode: 1003 }
 const CRASHED: Electron.RenderProcessGoneDetails = { reason: 'crashed', exitCode: 5 }
 
-/**
- * Field shape (v1.4.218, bundle F0C6NHQF4C8): while the OS refuses spawns, every load emits launch-failed and then
- * rejects ERR_FAILED within ~10ms, before any did-finish-load. Once headroom returns the same webContents loads.
- */
-function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
+/** Reproduce spawn refusal: launch-failed then ERR_FAILED before a document; the same WebContents loads once process headroom returns. */
+function createSpawnRefusingWindow(
+  platform: NodeJS.Platform = 'darwin',
+  failure: Electron.RenderProcessGoneDetails = LAUNCH_FAILED
+) {
   const handlers: Record<string, (...args: any[]) => void> = {}
   const spawn = { refused: true }
   const webContents = {
@@ -48,6 +50,7 @@ function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn()
@@ -58,7 +61,7 @@ function createSpawnRefusingWindow(platform: NodeJS.Platform = 'darwin') {
       return Promise.resolve()
     }
     queueMicrotask(() =>
-      withPlatform(platform, () => handlers['render-process-gone']?.({}, LAUNCH_FAILED))
+      withPlatform(platform, () => handlers['render-process-gone']?.({}, failure))
     )
     return Promise.reject(
       new Error("ERR_FAILED (-2) loading 'file:///opt/orca/renderer/index.html'")
@@ -110,30 +113,10 @@ describe('renderer launch-failed recovery', () => {
     vi.restoreAllMocks()
   })
 
-  it('backs off instead of opening the crash-loop breaker after 3 quick failures', async () => {
-    const { load } = createSpawnRefusingWindow()
-    const { onRendererRecoveryExhausted } = open()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(load).toHaveBeenCalledTimes(1)
-
-    // Field: 3 reloads in ~750ms, then the breaker opened. Now retries spread out: 250ms, 1s, 2s, 4s, ...
-    await vi.advanceTimersByTimeAsync(250)
-    expect(load).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(999)
-    expect(load).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(load).toHaveBeenCalledTimes(3)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(load).toHaveBeenCalledTimes(4)
-    await vi.advanceTimersByTimeAsync(4_000)
-    expect(load).toHaveBeenCalledTimes(5)
-    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
-  })
-
   it('recovers in place once spawn headroom returns, without any prompt', async () => {
     const { handlers, load, spawn } = createSpawnRefusingWindow()
     const { onRendererRecoveryExhausted, onRecoveryReloadOutcome } = open()
-    // Field: the process table stayed full for minutes.
+    // Reproduce process-table exhaustion lasting minutes.
     await vi.advanceTimersByTimeAsync(250 + 1_000 + 2_000 + 4_000 + 8_000 + 15_000)
     expect(load).toHaveBeenCalledTimes(7)
     spawn.refused = false
@@ -147,7 +130,7 @@ describe('renderer launch-failed recovery', () => {
     expect(load).toHaveBeenCalledTimes(8)
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // A loaded document starts a fresh schedule: the next launch failure retries after 250ms again.
+    // A loaded document resets the launch-failure backoff.
     spawn.refused = true
     handlers['render-process-gone']?.({}, LAUNCH_FAILED)
     await vi.advanceTimersByTimeAsync(250)
@@ -160,7 +143,7 @@ describe('renderer launch-failed recovery', () => {
     await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS - 1)
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // The last retry fails too; its prompt follows on the usual 250ms recovery tick.
+    // Prompt on the next recovery tick after the final retry fails.
     await vi.advanceTimersByTimeAsync(251)
     expect(BACKOFF_TOTAL_MS).toBeLessThanOrEqual(125_000)
     expect(load).toHaveBeenCalledTimes(1 + RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS.length)
@@ -206,14 +189,40 @@ describe('renderer launch-failed recovery', () => {
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
   })
 
-  it('keeps Windows launch failures on the short recovery schedule', async () => {
-    const { load } = createSpawnRefusingWindow('win32')
+  it('rides out a Windows sandbox CreateProcess refusal in place instead of prompting', async () => {
+    // Windows SBOX_ERROR_CREATE_PROCESS; awin repro (job capped at 1 process for 5s) prompted after ~1s on the 750ms breaker.
+    const { spawn } = createSpawnRefusingWindow('win32', {
+      reason: 'launch-failed',
+      exitCode: 18
+    })
+    const { onRendererRecoveryExhausted, onRecoveryReloadOutcome } = open()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+    spawn.refused = false
+
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'loaded' })
+    )
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+  })
+
+  it('still prompts on Windows once a persistent CreateProcess refusal spends the schedule', async () => {
+    const SANDBOX_REFUSED = { reason: 'launch-failed', exitCode: 18 } as const
+    const { load } = createSpawnRefusingWindow('win32', SANDBOX_REFUSED)
     const { onRendererRecoveryExhausted } = open()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(load).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS - 1)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(251)
+    expect(load).toHaveBeenCalledTimes(1 + RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS.length)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
     expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-      expect.objectContaining({ cause: 'launch-failed', recentRecoveryCount: 3 })
+      expect.objectContaining({
+        details: SANDBOX_REFUSED,
+        cause: 'launch-failed',
+        recentRecoveryCount: RENDERER_LAUNCH_FAILURE_RETRY_DELAYS_MS.length
+      })
     )
   })
 

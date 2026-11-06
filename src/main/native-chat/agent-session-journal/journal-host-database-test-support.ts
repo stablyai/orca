@@ -1,10 +1,23 @@
-// The host journal database for a test's state directory. One per directory per test process, as
-// one per state directory per host process in production, so a test that "restarts" a host on the
-// same directory reads the same database the way a restarted host would.
-
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from './journal-host-database'
-import { replayJournal, type JournalLoad } from './journal-open'
+import { restoreJournal, type JournalLoad } from './journal-open'
+import { buildJournalQueueRow, type JournalQueueChange } from './journal-queue-events'
+import { fields } from './journal-state-schema'
+import { journalOutcomeSource } from './journal-outcome-format'
+import { decodeJournalOutcome, type JournalOutcome } from './journal-outcome-codec'
+import { applyJournalRow } from './journal-reducer'
+import {
+  assertTestJournalHistoricalInputs,
+  pinTestJournalInputMode
+} from './journal-historical-inputs.test-support'
+export {
+  finishTestJournalHistoricalInputs,
+  pinTestJournalInputMode
+} from './journal-historical-inputs.test-support'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
   iterateJournalEpochRows,
@@ -12,9 +25,11 @@ import {
   readJournalSessionEpoch,
   type JournalStoredRow
 } from './journal-row-table'
-import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
+// Share one connection per test profile to match production host ownership.
+
+import type Database from '../../sqlite/sync-database'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -29,42 +44,46 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   return database
 }
 
-/** Closes this directory's database, so the next open reads the file as a fresh process would. */
-export function closeTestJournalHostDatabase(stateDirectory: string): void {
+export async function closeTestJournalHostDatabase(stateDirectory: string): Promise<void> {
   const directory = resolve(stateDirectory)
-  opened.get(directory)?.close()
+  await opened.get(directory)?.close()
   opened.delete(directory)
 }
 
-/** Closes every database this process opened for tests. */
-export function closeTestJournalHostDatabases(): void {
+export async function closeTestJournalHostDatabases(): Promise<void> {
   for (const database of opened.values()) {
-    database.close()
+    await database.close()
   }
   opened.clear()
 }
 
 export type TestJournalOptions = Omit<AgentSessionJournalOptions, 'database'> & {
-  /** The state directory whose one journal database holds this chat. */
   stateDirectory: string
 }
 
 export type TrackedJournalOpener = {
   open: (options: TestJournalOptions) => Promise<AgentSessionJournal>
   track: <T extends AgentSessionJournal>(journal: T) => T
-  /** Drains every tracked journal, then closes the databases. */
   closeAll: () => Promise<void>
 }
 
-export function createTrackedJournalOpener(): TrackedJournalOpener {
+export function createTrackedJournalOpener(
+  fixture: { legacyInputs?: boolean } = {}
+): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
   return {
     open: async ({ stateDirectory, ...options }) => {
+      if (fixture.legacyInputs) {
+        seedLegacyTestJournal(openTestJournalHostDatabase(stateDirectory), options)
+      }
       const { openAgentSessionJournal } = await import('./journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
         database: openTestJournalHostDatabase(stateDirectory)
       })
+      if (fixture.legacyInputs) {
+        pinTestJournalInputMode(journal)
+      }
       journals.push(journal)
       return journal
     },
@@ -74,13 +93,38 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
     }
   }
 }
 
-/** What a fresh open of the chat would replay, read from the test state directory's database. */
-/** What an open of a chat a newer Orca saved is refused with. */
+/** Input-parser fixtures explicitly found an epoch in the shipped input format. */
+export function seedLegacyTestJournal(
+  database: JournalHostDatabase,
+  options: Omit<TestJournalOptions, 'stateDirectory'>
+): void {
+  if (
+    database.readOnly ||
+    readJournalSessionEpoch(database.db, options.identity.sessionId) !== null
+  ) {
+    return
+  }
+  const epoch = options.mintEpoch?.() ?? randomUUID()
+  database.transaction((db) => {
+    publishJournalSessionEpoch(db, options.identity, epoch)
+    insertTestJournalRow(db, options.identity.sessionId, {
+      kind: 'epoch',
+      v: journalRowSchemaVersion([]),
+      epoch,
+      seq: 1,
+      fence: 0,
+      ts: options.now?.() ?? Date.now(),
+      reason: 'session_created',
+      providerHandle: agentSessionJournalProviderHandle(options.identity)
+    })
+  })
+}
+
 export const SAVED_BY_NEWER_ORCA = {
   refusal: {
     code: 'agent_session_journal_unreadable',
@@ -89,10 +133,8 @@ export const SAVED_BY_NEWER_ORCA = {
 }
 
 export function loadTestJournal(stateDirectory: string, sessionId: string): JournalLoad | null {
-  return replayJournal(openTestJournalHostDatabase(stateDirectory).db, sessionId)
+  return restoreJournal(openTestJournalHostDatabase(stateDirectory).db, sessionId)
 }
-
-// Staging on-disk states for a case, addressed the way the case thinks of them: by chat and sequence.
 
 function liveEpoch(db: Database.Database, sessionId: string): string {
   const epoch = readJournalSessionEpoch(db, sessionId)
@@ -102,7 +144,6 @@ function liveEpoch(db: Database.Database, sessionId: string): string {
   return epoch
 }
 
-/** Points the chat at a new epoch, as a publish would. */
 export function publishTestJournalEpoch(
   db: Database.Database,
   sessionId: string,
@@ -111,7 +152,6 @@ export function publishTestJournalEpoch(
   publishJournalSessionEpoch(db, { sessionId, workspaceId: 'ws-1' }, epoch)
 }
 
-/** The chat's rows of `epoch` — none once that epoch is no longer the live one. */
 export function readTestJournalRows(
   db: Database.Database,
   sessionId: string,
@@ -122,13 +162,11 @@ export function readTestJournalRows(
     : []
 }
 
-/** The chat's rows of whichever epoch is live now. */
 export function liveTestJournalRows(db: Database.Database, sessionId: string): JournalStoredRow[] {
   const epoch = readJournalSessionEpoch(db, sessionId)
   return epoch === null ? [] : [...iterateJournalEpochRows(db, sessionId, epoch)]
 }
 
-/** The row under the chat's live epoch, whatever epoch its body names. */
 export function insertTestJournalRow(
   db: Database.Database,
   sessionId: string,
@@ -137,7 +175,6 @@ export function insertTestJournalRow(
   insertTestJournalRowJson(db, sessionId, row.seq, serializeJournalRow(row), row.ts)
 }
 
-/** A raw `row_json` at `seq`, the way a newer build or a bad write would leave it. */
 export function insertTestJournalRowJson(
   db: Database.Database,
   sessionId: string,
@@ -167,4 +204,98 @@ export function deleteTestJournalRow(db: Database.Database, sessionId: string, s
     liveEpoch(db, sessionId),
     seq
   )
+}
+
+/** Persist a prior-build queue row verbatim, then replay it through the production fold. */
+export function appendTestJournalQueueRow(
+  db: Database.Database,
+  journal: AgentSessionJournal,
+  messageId: string,
+  change: JournalQueueChange
+): void {
+  const state = journal['state']
+  assertTestJournalHistoricalInputs(db, journal)
+  const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
+  insertTestJournalRow(db, state.sessionId, row)
+  applyJournalRow(state, row)
+}
+
+/** Unannotated submissions and terminal rows emitted by the legacy writer in one source epoch. */
+export function writeTestLegacyTerminalGaps(
+  db: Database.Database,
+  sessionId: string,
+  base: {
+    epoch: string
+    sequence: number
+    fence: number
+    providerHandle: AgentSessionJournalProviderHandle
+  },
+  n: number
+): number {
+  let seq = base.sequence
+  const row = () => ({ v: 3, epoch: base.epoch, seq: ++seq, fence: base.fence, ts: 1 })
+  for (let i = 0; i < n; i++) {
+    const id = `terminal-${i}`
+    insertTestJournalRow(db, sessionId, {
+      ...row(),
+      kind: 'submission',
+      clientMessageId: id,
+      payloadFingerprint: id,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+      providerHandle: base.providerHandle,
+      handoverRecorded: true,
+      origin: 'client'
+    })
+    insertTestJournalRow(db, sessionId, {
+      ...row(),
+      kind: 'dispatch',
+      clientMessageId: id,
+      state: 'rejected',
+      providerItemId: null,
+      reason: 'not sent'
+    })
+  }
+  return seq
+}
+
+/** Read current canonical contributions in commit order for persisted-outcome assertions. */
+export function readTestJournalOutcomes(
+  db: Database.Database,
+  sessionId: string
+): JournalOutcome[] {
+  const epoch = readJournalSessionEpoch(db, sessionId)
+  const source = epoch && journalOutcomeSource(db, sessionId, epoch)
+  if (!source) {
+    return []
+  }
+  return db
+    .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted FROM journal_outcomes
+    WHERE generation = ? ORDER BY seq, field, entry_key`)
+    .all(source.generation)
+    .map(decodeJournalOutcome)
+}
+
+export function readTestQueueChanges(
+  db: Database.Database,
+  sessionId: string
+): {
+  messageId: string
+  op: string
+  returned: boolean
+}[] {
+  const seen = new Set<string>()
+  return readTestJournalOutcomes(db, sessionId).flatMap((value) => {
+    if (value.field !== 'queue.cards') {
+      return []
+    }
+    if (value.deleted) {
+      return [{ messageId: String(JSON.parse(value.key)), op: 'withdrawn', returned: false }]
+    }
+    const [messageId, card] = fields.queue.shape.cards.element.parse(JSON.parse(value.json))
+    const first = !seen.has(messageId)
+    seen.add(messageId)
+    return [
+      { messageId, op: first ? 'queued' : card.state, returned: first && card.state === 'returned' }
+    ]
+  })
 }

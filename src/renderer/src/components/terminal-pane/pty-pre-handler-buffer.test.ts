@@ -20,8 +20,7 @@ const TRIM_PTY_ID = 'pty-pre-handler-trim'
 const EXIT_PTY_ID = 'pty-pre-handler-exit'
 const CAPPED_EXIT_PTY_IDS = Array.from({ length: 65 }, (_, index) => `pty-capped-exit-${index}`)
 const RECYCLED_PTY_ID = 'ssh:target@@pty-2'
-// Two lifetimes of the same relay-renumbered id: the shell that died while the transport was down,
-// and the one the fresh spawn just got handed.
+// Model two lifetimes of one recycled relay ID: the old exited shell and its fresh replacement.
 const PRIOR_INCARNATION_ID = 'incarnation-before-the-relay-restarted'
 const FRESH_INCARNATION_ID = 'incarnation-of-the-shell-now-attaching'
 
@@ -197,9 +196,7 @@ describe('pre-handler PTY buffer', () => {
     expect(exits).toContain(64)
   })
 
-  // A redeployed SSH relay renumbers from pty-1, so a fresh spawn is handed an id whose dead owner
-  // left an exit here. Applying it reports the brand-new shell as already exited and the pane never
-  // binds a PTY at all — the tab comes up blank forever.
+  // Relay restart reuses IDs; buffered old exits must not report a brand-new shell dead and leave it unbound.
   it("drops a recycled id's exit recorded before the fresh spawn was requested", () => {
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0)
     bufferPreHandlerPtyData(RECYCLED_PTY_ID, 'output from the dead shell')
@@ -233,9 +230,7 @@ describe('pre-handler PTY buffer', () => {
     expect(data).toHaveBeenCalledWith('startup bytes', undefined)
   })
 
-  // The case the sequence fence structurally cannot reach: the stale exit is recorded AFTER the
-  // renderer asked for a fresh PTY, so it is newer than the fence and passes it. Only the
-  // incarnation says the exit describes a lifetime of the id that ended before this one began.
+  // A late old-owner exit passes the request-time fence; only incarnation evidence can reject its lifetime.
   it("drops a recycled id's exit that arrived after the spawn request, on incarnation alone", () => {
     const fence = currentPreHandlerPtySequence()
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0, PRIOR_INCARNATION_ID)
@@ -261,8 +256,7 @@ describe('pre-handler PTY buffer', () => {
     expect(exit).toHaveBeenCalledWith(1)
   })
 
-  // Absence is unknown, never a mismatch: a host that predates the field, and the relay's own
-  // `{ id, code: -1 }` stale-PTY drop, must keep the fence's behaviour exactly.
+  // Missing incarnation is unknown, preserving old-host and synthetic relay-exit fence behavior.
   it('never discards on incarnation when either side is unnamed', () => {
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 2)
     discardPreHandlerPtyExitFromForeignIncarnation(RECYCLED_PTY_ID, FRESH_INCARNATION_ID)
@@ -275,8 +269,7 @@ describe('pre-handler PTY buffer', () => {
     expect(hasPreHandlerPtyExit(RECYCLED_PTY_ID)).toBe(true)
   })
 
-  // The identity rule is about exits only. `pty:data` carries no incarnation, so buffered bytes
-  // stay on the sequence fence and must survive a discard that rejects an exit beside them.
+  // Data has no incarnation; rejecting a foreign exit must preserve buffered bytes behind the sequence fence.
   it('leaves buffered bytes alone when it discards a foreign exit', () => {
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0, PRIOR_INCARNATION_ID)
     bufferPreHandlerPtyData(RECYCLED_PTY_ID, 'startup bytes')
@@ -289,10 +282,7 @@ describe('pre-handler PTY buffer', () => {
     expect(data).toHaveBeenCalledWith('startup bytes', undefined)
   })
 
-  // The intersection of the two races this buffer exists for: the shell we just spawned dies before
-  // the pane attaches, AND the relay flushes the previous owner's exit for the same recycled id
-  // afterwards. Keyed on the id alone, the stranger overwrites our own exit and the identity discard
-  // then removes the only survivor — a pane bound to a PTY that is dead and never reported dead.
+  // Keep separate exits when a newborn dies before attach and the prior owner’s exit arrives later; single-slot overwrite would lose the real death.
   it("keeps our own pre-attach exit when a late stranger's exit lands on the same recycled id", () => {
     const fence = currentPreHandlerPtySequence()
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 1, FRESH_INCARNATION_ID)
@@ -319,9 +309,7 @@ describe('pre-handler PTY buffer', () => {
     expect(exit).toHaveBeenCalledWith(9)
   })
 
-  // Reads are filtered by lifetime inside the buffer, so a consumer that never calls the discard —
-  // a background launch registering an eager buffer straight off its own spawn — still cannot be
-  // handed the previous owner's exit and tear its freshly started session down.
+  // Reads enforce lifetime filtering even for eager background launches that never invoke explicit discard.
   it('never reports or delivers a foreign exit to a reader that names its lifetime', () => {
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0, PRIOR_INCARNATION_ID)
 
@@ -334,8 +322,7 @@ describe('pre-handler PTY buffer', () => {
     expect(hasPreHandlerPtyExit(RECYCLED_PTY_ID)).toBe(true)
   })
 
-  // A malformed incarnation is evidence of nothing. Treating it as a value that disagrees with
-  // everything would discard the very exits the buffer exists to deliver.
+  // Malformed incarnations prove nothing and cannot authorize discarding legitimate exits.
   it('treats a malformed incarnation as unknown rather than as a disagreement', () => {
     bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 4, { not: 'a string' })
     discardPreHandlerPtyExitFromForeignIncarnation(RECYCLED_PTY_ID, FRESH_INCARNATION_ID)

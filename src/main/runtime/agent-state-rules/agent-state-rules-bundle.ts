@@ -6,25 +6,19 @@ import {
   type AgentStateRulesFile
 } from './agent-state-rules-schema'
 
-/**
- * The published bundle, `agent-state-rules.json`: the live-updatable agents' rule files, built by
- * config/scripts/agent-state-rules-bundle.mjs from the per-agent files and
- * agent-state-rules-release.json. `bundledOnly` tells apps to fall back to the rules they shipped.
- */
+/** Published live-update envelope; bundledOnly forces shipped-rule fallback. */
 
-// Why a cap: the file comes off the network and is parsed on the main thread.
+// Network input is parsed on the main thread.
 export const AGENT_STATE_RULES_BUNDLE_MAX_BYTES = 256 * 1024
 
-/** The version of the rules this build ships; a download must be higher to replace them. */
 export const BUNDLED_AGENT_STATE_RULES_VERSION: number = release.version
 
-/** The rule files a rules release may carry: those the publish gate can replay transcripts for. */
+/** Only agents covered by the release gate's transcript replay. */
 export const LIVE_UPDATABLE_AGENT_STATE_RULE_IDS: ReadonlySet<string> = new Set(
   release.liveUpdatable
 )
 
-// Why the engine is checked here, before the files: a newer engine's files fail the file schema
-// for a reason that is not theirs.
+// Check engine compatibility first so newer formats are not misreported as malformed files.
 const BundleEnvelopeSchema = z
   .object({
     version: z.number().int().positive(),
@@ -44,10 +38,7 @@ export type AgentStateRulesBundleParse =
   | { ok: true; bundle: AgentStateRulesBundle }
   | { ok: false; error: string }
 
-/**
- * Validates a bundle whole: a file that fails any check is rejected, never partly applied.
- * `any-agent` is for the local override, which the user chose, so it may carry any agent.
- */
+/** Reject the entire bundle on any failure; user-selected overrides may carry any agent. */
 export function parseAgentStateRulesBundle(
   text: string,
   scope: 'live-updatable' | 'any-agent'

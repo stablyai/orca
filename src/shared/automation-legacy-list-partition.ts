@@ -1,18 +1,4 @@
-/**
- * Partitions the unscoped list an old authority returns.
- *
- * Nothing here guesses: Self needs positive evidence (a `local` record whose
- * project resolves with no SSH connection), a valid SSH record goes to its
- * target even when that target is only a ghost, and everything contradictory
- * lands in the orphan bucket. Legacy rows carry no registration generation, so
- * they are keyed by target ID alone and stay view-only until the authority
- * advertises owner fencing.
- *
- * The project evidence must come from the answering authority's own registry.
- * When the caller can only offer a mirror of it, an unresolved project is
- * reported as unverified: not knowing where a record lives is not the same
- * diagnosis as knowing its project was deleted.
- */
+/** Partition old unscoped lists with positive owner evidence: Self needs a resolved local project; valid SSH targets may be ghosts; contradictions are orphans. Generation-less rows stay view-only until owner fencing. Registry evidence must come from the answering authority; unresolved mirrors mean unverified, not deleted. */
 
 import type { Automation } from './automations-types'
 import { AUTOMATION_ORPHAN_ISSUES } from './automation-list-scope'
@@ -37,11 +23,7 @@ export type LegacyAutomationPartition = {
 export type LegacyAutomationPartitionContext = {
   /** `undefined` = this table has no such repo; `null` = a local repo; a string = its SSH connection. */
   repoConnectionId: (repoId: string) => string | null | undefined
-  /**
-   * Whether the table above is the answering authority's own project registry.
-   * False for a table this client only mirrors, where a miss is an unread answer
-   * rather than a deleted project.
-   */
+  /** Only the answering authority's own registry proves deletion; misses in a client mirror remain unverified. */
   projectsAuthoritative: boolean
 }
 

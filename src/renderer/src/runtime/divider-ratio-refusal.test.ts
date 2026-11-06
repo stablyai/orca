@@ -1,5 +1,4 @@
-// A divider drag whose split main's tree no longer holds at that path: main refuses it, nothing of
-// main's moves, and the window snaps back to main's ratios when its hold on the tab ends.
+// A stale divider path is refused by main; the window restores main’s unchanged ratios when its tab hold ends.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'

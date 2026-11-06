@@ -1,6 +1,3 @@
-// Builds one worktree's tabs, browser pages and simulator tabs into the shapes
-// the three Cmd+J engines search.
-
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
@@ -21,6 +18,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -54,7 +52,6 @@ export type OpenTabSearchEntryState = Pick<
   worktree: Worktree
 }
 
-/** What the browser-page part of the entries reads; a narrower store subscription than the rest. */
 export type OpenTabSearchBrowserPageState = Pick<
   OpenTabSearchEntryState,
   | 'activeBrowserTabId'
@@ -70,8 +67,7 @@ export type OpenTabSearchBrowserPageState = Pick<
   | 'worktreesByRepo'
 >
 
-// Why picked: the full entry state also follows terminal titles and editor tabs, which would
-// re-render a subscriber that only needs the open browser pages.
+// Select browser state separately so terminal-title and editor writes cannot rerender browser-only consumers.
 export function selectOpenTabSearchBrowserPageState(
   state: AppState,
   worktreeId: string
@@ -117,8 +113,7 @@ export type OpenTabSearchAgentState = Pick<
   | 'terminalLayoutsByTabId'
 >
 
-// No group id: every tab of the worktree is offered, including the one the
-// column already shows, matching how Cmd+J lists the tab you are on.
+// Offer every workspace tab across groups, including the active one, to match Cmd+J.
 export function selectOpenTabSearchEntryState(
   state: AppState,
   worktreeId: string
@@ -140,8 +135,7 @@ export function selectOpenTabSearchEntryState(
       : undefined) ??
     repoCandidates[0] ??
     null
-  // preferredHostId last: it found this worktree, so it beats the local default
-  // when neither the worktree nor a repo names a host.
+  // Use the host that found the workspace when workspace/repo metadata has no host; do not silently fall back to local.
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined, preferredHostId)
   return {
     activeBrowserTabId: state.activeBrowserTabId,
@@ -209,7 +203,8 @@ export function buildOpenTabSearchBrowserPages(
 
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
-  agentState: OpenTabSearchAgentState
+  agentState: OpenTabSearchAgentState,
+  chatNames: StructuredChatTabNames
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
 
@@ -233,7 +228,8 @@ export function buildOpenTabSearchEntries(
       activeFileId: state.activeFileId,
       activeFileIdByWorktree: state.activeFileIdByWorktree,
       activeTabTypeByWorktree: state.activeTabTypeByWorktree,
-      generatedTitlesEnabled: state.generatedTitlesEnabled
+      generatedTitlesEnabled: state.generatedTitlesEnabled,
+      chatNames
     }),
     browserPages: buildOpenTabSearchBrowserPages(state, scope),
     simulatorTabs: buildSearchableSimulatorTabs({

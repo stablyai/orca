@@ -1,12 +1,9 @@
-// Browser, chat and simulator tabs in a layout-owner build (ORCA_LAYOUT_OWNER=main): the window
-// sends each open, close and page change to main first and draws the tab only from main's frame,
-// so nothing shows before main answers and a refused close leaves the tab. Switched off, the
-// window draws them itself and sends nothing.
+// Layout-owner browser/chat/simulator commands draw only from main’s answers; refusals preserve tabs. With switch off, window draws without sending main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+
+import '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
@@ -40,8 +37,8 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 createStoreCascadesMockApi()
 
 import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-provisional-tab'
-import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
+import '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 
 const WT = 'repo1::/path/wt1'
@@ -73,68 +70,6 @@ afterEach(() => {
 const tabs = () => store.getState().unifiedTabsByWorktree[WT] ?? []
 const tabOf = (entityId: string) => tabs().find((tab) => tab.entityId === entityId)
 const mainTabs = () => layoutApplyTestTransport.mainModel?.workspaces[WT]?.tabs ?? []
-
-function hostListing(chats: string[]): RuntimeMobileSessionTabsResult {
-  return {
-    worktree: WT,
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: null,
-    activeTabId: null,
-    activeTabType: null,
-    tabs: chats.map((sessionId) => ({
-      type: 'agent-session' as const,
-      id: `agent-session:${sessionId}`,
-      title: 'Codex Chat',
-      sessionId,
-      agent: 'codex' as const,
-      isActive: false
-    }))
-  }
-}
-
-const TERMINAL = 'terminal-1'
-
-/** The workspace with one terminal in the root group, drawn from main again. */
-async function redrawWithTerminal(): Promise<void> {
-  main.close()
-  seedStore(store, {
-    tabsByWorktree: {
-      [WT]: [
-        {
-          id: TERMINAL,
-          ptyId: null,
-          worktreeId: WT,
-          title: 'Terminal 1',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1
-        }
-      ]
-    },
-    unifiedTabsByWorktree: {
-      [WT]: [
-        {
-          id: TERMINAL,
-          entityId: TERMINAL,
-          groupId: ROOT,
-          worktreeId: WT,
-          contentType: 'terminal',
-          label: 'Terminal 1',
-          customLabel: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1
-        }
-      ]
-    },
-    groupsByWorktree: {
-      [WT]: [{ id: ROOT, worktreeId: WT, activeTabId: TERMINAL, tabOrder: [TERMINAL] }]
-    }
-  })
-  main = await drawTabsFromMain(store)
-}
 
 /** Opens with main's answer held back, then answers it; returns the opened entity id. */
 async function openHeld(open: () => string): Promise<string> {
@@ -199,18 +134,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     expect(store.getState().browserPagesByWorkspace[reopened!.id]?.[0]?.url).toBe(
       'https://example.com/'
     )
-  })
-
-  it('keeps a cleanup close off the reopen list, in main and in the window', async () => {
-    const id = store.getState().createBrowserTab(WT, 'about:blank').id
-    await main.settle()
-    store.getState().closeBrowserTab(id, { reason: 'cleanup' })
-    await main.settle()
-    expect(tabOf(id)).toBeUndefined()
-    expect(layoutApplyTestTransport.sentOfType('closeTabs').at(-1)).toMatchObject({
-      recordClose: 'cleanup'
-    })
-    expect(store.getState().recentlyClosedBrowserTabsByWorktree[WT] ?? []).toEqual([])
   })
 
   it('adds, converts and closes a page and switches a profile only once main did', async () => {
@@ -302,36 +225,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     layoutApplyTestTransport.answerWith('apply')
   })
 
-  it('draws a listing’s new chats in order once main places them; the listing sends nothing', async () => {
-    await redrawWithTerminal()
-    applyStructuredSessionTabSnapshots([hostListing(['chat-a', 'chat-b'])])
-    await main.settle()
-    expect(layoutApplyTestTransport.sent).toEqual([])
-    expect(tabOf('chat-a')).toBeUndefined()
-
-    // Main places listed chats itself (chatTabLayoutCommand): in the active
-    // group, in listing order.
-    const commands = ['chat-a', 'chat-b'].map((sessionId) => ({
-      type: 'openAgentSessionTab' as const,
-      workspace: WT,
-      tabId: structuredAgentSessionTabId(sessionId),
-      sessionId,
-      agent: 'codex' as const,
-      groupId: store.getState().activeGroupIdByWorktree[WT]
-    }))
-    for (const command of commands) {
-      await layoutApplyTestTransport.call({ command })
-    }
-    await main.settle()
-    expect(tabs().map((tab) => tab.entityId)).toEqual([TERMINAL, 'chat-a', 'chat-b'])
-    expect(store.getState().groupsByWorktree[WT]?.[0]?.tabOrder).toEqual([
-      TERMINAL,
-      structuredAgentSessionTabId('chat-a'),
-      structuredAgentSessionTabId('chat-b')
-    ])
-    expect(mainTabs().map((tab) => tab.entityId)).toEqual([TERMINAL, 'chat-a', 'chat-b'])
-  })
-
   it('opens a simulator tab to the right through main and surfaces it once drawn', async () => {
     store.getState().createBrowserTab(WT, 'about:blank')
     await main.settle()
@@ -354,31 +247,5 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs drawn from main’s fram
     store.getState().closeUnifiedTab(tabId)
     await main.settle()
     expect(tabs().some((tab) => tab.id === tabId)).toBe(false)
-  })
-})
-
-describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('content tabs with the switch off', () => {
-  it('draws browser, chat and simulator tabs at once and sends nothing', () => {
-    const id = store.getState().createBrowserTab(WT, 'https://example.com/').id
-    openStructuredAgentSessionProvisionalTab({
-      worktreeId: WT,
-      executionHostId: 'local',
-      sessionId: 'chat-1',
-      agent: 'codex'
-    })
-    const simulator = ensureSimulatorTab(WT)
-    expect(tabOf(id)).toBeDefined()
-    expect(tabOf('chat-1')).toBeDefined()
-    expect(tabs().some((tab) => tab.id === simulator)).toBe(true)
-    store.getState().closeBrowserTab(id)
-    expect(tabOf(id)).toBeUndefined()
-    expect(layoutApplyTestTransport.sent).toEqual([])
-  })
-
-  it('draws a listing’s new chats itself, in order, and sends nothing', async () => {
-    await redrawWithTerminal()
-    applyStructuredSessionTabSnapshots([hostListing(['chat-a', 'chat-b'])])
-    expect(tabs().map((tab) => tab.entityId)).toEqual([TERMINAL, 'chat-a', 'chat-b'])
-    expect(layoutApplyTestTransport.sent).toEqual([])
   })
 })

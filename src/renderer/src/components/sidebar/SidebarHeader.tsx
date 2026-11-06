@@ -14,11 +14,13 @@ import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCount
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
+  projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
-  activityOptionsTarget
+  activityOptionsTarget,
+  projectsCollapseTarget
 }: SidebarHeaderProps) {
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
@@ -56,16 +58,20 @@ const SidebarHeader = React.memo(function SidebarHeader({
   )
 
   return (
-    <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1.5 px-2">
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
+      <div
+        className="flex min-w-0 items-center"
+        data-contextual-tour-target={groupBy === 'repo' ? 'projects-collapse-all' : undefined}
+      >
         <span
-          // Why truncate: the action cluster is shrink-0, so a long localized title
-          // (es "Espacios de trabajo") otherwise wraps out of the h-8 row.
+          // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
           className="min-w-0 truncate select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
           {sidebarTitle}
         </span>
+        {/* WorktreeList portals the collapse-all toggle here; it owns the rendered project rows. */}
+        <div ref={projectsCollapseTarget} className="flex shrink-0 items-center empty:hidden" />
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Popover
@@ -85,22 +91,23 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     variant="ghost"
                     size="icon-xs"
                     className={cn(
-                      'text-muted-foreground',
-                      agentsViewActive && 'bg-primary/15 text-primary hover:bg-primary/20'
+                      'w-8 text-muted-foreground',
+                      agentsViewActive &&
+                        'bg-foreground/10 text-foreground hover:bg-foreground/15 dark:hover:bg-foreground/15'
                     )}
                     aria-label={activityLabel}
                     aria-pressed={agentsViewActive}
                     aria-describedby={activityBadgeId}
                     onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
                   >
-                    <span className="relative size-6 shrink-0">
-                      <Bell className="absolute left-0 top-1.5 size-3" />
+                    <span className="relative h-5 w-6 shrink-0">
+                      <Bell className="absolute left-0 top-1 size-3" />
                       <span
                         className="pointer-events-none absolute inset-0"
                         id={activityBadgeId}
                         aria-label={`${activityStatusLabel}: ${activityCount}`}
                       >
-                        <span className="absolute right-0 top-px flex h-2 w-3 items-center justify-center">
+                        <span className="absolute right-0 top-0 flex h-2 w-3 items-center justify-center">
                           {counts.attention > 0 ? (
                             <AgentQuestionIcon className="size-2" />
                           ) : (
@@ -112,7 +119,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
                             />
                           )}
                         </span>
-                        <span className="absolute right-0 top-3 flex h-2.5 w-3 items-center justify-center">
+                        <span className="absolute right-0 top-2.5 flex h-2.5 w-3 items-center justify-center">
                           <span
                             className={cn(
                               'icon-superscript-count',
@@ -164,12 +171,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
             </div>
           </PopoverContent>
         </Popover>
-        {agentsViewActive ? (
-          <div ref={activityOptionsTarget} className="flex items-center" />
-        ) : null}
         <SidebarHeaderActions
           onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
           agentsViewActive={agentsViewActive}
+          activityOptionsTarget={activityOptionsTarget}
         />
       </div>
     </div>

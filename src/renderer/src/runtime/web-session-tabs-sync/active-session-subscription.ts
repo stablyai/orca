@@ -11,10 +11,7 @@ import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking
 } from '../window-visibility-subscription-parking'
-import {
-  recordReceivedWebSessionTabsSnapshot,
-  shouldApplyRecoveredWebSessionTabsSnapshot
-} from './tracking'
+import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import {
   decideWebSessionTabsSnapshot,
   shouldRespawnWebRuntimeTerminalAfterWake,
@@ -28,7 +25,8 @@ import {
   acceptSessionTabsRuntimeId,
   getSessionTabsRuntimeIdFromResponse
 } from './publisher-identity-fences'
-import { applyWebSessionTabsSnapshot } from './snapshot-api'
+import { recordReceivedSessionTabsStreamFrame } from './received-agent-sender-publications'
+import { createWebSessionTabsSnapshotPatch } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import {
   hostSessionMirrorSettleForPatchlessFrame,
@@ -66,7 +64,6 @@ export type ActiveSessionTabsSubscription = WindowVisibilitySubscriptionParking 
   reconsiderSelected: () => void
 }
 
-/** Install one worktree's stream, which resumes immediately on visibility changes. */
 export function installActiveSessionTabsSubscription({
   activeWorktreeId,
   activeWorktreeRuntimeEnvironmentId,
@@ -90,8 +87,7 @@ export function installActiveSessionTabsSubscription({
     return undefined
   }
   const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
-  // Why: a warm stream keeps running after the user switches away; only the selected worktree on
-  // this host may seed (one worktree id can exist on two hosts).
+  // Warm streams outlive selection; seed only the selected worktree on this host because IDs can collide across hosts.
   const isSelected = (): boolean => {
     const state = useAppStore.getState()
     return (
@@ -168,7 +164,7 @@ export function installActiveSessionTabsSubscription({
       hostAffirmedWorktree ||= hostSnapshotAffirmsWorktreeContents(recovered)
       const replayed = isRuntimeSubscriptionReplayResponse(response)
       settle = applyWebSessionTabsStorePatch(
-        (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
+        createWebSessionTabsSnapshotPatch(recovered, environmentId),
         {
           frames: [
             {
@@ -186,14 +182,11 @@ export function installActiveSessionTabsSubscription({
         event.type === 'updated' && !replayed
       )
       visibilitySnapshotAccepted.current(environmentId, recovered, receivedFrame, runtimeId)
-      // Why here and only on an applied frame: this is the mirror's answer about the worktree. A
-      // bootstrap whose create resolved without a row was parked until that answer arrived; a
-      // pending create keeps its claim (see the latch module). The predicate above already ran with
-      // the latch held, so this frame never seeds — the next one decides on real state.
+      // Applied frames release awaiting-mirror only after seeding checked the held latch; pending RPCs retain claims and later frames decide retries.
       releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame(environmentId, recovered.worktree)
     }
     if (decision.apply && isCurrent()) {
-      // Why: a warm stream may get its only empty answer while unselected; selection re-decides it.
+      // Warm streams may answer empty only while unselected; redecide on selection.
       seeder.noteAppliedFrame(
         bootstrap ? { event: recoveredEvent, firstHostAnswer, receivedFrame, runtimeId } : null,
         isSelected()
@@ -261,12 +254,7 @@ export function installActiveSessionTabsSubscription({
               if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
                 return
               }
-              const frame = recordReceivedWebSessionTabsSnapshot(
-                environmentId,
-                event,
-                undefined,
-                runtimeId
-              )
+              const frame = recordReceivedSessionTabsStreamFrame(environmentId, event, runtimeId)
               visibilitySnapshotReceipt.current(environmentId, event, frame, runtimeId)
               void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
                 .catch((error) => {

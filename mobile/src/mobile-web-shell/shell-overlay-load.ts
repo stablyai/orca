@@ -9,11 +9,9 @@ export type ShellOverlayDownload = {
   feed: DownloadProgressFeed
 }
 
-/** How far an overlay shell's page is from drawing over the screen beneath. */
 export type ShellOverlayLoad =
   | { kind: 'loading'; download: ShellOverlayDownload | null }
   | { kind: 'painted' }
-  /** The page cannot show here: an older desktop, a wall, a failure, or no connection. */
   | { kind: 'unavailable' }
 
 function overlayLoadOf(
@@ -34,10 +32,7 @@ function overlayLoadOf(
   }
 }
 
-/**
- * Reports an overlay shell's load to the route that draws its loading state and its exits, which
- * outlive the shell's own state screens so one view covers every stage.
- */
+// Report to the route’s persistent loading/exit view so it can cover every shell state.
 export function useReportedShellOverlayLoad(
   onLoad: ((load: ShellOverlayLoad) => void) | undefined,
   state: MobileWebShellSessionState,
@@ -47,7 +42,7 @@ export function useReportedShellOverlayLoad(
   const kind = overlayLoadOf(state, pageFrame)
   const receivedBytes = state.kind === 'fetching' ? state.receivedBytes : null
   const totalBytes = state.kind === 'fetching' ? state.totalBytes : 0
-  // Before paint, so the caller's view swaps in the same frame the WebView is shown.
+  // Update before paint so overlay and WebView visibility change in the same frame.
   useLayoutEffect(() => {
     if (onLoad === undefined) {
       return

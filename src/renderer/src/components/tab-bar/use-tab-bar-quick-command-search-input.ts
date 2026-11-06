@@ -35,20 +35,30 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
         onRun(selectedCommand)
         return
       }
-      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filteredCommands.length > 0) {
+      const moveDown =
+        event.key === 'ArrowDown' || (event.ctrlKey && ['n', 'j'].includes(event.key))
+      const moveUp = event.key === 'ArrowUp' || (event.ctrlKey && ['p', 'k'].includes(event.key))
+      if (
+        (moveDown || moveUp || event.key === 'Home' || event.key === 'End') &&
+        filteredCommands.length > 0
+      ) {
         event.preventDefault()
         event.stopPropagation()
         const currentIndex = filteredCommands.findIndex(
           (command) => getCommandId(command) === commandValue
         )
         const startIndex = Math.max(currentIndex, 0)
-        const direction = event.key === 'ArrowDown' ? 1 : -1
+        const direction = moveDown ? 1 : -1
         const nextIndex =
-          (startIndex + direction + filteredCommands.length) % filteredCommands.length
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? filteredCommands.length - 1
+              : (startIndex + direction + filteredCommands.length) % filteredCommands.length
         onCommandValueChange(getCommandId(filteredCommands[nextIndex]))
         requestAnimationFrame(() => {
           commandListRef.current
-            ?.querySelector('[cmdk-item][data-selected="true"]')
+            ?.querySelector('[role="option"][aria-selected="true"]')
             ?.scrollIntoView({ block: 'nearest' })
         })
         return

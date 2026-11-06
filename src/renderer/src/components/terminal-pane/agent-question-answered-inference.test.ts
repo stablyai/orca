@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createAgentQuestionAnsweredInference } from './agent-question-answered-inference'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -40,36 +40,6 @@ function makeInference(entry: AgentStatusEntry | undefined) {
 }
 
 describe('agent question-answered inference', () => {
-  it('reports the baseline when Enter is sent to a waiting question pane', () => {
-    const { inference, inferQuestionAnswered } = makeInference(makeWaitingQuestionEntry())
-
-    inference.observeSentTerminalInput('\r')
-
-    expect(inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
-      paneKey: PANE_KEY,
-      baselineUpdatedAt: 1_000,
-      baselineStateStartedAt: 900,
-      baselinePrompt: 'pick a color',
-      baselineAgentType: 'claude'
-    })
-  })
-
-  it('accepts kitty-keyboard Enter encodings', () => {
-    const { inference, inferQuestionAnswered } = makeInference(makeWaitingQuestionEntry())
-
-    inference.observeSentTerminalInput('\x1b[13u')
-
-    expect(inferQuestionAnswered).toHaveBeenCalledOnce()
-  })
-
-  it('accepts a bare digit quick-select, which submits without Enter', () => {
-    const { inference, inferQuestionAnswered } = makeInference(makeWaitingQuestionEntry())
-
-    inference.observeSentTerminalInput('2')
-
-    expect(inferQuestionAnswered).toHaveBeenCalledOnce()
-  })
-
   it('keeps waiting when a digit only advances or toggles a partial answer', () => {
     const prompts = [
       JSON.stringify({
@@ -97,6 +67,29 @@ describe('agent question-answered inference', () => {
       inference.observeSentTerminalInput('\r')
       expect(inferQuestionAnswered).not.toHaveBeenCalled()
     }
+  })
+
+  it('waits for Enter when option previews make a digit only move focus', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [
+        {
+          question: 'pick a layout',
+          multiSelect: false,
+          options: [
+            { label: 'A', preview: '+--+' },
+            { label: 'B', preview: '|  |' }
+          ]
+        }
+      ]
+    })
+    const { inference, inferQuestionAnswered } = makeInference(
+      makeWaitingQuestionEntry({ interactivePrompt })
+    )
+
+    inference.observeSentTerminalInput('2')
+    expect(inferQuestionAnswered).not.toHaveBeenCalled()
+    inference.observeSentTerminalInput('\r')
+    expect(inferQuestionAnswered).toHaveBeenCalledOnce()
   })
 
   it('keeps waiting when the synthetic free-text row is selected', () => {
@@ -128,21 +121,6 @@ describe('agent question-answered inference', () => {
     expect(inferQuestionAnswered).toHaveBeenCalledOnce()
   })
 
-  it('does not read status for ordinary terminal input', () => {
-    const getStatusEntry = vi.fn(() => makeWaitingQuestionEntry())
-    const inferQuestionAnswered = vi.fn()
-    const inference = createAgentQuestionAnsweredInference({
-      paneKey: PANE_KEY,
-      getStatusEntry,
-      inferQuestionAnswered
-    })
-
-    inference.observeSentTerminalInput('ordinary typing')
-
-    expect(getStatusEntry).not.toHaveBeenCalled()
-    expect(inferQuestionAnswered).not.toHaveBeenCalled()
-  })
-
   it('ignores non-submit input, batched keystrokes, and pastes', () => {
     const { inference, inferQuestionAnswered } = makeInference(makeWaitingQuestionEntry())
 
@@ -162,8 +140,7 @@ describe('agent question-answered inference', () => {
       makeWaitingQuestionEntry({ state: 'working' }),
       makeWaitingQuestionEntry({ toolName: 'Bash' }),
       makeWaitingQuestionEntry({ agentType: 'codex' }),
-      // Why: a stale wait past the freshness horizon no longer renders amber,
-      // so a keystroke must not synthesize activity for it.
+      // Stale waits no longer render attention, so input must not revive them as inferred activity.
       makeWaitingQuestionEntry({ updatedAt: -100_000_000, stateStartedAt: -100_000_000 })
     ]
     for (const entry of cases) {

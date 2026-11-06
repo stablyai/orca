@@ -2,14 +2,7 @@ import type Database from '../../../sqlite/sync-database'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
 
-/**
- * The single write boundary for Task, Dispatch, and supervised worker state.
- *
- * This function deliberately does not open or commit a transaction. Callers
- * often compose several projections (and a mailbox effect) in one transaction;
- * keeping the boundary neutral makes every projection atomic with that
- * caller-owned transaction.
- */
+/** Callers own transactions so lifecycle projections and mailbox effects commit atomically together. */
 export type LifecycleEntity = 'task' | 'dispatch' | 'worker'
 
 type LifecycleWriteTransaction = {
@@ -39,6 +32,10 @@ export function rollbackLifecycleWriteTransaction(
   db: Database.Database,
   transaction: LifecycleWriteTransaction
 ): void {
+  // SQLite ends the whole transaction itself on I/O and disk-full errors; rolling back again would replace that error.
+  if (!db.isTransaction) {
+    return
+  }
   if (transaction.savepoint) {
     db.exec(`ROLLBACK TO ${transaction.savepoint}`)
     db.exec(`RELEASE ${transaction.savepoint}`)

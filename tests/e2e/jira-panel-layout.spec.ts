@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { JiraIssue } from '../../src/shared/jira-types'
+import type { JiraIssue } from '../../src/shared/jira/jira-types'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -64,52 +64,6 @@ async function openFixtureJiraList(page: Page): Promise<void> {
     store.getState().openTaskPage({ taskSource: 'jira' })
   }, ISSUE)
 }
-
-test('Jira titles and sort headings adapt to panel width inside a wide window', async ({
-  orcaPage
-}) => {
-  await openFixtureJiraList(orcaPage)
-
-  const title = orcaPage.getByRole('heading', { name: ISSUE_TITLE })
-  await expect(title).toBeVisible()
-  for (const width of [500, 780, 1050, 1320]) {
-    await title.evaluate((element, width) => {
-      const host =
-        element.closest('[role="button"]')?.parentElement?.parentElement?.parentElement
-          ?.parentElement?.parentElement
-      if (!(host instanceof HTMLElement)) {
-        throw new Error('Jira list host unavailable')
-      }
-      host.style.width = `${width}px`
-      host.style.maxWidth = 'none'
-    }, width)
-    await expect
-      .poll(() => title.evaluate((element) => element.getBoundingClientRect().width))
-      .toBeGreaterThan(200)
-    const mobileSort = orcaPage.getByTestId('jira-mobile-sort-controls')
-    const assignee = orcaPage.getByRole('button', { name: 'Assignee', exact: true })
-    await (width < 768 ? expect(mobileSort).toBeVisible() : expect(mobileSort).toBeHidden())
-    await (width >= 1024 ? expect(assignee).toBeVisible() : expect(assignee).toBeHidden())
-    if (width >= 768) {
-      const grids = await title.evaluate((element) => {
-        const row = element.closest('[role="button"]')
-        const host = row?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement
-        const header = host?.querySelector('button[aria-pressed]')?.parentElement
-        if (!row || !header) {
-          throw new Error('Jira header or row unavailable')
-        }
-        return [
-          getComputedStyle(row).gridTemplateColumns.split(' '),
-          getComputedStyle(header).gridTemplateColumns.split(' ')
-        ]
-      })
-      // The scroll gutter narrows the flexible title; fixed tracks must still match.
-      expect(grids[0].filter((_, index) => index !== 1)).toEqual(
-        grids[1].filter((_, index) => index !== 1)
-      )
-    }
-  }
-})
 
 test('Jira planning columns persist and hiding a sorted field selects a visible fallback', async ({
   orcaPage

@@ -45,7 +45,7 @@ describe('markdownDocumentFromFilePath', () => {
     })
   })
 
-  it('treats actual parent traversal as outside the root', () => {
+  it('uses the basename fallback for a file outside the root', () => {
     expect(
       markdownDocumentFromFilePath('/workspace', '/workspace-other/file.md', {
         outsideRootRelativePath: 'basename'

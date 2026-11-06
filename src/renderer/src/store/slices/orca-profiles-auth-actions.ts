@@ -21,9 +21,6 @@ export type OrcaProfilesAuthActions = {
   selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
 }
 
-// Why a separate module: the cloud-auth actions share the profiles slice's
-// state keys but form their own cohesive surface (connect/refresh/sign-out/
-// org selection), and the combined slice file exceeded the repo line budget.
 export const createOrcaProfilesAuthActions: StateCreator<
   AppState,
   [],
@@ -79,9 +76,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
     connectCurrentOrcaProfile: async () => {
       const attempt = ++nextConnectAttempt
       try {
-        // Why: a pending browser callback must not block retry. Another click
-        // starts a second PKCE wait; an older wait is ignored after a newer
-        // one has already linked.
+        // Pending PKCE must not block retry; newer linked waits supersede older callbacks.
         const result = await window.api.orcaProfiles.connectCurrent()
         if (attempt < appliedConnectAttempt) {
           return result

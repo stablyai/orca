@@ -1,19 +1,20 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
-// The create route's pre-commit boundary: a failure before `attach` must reach the client as a
-// refusal it can classify, and a failure at or after `attach` must not.
+// Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
+import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 const SESSION = 'session-alpha'
 const OPERATION = '1800000000000-00000000000000000000000000000001'
@@ -81,9 +82,8 @@ async function create(
 ): Promise<RpcResponse> {
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    // The structured surface is settings-gated for every caller; these fixtures probe the
-    // pre-commit boundary, which only runs once the gate admits the call.
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    // Fixtures pass capability admission so they exercise the pre-commit refusal boundary.
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -150,19 +150,18 @@ describe('a create refused before it commits', () => {
     expect(attach).not.toHaveBeenCalled()
   })
 
-  it('answers a code-less failure as a definitive envelope too, keeping the cause in the message', async () => {
+  it('keeps private precommit faults out of a definitive public refusal', async () => {
     // The class no per-site conversion catches: an unresolvable worktree throws prose, not a code.
     const response = await create({
       resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
-        throw new Error('No worktree matches id:workspace-1')
+        throw new Error('private-workspace-detail-sentinel')
       })
     })
 
     const refusal = refusalOf(response)
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-    expect(refusal?.message).toContain('structured agent chat')
-    expect(refusal?.message).not.toContain('Codex')
-    expect(refusal?.message).toContain('No worktree matches id:workspace-1')
+    expect(JSON.stringify(refusal)).not.toContain('private-workspace-detail-sentinel')
+    expect(refusal).not.toHaveProperty('details')
     expect(attach).not.toHaveBeenCalled()
   })
 
@@ -171,23 +170,36 @@ describe('a create refused before it commits', () => {
 
     const response = await create({
       ensureStructuredAgentSessionHost: vi.fn(async () => {
-        throw new Error('EACCES: could not open the session store')
+        throw new Error('private-store-detail-sentinel')
       })
     })
 
     const refusal = refusalOf(response)
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-    expect(refusal?.message).toContain('could not open the session store')
+    expect(JSON.stringify(refusal)).not.toContain('private-store-detail-sentinel')
   })
 
-  it('answers a missing host as a definitive envelope rather than a thrown code', async () => {
-    setStructuredAgentSessionHost(null)
-
-    const response = await create()
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('structured_agent_session_unsupported')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
+  it('keeps private faults out of in-process create refusals too', async () => {
+    const params = createParams()
+    const result = await createStructuredAgentSessionForWorktree({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver throws before create can read any other runtime member.
+      runtime: {
+        resolveStructuredAgentSessionCreateIntent: async () => {
+          throw new Error('private-in-process-sentinel')
+        }
+      } as unknown as OrcaRuntimeService,
+      ensureHost: async () => hostStub(),
+      caller: { callerKey: 'in-process-client' },
+      envelope: params.envelope,
+      worktree: WORKTREE,
+      agent: 'codex',
+      activate: true
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'structured_agent_session_unsupported' }
+    })
+    expect(JSON.stringify(result)).not.toContain('private-in-process-sentinel')
   })
 
   it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {

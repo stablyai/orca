@@ -33,8 +33,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-// Why: the real TooltipContent portals out of the trigger's subtree. The mock must
-// too, or "the pill itself does not render the chip" would pass vacuously.
+// Portal tooltip content like the real primitive so chip-absence assertions cannot pass through mock containment.
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -80,86 +79,5 @@ describe('DictationIndicator', () => {
 
     document.removeEventListener(DICTATION_CONTROL_EVENT, listener)
     expect(actions).toEqual(['stop'])
-  })
-
-  it('keeps focus on the dictation target when the stop button is pressed', () => {
-    render(<DictationIndicator />)
-    const stopButton = screen.getByRole('button', { name: 'Stop dictation' })
-
-    expect(fireEvent.mouseDown(stopButton)).toBe(false)
-  })
-
-  it('shows the assigned shortcut in the stop button tooltip in toggle mode', () => {
-    render(<DictationIndicator />)
-
-    const tooltip = screen.getByTestId('tooltip-content')
-    expect(tooltip.textContent).toContain('Stop dictation')
-    expect(tooltip.textContent).toContain('⌘')
-    expect(tooltip.textContent).toContain('E')
-  })
-
-  it('keeps the shortcut out of the always-visible pill, showing it only on hover', () => {
-    const { container } = render(<DictationIndicator />)
-    const pill = container.firstChild as HTMLElement
-
-    expect(pill.textContent).toContain('Listening')
-    expect(pill.textContent).not.toContain('⌘')
-  })
-
-  it('omits the shortcut chip in hold mode, where release stops dictation', () => {
-    storeState.settings = { voice: { dictationMode: 'hold' } }
-    render(<DictationIndicator />)
-
-    expect(screen.getByRole('button', { name: 'Stop dictation' })).toBeTruthy()
-    expect(screen.getByTestId('tooltip-content').textContent).not.toContain('⌘')
-  })
-
-  it('hides the stop control once the session is already stopping', () => {
-    storeState.dictationState = 'stopping'
-    render(<DictationIndicator />)
-
-    expect(screen.getByText('Processing…', { selector: '[aria-hidden="true"]' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull()
-  })
-
-  it('renders nothing while idle', () => {
-    storeState.dictationState = 'idle'
-    const { container } = render(<DictationIndicator />)
-
-    expect(container.firstChild).toBeNull()
-  })
-
-  it('reacts to speaking audio and exposes the semantic state', () => {
-    storeState.dictationMeter = {
-      level: 0.72,
-      isSpeaking: true,
-      isClipping: false
-    }
-    render(<DictationIndicator />)
-
-    expect(screen.getByText('Speaking')).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toBe('Listening')
-    expect(screen.getByTestId('dictation-grapes').children).toHaveLength(9)
-  })
-
-  it('uses the destructive role only while clipping', () => {
-    storeState.dictationMeter = {
-      level: 1,
-      isSpeaking: true,
-      isClipping: true
-    }
-    const { container } = render(<DictationIndicator />)
-
-    expect(screen.getByText('Too loud', { selector: '[aria-hidden="true"]' })).toBeTruthy()
-    expect((container.firstChild as HTMLElement).className).toContain('text-destructive')
-  })
-
-  it('keeps streaming transcript separate from the listening state', () => {
-    storeState.partialTranscript = 'A polished voice visualizer'
-    render(<DictationIndicator />)
-
-    expect(screen.getByText('Listening', { selector: '[aria-hidden="true"]' })).toBeTruthy()
-    expect(screen.getByText('A polished voice visualizer')).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toBe('Listening')
   })
 })

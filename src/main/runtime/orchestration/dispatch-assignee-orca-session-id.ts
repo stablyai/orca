@@ -1,11 +1,8 @@
 import { parseOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
-import { structuredWorkerOrcaSessionIdForIncarnation } from '../structured-worker-identity'
+import { structuredWorkerOrcaSessionIdForIncarnation } from './terminal-authority/structured-sessions/structured-worker-identity'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 
-/**
- * The Orca session id a Dispatch row stores for its assignee: the structured worker its process
- * incarnation names, or the chat its `orca_session_id:` handle names. A PTY has none.
- */
+/** Resolve structured incarnations or chat addresses to bare session ids; PTYs have none. */
 export function dispatchAssigneeOrcaSessionId(assignee: {
   handle: string
   processIncarnation: string | null | undefined

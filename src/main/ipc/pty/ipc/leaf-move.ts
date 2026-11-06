@@ -1,22 +1,24 @@
-import { getPtyIpc } from '../../pty-host-bindings'
-import type { Store } from '../../../persistence'
+import { getPtyIpc } from '../pty-host-bindings'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { rekeyMovedPaneOwners } from '../../../runtime/moved-pane-owner-rekey'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
-} from '../../../../shared/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-leaf-move'
 
 /** Durable move first; agent-status and orchestration keys follow only a committed move. */
 export async function commitLeafMoveAndRekey(
-  deps: { store?: Store; runtime?: OrcaRuntimeService },
+  deps: {
+    store?: { moveTerminalLeafToNewTab?: Store['moveTerminalLeafToNewTab'] }
+    runtime?: OrcaRuntimeService
+  },
   request: TerminalLeafMoveRequest
 ): Promise<TerminalLeafMoveResult> {
-  if (!deps.store) {
-    return { status: 'not_held' }
+  const result = (await deps.store?.moveTerminalLeafToNewTab?.(request)) ?? {
+    status: 'not_held'
   }
-  const result = await deps.store.moveTerminalLeafToNewTab(request)
   if (result.status !== 'moved') {
     return result
   }

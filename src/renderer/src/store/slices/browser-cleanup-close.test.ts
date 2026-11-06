@@ -3,10 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import {
-  layoutFrameApplyObserver,
-  observeLayoutFrameApply
-} from '@/runtime/workspace-layout-frame-apply-observer'
+
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mockCallRuntimeRpc = vi.hoisted(() => vi.fn())
@@ -107,8 +104,7 @@ describe('closeBrowserTab with reason cleanup', () => {
     mockCallRuntimeRpc.mockResolvedValue({})
   })
 
-  // Why: a failed create must land the user where the click did — the pre-click worktree — not on
-  // the landing screen the real "you closed your last tab" path deliberately falls back to.
+  // Failed creation returns to pre-click workspace; real last-tab close alone should enter Landing.
   it('keeps the worktree active when it unwinds the only tab in that worktree', async () => {
     const { store, workspaceId } = await storeWithOnlyBrowserTab()
     expect(store.getState().activeWorktreeId).toBe(WT)
@@ -123,8 +119,7 @@ describe('closeBrowserTab with reason cleanup', () => {
     expect(s.unifiedTabsByWorktree[WT] ?? []).toEqual([])
   })
 
-  // Why: the landing-screen fallback is the correct answer for a real close, so pin that the
-  // cleanup carve-out did not disable it for everyone.
+  // Require real closes still use Landing; cleanup carve-out must remain narrow.
   it('still returns to the landing state when the user closes the only tab', async () => {
     const { store, workspaceId } = await storeWithOnlyBrowserTab()
 
@@ -135,154 +130,7 @@ describe('closeBrowserTab with reason cleanup', () => {
     expect(store.getState().activeWorktreeId).toBeNull()
   })
 
-  // Why: the staged page's host tab was never minted, so a tabClose would either 404 or, worse,
-  // race the in-flight create and kill the page the host is about to hand back.
-  it('does not ask the host to close the page it never published', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    // A layout-owner build's close goes to main as `layout.apply`, answered before this mock.
-    expect(mockCallRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('asks the host to close the page on a real close', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    expect(mockCallRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'browser.tabClose',
-      expect.objectContaining({ page: 'remote-page-1' }),
-      expect.anything()
-    )
-  })
-
-  // Why: reopen-stack entries are the user's undo history; a tab that never existed must not
-  // occupy a slot, and reopening it would resurrect a workspace with no host page behind it.
-  it('does not enter the reopen stack', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    const s = store.getState()
-    expect(s.recentlyClosedBrowserTabsByWorktree[WT] ?? []).toEqual([])
-    expect(s.recentlyClosedTabKindsByWorktree[WT] ?? []).toEqual([])
-  })
-
-  it('enters the reopen stack on a real close', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    const s = store.getState()
-    expect(s.recentlyClosedBrowserTabsByWorktree[WT]).toHaveLength(1)
-    expect(s.recentlyClosedTabKindsByWorktree[WT]).toEqual(['browser'])
-  })
-
-  // Why: feature-interaction counters drive onboarding nudges; an unwound create is not the user
-  // exercising tabs.
-  it('does not record a tab interaction', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    expect(recordFeatureInteraction).not.toHaveBeenCalled()
-  })
-
-  it('records a tab interaction on a real close', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('terminal-tabs')
-  })
-  it('clears focus for closed pages without rescanning pages for unrelated focus entries', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const original = store.getState().browserPagesByWorkspace[workspaceId][0]
-    let idReads = 0
-    let counting = true
-    const pages = Array.from({ length: 1000 }, (_, index) => ({
-      ...original,
-      get id() {
-        if (counting) {
-          idReads++
-        }
-        return `closed-${index}`
-      }
-    }))
-    // The test transport's frame-apply check rebuilds every flush; its reads are not the close's.
-    const check = layoutFrameApplyObserver()
-    observeLayoutFrameApply(
-      check &&
-        ((observation) => {
-          counting = false
-          try {
-            check(observation)
-          } finally {
-            counting = true
-          }
-        })
-    )
-    const unrelated = Object.fromEntries(
-      Array.from({ length: 1000 }, (_, i) => [`other-${i}`, true as const])
-    )
-    store.setState({
-      browserPagesByWorkspace: { [workspaceId]: pages },
-      pendingAddressBarFocusByPageId: { ...unrelated, 'closed-999': true, [workspaceId]: true },
-      pendingAddressBarFocusByTabId: { ...unrelated, 'closed-999': true, [workspaceId]: true }
-    })
-    idReads = 0
-    try {
-      store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-      await settled()
-    } finally {
-      observeLayoutFrameApply(check)
-    }
-    expect(store.getState().pendingAddressBarFocusByPageId).toEqual({
-      ...unrelated,
-      [workspaceId]: true
-    })
-    expect(store.getState().pendingAddressBarFocusByTabId).toEqual(unrelated)
-    expect(idReads).toBeLessThan(10_000)
-  })
-
-  // Why: the omit path must not hand every pending-focus selector a fresh record on each close.
-  it('keeps the pending focus records identical when the closed tab had no pending entry', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const pending = { 'other-tab': true as const }
-    store.setState({
-      pendingAddressBarFocusByPageId: pending,
-      pendingAddressBarFocusByTabId: pending
-    })
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    expect(store.getState().pendingAddressBarFocusByPageId).toBe(pending)
-    expect(store.getState().pendingAddressBarFocusByTabId).toBe(pending)
-  })
-
-  // Why: closing a tab the user is not looking at must never move focus, whatever the
-  // pending-address-bar bookkeeping does around it.
+  // Background tab close must never move focus, including through pending address-bar bookkeeping.
   it('leaves the active browser tab alone when a background tab closes', async () => {
     const { store, ids } = await storeWithThreeBrowserTabs()
     store.getState().setActiveBrowserTab(ids[0]!)

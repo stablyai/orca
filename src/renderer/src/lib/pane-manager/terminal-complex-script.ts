@@ -1,10 +1,7 @@
-// Why: some foreground ANSI redraws paint background fills before glyphs settle.
-// Detect those chunks so the terminal can force a narrow viewport refresh
-// without switching renderers based on the text content.
+// Detect foreground ANSI chunks whose background fills precede glyphs so targeted refresh repairs them without selecting renderers by content.
 const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
 const REWRITE_CSI_SCAN_TAIL_MAX_CHARS = 64
-const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g')
 
 function containsStandaloneCarriageReturn(data: string): boolean {
   let index = data.indexOf('\r')
@@ -29,8 +26,7 @@ function isRendererRiskCodePoint(value: number): boolean {
     isInRange(value, 0x0590, 0x08ff) ||
     value === 0x200d ||
     isInRange(value, 0x1100, 0x11ff) ||
-    // Why: keep this list available for targeted refresh decisions without
-    // turning Unicode output into a renderer-selection signal.
+    // Share refresh classification without making Unicode output a renderer-selection signal.
     isInRange(value, 0x2e80, 0x9fff) ||
     isInRange(value, 0xa960, 0xa97f) ||
     isInRange(value, 0xac00, 0xd7ff) ||
@@ -66,55 +62,92 @@ function isEastAsianRendererRiskCodePoint(value: number): boolean {
   )
 }
 
-function sgrParamCode(param: string | undefined): number | null {
-  if (!param) {
-    return null
+const SEMICOLON = 0x3b
+const COLON = 0x3a
+const DIGIT_ZERO = 0x30
+const DIGIT_NINE = 0x39
+const SGR_FINAL = 0x6d
+
+/** Leading decimal of one SGR parameter (digits before any ':'); null when that head is empty. */
+function sgrParamCodeAt(data: string, start: number, end: number): number | null {
+  let value = 0
+  let index = start
+  for (; index < end; index++) {
+    const code = data.charCodeAt(index)
+    if (code === COLON) {
+      break
+    }
+    // Saturate: only codes up to 107 matter, and a huge code must not wrap into that range.
+    value = value > 1000 ? value : value * 10 + (code - DIGIT_ZERO)
   }
-  const [head] = param.split(':')
-  const value = Number.parseInt(head ?? '', 10)
-  return Number.isFinite(value) ? value : null
+  return index === start ? null : value
 }
 
-function sgrSequenceSetsBackground(params: string): boolean {
-  const parts = params.split(';')
-  for (let i = 0; i < parts.length; i += 1) {
-    const value = sgrParamCode(parts[i])
-    if (value === null) {
-      continue
+function sgrParamEnd(data: string, start: number, paramsEnd: number): number {
+  for (let index = start; index < paramsEnd; index++) {
+    if (data.charCodeAt(index) === SEMICOLON) {
+      return index
     }
-    if (isInRange(value, 40, 47) || isInRange(value, 100, 107)) {
+  }
+  return paramsEnd
+}
+
+function sgrParamHasColon(data: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index++) {
+    if (data.charCodeAt(index) === COLON) {
       return true
-    }
-    if (value === 48) {
-      return true
-    }
-    if (value === 38 && !parts[i]?.includes(':')) {
-      const mode = sgrParamCode(parts[i + 1])
-      if (mode === 5) {
-        i += 2
-      } else if (mode === 2) {
-        i += 4
-      } else {
-        i += 1
-      }
     }
   }
   return false
 }
 
-function containsBackgroundSgr(data: string): boolean {
-  if (!data.includes('\x1b[')) {
-    return false
+// Walks `params` in place; allocating per SGR made this scan cost as much as xterm's own parse on coloured floods.
+function sgrSequenceSetsBackground(data: string, paramsStart: number, paramsEnd: number): boolean {
+  let skipParams = 0
+  for (let start = paramsStart; start <= paramsEnd;) {
+    const end = sgrParamEnd(data, start, paramsEnd)
+    const next = end + 1
+    if (skipParams > 0) {
+      skipParams -= 1
+      start = next
+      continue
+    }
+    const value = sgrParamCodeAt(data, start, end)
+    if (value !== null) {
+      if (isInRange(value, 40, 47) || isInRange(value, 100, 107) || value === 48) {
+        return true
+      }
+      if (value === 38 && !sgrParamHasColon(data, start, end)) {
+        const mode =
+          next <= paramsEnd ? sgrParamCodeAt(data, next, sgrParamEnd(data, next, paramsEnd)) : null
+        skipParams = mode === 5 ? 2 : mode === 2 ? 4 : 1
+      }
+    }
+    start = next
   }
-  SGR_SEQUENCE_PATTERN.lastIndex = 0
-  for (
-    let match = SGR_SEQUENCE_PATTERN.exec(data);
-    match;
-    match = SGR_SEQUENCE_PATTERN.exec(data)
-  ) {
-    if (sgrSequenceSetsBackground(match[1] ?? '')) {
+  return false
+}
+
+function isSgrParamCode(code: number): boolean {
+  return (code >= DIGIT_ZERO && code <= DIGIT_NINE) || code === SEMICOLON || code === COLON
+}
+
+function containsBackgroundSgr(data: string): boolean {
+  let escapeIndex = data.indexOf('\x1b[')
+  while (escapeIndex !== -1) {
+    const paramsStart = escapeIndex + 2
+    let paramsEnd = paramsStart
+    while (paramsEnd < data.length && isSgrParamCode(data.charCodeAt(paramsEnd))) {
+      paramsEnd += 1
+    }
+    if (
+      paramsEnd < data.length &&
+      data.charCodeAt(paramsEnd) === SGR_FINAL &&
+      sgrSequenceSetsBackground(data, paramsStart, paramsEnd)
+    ) {
       return true
     }
+    escapeIndex = data.indexOf('\x1b[', paramsEnd)
   }
   return false
 }
@@ -130,8 +163,7 @@ function containsRewriteEraseSequence(data: string): boolean {
       if (char === ';' || char === '?') {
         continue
       }
-      // Why: erase-in-line/screen rewrites can leave stale renderer cells until
-      // the next resize; xterm's buffer is correct, but the visible layer needs repainting.
+      // Erase rewrites can leave stale visible cells despite correct xterm buffers; repaint without requiring resize.
       if (char === 'J' || char === 'K') {
         return true
       }
@@ -212,19 +244,7 @@ export function terminalRewriteOutputRenderRefreshDecision(
   }
 }
 
-/**
- * Whether a native-Windows ConPTY foreground chunk that forces a render refresh
- * should ALSO schedule a follow-up next-frame repaint.
- *
- * Why: Claude Code echoes prompt keystrokes by redrawing the input line in place
- * (CR + CHA/erase + reprint) without DEC 2026 synchronized output. xterm's buffer
- * ends up correct, but its DOM renderer can paint these rapid rewrites one frame
- * late — surfacing a phantom first char or an overwritten cell ("zzzx" rendered as
- * "zzx") that only a window resize clears. A single synchronous refresh races that
- * late paint; a follow-up next-frame repaint corrects the column desync the way the
- * existing cursor-restore and scroll cases already do. Scoped to in-place rewrites
- * on native Windows so plain shells and non-Windows renderers are unaffected.
- */
+/** Native Windows ConPTY prompt rewrites (CR/CHA/erase/reprint without DEC 2026) can paint one frame late, leaving phantom/overwritten characters. Synchronous refresh races that paint; schedule a follow-up frame for in-place rewrites, avoiding costs on other platforms/plain output. */
 export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
   isNativeWindowsConpty: boolean
   isForeground: boolean
@@ -246,8 +266,7 @@ export function terminalOutputPrefersRenderRefresh(data: string): boolean {
     }
   }
   if (!hasNonAscii) {
-    // Why: Codex-style terminal redraws are usually ASCII; avoid the Unicode
-    // emoji/property regex and code-point walk on the hottest output path.
+    // Most Codex redraws are ASCII; avoid Unicode regex/code-point scans on the hot path.
     return false
   }
 
@@ -286,8 +305,7 @@ export function terminalOutputContainsEastAsianRendererRisk(data: string): boole
 }
 
 export type WindowsEastAsianRefreshState = {
-  // Why: recent IME commits are a Windows-client renderer issue, while agent
-  // output repainting is only forced for native ConPTY to avoid remote costs.
+  // IME commits affect Windows clients; forced agent repaint remains native-ConPTY-only to avoid remote costs.
   isWindowsClient: boolean
   isNativeWindowsConpty: boolean
   hadRecentInput: boolean

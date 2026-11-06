@@ -81,8 +81,7 @@ export function EditorPanelHeaderPath({
               { value0: currentFileName }
             )}
             defaultValue={currentFileName}
-            // Why: the field spans the header rather than sizing to the name —
-            // a long path is exactly when the rename field needs the room.
+            // Span header for long-path rename space instead of sizing to filename.
             className="h-6 w-full min-w-0 max-w-full rounded-md border border-accent/40 bg-input/40 px-1.5 font-mono text-xs text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-ring"
             spellCheck={false}
             onPointerDown={(event) => event.stopPropagation()}
@@ -90,8 +89,7 @@ export function EditorPanelHeaderPath({
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
-              // Why: an Enter that only confirms a CJK IME candidate must not
-              // commit the rename; wait for a non-composition Enter.
+              // IME candidate-confirming Enter must not commit rename; wait until composition ends.
               if (isImeCompositionKeyDown(event)) {
                 return
               }
@@ -119,9 +117,7 @@ export function EditorPanelHeaderPath({
             <span className="editor-header-path-file">{displayPath.fileName}</span>
           </button>
         )}
-        {/* Why: the toast is opacity-0 rather than display-none, so leaving it
-            mounted reserves ~100px of the row from the rename field for a
-            message that cannot fire while renaming. */}
+        {/* Unmount opacity-hidden toast while renaming or it reserves ~100px for an impossible message. */}
         {!isRenaming && (
           <span
             className={`editor-header-copy-toast${copiedPathVisible ? ' is-visible' : ''}`}
@@ -141,7 +137,7 @@ export function EditorPanelHeaderPath({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-56"
+          className="min-w-56"
           sideOffset={0}
           align="start"
           onCloseAutoFocus={(event) => {

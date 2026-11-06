@@ -3,12 +3,24 @@ import {
   getEffectiveKeybindingsForDefinition,
   keybindingMatchesInput,
   type KeybindingDefinition,
+  type KeybindingMatchOptions,
   type KeybindingInput,
   type KeybindingOverrides,
+  type KeybindingActionId,
   type PluginKeybindingActionId
 } from '../../../shared/keybindings'
+import {
+  type fileSearchClaimsTextKey,
+  textFieldClaimsActionKey
+} from './file-search-shortcut-policy'
+import {
+  isFloatingWorkspacePanelFocused,
+  isFloatingWorkspaceTerminalInputTarget,
+  matchFloatingWorkspacePanelChord
+} from './floating-workspace-terminal-actions'
 import { translate } from '@/i18n/i18n'
-import { pluginCommandKeybindingActionId as sharedPluginCommandKeybindingActionId } from '../../../shared/plugins/plugin-command-actions'
+import { pluginCommandKeybindingActionId as sharedPluginCommandKeybindingActionId } from '../../../shared/plugins/contributions/plugin-command-actions'
+import { isWorkspaceScopedPluginContext } from '../../../shared/plugins/contributions/plugin-command-contribution'
 
 export function pluginCommandKeybindingActionId(
   command: Pick<ActivePluginCommand, 'pluginKey' | 'id'>
@@ -61,7 +73,7 @@ export function findPluginCommandForKeybinding(
   hasActiveWorktree: boolean
 ): ActivePluginCommand | null {
   for (const command of commands) {
-    if (command.context === 'worktree' && !hasActiveWorktree) {
+    if (isWorkspaceScopedPluginContext(command.context) && !hasActiveWorktree) {
       continue
     }
     const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(
@@ -72,4 +84,19 @@ export function findPluginCommandForKeybinding(
     }
   }
   return null
+}
+
+export function globalShortcutTargetYields(
+  input: KeybindingInput & Parameters<typeof fileSearchClaimsTextKey>[0],
+  platform: NodeJS.Platform,
+  overrides: KeybindingOverrides | undefined,
+  options: KeybindingMatchOptions,
+  actionId?: KeybindingActionId
+): boolean {
+  return (
+    textFieldClaimsActionKey(input, actionId) ||
+    isFloatingWorkspaceTerminalInputTarget(input.target) ||
+    (isFloatingWorkspacePanelFocused() &&
+      matchFloatingWorkspacePanelChord(input, platform, null, overrides, options) !== null)
+  )
 }

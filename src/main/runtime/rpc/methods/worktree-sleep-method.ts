@@ -5,8 +5,7 @@ export const WORKTREE_SLEEP_METHOD = defineMethod({
   name: 'worktree.sleep',
   permission: 'workspace',
   params: WorktreeSleepParams,
-  // Each workspace's sleep queues itself, so this call must not queue again. A phone never reads
-  // the reply, and the sleep can outlast its request timeout, so it is answered on acceptance.
+  // Sleep owns each workspace queue; do not queue twice. Answer on acceptance because phones ignore replies and sleep may outlast timeout.
   handler: async (params, { runtime, clientKind }) =>
     runtime.sleepManagedWorktree(params.worktree, {
       replyOnAcceptance: clientKind === 'mobile',

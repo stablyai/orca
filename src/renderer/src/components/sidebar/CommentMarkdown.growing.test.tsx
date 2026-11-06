@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
 import type { DocumentCodeBlockRenderer } from './comment-markdown-element-renderers'
 
-// These fixtures exercise prose, links and images without rendering diagrams.
 const mocks = vi.hoisted(() => ({
   mermaid: vi.fn(() => {
     throw new Error('These fixtures must not render Mermaid diagrams')
@@ -19,7 +18,7 @@ afterEach(() => {
   mocks.mermaid.mockClear()
 })
 
-/** The rendered blocks, without the line breaks the renderer puts between them, which lay out as nothing. */
+/** Ignore inter-block line breaks because they have no rendered layout. */
 function blocksOf(container: HTMLElement): string[] {
   return Array.from(container.firstElementChild?.children ?? [], (block) => block.outerHTML)
 }
@@ -53,7 +52,6 @@ describe('growing comment markdown', () => {
         <CommentMarkdown content={REPLY.slice(0, end)} variant="document" growing />
       )
     }
-    // The stream ending must not redraw what is already there.
     streamed.rerender(<CommentMarkdown content={REPLY} variant="document" />)
     expect(blocksOf(streamed.container)).toEqual(expected)
   })
@@ -87,6 +85,19 @@ describe('growing comment markdown', () => {
       )
     }
     expect(renderCodeBlock.mock.calls.length).toBe(afterFence)
+  })
+
+  it('does not remount earlier text when a kept tag closes', () => {
+    const props = { variant: 'document', unknownHtmlAsText: true, growing: true } as const
+    const view = render(<CommentMarkdown content={'Intro.\n\nPress <kbd>Ctrl'} {...props} />)
+    const press = view.container.querySelectorAll('p')[1]
+    for (const content of [
+      'Intro.\n\nPress <kbd>Ctrl</kbd> to copy.',
+      'Intro.\n\nPress <kbd>Ctrl</kbd> to copy.\n\nTail.'
+    ]) {
+      view.rerender(<CommentMarkdown content={content} {...props} />)
+      expect(view.container.querySelectorAll('p')[1]).toBe(press)
+    }
   })
 
   it('links a path in an earlier block once the host confirms it', () => {

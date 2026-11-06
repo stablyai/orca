@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// The crash this guards: a ReferenceError raised while Monaco builds its editor takes down
-// the workbench unless a boundary sits directly around the editor pane.
+// Contain Monaco initialization errors at the editor pane so they cannot unmount the workbench.
 
 import { act, useEffect, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -10,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import type { OpenFile } from '@/store/slices/editor'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 
 const reportCrashMock = vi.hoisted(() => vi.fn())
@@ -27,8 +26,7 @@ vi.mock('@/lib/react-error-boundary-reporting', () => ({
 
 vi.mock('./editor-lazy-views', () => {
   function MonacoEditorStub(): ReactElement {
-    // Why: @monaco-editor/react calls editor.create() and then onMount from its own mount
-    // effect, so both cited failures surface here — as a direct throw and as a callback throw.
+    // Monaco creates the editor and invokes onMount inside its mount effect; exercise both throw paths there.
     useEffect(() => {
       editorMounts.count += 1
       if (editorMounts.failure === 'create') {

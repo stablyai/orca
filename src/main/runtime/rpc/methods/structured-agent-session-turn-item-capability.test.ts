@@ -1,12 +1,12 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
-import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
 import {
   call,
@@ -24,9 +24,7 @@ import {
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
 
-// A turn the host watched finish that the provider nonetheless failed: the arm
-// and the verdict disagree on purpose, which is the shape this surface has to
-// carry in both directions.
+// Keep item kind and failed provider verdict distinct in both directions, even for observed completed turns.
 const TURN = {
   turnId: 'turn-1',
   state: 'completed' as const,
@@ -85,6 +83,32 @@ describe('turn item capability at the RPC boundary', () => {
     ).toMatchObject({ ok: true, result: { page: { items: [USER_ITEM, expected] } } })
   })
 
+  it('keeps the session agent on command-turn history for an older reader', async () => {
+    const command = { ...TURN_ITEM, itemId: 'legacy:orca:command:compact:1' }
+    hostCalls.sessionAgent.mockReturnValue('claude')
+    hostCalls.history.mockReturnValue({ ok: true, page: page([USER_ITEM, command]) })
+    expect(
+      await call(
+        'agentSession.history',
+        { sessionId: SESSION, direction: 'tail' },
+        STRUCTURED_CLIENT
+      )
+    ).toMatchObject({
+      ok: true,
+      result: {
+        page: {
+          items: [
+            USER_ITEM,
+            {
+              ...command,
+              body: { kind: 'status', text: 'Claude turn completed', turnLifecycle: TURN }
+            }
+          ]
+        }
+      }
+    })
+  })
+
   it.each(['snapshot', 'batch', 'reset'] as const)(
     'downgrades the %s stream only for a legacy reader',
     async (type) => {
@@ -115,9 +139,22 @@ describe('turn item capability at the RPC boundary', () => {
         [CURRENT_CLIENT, TURN_ITEM]
       ] as const) {
         const reply = await call('agentSession.subscribe', { sessionId: SESSION }, client)
-        const event = (reply.ok ? reply.result : null) as AgentSessionSubscribeEvent
-        const items =
-          event.type === 'batch' ? event.batch.items : 'page' in event ? event.page.items : []
+        const event = reply.ok ? reply.result : null
+        if (typeof event !== 'object' || event === null || !('type' in event)) {
+          throw new Error('Expected a subscription frame')
+        }
+        const payload =
+          event.type === 'batch'
+            ? 'batch' in event
+              ? event.batch
+              : null
+            : 'page' in event
+              ? event.page
+              : null
+        if (typeof payload !== 'object' || payload === null || !('items' in payload)) {
+          throw new Error('Expected subscription frame items')
+        }
+        const items = payload.items
         expect(items).toEqual([USER_ITEM, expected])
       }
     }
@@ -136,13 +173,11 @@ describe('turn item projection', () => {
   it('publishes the status form with the lifecycle intact to a legacy reader', () => {
     const projected = projectTurnItemHistory(history, STRUCTURED_CLIENT)
     expect(projected.page.items).toEqual([USER_ITEM, LEGACY_STATUS_ITEM])
-    // The downgrade is the only carrier an old client gets, so the verdict has to
-    // ride inside `turnLifecycle` rather than being dropped with the item kind.
+    // Legacy downgrade must retain the verdict in turnLifecycle when it drops the new item kind.
     expect(projected.page.items[1]?.body).toMatchObject({
       kind: 'status',
       turnLifecycle: { state: 'completed', outcome: 'failure' }
     })
-    // Untouched rows keep their identity; the journal's own body is never mutated.
     expect(projected.page.items[0]).toBe(USER_ITEM)
     expect(TURN_ITEM.body.kind).toBe('turn')
   })

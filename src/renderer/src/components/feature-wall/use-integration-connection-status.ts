@@ -4,18 +4,13 @@ import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 export type IntegrationStepState = 'active' | 'done' | 'upcoming'
 
-// Pure derivation of the two-step flow's step states from connection facts,
-// extracted so the progressive logic is testable without the store or DOM.
-// `codeHostTaskConnected` means a connected code host whose issues double as
-// a task source (GitHub/GitLab), which resolves step 2 without a tracker.
+// GitHub/GitLab issues satisfy the task step without a dedicated tracker.
 export function deriveIntegrationStepStates(input: {
   reviewConnected: boolean
   trackerConnected: boolean
   codeHostTaskConnected: boolean
 }): { review: IntegrationStepState; task: IntegrationStepState; complete: boolean } {
   const review: IntegrationStepState = input.reviewConnected ? 'done' : 'active'
-  // A dedicated tracker resolves tasks outright. The code host only counts
-  // once review is connected, since step 2 is unreachable before then.
   const taskResolved =
     input.trackerConnected || (input.reviewConnected && input.codeHostTaskConnected)
   const task: IntegrationStepState = taskResolved
@@ -38,9 +33,7 @@ export function deriveIntegrationFlowState(input: {
   taskResolved: boolean
 } {
   const trackerConnected = input.trackerProviderName !== null
-  // The code host resolves the task step only after dedicated tracker facts
-  // have settled for this runtime, so the collapsed summary names the right
-  // completion reason instead of flashing the code-host fallback copy.
+  // Wait for tracker checks before using the code-host fallback to avoid flashing the wrong completion reason.
   const codeHostTaskReady = input.codeHostTaskProviderName !== null && !input.trackerChecking
   const stepStates = deriveIntegrationStepStates({
     reviewConnected: input.reviewConnected,
@@ -93,28 +86,20 @@ type ProviderStatusFacts = {
 }
 
 export type IntegrationConnectionStatus = {
-  // True once any review provider is connected/configured for this context.
   reviewConnected: boolean
-  // Display name of the connected review provider, or null while none is.
   reviewProviderName: 'GitHub' | 'GitLab' | 'Bitbucket' | 'Azure DevOps' | 'Gitea' | null
   // GitHub/GitLab issues can double as tasks; token/env review providers do not.
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
-  // True once any task source is usable: a code host (its issues double as a
-  // task source) or a dedicated tracker (Linear/Jira).
+  // Any usable task source, including code-host issues, satisfies this legacy-named field.
   trackerConnected: boolean
-  // Display name of the connected tracker, or null. Code hosts are surfaced
-  // via reviewProviderName, so this only names Linear/Jira.
+  // Dedicated trackers only; code hosts use reviewProviderName.
   trackerProviderName: 'Linear' | 'Jira' | null
-  // Every connected task source, trackers first, for "Linear and GitHub
-  // connected for tasks" summaries that don't under-report what's usable.
+  // Include all usable sources, trackers first, for complete connection summaries.
   taskSourceNames: ('Linear' | 'Jira' | 'GitHub' | 'GitLab')[]
-  // True while the code-host check is unresolved, stale, loading, or errored.
+  // True while the code-host check is unresolved, stale or loading.
   reviewChecking: boolean
-  // True while either dedicated tracker check is unresolved or stale.
   trackerChecking: boolean
-  // True until the underlying provider checks have resolved for this surface.
-  // Callers should treat unknown state as "not connected yet" rather than
-  // flashing summaries.
+  // Treat unresolved checks as unknown to avoid flashing disconnected summaries.
   checking: boolean
 }
 
@@ -192,9 +177,7 @@ export function deriveIntegrationConnectionStatus(
     ...(gitlabConnected ? (['GitLab'] as const) : [])
   ]
   const hasUsableTaskSource = taskSourceNames.length > 0
-  // Why: one resolved task source is enough for parent setup readiness, but the
-  // local "use code host issues" acknowledgement waits until tracker checks
-  // settle so the banner uses the right completion reason.
+  // Parent readiness needs one task source; the code-host acknowledgement waits for trackers to choose accurate copy.
   const trackerChecking = trackerProviderName === null && (linearChecking || jiraChecking)
 
   return {
@@ -215,9 +198,6 @@ export function deriveIntegrationConnectionStatus(
   }
 }
 
-// Derives the two-step progressive flow's done-state from real provider
-// connection status, mirroring use-feature-wall-task-source-presentation so a
-// code host counts as both a review source and a task source.
 export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)

@@ -1,6 +1,6 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit, type QueuedMessageEdit } from '../../../shared/queued-message-edit'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
@@ -9,9 +9,7 @@ export type QueuedMessageUpdate = QueuedMessageEdit & {
   expectedBodyFingerprint: string
 }
 
-/** Compare-and-set on the body fingerprint. The resulting body is checked first, so a retried
- *  Save whose first answer was lost reads `unchanged`, and one a newer edit superseded reads
- *  `changed`: a retry never overwrites newer text. */
+/** A user edit: reconcile lost replies before CAS, then durably attribute changed content to the user. */
 export function queuedMessageUpdateDecision(
   row: QueuedMessageRow | null,
   sessionId: string,
@@ -31,7 +29,7 @@ export function queuedMessageUpdateDecision(
     return { status: 'gone', messageId, disposition }
   }
   const edited = queuedMessageWithEdit(row.body, input)
-  // A caller shown no image card must not make one it then cannot see.
+  // Clients unable to display image cards must not create them.
   if (!edited.ok || (!readsImageCards && (input.images?.length ?? 0) > 0)) {
     return { status: 'not-editable', messageId }
   }
@@ -42,5 +40,6 @@ export function queuedMessageUpdateDecision(
   if (row.fingerprint !== input.expectedBodyFingerprint) {
     return { status: 'changed', messageId }
   }
-  return { status: 'ready', body: edited.body, previous: row.body, fingerprint }
+  const { from: _sender, ...body } = edited.body
+  return { status: 'ready', body, previous: row.body, fingerprint }
 }

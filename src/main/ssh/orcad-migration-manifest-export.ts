@@ -1,11 +1,5 @@
-/**
- * The signed manifest a relay-hosted SSH target's state is exported as.
- *
- * Reads only: the catalog rows the target owns and the dormant state that references them, copied
- * out of the profile-state store. The source keeps every row; retiring it happens only after the
- * destination has verified and imported this exact manifest.
- */
-import { randomUUID } from 'node:crypto'
+/** Export copied catalog/dormant state without mutating source. Path rewriting precedes signing; source ownership remains until cutover establishes destination authority. */
+import { createHash, randomUUID } from 'node:crypto'
 import {
   MAX_ORCAD_MIGRATION_MANIFEST_BYTES,
   ORCAD_MIGRATION_MANIFEST_VERSION,
@@ -16,9 +10,18 @@ import type {
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
+import {
+  ORCAD_MIGRATION_BLOB_KIND_CONTRACTS,
+  type OrcadMigrationBlobDescriptor
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import {
+  orcadMigrationAutomationRunHistoryBlob,
+  serializeOrcadMigrationAutomationRunHistory,
+  withOrcadMigrationAutomationRunHistory
+} from '../../shared/orcad-migration/orcad-migration-automation-run-history'
 import type { SshTarget } from '../../shared/ssh-types'
-import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../shared/remote-runtime-memory-limits'
-import type { Store } from '../persistence'
+import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
+import type { Store } from '../persistence/loading-store/store'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
 import {
@@ -42,10 +45,22 @@ export type OrcadMigrationManifestExportOptions = {
   migrationId?: string
   now?: () => Date
   destinationEnvironmentId?: string
-  /** Only these rows: a re-export of what earlier migrations of the host already moved. */
   onlyCatalog?: OrcadMigrationCatalogIds
   /** Maps source paths to destination paths before signing; identity for an SSH host. */
   rewrite?: OrcadMigrationPathRewriter
+  /** Re-export a journal written before run history moved out of the manifest, as it was signed. */
+  inlineAutomationRuns?: boolean
+}
+
+export type OrcadMigrationExportedBlob = {
+  descriptor: OrcadMigrationBlobDescriptor
+  bytes: Buffer
+}
+
+export type OrcadMigrationManifestExport = {
+  manifest: OrcadMigrationManifest
+  /** The bytes of every blob the manifest names. */
+  blobs: OrcadMigrationExportedBlob[]
 }
 
 export function createOrcadMigrationManifest(
@@ -53,6 +68,14 @@ export function createOrcadMigrationManifest(
   target: SshTarget,
   options: OrcadMigrationManifestExportOptions = {}
 ): OrcadMigrationManifest {
+  return exportOrcadMigrationManifest(store, target, options).manifest
+}
+
+export function exportOrcadMigrationManifest(
+  store: OrcadMigrationExportStore,
+  target: SshTarget,
+  options: OrcadMigrationManifestExportOptions = {}
+): OrcadMigrationManifestExport {
   const rewrite = options.rewrite ?? IDENTITY_ORCAD_MIGRATION_PATH_REWRITER
   const collected = restrictCatalog(
     collectOrcadMigrationSourceCatalog(store, target),
@@ -75,11 +98,14 @@ export function createOrcadMigrationManifest(
     sourcePayload,
     options.destinationEnvironmentId
   )
-  // After collection: dormant state is selected by the source's own paths and ids.
-  const payload = rewriteOrcadMigrationPayloadPaths(
+  // Select dormant state using source identities before rewriting destination paths.
+  const rewritten = rewriteOrcadMigrationPayloadPaths(
     { ...sourcePayload, ...(hasDormantState(dormantState) ? { dormantState } : {}) },
     rewrite
   )
+  const { payload, runHistory } = options.inlineAutomationRuns
+    ? { payload: rewritten, runHistory: null }
+    : moveAutomationRunsToBlob(rewritten)
   const unsigned = {
     version: ORCAD_MIGRATION_MANIFEST_VERSION,
     migrationId: options.migrationId ?? randomUUID(),
@@ -91,10 +117,20 @@ export function createOrcadMigrationManifest(
       : {})
   }
   try {
-    return parseOrcadMigrationManifest({
-      ...unsigned,
-      manifestSha256: computeOrcadMigrationManifestSha256(unsigned)
+    // Sign what the journal and the host read back: the parsed form (the parser keeps only the fields
+    // it knows) of the JSON (a value with toJSON serializes differently), never the live objects.
+    const { manifestSha256: _unsigned, ...normalized } = parseOrcadMigrationManifest({
+      ...JSON.parse(JSON.stringify(unsigned)),
+      manifestSha256: UNSIGNED_DIGEST
     })
+    if (runHistory) {
+      // Refuse here what the destination's commit would refuse, while nothing is fenced.
+      withOrcadMigrationAutomationRunHistory(normalized, runHistory.bytes.toString('utf8'))
+    }
+    return {
+      manifest: { ...normalized, manifestSha256: computeOrcadMigrationManifestSha256(normalized) },
+      blobs: runHistory ? [runHistory] : []
+    }
   } catch (error) {
     if (error instanceof Error && error.message === ORCAD_MIGRATION_MANIFEST_TOO_LARGE) {
       throw new Error(describeOversizedOrcadMigrationPayload(payload))
@@ -103,19 +139,49 @@ export function createOrcadMigrationManifest(
   }
 }
 
+/** Run history scales with every run ever kept, so it travels beside the manifest, never in it. */
+function moveAutomationRunsToBlob(payload: OrcadMigrationCatalogPayload): {
+  payload: OrcadMigrationCatalogPayload
+  runHistory: OrcadMigrationExportedBlob | null
+} {
+  if (!payload.dormantState?.automationRuns?.length) {
+    return { payload, runHistory: null }
+  }
+  const { automationRuns, ...dormantState } = payload.dormantState
+  // The JSON round trip matches what the manifest's own normalization keeps.
+  const bytes = Buffer.from(
+    serializeOrcadMigrationAutomationRunHistory(JSON.parse(JSON.stringify(automationRuns))),
+    'utf8'
+  )
+  const maxBytes = ORCAD_MIGRATION_BLOB_KIND_CONTRACTS['automation-run-history'].maxBytes
+  if (bytes.length > maxBytes) {
+    throw new Error(
+      `This SSH host's automation run history is too large to move to its Orca server ` +
+        `(${formatKib(bytes.length)}, limit ${formatKib(maxBytes)}). Delete automations you no ` +
+        `longer need from this host's projects; their run history goes with them. Then reconnect. ` +
+        `(orcad_migration_automation_run_history_too_large)`
+    )
+  }
+  const ref = { sha256: createHash('sha256').update(bytes).digest('hex'), byteLength: bytes.length }
+  return {
+    payload: {
+      ...payload,
+      dormantState: { ...dormantState, automationRunHistory: ref }
+    },
+    runHistory: { descriptor: orcadMigrationAutomationRunHistoryBlob(ref), bytes }
+  }
+}
+
 const ORCAD_MIGRATION_MANIFEST_TOO_LARGE = 'orcad_migration_manifest_too_large'
+const UNSIGNED_DIGEST = '0'.repeat(64)
 
 // Request id, device token, method name and JSON framing around the params.
 const REQUEST_ENVELOPE_RESERVE_BYTES = 1024
 /** The largest catalog-request params that still fit the host's sealed inbound frame. */
-const ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES =
+export const ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES =
   REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - REQUEST_ENVELOPE_RESERVE_BYTES
 
-/**
- * Throws the user-facing refusal when a catalog request would overflow the host's sealed frame;
- * the host would answer by closing the socket. Every request carries the whole manifest, so a
- * fence must not be taken on one that fails this: its stage, state and abort would all refuse.
- */
+/** Reject oversized manifest requests before fencing: stage/state/full abort would all exceed the sealed frame and close its socket. */
 export function assertOrcadMigrationRequestFits(params: {
   manifest: OrcadMigrationManifest
 }): void {
@@ -135,40 +201,57 @@ export function orcadMigrationRequestFits(params: { manifest: OrcadMigrationMani
   )
 }
 
-/** The bare code told users nothing (#30126): name the largest parts and what to trim. */
+/** Name the largest sections and how to trim the largest; a bare error code was unhelpful (#30126). */
 export function describeOversizedOrcadMigrationPayload(
   payload: OrcadMigrationCatalogPayload,
   limitBytes = MAX_ORCAD_MIGRATION_MANIFEST_BYTES
 ): string {
   const dormant = payload.dormantState
-  const parts: [string, unknown][] = [
-    ['projects', payload.repositories],
-    ['folder workspaces', payload.folderWorkspaces],
-    ['project groups', payload.projectGroups],
-    ['saved tabs and panes', dormant?.workspaceSession],
-    ['saved terminal history', dormant?.terminalScrollbackSnapshots],
-    ['saved workspace details', dormant?.worktreeMeta],
-    ['workspace history', [dormant?.worktreeLineage, dormant?.workspaceLineage]],
-    ['sparse checkout presets', dormant?.sparsePresets],
+  const removeProjects = 'remove projects you no longer use from this host'
+  const closeTabs = 'close tabs you no longer need'
+  const parts: [words: string, value: unknown, trim: string][] = [
+    ['projects', payload.repositories, removeProjects],
+    ['folder workspaces', payload.folderWorkspaces, removeProjects],
+    ['project groups', payload.projectGroups, removeProjects],
+    ['saved tabs and panes', dormant?.workspaceSession, closeTabs],
+    ['saved terminal history', dormant?.terminalScrollbackSnapshots, closeTabs],
+    ['saved workspace details', dormant?.worktreeMeta, 'delete workspaces you no longer need'],
+    [
+      'workspace history',
+      [dormant?.worktreeLineage, dormant?.workspaceLineage],
+      'delete workspaces you no longer need'
+    ],
+    [
+      'sparse checkout presets',
+      dormant?.sparsePresets,
+      'delete sparse checkout presets you no longer use'
+    ],
     [
       'retired workspace names',
-      [dormant?.retiredWorktreeNames, dormant?.retiredWorktreeNamespaces]
+      [dormant?.retiredWorktreeNames, dormant?.retiredWorktreeNamespaces],
+      removeProjects
     ],
-    ['automations', [dormant?.automations, dormant?.automationRuns]],
-    ['sidebar and browser settings', dormant?.clientState]
+    [
+      'automations',
+      [dormant?.automations, dormant?.automationRuns],
+      "delete automations you no longer need from this host's projects"
+    ],
+    ['sidebar and browser settings', dormant?.clientState, closeTabs]
   ]
   const largest = parts
-    .map(([words, value]) => ({
+    .map(([words, value, trim]) => ({
       words,
+      trim,
       bytes: new TextEncoder().encode(JSON.stringify(value ?? null)).byteLength
     }))
     .sort((left, right) => right.bytes - left.bytes)
     .slice(0, 3)
-    .map(({ words, bytes }) => `${words} (${formatKib(bytes)})`)
+  const { trim } = largest[0]
   return (
     `This SSH host's saved state is too large to move to its Orca server (limit ` +
-    `${formatKib(limitBytes)}). Largest parts: ${largest.join(', ')}. ` +
-    `Close tabs you no longer need or remove unused projects for this host, then reconnect. ` +
+    `${formatKib(limitBytes)}). Largest parts: ` +
+    `${largest.map(({ words, bytes }) => `${words} (${formatKib(bytes)})`).join(', ')}. ` +
+    `${trim.charAt(0).toUpperCase()}${trim.slice(1)}, then reconnect. ` +
     `(${ORCAD_MIGRATION_MANIFEST_TOO_LARGE})`
   )
 }
@@ -207,7 +290,7 @@ function restrictCatalog(
   }
 }
 
-function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
+export function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
   return (
     state.worktreeMeta.length > 0 ||
     state.worktreeLineage.length > 0 ||
@@ -219,6 +302,7 @@ function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
     (state.terminalScrollbackSnapshots?.length ?? 0) > 0 ||
     (state.automations?.length ?? 0) > 0 ||
     (state.automationRuns?.length ?? 0) > 0 ||
+    state.automationRunHistory !== undefined ||
     (state.clientState !== undefined && Object.keys(state.clientState).length > 0)
   )
 }

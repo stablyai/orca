@@ -1,6 +1,4 @@
-// Layout-owner build: a pane with no live terminal is started by main, never by the window. A
-// sleeping pane asks main on its first view and attaches once main binds it; a reattach that finds
-// its terminal gone asks main too, and nothing the window does starts or resumes a terminal.
+// Layout-owner main starts or resumes missing terminals; the window only asks and attaches, including after a failed reattach.
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -11,7 +9,11 @@ import {
   leafIdForPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
@@ -23,6 +25,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -76,6 +79,7 @@ async function connectBound(
   transport = createMockTransport()
 ) {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   transportFactoryQueue.push(transport)
   setStore({
     tabsByWorktree: { 'wt-1': [{ id: TAB, ptyId: 'pty-old' }] },
@@ -88,10 +92,9 @@ async function connectBound(
     restoredPtyIdByLeafId: { [LEAF]: 'pty-old' },
     isVisibleRef: { current: visible }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-  const args = [createPane(1), createManager(1), deps] as unknown as Parameters<
-    typeof connectPanePty
-  >
+  const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
+  bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
   const connection = connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps, connection }

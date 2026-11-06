@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isHostMirroredSleepingRecord } from './host-mirrored-pane-liveness'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
 
@@ -6,8 +6,7 @@ function outranks(
   record: SleepingAgentSessionRecord,
   current: SleepingAgentSessionRecord
 ): boolean {
-  // Why: a host mirror may name a transcript its host still writes, so it speaks for the claim and a
-  // newer native sibling for the same session is the duplicate (#29421).
+  // Host mirrors speak for transcripts the host may still write; newer native siblings are duplicates (#29421).
   const mirrorRank =
     Number(isHostMirroredSleepingRecord(record)) - Number(isHostMirroredSleepingRecord(current))
   if (mirrorRank !== 0) {

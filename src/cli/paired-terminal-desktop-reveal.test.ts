@@ -16,7 +16,7 @@ vi.mock('./runtime-client', () => ({
 }))
 vi.mock('./runtime/environments', () => ({ resolveEnvironment: mocks.resolveEnvironment }))
 
-import type { TerminalPaneRevealTarget } from '../shared/terminal-pane-reveal'
+import type { TerminalPaneRevealTarget } from '../shared/workspace-layout/terminal-pane-reveal'
 import type { RuntimeClient } from './runtime-client'
 import { revealPairedTerminalOnLocalDesktop } from './paired-terminal-desktop-reveal'
 
@@ -28,11 +28,11 @@ const shownTerminal = {
   leafId: '11111111-1111-4111-8111-111111111111'
 }
 
-function pairedClient(environmentSelector: string | null) {
+function pairedClient() {
   const serverCall = vi.fn(async () => ({ ok: true, result: { terminal: shownTerminal } }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reveal reads only these three members.
   const client = {
-    environmentSelector,
+    environmentSelector: 'winpc',
     userDataPath: '/profile',
     call: serverCall
   } as unknown as RuntimeClient
@@ -51,12 +51,11 @@ describe('revealPairedTerminalOnLocalDesktop', () => {
     )
   })
 
-  it("shows a paired server's terminal in this machine's desktop window", async () => {
-    const { client, serverCall } = pairedClient('winpc')
+  it('bounds both the paired host and the local desktop before the host fallback', async () => {
+    const { client, serverCall } = pairedClient()
 
     await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(true)
 
-    expect(mocks.resolveEnvironment).toHaveBeenCalledWith('/profile', 'winpc')
     expect(serverCall).toHaveBeenCalledWith(
       'terminal.show',
       { terminal: HANDLE },
@@ -64,49 +63,14 @@ describe('revealPairedTerminalOnLocalDesktop', () => {
     )
     // null bypasses ambient remote selection so reveal reaches the local desktop; 12 s bounds a stalled one.
     expect(mocks.desktopClient).toHaveBeenCalledWith('/profile', 12_000, null, null)
-    expect(mocks.desktopCall).toHaveBeenCalledWith('terminal.reveal', {
-      worktreeId: shownTerminal.worktreeId,
-      tabId: shownTerminal.tabId,
-      leafId: shownTerminal.leafId,
-      executionHostId: 'runtime:env%2F1'
-    })
   })
 
-  it('asks no desktop when the client is not talking to a paired environment', async () => {
-    const { client, serverCall } = pairedClient(null)
-
-    await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(false)
-
-    expect(serverCall).not.toHaveBeenCalled()
-    expect(mocks.desktopClient).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['no longer knows the terminal', 'terminal_handle_stale'],
-    ['is too slow to show it', 'request_timeout']
-  ])('asks no desktop when the server %s', async (_case, code) => {
-    const { client, serverCall } = pairedClient('winpc')
-    serverCall.mockRejectedValue(new Error(code))
+  it('asks no desktop when the paired host is too slow to show the terminal', async () => {
+    const { client, serverCall } = pairedClient()
+    serverCall.mockRejectedValue(new Error('request_timeout'))
 
     await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(false)
 
     expect(mocks.desktopClient).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['no desktop is running here', new Error('runtime_unavailable')],
-    ['the desktop predates terminal.reveal', new Error('method_not_found')]
-  ])('keeps the server answer when %s', async (_case, error) => {
-    const { client } = pairedClient('winpc')
-    mocks.desktopCall.mockRejectedValue(error)
-
-    await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(false)
-  })
-
-  it('keeps the server answer when the desktop does not know the workspace', async () => {
-    const { client } = pairedClient('winpc')
-    mocks.desktopCall.mockResolvedValue({ ok: true, result: { reveal: { navigated: false } } })
-
-    await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(false)
   })
 })

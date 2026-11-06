@@ -1,7 +1,4 @@
-// A layout-owner build's tab moves and group sizes. A move: main places the tab first and its frame
-// shows the move, or while its stream is down, the reconnect's snapshot does; the flush that shows
-// it selects the tab, unless the user chose another selection since (L120).
-// Group sizes: drawn while dragging, main saves the ratio when the drag ends.
+// Main frames/reconnect snapshots draw moves and select them unless selection changed; divider ratios persist on release.
 
 import { useAppStore } from '@/store'
 import type { TabSplitDirection } from '@/store/slices/tabs'
@@ -19,17 +16,12 @@ import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ra
 import { serverTabCount } from '@/lib/frame-drawn-desktop-created-tabs'
 import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 
-/** A tab drop as the window resolved it: within its group, into another, or beside a group. */
 export type TabDrop =
   | { kind: 'reorder'; tabId: string; groupId: string; tabOrder: string[] }
   | { kind: 'move'; tabId: string; groupId: string; index?: number }
   | { kind: 'split'; tabId: string; groupId: string; direction: TabSplitDirection }
 
-/**
- * Sends a tab drop to main, which the window then shows; a refused drop moves nothing. False when
- * the window skips the drop or a paired server owns the workspace's layout: the caller moves the
- * tab as today.
- */
+/** Send drops to main; refusal leaves tabs in place, while false delegates skipped or paired-server drops to the caller. */
 export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): boolean {
   const command = commandFor(worktreeId, drop)
   if (!command) {
@@ -37,8 +29,7 @@ export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): bo
   }
   const forget = expectSelectionAfterMove(worktreeId, drop)
   const sent = sendLayoutCommandToOwner(worktreeId, command, {
-    // The frame the answer waits for showed the move and the selection; with no stream, the
-    // reconnect's snapshot will.
+    // Forget after the answering frame; without a stream, retain selection intent for the reconnect snapshot.
     apply: (_result, origin) => {
       if (layoutFramesFlowing(origin.framesKey)) {
         forget()
@@ -56,7 +47,7 @@ export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): bo
   return sent
 }
 
-/** Records that the moved tab is selected once a frame shows it out of its group. */
+/** Select a moved tab when its frame arrives, unless the user selected elsewhere. */
 function expectSelectionAfterMove(worktreeId: string, drop: TabDrop): () => void {
   const state = useAppStore.getState()
   const fromGroupId = state.unifiedTabsByWorktree[worktreeId]?.find(
@@ -80,7 +71,7 @@ function commandFor(worktreeId: string, drop: TabDrop): WindowLayoutCommand | nu
   const groups = state.groupsByWorktree[worktreeId] ?? []
   if (drop.kind === 'split') {
     const source = groups.find((candidate) => candidate.tabOrder.includes(tabId))
-    // Why: a drop the window's own move skips changes nothing; main would still reset the ratio.
+    // Skip local no-ops before main can reset a split ratio.
     if (
       !source ||
       isPaneColumnSplitDropNoOp({
@@ -96,7 +87,7 @@ function commandFor(worktreeId: string, drop: TabDrop): WindowLayoutCommand | nu
     return { type: 'splitGroup', tabId, besideGroupId: groupId, direction: drop.direction }
   }
   const group = groups.find((candidate) => candidate.id === groupId)
-  // Why: a move into the tab's own group moves nothing today (a paired client can send one).
+  // Paired clients can request same-group moves, which must remain no-ops.
   if (!group || (drop.kind === 'move' && group.tabOrder.includes(tabId))) {
     return null
   }
@@ -114,12 +105,12 @@ function commandFor(worktreeId: string, drop: TabDrop): WindowLayoutCommand | nu
   }
 }
 
-/** Today's move, mirrored to a web client's server as today. */
+/** Apply the window-owned fallback and mirror it to the web runtime. */
 function moveAsToday(worktreeId: string, drop: TabDrop): boolean {
   const state = useAppStore.getState()
   const { tabId, groupId: targetGroupId } = drop
   if (drop.kind === 'reorder') {
-    // Why handled: main already moved the tab, or cannot.
+    // Mark ownership handled to avoid submitting the same reorder again.
     state.reorderUnifiedTabs(targetGroupId, drop.tabOrder, { layoutOwnerHandled: true })
     mirrorWebRuntimeTabMove({
       kind: 'reorder',
@@ -149,7 +140,7 @@ function moveAsToday(worktreeId: string, drop: TabDrop): boolean {
   return moved
 }
 
-/** Sets a group divider's ratio here, as today, then has main save that divider's ratio. */
+/** Draw the ratio locally, then ask main to persist it. */
 export function setGroupRatioThroughLayoutOwner(
   worktreeId: string,
   nodePath: string,
@@ -158,8 +149,7 @@ export function setGroupRatioThroughLayoutOwner(
   const state = useAppStore.getState()
   state.setTabGroupSplitRatio(worktreeId, nodePath, ratio)
   const layout = useAppStore.getState().layoutByWorktree[worktreeId]
-  // The window drew the ratio while dragging; main takes the divider's new ratio, not its tree,
-  // and refuses it if that path now names another split (frames then redraw main's).
+  // Send split identity with the ratio so main refuses it if this path now names another split.
   const intent = layout && splitRatioIntentAt(layout, nodePath, ratio)
   if (intent && layout !== state.layoutByWorktree[worktreeId]) {
     const keep = (): void => {}

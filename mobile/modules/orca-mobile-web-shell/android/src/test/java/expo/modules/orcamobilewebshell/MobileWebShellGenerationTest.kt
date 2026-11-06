@@ -40,8 +40,7 @@ class MobileWebShellGenerationTest {
     assertEquals(4, entries.size)
     assertEquals(File(DIRECTORY, "index.html"), entries["/"]!!.file)
     assertEquals("text/html; charset=utf-8", entries["/"]!!.contentType)
-    // Only "/" reaches the document: a second URL for the same bytes would answer without the CSP
-    // header, which rides the document response alone.
+    // Only / may serve document bytes with CSP; no entrypoint alias.
     assertNull(entries["/index.html"])
     assertEquals(File(DIRECTORY, "assets/bb.png"), entries["/assets/bb.png"]!!.file)
     assertEquals("image/png", entries["/assets/bb.png"]!!.contentType)
@@ -119,12 +118,6 @@ class MobileWebShellGenerationTest {
     assertFalse(MobileWebShellGeneration.isServableContentType("-text/html"))
     assertFalse(MobileWebShellGeneration.isServableContentType("text/html; charset="))
     assertFalse(MobileWebShellGeneration.isServableContentType("a".repeat(130) + "/b"))
-  }
-
-  @Test
-  fun `splits the content type the way WebResourceResponse wants it`() {
-    assertEquals("text/html" to "utf-8", splitMobileWebShellContentType("text/html; charset=utf-8"))
-    assertEquals("image/png" to null, splitMobileWebShellContentType("image/png"))
   }
 
   @Test

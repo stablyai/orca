@@ -99,8 +99,7 @@ describe('WSL transcript filesystem gate', () => {
     await expect(wslProbe).resolves.toBe(firstUncPath)
   })
 
-  // Last on purpose: the never-settling Ubuntu probe leaves its gate permit
-  // stuck for the rest of this module's lifetime.
+  // Last: the never-settling probe retains its gate permit for this module’s lifetime.
   it('falls through to the next distro when a probe exceeds the gate deadline', async () => {
     vi.useFakeTimers()
     const DEBIAN_HOME = '\\\\wsl.localhost\\Debian\\home\\ada'

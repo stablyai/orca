@@ -91,8 +91,7 @@ export function LinearAgentSkillSetupPrompt({
     readLocalDismissed(localDismissStorageKey)
   )
   const [previousDismissStorageKey, setPreviousDismissStorageKey] = useState(localDismissStorageKey)
-  // Why: dismissal is scoped to the selected runtime, so read the new key before
-  // paint rather than briefly showing the previous runtime's prompt state.
+  // Read runtime-scoped dismissal before paint so switching targets cannot flash the previous prompt state.
   if (localDismissStorageKey !== previousDismissStorageKey) {
     setPreviousDismissStorageKey(localDismissStorageKey)
     setLocalDismissed(readLocalDismissed(localDismissStorageKey))
@@ -130,7 +129,6 @@ export function LinearAgentSkillSetupPrompt({
       setActiveSetupCheckIdentity(null)
       return
     }
-    // Wait until the refreshed skill state is ready for this target.
     if (setupCheckResult === 'checking' && setupReady) {
       setSetupCheckResult('ready')
       return

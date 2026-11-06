@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 
 type CurrentRef<T> = { readonly current: T }
 
@@ -11,17 +12,10 @@ type AttachmentInputLeaseGateArgs = {
   readonly showToast: (message: string, durationMs?: number) => void
 }
 
-// Poll cadence + ceiling for riding out a terminal resubscribe (WS reconnect or
-// return-to-terminal) during which the input lease is briefly not ready.
 const LEASE_READY_POLL_MS = 100
 const LEASE_READY_TIMEOUT_MS = 3000
 
-/** Gates an image attachment's terminal.send on a ready input lease. Flushes any
- *  pending IME/live input, confirms the send still targets the connected terminal
- *  tab, then waits out a short lease-not-ready window so a finished upload isn't
- *  dropped as if the picker were cancelled. Returns false only when the lease
- *  never recovers — surfacing a toast, since the caller treats a bare false as a
- *  silent picker-cancel (no error path). */
+// Wait through brief lease gaps after flushing IME; toast only unrecovered leases because the caller treats bare false as picker cancellation.
 export function useMobileAttachmentInputLeaseGate({
   flushPendingLiveInputBeforeExternalSend,
   connStateRef,
@@ -33,7 +27,7 @@ export function useMobileAttachmentInputLeaseGate({
   return useCallback(
     async (targetHandle: string): Promise<boolean> => {
       const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
-      // Why: image picking/upload and IME flushing can outlive the original tab.
+      // Picking/upload and IME flush may outlive their original tab.
       if (
         !flushedPendingInput ||
         connStateRef.current !== 'connected' ||
@@ -46,10 +40,7 @@ export function useMobileAttachmentInputLeaseGate({
       while (!nativeChatInputLeaseReadyRef.current && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, LEASE_READY_POLL_MS))
       }
-      // Why: the wait can outlive the target too — re-check so a tab/host switch
-      // or disconnect mid-wait doesn't send into the wrong (or dead) terminal.
-      // A moved-away target drops silently like the pre-wait guard; only a lease
-      // that never recovered warrants the toast.
+      // Recheck after waiting to avoid writing to a switched/dead target; moved targets cancel silently, failed lease recovery toasts.
       if (
         connStateRef.current !== 'connected' ||
         targetHandle !== activeHandleRef.current ||
@@ -60,7 +51,13 @@ export function useMobileAttachmentInputLeaseGate({
       if (nativeChatInputLeaseReadyRef.current) {
         return true
       }
-      showToast('Attach failed (reconnecting)', 1500)
+      showToast(
+        translate(
+          'session.useAttachmentInputLeaseGate.reconnecting',
+          'Attach failed (reconnecting)'
+        ),
+        1500
+      )
       return false
     },
     [

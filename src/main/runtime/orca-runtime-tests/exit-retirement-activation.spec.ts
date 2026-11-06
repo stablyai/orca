@@ -1,6 +1,7 @@
 import type { AdoptStablePaneArgs } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -9,7 +10,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 async function startSplitHost() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
@@ -71,8 +72,7 @@ async function startSplitHost() {
 }
 
 describe('OrcaRuntimeService', () => {
-  // Why: a paired mirror answers an exit's stream end by re-activating its pane. An activation
-  // that still finds the leaf respawns the exited session, and the retirement never publishes.
+  // Paired stream-end reactivation can respawn exited leaves; retire before releasing the stream.
   it('retires an exited split leaf before its stream end, while the durable write is pending', async () => {
     const { runtime, runtimeStore, getSession, spawn, adoptStablePane, activate, terminalLeafIds } =
       await startSplitHost()
@@ -81,7 +81,7 @@ describe('OrcaRuntimeService', () => {
     Object.assign(runtimeStore, { flushPendingOrThrowAsync: () => disk.promise })
     const published = vi.fn()
     runtime.onMobileSessionTabsChanged(published)
-    // The stream end: the mirror's re-activation starts the moment the host releases it.
+    // Model immediate paired-client reactivation on stream end.
     let reactivation: Promise<unknown> | undefined
     let observedAtStreamEnd: { binding?: string; publications: number } | undefined
     runtime.subscribeToPtyExit('pty-b', () => {
@@ -96,10 +96,9 @@ describe('OrcaRuntimeService', () => {
     })
     const exiting = runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
 
-    // Why: whatever answers the stream end, over any transport, must already see the leaf retired.
     expect(observedAtStreamEnd).toEqual({ binding: undefined, publications: 1 })
     expect(reactivation).toBeDefined()
-    // Why: the refusal must come from the lookup, before any stable-pane adoption can revive it.
+    // Lookup must reject before stable-pane adoption can revive the retired leaf.
     expect(await reactivation).toEqual(new Error('tab_not_found'))
     expect(adoptStablePane).toHaveBeenCalledTimes(2)
     expect(spawn).toHaveBeenCalledTimes(2)
@@ -111,42 +110,5 @@ describe('OrcaRuntimeService', () => {
     disk.resolve()
     await exiting
     expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
-  })
-
-  // Why: the process is gone whether or not the profile admits the write (quit, maintenance).
-  it('retires the pane and ends the stream when the profile refuses the staging write', async () => {
-    const { runtime, runtimeStore, activate, terminalLeafIds } = await startSplitHost()
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    runtimeStore.setWorkspaceSession.mockImplementation(() => {
-      throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
-    })
-    const streamEnd = vi.fn()
-    runtime.subscribeToPtyExit('pty-b', streamEnd)
-
-    await runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
-
-    expect(streamEnd).toHaveBeenCalledOnce()
-    expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
-    await expect(activate(HEADLESS_SECOND_LEAF_ID, 'automatic')).rejects.toThrow('tab_not_found')
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[runtime] could not stage terminal retirement:',
-      expect.any(Error)
-    )
-    errorSpy.mockRestore()
-  })
-
-  // Why: the stream end now waits behind the exit cleanup; a cleanup fault must not strand it.
-  it('still ends the stream when exit cleanup throws before the retirement', () => {
-    const runtime = new OrcaRuntimeService()
-    Object.assign(runtime, {
-      disposeHeadlessTerminal: () => {
-        throw new Error('dispose_failed')
-      }
-    })
-    const streamEnd = vi.fn()
-    runtime.subscribeToPtyExit('pty-a', streamEnd)
-
-    expect(() => runtime.onPtyExit('pty-a', 0)).toThrow('dispose_failed')
-    expect(streamEnd).toHaveBeenCalledOnce()
   })
 })

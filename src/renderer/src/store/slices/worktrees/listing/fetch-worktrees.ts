@@ -77,8 +77,7 @@ export function createFetchWorktrees(
           ? (directCallerAuthority ?? getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
-        // rows as a side effect before returning false would silently weaken that contract.
+        // Authoritative-only callers must not receive non-authoritative store side effects before false returns.
         if (!options?.requireAuthoritative) {
           await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         }
@@ -115,10 +114,7 @@ export function createFetchWorktrees(
         case 'applied':
           break
         case 'superseded':
-          // Why current for direct callers: a newer catalog is already applied; 'stale' means a moved
-          // connection. Others relist once: a caller that joined a listing already in flight (a
-          // change event's refresh) may get only that older answer, and nothing else would follow
-          // it. One new listing scans at or past the applied version, so it is admitted.
+          // Direct callers retain current-catalog result; joined refreshes relist once after supersession or their only older answer leaves no follow-up.
           if (directCallerAuthority) {
             return refresh.providerResult ?? false
           }

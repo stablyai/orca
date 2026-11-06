@@ -1,24 +1,28 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { PaletteDocument } from './palette-match/palette-document'
-import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
+import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
+import type {
+  Tab,
+  TabContentType,
+  TabGroup,
+  WorkspaceVisibleTabType
+} from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
 export {
   searchWorkspaceTabs,
   type WorkspaceTabPaletteSearchResult
 } from './workspace-tab-palette-results'
 
-export type WorkspaceTabContentType =
-  | 'terminal'
-  | 'editor'
-  | 'diff'
-  | 'conflict-review'
-  | 'check-details'
+export type WorkspaceTabContentType = Exclude<TabContentType, 'browser' | 'simulator'>
 
 export type SearchableWorkspaceTab = {
   tab: Tab & { contentType: WorkspaceTabContentType }
@@ -45,8 +49,7 @@ export type SearchableWorkspaceTab = {
   isCurrentWorktree: boolean
 }
 
-// Why search-only: the status/content icon already says "terminal"; a fixed
-// secondary crowds the row. Keep these matchable so typing "terminal" still finds them.
+// Keep terminal type aliases searchable but undisplayed; icons already communicate type.
 export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
 type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
@@ -71,6 +74,8 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   activeFileIdByWorktree: Record<string, string | null | undefined>
   activeTabTypeByWorktree: Record<string, WorkspaceTabPaletteActiveTabType | undefined>
   generatedTitlesEnabled: boolean
+  /** Chat names as the tab strip shows them, so a renamed chat is found by its new name. */
+  chatNames: StructuredChatTabNames
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }

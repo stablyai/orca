@@ -34,8 +34,6 @@ import { walkInitialAuthLadder } from './ssh-connection-test-fixtures'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 
-// ── findDefaultKeyFile ───────────────────────────────────────────────
-
 describe('findDefaultKeyFile', () => {
   beforeEach(() => {
     mockExistsSync.mockReset()
@@ -121,8 +119,6 @@ describe('findDefaultKeyFile', () => {
     expect(result!.path).toBe('~/.ssh/id_rsa')
   })
 })
-
-// ── buildConnectConfig ──────────────────────────────────────────────
 
 // What an OpenSSH host that collects its password through keyboard-interactive lists after 'none'.
 const PASSWORD_HOST_METHODS: AuthenticationType[] = ['publickey', 'keyboard-interactive']
@@ -358,6 +354,26 @@ describe('buildConnectConfig', () => {
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/work_key.pub')
   })
 
+  it('applies a manual target IdentitiesOnly setting when ssh -G reports it off', () => {
+    mockReadFileSync.mockImplementation((path: unknown) => {
+      if (String(path) === '/home/user/.ssh/work_key.pub') {
+        return 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILI4wa2zRZoB26D015dsafYmu3jDCI7rh26bFXZrUiAp test-key'
+      }
+      throw new Error('unexpected read')
+    })
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'manual',
+        identitiesOnly: true,
+        identityFile: '/home/user/.ssh/work_key'
+      }),
+      makeResolved({ identitiesOnly: false })
+    )
+
+    expect(config.agent).toMatchObject({ kind: 'identity-filtered-agent' })
+    expect(config.privateKey).toBeUndefined()
+  })
+
   it('does not offer broad agent auth when IdentitiesOnly keys cannot be parsed', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
     const config = buildConnectConfig(
@@ -453,8 +469,7 @@ describe('buildConnectConfig', () => {
       makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
-    // No privateKey, so ssh2 cannot parse (and demand a passphrase for) the key before the agent
-    // has been tried, and no password challenge, so the deferred key is reached before any dialog.
+    // Do not parse deferred keys or prompt before agent auth; the key follows before the host challenge.
     expect(config.privateKey).toBeUndefined()
     expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual(['none', 'agent'])
   })
@@ -468,8 +483,7 @@ describe('buildConnectConfig', () => {
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
     expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual(['none', 'agent'])
-    // A host that does not list it can only demand it as a second factor, after the agent key
-    // partially succeeds; ssh2 reports that with the stale pre-agent list, so it stays offered.
+    // A post-agent second-factor challenge may use the stale pre-agent methods list; keep it offered.
     expect(walkInitialAuthLadder(config, ['publickey'])).toEqual([
       'none',
       'agent',
@@ -482,7 +496,7 @@ describe('buildConnectConfig', () => {
     mockExistsSync.mockImplementation((p: unknown) => String(p) === defaultKeyPath)
     mockReadFileSync.mockReturnValue(UNENCRYPTED_KEY)
     const config = buildConnectConfig(makeTarget(), null)
-    // A FIFO or slow mount there must not block an agent login that never needs the file.
+    // Agent-only success must not touch FIFO/slow-mount identity files.
     expect(mockReadFileSync).not.toHaveBeenCalledWith(defaultKeyPath)
     expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual(['none', 'agent'])
     expect(mockReadFileSync).toHaveBeenCalledWith(defaultKeyPath)
@@ -521,7 +535,7 @@ describe('buildConnectConfig', () => {
     mockExistsSync.mockImplementation(
       (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
-    // ssh2 connect() throws on either before any auth, so the retry could never log in.
+    // ssh2 rejects malformed keys before auth, so they cannot occupy the retry.
     const unusableKeys = [
       Buffer.from('not a private key'),
       Buffer.from(utils.generateKeyPairSync('ecdsa', { bits: 256 }).public)
@@ -575,8 +589,6 @@ describe('buildConnectConfig', () => {
     expect(config.privateKey).toEqual(Buffer.from('key'))
   })
 })
-
-// ── resolveEffectiveProxy ───────────────────────────────────────────
 
 describe('resolveEffectiveProxy', () => {
   it('returns target.proxyCommand first', () => {

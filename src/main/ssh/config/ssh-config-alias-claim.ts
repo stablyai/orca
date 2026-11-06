@@ -5,17 +5,7 @@ import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { parseSshConfigAliasClaims, type SshConfigAliasClaims } from './ssh-config-parser'
 
-/**
- * Whether anything in the user's ssh_config could claim this alias — i.e. whether a `Host` or
- * `Match` block other than a bare catch-all applies to it.
- *
- * Sound in the negative direction only. `false` means the parsed config proves nothing claims the
- * alias; every uncertainty (unreadable file, any `Match` block, any negated `Host` group, any
- * pattern that might match)
- * answers `true`, because "we could not tell" must never be read as "no block exists". Callers use
- * `false` as licence to override what OpenSSH would resolve, so a wrong `false` breaks a config the
- * user explicitly wrote, which is worse than the routing bug it exists to fix.
- */
+/** False alone proves the alias is unclaimed and permits override; unreadable config, Match blocks, negations and possible matches must return true. */
 export function sshConfigMayClaimAlias(
   alias: string,
   claims: SshConfigAliasClaims | null
@@ -24,14 +14,12 @@ export function sshConfigMayClaimAlias(
   if (!normalizedAlias || claims === null) {
     return true
   }
-  // A Match block's criteria (exec, originalhost, user, …) are not modelled here, and one that
-  // routes this alias is indistinguishable from one that does not.
+  // Unmodeled Match criteria may route this alias; retain uncertainty.
   if (claims.hasMatchBlock) {
     return true
   }
   return claims.hostPatternGroups.some((patterns) =>
-    // A negation makes the whole group uncertain: `Host * !prod` still routes every other alias,
-    // so skipping both the catch-all and the `!` would answer "unclaimed" for one that is claimed.
+    // Negated groups may still route other aliases; never call the whole group unclaimed.
     patterns.some((pattern) => pattern.startsWith('!'))
       ? true
       : patterns.some(
@@ -41,7 +29,7 @@ export function sshConfigMayClaimAlias(
   )
 }
 
-/** `Host *` — the block every alias matches, which is exactly the one that proves nothing. */
+/** Bare catch-alls prove no alias-specific claim. */
 function isCatchAllHostPattern(pattern: string): boolean {
   return pattern.length > 0 && /^\*+$/.test(pattern)
 }
@@ -60,25 +48,19 @@ function matchesHostPattern(pattern: string, normalizedAlias: string): boolean {
   return new RegExp(`^${expression}$`).test(normalizedAlias)
 }
 
-// Bounds how long an edit to an Included file can go unnoticed; buildSshArgs runs per remote
-// command, so re-expanding Includes every time is not an option.
+// Bound staleness of Includes without re-expanding them for every remote command.
 const CLAIM_CACHE_TTL_MS = 5_000
 
 let cachedClaims: { key: string; readAt: number; claims: SshConfigAliasClaims } | null = null
 
-/**
- * Parse of `~/.ssh/config` (Includes expanded), or null when it cannot be read.
- *
- * Null and empty are different answers here: an absent or unreadable file is the uncertainty case,
- * while a readable file with no matching block is the proof {@link sshConfigMayClaimAlias} needs.
- */
+/** Null means unreadable/absent, not proof of an empty config. */
 function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
   const configPath = join(homedir(), '.ssh', 'config')
   try {
     if (!existsSync(configPath)) {
       return null
     }
-    // Why key on the root file only: an edited Include can go unnoticed, so the cache also expires.
+    // Root metadata alone misses Include edits, so also expire by TTL.
     const stats = statSync(configPath)
     const key = `${stats.mtimeMs}:${stats.size}`
     const now = Date.now()
@@ -93,7 +75,6 @@ function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
   }
 }
 
-/** Convenience wrapper over the two above; used where the caller has no claims to inject. */
 export function mayUserSshConfigClaimAlias(alias: string): boolean {
   return sshConfigMayClaimAlias(alias, loadUserSshConfigAliasClaims())
 }

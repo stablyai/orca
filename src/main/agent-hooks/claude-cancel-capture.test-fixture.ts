@@ -1,10 +1,8 @@
-// Loads the Claude Code 2.1.280 cancel captures (src/shared/__fixtures__/claude-cancel-*-hooks.jsonl,
-// sidecars beside them): hook payloads recorded over a real PTY, merged in time order with the
-// driver's cancel and kill markers.
+// Merge Claude Code 2.1.280 PTY hook captures with their cancel/kill sidecars in time order.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { AGENT_INTERRUPT_SETTLE_MS } from '../../shared/agent-interrupt-intent'
+import { AGENT_INTERRUPT_SETTLE_MS } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
 
 const capturedHook = z.object({
   kind: z.literal('hook'),
@@ -54,8 +52,7 @@ export function cancelLabelled(records: CapturedRecord[], label: string): Captur
   return cancel
 }
 
-/** Whether a hook landed inside the settle window on the capture's own clock, which is when the
- *  renderer's baseline check drops the inference instead of sending it. */
+/** A hook inside the capture's settle window supersedes the renderer's inferred cancellation. */
 export function hookSupersedesCancel(records: CapturedRecord[], cancel: CapturedCancel): boolean {
   return records.some(
     (record) =>

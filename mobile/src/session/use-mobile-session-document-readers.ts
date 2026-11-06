@@ -1,6 +1,9 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { RpcFailure } from '../transport/types'
+import { translate } from '../i18n/mobile-i18n'
 import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
+import { shouldIgnoreTrimWhitespace } from '../../../src/shared/diff-whitespace'
+import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
 import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-session-read-operations'
 import {
@@ -21,8 +24,26 @@ import type { FileDocState, MarkdownDocState, MobileSessionTab } from './mobile-
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, markdownDocsRef, setMarkdownDocs, setFileDocs } = scope
+  const { worktreeId, client, connState, markdownDocsRef, setMarkdownDocs, setFileDocs } = scope
+  const { diffShowWhitespace } = useMobileSourceControlSettings(client, connState).settings
   const markdownReadSeqRef = useRef(new Map<string, number>())
+  // Diffs built or loading under the old whitespace choice are dropped so the open tab reads them again.
+  const builtWhitespaceRef = useRef(diffShowWhitespace)
+  useEffect(() => {
+    if (builtWhitespaceRef.current === diffShowWhitespace) {
+      return
+    }
+    builtWhitespaceRef.current = diffShowWhitespace
+    setFileDocs((prev) => {
+      const next = new Map(prev)
+      for (const [tabId, doc] of prev) {
+        if (doc.status === 'loading' || (doc.status === 'ready' && doc.kind === 'diff')) {
+          next.delete(tabId)
+        }
+      }
+      return next
+    })
+  }, [diffShowWhitespace, setFileDocs])
   const fileReadSeqRef = useRef(new Map<string, number>())
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -31,7 +52,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       }
       const seq = claimDocumentRead(markdownReadSeqRef.current, tab.id)
       const visibleAtStart = markdownDocsRef.current.get(tab.id)
-      // Why: swapping a visible document for `loading` unmounts the WebView and drops the caret.
+      // Retain visible documents during refresh so WebView unmount cannot drop the caret.
       const loading: MarkdownDocState = { status: 'loading' }
       setMarkdownDocs((prev) =>
         installDocumentReadPlaceholder(prev, tab.id, loading, keepMarkdownVisibleDuringRead)
@@ -96,7 +117,10 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       } catch (err) {
         publish({
           status: 'error',
-          message: documentReadErrorMessage(err, "Couldn't load markdown")
+          message: documentReadErrorMessage(
+            err,
+            translate('session.documentReaders.markdownFailed', "Couldn't load markdown")
+          )
         })
       }
     },
@@ -125,20 +149,22 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         const doc = await resolveMobileFileTabDoc(client, {
           worktreeId,
           relativePath: tab.relativePath,
-          diffSource: tab.diffSource
+          diffSource: tab.diffSource,
+          ...(tab.oldPath ? { oldPath: tab.oldPath } : {}),
+          ignoreTrimWhitespace: shouldIgnoreTrimWhitespace(diffShowWhitespace)
         })
         publish(doc)
       } catch (err) {
         const previewMessage = documentReadErrorMessage(
           err,
           tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
-            ? "Couldn't load diff preview"
-            : "Couldn't load file preview"
+            ? translate('session.documentReaders.diffFailed', "Couldn't load diff preview")
+            : translate('session.documentReaders.fileFailed', "Couldn't load file preview")
         )
         publish({ status: 'error', message: previewMessage })
       }
     },
-    [client, worktreeId]
+    [client, diffShowWhitespace, worktreeId]
   )
   return {
     readMarkdownTab,
@@ -150,10 +176,17 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
 function documentReadErrorMessage(err: unknown, fallback: string): string {
   const message = err instanceof Error ? err.message : ''
   if (message === 'binary_file') {
-    return 'Binary preview unavailable'
+    return translate('files.filePreviewResponse.binaryUnavailable', 'Binary preview unavailable')
   }
   if (message === 'file_too_large') {
-    return 'File too large for mobile preview'
+    return translate('files.filePreviewResponse.fileTooLarge', 'File too large for mobile preview')
+  }
+  // Why: the host only serves workspace-relative paths; a desktop tab of an external file has none.
+  if (message === 'invalid_relative_path') {
+    return translate(
+      'session.documentReaders.outsideWorkspace',
+      'This file is outside the workspace. Open it on desktop to view it.'
+    )
   }
   return fallback
 }

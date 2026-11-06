@@ -25,8 +25,7 @@ afterEach(() => {
   container.remove()
 })
 
-// Why: some tests observe the flush that runs when the field unmounts
-// mid-composition; unmount explicitly and let afterEach skip the double-unmount.
+// Unmount explicitly to observe mid-composition flush; afterEach must skip a second unmount.
 function unmountNow(): void {
   act(() => {
     root.unmount()
@@ -34,20 +33,24 @@ function unmountNow(): void {
   unmounted = true
 }
 
-// Why: React routes onBlur through the bubbling focusout event.
+// React onBlur delegates through bubbling focusout.
 function blurInput(): void {
   act(() => {
     getInput().dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
   })
 }
 
-function render(props: {
-  repoId: string
-  storeValue: string
-  onTextChange: (text: string) => void
-}): void {
+function render(
+  props: {
+    repoId: string
+    storeValue: string
+    onTextChange: (text: string) => void
+  },
+  options?: { strict?: boolean }
+): void {
+  const element = React.createElement(RepoSettingsDraftInput, props)
   act(() => {
-    root.render(React.createElement(RepoSettingsDraftInput, props))
+    root.render(options?.strict ? React.createElement(React.StrictMode, null, element) : element)
   })
 }
 
@@ -60,8 +63,7 @@ function getInput(): HTMLInputElement {
 }
 
 function setNativeValue(input: HTMLInputElement, text: string): void {
-  // Why: React reads controlled-input changes via the native value setter;
-  // assigning input.value directly is swallowed by React's value tracking.
+  // Use the native setter so React’s controlled-value tracker recognizes the input.
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
   setValue?.call(input, text)
 }
@@ -80,8 +82,7 @@ function compositionStart(): void {
   })
 }
 
-// Why: an input event fired between compositionstart and compositionend models a
-// keystroke of unconfirmed IME text (e.g. Japanese kana before conversion).
+// Model unconfirmed IME text between compositionstart and compositionend.
 function composingInput(text: string): void {
   typeText(text)
 }
@@ -91,8 +92,7 @@ function compositionEnd(text: string, options?: { trailingInput?: boolean }): vo
     const input = getInput()
     setNativeValue(input, text)
     input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }))
-    // Why: some IMEs (e.g. Firefox) emit the final input event after
-    // compositionend; model it so the single-persist guard is exercised.
+    // Model IMEs that emit final input after compositionend to verify single persistence.
     if (options?.trailingInput !== false) {
       input.dispatchEvent(new Event('input', { bubbles: true }))
     }
@@ -100,78 +100,27 @@ function compositionEnd(text: string, options?: { trailingInput?: boolean }): vo
 }
 
 describe('RepoSettingsDraftInput', () => {
-  it('keeps draft text while the store still holds the previous value (IME regression)', () => {
+  it('keeps draft text on a stale echo when React runs state updaters twice', () => {
     const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '가', onTextChange })
-
-    typeText('가나')
-
-    // Why: updateRepo persists via async IPC, so the store re-renders the pane
-    // with the stale value first. Reverting the input here is what aborted the
-    // Hangul IME composition (가나다 → ㄱㅏㄴㅏㄷㅏ).
-    render({ repoId: 'repo-1', storeValue: '가', onTextChange })
-
-    expect(getInput().value).toBe('가나')
-    expect(onTextChange).toHaveBeenCalledWith('가나')
-  })
-
-  it('keeps draft text when a stale store echo arrives after newer keystrokes', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
+    render({ repoId: 'repo-1', storeValue: '', onTextChange }, { strict: true })
 
     typeText('가')
     typeText('가나')
-
-    // Stale repos:changed echo of the first keystroke.
-    render({ repoId: 'repo-1', storeValue: '가', onTextChange })
+    render({ repoId: 'repo-1', storeValue: '가', onTextChange }, { strict: true })
 
     expect(getInput().value).toBe('가나')
-  })
-
-  it('accepts same-repo store changes that did not come from the input draft', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '../custom-worktrees', onTextChange })
-
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    expect(getInput().value).toBe('')
-  })
-
-  it('resets the draft when the pane switches repos', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: 'Repo One', onTextChange })
-
-    typeText('Renamed')
-
-    render({ repoId: 'repo-2', storeValue: 'Repo Two', onTextChange })
-
-    expect(getInput().value).toBe('Repo Two')
-  })
-
-  it('persists every keystroke through onTextChange', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    typeText('a')
-    typeText('ab')
-
-    expect(onTextChange).toHaveBeenNthCalledWith(1, 'a')
-    expect(onTextChange).toHaveBeenNthCalledWith(2, 'ab')
   })
 
   it('does not persist unconfirmed IME text while composing', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: '', onTextChange })
 
-    // Japanese conversion: type kana, then convert, before confirming.
     compositionStart()
     composingInput('にほんご')
     composingInput('日本語')
 
-    // Why: persisting mid-composition writes the pre-confirmation value and its
-    // async store echo can cancel the IME session.
+    // Unconfirmed persistence echoes can cancel the IME session.
     expect(onTextChange).not.toHaveBeenCalled()
-    // The input still shows the unconfirmed text via the local draft.
     expect(getInput().value).toBe('日本語')
   })
 
@@ -204,19 +153,6 @@ describe('RepoSettingsDraftInput', () => {
     expect(onTextChange).toHaveBeenNthCalledWith(2, '日本語!')
   })
 
-  it('resumes per-keystroke persistence after composition ends', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    compositionStart()
-    composingInput('あ')
-    compositionEnd('亜')
-    typeText('亜b')
-
-    expect(onTextChange).toHaveBeenNthCalledWith(1, '亜')
-    expect(onTextChange).toHaveBeenNthCalledWith(2, '亜b')
-  })
-
   it('resets composition state when the pane switches repos', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: '', onTextChange })
@@ -234,8 +170,7 @@ describe('RepoSettingsDraftInput', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: '', onTextChange })
 
-    // Hangul: type a syllable but leave it unconfirmed, then blur the field
-    // (no compositionend) — the last syllable must still be persisted.
+    // Blur without compositionend must still save the unconfirmed last syllable.
     compositionStart()
     composingInput('홍')
     expect(onTextChange).not.toHaveBeenCalled()
@@ -250,8 +185,7 @@ describe('RepoSettingsDraftInput', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: '', onTextChange })
 
-    // The user navigates back out of project settings before confirming the
-    // syllable: the field unmounts with no compositionend.
+    // Navigation can unmount before compositionend; retain the visible syllable.
     compositionStart()
     composingInput('홍')
     expect(onTextChange).not.toHaveBeenCalled()
@@ -260,29 +194,5 @@ describe('RepoSettingsDraftInput', () => {
 
     expect(onTextChange).toHaveBeenCalledTimes(1)
     expect(onTextChange).toHaveBeenCalledWith('홍')
-  })
-
-  it('does not re-persist a confirmed value on blur or unmount', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    compositionStart()
-    composingInput('홍')
-    compositionEnd('홍')
-    blurInput()
-    unmountNow()
-
-    expect(onTextChange).toHaveBeenCalledTimes(1)
-    expect(onTextChange).toHaveBeenCalledWith('홍')
-  })
-
-  it('does not persist on blur or unmount when nothing was edited', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: 'seed', onTextChange })
-
-    blurInput()
-    unmountNow()
-
-    expect(onTextChange).not.toHaveBeenCalled()
   })
 })

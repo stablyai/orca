@@ -1,22 +1,15 @@
-// How an acquisition that failed after spawn ended, as far as cleanup could prove it.
-
-/**
- * The provider's own root process was observed to exit, but its descendant tree
- * was not proven gone. The lease keys on the root's pid and start time, so its
- * observed death releases the reservation; nothing is claimed about descendants,
- * including one seen still alive.
- */
+/** Writer death evidence releases its reservation without claiming descendant termination. */
 export class AgentSessionAcquisitionRootExitObservedError extends Error {
-  constructor(cause: unknown) {
-    // The provider's own diagnostic is the only thing the user can act on.
+  constructor(
+    cause: unknown,
+    readonly deathEvidenceKind: 'exit-observed' | 'kill-delivered' = 'exit-observed'
+  ) {
     super(cause instanceof Error ? cause.message : String(cause), { cause })
     this.name = 'AgentSessionAcquisitionRootExitObservedError'
   }
 }
 
-/** The provider child failed and cleanup proved its whole tree gone — on Windows, that its root
- *  left on its own after stdin end (descendants not addressed, as with Codex) or taskkill reported
- *  the tree terminated. As with a root exit, the provider's own diagnostic is the message. */
+/** Cleanup proved exit: on Windows, graceful root exit or taskkill’s tree-termination report. */
 export class AgentSessionAcquisitionExitProvenError extends Error {
   constructor(cause: unknown) {
     super(cause instanceof Error ? cause.message : String(cause), { cause })

@@ -1,11 +1,13 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import { withForkMarker, type ForkMarker } from './agent-session-fork-marker'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { HistoryReader } from './agent-session-history-page-bounds'
 import {
   readAgentSessionHistory,
   type AgentSessionHistoryScope
@@ -16,7 +18,7 @@ import {
 } from './agent-session-published-work'
 
 export function structuredAgentSessionProviderSessionMetadata(
-  record: AgentSessionRecord | null
+  record: AgentSessionConversationView | null
 ): AgentProviderSessionMetadata | undefined {
   const head = record ? agentSessionProviderHandleChainHead(record.providerHandleChain) : null
   return head ? { key: 'session_id', id: head.handle.nativeId } : undefined
@@ -24,17 +26,24 @@ export function structuredAgentSessionProviderSessionMetadata(
 
 export function readStructuredAgentSessionHistoryResult(input: {
   journal: AgentSessionJournal
-  record: AgentSessionRecord | null
+  record: AgentSessionConversationView | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
+  forkMarker?: ForkMarker
+  reader?: HistoryReader
+  replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
   const result = withPublishedWorkResult(
-    readAgentSessionHistory(input.journal, input.request, { scope: input.scope }),
+    readAgentSessionHistory(input.journal, input.request, {
+      scope: input.scope,
+      reader: withForkMarker(input.reader, () => input.forkMarker),
+      rowReplay: input.replaceNormalizedHistory === false
+    }),
     input.work
   )
-  const fence = input.record?.lease.runtimeFence
+  const fence = input.record?.currentFence
   const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
   if (fence === undefined) {
     return providerSession ? { ...result, providerSession } : result

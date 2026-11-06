@@ -1,10 +1,10 @@
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getProvenWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
-} from '../../../../shared/workspace-reference-identity'
+} from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import {
   getLinkedWorkItemWorkspaceName,
@@ -18,7 +18,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
-import { getJiraIssueWorkspaceSeed } from '../task-page-source-context'
+import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
 
 function sourceMatches(source: TaskSourceContext, target: TaskSourceContext): boolean {
   if (source.provider !== target.provider || source.hostId !== target.hostId) {

@@ -1,11 +1,3 @@
-/**
- * The native form of the media seam: the device's own pickers, reached exactly as before.
- *
- * This half has no behaviour to test beyond that, and that is the point of the file — the screen's
- * picking moved behind a seam and the phone must run the same two calls it ran before, with the
- * same argument. The picking itself is `mobile-image-source-picker.test.ts`'s, and the pasteboard
- * is the clipboard seam's.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const calls: string[] = []

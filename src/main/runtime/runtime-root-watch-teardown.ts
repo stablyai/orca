@@ -1,4 +1,4 @@
-import { isWatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
+import { isWatcherProcessFailure } from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 
 type RuntimeRootWatchTeardown = {
   closed: boolean

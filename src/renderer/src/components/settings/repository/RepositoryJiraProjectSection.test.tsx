@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { JiraProjectReference } from '../../../../../shared/jira-project-reference'
+import type { JiraProjectReference } from '../../../../../shared/jira/jira-project-reference'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 const project = { id: '10', key: 'ALP', name: 'Alpha', siteId: 'site-a' }
 const { state, inventory } = vi.hoisted(() => {

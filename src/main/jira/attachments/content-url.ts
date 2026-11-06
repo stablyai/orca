@@ -1,4 +1,4 @@
-import type { JiraSite } from '../../../shared/jira-types'
+import type { JiraSite } from '../../../shared/jira/jira-types'
 import { apiBasePath } from '../authenticated-request'
 import { isJiraGatewayBaseUrl } from '../gateway-base-url'
 import type { AttachmentMeta } from './meta'

@@ -35,8 +35,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// The renderer mirrors this machine's chats once one exists, e.g. when a paired client creates the
-// first chat here while the chat setting is off. Building the host is not holding a chat.
+// A paired client can create the first chat while the local setting is off; host construction holds none.
 describe("the structured host's held-chats signal", () => {
   it('stays false when a host is built over a profile with no chat', () => {
     const listener = vi.fn()

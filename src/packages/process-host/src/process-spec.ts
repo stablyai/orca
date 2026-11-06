@@ -22,6 +22,8 @@ export type ProcessSpec = {
   maxOutputBytes?: number
   /** Capture stdout as bytes without decoding; stdout stays empty in this mode. */
   captureStdoutAsBytes?: boolean
+  /** Capture stderr as bytes without decoding; stderr stays empty in this mode. */
+  captureStderrAsBytes?: boolean
   killOnOutputLimit?: boolean
   /** Aborting still resolves with the process exit result. */
   signal?: AbortSignal
@@ -60,6 +62,7 @@ export type ProcessResult = {
   stdout: string
   stdoutBytes?: Buffer
   stderr: string
+  stderrBytes?: Buffer
   timedOut: boolean
   outputTruncated?: boolean
 }

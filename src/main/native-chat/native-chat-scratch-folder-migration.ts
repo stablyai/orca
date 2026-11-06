@@ -16,7 +16,7 @@ const SCOPE = 'nativeChatVisuals.migration'
 
 type Presence = 'absent' | 'directory' | 'other'
 
-/** What sits at `path` without following it: a link is never a place this host moves files into. */
+/** Never move into symlinks. */
 async function presenceOf(path: string): Promise<Presence> {
   try {
     return (await lstat(path)).isDirectory() ? 'directory' : 'other'

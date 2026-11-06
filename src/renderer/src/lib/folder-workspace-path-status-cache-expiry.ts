@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../shared/folder-workspace-path-status'
+import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../shared/folder-workspaces/folder-workspace-path-status'
 
 type FolderWorkspacePathStatusCacheClockEntry = {
   checkedAt: number
@@ -22,8 +22,7 @@ export function useFolderWorkspacePathStatusCacheExpiryTick(
     if (!Number.isFinite(nextDelayMs)) {
       return
     }
-    // Why: TTL freshness is derived from Date.now(), so subscribers need one
-    // clock tick when the oldest cached status stops being authoritative.
+    // Wake subscribers when Date.now-based TTL makes the oldest verdict stale.
     const timeout = window.setTimeout(() => setTick((value) => value + 1), nextDelayMs + 1)
     return () => window.clearTimeout(timeout)
   }, [entries, tick])

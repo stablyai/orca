@@ -30,6 +30,9 @@ describe('ripgrep filename decoding', () => {
 
   it('accepts string fixtures without losing decoder state', () => {
     const decoder = new RipgrepFilenameDecoder()
+    expect(decoder.decode(Buffer.from([0xf0, 0x9f]))).toBe('')
+    expect(() => decoder.decode('')).not.toThrow()
+    expect(decoder.decode(Buffer.from([0x98, 0x80]))).toBe('😀')
     expect(decoder.decode('literal-�\0')).toBe('literal-�\0')
     decoder.finish()
   })

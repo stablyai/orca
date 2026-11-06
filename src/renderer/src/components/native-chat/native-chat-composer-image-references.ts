@@ -1,5 +1,4 @@
-// The prompt's image chips, added and removed by image id in the draft that holds the image: the
-// editor when it shows that draft (`input`), else the stored draft.
+// Update image chips by id in the current editor or its stored draft when hidden.
 
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
@@ -14,8 +13,9 @@ import {
 } from './native-chat-pending-attachment-cache'
 import {
   imageReferenceInsertion,
-  imageReferenceToken
-} from '../../../../shared/native-chat-image-reference'
+  imageReferenceToken,
+  withoutImageReference
+} from '../../../../shared/native-chat/native-chat-image-reference'
 import { withoutImageReferenceNodes } from './native-chat-prompt-document-text'
 
 /** A chip for each image at the caret, or after the draft when the editor takes no input. */
@@ -48,8 +48,7 @@ export function removeImageReferences(
     return
   }
   const { text, document } = readNativeChatComposerDraft(scopeKey)
-  const token = imageReferenceToken(attachmentId)
-  const kept = text.replaceAll(`${token} `, '').replaceAll(token, '')
+  const kept = withoutImageReference(text, attachmentId)
   if (kept === text) {
     return
   }
@@ -61,7 +60,6 @@ export function removeImageReferences(
   updateNativeChatComposerDraft(scopeKey, change, 'immediate')
 }
 
-/** The thumbnail row's ids. */
 export function nativeChatImageRowIds(scopeKey: string): string[] {
   return nativeChatImageRow(
     readNativeChatComposerDraft(scopeKey).images,
@@ -69,9 +67,7 @@ export function nativeChatImageRowIds(scopeKey: string): string[] {
   ).map(({ id }) => id)
 }
 
-/** Runs a change to the scope's pending images. One that leaves the queue without joining the row
- *  (removed, failed, turned into a file reference, or placed over an unavailable image whose id it
- *  takes) loses its chips. */
+/** Remove chips when a pending image leaves without joining the row under its original id. */
 export function settlePendingImageReferences<T>(
   scopeKey: string,
   input: NativeChatComposerInput | null,
@@ -103,7 +99,6 @@ export function removeImageWithReferences(
   input: NativeChatComposerInput | null,
   id: string
 ): void {
-  // A chip still on its way is removed before it settles, so its file never joins the message.
   if (takePendingImageWithReferences(scopeKey, input, id)) {
     return
   }

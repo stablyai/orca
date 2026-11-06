@@ -1,20 +1,15 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 // @vitest-environment happy-dom
 import { createElement, useEffect, useRef, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { hostOs } from '../platform/host-os'
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
+import type { TerminalModes } from '../terminal/terminal-webview-contract'
 
-/**
- * The page's buffered submit, end to end through the hook that owns it.
- *
- * The census beside this file reads one spelling of a frozen handler. This reads the behaviour, so
- * a `useMemo`, a module-level function or a ref captured once fails it the same way: the hook is
- * rendered first as a session is before its effects land — no client, no handle, nothing sendable —
- * then again as it is after, and the field's bound listener has to reach the second one.
- */
 const mocks = vi.hoisted(() => {
   const sent: Array<Record<string, unknown>> = []
   return { sent, acknowledge: async () => {} }
@@ -24,9 +19,6 @@ vi.mock('react-native', () => ({
   Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: vi.fn() }) }
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerMediumImpact: vi.fn() }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('../terminal/mobile-terminal-operations', () => ({
   terminalInputSend: {
     request: async (_client: unknown, params: Record<string, unknown>) => {
@@ -37,7 +29,7 @@ vi.mock('../terminal/mobile-terminal-operations', () => ({
     interpret: () => true
   }
 }))
-vi.mock('../platform/host-os', () => ({ hostOs: () => 'android' }))
+vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
 
 // The page's own sibling, because the listener this test dispatches to only exists there.
 vi.mock(
@@ -49,23 +41,21 @@ type Session = {
   readonly client: unknown
   readonly activeHandle: string | null
   readonly canSend: boolean
-  readonly draft: string
+  readonly modes?: TerminalModes
 }
 
-const OFFLINE: Session = { client: null, activeHandle: null, canSend: false, draft: '' }
 const READY: Session = {
   client: { getState: () => 'connected' },
   activeHandle: 'terminal-a',
-  canSend: true,
-  draft: 'ls -la'
+  canSend: true
 }
-
-const field = document.createElement('input')
-let restoredDrafts: string[] = []
 
 function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   const noop = (): void => {}
   const scope = {
+    sendTerminalUserInput: terminalInputSend.request,
+    sendTerminalOrderedInput: terminalInputSend.request,
+    terminalRefs: { current: new Map() },
     client: session.client,
     activeHandle: session.activeHandle,
     activeSessionTab: null,
@@ -79,24 +69,17 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     clientRef: { current: session.client },
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
-    commandInputRef: { current: null },
+    ptyModesRef: {
+      current: new Map(
+        session.activeHandle && session.modes ? [[session.activeHandle, session.modes]] : []
+      )
+    },
     liveInputFocusTimerRef: { current: null },
     sendLiveTerminalInputRef: { current: async () => true },
     sessionTabActionSheetKeyboardHideSubRef: { current: null },
     sessionTabActionSheetRequestSeqRef: { current: 0 },
     activeHandleRef: { current: session.activeHandle },
     activeSessionTabTypeRef: { current: 'terminal' },
-    sendingRef: { current: false },
-    bufferedTerminalDraftState: {
-      input: session.draft,
-      beginBufferedTerminalDraftSend: (handle: string, draft: string) => ({
-        draft,
-        handle,
-        token: { handle }
-      }),
-      restoreRejectedDraft: (send: { draft: string }) => restoredDrafts.push(send.draft),
-      settleBufferedTerminalDraftSend: () => true
-    },
     getSendCompletionGeneration: () => 0,
     getLiveInteractionGeneration: () => 0,
     handleLiveInputAccessoryBytes: async () => ({ kind: 'allow-raw' }),
@@ -108,47 +91,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook destructures exactly the keys above, which the census beside this file pins; nothing else on the model is reachable from the submit path under test.
   return scope as unknown as MobileSessionTerminalWebviewModel
 }
-
-function Harness({ session }: { readonly session: Session }): null {
-  const { bindCommandField } = useMobileSessionTerminalSendActions(buildScope(session))
-  // Once, as React attaches a ref whose identity does not change — which is why the handler behind
-  // it has to stay current on its own.
-  useEffect(() => {
-    bindCommandField(fieldAsTextInput)
-  }, [bindCommandField])
-  return null
-}
-
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: on React Native Web a TextInput ref is the DOM node, which is what the page's binding reads and what this dispatches on.
-const fieldAsTextInput = field as unknown as RefObject<never>['current']
-
-describe('the buffered field submit the page binds', () => {
-  it('reaches a handleSend that can send, not the one the first render had', () => {
-    mocks.sent.length = 0
-    restoredDrafts = []
-    let renderer: ReactTestRenderer | null = null
-
-    act(() => {
-      renderer = create(createElement(Harness, { session: OFFLINE }))
-    })
-    act(() => {
-      renderer?.update(createElement(Harness, { session: READY }))
-    })
-    act(() => {
-      field.dispatchEvent(
-        new InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertLineBreak'
-        })
-      )
-    })
-
-    expect(mocks.sent).toHaveLength(1)
-    expect(mocks.sent[0]).toMatchObject({ terminal: 'terminal-a', text: 'ls -la', enter: true })
-    act(() => renderer?.unmount())
-  })
-})
 
 let changeLiveText: (text: string) => void = () => {}
 const liveField = Object.assign(document.createElement('input'), {
@@ -162,14 +104,12 @@ const liveFieldRef = liveField as unknown as RefObject<never>['current']
 function LiveHarness({ session }: { readonly session: Session }): null {
   const current = buildScope(session)
   const refs = useRef(current).current
-  const liveHandles = useRef(new Set<string>())
   const sender = useRef<TerminalLiveInputSender>(async () => false)
   const handle = session.activeHandle
   refs.activeHandleRef.current = handle
   refs.activeSessionTabTypeRef.current = 'terminal'
   refs.connStateRef.current = session.canSend ? 'connected' : 'disconnected'
   refs.clientRef.current = current.client
-  liveHandles.current = new Set(handle ? [handle] : [])
   const commit = useTerminalLiveInputCommit({
     activeHandle: handle,
     activeHandleRef: refs.activeHandleRef,
@@ -177,8 +117,6 @@ function LiveHarness({ session }: { readonly session: Session }): null {
     activeSessionTabTypeRef: refs.activeSessionTabTypeRef,
     connected: session.canSend,
     liveInputRef: refs.liveInputRef,
-    liveInputTerminalHandles: liveHandles.current,
-    liveInputTerminalHandlesRef: liveHandles,
     sendLiveTerminalInputRef: sender,
     setLiveInputCapture: () => {}
   })
@@ -190,8 +128,10 @@ function LiveHarness({ session }: { readonly session: Session }): null {
     canSend: session.canSend,
     sendLiveTerminalInputRef: sender
   })
-  changeLiveText = (text) =>
+  changeLiveText = (text) => {
+    liveField.value = text
     commit.handleLiveInputChange({ nativeEvent: { text, isComposing: false } })
+  }
   useEffect(() => {
     actions.bindLiveInputField(liveFieldRef)
     return () => actions.bindLiveInputField(null)
@@ -222,7 +162,11 @@ function holdAcknowledgement(): () => void {
   }
 }
 
-describe('keyboard controls through the live pending-text queue', () => {
+describe.each(['android', 'ios'] as const)('the %s live pending-text queue', (os) => {
+  beforeEach(() => {
+    vi.mocked(hostOs).mockReturnValue(os)
+  })
+
   it('sends the control once only after pending text is acknowledged', async () => {
     mocks.sent.length = 0
     const release = holdAcknowledgement()
@@ -242,37 +186,4 @@ describe('keyboard controls through the live pending-text queue', () => {
     act(() => renderer?.unmount())
     expect(pressControl().defaultPrevented).toBe(false)
   })
-
-  it.each(['terminal switch', 'disconnect and reconnect'] as const)(
-    'drops a queued control after %s even when the original terminal returns',
-    async (change) => {
-      mocks.sent.length = 0
-      const release = holdAcknowledgement()
-      let renderer: ReactTestRenderer | null = null
-      await act(async () => {
-        renderer = create(createElement(LiveHarness, { session: READY }))
-      })
-      await act(async () => {
-        changeLiveText('hello')
-        pressControl()
-      })
-      const changed =
-        change === 'terminal switch' ? { ...READY, activeHandle: 'terminal-b' } : OFFLINE
-      await act(async () => {
-        renderer?.update(createElement(LiveHarness, { session: changed }))
-      })
-      await act(async () => {
-        renderer?.update(createElement(LiveHarness, { session: READY }))
-      })
-      await act(async () => {
-        release()
-      })
-      expect(mocks.sent.map((send) => send.text)).toEqual(['hello'])
-      await act(async () => {
-        pressControl()
-      })
-      expect(mocks.sent.map((send) => send.text)).toEqual(['hello', '\x03'])
-      act(() => renderer?.unmount())
-    }
-  )
 })

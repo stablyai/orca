@@ -5,9 +5,9 @@ import {
   createMockSubprocess,
   startDaemonAdapterHarness,
   waitFor
-} from '../../daemon/daemon-pty-adapter-test-harness'
+} from '../../daemon/providers/adapter/testing/daemon-pty-adapter-test-harness'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { setPtyHostBindings, type PtyIpcSurface } from '../pty-host-bindings'
+import { setPtyHostBindings, type PtyIpcSurface } from './pty-host-bindings'
 import { consumeSyntheticKillExit, rememberSyntheticKillExit } from './delivery/exit'
 import { installPtyKillIpcHandler } from './ipc/renderer-kill'
 import { bindProviderListeners } from './provider/bind-listeners'
@@ -19,7 +19,7 @@ import { finishPtyShutdown } from './provider/liveness'
 import { stopAndWaitPtyFromRuntimeController } from './runtime/kill'
 import type { PtyRuntimeControllerDeps } from './runtime/controller-deps'
 import { createPtyIpcSession } from './session'
-import type { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
+import type { DaemonPtyAdapter } from '../../daemon/providers/adapter/daemon-pty-adapter'
 
 const PTY_ID = 'repo::/tmp/late-exit-audit@@terminal'
 const TAB_ID = '00000000-0000-4000-8000-000000000001'
@@ -164,8 +164,8 @@ export async function startLateExitHarness() {
     },
     id: PTY_ID,
     deliverProviderExit: (event: { id: string; code: number; incarnationId?: string }) => {
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: exit listeners may unsubscribe while receiving the event.
-      for (const listener of [...harness.adapter['exitListeners']]) {
+      // Why: exit listeners may unsubscribe while receiving the event.
+      for (const listener of Array.from(harness.adapter['exitListeners'])) {
         listener(event)
       }
     },

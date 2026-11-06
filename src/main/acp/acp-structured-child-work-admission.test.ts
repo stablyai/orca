@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -21,7 +21,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-/** What Grok says about one subagent, translated as the adapter would. */
 function subagent(lane: AcpStructuredLane, state: 'working' | 'completed'): AcpTimelineEvent[] {
   const update =
     state === 'working'

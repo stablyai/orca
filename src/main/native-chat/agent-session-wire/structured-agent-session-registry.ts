@@ -1,10 +1,4 @@
-// Where the RPC layer finds the host.
-//
-// The runtime service is already far past its size budget, so structured
-// sessions hang off a module-level slot instead of another field on it — the
-// same shape the native-chat RPC methods use to reach their own collaborators.
-// Tests install a host with a stub adapter and clear it on teardown.
-
+import { sessionCrewChanges } from '../../runtime/orchestration/crew/crew-changes'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 let host: StructuredAgentSessionHost | null = null
@@ -12,12 +6,12 @@ let held = false
 let stopWatchingHost: (() => void) | null = null
 const heldListeners = new Set<(held: boolean) => void>()
 
-// Why typeof: tests install partial hosts.
+// Partial test hosts may omit holdsSessions.
 function hostHoldsSessions(candidate: StructuredAgentSessionHost | null): boolean {
   return typeof candidate?.holdsSessions === 'function' && candidate.holdsSessions()
 }
 
-// A notification must never fail the install that triggered it: a retry would build a second host.
+// Failed notification must not trigger host reinstallation and duplicate ownership.
 function publishHeld(): void {
   try {
     const next = hostHoldsSessions(host)
@@ -40,7 +34,11 @@ function publishHeld(): void {
 export function setStructuredAgentSessionHost(next: StructuredAgentSessionHost | null): void {
   stopWatchingHost?.()
   stopWatchingHost = null
+  const changed = host !== next
   host = next
+  if (changed) {
+    sessionCrewChanges.notify()
+  }
   try {
     stopWatchingHost =
       typeof next?.onSessionsHeld === 'function' ? next.onSessionsHeld(publishHeld) : null
@@ -50,12 +48,11 @@ export function setStructuredAgentSessionHost(next: StructuredAgentSessionHost |
   publishHeld()
 }
 
-/** Whether this runtime holds a structured chat, saved or live; building the host alone is not one. */
+/** Includes saved/live chats; constructing a host holds none. */
 export function structuredAgentSessionsHeld(): boolean {
   return hostHoldsSessions(host)
 }
 
-/** Called each time that answer changes, e.g. when the first chat here is restored or created. */
 export function onStructuredAgentSessionsHeldChanged(
   listener: (held: boolean) => void
 ): () => void {

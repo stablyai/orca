@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_MR_STATE_FILTER,
-  MR_STATE_FILTER_OPTIONS,
   normalizeSmartMode,
   resolveAvailableSmartModes,
   resolveDefaultSmartMode
@@ -85,12 +83,5 @@ describe('normalizeSmartMode', () => {
     expect(normalizeSmartMode('gitlab', { ...fullyAvailable, gitlabAvailable: false })).toBe(
       'smart'
     )
-  })
-})
-
-describe('MR state filters', () => {
-  it('exposes Open/Merged/Closed/All with an Open default', () => {
-    expect(MR_STATE_FILTER_OPTIONS.map((o) => o.id)).toEqual(['opened', 'merged', 'closed', 'all'])
-    expect(DEFAULT_MR_STATE_FILTER).toBe('opened')
   })
 })

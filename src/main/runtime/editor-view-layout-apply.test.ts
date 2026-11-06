@@ -1,5 +1,4 @@
-// A diff tab's view through main's real Store apply, the path OrcaRuntime.applyLayoutCommand takes:
-// views are in memory only, so each apply must carry them past the saved session it reloads.
+// Layout apply reloads saved sessions; retain editor views, which exist only in memory.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -53,7 +52,6 @@ async function harness() {
   store.setWorkspaceSession(window.snapshot())
   await store.flushPendingOrThrowAsync()
   const runtime = new OrcaRuntimeService(store)
-  // A live subscriber, as a window's frame sync is: the stream projects from its cached partitions.
   const subscription = runtime.subscribeWorkspaceLayouts(() => {})
   return { store, runtime, directory, subscription }
 }
@@ -83,7 +81,6 @@ function openFile(tabId: string, path: string) {
   } as const
 }
 
-/** The editor view main's layout stream publishes for `tabId` now. */
 function publishedView(runtime: OrcaRuntimeService, tabId: string, workspace = WT) {
   const reader = runtime.subscribeWorkspaceLayouts(() => {})
   reader.unsubscribe()

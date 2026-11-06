@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The detail view never said which machine an automation lived on, so two rows
- * from different hosts read identically. These pin the host to the row's own
- * catalog entry rather than to the record's host-local execution target.
- */
+/** Display the catalog row’s host; host-local executionTargetType cannot identify which machine owns the automation. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

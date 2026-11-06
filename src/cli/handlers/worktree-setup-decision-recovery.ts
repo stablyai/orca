@@ -1,4 +1,4 @@
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 
 // Hosts use generic runtime_error here; this message is the stable discriminator.
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'
@@ -32,6 +32,10 @@ function attachSetupDecisionRecovery(error: unknown, replayingLaunch: boolean): 
         : [])
     ]
   }
+  return attachCliErrorData(error, data)
+}
+
+export function attachCliErrorData(error: RuntimeClientError, data: unknown): RuntimeClientError {
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,

@@ -52,7 +52,7 @@ export function getSelectedClaudeAccountIdForTarget(
     return selection.host
   }
   if (normalizedTarget.wslDistro) {
-    // Why exact first: a saved spelling that matches keeps resolving as it did before aliasing.
+    // Exact spelling retains precedence for selections saved before alias support.
     if (Object.hasOwn(selection.wsl, normalizedTarget.wslDistro)) {
       return selection.wsl[normalizedTarget.wslDistro] ?? null
     }
@@ -136,7 +136,7 @@ export function pruneInvalidClaudeRuntimeSelection(
 }
 
 export function getClaudeSelectionTargetForAccount(
-  account: ClaudeManagedAccount
+  account: Pick<ClaudeManagedAccount, 'managedAuthRuntime' | 'wslDistro'>
 ): ClaudeAccountSelectionTarget {
   if (account.managedAuthRuntime === 'wsl') {
     return { runtime: 'wsl', wslDistro: account.wslDistro ?? null }

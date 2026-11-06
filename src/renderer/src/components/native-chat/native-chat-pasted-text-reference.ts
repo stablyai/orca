@@ -1,5 +1,4 @@
-// A paste still saving as a file holds its place in the draft as this fixed token, so the file lands
-// where the paste went however the draft changed meanwhile. It never reaches an agent.
+// Pending paste tokens track draft position through edits and never reach the agent.
 import { translate } from '@/i18n/i18n'
 
 /** Only live I/O holds source bytes; failure and renderer exit leave an unavailable token. */
@@ -23,7 +22,6 @@ export function nativeChatPastedTextToken(id: string): string {
   return `[Pasted text](orca-paste:${id})`
 }
 
-/** The paste a token names, or null for anything else. */
 export function nativeChatPastedTextId(token: string): string | null {
   return /^\[Pasted text\]\(orca-paste:([0-9a-f-]{36})\)$/.exec(token)?.[1] ?? null
 }

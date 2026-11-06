@@ -1,4 +1,6 @@
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
+import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../shared/serve-supervised-terminal-durability'
+import { orcadStaleLockReclaimCommand } from '../../shared/orcad-stale-lock-reclaim'
 import {
   brakeForBuild,
   clearServeSupervisorBrake,
@@ -271,12 +273,15 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
           // An occupied profile warrants standby, not a crash-brake failure.
           const delayMs = standbyDelayMs(standbyAttempt++, random)
           log(
-            `[serve] Another Orca serves this profile; checking again in ${Math.round(delayMs / 1000)}s.`
+            `[serve] Another Orca serves this profile, or holds it and cannot be shown to have stopped; checking again in ${Math.round(delayMs / 1000)}s.${process.platform === 'linux' ? ` If its message says it may have stopped, \`${orcadStaleLockReclaimCommand(options.userDataPath, null)}\` checks it.` : ''}`
           )
           await sleep(delayMs)
           continue
         }
-        failure = `exited with code ${code}`
+        failure =
+          code === ORCAD_EXIT_TERMINALS_NOT_DURABLE
+            ? `exited with code ${code}: the terminal daemon did not start, and terminals outside it would not survive a restart (orcad's log above has the cause)`
+            : `exited with code ${code}`
       } else {
         const error: unknown = attempt.settled.reason
         failure = (error instanceof Error ? error.message : String(error))

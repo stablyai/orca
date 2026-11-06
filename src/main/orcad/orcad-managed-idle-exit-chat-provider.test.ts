@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createRestTestRig,
   foundRestTestChat,
@@ -44,6 +44,7 @@ function idleMonitor() {
         agentStates: () => [{ state: 'blocked' }],
         hasStagedMigration: () => false,
         automationsBusy: () => false,
+        emulatorsBusy: async () => false,
         activationFenceExists: async () => false
       }
     )
@@ -92,7 +93,7 @@ it('releases an idle provider after the existing window, then lets the disconnec
 
   rig.clock.now += 2
   await sweepOnce(rig.host)
-  expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION)
+  expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION, undefined)
   expect(rig.host.hasLoadedProviders()).toBe(false)
   expect(await monitor.check()).toBe(false)
   rig.clock.now += SERVER_IDLE_MS

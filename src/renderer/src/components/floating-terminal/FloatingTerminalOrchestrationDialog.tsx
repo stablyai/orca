@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { SkillFreshnessStatusPill } from '@/components/skills/SkillFreshnessStatusPill'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
@@ -42,8 +42,7 @@ export function FloatingTerminalOrchestrationDialog({
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
-  // Why: detecting the installed skill marks setup complete; refresh the banner
-  // so it hides once the same quick-install flow used in Settings/CLI tips lands.
+  // Refresh setup completion after installation so the orchestration banner hides.
   useEffect(() => {
     if (orchestrationSkillDetected) {
       onSetupStateChange()
@@ -62,8 +61,7 @@ export function FloatingTerminalOrchestrationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-4 sm:max-w-[620px]">
         <DialogHeader>
-          {/* Why: the panel renders with hideHeader, so the modal owns the title
-              and status pill — avoiding a duplicate heading inside the modal. */}
+          {/* The panel hides its header, so the modal owns the title and status. */}
           <div className="flex flex-wrap items-center gap-2 pr-6">
             <DialogTitle>
               {translate(

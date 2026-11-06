@@ -1,7 +1,4 @@
-// Editor, browser, chat and simulator tab closes in a layout-owner build: main closes the tab and
-// its frame drops it; the window changes no tab first, so a close main refuses leaves the tab.
-// Once the frame is in, the group shows the tab today's close picks (its previous one). Waiters on
-// the tab learn the outcome.
+// Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
 import type { Tab } from '../../../../../shared/tab-types'
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
@@ -25,11 +22,7 @@ export function closesThroughLayoutOwner(contentType: Tab['contentType']): boole
   )
 }
 
-/**
- * Once main's frame dropped the closed tab, its group shows the tab today's close picks (one
- * picked before that is itself gone falls back to the group's history), and the workspace's
- * surface follows its active group. Nothing while the tab still shows.
- */
+/** After main’s frame drops the tab, choose the preselected successor or group MRU fallback, then follow the active group’s surface. */
 function selectAfterClose(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'worktreeId' | 'groupId'>,
@@ -73,10 +66,7 @@ export type ContentTabClose = {
   landIfEmptied?: () => boolean
 }
 
-/**
- * Sends a tab's close; false when main does not decide its kind or is not asked (a paired server
- * owns the workspace's layout), and the caller closes it as today.
- */
+/** Return false for kinds/layouts main does not own, allowing caller-local close. */
 export function closeContentTabThroughLayoutOwner(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId' | 'groupId' | 'contentType'>,
@@ -137,8 +127,7 @@ export function closeContentTabThroughLayoutOwner(
         }
       },
       asToday: closeAsToday,
-      // A tab main no longer holds, or whose workspace it no longer holds, was closed there first
-      // (a host's chat close, a removed workspace). A workspace main never held draws only here.
+      // Treat missing held tabs/workspaces as already closed; never-held workspaces remain window-owned.
       refused: (code) => {
         const shows = get().unifiedTabsByWorktree[tab.worktreeId]?.some((e) => e.id === tab.id)
         if ((code === 'tab_not_found' || code === 'workspace_not_found') && !shows) {

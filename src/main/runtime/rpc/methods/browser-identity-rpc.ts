@@ -3,10 +3,9 @@ import { BrowserIdentitySet } from '../../../../shared/rpc-contract/browser-iden
 import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode
-} from '../../../browser/browser-identity-mode-store'
+} from '../../../browser/identity/browser-identity-mode-store'
 
-// Why separate from browser-core: these read and write this host's own process identity rather
-// than driving a page, so they take no BrowserTarget and never reach the runtime browser commands.
+// Process identity has no BrowserTarget and does not drive pages, so keep it separate from browser-core.
 export const BROWSER_IDENTITY_METHODS = [
   defineMethod({
     name: 'browser.identity.get',

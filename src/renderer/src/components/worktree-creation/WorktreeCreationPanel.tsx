@@ -1,7 +1,6 @@
 import React from 'react'
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import {
   getCreationProgressLabel,
@@ -10,16 +9,9 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
+import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
 
-/**
- * In-frame creation state, shown in the workspace content area while a worktree
- * is being created. Presented as a faux tab: a tab strip carrying the new
- * worktree's name (the title) over a body that holds the live status. This lets
- * the in-progress create read as a real workspace tab whose content is loading,
- * so the handoff to the real terminal is a same-frame swap — and the title
- * (name) and the body status never duplicate each other. Its appearance is
- * debounced upstream so fast creates never paint it.
- */
+/** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
 export default function WorktreeCreationPanel({
   creationId,
   reserveCollapsedSidebarHeaderSpace = false
@@ -28,28 +20,16 @@ export default function WorktreeCreationPanel({
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
-  const [now, setNow] = React.useState(() => Date.now())
   const progressLabelId = React.useId()
-  // Why: depend on the primitive status only — provisioning appends a log to the
-  // entry on every stderr chunk, giving a fresh `entry` reference each tick that
-  // would otherwise tear down and recreate this interval before it can fire.
-  const entryStatus = entry?.status
-  React.useEffect(() => {
-    if (entryStatus !== 'creating') {
-      return
-    }
-    // Pause the 1s clock while the window is hidden so a backgrounded creation
-    // panel stops re-rendering for ticks no one can see.
-    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
-  }, [entryStatus])
+  // Depend on primitive status so stderr’s fresh entry objects cannot continuously reset the interval.
+  const now = useWorktreeCreationClock(entry?.status === 'creating')
   if (!entry) {
     return null
   }
 
   const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
   const isError = entry.status === 'error'
-  // VM creations keep the 'provisioning-vm' phase even on failure, so the failure renders in the
-  // same centered layout as provisioning (just with the error header) rather than the generic block.
+  // Failed VM creations retain provisioning-vm phase so error and progress share the centered layout.
   const isVmCreation = entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
   const elapsedLabel = formatElapsedTime(now - entry.startedAt)
@@ -64,13 +44,9 @@ export default function WorktreeCreationPanel({
         onCancel={dismiss}
       />
 
-      {/* Body: a quiet top-left annotation on the surface the terminal will
-          fill — the same spot terminal output appears — so creation → terminal
-          reads as one frame filling in. */}
       <div className="min-h-0 flex-1 p-3">
         {isVmCreation ? (
-          // Why: keep the same centered layout for provisioning AND failure so the recipe log stays
-          // put — on failure the spinner header just swaps to the error + Retry/Dismiss.
+          // Keep the log fixed across provisioning/failure; swap only header and actions.
           <VmProvisioningStatus
             elapsedLabel={elapsedLabel}
             log={entry.provisioningLog ?? ''}
@@ -157,8 +133,6 @@ function VmProvisioningStatus({
 }: {
   elapsedLabel: string
   log: string
-  // When set, the recipe failed: keep the same centered layout + log, but swap the
-  // spinner header for the error and Retry/Dismiss so nothing shifts on failure.
   error?: string | null
   onCancel?: () => void
   onRetry?: () => void
@@ -242,9 +216,7 @@ function VmProvisioningStatus({
   )
 }
 
-// Why: the recipe's stderr is the only thing that explains a failure or a slow
-// provision, so it gets the same fixed-height log surface whether provisioning is
-// in progress or has failed.
+// Recipe stderr explains both slow progress and failures; retain the same fixed log surface.
 function RecipeOutputLog({
   log,
   emptyLabel
@@ -253,8 +225,7 @@ function RecipeOutputLog({
   emptyLabel: string
 }): React.JSX.Element {
   const ref = React.useRef<HTMLPreElement>(null)
-  // Why: follow the tail as output streams in, but stop following the moment the user scrolls up so
-  // they can read earlier output. Resume following once they scroll back to the bottom.
+  // Follow output until user scrolls up; resume only when they return to bottom.
   const pinnedToBottomRef = React.useRef(true)
   const handleScroll = React.useCallback((): void => {
     const el = ref.current
@@ -278,14 +249,4 @@ function RecipeOutputLog({
       {log || <span className="text-muted-foreground/60">{emptyLabel}</span>}
     </pre>
   )
-}
-
-function formatElapsedTime(elapsedMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  if (minutes === 0) {
-    return `${seconds}s`
-  }
-  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }

@@ -54,7 +54,6 @@ it('reports on change, on a new socket and as a keepalive, and never reports unk
   await Promise.resolve()
   tick()
   expect(reported()).toHaveLength(7)
-  // Suspend reports away at once and holds it while the idle clock still reads active.
   reporter.setForcedAway(true)
   expect(reported().at(-1)).toEqual({ away: true })
   now += DESKTOP_PRESENCE_REPORT_INTERVAL_MS

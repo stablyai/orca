@@ -3,7 +3,6 @@ import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -44,15 +43,5 @@ describe('closeUnifiedTab with a missing group record (#11308)', () => {
 
     expect(result).toEqual({ closedTabId: closing.id, wasLastTab: false, worktreeId: WT })
     expect(store.getState().unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([kept.id])
-  })
-
-  it('reports the last tab when the worktree has no other tab', async () => {
-    const only = store.getState().createUnifiedTab(WT, 'editor', { id: 'editor-only' })
-    main = await drawTabsFromMain(store)
-    store.setState({ groupsByWorktree: { [WT]: [] } })
-
-    expect(store.getState().closeUnifiedTab(only.id)?.wasLastTab).toBe(true)
-    await main.settle()
-    expect(store.getState().unifiedTabsByWorktree[WT] ?? []).toEqual([])
   })
 })

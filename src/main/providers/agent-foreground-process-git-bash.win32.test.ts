@@ -5,13 +5,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { confirmPtyShellForeground } from '../daemon/pty-subprocess/pty-shell-foreground-confirmation'
-import { createPtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
+import {
+  createPtyShellLaunchPlan,
+  type PtyShellLaunchPlan
+} from '../daemon/pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty } from '../daemon/pty-subprocess/native-pty-spawn'
 import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
 import { inspectSpawnFileWindowsChildProcesses } from '../daemon/pty-subprocess/spawn-file-child-processes'
-import type { PtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
-import type { PtySubprocessOptions } from '../daemon/pty-subprocess'
-import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../git-bash'
+
+import type { PtySubprocessOptions } from '../daemon/pty-subprocess/pty-subprocess'
+import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../pty/shell-startup/git-bash'
 import { readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
@@ -30,7 +33,7 @@ async function proveIdlePromptCycle(
   expectedJobSize: number
 ): Promise<void> {
   const proc = spawned.process
-  let output = ''
+  let output = spawned.claimStartupEvents?.().data.join('') ?? ''
   let dead = false
   proc.onData((chunk) => {
     output += chunk
@@ -164,7 +167,7 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
     const env = createDaemonPtyEnvironment(opts)
     const spawned = await spawnPlannedPane(createPtyShellLaunchPlan(opts, env), env, opts)
     const proc = spawned.process
-    let output = ''
+    let output = spawned.claimStartupEvents?.().data.join('') ?? ''
     proc.onData((chunk) => {
       output += chunk
     })
@@ -175,7 +178,8 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
       await vi.waitFor(() => expect(output).toContain('$'), { timeout: 20_000 })
       // ssh-agent forks, setsids off the console, and its Win32 parent exits.
       proc.write('eval "$(ssh-agent -s)"; echo ORCA_AGENT_$SSH_AGENT_PID\r')
-      await vi.waitFor(() => expect(output).toMatch(/ORCA_AGENT_\d+/), { timeout: 10_000 })
+      // Usually ~1s, but it exceeded 10s on a loaded runner; the bound only catches a hang.
+      await vi.waitFor(() => expect(output).toMatch(/ORCA_AGENT_\d+/), { timeout: 30_000 })
       agentPid = Number(/ORCA_AGENT_(\d+)/.exec(output)?.[1])
       await vi.waitFor(async () => expect(await inspect(true)).toBe('no-children'), {
         timeout: 10_000
@@ -196,5 +200,5 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
       }
       proc.kill()
     }
-  }, 60_000)
+  }, 90_000)
 })

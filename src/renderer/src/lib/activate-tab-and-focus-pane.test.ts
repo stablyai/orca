@@ -36,61 +36,46 @@ describe('activateTabAndFocusPane', () => {
   })
 
   it('cancels a pending pane focus frame when a newer activation starts', () => {
-    const cancelAnimationFrame = vi.fn()
+    const frames = new Map<number, FrameRequestCallback>()
+    let frameId = 0
+    const cancelAnimationFrame = vi.fn((id: number) => frames.delete(id))
+    const dispatchEvent = vi.fn()
     vi.stubGlobal(
       'requestAnimationFrame',
-      vi.fn(() => 12)
+      vi.fn((callback: FrameRequestCallback) => {
+        frames.set(++frameId, callback)
+        return frameId
+      })
     )
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
-    vi.stubGlobal('window', {
-      dispatchEvent: vi.fn()
-    })
+    vi.stubGlobal('window', { dispatchEvent })
 
     activateTabAndFocusPane('tab-1', 'leaf-1')
-    activateTabAndFocusPane('tab-2', 'leaf-2')
+    activateTabAndFocusPane('tab-2', 'leaf-2', {
+      ackPaneKeyOnSuccess: 'tab-2:leaf-2',
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
 
     expect(setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1')
     expect(setActiveTab).toHaveBeenNthCalledWith(2, 'tab-2')
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(12)
-  })
-
-  it('reveals the terminal surface before selecting the terminal tab', () => {
-    const callOrder: string[] = []
-    setActiveTabType.mockImplementation((tabType: string) => {
-      callOrder.push(`type:${tabType}`)
-    })
-    setActiveTab.mockImplementation((tabId: string) => {
-      callOrder.push(`tab:${tabId}`)
-    })
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 12)
-    )
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    vi.stubGlobal('window', {
-      dispatchEvent: vi.fn()
-    })
-
-    activateTabAndFocusPane('tab-1', 'leaf-1')
-
-    expect(callOrder).toEqual(['type:terminal', 'tab:tab-1'])
-  })
-
-  it('reveals the terminal surface for tab-only activation without dispatching pane focus', () => {
-    const requestAnimationFrame = vi.fn()
-    const dispatchEvent = vi.fn()
-    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame)
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    vi.stubGlobal('window', {
-      dispatchEvent
-    })
-
-    activateTabAndFocusPane('tab-1', null)
-
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-    expect(setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(requestAnimationFrame).not.toHaveBeenCalled()
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1)
     expect(dispatchEvent).not.toHaveBeenCalled()
+    for (const callback of frames.values()) {
+      callback(0)
+    }
+    expect(dispatchEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        type: 'orca-focus-terminal-pane',
+        detail: {
+          tabId: 'tab-2',
+          leafId: 'leaf-2',
+          ackPaneKeyOnSuccess: 'tab-2:leaf-2',
+          flashFocusedPane: true,
+          scrollToBottomIfOutputSinceLastView: true
+        }
+      })
+    )
   })
 
   it("scopes the terminal reveal to the tab's own worktree, not the one the main window shows", () => {

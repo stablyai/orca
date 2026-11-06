@@ -12,14 +12,7 @@ type PendingWorktreeHookCommandDelivery = {
   deliver: (state: AppStoreSnapshot, firstTerminalTabId: string) => void
 }
 
-// Why: runtime-owned worktrees mirror their session tabs asynchronously, so a
-// fresh create usually has no tab to queue setup/issue commands on yet. Hold
-// the delivery until the first mirrored terminal tab lands instead of
-// dropping it. Mirrors agent-startup-delayed-delivery's lazy-subscription
-// shape: subscribed only while something is pending.
-// Queued per worktree rather than one-per-worktree: a runtime-owned create can
-// have both setup/issue commands and an agent-tab seed waiting on the same
-// first mirrored tab, and neither may evict the other.
+// Hold deliveries until the first asynchronously mirrored terminal; queue multiple entries per workspace so hook commands and agent seeds coexist. Subscribe only while pending.
 const pendingHookCommandDeliveries = new Map<string, PendingWorktreeHookCommandDelivery[]>()
 let unsubscribePendingHookCommandDeliveries: (() => void) | null = null
 
@@ -47,16 +40,14 @@ function ensurePendingHookCommandSubscription(): void {
     return
   }
   const initial = useAppStore.getState()
-  // Capture references so unrelated PTY/status updates do not rescan every
-  // runtime worktree waiting for its first mirrored terminal tab.
+  // Track references so unrelated PTY/status writes cannot rescan all pending runtime workspaces.
   let previousTabsByWorktree = initial.tabsByWorktree
   let previousWorktreesByRepo = selectWorktreesByRepo(initial)
   let previousDetectedWorktreesByRepo = selectDetectedWorktreesByRepo(initial)
   let previousFolderWorkspaces = selectFolderWorkspaces(initial)
   let previousWorktreeLookup = initial.getKnownWorktreeById
   unsubscribePendingHookCommandDeliveries = useAppStore.subscribe((state) => {
-    // Why: only these slices (or the test-adapter lookup itself) can change
-    // whether a pending worktree exists or has received its first tab.
+    // Only these slices/adapter lookup can change workspace existence or first-tab availability.
     if (
       state.tabsByWorktree === previousTabsByWorktree &&
       selectWorktreesByRepo(state) === previousWorktreesByRepo &&
@@ -88,15 +79,13 @@ function flushPendingHookCommandDeliveries(): void {
   for (const [worktreeId, deliveries] of pendingHookCommandDeliveries) {
     const firstTerminalTabId = state.tabsByWorktree[worktreeId]?.[0]?.id
     if (!firstTerminalTabId) {
-      // Why: a worktree can be removed before its tabs ever mirror; drop the
-      // entry so the subscription does not stay armed forever.
+      // Drop removed workspaces so pending entries cannot hold the subscription forever.
       if (!state.getKnownWorktreeById(worktreeId)) {
         pendingHookCommandDeliveries.delete(worktreeId)
       }
       continue
     }
-    // Delete before delivering so store writes inside deliver cannot re-enter
-    // these entries through the subscription.
+    // Remove before calling deliver: synchronous store writes can re-enter this subscription.
     pendingHookCommandDeliveries.delete(worktreeId)
     for (const delivery of deliveries) {
       delivery.deliver(state, firstTerminalTabId)

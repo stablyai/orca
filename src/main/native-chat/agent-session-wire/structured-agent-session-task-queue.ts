@@ -1,5 +1,5 @@
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 export class StructuredAgentSessionTaskQueue {
   private readonly chains = new Map<string, Promise<void>>()
@@ -14,6 +14,18 @@ export class StructuredAgentSessionTaskQueue {
 
   serialize<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
     return runKeyedSerializedOperation(this.chains, sessionId, task)
+  }
+
+  /** Own preparation through founding separately from the destination's journal mutations. */
+  serializeCreateIntent<T>(
+    callerKey: string,
+    envelope: { sessionId: string; clientOperationId: string },
+    run: () => Promise<T>
+  ): Promise<T> {
+    return this.serialize(
+      JSON.stringify(['create-intent', callerKey, envelope.sessionId, envelope.clientOperationId]),
+      run
+    )
   }
 
   trackAttach<T>(
@@ -45,7 +57,6 @@ export class StructuredAgentSessionTaskQueue {
       .map(({ sessionId }) => sessionId)
   }
 
-  /** A create or attach for this session that has not settled yet. */
   hasPendingAttach(sessionId: string): boolean {
     return [...this.pendingLocations.values()].some((pending) => pending.sessionId === sessionId)
   }

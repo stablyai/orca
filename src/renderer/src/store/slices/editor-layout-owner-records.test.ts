@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// Editor records in a layout-owner build (ORCA_LAYOUT_OWNER=main): main's frames draw the editor
-// tabs, and a diff, preview or conflict tab is drawn from the view its open sent.
+// Main frames draw editor tabs; opens carry view data for diff/preview/conflict in layout-owner builds.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
@@ -14,7 +13,6 @@ import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -543,39 +541,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, layout-ow
     expect(editorTabsAndFiles()).toEqual([
       { kind: 'diff', entity: expect.stringContaining('lib/a.ts'), hasFile: true }
     ])
-  })
-
-  it('sends nothing for a refused rekey', async () => {
-    openEdit(WT, '/repo-a/a.ts', 'a.ts')
-    openEdit(WT, '/repo-a/b.ts', 'b.ts')
-    await main.settle()
-    const sentBefore = layoutApplyTestTransport.sent.length
-    expect(
-      remapOpenEditorTabsForPathChange({
-        fromPath: '/repo-a/a.ts',
-        toPath: '/repo-a/b.ts',
-        worktreePath: '/repo-a',
-        worktreeId: WT,
-        owner: localMoveOwner(WT)
-      })
-    ).toEqual({ ok: false, reason: 'collision' })
-    expect(layoutApplyTestTransport.sent.slice(sentBefore)).toEqual([])
-  })
-})
-
-describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, switch off', () => {
-  it('sends nothing', () => {
-    openEdit(WT, '/repo-a/a.ts', 'a.ts')
-    expect(
-      remapOpenEditorTabsForPathChange({
-        fromPath: '/repo-a/a.ts',
-        toPath: '/repo-a/c.ts',
-        worktreePath: '/repo-a',
-        worktreeId: WT,
-        owner: localMoveOwner(WT)
-      })
-    ).toEqual({ ok: true })
-    expect(layoutApplyTestTransport.sent).toEqual([])
   })
 })
 

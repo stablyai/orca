@@ -1,8 +1,4 @@
-// Several writes run as ONE turn in the chat's write queue, one after another.
-//
-// Each step is planned from the fold with every step before it landed, and commits in its own
-// transaction. The steps share one queue body, so no other write lands between them, and the
-// first step that throws ends the run: the steps before it stay written and none after it runs.
+// Steps share one queue turn but commit separately; failure preserves earlier steps and skips later ones.
 
 import type {
   JournalItemAppendOptions,
@@ -19,7 +15,7 @@ import type { JournalWriteBody } from './journal-write-queue'
 export type JournalStep =
   | {
       kind: 'item'
-      /** Read at the step's turn; null writes nothing. */
+      /** Resolve after earlier steps commit; null writes nothing. */
       resolve: () => JournalResolvedItem | null
       options: JournalItemAppendOptions
     }
@@ -35,7 +31,6 @@ export class JournalStepWriter {
     }
   ) {}
 
-  /** Whether each step wrote; rejects with the error of the step that threw. */
   append(steps: readonly JournalStep[]): Promise<boolean[]> {
     return this.deps.serialize(() => {
       const wrote: boolean[] = []

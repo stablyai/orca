@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { Tab } from '../../../shared/tab-types'
-import { isAgentSessionConversationName } from '../../../shared/agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,
-  AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+  AgentSessionConversationName
+} from '../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
   structuredAgentSessionOwnerForTab,
@@ -52,7 +52,7 @@ export function useStructuredConversationNamingError(
 function useStructuredSessionSummaryField<T>(
   executionHostId: string | null | undefined,
   sessionId: string | null | undefined,
-  read: (summary: AgentSessionStatusSummary | undefined) => T | null
+  read: (summary: AgentSessionConversationName | undefined) => T | null
 ): T | null {
   const feed = useMemo(() => {
     const target = structuredAgentSessionTargetForHost(executionHostId)
@@ -60,9 +60,14 @@ function useStructuredSessionSummaryField<T>(
   }, [executionHostId])
   const watched = sessionId ? feed : null
   useEffect(() => watched?.activate(), [watched])
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      watched && sessionId ? watched.subscribeSession(sessionId, listener) : noSubscription(),
+    [watched, sessionId]
+  )
   return useSyncExternalStore(
-    watched?.subscribe ?? noSubscription,
-    () => read(sessionId ? watched?.getSnapshot().get(sessionId) : undefined),
+    subscribe,
+    () => read(sessionId ? watched?.getNamingSnapshot().get(sessionId) : undefined),
     () => null
   )
 }

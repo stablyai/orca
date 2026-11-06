@@ -44,6 +44,8 @@ export type FleetDurableWorker = {
     hostScope: string | null
     ownershipState: string
     releaseState: string
+    /** A scheduled automatic release; the coordinator owes no release of its own. */
+    autoReleaseAt?: string | null
     updatedAt: string
   } | null
 }
@@ -112,6 +114,8 @@ export type OrchestrationFleetWorker = {
     lastObservedAt: number | null
   }
   resource: FleetResourceProjection
+  /** When Orca releases this settled worker's terminal on its own, from the host that owns it. */
+  autoReleaseAt?: string
   nextAction: FleetNextAction
   attention: OrchestrationFleetAttention
 }
@@ -126,8 +130,7 @@ export type OrchestrationFleetPage = {
   }
 }
 
-/** Re-runs the one attention projection against a newer host verdict. Re-deriving categories
- *  from liveness alone dropped the `unverifiable` an unproven outcome contributed. */
+/** Recompute attention with newer host verdicts; liveness-only derivation lost unverifiable outcomes. */
 export function refreshOrchestrationFleetLivenessAttention(worker: OrchestrationFleetWorker): void {
   const had = (category: OrchestrationFleetAttentionCategory): boolean =>
     worker.attention.categories.includes(category)

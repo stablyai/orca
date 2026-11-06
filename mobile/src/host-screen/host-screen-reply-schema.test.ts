@@ -30,8 +30,7 @@ describe('host screen reply schemas', () => {
     const unknown = hostRepoCatalogSchema.parse({
       repos: [{ id: 'r', displayName: 'o', repoIcon: { type: 'svg', markup: '<svg/>' } }]
     })
-    // The row survives and draws the Folder default MobileRepoIcon already drew for an arm it
-    // could not match.
+    // Unknown icon arms retain the row and use MobileRepoIcon’s Folder default.
     expect(unknown[0]?.id).toBe('r')
     expect(unknown[0]?.repoIcon).toBeUndefined()
   })
@@ -51,8 +50,7 @@ describe('host screen reply schemas', () => {
         }
       ]
     })
-    // MobileRepoIcon reads src and label and never source, so narrowing source would have drawn a
-    // Folder where main drew the image. The member itself still reaches the row.
+    // MobileRepoIcon ignores source; constraining it would drop images from newer hosts for a member the renderer never reads.
     expect(repo?.repoIcon).toEqual({
       type: 'image',
       src: 'https://example.invalid/a.png',
@@ -94,8 +92,7 @@ describe('host screen reply schemas', () => {
   })
 
   it('answers the empty target list for a reply that is no object at all', () => {
-    // Why: the label write runs before the platform write in the same sequence, so a throw here
-    // would take the platform down with it. readSshTargets answered [] for every one of these.
+    // Label writes precede platform writes; malformed targets must degrade to [] rather than skip both.
     for (const payload of [null, undefined, 'nope', 42, []]) {
       expect(hostSshTargetSummariesSchema.parse(payload)).toEqual([])
     }

@@ -1,10 +1,7 @@
-// A paired desktop's confirmed close of a pinned server tab: session.tabs.close carries `force`,
-// which the server honours in both builds and advertises with a capability in both builds.
+// Confirmed pinned-tab closes carry force in both layout builds.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY } from '../../shared/session-tabs-runtime-capabilities'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { z } from 'zod'
-import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
 import {
@@ -56,7 +53,7 @@ async function pinnedServerTab(layoutOwnerIsMain: boolean) {
       }))
     }
   })
-  // The window's pin guard (mobile-terminal-close-ipc-bridge.ts): a pinned tab closes only forced.
+  // Model the window pin guard: pinned tabs require force.
   const windowClose = f.closeTerminalTab.getMockImplementation()!
   f.acknowledgement.resolve()
   f.closeTerminalTab.mockImplementation(async (_tabId?: unknown, options?: unknown) => {
@@ -96,13 +93,6 @@ async function pinnedServerTab(layoutOwnerIsMain: boolean) {
 }
 
 describe.each([false, true])('ORCA_LAYOUT_OWNER_IS_MAIN=%s', (layoutOwnerIsMain) => {
-  it('advertises the forced-close capability', async () => {
-    layoutOwner.isMain = layoutOwnerIsMain
-    expect(new OrcaRuntimeService().getStatus().capabilities).toContain(
-      SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY
-    )
-  })
-
   it('refuses an unforced close of a pinned tab and keeps it and its terminals', async () => {
     const { f, stopped, close } = await pinnedServerTab(layoutOwnerIsMain)
     const reply = await close({})

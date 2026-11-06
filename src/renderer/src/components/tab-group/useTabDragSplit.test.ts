@@ -391,8 +391,7 @@ describe('useTabDragSplit', () => {
             typeof drag.onDragStart
           >[0]
         )
-        // Why: dispatch in the same turn as drag start so the fallback must be
-        // installed synchronously, before React can run passive effects.
+        // Dispatch before passive effects to verify missed-end listeners are installed synchronously.
         window.dispatchEvent(new MouseEvent(eventName, { bubbles: true }))
       })
       expect(drag.isTabDragActiveRef.current).toBe(true)

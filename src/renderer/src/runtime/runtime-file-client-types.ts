@@ -3,6 +3,8 @@ import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean
@@ -23,13 +25,18 @@ export type RuntimeFileReadArgs = {
   access?: LocalFileAccess
   /** Host grant for a runtime file outside every workspace (see OpenFile.terminalArtifactGrantId). */
   terminalArtifactGrantId?: string
+  /** Pairing that issued the grant; a same-id re-pair must not answer for it. */
+  expectedEnvironmentPairingRevision?: number
   /** Set by readers that render the bytes: page a remote PDF/image too large for one reply. */
   pageOversizedBinary?: boolean
+  /** A user act (open, expand, Retry); may start a stopped WSL distro. Local reads only. */
+  wakeWslDistro?: boolean
 }
 
 export type RuntimeFileOperationArgs = {
   /** The worktree owner's transport; never the focused server. */
   target: RuntimeClientTarget
+  expectedEnvironmentPairingRevision?: number
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string

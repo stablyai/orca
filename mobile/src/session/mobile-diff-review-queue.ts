@@ -1,12 +1,16 @@
+import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { translate } from '../i18n/mobile-i18n'
 import type {
   DiffComment,
   DiffReviewScope,
   MobileDiffReviewState
 } from '../../../src/shared/diff-comment-types'
 import type { MobileGitBranchChangeEntry } from '../source-control/mobile-branch-compare'
+import type { MobileGitChangedFile } from '../source-control/git-compare-reply-schema'
 import {
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
+  isMobileGitUnstageableEntry,
   type MobileGitFileStatus,
   type MobileGitStagingArea,
   type MobileGitStatusEntry
@@ -17,18 +21,14 @@ import {
   isMobileDiffReviewFileReviewed
 } from './mobile-diff-review-state'
 
-export type MobileDiffReviewQueueFilter =
-  | 'all'
-  | 'unreviewed'
-  | 'notes'
-  | 'unstaged'
-  | 'staged'
-  | 'branch'
+// The screen walks one section: uncommitted, staged, committed on the branch, or one commit's files.
+export type MobileDiffReviewSection = DiffReviewScope | 'commit'
+export type MobileDiffReviewQueueFilter = 'all' | MobileDiffReviewSection
 
 export type MobileDiffReviewQueueItem = {
   key: string
-  scope: DiffReviewScope
-  area: MobileGitStagingArea | 'branch'
+  scope: MobileDiffReviewSection
+  area: MobileGitStagingArea | 'branch' | 'commit'
   filePath: string
   oldPath?: string
   status: MobileGitFileStatus
@@ -55,14 +55,17 @@ export type BuildMobileDiffReviewQueueInput = {
   branchEntries: readonly MobileGitBranchChangeEntry[]
   branchHeadOid?: string | null
   branchMergeBase?: string | null
+  /** A commit's files, read-only: no notes, no viewed state. */
+  commitEntries?: readonly MobileGitChangedFile[]
   comments: readonly DiffComment[]
   reviewState: MobileDiffReviewState
 }
 
-const SCOPE_SORT_ORDER: Record<DiffReviewScope, number> = {
+const SCOPE_SORT_ORDER: Record<MobileDiffReviewSection, number> = {
   unstaged: 0,
   staged: 1,
-  branch: 2
+  branch: 2,
+  commit: 3
 }
 
 function scopeForStatusArea(area: MobileGitStagingArea): DiffReviewScope {
@@ -70,8 +73,8 @@ function scopeForStatusArea(area: MobileGitStagingArea): DiffReviewScope {
 }
 
 export function createMobileDiffReviewFileKey(
-  scope: DiffReviewScope,
-  area: MobileGitStagingArea | 'branch',
+  scope: MobileDiffReviewSection,
+  area: MobileDiffReviewQueueItem['area'],
   filePath: string,
   oldPath?: string
 ): string {
@@ -128,7 +131,12 @@ export function mobileDiffReviewCommentMatchesItem(
   comment: DiffComment,
   item: Pick<MobileDiffReviewQueueItem, 'filePath' | 'oldPath' | 'scope' | 'diffIdentity'>
 ): boolean {
-  if (comment.source === 'markdown' || comment.filePath !== item.filePath) {
+  // Notes belong to the worktree's changes; a past commit's files carry none.
+  if (
+    item.scope === 'commit' ||
+    comment.source === 'markdown' ||
+    comment.filePath !== item.filePath
+  ) {
     return false
   }
   if (comment.scope !== undefined && comment.scope !== item.scope) {
@@ -162,7 +170,6 @@ function queueNoteCounts(
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
-/** A row whose staging area this build can place. One with no area is in no section either. */
 type PlaceableStatusEntry = MobileGitStatusEntry & { area: MobileGitStagingArea }
 
 function isPlaceableStatusEntry(entry: MobileGitStatusEntry): entry is PlaceableStatusEntry {
@@ -190,12 +197,16 @@ function statusEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: scope === 'staged' ? 'Staged' : 'Unstaged',
+    get subtitle() {
+      return scope === 'staged'
+        ? translate('session.diffReviewQueue.staged', 'Staged')
+        : translate('session.diffReviewQueue.unstaged', 'Unstaged')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: isMobileGitStageableEntry(entry),
-    canUnstage: entry.area === 'staged',
-    canDiscard: isMobileGitDiscardableEntry(entry) && entry.area !== 'staged',
+    canUnstage: isMobileGitUnstageableEntry(entry),
+    canDiscard: isMobileGitDiscardableEntry(entry),
     isGeneratedOrLockFile: isGeneratedOrLockFile(entry.path),
     diffIdentity,
     ...counts,
@@ -226,7 +237,9 @@ function branchEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: 'Committed on branch',
+    get subtitle() {
+      return translate('session.diffReviewQueue.committedOnBranch', 'Committed on branch')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: false,
@@ -238,6 +251,33 @@ function branchEntryToQueueItem(
     reviewedAt: reviewFileState?.reviewedAt,
     isReviewed: isMobileDiffReviewFileReviewed(reviewFileState, diffIdentity),
     changedSinceReview: didMobileDiffReviewFileChangeSinceReview(reviewFileState, diffIdentity)
+  }
+}
+
+function commitEntryToQueueItem(entry: MobileGitChangedFile): MobileDiffReviewQueueItem {
+  return {
+    key: createMobileDiffReviewFileKey('commit', 'commit', entry.path, entry.oldPath),
+    scope: 'commit',
+    area: 'commit',
+    filePath: entry.path,
+    oldPath: entry.oldPath,
+    status: entry.status ?? 'modified',
+    title: entry.path,
+    get subtitle() {
+      return translate('session.diffReviewQueue.inCommit', 'In this commit')
+    },
+    added: entry.added,
+    removed: entry.removed,
+    canStage: false,
+    canUnstage: false,
+    canDiscard: false,
+    isGeneratedOrLockFile: isGeneratedOrLockFile(entry.path),
+    diffIdentity: '',
+    noteCount: 0,
+    unsentNoteCount: 0,
+    staleNoteCount: 0,
+    isReviewed: false,
+    changedSinceReview: false
   }
 }
 
@@ -258,17 +298,15 @@ export function buildMobileDiffReviewQueue(
       ),
     ...input.branchEntries.map((entry) =>
       branchEntryToQueueItem(entry, input, commentsByPath.get(entry.path) ?? [])
-    )
+    ),
+    ...(input.commitEntries ?? []).map(commitEntryToQueueItem)
   ]
-  if (queue.length > 1) {
-    const collator = new Intl.Collator(undefined, { numeric: true })
-    queue.sort(
-      (first, second) =>
-        SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
-        Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
-        collator.compare(first.filePath, second.filePath)
-    )
-  }
+  queue.sort(
+    (first, second) =>
+      SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
+      Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
+      compareFileNames(first.filePath, second.filePath)
+  )
   return queue
 }
 
@@ -276,38 +314,5 @@ export function filterMobileDiffReviewQueue(
   queue: readonly MobileDiffReviewQueueItem[],
   filter: MobileDiffReviewQueueFilter
 ): MobileDiffReviewQueueItem[] {
-  switch (filter) {
-    case 'unreviewed':
-      return queue.filter((item) => !item.isReviewed)
-    case 'notes':
-      return queue.filter((item) => item.noteCount > 0)
-    case 'unstaged':
-    case 'staged':
-    case 'branch':
-      return queue.filter((item) => item.scope === filter)
-    case 'all':
-      return [...queue]
-  }
-}
-
-export type MobileDiffReviewQueueSummary = {
-  reviewedCount: number
-  reviewedUnstagedCount: number
-}
-
-export function summarizeMobileDiffReviewQueue(
-  queue: readonly MobileDiffReviewQueueItem[]
-): MobileDiffReviewQueueSummary {
-  let reviewedCount = 0
-  let reviewedUnstagedCount = 0
-  for (const item of queue) {
-    if (!item.isReviewed) {
-      continue
-    }
-    reviewedCount += 1
-    if (item.scope === 'unstaged' && item.canStage) {
-      reviewedUnstagedCount += 1
-    }
-  }
-  return { reviewedCount, reviewedUnstagedCount }
+  return filter === 'all' ? [...queue] : queue.filter((item) => item.scope === filter)
 }

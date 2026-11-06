@@ -1,10 +1,10 @@
 import { DirectoryTransferBudget } from '../ssh-directory-transfer-budget'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { lstat, opendir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { wrapRemoteCommandForPosixShell } from '../ssh-posix-command-wrapper'
 import { findSystemSsh } from './system-ssh-binary'
 import {
@@ -25,7 +25,6 @@ import {
   throwIfAborted,
   waitForChannelClose,
   waitForProcess,
-  isHostAnsweredSystemSshExit,
   type ProcessResult
 } from './system-ssh-operation-lifecycle'
 import { uploadFileViaSystemSsh, writeBufferViaSystemSsh } from './system-ssh-file-binary-transfer'
@@ -86,7 +85,6 @@ export async function uploadDirectoryViaSystemSsh(
         killProcess(sshExtract)
       },
       settleUploadPipeline(
-        tarCreate,
         waitForProcess(tarCreate, 'local tar relay upload'),
         waitForProcess(sshExtract, 'system ssh relay upload', 'remote'),
         pipeline(tarCreate.stdout!, sshExtract.stdin!)
@@ -106,39 +104,15 @@ export async function uploadDirectoryViaSystemSsh(
   }
 }
 
-/** What local tar says when its output, not its input, failed: the far end went away. */
-const DOWNSTREAM_WRITE_FAILURE = /write error|cannot write|broken pipe|EPIPE/i
-
-/**
- * Waits for all three, then names the cause; a failed ssh wins over a tar that succeeded. A remote
- * exit the host answered wins over a local tar failure that only followed it: tar was signalled,
- * failed after ssh closed, or reported a write/pipe error (BSD tar exits 1 with "Write error", no
- * signal). A local tar that failed on its own input first (missing directory, unreadable file) is
- * the client's fault.
- */
+/** Local tar can fail downstream only after the far end stops reading, which rejects the pipe first; any other tar failure caused the remote EOF. */
 async function settleUploadPipeline(
-  tarProcess: ChildProcess,
   local: Promise<ProcessResult>,
   remote: Promise<ProcessResult>,
   pipe: Promise<void>
 ): Promise<readonly [ProcessResult, ProcessResult]> {
-  let settled = 0
-  let localAt = 0
-  let remoteAt = 0
-  const stamp = <T>(promise: Promise<T>, record: (at: number) => void): Promise<T> =>
-    promise.finally(() => record(++settled))
-  const [tar, ssh, piped] = await Promise.allSettled([
-    stamp(local, (at) => (localAt = at)),
-    stamp(remote, (at) => (remoteAt = at)),
-    pipe
-  ])
-  const remoteAnswered = ssh.status === 'rejected' && isHostAnsweredSystemSshExit(ssh.reason)
+  const [tar, ssh, piped] = await Promise.allSettled([local, remote, pipe])
   if (tar.status === 'rejected') {
-    const localFollowedRemote =
-      tarProcess.signalCode !== null ||
-      remoteAt < localAt ||
-      (tar.reason instanceof Error && DOWNSTREAM_WRITE_FAILURE.test(tar.reason.message))
-    throw remoteAnswered && localFollowedRemote ? ssh.reason : tar.reason
+    throw ssh.status === 'rejected' && piped.status === 'rejected' ? ssh.reason : tar.reason
   }
   if (ssh.status === 'rejected') {
     throw ssh.reason
@@ -173,8 +147,7 @@ async function uploadDirectoryViaSystemSshWindows(
   await createWindowsUploadDirectories(target, plan.directories, options)
   for (const file of plan.files) {
     throwIfAborted(options.signal)
-    // Reuses the single-file upload: it already opens O_NOFOLLOW, verifies the source did not
-    // change under it, and splits the bytes into stdin-sized writes staged under a partial name.
+    // Reuse source verification (O_NOFOLLOW and stability checks), transport fallback and unique staging from single-file uploads.
     await uploadFileViaSystemSsh(target, file.localPath, file.remotePath, options)
   }
 }
@@ -184,13 +157,7 @@ export type LocalUploadPlan = {
   files: { localPath: string; remotePath: string }[]
 }
 
-/**
- * #16432: this used to base64 every artifact into one JSON array and push the whole ~1.9MB string
- * into one PowerShell stdin. Base64 inflates the payload 1.33x, and Windows PowerShell 5.1 cannot
- * read a stdin that large over a non-pty ssh exec — it blocks forever instead of failing. Nothing
- * about a directory upload requires one frame: the plan carries paths only, and the bytes go per
- * file, in writes bounded by WINDOWS_STDIN_WRITE_CHUNK_BYTES.
- */
+/** Plan paths separately from payloads so per-file transport selection avoids PowerShell 5.1 redirected-stdin hangs (#16432). */
 export async function collectLocalUploadPlan(
   localDir: string,
   remoteDir: string,
@@ -229,14 +196,7 @@ export async function collectLocalUploadPlan(
   return plan
 }
 
-/**
- * Creates the upload's directories, preferring sftp's own `mkdir`.
- *
- * The PowerShell fallback keeps the JSON envelope, batched under one stdin's worth: a path list is
- * metadata, so it stays in the hundreds of bytes even for a deep tree. It is still a redirected
- * stdin read though, so on Windows PowerShell 5.1 it carries the same defect as any other — which
- * is why sftp is tried first even for a payload this small.
- */
+/** Prefer SFTP even for directory metadata: bounded PowerShell stdin batches still risk the per-read 5.1 hang (#16432). */
 async function createWindowsUploadDirectories(
   target: SshTarget,
   directories: readonly string[],
@@ -305,18 +265,11 @@ function makeWindowsCreateDirectoriesCommand(): string {
   return powerShellCommand(
     [
       '$ErrorActionPreference = "Stop"',
-      // Reached only where the host has no sftp subsystem. Windows PowerShell 5.1 can lose a
-      // redirected stdin for good when a read finds it empty (#16432); a batch this small usually
-      // arrives in one piece, and "usually" is exactly why sftp is preferred.
+      // SFTP refusal/path fallback still risks the 5.1 empty-pipe hang, even for small metadata (#16432).
       '$reader = New-Object System.IO.StreamReader([Console]::OpenStandardInput())',
       'try { $json = $reader.ReadToEnd() } finally { $reader.Dispose() }',
       'if ([string]::IsNullOrWhiteSpace($json)) { return }',
-      // `[string[]]`, not `@(...)`: ConvertFrom-Json emits the parsed array as a single pipeline
-      // object, so `@(...)` wraps it in *another* array and the loop variable binds to the whole
-      // thing. `[string]` of that is the paths joined by spaces, which CreateDirectory rejects with
-      // "The given path's format is not supported". It only ever worked for a one-element batch,
-      // where stringifying a single-element array happens to yield the element. Measured on
-      // WindowsPowerShell 5.1.26100 against a three-directory tree.
+      // ConvertFrom-Json emits one array object; @() nests it and stringifies all paths together. Cast to string[] to iterate paths.
       'foreach ($path in [string[]]($json | ConvertFrom-Json)) {',
       '  $null = [System.IO.Directory]::CreateDirectory($path)',
       '}'

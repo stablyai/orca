@@ -11,8 +11,7 @@ type PairedMobileDevicesSnapshot = {
   devices: readonly PairedMobileDevice[]
   loaded: boolean
   loading: boolean
-  // Why: distinguishes "load failed" from "zero devices paired" — both leave
-  // devices empty, but only the former should be retried/recovered.
+  // Distinguish failed loading from a confirmed empty device list.
   error: boolean
 }
 
@@ -28,8 +27,7 @@ const EMPTY_SNAPSHOT: PairedMobileDevicesSnapshot = {
 }
 
 let snapshot = EMPTY_SNAPSHOT
-// Why: Sidebar, Mobile page, and Settings can mount together; share one
-// device-list request so slow IPC does not fan out across surfaces.
+// Share device-list IPC across Sidebar, Mobile and Settings so simultaneous mounts do not fan out.
 let activeRequest: {
   id: number
   promise: Promise<readonly PairedMobileDevice[]>
@@ -56,17 +54,13 @@ function getSnapshot(): PairedMobileDevicesSnapshot {
   return snapshot
 }
 
-// Why: a superseded request must hand back whatever now owns the shared cache —
-// the newer in-flight request's promise, or the current published devices —
-// never the stale data the store already ignored.
+// Return the current request or published devices when superseded, never data the cache already rejected.
 function supersededResult():
   | Promise<readonly PairedMobileDevice[]>
   | readonly PairedMobileDevice[] {
   return activeRequest?.promise ?? snapshot.devices
 }
 
-// Why: lets callers read the up-to-the-moment device list synchronously inside
-// callbacks/closures without hand-mirroring the store into a local ref.
 export function getPairedMobileDevicesSnapshot(): readonly PairedMobileDevice[] {
   return snapshot.devices
 }
@@ -112,9 +106,7 @@ export function refreshPairedMobileDevices({
       if (requestId !== latestRequestId) {
         return supersededResult()
       }
-      // Why: keep loaded:true so the loaded-gated mount effect can't refire into a
-      // retry loop; flag error so consumers can distinguish a failed load from "no
-      // devices" and recover.
+      // Keep loaded true to prevent automatic retry loops; error allows explicit or reconnect recovery.
       publish({
         ...snapshot,
         loaded: true,
@@ -133,10 +125,7 @@ export function refreshPairedMobileDevices({
   return promise
 }
 
-// Why: recover a failed shared load on window focus/reconnect without a polling
-// timer. A single module-level listener (shared across every consumer) fires one
-// forced refresh, instead of each mounted consumer registering its own listener
-// and fanning out one forced listDevices IPC per consumer on every focus event.
+// Share one focus/online recovery listener so failed loads retry without polling or per-consumer IPC fan-out.
 let enabledConsumerCount = 0
 
 function recoverPairedMobileDevicesOnReconnect(): void {
@@ -189,10 +178,7 @@ export function usePairedMobileDevices({
     })
   }, [currentSnapshot.loaded, currentSnapshot.loading, enabled, refreshOnMount])
 
-  // Why: a failed load parks the shared cache in an error state the loaded-gated
-  // mount effect above can't retry (it would loop). While mounted, register as a
-  // recovery consumer so the shared focus/online listener can un-wedge a
-  // persistent consumer like the sidebar after a transient startup IPC failure.
+  // Register recovery while mounted because loaded-gated effects cannot retry failed loads without looping.
   useEffect(() => {
     if (!enabled) {
       return

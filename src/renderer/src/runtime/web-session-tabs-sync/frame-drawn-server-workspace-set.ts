@@ -4,10 +4,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 // Why one source per workspace: frames and the mirror writing the same tree would fight.
 const frameDrawnWorktreeIdsByEnvironment = new Map<string, ReadonlySet<string>>()
 
-/**
- * The workspaces of `environmentId` that a server's layout frames draw; replaces the previous set.
- * A workspace leaving the set keeps its frame tree until `resyncMirroredServerWorkspace` replaces it.
- */
+/** Replace this environment’s frame-drawn set; leaving workspaces retain frames until resyncMirroredServerWorkspace replaces them. */
 export function setFrameDrawnServerWorkspaces(
   environmentId: string,
   worktreeIds: ReadonlySet<string>

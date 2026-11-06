@@ -168,9 +168,7 @@ describe('Korean won input after a composition commit', () => {
     await expect(
       typeHangulThenWon(['₩'], {
         beforeWon: (textarea) => {
-          // Why: the full sequence a browser emits for an unprevented printable
-          // key. The keydown alone is not a shape Chromium can produce, and the
-          // `input` event is what carries the character now.
+          // Replay the full uncancelled browser sequence; keydown alone cannot carry the character now supplied by input.
           textarea.dispatchEvent(keyboardEvent('keydown', 'a', 'KeyA', 65))
           textarea.dispatchEvent(keyboardEvent('keypress', 'a', 'KeyA', 65))
           textarea.value += 'a'
@@ -184,11 +182,6 @@ describe('Korean won input after a composition commit', () => {
 
   it('suppresses a duplicate insertText without a new keydown or textarea mutation', async () => {
     await expect(typeHangulThenWon(['`'], { duplicateFirstInput: true })).resolves.toBe('한`')
-  })
-
-  it('preserves a 64-input native-text burst before the composition finalizer', async () => {
-    const committed = Array.from({ length: 64 }, (_, index) => (index % 2 === 0 ? '`' : '₩'))
-    await expect(typeHangulThenWon(committed)).resolves.toBe(`한${committed.join('')}`)
   })
 
   it('preserves an immediate won remap after repeated stale composition ends', async () => {

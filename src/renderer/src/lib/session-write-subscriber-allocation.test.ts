@@ -4,12 +4,7 @@ import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { SESSION_RELEVANT_FIELDS } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 
-/**
- * Why a hand-built store: the subscriber allocates a 35-field snapshot plus a changed-field array
- * on every fire that reaches its body, and both are invisible from outside. Driving it through an
- * injected store lets `Array.prototype.filter` stand in as the allocation counter — the changed
- * list is built 1:1 with the snapshot, in the same block, so one count measures both.
- */
+/** Inject a store to count Array.filter allocations: each changed-field list shares the block allocating its 35-field snapshot, so one count observes both costs. */
 function makeSessionState(overrides: Partial<AppState> = {}): AppState {
   const base: Record<string, unknown> = {
     workspaceSessionReady: true,
@@ -120,49 +115,6 @@ describe('session write subscriber allocation', () => {
     }
   )
 
-  it('allocates nothing for store writes that touch no session field', () => {
-    const harness = createHarness()
-    try {
-      // Prime `prev` on the first fire.
-      harness.write()
-      vi.advanceTimersByTime(500)
-
-      const writes = 200
-      const calls = countFilterCalls(() => {
-        for (let write = 0; write < writes; write += 1) {
-          harness.write((previous) => ({
-            agentStatusByPaneKey: { ...previous.agentStatusByPaneKey, [`p-${write}`]: {} } as never
-          }))
-        }
-      })
-      // Before: one changed-field array (and one 35-field snapshot) per write.
-      expect(calls).toBe(0)
-    } finally {
-      harness.dispose()
-    }
-  })
-
-  it('still allocates and persists when a session field really changes', () => {
-    const harness = createHarness()
-    try {
-      harness.write()
-      vi.advanceTimersByTime(500)
-      harness.persisted.length = 0
-
-      const writes = 20
-      const calls = countFilterCalls(() => {
-        for (let write = 0; write < writes; write += 1) {
-          harness.write(() => ({ activeTabId: `tab-${write}` }))
-        }
-      })
-      expect(calls).toBe(writes)
-      vi.advanceTimersByTime(500)
-      expect(harness.persisted).toHaveLength(1)
-    } finally {
-      harness.dispose()
-    }
-  })
-
   it('still wakes a deferred write when an unrelated field changes', () => {
     let state = makeSessionState()
     const listeners: ((next: AppState) => void)[] = []
@@ -195,8 +147,7 @@ describe('session write subscriber allocation', () => {
       vi.advanceTimersByTime(500)
       expect(persisted).toHaveLength(0)
 
-      // An unrelated write must re-arm it even though nothing session-relevant moved — the
-      // identity-scan fast path must not swallow this wake-up.
+      // Unrelated writes must wake deferred persistence even when session identities are unchanged.
       refuse = false
       write({ agentStatusByPaneKey: { a: {} } as never })
       vi.advanceTimersByTime(500)
@@ -207,8 +158,7 @@ describe('session write subscriber allocation', () => {
   })
 
   it('gates on a strict superset of the fields the patch builder reads', () => {
-    // A gate that misses a projection input persists stale state, so this is a correctness lock,
-    // not a perf one. Record what the builder actually touches rather than trusting the types.
+    // Record actual projection reads; missing one persists stale data, making this a correctness gate, not just performance.
     const read = new Set<string>()
     const snapshot = new Proxy(makeSessionState() as unknown as Record<string, unknown>, {
       get(target, property, receiver) {

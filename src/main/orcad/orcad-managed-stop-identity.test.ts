@@ -27,7 +27,7 @@ const RECORDED: OrcadProcessIncarnation = {
   linuxStartTicks: '4242',
   bootId: 'boot-a'
 }
-// The WSL2 smoke saw btime move by 157 s against a 1.5 s tolerance.
+// WSL2 btime drift exceeded the 1.5-second wall-clock tolerance.
 const DRIFTED_STARTED_AT_MS = 5_000 + 157_000
 
 function running(
@@ -57,7 +57,6 @@ function running(
   }
 }
 
-/** Alive for `aliveFor` observations, then gone. */
 function linuxHost(
   actual: OrcadProcessIncarnation | null,
   aliveFor = Number.POSITIVE_INFINITY
@@ -137,7 +136,7 @@ describe('managed stop instance identity', () => {
 
   it('stays readable by peers on either side of the change', async () => {
     const request = running(RECORDED, { requestCarriesIncarnation: true })
-    // The instance shape slots before this change parse: the incarnation is dropped, not refused.
+    // Older readers strip the added incarnation fields.
     const olderInstance = z.object({
       pid: z.number().int().positive(),
       startedAtMs: z.number().finite().nonnegative().nullable(),
@@ -146,7 +145,7 @@ describe('managed stop instance identity', () => {
     })
     const { linuxStartTicks: _ticks, bootId: _boot, ...withoutIncarnation } = request.instance
     expect(olderInstance.parse(request.instance)).toEqual(withoutIncarnation)
-    // And a newer slot reads what an older client wrote, taking the incarnation from the lock.
+    // New readers recover the missing incarnation from the lock.
     const fromOlderClient = OrcadManagedStopRequestSchema.parse({
       ...request,
       instance: withoutIncarnation

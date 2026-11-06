@@ -29,6 +29,14 @@ export function projectSessionTabBrowserPlacements(
   if (removedIds.size === 0) {
     return payload
   }
+  return withoutSessionTabs(payload, removedIds)
+}
+
+/** Hides tabs from a client, keeping its groups, layout and active tab consistent. */
+export function withoutSessionTabs(
+  payload: RuntimeMobileSessionTabsResult,
+  removedIds: ReadonlySet<string>
+): RuntimeMobileSessionTabsResult {
   const retainedTabs = payload.tabs.filter((tab) => !removedIds.has(tab.id))
   const active = selectProjectedActiveTab(payload.activeTabId, retainedTabs)
   const tabs = retainedTabs.map((tab) => ({ ...tab, isActive: tab.id === active?.id }))

@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
-  WORKTREE_TEARDOWN_RPC_MARGIN_MS,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../workspaces/removal/worktree-teardown'
+import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../workspaces/removal/worktree-teardown-deadline'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -17,7 +16,17 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+
+// A live PTY as a host lists it: the daemon reports its workspace, never just a cwd (#36716).
+function listedPty(
+  id: string,
+  title: string,
+  cwd = TEST_WORKTREE_PATH,
+  worktreeId = TEST_WORKTREE_ID
+) {
+  return { id, cwd, worktreeId, title }
+}
 
 describe('OrcaRuntimeService', () => {
   it('durably closes every terminal in one workspace without touching a sibling', async () => {
@@ -321,7 +330,6 @@ describe('OrcaRuntimeService', () => {
     })
     syncSinglePty(runtime)
 
-    // An orphaned workspace's repo is gone, so only the caller's id can identify it.
     await expect(
       runtime.stopTerminalsForWorktree('id:repo-gone::/tmp/gone', {
         resolvedWorktreeId: TEST_WORKTREE_ID
@@ -341,9 +349,7 @@ describe('OrcaRuntimeService', () => {
     })
     syncSinglePty(runtime)
 
-    // Regression for #10252: folder-workspace instances share one checkout dir, so comparing
-    // filesystem paths (which strip `::workspace:<uuid>`) would match the root and its siblings
-    // and kill their live terminals.
+    // Folder instances share a checkout path; path-based matching would kill sibling workspaces (#10252).
     await expect(
       runtime.stopTerminalsForWorktree('id:repo-gone::/tmp/gone', {
         resolvedWorktreeId: `${TEST_WORKTREE_ID}::workspace:11111111-1111-1111-1111-111111111111`
@@ -383,8 +389,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime, null)
-    // The store keeps one `repoId::path` per host, so deleting the SSH copy must leave the
-    // local copy's terminals running — the fence the destructive removal paths now supply.
+    // Worktree ids collide across hosts; SSH deletion must not sweep same-id local terminals.
     runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-1')
     runtime.registerPty('pty-local', TEST_WORKTREE_ID, null)
 
@@ -447,8 +452,7 @@ describe('OrcaRuntimeService', () => {
       owner: true
     }))
 
-    // Why: the runtime-graph sweep must bound the underlying shutdown/list RPCs
-    // below the sweep deadline, or a wedged daemon trips the outer sweep deadline.
+    // Bound shutdown/list RPCs below the outer sweep deadline.
     const deadline = Date.now() + WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
     await expect(
       runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { deadline, stopPty })
@@ -460,8 +464,7 @@ describe('OrcaRuntimeService', () => {
       { deadlineMs?: number } | undefined
     ]
     expect(ptyId).toBe('pty-1')
-    // Pin the margin: RPCs must settle WORKTREE_TEARDOWN_RPC_MARGIN_MS before the
-    // sweep deadline so the accurate stop failure outruns the sweep-timeout error.
+    // RPCs need a margin so accurate stop failure arrives before the outer timeout.
     expect(opts?.deadlineMs).toBe(deadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS)
   })
 
@@ -611,13 +614,7 @@ describe('OrcaRuntimeService', () => {
   it('sleeps every freshly discovered worktree PTY without a hydrated renderer graph', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const processLists = [
-      [
-        { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
-        { id: 'pty-2', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
-      ],
-      []
-    ]
+    const processLists = [[listedPty('pty-1', 'Claude'), listedPty('pty-2', 'Shell')], []]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -813,7 +810,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: vi.fn(async () => false),
       getForegroundProcess: async () => null,
-      listProcesses: async () => [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }]
+      listProcesses: async () => [listedPty('pty-1', 'Claude')]
     })
 
     await expect(runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
@@ -835,11 +832,9 @@ describe('OrcaRuntimeService', () => {
     ])
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const otherPty = { id: 'pty-other', cwd: otherWorktreePath, title: 'Other' }
-    const processLists = [
-      [{ id: 'pty-target', cwd: TEST_WORKTREE_PATH, title: 'Target' }, otherPty],
-      [otherPty]
-    ]
+    const otherId = `${TEST_REPO_ID}::${otherWorktreePath}`
+    const otherPty = listedPty('pty-other', 'Other', otherWorktreePath, otherId)
+    const processLists = [[listedPty('pty-target', 'Target'), otherPty], [otherPty]]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,

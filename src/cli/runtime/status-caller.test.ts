@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -61,6 +61,7 @@ describe.skipIf(process.platform === 'win32')(
         socket.destroy()
       }
       await new Promise<void>((resolve) => server.close(() => resolve()))
+      rmSync(userDataPath, { recursive: true, force: true })
       vi.restoreAllMocks()
       for (const [key, value] of savedEnv) {
         if (value === undefined) {
@@ -95,7 +96,7 @@ describe.skipIf(process.platform === 'win32')(
     async function status(json: boolean): Promise<string> {
       const log = vi.spyOn(console, 'log').mockImplementation(() => {})
       await CORE_HANDLERS.status({
-        client: new RuntimeClient(userDataPath),
+        client: new RuntimeClient(userDataPath, undefined, null, null),
         flags: new Map(),
         cwd: userDataPath,
         json

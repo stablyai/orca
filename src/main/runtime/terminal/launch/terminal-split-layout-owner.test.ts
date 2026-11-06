@@ -1,16 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../../orca-runtime-test-scenario-builders.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from '../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { ProvisioningRuntime } from '../../orca-runtime-layout-owner-start-fixture'
-import { committingSpawn, registerBoundPty } from '../../bind-first-pane.test-fixture'
+import { ProvisioningRuntime } from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import {
+  committingSpawn,
+  registerBoundPty
+} from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -104,11 +108,18 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       tabId: TAB_ID,
       leafId: split.leafId,
       cwd: '/repo/src',
+      resolvedWorkspace: {
+        id: TEST_WORKTREE_ID,
+        path: TEST_WORKTREE_PATH,
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      },
       command: 'make test',
       cols: 120,
       rows: 40
     })
-    // Views see the pane as starting while it starts, so none starts its own; then it clears.
+    // Publish starting status to prevent views spawning duplicates, then clear it after binding.
     expect(statusesSeen).toEqual([{ status: 'starting' }])
     expect(runtime.startStatusOf(makePaneKey(TAB_ID, split.leafId ?? ''))).toBeNull()
     expect(split.tabId).toBe(TAB_ID)
@@ -262,7 +273,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
 
       const root = getSession().terminalLayoutsByTabId[TAB_ID]?.root
       expect(root ? collectLayoutLeafIdsInOrder(root) : []).not.toContain(NEW_LEAF_ID)
-      // Nothing is left showing a start for a pane that is gone.
       expect(runtime.startStatusOf(makePaneKey(TAB_ID, NEW_LEAF_ID))).toBeNull()
     }
   )
@@ -316,7 +326,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
         { direction: 'vertical', newLeafId: HEADLESS_LEAF_ID, keepPaneOnStartFailure: true }
       )
     ).rejects.toThrow('pane_exists')
-    // The live pane is not marked as a failed start.
     expect(runtime.startStatusOf(makePaneKey(TAB_ID, HEADLESS_LEAF_ID))).toBeNull()
   })
 })

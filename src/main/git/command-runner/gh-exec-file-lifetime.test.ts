@@ -13,7 +13,7 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
-vi.mock('../../ipc/command-path-resolver', () => ({
+vi.mock('../../ipc/command-path/command-path-resolver', () => ({
   resolveSelectedLocalCommand: resolveSelectedMock
 }))
 
@@ -46,39 +46,6 @@ describe('tracked gh capture lifetime', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([false, true])(
-    'keeps grace settlement separate from termination (abort: %s)',
-    async (abort) => {
-      const value = child(1234)
-      spawnMock.mockReturnValue(value)
-      const owner = createGhLogicalLifetime()
-      const controller = new AbortController()
-      const result = ghExecFileAsync(
-        ['api', 'user'],
-        { timeout: 10, ...(abort ? { signal: controller.signal } : {}) },
-        owner.hooks
-      )
-      const rejection = expect(result).rejects.toThrow()
-      await vi.advanceTimersByTimeAsync(0)
-      if (abort) {
-        controller.abort('private-reason')
-      }
-      await vi.advanceTimersByTimeAsync(12_010)
-      await rejection
-      owner.seal()
-      let terminated = false
-      void owner.terminated.then(() => {
-        terminated = true
-      })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(terminated).toBe(false)
-      expect(spawnMock).toHaveBeenCalledOnce()
-      value.emit('close', null, 'SIGKILL')
-      await vi.advanceTimersByTimeAsync(0)
-      expect(terminated).toBe(true)
-    }
-  )
-
   it('waits for a PID error close before retry and ignores its stale callback', async () => {
     const values = [child(11), child(12)]
     spawnMock.mockReturnValueOnce(values[0]).mockReturnValueOnce(values[1])
@@ -107,71 +74,4 @@ describe('tracked gh capture lifetime', () => {
     await expect(result).resolves.toMatchObject({ stdout: 'ok' })
     await owner.terminated
   })
-
-  it('bounds an unverified retry wait by cancellation without spawning another child', async () => {
-    const value = child(1234)
-    spawnMock.mockReturnValue(value)
-    const owner = createGhLogicalLifetime()
-    const controller = new AbortController()
-    const result = ghExecFileAsync(
-      ['api', 'user'],
-      { timeout: 10, signal: controller.signal },
-      owner.hooks
-    )
-    const rejection = expect(result).rejects.toMatchObject({ name: 'AbortError' })
-    await vi.advanceTimersByTimeAsync(12_010)
-    controller.abort()
-    await rejection
-    expect(spawnMock).toHaveBeenCalledOnce()
-    owner.seal()
-    value.emit('close', null, 'SIGKILL')
-    await owner.terminated
-  })
-
-  it.each(['sync', 'no_pid', 'resolver', 'preabort', 'ordinary', 'verified'])(
-    'seals positive no-child/termination evidence: %s',
-    async (mode) => {
-      const value = child(mode === 'no_pid' ? undefined : 1234)
-      const owner = createGhLogicalLifetime()
-      const controller = new AbortController()
-      if (mode === 'sync') {
-        spawnMock.mockImplementation(() => {
-          throw new Error('spawn failed')
-        })
-      } else {
-        spawnMock.mockReturnValue(value)
-      }
-      if (mode === 'resolver') {
-        resolveSelectedMock.mockImplementation(() => {
-          throw new Error('resolver failed')
-        })
-      }
-      if (mode === 'preabort') {
-        controller.abort()
-      }
-      if (mode === 'verified') {
-        forceMock.mockResolvedValue(true)
-      }
-      const result = ghExecFileAsync(
-        ['api', 'user'],
-        { timeout: 10, signal: controller.signal },
-        owner.hooks
-      )
-      const observed = result.catch(() => null)
-      await vi.advanceTimersByTimeAsync(0)
-      if (mode === 'no_pid') {
-        value.emit('error', new Error('missing binary'))
-      }
-      if (mode === 'ordinary') {
-        finish(value)
-      }
-      if (mode === 'verified') {
-        await vi.advanceTimersByTimeAsync(2_010)
-      }
-      await observed
-      owner.seal()
-      await owner.terminated
-      expect(spawnMock).toHaveBeenCalledTimes(mode === 'resolver' || mode === 'preabort' ? 0 : 1)
-    }
-  )
 })

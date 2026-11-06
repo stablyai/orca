@@ -14,10 +14,12 @@ import { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
 import { SessionHostPartitionOperations } from './session-host-partitions'
 import { SessionSnapshotOperations } from './session-snapshot-operations'
 import { MetadataLineageOperations } from './metadata-lineage-operations'
+import { CrossStoreLineagePersistence } from './cross-store-lineage-persistence'
 import { ProjectCollectionOperations } from './project-collection-operations'
 import { AutomationPersistence } from './automation-persistence'
 import { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
 import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/remote-layout-snapshot-persistence'
+import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
 import { SparsePresetPersistence } from './sparse-preset-persistence'
 import { PtyBindingPersistenceOperations } from './pty-binding-persistence'
 import { LayoutCommandPersistence } from '../terminal-topology/layout-command-persistence'
@@ -34,9 +36,11 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   RepoLifecycleOperations &
   MobileTabSelectionPersistence &
   RemoteLayoutSnapshotPersistence &
+  HostRepoCatalogSnapshotPersistence &
   SparsePresetPersistence &
   AutomationPersistence &
   MetadataLineageOperations &
+  CrossStoreLineagePersistence &
   ProfilePreferences &
   SessionHostPartitionOperations &
   SessionSnapshotOperations &
@@ -64,10 +68,12 @@ export type StoreDomains = {
   sessions: SessionHostPartitionOperations
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
+  crossStoreLineage: CrossStoreLineagePersistence
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
   remoteLayoutSnapshots: RemoteLayoutSnapshotPersistence
+  hostRepoCatalogSnapshots: HostRepoCatalogSnapshotPersistence
   sparsePresets: SparsePresetPersistence
   ptyBindings: PtyBindingPersistenceOperations
   layoutCommands: LayoutCommandPersistence
@@ -86,9 +92,11 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   RepoLifecycleOperations,
   MobileTabSelectionPersistence,
   RemoteLayoutSnapshotPersistence,
+  HostRepoCatalogSnapshotPersistence,
   SparsePresetPersistence,
   AutomationPersistence,
   MetadataLineageOperations,
+  CrossStoreLineagePersistence,
   ProfilePreferences,
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
@@ -104,7 +112,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
 ] as const
 
 export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
-  // Each domain keeps its context under a module-private Symbol; the Store mixes in the domain methods, so it needs those symbols too.
+  // Mixed-in methods need each domain's private context symbols installed on Store too.
   for (const domain of Object.values(domains)) {
     for (const key of Object.getOwnPropertySymbols(domain)) {
       const { value } = Object.getOwnPropertyDescriptor(domain, key) ?? {}
@@ -161,22 +169,23 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessions,
     sessionSnapshots,
     metadata,
+    crossStoreLineage: new CrossStoreLineagePersistence(runtime, scheduling),
     projects,
     automations,
     mobileTabSelections,
     remoteLayoutSnapshots,
+    hostRepoCatalogSnapshots: new HostRepoCatalogSnapshotPersistence(runtime, scheduling),
     sparsePresets,
     ptyBindings,
     layoutCommands: new LayoutCommandPersistence(
       runtime,
       sessions,
-      // Switch point: a terminal close kept after a failed write is saved again later.
+      // Retry persistence for terminal closes retained after failed writes.
       ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
     ),
     sshProfiles,
     retiredWorktreeNames,
     sshLeases,
-    // Read-only: holds the runtime state and nothing that writes.
     orcadSourceExport: new OrcadSourceExportPersistence(runtime),
     orcadCatalogImports,
     orcadMigrationBlobInstalls: new OrcadMigrationBlobInstallPersistence(runtime)

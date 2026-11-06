@@ -1,4 +1,3 @@
-/** Shared timing contracts for agent submission and worker-start transports. */
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 
 export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 30_000

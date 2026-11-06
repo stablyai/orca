@@ -45,7 +45,7 @@ describe('current-document annotation marker projection', () => {
     )
   })
 
-  it('does not resurrect old same-URL geometry on dom-ready or return, but permits pending viewport events', () => {
+  it('keeps retired same-URL geometry hidden and permits pending viewport events', () => {
     const { setAnnotationViewportBridge, notes } = createBridge()
     const args = {
       toolTargetId: 'page-1',
@@ -100,7 +100,7 @@ describe('current-document annotation marker projection', () => {
     )
   })
 
-  it('tolerates a destroyed guest without retaining or throwing a rejected bridge call', async () => {
+  it('handles a rejected bridge call without a synchronous exception', async () => {
     const { setAnnotationViewportBridge, notes } = createBridge()
     setAnnotationViewportBridge.mockRejectedValueOnce(new Error('Guest destroyed'))
     expect(() =>

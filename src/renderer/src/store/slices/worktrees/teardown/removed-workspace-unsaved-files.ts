@@ -6,9 +6,9 @@ import {
   flushRemovalPendingEdits,
   lastViewUnsavedFiles,
   unsavedTextViewIds
-} from '@/components/editor/removal-unsaved-editor-files'
+} from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { worktreePurgeClosedFileIds } from './worktree-purge-closed-files'
-import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
+import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { isRemovedRuntimeHostId } from '../../stale-runtime-host-rows'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
@@ -81,12 +81,7 @@ function workspaceLabel(s: AppState, worktreeId: string): string {
   return worktree?.displayName ?? folder?.name ?? worktreeId
 }
 
-/**
- * Captures the unsaved text of tabs a purge closes and offers it back. Runs inside purge updaters,
- * so one toast per microtask waits for the commit and merges every purge of the batch. Text still
- * equal to `confirmed` is dropped, for this batch only. Returns the keep request the closing write
- * carries, so those records (and their models) outlive the tabs until the notice goes away.
- */
+/** Retain unsaved text/models until notice recovery/dismissal; microtask merges committed purge notices. Drop only text exactly confirmed for discard in this batch; return keep token for closing writes. */
 export function noticeRemovedUnsavedFiles(
   s: AppState,
   removedFileIds: ReadonlySet<string>,

@@ -22,7 +22,7 @@ import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution
 import {
   isListedRemoteServer,
   runtimePairingRepairRoute
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
 import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
@@ -32,15 +32,15 @@ import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync
 import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
 import {
   runtimeHostBlockedCopy,
+  runtimeHostBlockedRecovery,
   runtimeHostConnectionDetail,
   runtimeHostStatusForOverall,
-  sshStatusForOverall
+  sshStatusForOverall,
+  type RuntimeHostBlockedRecovery
 } from './remote-host-connection-status'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
-import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
 
 export function SshStatusSegment({
   compact,
@@ -87,8 +87,7 @@ export function SshStatusSegment({
     ).map((host) => [host.id, host])
   )
   const targets = Array.from(sshTargetLabels.entries())
-    // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
-    // as a user-facing SSH host in the status bar.
+    // Hide runtime-owned per-workspace SSH targets from the user-managed host list.
     .filter(([id]) => !isOwnedSshTargetId(id) && visibleHosts.has(toSshExecutionHostId(id)))
     .map(([id, label]) => {
       const state = sshConnectionStates.get(id)
@@ -114,7 +113,7 @@ export function SshStatusSegment({
         blocked: blockedReason
           ? {
               ...runtimeHostBlockedCopy(blockedReason, registryHost?.compatibility, repairRoute),
-              canRepair: blockedReason === 'access-revoked' && repairRoute === 'access-link'
+              recovery: runtimeHostBlockedRecovery(blockedReason, repairRoute)
             }
           : null,
         snapshot: statusEntry?.snapshot,
@@ -127,8 +126,7 @@ export function SshStatusSegment({
     ...host,
     state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
   }))
-  // Available remote servers are online even when they are not the active runtime.
-  // Keep host health separate from the advanced active-server selection.
+  // Host health is independent of active runtime selection; available remote servers remain online.
   const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
     isConnectedRuntimeHostState(host.state)
   )
@@ -177,9 +175,19 @@ export function SshStatusSegment({
     ...runtimeHostRows.map((host) => runtimeHostStatusForOverall(host.state, host.blockedReason))
   ]
   const connectedHostCount = statuses.filter((status) => status === 'connected').length
-  const openRepair = (host: { id: string; label: string }): void => {
+  const openRecovery = (host: {
+    id: string
+    label: string
+    blocked: { recovery: RuntimeHostBlockedRecovery | null } | null
+  }): void => {
     // Why close first: the dialog must not open underneath the menu's focus trap.
     setMenuOpen(false)
+    if (host.blocked?.recovery === 'open-settings') {
+      const state = useAppStore.getState()
+      state.openSettingsTarget({ pane: 'servers', repoId: null, sectionId: host.id })
+      state.openSettingsPage()
+      return
+    }
     setRepairTarget({ id: host.id, label: host.label })
   }
   return (
@@ -252,7 +260,7 @@ export function SshStatusSegment({
             blocked={host.blocked}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id)}
-            onRepair={() => openRepair(host)}
+            onRecover={() => openRecovery(host)}
           />
         ))}
         {connectedTargets.map((t) => (
@@ -268,7 +276,7 @@ export function SshStatusSegment({
             blocked={host.blocked}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id)}
-            onRepair={() => openRepair(host)}
+            onRecover={() => openRecovery(host)}
           />
         ))}
         {disconnectedTargets.map((t) => (

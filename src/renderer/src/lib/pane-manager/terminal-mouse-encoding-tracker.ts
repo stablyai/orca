@@ -1,11 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import { guardParserHandler } from '@/components/terminal-pane/terminal-parser-handler-guard'
 
-// Why this module exists: xterm keeps the mouse report encoding (DECSET 1006 /
-// 1016) private, and SerializeAddon writes the tracking modes without it. A
-// replayed pane snapshot therefore reads as "legacy `ESC[M` reports", which a
-// phone then types into an SGR-only TUI. Mirroring the encoding from the
-// parser lets the pane snapshot carry it in-band.
+// SerializeAddon omits private DECSET 1006/1016 encoding, so snapshots would make phones send legacy reports to SGR-only TUIs. Mirror parser state for in-band replay.
 
 type TerminalMouseEncoding = 'default' | 'sgr' | 'sgr-pixels'
 
@@ -26,8 +22,7 @@ const SGR_PIXELS_MOUSE_MODE = 1016
 
 const encodingByTerminal = new WeakMap<object, TerminalMouseEncoding>()
 
-// Mirrors xterm's InputHandler.setModePrivate / resetModePrivate: params apply
-// in order, and a reset of either mode returns to the default encoding.
+// Match xterm mode order; resetting either mode restores default encoding.
 function applyPrivateModes(
   terminal: TerminalMouseEncodingTrackerTarget,
   params: PrivateModeParams,

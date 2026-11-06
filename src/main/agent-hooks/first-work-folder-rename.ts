@@ -1,10 +1,3 @@
-// Why: after the first-work branch+display rename, the worktree's on-disk folder
-// still carries its creature name (e.g. `cunner`), which is confusing once the
-// branch reads `worktree-creation-spinner`. This module aligns the folder with
-// the new branch leaf via `git worktree move`, then migrates Orca's path-derived
-// worktree identity so meta, tabs, and the live PTY session carry over. It is
-// best-effort and local-only — remote/Windows/locked/dest-taken all degrade to
-// "folder kept" without disturbing the rename that already succeeded.
 import type { Repo } from '../../shared/repo-types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
@@ -19,31 +12,21 @@ import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-id
 export type FirstWorkFolderRenameDeps = {
   getRepo: (repoId: string) => Repo | undefined
   getSettings: () => Parameters<typeof planWorktreeFolderRename>[0]['settings']
-  /** Re-key all worktreeId-keyed state from the old (path-derived) id to the new. */
   migrateWorktreeIdentity: (target: HostWorktreeTarget, newWorktreeId: string) => void
-  /** Invalidate caches + tell the renderer the worktree's id changed (old->new) so
-   *  it re-keys its state instead of treating the rename as a deletion. */
+  /** Re-key renderer state so a folder move is not treated as deletion. */
   notifyWorktreeRenamed: (repoId: string, oldWorktreeId: string, newWorktreeId: string) => void
-  /** True when the path already exists — git worktree move refuses a taken dest. */
   pathExists: (path: string) => Promise<boolean>
   moveWorktree: (repoPath: string, oldPath: string, newPath: string) => Promise<void>
 }
 
-/**
- * Rename a worktree's folder to match its work-derived branch leaf. Returns true
- * only when the folder was actually moved; false (folder kept) for every skip or
- * graceful-degrade case. Throws only on an unexpected git failure mid-move — the
- * caller swallows it so the branch/display rename is never undone.
- */
+/** False keeps the folder; callers retain the successful branch rename even if this move fails. */
 export async function renameWorktreeFolderOnFirstWork(
   worktreeId: string,
   newLeaf: string,
   deps: FirstWorkFolderRenameDeps
 ): Promise<boolean> {
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
-  // Why: oldWorktreePath feeds an on-disk folder move. Resolve the synthetic
-  // `::workspace:<uuid>` suffix to the backing folder; identity is migrated
-  // separately via the untouched worktreeId.
+  // Strip synthetic workspace suffixes from filesystem paths without losing the identity suffix.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!repo || !parsed) {
     return false
@@ -67,8 +50,7 @@ export async function renameWorktreeFolderOnFirstWork(
     return false
   }
   await deps.moveWorktree(repo.path, plan.oldPath, plan.newPath)
-  // Order: move first (point of no return), then re-key identity synchronously so
-  // nothing interleaves before the worktree's state is re-bound to the new id.
+  // After the move, migrate identity synchronously before notifying the renderer.
   deps.migrateWorktreeIdentity(hostWorktreeTargetForRepo(worktreeId, repo), plan.newWorktreeId)
   deps.notifyWorktreeRenamed(repo.id, worktreeId, plan.newWorktreeId)
   return true

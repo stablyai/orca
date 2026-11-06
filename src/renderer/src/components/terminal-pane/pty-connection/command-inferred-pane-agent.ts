@@ -1,26 +1,28 @@
-import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
+import { detectAgentStatusFromTitle as detectAgentStatusFromTitleDefault } from '../../../../../shared/agent-status/title/agent-title-status'
+import { isClaudeAgent as isClaudeAgentDefault } from '../../../../../shared/agent-status/title/agent-title-identity'
 import { useAppStore } from '@/store'
-import {
-  isFreshNonDoneAgentStatus,
-  type AgentStatusEntry,
-  type AgentType
-} from '../../../../../shared/agent-status-types'
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { registerAgentHookTerminalLifecycleHandler } from '../agent-hook-terminal-lifecycle'
 import type { AgentCompletionStatusSnapshot } from '../agent-completion-coordinator-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
-import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-command-line-intent'
-import type { TerminalAgent } from '../../../../../shared/terminal-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/agent-command-line-intent'
+import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installCommandInferredPaneAgent(session: ConnectPanePtySession): void {
-  // Why: infer pane ownership from a manually typed agent command (e.g. `omp`) by
-  // shadowing the shell's current command line, for generic terminals where no
-  // launch metadata exists. Consumed by getAuthoritativePaneAgent below.
+  const detectAgentStatusFromTitle =
+    session.deps.detectAgentStatusFromTitle ?? detectAgentStatusFromTitleDefault
+  const isClaudeAgent = session.deps.isClaudeAgent ?? isClaudeAgentDefault
+  // Shadow typed shell commands to infer manual agent launches without launch metadata.
   session.commandInferredPaneAgent = null
   session.pendingShellCommandLine = ''
   session.pendingShellCommandCursor = 0
@@ -41,8 +43,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     const state = useAppStore.getState()
     const registeredLaunchAgent =
       state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType
-    // Why: input inside a live TUI can spell another agent command; process or
-    // pane-scoped launch ownership is stronger than typed shell inference.
+    // TUI input may spell an agent command; confirmed process or pane launch ownership outranks typed inference.
     const hasStrongerAgentOwnership =
       Boolean(state.paneForegroundAgentByPaneKey[session.cacheKey]?.agent) ||
       isTuiAgent(registeredLaunchAgent)
@@ -135,10 +136,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
       return null
     }
     const params = data.slice(index + 2, cursor)
-    // Why: only emulate a bare one-column move. Parameterized/modified cursor keys
-    // (e.g. Ctrl+Left `\x1b[1;5D` = word-jump) move the real cursor by more than
-    // one, so tracking them as ±1 would desync the shadow line — fall through to
-    // reset instead of silently corrupting the sampled command.
+    // Only bare one-column cursor moves preserve the shadow line; modified/parameterized moves require reset to avoid desynchronization.
     if (final === 'D' && params === '') {
       session.movePendingShellCommandCursor(-1)
     } else if (final === 'C' && params === '') {
@@ -164,9 +162,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     )?.title
     return runtimeTitle ?? tabTitle ?? null
   }
-  // Why: a pane-scoped explicit row only counts as current ownership evidence
-  // when it is fresh and not already `done` — a stale or completed row is a
-  // leftover from a prior agent that may no longer own the shell.
+  // Only fresh, unfinished pane rows prove current ownership; stale/completed rows can belong to a previous agent.
   session.isFreshActivePaneAgentEntry = (
     entry: AgentStatusEntry | undefined
   ): entry is AgentStatusEntry => {

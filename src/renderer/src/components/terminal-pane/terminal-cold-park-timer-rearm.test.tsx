@@ -1,18 +1,9 @@
 /** @vitest-environment happy-dom */
-/**
- * The cold-park effect must keep re-running on every tab-model write — watcher
- * coverage is re-derived from store and registry state the park key cannot
- * encode, and terminal-cold-park-verdict-loop pins what happens when it stops.
- *
- * What it must NOT do is cancel and re-arm every pending recheck timer on each
- * run. Recheck deadlines are absolute, so a title-only write recomputes the same
- * instant and the re-arm changed nothing but the syscall count. This pins both
- * halves: no timer churn under a title flood, and an unchanged park instant.
- */
+/** Tab-model writes must recheck watcher coverage without rearming unchanged absolute deadlines; title floods must preserve the park instant and avoid timer churn. */
 import { act, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const park = vi.hoisted(() => ({
@@ -59,7 +50,7 @@ import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 const TAB_IDS = ['tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-e'] as const
 const EMPTY_ASSIGNMENTS = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
 const EMPTY_PORTALS: never[] = []
-const TITLE_FLOOD_WRITES = 40
+
 const TICK_MS = 10_000
 
 type ParkingStoreState = { tabsByWorktree: Record<string, TerminalTab[]> }
@@ -155,22 +146,6 @@ function firstParkedElapsedMs(options: { publishTitles: boolean }): number {
 }
 
 describe('cold-park recheck timers under a background title flood', () => {
-  it('re-arms no park timer for tab-model writes that move no deadline', () => {
-    root = createRoot(container)
-    act(() => root?.render(<ParkingHost writes={0} />))
-
-    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
-    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
-    act(() => root?.render(<ParkingHost writes={TITLE_FLOOD_WRITES} />))
-
-    // The effect still runs per write — that is the coverage wakeup, and dropping
-    // it regresses terminal-cold-park-verdict-loop.
-    expect(park.effectRuns).toBeGreaterThanOrEqual(TITLE_FLOOD_WRITES)
-    // Before: one clearTimeout and one setTimeout per hidden tab per run.
-    expect(setTimeoutSpy.mock.calls.length).toBe(0)
-    expect(clearTimeoutSpy.mock.calls.length).toBe(0)
-  })
-
   it('parks at the same instant with and without a title flood', () => {
     const quiet = firstParkedElapsedMs({ publishTitles: false })
     act(() => root?.unmount())

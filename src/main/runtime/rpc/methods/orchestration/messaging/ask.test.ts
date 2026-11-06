@@ -5,6 +5,8 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../../../shared/orchestration-ask-timeout'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { MessageWake } from '../../../../runtime-message-waiters'
+import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -99,6 +101,28 @@ describe('orchestration RPC methods', () => {
         })
       ).rejects.toMatchObject({ code: 'answer_conflict' })
     })
+
+    it('sends the coordinator back to check after an answer instead of ending its turn', async () => {
+      setup()
+      const task = db.createTask({ spec: 'question work' })
+      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const created = db.createQuestion({
+        runId: activeRunId!,
+        dispatchId: dispatch.id,
+        askerHandle: 'term_worker',
+        question: 'Proceed?'
+      })
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
+      // The question's batch may still hold another worker's report.
+      expect(
+        await call('orchestration.reply', {
+          id: created.message.id,
+          body: 'Yes',
+          from: 'term_coord'
+        })
+      ).toMatchObject({ next: expect.not.stringContaining('end your turn') })
+    })
   })
 
   describe('orchestration.ask', () => {
@@ -122,7 +146,7 @@ describe('orchestration RPC methods', () => {
             body: 'go ahead'
           })
         }
-        return 'notified'
+        return new MessageWake()
       })
 
       const result = (await call('orchestration.ask', {
@@ -315,7 +339,7 @@ describe('orchestration RPC methods', () => {
             body: 'correct answer'
           })
         }
-        return 'notified'
+        return new MessageWake()
       })
 
       const result = (await call('orchestration.ask', {
@@ -339,9 +363,8 @@ describe('orchestration RPC methods', () => {
       let observedTimeoutMs: number | undefined
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
         observedTimeoutMs = options?.timeoutMs
-        // End the wait loop so the assertion runs against the first budget slice.
         const outbound = db.getInbox(10).find((message) => message.type === 'question')
-        // Why: without a reply the handler's while(true) spins on this mock until vitest times out, hanging instead of failing.
+        // Reply once to end the mocked loop; otherwise a regression hangs until Vitest timeout instead of asserting.
         expect(outbound).toBeDefined()
         db.answerQuestion({
           messageId: outbound!.id,
@@ -349,7 +372,7 @@ describe('orchestration RPC methods', () => {
           consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
           body: 'ok'
         })
-        return 'notified'
+        return new MessageWake()
       })
 
       const result = (await call('orchestration.ask', {
@@ -396,6 +419,128 @@ describe('orchestration RPC methods', () => {
       const outbound = db.getInbox(10).find((message) => message.type === 'question')
       const payload = JSON.parse(outbound!.payload ?? '{}')
       expect(payload.options).toEqual(['a', 'b', 'c'])
+    })
+  })
+
+  describe('ask, then end the turn', () => {
+    const flush = () => new Promise((resolve) => setImmediate(resolve))
+    const askedQuestion = () => db.getInbox(20).find((message) => message.type === 'question')!
+
+    function askingDispatch() {
+      const task = db.createTask({ spec: 'question work' })
+      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const deliver = vi
+        .spyOn(runtime, 'deliverPendingMessagesForHandle')
+        .mockImplementation(() => {})
+      const woke = () => deliver.mock.calls.some(([handle]) => handle === `dispatch:${dispatch.id}`)
+      return { dispatch, woke }
+    }
+
+    it('wakes the worker with an answer that arrives after it stopped waiting', async () => {
+      setup()
+      const { woke } = askingDispatch()
+
+      await expect(
+        call('orchestration.ask', {
+          from: 'term_worker',
+          question: 'Which file?',
+          wait: false,
+          timeoutMs: 1
+        })
+      ).resolves.toMatchObject({ pending: true, next: expect.stringContaining('End your turn') })
+      const question = askedQuestion()
+      await call('orchestration.reply', { id: question.id, body: 'main.ts', from: 'term_coord' })
+      await flush()
+
+      expect(woke()).toBe(true)
+      await expect(call('orchestration.check', { terminal: 'term_worker' })).resolves.toMatchObject(
+        { messages: [expect.objectContaining({ body: 'main.ts', thread_id: question.id })] }
+      )
+    })
+
+    it('lets other mail wake a worker blocked on a waiting ask', async () => {
+      setup()
+      const { dispatch, woke } = askingDispatch()
+      const asking = call('orchestration.ask', {
+        from: 'term_worker',
+        question: 'Proceed?',
+        timeoutMs: 5_000
+      })
+      await flush()
+
+      await call('orchestration.send', {
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Change of plan',
+        body: 'Drop the question; do the other thing.'
+      })
+      await flush()
+      expect(woke()).toBe(true)
+
+      await call('orchestration.reply', { id: askedQuestion().id, body: 'yes', from: 'term_coord' })
+      await expect(asking).resolves.toMatchObject({ answer: 'yes' })
+    })
+
+    it('gives a waiting ask its answer without also waking the worker with it', async () => {
+      setup()
+      const { woke } = askingDispatch()
+      const asking = call('orchestration.ask', {
+        from: 'term_worker',
+        question: 'Proceed?',
+        timeoutMs: 5_000
+      })
+      await flush()
+
+      const question = askedQuestion()
+      await call('orchestration.reply', { id: question.id, body: 'yes', from: 'term_coord' })
+      await expect(asking).resolves.toMatchObject({ answer: 'yes' })
+      await flush()
+
+      expect(woke()).toBe(false)
+      const answerId = db.getQuestion(question.id)!.answer_message_id!
+      expect(db.getMessageById(answerId)?.read).toBe(1)
+    })
+
+    it('leaves an answer that lands as its waiting ask is cancelled to wake the worker', async () => {
+      setup()
+      const { dispatch, woke } = askingDispatch()
+      const controller = new AbortController()
+      const method = findMethod('orchestration.ask')
+      const asking = method.handler(
+        method.params!.parse({ from: 'term_worker', question: 'Proceed?', timeoutMs: 5_000 }),
+        { runtime, signal: controller.signal }
+      )
+      await flush()
+
+      const question = askedQuestion()
+      controller.abort()
+      const answered = db.answerQuestion({
+        messageId: question.id,
+        runId: activeRunId!,
+        consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
+        body: 'yes'
+      })
+      deliverQuestionAnswer(runtime, { message_id: question.id, dispatch_id: dispatch.id })
+
+      await expect(asking).resolves.toMatchObject({ cancelled: true, answer: null })
+      await flush()
+      expect(db.getMessageById(answered.message.id)?.read).toBe(0)
+      expect(woke()).toBe(true)
+    })
+
+    it('ends a waiting ask at once when its Dispatch is abandoned', async () => {
+      setup()
+      const { dispatch } = askingDispatch()
+      const asking = call('orchestration.ask', {
+        from: 'term_worker',
+        question: 'Proceed?',
+        timeoutMs: 60_000
+      })
+      await flush()
+
+      db.closeQuestionsForDispatch(dispatch.id)
+      runtime.notifyMessageArrived(`dispatch:${dispatch.id}`, 'status')
+      await expect(asking).rejects.toMatchObject({ code: 'dispatch_inactive' })
     })
   })
 })

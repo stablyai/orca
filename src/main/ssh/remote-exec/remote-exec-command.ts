@@ -21,10 +21,7 @@ const MAX_EXEC_OUTPUT_CHARS = 1024 * 1024
 
 type ExecCommandOptions = SshExecOptions & {
   timeoutMs?: number
-  // Why: a zero-exit command resolves with stdout alone, so the reason a wrapped-in-`|| echo`
-  // probe failed is discarded. Callers that need that diagnostic opt in here rather than
-  // folding stderr into stdout, where it would match the probe's own token strings.
-  // On the system-ssh transport this stream also carries local OpenSSH noise; log-only.
+  // Log stderr separately: zero-exit probes can need diagnostics, but mixing them into stdout could match probe tokens or OpenSSH noise.
   onStderr?: (stderr: string) => void
   /** Streamed into the command's stdin, then EOF. A read error terminates the command. */
   stdin?: Readable
@@ -34,8 +31,7 @@ type SshCommandTerminationError = Error & {
   sshChannelCloseConfirmed: boolean
 }
 
-// Why: callers must tell "the host answered no" from "the host never answered". Matching the
-// message text is what let an unanswered probe be read as a definitive negative.
+// Use typed timeout identity so unanswered probes cannot be mistaken for host refusal.
 export const SSH_EXEC_TIMEOUT_CODE = 'SSH_EXEC_TIMEOUT'
 
 export function isSshExecTimeout(error: unknown): boolean {
@@ -53,7 +49,7 @@ export function isUnconfirmedSshCommandTermination(
   )
 }
 
-/** A command that ran and exited nonzero; `stdout` is its own output, never the command text. */
+/** stdout excludes quoted command text so classifiers see host output only. */
 type SshCommandExitError = Error & { exitCode: number; stdout: string }
 
 export function isSshCommandExitError(error: unknown): error is SshCommandExitError {
@@ -84,8 +80,7 @@ type ExecTransport = Pick<
   'exec' | 'execWithClosedStdin' | 'usesSystemSshTransport'
 >
 
-// Hosts that could not decode a compressed command; they get every command plain. Keyed by SSH
-// target id where the transport has one, so a reconnect's new connection object keeps the verdict.
+// Remember missing decoders across reconnect by target id; transports without ids use object identity.
 const targetsWithoutCommandDecoder = new Set<string>()
 const transportsWithoutCommandDecoder = new WeakSet<ExecTransport>()
 
@@ -137,11 +132,11 @@ export async function execCommand(
   try {
     return await execCommandOnce(conn, command, {
       ...options,
-      // Not with stdin: its bytes are spent once, so a decoder miss could not be resent.
+      // stdin is single-use and cannot replay after a decoder miss.
       compressCommand: options?.compressCommand ?? !options?.stdin
     })
   } catch (error) {
-    // Nothing ran: the wrapper checks for its decoders before reading stdin or the script.
+    // Decoder checks precede script execution/input consumption, so plain retry has no side effects.
     if (
       options?.stdin ||
       options?.compressCommand === false ||
@@ -164,16 +159,14 @@ async function execCommandOnce(
   if (signal?.aborted) {
     throw createSshOperationAbortError()
   }
-  // Why: reconnect/disconnect can flip the connection back to ssh2 before a
-  // killed local OpenSSH child emits close; the channel's transport is immutable.
+  // Capture transport at open: reconnect/disconnect may change the connection before this channel closes.
   const openedWithSystemSsh = conn.usesSystemSshTransport?.() === true
-  // Why: sshd runs the user's login shell before our /bin/sh wrapper, so rc-file stdout
-  // (an `echo`, a title escape) would otherwise be read as the command's answer.
+  // Fence login-shell startup stdout so banners/title escapes cannot become probe answers.
   const fence = execOptions.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
   const readPayload = (stdout: string): string => fence?.readStdout(stdout) ?? stdout
   let channel: RemoteCommandChannel
   try {
-    // Why only without `stdin`: nothing below writes or ends the channel's stdin otherwise.
+    // Use closed stdin only when no input will be piped.
     channel =
       !stdin && conn.execWithClosedStdin
         ? await conn.execWithClosedStdin(fence?.command ?? command, execOptions)
@@ -225,24 +218,18 @@ async function execCommandOnce(
       channel.on('error', swallowLateError)
       channel.stderr.on('error', swallowLateError)
       channel.once('close', cleanupGuards)
-      // Why: an unconfirmed close can arrive after the caller's bounded wait;
-      // keep draining discarded streams so ssh2 can finish CHANNEL_CLOSE.
+      // Drain discarded streams after bounded teardown so ssh2 can complete CHANNEL_CLOSE.
       channel.resume()
       channel.stderr.resume()
     }
-    // Why: sshd counts the session against MaxSessions until CHANNEL_CLOSE
-    // completes. Settling on abort before the channel actually closes lets the
-    // concurrent-bootstrap sequential fallback reissue an exec while the slot
-    // is still held, so it gets refused again. Close and settle from onClose.
+    // Wait for CHANNEL_CLOSE before settling abort or sequential fallback can race sshd's held MaxSessions slot.
     const requestTermination = (error: Error): void => {
       if (terminationError) {
         return
       }
       terminationError = Object.assign(error, { sshChannelCloseConfirmed: false })
       clearTimeout(timeout)
-      // Why: callers must not release an install lock while its remote npm
-      // process can still mutate node_modules. Prefer confirmed channel close,
-      // but bound a broken transport's teardown wait.
+      // Install locks must outlive possible remote mutations; prefer confirmed close but bound broken-transport teardown.
       closeGraceTimer = setTimeout(() => {
         guardUnconfirmedTeardown()
         settle(reject, error)
@@ -271,15 +258,13 @@ async function execCommandOnce(
         })
       }
       if (terminationError) {
-        // Why: a system-SSH channel closes when the local OpenSSH child exits;
-        // that does not prove the remote command stopped, especially with a ControlMaster.
+        // Local OpenSSH exit cannot prove remote command termination, especially through ControlMaster.
         if (!openedWithSystemSsh) {
           terminationError.sshChannelCloseConfirmed = true
         }
         settle(reject, terminationError)
       } else if (code !== 0) {
-        // Why: on the system-ssh transport channel.stderr carries local OpenSSH
-        // client noise; preferring it masks the real failure in stdout (2>&1).
+        // System SSH stderr is local client noise; prefer the remote command's merged stdout.
         const payload = readPayload(stdout)
         const output = [stderr.trim(), payload.trim()].filter(Boolean).join('\n')
         settle(reject, sshCommandExitError(command, code, payload, output))
@@ -303,8 +288,7 @@ async function execCommandOnce(
       )
     }, timeoutMs)
 
-    // Why: remote reboot tears down exec channels with stream errors. Without
-    // scoped listeners, Node treats those as uncaught exceptions.
+    // Handle stream errors from remote reboot instead of letting EventEmitter crash main.
     signal?.addEventListener('abort', onAbort, { once: true })
     channel.on('error', fail)
     channel.stderr.on('error', fail)
@@ -313,7 +297,7 @@ async function execCommandOnce(
     channel.on('close', onClose)
     if (stdin) {
       stdin.on('error', fail)
-      // Why `.stdin`: ssh2 aliases it to the channel, and a system-ssh channel only ends it there.
+      // Pipe to .stdin: ssh2 aliases it to channel, while system SSH ends input only there.
       stdin.pipe(channel.stdin)
     }
     if (signal?.aborted) {

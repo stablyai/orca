@@ -9,9 +9,9 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
 import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
-// The seam ruling 5 put between the pane and a shell that may have no encoder behind the lane the
-// pane would ask for. Native answers yes always; mocked here so both answers are reachable.
+// Mock binary-lane negotiation: native always supports it, but older shells may have no encoder behind requested lane (ruling 5).
 vi.mock('./use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
 }))
@@ -35,8 +35,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-// Why: covers icons reached transitively too (the view-mode switch), not just the pane's own
-// imports — vitest throws on the first unmocked export rather than rendering without it.
+// Mock transitive icons too: Vitest throws on first unmocked export, including view-mode switch.
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronLeft: 'ChevronLeft',
@@ -64,7 +63,7 @@ function makeFrame(): BrowserScreencastFrame {
 }
 
 function spinnerCount(renderer: ReactTestRenderer): number {
-  return renderer.root.findAllByType('ActivityIndicator').length
+  return findAllByHostType(renderer.root, 'ActivityIndicator').length
 }
 
 async function renderPane(): Promise<{
@@ -100,9 +99,9 @@ async function renderPane(): Promise<{
     isActive: true
   }
 
-  let renderer: ReactTestRenderer
+  const rendered: { renderer?: ReactTestRenderer } = {}
   await act(async () => {
-    renderer = create(
+    rendered.renderer = create(
       createElement(MobileBrowserPane, {
         client,
         // Why: unique worktree id keeps each test on a cold module-level frame cache.
@@ -117,10 +116,13 @@ async function renderPane(): Promise<{
     )
     await Promise.resolve()
   })
-  const mounted: ReactTestRenderer = renderer
-  const viewport = mounted.root
-    .findAllByType('View')
-    .find((node) => typeof node.props.onLayout === 'function')
+  const mounted = rendered.renderer
+  if (!mounted) {
+    throw new Error('MobileBrowserPane did not mount')
+  }
+  const viewport = findAllByHostType(mounted.root, 'View').find(
+    (node) => typeof node.props.onLayout === 'function'
+  )
   if (!viewport) {
     throw new Error('Viewport with onLayout not found')
   }
@@ -142,14 +144,13 @@ async function renderStreamingPane(): Promise<{
 }
 
 function errorMessages(renderer: ReactTestRenderer): string[] {
-  return renderer.root
-    .findAllByType('Text')
-    .flatMap((node) => (typeof node.props.children === 'string' ? [node.props.children] : []))
+  return findAllByHostType(renderer.root, 'Text').flatMap((node) =>
+    typeof node.props.children === 'string' ? [node.props.children] : []
+  )
 }
 
 describe('MobileBrowserPane with a stream that reports ready but sends no frames', () => {
-  // Why: a host that stops painting still reports `ready`, so the pane used to clear its
-  // indicator and leave an unexplained black rectangle.
+  // Ready without frames must retain indicator instead of unexplained blank pane.
   it('keeps showing the loading indicator instead of an empty black pane', async () => {
     const { renderer, stream } = await renderStreamingPane()
 
@@ -174,8 +175,7 @@ describe('MobileBrowserPane with a stream that reports ready but sends no frames
     expect(errorMessages(renderer)).not.toContain(
       'Update the Orca app to stream browser tabs here.'
     )
-    const source = renderer.root
-      .findAllByType('Image')
+    const source = findAllByHostType(renderer.root, 'Image')
       .map((image) => (image.props.source as { uri?: string } | null)?.uri)
       .find((uri) => typeof uri === 'string')
     expect(source).toContain(Buffer.from(makeFrame().image).toString('base64'))
@@ -183,8 +183,7 @@ describe('MobileBrowserPane with a stream that reports ready but sends no frames
 })
 
 describe('MobileBrowserPane against a shell with no binary screencast lane', () => {
-  // Ruling 5: the grant is the negotiation. Subscribing anyway leaves the pane on a stream that
-  // can never produce a frame, and the startup timeout is the only thing that would ever say so.
+  // Grant is negotiation: subscribing without encoder yields no frames until startup timeout (ruling 5).
   it('never subscribes, and says so with the stream-error state it already has', async () => {
     vi.mocked(useBrowserBinaryScreencastGrant).mockReturnValue(false)
     try {

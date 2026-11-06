@@ -9,6 +9,8 @@ import type {
   BrowserViewportPresetId
 } from '../../../../../shared/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { findWorkspace } from '@/store/slices/browser-page-records'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery,
@@ -20,6 +22,10 @@ import {
   webviewRegistry
 } from './webview-registry'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
+import {
+  setBrowserPageAgentViewportSize,
+  setBrowserPageViewportPresetSize
+} from './browser-page-viewport'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserTabPageState
@@ -113,6 +119,7 @@ export function createBrowserPageWebviewGuestSession({
         }
         if (registered) {
           registeredWebContentsIds.set(browserTabId, webContentsId)
+          publishActiveBrowserPageIfCurrent(browserTabId)
           return true
         }
         return null
@@ -258,6 +265,12 @@ export function createBrowserPageWebviewGuestSession({
     const presetId = viewportPresetIdRef.current
     const preset = getBrowserViewportPreset(presetId)
     // Why: reapply even null so CDP matches store state; setDeviceMetricsOverride persists across same-origin nav and would leave a stale viewport.
+    // The box resets with it, dropping an agent's viewport the reset clears.
+    setBrowserPageAgentViewportSize(browserTabId, null)
+    setBrowserPageViewportPresetSize(
+      browserTabId,
+      preset ? { width: preset.width, height: preset.height } : null
+    )
     void window.api.browser.setViewportOverride({
       browserPageId: browserTabId,
       override: preset ? browserViewportPresetToOverride(preset) : null
@@ -265,8 +278,7 @@ export function createBrowserPageWebviewGuestSession({
   }
 
   const handleGuestDestroyed = (): void => {
-    // Why: a guest can be destroyed without render-process-gone (detach/reattach race,
-    // guest-side close). Skip intentional teardown, where the element already left the DOM.
+    // Guest close or detach races can destroy without render-process-gone; recover only while still connected, excluding intentional teardown.
     if (webview.isConnected) {
       guestRecovery.recoverRenderer()
     }
@@ -277,5 +289,16 @@ export function createBrowserPageWebviewGuestSession({
     handleDidAttach,
     handleDomReady,
     handleGuestDestroyed
+  }
+}
+
+// Why: a page restored at launch is active without any focus action, so main would not learn it.
+function publishActiveBrowserPageIfCurrent(browserPageId: string): void {
+  const state = useAppStore.getState()
+  const workspace = state.activeBrowserTabId
+    ? findWorkspace(state.browserTabsByWorktree, state.activeBrowserTabId)
+    : null
+  if (workspace?.activePageId === browserPageId) {
+    window.api.browser.notifyActiveTabChanged({ browserPageId }).catch(() => {})
   }
 }

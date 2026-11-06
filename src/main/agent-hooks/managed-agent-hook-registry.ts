@@ -1,12 +1,12 @@
 import { codebuddyHookService } from '../codebuddy/hook-service'
 import { qwenCodeHookService } from '../qwen-code/hook-service'
 import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
@@ -23,9 +23,6 @@ import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
-// Why (#16441): Codex's installer may await a codex app-server session for its
-// hook hashes instead of blocking the main thread on spawnSync. Widening the tuple
-// keeps the other agent services synchronous — the shared loop already awaits.
 export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
@@ -70,12 +67,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['kiro', () => kiroHookService.install()]
 ]
 
-// Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
-// user-wide agent config keeps invoking after the CLI falls off PATH. Amp and Hermes write
-// provider-native plugin code into their own config dirs with their own install lifecycles,
-// not shared launchers, so they are deliberately absent. Enforced by the coverage test in
-// managed-hook-script-refresh.test.ts: a new installer that writes a launcher without adding
-// a refresher here fails that test.
+// Refresh shared launchers even after CLI removal; Amp/Hermes manage provider-native plugins separately.
 export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScriptRefresher[] = [
   ['claude', () => claudeHookService.refreshManagedScripts()],
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],

@@ -1,10 +1,15 @@
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
-import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
+import {
+  type RecognizedAgentProcess,
+  recognizeAgentProcess
+} from '../../../../shared/agent-status/process/agent-process-recognition'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../shared/remote-foreground-evidence-admission'
-import { isClientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
+import {
+  isClientOnlyUnverifiableInspection,
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection
+} from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 import type {
   AgentCompletionIdentityScope,
@@ -67,8 +72,7 @@ export function handleAgentCompletionInspectionResult(args: {
   }
   if (remote) {
     const evidence = result.foregroundProcessEvidence
-    // Remote identity is host-authoritative. Compatibility names and unverifiable observations
-    // never mutate routing state or synthesize process exit.
+    // Only authoritative remote evidence may change routing or synthesize exit; legacy names and unverifiable reads cannot.
     const expectedIncarnationId = options.getExpectedIncarnationId?.() ?? null
     const ptyId = options.getPtyId()
     const bindingKey = `${ptyId ?? ''}\0${expectedIncarnationId ?? ''}`

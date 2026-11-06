@@ -89,7 +89,6 @@ describe('doctorEphemeralVmRecipe', () => {
       destroyDisabled: true
     })
     expect(checkById(result, 'recipe.suspend_resume_pairing')?.status).toBe('warn')
-    // warn never flips ok
     expect(result.ok).toBe(true)
   })
 

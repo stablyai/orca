@@ -1,19 +1,17 @@
-// Folding submission rows: the queue entry, its message row, where a handover places it, and the
-// provider item an accepted message adopts.
-
+import { getJournalInputOrder } from './journal-input-order-registry'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
-import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -31,19 +29,16 @@ export function applyJournalSubmission(
     resolvedAt: null,
     submittedSequence: row.seq,
     ...(row.handoverRecorded ? { handoverRecorded: true, acceptedSequence: row.seq } : {}),
-    // A malformed stored link is dropped, never the row.
     ...(typeof row.queuedMessageId === 'string' && row.queuedMessageId.length > 0
       ? { queuedMessageId: row.queuedMessageId }
       : {}),
     ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {}),
-    // Kept as written, a newer build's kind too; an undecodable one as an empty kind, so neither
-    // reads as a row without one.
+    // Preserve source presence: unknown/unreadable kinds must not become legacy user sends.
     ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
-    // A stored value this build cannot read only loses the choices it carried, never the row.
     ...(options ? { options } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  // A message handed over later belongs to no turn until its handover names one.
+  // Delayed handovers belong to no turn until dispatch names one.
   const turnScope = row.handoverRecorded
     ? AGENT_JOURNAL_THREAD_SCOPE
     : statedOrDerivedTurnScope(state, row)
@@ -52,15 +47,12 @@ export function applyJournalSubmission(
     itemId,
     0,
     journalRenderItem(itemId, 0, row.body, row, turnScope),
-    // A person's message is no generation's work: its provenance is the fence that accepted it.
+    // User messages retain admission provenance, not provider execution ownership.
     { fence: row.fence }
   )
 }
 
-/** A queued message joins the conversation where it was handed over, not where it was accepted:
- *  what the agent did meanwhile — a command it waited behind, say — happened before it. It joins
- *  the turn that handover delivered it into — a steer — or none. Rows from hosts that predate the
- *  stated scope are scoped at the handover, as their creation would have been. */
+/** Place at handover, after intervening work; scope legacy rows from the handover position. */
 export function placeHandedOverMessage(
   state: JournalReducerState,
   submission: AgentJournalSubmission,
@@ -90,10 +82,21 @@ export function placeHandedOverMessage(
  * withdrawal before any turn opened reads as a person's own send a Stop took back. Derived on
  * every fold from the stored rejection, which stays as written.
  */
-export function foldQueuedHandOffInDoubt(
+export function foldQueuedHandOffInDoubt(submission: AgentJournalSubmission): void {
+  if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
+    return
+  }
+  submission.dispatchState = 'unknown'
+  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+  submission.recovered = true
+  delete submission.rejection
+}
+
+export function placeQueuedHandOffInDoubt(
   state: JournalReducerState,
   submission: AgentJournalSubmission
 ): void {
+  state.normalizedHandOffs.add(submission.clientMessageId)
   const itemId = agentJournalSubmissionKey(submission.clientMessageId)
   const item = state.items.get(itemId)
   const place = state.queuedHandOffPlaces.get(submission.clientMessageId)
@@ -103,17 +106,10 @@ export function foldQueuedHandOffInDoubt(
   }
   if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
     delete submission.queuedMessageId
-    return
   }
-  submission.dispatchState = 'unknown'
-  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
-  submission.recovered = true
-  delete submission.rejection
 }
 
-/** A rejected message — queued, handed over, or sent directly — joins the conversation where it was
- *  rejected, in no turn: what happened before the rejection happened before it, and the newest page
- *  holds a recent one. Only a rejection: one in doubt may have reached the agent, so it stays. */
+/** Place proven rejections at settlement in thread scope; uncertain deliveries retain their position. */
 export function placeRejectedMessage(
   state: JournalReducerState,
   submission: AgentJournalSubmission,
@@ -142,14 +138,15 @@ export function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
-  const submission = [...state.submissions.values()].find(
-    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
-  )
+  state.inputs.echoes.add(resolvedItemId)
+  const submission = getJournalInputOrder(state)?.inputForItem(resolvedItemId)
   if (!submission || !journalDispatchRowApplies(submission)) {
     return
   }
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
+  state.inputs.candidates.delete(submission.clientMessageId)
+  state.inputs.revision++
   noteTurnAccepted(state, submission)
   submission.providerItemId = providerItemId
   submission.reason = null
@@ -163,7 +160,7 @@ export function acceptSubmissionFromProviderItem(
   })
 }
 
-/** A turn the provider accepted, whoever sent it: the fact the queue's pause is lifted by. */
+/** Any provider-accepted turn may lift queue pauses. */
 export function noteTurnAccepted(
   state: JournalReducerState,
   submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
@@ -176,7 +173,7 @@ export function noteTurnAccepted(
   }
 }
 
-/** A stored source's kind; an undecodable value reads as an empty kind, never a person's. */
+/** Unreadable source kinds stay distinct from personal sends. */
 function storedSourceKind(stored: unknown): string {
   return typeof stored === 'object' &&
     stored !== null &&

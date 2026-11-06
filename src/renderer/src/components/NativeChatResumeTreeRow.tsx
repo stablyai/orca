@@ -13,14 +13,7 @@ const RESUME_TREE_CHECKBOX_COLUMN_PX = 28
 /** Where a row's body starts after the checkbox column: the arrow slot (size-4.5) and the body's pl-1. */
 const RESUME_TREE_BODY_OFFSET_PX = 18 + 4
 
-/**
- * One row of the resume tree: the checkbox in the list's single left column, the indent for its
- * depth, a disclosure arrow (an empty slot on a leaf, so icons line up), then the caller's body.
- * With nothing left to select there is no checkbox column, and a leaf's status takes its arrow slot.
- *
- * The row is a flat `treeitem` carrying its own `aria-level`, so the tree's keyboard handling can
- * find a row's disclosure without walking nested groups.
- */
+/** Keep checkboxes in one column across flat aria-level treeitems so keyboard handling finds disclosures directly. Reserve leaf arrow slots for alignment/status, and omit checkbox columns for results. */
 export function ResumeTreeRow({
   depth,
   expanded,
@@ -116,8 +109,7 @@ export function ResumeTreeRow({
                 event.currentTarget.focus()
                 return
               }
-              // A pointer press focuses the arrow, where no tree key works; hand focus to the
-              // row's checkbox, or to the tree when that is disabled.
+              // After disclosure clicks, return focus to the row checkbox or tree so keyboard navigation remains available.
               const row = event.currentTarget.closest('[role="treeitem"]')
               const box = row?.querySelector<HTMLElement>('[role="checkbox"]:not(:disabled)')
               const next = box ?? row?.closest<HTMLElement>('[role="tree"]')

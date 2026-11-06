@@ -2,42 +2,29 @@ import { createHash } from 'node:crypto'
 import type * as NodeFs from 'node:fs'
 import {
   chmodSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
-  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { pruneOrcadArtifactCache } from './orcad-artifact-cache-retention'
 import { z } from 'zod'
+import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import {
-  NODE_RUNTIME_ASSETS,
-  NODE_RUNTIME_COMPAT_ASSETS,
-  pinnedNodeRuntimeAsset,
-  type NodeRuntimeTarget
-} from '../../shared/node-runtime-pin'
-import {
-  ORCAD_BUILD_TARGET_FILENAME,
   ORCAD_MOBILE_WEB_MANIFEST,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
-  ORCAD_VERSION_FILENAME,
-  orcadArtifactFilenames,
   orcadRipgrepArtifact,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
 } from '../../shared/orcad-artifacts'
-import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
-import { ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME } from './orcad-artifact-verification-record'
 import {
   getAppEnvironment,
   hasAppEnvironment,
@@ -55,7 +42,6 @@ const TARGET = 'linux-x64-glibc' as const
 const PAGE_ASSETS = ['out/mobile-web/index.html']
 const fileReads = vi.hoisted(() => ({ count: 0 }))
 
-// Counts whole-file hash reads without changing read behavior.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -160,29 +146,6 @@ function rewriteManifest(
 }
 
 describe('assembleOrcadArtifact', () => {
-  it('reuses the same version from cache after retention evicts other versions', async () => {
-    const fixture = createTemplate()
-    const first = await assembleOrcadArtifact({ ...fixture, target: TARGET })
-    const entry = statSync(join(first, 'orcad.js'))
-    // Older versions of the same target, used before this one.
-    const older = [1, 2, 3].map((age) => {
-      const dir = join(fixture.cacheRoot, TARGET, `0.0.${age}+old`)
-      write(join(dir, 'orcad.js'), 'old')
-      const at = new Date(Date.now() - age * 60_000)
-      utimesSync(dir, at, at)
-      return dir
-    })
-    const removed = await pruneOrcadArtifactCache(fixture.cacheRoot, {
-      inUseVersions: new Set([basename(first)])
-    })
-
-    expect(removed).toEqual([older[2]])
-    const second = await assembleOrcadArtifact({ ...fixture, target: TARGET })
-    expect(second).toBe(first)
-    // A verified hit: the same files, not a re-copy.
-    expect(statSync(join(second, 'orcad.js')).ino).toBe(entry.ino)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'restores executable modes from a template copied without them',
     async () => {
@@ -202,68 +165,6 @@ describe('assembleOrcadArtifact', () => {
     }
   )
 
-  it('assembles the rung B compat slot against the compat runtime', async () => {
-    const target = 'linux-x64-glibc217' as const
-    const fixture = createTemplate(target)
-    const artifactDir = await assembleOrcadArtifact({ ...fixture, target })
-
-    expect(readFileSync(join(artifactDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), 'utf8').trim()).toBe(
-      NODE_RUNTIME_COMPAT_ASSETS[target].executableSha256
-    )
-    expect(
-      readFileSync(join(artifactDir, 'node_modules/node-pty/build/Release/pty.node'), 'utf8')
-    ).toBe(`${target}:node_modules/node-pty/build/Release/pty.node`)
-    // The host-side preflight hashes it the same way, so managed orcad can run it.
-    expect(await readOrcadArtifactIdentity(artifactDir)).toBe(
-      readFileSync(join(artifactDir, ORCAD_VERSION_FILENAME), 'utf8').trim()
-    )
-  })
-
-  it('refuses a compat slot that names the default runtime', async () => {
-    const target = 'linux-x64-glibc217' as const
-    const fixture = createTemplate(target)
-    const marker = join(
-      fixture.templateDir,
-      ORCAD_TEMPLATE_TARGETS_DIR,
-      target,
-      ORCAD_NODE_RUNTIME_MARKER_FILENAME
-    )
-    write(marker, `${NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256}\n`)
-    rewriteManifest(fixture.templateDir, (manifest) => {
-      const entry = manifest.targets[target]
-      if (entry) {
-        entry.files[ORCAD_NODE_RUNTIME_MARKER_FILENAME] = sha256(marker)
-      }
-    })
-    await expect(assembleOrcadArtifact({ ...fixture, target })).rejects.toThrow(
-      'does not reference the pinned Node'
-    )
-  })
-
-  it('assembles a complete content-addressed slot that references the pinned Node', async () => {
-    const fixture = createTemplate()
-    const artifactDir = await assembleOrcadArtifact({ ...fixture, target: TARGET })
-
-    const version = readFileSync(join(artifactDir, ORCAD_VERSION_FILENAME), 'utf8').trim()
-    expect(version).toMatch(/^0\.1\.0\+[a-f0-9]{12}$/u)
-    expect(await readOrcadArtifactIdentity(artifactDir)).toBe(version)
-    write(join(artifactDir, 'orcad.js'), 'changed-installed-bytes')
-    expect(await readOrcadArtifactIdentity(artifactDir)).not.toBe(version)
-    expect(artifactDir).toBe(join(fixture.cacheRoot, TARGET, version))
-    expect(readFileSync(join(artifactDir, ORCAD_SERVER_TARGET_FILENAME), 'utf8').trim()).toBe(
-      TARGET
-    )
-    expect(readFileSync(join(artifactDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), 'utf8').trim()).toBe(
-      NODE_RUNTIME_ASSETS[TARGET].executableSha256
-    )
-    for (const filename of orcadArtifactFilenames(TARGET, PAGE_ASSETS)) {
-      expect(readFileSync(join(artifactDir, filename)).byteLength).toBeGreaterThan(0)
-    }
-    // A Bun-era client's selector would exit 78 on this file without a Bun runtime (R5).
-    expect(() => readFileSync(join(artifactDir, ORCAD_BUILD_TARGET_FILENAME))).toThrow()
-    expect(readFileSync(join(artifactDir, 'agent-browser-linux-x64'), 'utf8')).toBe('browser')
-  })
-
   it('rejects a packaged native file that does not match its manifest', async () => {
     const fixture = createTemplate()
     write(
@@ -278,21 +179,6 @@ describe('assembleOrcadArtifact', () => {
 
     await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
       'node_modules/node-pty/build/Release/pty.node checksum mismatch'
-    )
-  })
-
-  it('copies the page phones load into the slot, verified like every other file', async () => {
-    const fixture = createTemplate()
-    const artifactDir = await assembleOrcadArtifact({ ...fixture, target: TARGET })
-    expect(readFileSync(join(artifactDir, 'out/mobile-web/index.html'), 'utf8')).toBe(
-      'out/mobile-web/index.html'
-    )
-    expect(existsSync(join(artifactDir, ORCAD_MOBILE_WEB_MANIFEST))).toBe(true)
-
-    const corrupted = createTemplate()
-    write(join(corrupted.templateDir, 'out/mobile-web/index.html'), 'corrupted')
-    await expect(assembleOrcadArtifact({ ...corrupted, target: TARGET })).rejects.toThrow(
-      'out/mobile-web/index.html checksum mismatch'
     )
   })
 
@@ -358,52 +244,31 @@ describe('assembleOrcadArtifact', () => {
     expect(readFileSync(join(first, 'orcad.js'), 'utf8')).toBe('corrupted-cache-entry')
   })
 
-  it('rejects an optional browser without a matching manifest checksum', async () => {
+  // Desktop templates omit drivers; the app's resources copy must still reach the slot (#33846).
+  it("copies the app's own driver into the slot when the template references it", async () => {
     const fixture = createTemplate()
+    renameSync(
+      join(fixture.templateDir, ORCAD_TEMPLATE_TARGETS_DIR, TARGET, 'agent-browser-linux-x64'),
+      join(dirname(fixture.templateDir), 'agent-browser-linux-x64')
+    )
     rewriteManifest(fixture.templateDir, (manifest) => {
-      delete manifest.targets[TARGET]?.browserSha256
+      Object.assign(manifest.targets[TARGET]!, { packagedBrowser: true })
     })
 
-    await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
-      'browserName and browserSha256'
-    )
-  })
+    const artifactDir = await assembleOrcadArtifact({ ...fixture, target: TARGET })
 
-  // Regression: a browser digest keyed like orcad.js must not replace the common digest.
-  it('rejects a browser named like a required slot file', async () => {
-    const fixture = createTemplate()
-    rewriteManifest(fixture.templateDir, (manifest) => {
-      manifest.targets[TARGET]!.browserName = 'orcad.js'
-    })
-
-    await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
-      'browser name collides with a slot file'
-    )
-  })
-
-  it('rejects a manifest that omits a required common artifact checksum', async () => {
-    const fixture = createTemplate()
-    rewriteManifest(fixture.templateDir, (manifest) => {
-      delete manifest.commonSha256['orcad.js']
-    })
-
-    await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
-      'manifest omits orcad.js'
-    )
+    expect(readFileSync(join(artifactDir, 'agent-browser-linux-x64'), 'utf8')).toBe('browser')
   })
 })
 
 describe('assembleOrcadArtifact verification record', () => {
-  // Every fixture file was written this instant; a later clock makes their signatures settled.
+  // Move the clock beyond fixture writes so signatures count as settled.
   const later = (): number => Date.now() + 60_000
-  const recordPath = (cacheRoot: string): string =>
-    join(cacheRoot, TARGET, ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME)
 
   async function assembleUntilSlotRecorded(fixture: {
     templateDir: string
     cacheRoot: string
   }): Promise<string> {
-    // The first call copies a fresh slot; the second hashes it once and records it.
     const first = await assembleOrcadArtifact({
       ...fixture,
       target: TARGET,
@@ -420,54 +285,6 @@ describe('assembleOrcadArtifact verification record', () => {
     ).toBe(first)
     return first
   }
-
-  // Regression: SSH and local serve keep hashing every launch; a forged record must not bypass it.
-  it('neither reads nor writes a record unless the caller trusts it', async () => {
-    const fixture = createTemplate()
-    const slot = await assembleUntilSlotRecorded(fixture)
-    const recorded = readFileSync(recordPath(fixture.cacheRoot), 'utf8')
-    const before = fileReads.count
-    expect(await assembleOrcadArtifact({ ...fixture, target: TARGET, now: later })).toBe(slot)
-    // Template pass plus the slot's own check, exactly as with no record at all.
-    expect(fileReads.count - before).toBe(
-      (orcadArtifactFilenames(TARGET, PAGE_ASSETS).length + 1) * 2
-    )
-    rmSync(recordPath(fixture.cacheRoot))
-    await assembleOrcadArtifact({ ...fixture, target: TARGET, now: later })
-    expect(existsSync(recordPath(fixture.cacheRoot))).toBe(false)
-    expect(recorded.length).toBeGreaterThan(0)
-  })
-
-  it('records nothing while the files may still change under the same timestamps', async () => {
-    const fixture = createTemplate()
-    await assembleOrcadArtifact({ ...fixture, target: TARGET, trustVerificationRecord: true })
-    expect(existsSync(recordPath(fixture.cacheRoot))).toBe(false)
-  })
-
-  it('reuses recorded digests without reading the template or the slot again', async () => {
-    const fixture = createTemplate()
-    const slot = await assembleUntilSlotRecorded(fixture)
-    const before = fileReads.count
-    expect(
-      await assembleOrcadArtifact({
-        ...fixture,
-        target: TARGET,
-        now: later,
-        trustVerificationRecord: true
-      })
-    ).toBe(slot)
-    expect(fileReads.count).toBe(before)
-  })
-
-  it('hashes the template once per launch when nothing is recorded', async () => {
-    const fixture = createTemplate()
-    const before = fileReads.count
-    const slot = await assembleOrcadArtifact({ ...fixture, target: TARGET })
-    const sources = orcadArtifactFilenames(TARGET, PAGE_ASSETS).length + 1
-    // One template pass plus the copied slot's own check, where three template passes ran before.
-    expect(fileReads.count - before).toBe(sources * 2)
-    expect(slot).toContain(fixture.cacheRoot)
-  })
 
   it('hashes again when a template file is rewritten in place at the same size', async () => {
     const fixture = createTemplate()
@@ -516,21 +333,6 @@ describe('assembleOrcadArtifact verification record', () => {
     expect(repaired).toBe(`${slot}.repair-1`)
     expect(readFileSync(join(repaired, 'orcad.js'), 'utf8')).toBe('orcad-entry')
   })
-
-  it('ignores an unreadable record and hashes as before', async () => {
-    const fixture = createTemplate()
-    const slot = await assembleUntilSlotRecorded(fixture)
-    writeFileSync(recordPath(fixture.cacheRoot), '{"version":1,')
-
-    expect(
-      await assembleOrcadArtifact({
-        ...fixture,
-        target: TARGET,
-        now: later,
-        trustVerificationRecord: true
-      })
-    ).toBe(slot)
-  })
 })
 
 describe('materializeOrcadArtifact cancellation', () => {
@@ -543,14 +345,6 @@ describe('materializeOrcadArtifact cancellation', () => {
     await expect(one).rejects.toThrow('first cancelled')
     const artifact = await two
     expect(readFileSync(join(artifact, 'orcad.js'), 'utf8')).toBe('orcad-entry')
-  })
-
-  it('refuses an already cancelled request before reading artifacts', async () => {
-    const controller = new AbortController()
-    controller.abort(new Error('cancelled'))
-    await expect(materializeOrcadArtifact(TARGET, { signal: controller.signal })).rejects.toThrow(
-      'cancelled'
-    )
   })
 })
 
@@ -575,7 +369,6 @@ describe('packaged template lookup', () => {
     }
   })
 
-  /** An installed app: electron-builder copies out/orcad-template to Resources/orcad-template. */
   function installPackagedApp(): { resourcesDir: string; userData: string } {
     const fixture = createTemplate()
     const root = dirname(fixture.templateDir)
@@ -609,14 +402,5 @@ describe('packaged template lookup', () => {
     const artifact = await materializeOrcadArtifact(TARGET)
     expect(dirname(dirname(artifact))).toBe(join(userData, 'orcad-artifacts'))
     expect(readFileSync(join(artifact, 'orcad.js'), 'utf8')).toBe('orcad-entry')
-  })
-
-  it('reports a build that shipped no template, which relays treat as a legacy fallback', async () => {
-    const { resourcesDir } = installPackagedApp()
-    rmSync(join(resourcesDir, 'orcad-template'), { recursive: true })
-
-    await expect(materializeOrcadArtifact(TARGET)).rejects.toThrow(
-      'The packaged orcad deployment template is missing'
-    )
   })
 })

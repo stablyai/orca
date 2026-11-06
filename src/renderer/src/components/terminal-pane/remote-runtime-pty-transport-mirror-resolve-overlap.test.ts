@@ -5,10 +5,7 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
-// A parked web-mirror reveal used to wait for session.tabs.activate before sending
-// terminal.resolvePane, a whole extra round trip before Subscribe. The pane read has no
-// data dependency on the activation, so it now overlaps it; a pending surface that only
-// the activation materializes is still re-read afterwards.
+// Overlap pane resolution with activation to save a round trip; reread afterward if activation materializes a pending surface.
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 

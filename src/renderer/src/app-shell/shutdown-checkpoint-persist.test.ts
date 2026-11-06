@@ -30,8 +30,7 @@ describe('createShutdownCheckpointPersist', () => {
     })
 
     expect(createShutdownCheckpointPersist(deps).run).not.toThrow()
-    // The full snapshot must still be staged — a weaker resume record for done
-    // panes is strictly better than blocking the update.
+    // Keep staging the full snapshot; weaker done-pane resume records must not block an update.
     expect(deps.stageBeforeUnloadSync).toHaveBeenCalledWith({
       sessions: [{ state: { activeTabId: 't1' } }],
       ui: { activeView: 'workspace' }

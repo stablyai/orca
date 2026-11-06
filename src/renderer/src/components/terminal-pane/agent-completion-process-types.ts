@@ -1,5 +1,5 @@
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentCompletionIdentityScope,
   LastCompletionIdentity

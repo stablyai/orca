@@ -1,31 +1,11 @@
-/** Largest window one `fs.readFileRange` response may carry. Derived from the
- *  relay writer's admission budget, NOT from the 16 MiB frame cap.
- *
- *  A response frame over `DISPATCHER_CONTROL_QUEUE_MAX_BYTES` (1 MiB) is demoted
- *  to the `legacy-response` lane, which is refused outright once the producer
- *  queue passes `DEFAULT_PRODUCER_QUEUE_MAX_BYTES` (2 MiB) -- an opaque
- *  `ResponseOverCapacity` that depends on unrelated load. 256 KiB of raw bytes
- *  frames to ~350 KB, so a full-cap response takes the control lane instead.
- *
- *  The control lane is a shared budget, not a per-frame one: two full-cap
- *  responses fit alongside each other, and the third is refused. That refusal
- *  costs the one request -- `sendResponse` admits responses with
- *  `controlOverflow: 'reject'` and substitutes a `ResponseOverCapacity` error
- *  rather than closing the connection -- but it still turns on unrelated load,
- *  so the two-deep headroom that keeps it rare is pinned by a test. Widening
- *  the cap spends that headroom, so bigger transfers belong on the ack-paced
- *  bulk lane (`fs.readFileStream`) rather than on a wider window here.
- *
- *  Raising this value is a wire change even though it is a constant: an older
- *  host still advertising `rangedReadVersion: 1` refuses a longer window with an
- *  opaque error, so a wider cap needs a version bump to negotiate against.
- *
- *  Requests above it are REJECTED, never clamped: a clamped read is
- *  indistinguishable from EOF, and callers page by advancing `position`. */
+/** 256 KiB raw becomes ~350 KB encoded, fitting the relay’s 1 MiB shared control queue, not merely its 16 MiB frame cap.
+ * Larger frames enter legacy-response, which rejects above the 2 MiB producer budget. Two capped control responses fit; a third
+ * is rejected per request with ResponseOverCapacity (controlOverflow: reject), without closing the connection. Tests pin this headroom.
+ * Larger transfers belong on ack-paced fs.readFileStream. Raising the cap requires negotiating a rangedReadVersion bump; v1 hosts refuse it.
+ * Reject oversized requests; never clamp, since a short response looks like EOF to position-based paging. */
 export const MAX_FILE_RANGE_READ_BYTES = 256 * 1024
 
-/** A range request the host will refuse. Separate from a read failure so a
- *  caller can tell "I asked for the wrong thing" from "the file is unreadable". */
+/** Distinguish invalid range requests from unreadable-file failures. */
 export class FileRangeReadRequestError extends Error {
   constructor(message: string) {
     super(message)
@@ -33,11 +13,7 @@ export class FileRangeReadRequestError extends Error {
   }
 }
 
-/** The single source of truth for what `fs.readFileRange` accepts. Both sides
- *  call it: the client so an invalid request never costs a round trip, the host
- *  because `position`/`length` land straight in an fd read and the relay has no
- *  request schema. Two independent copies would drift into a client that sends
- *  what the host rejects. */
+/** Validate on both peers to avoid client round trips and protect host fd reads; the relay has no request schema. */
 export function validateFileRangeRequest(
   position: unknown,
   length: unknown

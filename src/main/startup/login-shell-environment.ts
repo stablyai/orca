@@ -6,12 +6,13 @@ import {
   resolveProfileLoadingFallbackShell,
   resolveProfileLoadingShell
 } from './hydrate-shell-path'
+import { shellProbeDetached } from './shell-path-probe'
+import { bindShellProbeLifetime } from './shell-probe-lifetime'
 
 const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
 const SPAWN_TIMEOUT_MS = 5000
 
-/** Whether a profile-loading shell produced the env, or Orca fell back to its own. */
 export type LoginShellEnvironmentCapture = {
   status: 'captured' | 'fallback'
   env: NodeJS.ProcessEnv
@@ -20,9 +21,9 @@ export type LoginShellEnvironmentCapture = {
 type CachedEnvironment = {
   /** The last good result: a fallback stays only until a capture replaces it. */
   last?: LoginShellEnvironmentCapture
+  lastStartedAt: number
   /** When the newest finished run started; an older run finishing later is ignored. */
   attemptedAt: number
-  /** The newest run still going. */
   running?: { capture: Promise<LoginShellEnvironmentCapture>; startedAt: number }
 }
 
@@ -41,7 +42,7 @@ function cachedEnvironment(key: string): CachedEnvironment {
     }
     environmentCache.delete(oldest)
   }
-  const entry: CachedEnvironment = { attemptedAt: -Infinity }
+  const entry: CachedEnvironment = { attemptedAt: -Infinity, lastStartedAt: -Infinity }
   environmentCache.set(key, entry)
   return entry
 }
@@ -52,24 +53,30 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
   )
 }
 
+const POWERSHELL_ENVIRONMENT_DUMP =
+  `$values = @{}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
+  `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
+  `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
+  `[Console]::Write('${START_MARKER}'); ` +
+  `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
+  `[Console]::Write('${END_MARKER}')`
+
 function shellProbe(shell: string): string[] | null {
-  if (process.platform !== 'win32' || resolveWindowsShellStartupFamily(shell) === 'posix') {
+  if (process.platform !== 'win32') {
     const command =
       `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` + `printf '\\0${END_MARKER}\\0'`
     return ['-ilc', command]
+  }
+  if (resolveWindowsShellStartupFamily(shell) === 'posix') {
+    // Git Bash's own env holds MSYS paths (/c/..., TEMP=/tmp); a native child sees the converted values native agents get.
+    const encoded = Buffer.from(POWERSHELL_ENVIRONMENT_DUMP, 'utf16le').toString('base64')
+    return ['-ilc', `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${encoded}`]
   }
   const basename = pathWin32.basename(shell).toLowerCase()
   if (basename !== 'powershell.exe' && basename !== 'pwsh.exe') {
     return null
   }
-  const command =
-    `$values = @{}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
-    `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
-    `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
-    `[Console]::Write('${START_MARKER}'); ` +
-    `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
-    `[Console]::Write('${END_MARKER}')`
-  return ['-NoLogo', '-Command', command]
+  return ['-NoLogo', '-Command', POWERSHELL_ENVIRONMENT_DUMP]
 }
 
 function parsePosixEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
@@ -123,21 +130,19 @@ function spawnShellAndReadEnvironment(
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
-    const child = spawnProcess({ program: shell, args, env })
+    const child = spawnProcess({ program: shell, args, env, detached: shellProbeDetached() })
+    const lifetime = bindShellProbeLifetime(child)
     const finish = (value: NodeJS.ProcessEnv | null): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
+      lifetime.release()
       resolve(value)
     }
     const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch {
-        // Best-effort timeout cleanup.
-      }
+      lifetime.kill()
       finish(null)
     }, timeoutMs)
     child.stdin.on('error', () => {})
@@ -150,7 +155,7 @@ function spawnShellAndReadEnvironment(
     child.on('close', () => {
       const output = Buffer.concat(chunks)
       finish(
-        process.platform === 'win32' && resolveWindowsShellStartupFamily(shell) !== 'posix'
+        process.platform === 'win32'
           ? parsePowerShellEnvironment(output)
           : parsePosixEnvironment(output)
       )
@@ -161,7 +166,7 @@ function spawnShellAndReadEnvironment(
 export type ResolveLoginShellEnvironmentOptions = {
   /** Reads the last capture or process fallback without starting or awaiting shell work. */
   cachedOnly?: boolean
-  /** Only a run that started at or after this time answers; one is started if none has. */
+  /** Only a run that started at or after this time answers, running or finished; one is started if none has. */
   startedAfter?: number
   /** Serves the last result, rerunning the shell in the background once the last run is older. */
   refreshAfterMs?: number
@@ -174,9 +179,7 @@ export type ResolveLoginShellEnvironmentOptions = {
   spawner?: (shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>
 }
 
-/** Captures the environment seen by commands launched from Orca's profile-loading terminal
- *  shell, saying whether the shell produced it or it is Orca's own env as a fallback. One cache
- *  per shell and env owns the result, the run in progress and which run's result wins. */
+/** Capture terminal-shell environment or process fallback; cache by shell/environment and let newest-started completed runs win. */
 export function captureLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
 ): Promise<LoginShellEnvironmentCapture> {
@@ -218,6 +221,7 @@ export function captureLoginShellEnvironment(
       entry.attemptedAt = startedAt
       if (result.status === 'captured' || entry.last?.status !== 'captured') {
         entry.last = result
+        entry.lastStartedAt = startedAt
       }
     })
     return capture
@@ -227,7 +231,11 @@ export function captureLoginShellEnvironment(
     return Promise.resolve(last ?? fellBack)
   }
   if (options.startedAfter !== undefined) {
-    return running && running.startedAt >= options.startedAfter ? running.capture : run()
+    if (running && running.startedAt >= options.startedAfter) {
+      return running.capture
+    }
+    // Strictly later: a same-millisecond run may predate the request.
+    return last && entry.lastStartedAt > options.startedAfter ? Promise.resolve(last) : run()
   }
   if (!last) {
     return running?.capture ?? run()
@@ -242,7 +250,6 @@ export function captureLoginShellEnvironment(
   return Promise.resolve(last)
 }
 
-/** Resolves the environment seen by commands launched from Orca's profile-loading terminal shell. */
 export function resolveLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
 ): Promise<NodeJS.ProcessEnv> {

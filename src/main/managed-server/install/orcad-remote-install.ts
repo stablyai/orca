@@ -4,11 +4,12 @@ import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'
+import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
@@ -24,25 +25,29 @@ import {
   isRemoteInstallComplete
 } from './remote-versioned-install'
 
-/** Install the bytes under `orcad-<version>/`, using the relay's install transaction. */
 export async function installOrcadBundle(
   options: {
     conn: OrcadHostTransport
     host: RemoteHostPlatform
     localOrcadDir: string
     target: NodeRuntimeTarget
-    /** The locally verified pinned Node archive, fetched only when the host lacks the runtime. */
+    /** Lazily acquire verified runtime bytes only if the host needs them. */
     nodeRuntimeArchive: () => Promise<string>
-    /** Where a hand-copied Node archive is used offline; named when no download works. */
+    /** Offline archive location named when downloads fail. */
     nodeRuntimeOfflineArchivePath?: string
-    /** WSL only: skip re-hashing a runtime whose stat signature is unchanged since it hashed to the pin. */
+    /** Per-source connect budget for the host's own download fallback. */
+    nodeRuntimeHostConnectTimeoutSeconds?: number
+    /** WSL opt-in: reuse a matching stat signature previously hashed to this pin. */
     recordedNodeRuntimeProbe?: boolean
     signal?: AbortSignal
   },
   fullVersion: string,
   remoteDir: string
-): Promise<void> {
-  // Why before the slot probe: an installed slot is unlaunchable without the runtime it names.
+): Promise<'uploaded' | 'reused'> {
+  if (options.recordedNodeRuntimeProbe && (await cachedOrcadSlotInstalled(options, remoteDir))) {
+    return 'reused'
+  }
+  // Existing slot bytes are unusable without their referenced runtime.
   await ensureRemoteOrcadNodeRuntime({
     conn: options.conn,
     host: options.host,
@@ -50,6 +55,7 @@ export async function installOrcadBundle(
     target: options.target,
     archivePath: options.nodeRuntimeArchive,
     offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
+    hostConnectTimeoutSeconds: options.nodeRuntimeHostConnectTimeoutSeconds,
     signal: options.signal,
     ...(options.recordedNodeRuntimeProbe
       ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }
@@ -60,16 +66,16 @@ export async function installOrcadBundle(
       signal: options.signal
     })
   ) {
-    return
+    return 'reused'
   }
-  // Its token lets a relaunch prove a lock its own quit left mid-upload (BUG-23).
+  // Persist the token so a relaunch can prove ownership of an interrupted upload lock.
   const token = randomUUID()
   rememberHeldOrcadFence(token)
   try {
     await acquireInstallLock(options.conn, remoteDir, options.host, {
       signal: options.signal,
       owner: { fileName: ORCAD_FENCE_OWNER_FILENAME, token },
-      // Nothing keeps writing once its client exited: uploads are SFTP and chmod is immediate.
+      // SFTP uploads and chmod leave no host workload after this client exits.
       exitedOwner: exitedOwnLockProof(options, {
         baseDir: orcadWindowsBaseDir(options.host, remoteDir),
         guardsStateMutation: false
@@ -83,13 +89,13 @@ export async function installOrcadBundle(
   }
   let preserveInstallLock = false
   try {
-    // Re-probe under the lock: a sibling deploy may have finished while we waited.
+    // A sibling may have completed deployment while this client waited for the lock.
     if (
       await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
         signal: options.signal
       })
     ) {
-      return
+      return 'reused'
     }
     await uploadRemoteInstallDirectory(
       options.conn,
@@ -121,12 +127,13 @@ export async function installOrcadBundle(
       signal: options.signal,
       releaseLock: false
     })
+    return 'uploaded'
   } catch (error) {
     preserveInstallLock = isUnconfirmedSshCommandTermination(error)
     throw error
   } finally {
     if (!preserveInstallLock) {
-      // A removal a quit cut short keeps the token, so the relaunch can prove the lock its own.
+      // Retain ownership proof if interrupted cleanup cannot confirm lock removal.
       if (await abandonInstall(options.conn, remoteDir, options.host)) {
         forgetHeldOrcadFence(token)
       }
@@ -149,7 +156,7 @@ export function executablePermissionsCommand(
       )
     )
   )
-  // SFTP drops executable modes; missing optional browser binaries remain a supported install.
+  // Restore executable modes lost by SFTP; absent optional browser binaries remain supported.
   return (
     `chmod 755 ${required.map(quotePosixShell).join(' ')} && ` +
     `for executable in ${[...browsers].join(' ')}; do ` +

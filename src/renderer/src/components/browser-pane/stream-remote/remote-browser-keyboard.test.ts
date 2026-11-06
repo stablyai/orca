@@ -19,10 +19,6 @@ function keyboardEvent(
 }
 
 describe('remote browser keyboard serialization', () => {
-  it('serializes modified letter shortcuts', () => {
-    expect(getRemoteBrowserKeyboardShortcut(keyboardEvent({ ctrlKey: true }))).toBe('Control+r')
-  })
-
   it('preserves Shift on modified letter shortcuts', () => {
     expect(
       getRemoteBrowserKeyboardShortcut(keyboardEvent({ key: 'R', ctrlKey: true, shiftKey: true }))

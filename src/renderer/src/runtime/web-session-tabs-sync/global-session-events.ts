@@ -3,11 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { useAppStore } from '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
-import {
-  recordReceivedWebSessionTabsSnapshot,
-  sessionTabsFreshnessKey,
-  shouldApplyRecoveredWebSessionTabsSnapshot
-} from './tracking'
+import { sessionTabsFreshnessKey, shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
 import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
 import {
@@ -16,7 +12,8 @@ import {
   isRetiredSessionTabsPublicationEpoch
 } from './publisher-identity-fences'
 import { scheduleRetiredEpochCensus } from './retired-epoch-census'
-import { applyWebSessionTabsSnapshot } from './snapshot-api'
+import { recordReceivedSessionTabsStreamFrame } from './received-agent-sender-publications'
+import { createWebSessionTabsSnapshotPatch } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import {
   hostSessionMirrorSettleForPatchlessFrame,
@@ -38,7 +35,6 @@ export type GlobalSessionEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply one event from the all-worktrees stream, including visibility inventory fencing. */
 export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   const {
     environmentId,
@@ -86,12 +82,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   if (event.type !== 'snapshot' && event.type !== 'updated') {
     return
   }
-  const receivedFrame = recordReceivedWebSessionTabsSnapshot(
-    environmentId,
-    event,
-    undefined,
-    runtimeId
-  )
+  const receivedFrame = recordReceivedSessionTabsStreamFrame(environmentId, event, runtimeId)
   coordinator.recordSnapshotReceipt(environmentId, event, receivedFrame, runtimeId)
   if (
     isRetiredSessionTabsPublicationEpoch(
@@ -142,7 +133,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
       if (decision.apply) {
         settleHydration = applyWebSessionTabsStorePatch(
-          (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
+          createWebSessionTabsSnapshotPatch(recovered, environmentId),
           {
             frames: [
               {

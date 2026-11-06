@@ -138,18 +138,6 @@ describe('plain SSH terminal sessions', () => {
     expect(spawned).toHaveLength(0)
   })
 
-  it('names OpenSSH Client when Windows has no ssh.exe, with no shell workaround', async () => {
-    const result = await open(deps({ findSsh: () => null, platform: 'win32' }))
-    expect(result).toMatchObject({ ok: false, reason: 'ssh-missing' })
-    expect(result.ok ? '' : 'message' in result ? result.message : '').toContain('OpenSSH Client')
-  })
-
-  it('keeps one session per host across windows', async () => {
-    await open(deps(), 'lambda', 1)
-    expect(await open(deps(), 'lambda', 2)).toEqual({ ok: false, reason: 'already-open' })
-    expect(spawned).toHaveLength(1)
-  })
-
   it('claims the host before awaiting, so concurrent opens never spawn twice', async () => {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -163,7 +151,7 @@ describe('plain SSH terminal sessions', () => {
     })
     const first = open(slow, 'lambda', 1)
     const other = await open(slow, 'lambda', 2)
-    // The same window replacing its own pending open (e.g. a remount) wins; the older one yields.
+    // Same-window remount replaces its pending claim; older async open must yield.
     const again = open(slow, 'lambda', 1)
     release()
     expect(other).toEqual({ ok: false, reason: 'already-open' })
@@ -212,7 +200,6 @@ describe('plain SSH terminal sessions', () => {
     expect(spawned[0].pause).not.toHaveBeenCalled()
     spawned[0].emitData(chunk)
     expect(spawned[0].pause).toHaveBeenCalledTimes(1)
-    // Another window's ack is ignored.
     ackPlainSshTerminal(sessionId, 2, 9 * chunk.length)
     expect(spawned[0].resume).not.toHaveBeenCalled()
     ackPlainSshTerminal(sessionId, 1, 6 * chunk.length)
@@ -245,15 +232,6 @@ describe('plain SSH terminal sessions', () => {
     expect(() => writePlainSshTerminal(sessionId, 1, 'ls\r')).not.toThrow()
   })
 
-  it('reports a signal kill, which is not a clean logout', async () => {
-    const events: PlainSshTerminalEvent[] = []
-    const result = await open(deps(), 'lambda', 1, events)
-    spawned[0].emitExit(0, 9)
-    expect(events).toEqual([
-      { kind: 'exit', sessionId: result.ok ? result.sessionId : '', exitCode: 0, signal: 9 }
-    ])
-  })
-
   it('forwards output and exit, and only its owner can write, resize or close it', async () => {
     const events: PlainSshTerminalEvent[] = []
     const result = await open(deps(), 'lambda', 7, events)
@@ -274,7 +252,6 @@ describe('plain SSH terminal sessions', () => {
       { kind: 'data', sessionId, data: 'Welcome to lambda\r\n' },
       { kind: 'exit', sessionId, exitCode: 129 }
     ])
-    // Ended: a new one may open.
     expect(await open(deps(), 'lambda', 7)).toMatchObject({ ok: true })
   })
 

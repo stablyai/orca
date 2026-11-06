@@ -10,14 +10,17 @@ export type SystemSshBuildArgsOptions = {
   nonInteractive?: boolean
   /** Keeps OpenSSH's channel-open failures on stderr even under a quieter configured LogLevel. */
   logChannelFailures?: boolean
-  /**
-   * `false` only when the parsed ssh_config proves no `Host`/`Match` block claims `configHost`.
-   *
-   * Absent or `true` keeps the config alias fully authoritative, which is right whenever a block
-   * really does name it — and is the only safe default, since a caller that cannot answer must not
-   * be read as having answered "nothing claims it". See `sshConfigMayClaimAlias`.
-   */
+  /** Only proven absence of a matching Host/Match block permits stored endpoint overrides; unknown keeps the alias authoritative. */
   aliasClaimedByConfig?: boolean
+  /** Dial Orca's held `ssh -L` forward instead of the target's proxy. See `system-ssh-loopback-route`. */
+  loopbackRoute?: SystemSshLoopbackRouteArgs
+  /** Server-alive probes for a long-lived unmultiplexed process, which no ControlMaster watches. */
+  keepAlive?: boolean
+}
+
+export type SystemSshLoopbackRouteArgs = {
+  localPort: number
+  hostKeyAlias: string
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
@@ -37,28 +40,24 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'GSSAPIAuthentication=yes')
     args.push('-o', 'PreferredAuthentications=gssapi-with-mic')
   }
-  // Forward stdin/stdout for relay communication
   args.push('-T')
 
-  // Why: ControlMaster multiplexes all SSH exec commands over a single connection,
-  // eliminating the ~9s handshake overhead per command. Without this, each
-  // spawnSystemSshCommand call opens a new TCP connection.
+  // Reuse one SSH connection across execs to avoid a fresh handshake per command.
   const controlPath = getOrcaControlSocketPath(target, options)
   const forceDisableControlMaster =
     options?.disableControlMaster === true ||
     target.systemSshConnectionReuse === false ||
     (options?.gssapiOnly === true && controlPath === null)
   if (forceDisableControlMaster) {
-    // Why: muxed OpenSSH forwards remain registered on the master after the
-    // client exits. Also honors the per-target compatibility opt-out even if
-    // a broad Host * ssh_config block enables multiplexing.
+    // Mux forwards outlive their client; also honor the target opt-out over broad Host * multiplexing.
     args.push('-S', 'none')
   } else if (controlPath) {
     args.push('-o', 'ControlMaster=auto')
     args.push('-o', `ControlPath=${controlPath}`)
-    // Why: keep master alive 300s after last command so rapid reconnects
-    // (e.g. on tab focus) skip re-handshake without holding a process open.
+    // Retain the idle master for reconnects without keeping a client process open.
     args.push('-o', 'ControlPersist=300')
+  }
+  if (options?.keepAlive || (!forceDisableControlMaster && controlPath)) {
     args.push('-o', 'ServerAliveInterval=15')
     args.push('-o', 'ServerAliveCountMax=3')
   }
@@ -67,27 +66,29 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   return args
 }
 
-/**
- * Who to log in as and how to reach the host, ending `-- destination`: the part of a dial that
- * belongs to the saved target rather than to Orca's transport (multiplexing, batch mode, `-T`).
- */
+/** Saved-target routing and login args, separate from Orca transport options. */
 export function appendSshTargetDestinationArgs(
   args: string[],
   target: SshTarget,
-  options?: Pick<SystemSshBuildArgsOptions, 'aliasClaimedByConfig' | 'gssapiOnly'>
+  options?: Pick<SystemSshBuildArgsOptions, 'aliasClaimedByConfig' | 'gssapiOnly' | 'loopbackRoute'>
 ): void {
   const useConfigHost = shouldUseOpenSshConfigHost(target)
+  const loopbackRoute = options?.loopbackRoute
+  if (loopbackRoute) {
+    // OpenSSH takes the first option value: override routing while retaining alias identity and known_hosts settings.
+    args.push('-o', 'HostName=127.0.0.1')
+    args.push('-o', `Port=${loopbackRoute.localPort}`)
+    args.push('-o', 'ProxyCommand=none')
+    args.push('-o', 'ProxyJump=none')
+    args.push('-o', `HostKeyAlias=${loopbackRoute.hostKeyAlias}`)
+  }
 
-  // Why: a wildcard `Host *` block supplies ProxyCommand/ProxyJump for every alias, so an alias
-  // whose own Host block was renamed or deleted still looks config-backed and gets dialled bare —
-  // as the wildcard's user, at the wildcard's host, discarding the endpoint Orca stored. Keep the
-  // system transport (OpenSSH must still apply that proxy) but state the stored endpoint, and only
-  // where the config proves no block claims the alias.
+  // An unclaimed alias may inherit wildcard routing; restore its saved endpoint only on proven absence of a claiming block.
   if (useConfigHost && options?.aliasClaimedByConfig === false) {
     appendUnclaimedAliasEndpoint(args, target)
   }
 
-  if (!useConfigHost && target.port !== 22) {
+  if (!useConfigHost && !loopbackRoute && target.port !== 22) {
     args.push('-p', String(target.port))
   }
 
@@ -109,35 +110,30 @@ export function appendSshTargetDestinationArgs(
     args.push('-o', 'GSSAPIAuthentication=yes')
   }
 
-  if (!useConfigHost && target.jumpHost) {
+  // Why: `-J` after `ProxyJump=none` is a fatal duplicate in OpenSSH, so the route skips both proxies.
+  if (!useConfigHost && !loopbackRoute && target.jumpHost) {
     args.push('-J', target.jumpHost)
   }
 
-  if (!useConfigHost && target.proxyCommand) {
+  if (!useConfigHost && !loopbackRoute && target.proxyCommand) {
     args.push('-o', `ProxyCommand=${target.proxyCommand}`)
   }
 
   const host = target.configHost || target.host
-  // Why: OpenSSH owns User for config-backed aliases; imported fallback values
-  // must not override a fresh wildcard, Include, or Match result.
+  // Keep alias User authoritative, including fresh wildcard, Include and Match results.
   const userHost = useConfigHost ? host : target.username ? `${target.username}@${host}` : host
   args.push('--', userHost)
 }
 
-/**
- * Args for an `ssh -N` forward process. Unmultiplexed: through any ControlMaster (Orca's or the
- * user's ssh_config) the master owns the listener and its refusals, so killing the child would
- * neither close the forward nor report why sshd refused it. So a forward logs in on its own, even
- * where a live master holds a login it cannot repeat: through that master its `-N` mux client
- * exits at once and the port stays on the master, out of Orca's reach. A managed tunnel whose
- * forward cannot log in takes the stdio bridge over the master's exec instead.
- */
+/** Forwards must own their listener and refusal stderr: a mux client exits while its master retains both. If standalone auth cannot repeat, managed tunnels use the master's exec bridge. */
 export function buildForwardProcessSshArgs(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
 ): string[] {
+  // Why no loopbackRoute: forwards outlive commands, and the route's own forward must take the real proxy.
   return buildSshArgs(target, {
     ...options,
+    loopbackRoute: undefined,
     suppressOrcaControlMaster: true,
     disableControlMaster: true
   })
@@ -178,6 +174,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   if (options?.aliasClaimedByConfig === false) {
     buildArgsOptions.aliasClaimedByConfig = false
   }
+  if (options?.loopbackRoute !== undefined) {
+    buildArgsOptions.loopbackRoute = options.loopbackRoute
+  }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }
 
@@ -185,8 +184,7 @@ function shouldDisableOrcaControlMaster(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
 ): boolean {
-  // Why: unresolved ssh_config aliases could otherwise share one Orca socket
-  // while OpenSSH routes them through mutable HostName/ProxyJump settings.
+  // Unresolved aliases may route through mutable ssh_config; never pool them on a guessed endpoint.
   const unresolvedConfigBackedTarget =
     isOpenSshConfigBackedTarget(target) && options?.resolvedConfig == null
   return (
@@ -204,8 +202,7 @@ function hasUserConfiguredControlMaster(
   if (!resolvedConfig) {
     return false
   }
-  // Why: ControlPersist/ControlPath alone can reuse a master someone else
-  // created, but they do not create the setup-burst master Orca needs.
+  // ControlPersist/ControlPath reuse existing masters; Orca also needs ControlMaster enabled to create one.
   return (
     hasEnabledControlMaster(resolvedConfig.controlMaster) &&
     hasEnabledControlPath(resolvedConfig.controlPath)
@@ -228,13 +225,7 @@ function hasEnabledControlPath(value: string | undefined): boolean {
   return normalized != null && normalized !== '' && normalized !== 'none'
 }
 
-/**
- * Restore only Hostname/Port/User, and only where they diverge from the alias.
- *
- * Not `-i`/`-J`/ProxyCommand: the wildcard block is still the route to this network, and `-o
- * Hostname=` does not change which blocks OpenSSH selects (matching uses the original destination),
- * so the proxy keeps applying and `%h` now expands to the host we actually mean.
- */
+/** Restore only Hostname/Port/User; matching still uses the original alias, preserving wildcard proxies and identities while %h expands to the saved host. */
 function appendUnclaimedAliasEndpoint(args: string[], target: SshTarget): void {
   const alias = target.configHost
   const storedHost = target.host.trim()
@@ -265,7 +256,6 @@ export function isOpenSshConfigBackedTarget(
   if (target.source === 'manual') {
     return false
   }
-  // Why: legacy imported aliases have a distinct configHost; manual targets
-  // historically stored configHost=host and still need explicit -p/-i args.
+  // Legacy aliases differ from host; manual configHost=host still needs explicit port/identity args.
   return Boolean(target.configHost && target.configHost !== target.host)
 }

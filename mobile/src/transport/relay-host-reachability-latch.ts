@@ -20,9 +20,7 @@ export function relayHostReachabilityForFailure(error: Error | null): RelayHostR
   return 'connecting'
 }
 
-// Consecutive identical relay verdicts. Mirrors RelayPairingRejectionLatch: the
-// row must not flip on one dial, and only a connection clears it — an app resume
-// or a gate lift must not put "Connecting via Relay…" back on an offline host.
+// Latch consecutive identical failures until authenticated connection; app resume/gate lifts provide no recovery evidence.
 export class RelayHostReachabilityLatch {
   private candidate: RelayHostReachability = 'connecting'
   private streak = 0
@@ -39,14 +37,12 @@ export class RelayHostReachabilityLatch {
   }
 
   record(error: Error | null): void {
-    // Why: a later plain 4404 is the cell forgetting the reason, not the desktop
-    // signing back in — only a connection retires a reported sign-out.
+    // A later unlabelled offline close only lost its reason; retain signed-out until connection.
     if (this.reported === 'signed-out') {
       return
     }
     const next = relayHostReachabilityForFailure(error)
-    // An unmapped failure breaks the streak but keeps the last verdict: a 4408
-    // after two 4404s is not evidence the desktop came back.
+    // Unmapped failures break the streak but do not prove the last reported outage ended.
     if (next === 'connecting') {
       this.streak = 0
       return
@@ -71,8 +67,7 @@ export class RelayHostReachabilityLatch {
     this.publish('connecting')
   }
 
-  // Unconditional: LogicalClientConnectionPath.update is the one deduper, and a
-  // second one here would swallow a verdict whenever the two disagreed.
+  // Publish unconditionally; LogicalClientConnectionPath.update owns deduplication.
   private publish(reachability: RelayHostReachability): void {
     this.reported = reachability
     this.reporter?.(reachability)

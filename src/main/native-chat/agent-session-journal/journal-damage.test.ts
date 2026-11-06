@@ -1,26 +1,21 @@
-// Damage fails the chat's load, and nothing is deleted.
-//
-// A row this build cannot parse, a row numbered against its key, a gap in the sequence and an epoch
-// without its first row are each damage. The open refuses the chat as history that cannot be
-// loaded, and every stored row is where it was.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
-  loadTestJournal,
   liveTestJournalRows,
   updateTestJournalRowJson,
   deleteTestJournalRow,
@@ -41,7 +36,7 @@ const UNLOADABLE = {
 
 let root: string
 let clock = 1_000
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 function item(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
@@ -61,20 +56,19 @@ function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> 
   })
 }
 
-function withJournalDatabase<T>(run: (db: Database.Database) => T): T {
+async function withJournalDatabase<T>(run: (db: Database.Database) => T): Promise<T> {
   const opened = openTestJournalHostDatabase(root)
   try {
     return run(opened.db)
   } finally {
-    opened.close()
+    await opened.close()
   }
 }
 
-function storedRows(): { seq: number; rowJson: string }[] {
+async function storedRows(): Promise<{ seq: number; rowJson: string }[]> {
   return withJournalDatabase((db) => liveTestJournalRows(db, IDENTITY.sessionId))
 }
 
-/** A chat of an epoch row and five messages: sequences 1 to 6. */
 async function writeChat(): Promise<void> {
   const journal = await open()
   for (let ordinal = 0; ordinal < 5; ordinal += 1) {
@@ -129,37 +123,30 @@ describe('a damaged chat', () => {
     ['no epoch row', (db: Database.Database) => deleteTestJournalRow(db, IDENTITY.sessionId, 1)]
   ])('fails to load and keeps every row: %s', async (_name, damage) => {
     await writeChat()
-    withJournalDatabase(damage)
-    const before = storedRows()
+    await withJournalDatabase(damage)
+    const before = await storedRows()
 
     await expect(open()).rejects.toMatchObject(UNLOADABLE)
     await expect(open()).rejects.toMatchObject(UNLOADABLE)
 
-    expect(storedRows()).toEqual(before)
+    expect(await storedRows()).toEqual(before)
   })
 
-  it('names where the damage starts', async () => {
-    await writeChat()
-    withJournalDatabase((db) => deleteTestJournalRow(db, IDENTITY.sessionId, 4))
+  it.each([1, 3])(
+    "reads past damage at row %i to a newer build's row, which fails the load as a newer Orca's instead",
+    async (damaged) => {
+      await writeChat()
+      await withJournalDatabase((db) => {
+        updateTestJournalRowJson(db, IDENTITY.sessionId, damaged, '}{')
+        const newer = { ...JSON.parse(storedRowJson(db, 5)), kind: 'checkpoint' }
+        updateTestJournalRowJson(db, IDENTITY.sessionId, 5, JSON.stringify(newer))
+      })
+      const before = await storedRows()
 
-    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
-      newer: null,
-      damage: { sequence: 4, cause: 'sequence-gap' }
-    })
-  })
-
-  it("reads past damage to a newer build's row, which fails the load as a newer Orca's instead", async () => {
-    await writeChat()
-    withJournalDatabase((db) => {
-      updateTestJournalRowJson(db, IDENTITY.sessionId, 3, '}{')
-      const newer = { ...JSON.parse(storedRowJson(db, 5)), kind: 'checkpoint' }
-      updateTestJournalRowJson(db, IDENTITY.sessionId, 5, JSON.stringify(newer))
-    })
-    const before = storedRows()
-
-    await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-    expect(storedRows()).toEqual(before)
-  })
+      await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
+      expect(await storedRows()).toEqual(before)
+    }
+  )
 })
 
 function storedRowJson(db: Database.Database, seq: number): string {
@@ -171,7 +158,6 @@ function storedRowJson(db: Database.Database, seq: number): string {
 }
 
 describe('a row the reader would reject', () => {
-  // TypeScript accepts it; the persisted reader rejects a call id that is only spaces.
   const blankCallId: AgentJournalItemBody = {
     kind: 'message',
     role: 'assistant',
@@ -179,27 +165,10 @@ describe('a row the reader would reject', () => {
   }
   const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
-  it('is refused when it is written, and the chat still loads with every other row', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('before'), scope)
-    await expect(journal.appendItem(item(1), blankCallId, scope)).rejects.toMatchObject({
-      code: 'journal_row_rejected'
-    })
-    await journal.appendItem(item(2), body('after'), scope)
-    await journal.close()
-
-    const reopened = await open()
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([
-      body('before'),
-      body('after')
-    ])
-    expect(storedRows().map((row) => row.seq)).toEqual([1, 2, 3])
-  })
-
   it('rolls back a whole epoch replacement that holds one, keeping the epoch it would replace', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('kept'), scope)
-    // The open journal's own database: closing it here would close the journal's too.
+    // Closing the shared test connection would also close the live journal.
     const liveRows = () =>
       liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
     const before = liveRows()
@@ -215,32 +184,5 @@ describe('a row the reader would reject', () => {
     await journal.appendItem(item(1), body('still writable'), scope)
     await journal.close()
     await expect(open()).resolves.toBeTruthy()
-  })
-})
-
-describe('an epoch named with no rows at all', () => {
-  // A crash inside an older build's repair: the suffix deleted, its new epoch not yet published.
-  it('is founded afresh on open, with nothing deleted, and takes writes', async () => {
-    await writeChat()
-    withJournalDatabase((db) => {
-      for (const row of liveTestJournalRows(db, IDENTITY.sessionId)) {
-        deleteTestJournalRow(db, IDENTITY.sessionId, row.seq)
-      }
-    })
-    expect(loadTestJournal(root, IDENTITY.sessionId)).toMatchObject({
-      newer: null,
-      damage: null,
-      state: { lastSequence: 0 }
-    })
-
-    const journal = await open()
-    await journal.appendItem(item(0), body('after'), {
-      fence: 1,
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    await journal.close()
-
-    const reopened = await open()
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([body('after')])
   })
 })

@@ -23,11 +23,7 @@ export function isBrowserSiteColorScheme(value: unknown): value is BrowserSiteCo
   return value === 'light' || value === 'dark'
 }
 
-/**
- * The hostname, port ignored: Chromium shares page zoom across ports, so `localhost:3000` and
- * `localhost:5173` must be one site or they would keep resetting each other. Null for pages no site
- * owns (about:blank, data:, chrome errors).
- */
+/** Ignore ports as Chromium zoom does, preventing localhost dev servers resetting each other. Return null for opaque/blank/error pages. */
 export function browserSiteDisplayKey(url: string): string | null {
   try {
     const parsed = new URL(url)

@@ -1,5 +1,4 @@
-// Moving editor tabs to another workspace of the same partition: a restored tab whose file the
-// window found under a sibling workspace (F42). The window resolves that owner; main moves the tabs.
+// The window resolves a restored editor tab’s sibling workspace owner; main moves it within the same partition (F42).
 
 import {
   applied,
@@ -23,10 +22,7 @@ export const EDITOR_KINDS: ReadonlySet<LayoutTab['kind']> = new Set<LayoutTab['k
   'check-details'
 ])
 
-/**
- * Whether the group shows this tab's file in another tab of its kind. A layout-owner window draws
- * only one of the two, so a close could not reach the other: main never puts a second one there.
- */
+/** A layout-owner group must show only one tab per file/kind; otherwise closing the visible tab leaves an unreachable duplicate. */
 export function groupShowsTabFile(
   workspace: WorkspaceLayout,
   groupId: string,
@@ -47,7 +43,6 @@ export function groupShowsTabFile(
 
 type Move = CommandOf<'moveTabToWorkspace'>['tabs'][number] & { tab: LayoutTab }
 
-/** The tab a group already shows for each file, by kind and entity: a layout-owner build's fold. */
 function shownFiles(workspace: WorkspaceLayout, groupId: string): Map<string, string> {
   const shown = new Map<string, string>()
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -62,12 +57,7 @@ function shownFiles(workspace: WorkspaceLayout, groupId: string): Map<string, st
   return shown
 }
 
-/**
- * Each tab leaves its workspace and is appended to `groupId` under its new ids, with its view (the
- * window's new one when it sends one); the file's record moves with it. Only editor tabs move: no
- * other kind's records follow it. In a layout-owner build a tab whose file the group already shows
- * (or an earlier moved tab does) folds into that tab, as the loader folds a saved duplicate.
- */
+/** Move editor tabs and file records under new IDs, using the sender’s view when supplied. In layout-owner builds, fold files already shown by the destination, including earlier moves in this command. */
 export function moveTabToWorkspace(
   model: WorkspaceLayoutModel,
   command: CommandOf<'moveTabToWorkspace'>,
@@ -153,7 +143,6 @@ export function moveTabToWorkspace(
   return applied(next, { tabId: landed, groupId: command.groupId })
 }
 
-/** The workspace without the tab and its view. */
 function withoutTab(workspace: WorkspaceLayout, tabId: string): WorkspaceLayout {
   const removed = removeTabFromWorkspace(workspace, tabId)
   return removed.editorViews
@@ -161,7 +150,6 @@ function withoutTab(workspace: WorkspaceLayout, tabId: string): WorkspaceLayout 
     : removed
 }
 
-/** The file's record moves with its tabs. */
 function moveEditorFile(
   source: WorkspaceLayout,
   target: WorkspaceLayout,

@@ -1,7 +1,4 @@
-// The encoder the page really runs. A bare `buffer` specifier reaches Node's builtin under vitest,
-// which encodes in C++; the page bundle resolves it to this shim, which encodes in JS and is
-// roughly twenty times slower on a frame-sized buffer. Measuring against the builtin would put the
-// cost of the re-encode an order of magnitude below what a phone pays for it.
+// Use page’s JS buffer shim, not Node builtin: C++ base64 encodes frame-sized buffers ~20x faster and understates phone cost.
 import { Buffer } from 'buffer/index.js'
 import { describe, expect, it } from 'vitest'
 import {
@@ -46,8 +43,7 @@ describe('the browser frame data URI', () => {
     )
   })
 
-  // The oracle for "it did not re-encode": a frame whose two halves disagree, which the bridge
-  // never produces. A web sibling that encoded `image` anyway would answer the native string.
+  // Give halves conflicting values to prove web uses supplied b64 without re-encoding image; bridge never produces mismatch.
   it('uses the base64 the bridge carried rather than the bytes beside it', () => {
     const uri = createBrowserFrameDataUriOnWeb(makeFrame(makeImageBytes(64), 'Y2FycmllZA=='))
 

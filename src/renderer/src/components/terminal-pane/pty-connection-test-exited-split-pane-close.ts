@@ -1,12 +1,8 @@
 import { expect, vi } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { LEAF_1, LEAF_2, type MockPaneManager } from './pty-connection-test-pane-fixtures'
 
-/**
- * Switch on: tab-1's pane 2 ended, so the window leaves its close to main: it neither closes the
- * pane nor sends a close, and main's frame without the leaf takes it once, as an exit.
- * Imports are dynamic so they share the module graph the test's `import('./pty-connection')` used.
- */
+/** Main-owned exits wait for its leaf-removal frame without sending another close; dynamic imports share the test’s reset module graph. */
 export async function expectMainFrameClosesExitedSplitPaneOnce(
   manager: MockPaneManager
 ): Promise<void> {

@@ -1,6 +1,5 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -9,12 +8,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
-  findIndexedRepoOwner,
-  findIndexedRepoOwnerForHost,
-  findIndexedWorktreeOwner,
-  findIndexedWorktreeOwnerForHost
+  findIndexedProjectGroupOwner
 } from './worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -52,10 +49,7 @@ function getResolvedFolderHost(
   return folder && (group || preferredHostId) ? (preferredHostId ?? LOCAL_EXECUTION_HOST_ID) : null
 }
 
-/**
- * Resolves a host only when hydrated ownership proves it. Why: a restored SSH
- * worktree can temporarily collide with a local repo row during catalog load.
- */
+/** Require hydrated ownership: restored SSH worktrees can collide with local repo rows while catalogs load. */
 export function getResolvedExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -74,23 +68,14 @@ export function getResolvedExecutionHostIdForWorktree(
     state.activeWorktreeId === worktreeId
       ? (state.activeWorkspaceExecutionHostId ?? undefined)
       : undefined
-  const worktree = preferredHostId
-    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, preferredHostId)
-    : findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
-  const worktreeHost = parseExecutionHostId(worktree?.hostId)
-  if (worktreeHost) {
-    return worktreeHost.id
-  }
-  if (!worktree) {
-    return null
-  }
-  const repo = preferredHostId
-    ? findIndexedRepoOwnerForHost(state.repos, worktree.repoId, preferredHostId)
-    : findIndexedRepoOwner(state.repos, worktree.repoId)
-  if (!repo) {
-    return null
-  }
-  return getRepoExecutionHostId(repo)
+  return (
+    resolveQualifiedWorktreeExecutionOwner(
+      selectWorktreesByRepo(state),
+      state.repos,
+      worktreeId,
+      preferredHostId
+    )?.hostId ?? null
+  )
 }
 
 /**
@@ -100,7 +85,7 @@ export function getResolvedExecutionHostIdForWorktree(
 export function getActiveWorkspaceOwnerTarget(
   state: WorktreeRuntimeOwnerState
 ): RuntimeClientTarget | null {
-  // Why: with no paired server every RPC owner is this app; skip the owner-index build.
+  // Without paired servers all RPC owners are this app; skip building the owner index.
   if (state.runtimeEnvironmentCatalogHydrated && state.runtimeEnvironments?.length === 0) {
     return null
   }

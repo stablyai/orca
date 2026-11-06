@@ -1,6 +1,4 @@
-// The window's read-only copy of each workspace's layout, exactly as the runtime published it
-// (design 3.3). Not wired to the store yet: the switch makes it a slice and derives today's fields
-// from it.
+// Read-only runtime layout copy (design 3.3); the owner switch derives store slices from it.
 
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
@@ -11,12 +9,7 @@ export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLay
 
 export const EMPTY_WORKSPACE_LAYOUT_CACHE: WorkspaceLayoutCache = {}
 
-/**
- * The cache's only writer (design 3.3's `applyFromRuntime`): replaces from the runtime's frame,
- * or applies its changed records to the workspace they name; nothing else edits, merges or saves
- * it. Returns the same cache when nothing changed. Throws on records that do not fit the cache:
- * the stream must then be fetched again.
- */
+/** Only writer (design 3.3 applyFromRuntime); keep identity when unchanged. Invalid records throw so callers refetch the stream. */
 export function applyLayoutFrame(
   cache: WorkspaceLayoutCache,
   frame: WorkspaceLayoutChangeFrame

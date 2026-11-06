@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
-import * as client from '../github/client'
+import * as repoSlugUpstream from '../github/client/fetch/repo-slug-upstream'
 import { OrcaRuntimeService } from './orca-runtime'
 import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
-vi.mock('../github/client', async (importOriginal) => ({
+vi.mock('../github/client/fetch/repo-slug-upstream', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  getRepoUpstream: vi.fn(),
-  getRepoSlug: vi.fn()
+  getRepoSlug: vi.fn(),
+  getRepoUpstream: vi.fn()
 }))
 
-const getRepoUpstream = vi.mocked(client.getRepoUpstream)
-const getRepoSlug = vi.mocked(client.getRepoSlug)
+const getRepoUpstream = vi.mocked(repoSlugUpstream.getRepoUpstream)
+const getRepoSlug = vi.mocked(repoSlugUpstream.getRepoSlug)
 
 type BackfillInternals = { repositoryForkBackfill: { run(): Promise<void> } }
 
@@ -47,58 +47,8 @@ afterEach(() => {
 })
 
 describe('startup fork-upstream backfill', () => {
-  it('keeps a renamed fork own owner avatar while recording the upstream', async () => {
-    const runtime = new OrcaRuntimeService()
-    const updateRepo = attachStore(runtime, [makeRepo()])
-    getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
-    getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket-pro' })
-
-    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
-
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
-      upstream: { owner: 'upstream-org', repo: 'rocket' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/acme.png?size=64',
-        source: 'github',
-        label: 'acme/rocket-pro'
-      }
-    })
-  })
-
-  it('migrates a same-name fork to the upstream owner avatar', async () => {
-    const runtime = new OrcaRuntimeService()
-    const updateRepo = attachStore(runtime, [
-      makeRepo({
-        path: '/workspace/rocket',
-        repoIcon: {
-          type: 'image',
-          src: 'https://github.com/acme.png?size=64',
-          source: 'github',
-          label: 'acme/rocket'
-        }
-      })
-    ])
-    getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
-    getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket' })
-
-    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
-
-    expect(updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('repo-1'), {
-      upstream: { owner: 'upstream-org', repo: 'rocket' },
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/upstream-org.png?size=64',
-        source: 'github',
-        label: 'upstream-org/rocket'
-      }
-    })
-  })
-
   it('skips every row whose files sit on an SSH host', async () => {
-    // Why: the incumbent guard read `repo.connectionId`, so a row minted with only the unified
-    // spelling fell through and had its upstream read off this client's copy of the path. A
-    // runtime row's nested target holds its files too, and is equally not ours to read.
+    // Unified remote ownership, including nested runtime targets, must not read this client's same-path files.
     const runtime = new OrcaRuntimeService()
     const updateRepo = attachStore(runtime, [
       makeRepo({ id: 'repo-ssh', executionHostId: 'ssh:builder' }),

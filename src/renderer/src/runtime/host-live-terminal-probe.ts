@@ -2,17 +2,7 @@ import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { hostScopeCensusIsComplete } from '../../../shared/runtime-listing-host-scope'
 
-/**
- * Asks the host whether ANY terminal is live in an environment, for the one
- * question the session-tab mirror cannot answer: a live host that has not
- * published yet returns the same empty inventory as a host with no terminals
- * at all. `terminal.list` reads the PTY controller — `ptysById` plus the
- * cross-generation daemon inventory — not the mirror, so it sees exactly that
- * gap.
- *
- * `unverifiable` is a verdict, never a synonym for `none`: loss of contact
- * with the execution host is no evidence a host-owned PTY exited.
- */
+/** Probe PTY controller plus daemon inventory, not the session mirror: unpublished live terminals and empty hosts look identical there. unverifiable never means none; lost contact proves no exit. */
 export type HostLiveTerminalProbeVerdict = 'live' | 'none' | 'unverifiable'
 
 type RuntimeCall = (args: {
@@ -63,9 +53,7 @@ async function probeHost(
     params: {
       // Why: one row settles "any", and `totalCount` is the pre-limit census.
       limit: 1,
-      // Why: without it an unavailable daemon inventory answers from stale PTY
-      // records — a false empty. It raises `terminal_liveness_unavailable`
-      // instead, which lands here as `unverifiable`.
+      // Require daemon liveness: stale PTY records can falsely look empty. terminal_liveness_unavailable becomes unverifiable.
       requireFreshPtyLiveness: true,
       includeVisualLayouts: false
     },
@@ -75,10 +63,7 @@ async function probeHost(
   if (response.ok === false || !isTerminalListResult(response.result)) {
     return 'unverifiable'
   }
-  // A host this listing owed coverage for and did not deliver leaves an incomplete census — a
-  // relay can list its local PTYs while an SSH child host is still starting up. A peer runtime
-  // is not such a host: it answers `--environment` for itself, and reading its disclosure entry
-  // as a gap latched this probe forever (#18595).
+  // Missing owed host coverage means incomplete census, including starting SSH children. Peer runtimes answer environment for themselves; treating disclosure as a gap latched probes forever (#18595).
   const hostScope = response.result.hostScope
   if (hostScope && !hostScopeCensusIsComplete(hostScope)) {
     return 'unverifiable'

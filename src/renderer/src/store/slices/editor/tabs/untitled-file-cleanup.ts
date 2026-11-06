@@ -26,7 +26,7 @@ export function deleteUntouchedUntitledFile(getState: () => AppState, file: Open
   } catch {
     return
   }
-  // Why: agents, external editors, and paired clients can fill the file without this window seeing it, so delete only a still-empty placeholder.
+  // Delete only still-empty placeholders; agents/external editors/paired clients may write unseen content.
   void statRuntimePath(context, file.filePath)
     .then(async (stat) => {
       if (stat.size !== 0 || hasRetainedView()) {
@@ -51,7 +51,7 @@ export function shouldDeleteUntouchedUntitledFile(
     !file.isDirty &&
     !hasDraft &&
     file.deleteUntouchedOnClose !== false &&
-    // Why: a save or reload that left content on disk makes it a real note; the size check still catches writes this window never saw.
+    // Saved/reloaded content makes real notes; disk size also catches writes this window missed.
     (file.lastKnownDiskSignature === undefined ||
       file.lastKnownDiskSignature === EMPTY_DISK_SIGNATURE)
   )

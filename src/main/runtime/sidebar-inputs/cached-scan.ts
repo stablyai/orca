@@ -1,9 +1,4 @@
-/**
- * A slow listing (git scans) kept as its last applied result, so a producer reads it synchronously.
- * Scans run one at a time; a request during one queues one more after it, so the newest request
- * is always covered. A result applies only over an older one. With no demand, a request just marks
- * the cache stale and the next `ready` scans.
- */
+/** Cache slow listings synchronously. Run one scan at a time plus one queued rerun; newer results win. Without demand, mark stale until ready requests a scan. */
 export class CachedScan<T> {
   private value: T | null = null
   private appliedVersion = 0

@@ -17,9 +17,7 @@ export type KeybindingServiceOptions = {
   homePath: string
   platform?: NodeJS.Platform
   getLegacyOverrides?: () => KeybindingOverrides | undefined
-  /** Cohort seed for the tab-switch convention swap. `isPending` is true only
-   *  for pre-existing installs on the first launch after the swap; `markSeeded`
-   *  freezes the one-shot so it never runs again. */
+  /** Seed once for pre-existing installs; markSeeded completes the persisted cohort. */
   legacyTabSwitchSeed?: {
     isPending: () => boolean
     markSeeded: () => void
@@ -34,16 +32,12 @@ export class KeybindingService {
   constructor(options: KeybindingServiceOptions) {
     this.configPath = getUserKeybindingsPath(options.homePath)
     this.platform = options.platform ?? process.platform
-    // Why: older builds persisted custom shortcuts inside global settings.
-    // Once a keybindings file exists, it is the sole source of truth.
+    // A keybindings file supersedes shortcuts stored in legacy global settings.
     migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
-    // Why: pre-existing installs keep the old tab-switch chords. Only mark the
-    // one-shot done on success so a transient IO failure retries next launch
-    // instead of silently dropping the pin.
+    // Complete the cohort only after successful pinning so transient I/O failures retry next launch.
     if (options.legacyTabSwitchSeed?.isPending()) {
       try {
-        // Why: the seed already read the file to build its snapshot — prime the
-        // lazy cache with it instead of re-reading on the first getSnapshot().
+        // Seed already read the file; reuse its snapshot for the lazy cache.
         this.snapshot = seedLegacyTabSwitchBindings(
           this.configPath,
           this.platform,

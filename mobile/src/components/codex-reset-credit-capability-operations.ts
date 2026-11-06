@@ -2,15 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { codexResetCapabilityListSchema } from './codex-reset-credit-reply-schema'
 
-/**
- * status.get read for the Codex reset-credit probe, with its own policy on that method.
- *
- * The probe treats a refusal, a null result and a non-object result identically as "unsupported",
- * which only `object-result-or-null` expresses, and which is what `rpcObjectResultOrNull` already
- * spelled at this call site. The checked reader keeps that: an incompatible reply reaches the same
- * `null` this policy already produced, because `object-result-or-null` is the one policy that never
- * turns an unreadable result into a throw.
- */
+// Probe treats refusal/null/non-object/unreadable as unsupported via object-result-or-null; checked reader must never turn this into throw.
 export const codexResetCreditCapabilityRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'status.codex-reset-credit-capability',

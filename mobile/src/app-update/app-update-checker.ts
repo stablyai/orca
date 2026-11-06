@@ -3,7 +3,7 @@ import { EMPTY_APP_UPDATE_PREFERENCES } from '../storage/app-update-preferences'
 import type { AppUpdateSource } from './app-update-source'
 import { isNewerReleaseVersion } from './app-update-source'
 
-// Same cadence as the desktop updater (src/main/updater-events.ts).
+// Same cadence as the desktop updater (src/main/updater/updater-events.ts).
 export const APP_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const APP_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 const APP_UPDATE_CHECK_TIMEOUT_MS = 8000

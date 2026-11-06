@@ -1,5 +1,4 @@
-/** Builds the stateful per-tab cold-park candidate list. */
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalTabColdParkCandidate } from './terminal-hidden-view-parking'
 import type { TerminalTabActivationOrder } from './terminal-tab-activation-order'
 

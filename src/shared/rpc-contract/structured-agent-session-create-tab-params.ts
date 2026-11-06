@@ -1,7 +1,5 @@
-// Split out of structured-agent-session-params.ts, which is at its line limit.
-
 import { z } from 'zod'
-import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
+import { isAgentSessionSurfaceTabId } from '../agent-session/view/agent-session-surface-tab-id'
 import { Identifier } from './structured-agent-session-identifiers'
 
 /** `agentSession.create`'s tab fields. Strict payload: each is sent only to a host advertising its

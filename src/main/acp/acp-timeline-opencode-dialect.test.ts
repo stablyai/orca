@@ -6,6 +6,7 @@ import {
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
+import { AcpAgentError } from './acp-errors'
 
 afterEach(closeProviderTimelineRigs)
 
@@ -26,8 +27,7 @@ async function openCodeRig() {
   return { rig, translator, apply, update }
 }
 
-// The shapes OpenCode's ACP server writes for a shell tool: its output and exit code ride under
-// `rawOutput.metadata`, beside the text content.
+// OpenCode puts shell output and exit status in rawOutput.metadata.
 const bashStart = {
   sessionUpdate: 'tool_call',
   toolCallId: 'call-1',
@@ -38,6 +38,80 @@ const bashStart = {
 }
 
 describe('OpenCode over ACP', () => {
+  it.each([
+    { errorName: 'provider.quota', message: undefined },
+    { errorName: 'provider.rate-limit', retryAfterMs: 60_000, message: undefined },
+    ...[
+      'Usage limit reached for 5 hours. Your limit will reset at 2026-10-01 00:00:00',
+      'Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-01 00:00:00'
+    ].map((message) => ({ errorName: 'provider.quota', message }))
+  ])('shows usage limits for $errorName', async ({ message: detail, ...data }) => {
+    const { rig, translator, apply } = await openCodeRig()
+    const message = `Internal error: ${detail ?? 'Rate limit exceeded. Please try again later.'}`
+    apply(
+      translator.promptFailed(
+        'send-1',
+        new AcpAgentError(-32603, message, {
+          service: 'session',
+          ...data
+        }),
+        1001
+      )
+    )
+    const statuses = (await rig.rows()).filter((row) => row.body.kind === 'status')
+    expect(statuses.map((row) => row.body)).toEqual([
+      expect.objectContaining({
+        kind: 'status',
+        tone: 'warning',
+        failure: {
+          kind: 'usageLimitReached',
+          detail: { text: message, audience: 'person' },
+          ...('retryAfterMs' in data ? { usageLimit: { resetsAt: 61_001 } } : {})
+        }
+      })
+    ])
+    expect((await rig.turns())[0]?.outcome).toBe('failure')
+  })
+
+  it.each([
+    { status: 402, message: 'Request rejected' },
+    { message: 'Payment Required' },
+    { message: 'Insufficient balance or no resource package. Please recharge.' },
+    { message: 'Credit limit exceeded.' },
+    { message: 'Upstream request failed: Insufficient account funds' },
+    { message: 'Upstream request failed: Account invoice is overdue' },
+    ...[
+      'Please add or update your payment method to continue',
+      'Your GLM Coding Plan package has expired and is temporarily unavailable. You can resume using it after renewing the subscription on the official website.',
+      '[1309][Your GLM Coding Plan package has expired and is temporarily unavailable. You can resume using it after renewing the subscription on the official website.][20260929132151e73af01340d54b58]',
+      'Your current subscription plan does not yet include access to glm-5',
+      'Your enterprise package has expired. Please contact your enterprise administrator.'
+    ].map((message) => ({ message })),
+    {
+      errorName: 'provider.free-limit',
+      message:
+        'Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.'
+    }
+  ])('keeps non-reset errors generic: $message', async ({ message: detail, ...data }) => {
+    const { rig, translator, apply } = await openCodeRig()
+    const message = `Internal error: ${detail}`
+    apply(
+      translator.promptFailed(
+        'send-1',
+        new AcpAgentError(-32603, message, {
+          service: 'session',
+          errorName: 'provider.quota',
+          ...data
+        }),
+        1001
+      )
+    )
+    expect(
+      (await rig.rows()).filter((row) => row.body.kind === 'status').map((row) => row.body)
+    ).toEqual([{ kind: 'status', tone: 'error', text: message }])
+    expect((await rig.turns())[0]?.outcome).toBe('failure')
+  })
+
   it.each([
     {
       label: 'metadata output and exit fallback',

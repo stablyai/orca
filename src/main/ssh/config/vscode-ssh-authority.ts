@@ -6,7 +6,7 @@ type VsCodeSshAuthorityResult =
   | { ok: false; reason: 'ssh-target-invalid' }
   | { ok: false; reason: 'ssh-alias-required'; host: string; port: number }
 
-function isValidAuthorityPart(value: string, allowEmpty = false): boolean {
+export function isValidAuthorityPart(value: string, allowEmpty = false): boolean {
   return (
     (allowEmpty || value.trim().length > 0) &&
     !Array.from(value).some((character) => {

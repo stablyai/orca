@@ -2,14 +2,8 @@
 export type ForegroundEvidenceObservation = {
   authorityGeneration: string
   observationEpoch: number
-  /** How old the underlying process-table capture was when this record was serialized, measured on
-   *  the OBSERVING host's clock so no clock skew enters it. Receivers rebase it onto their own
-   *  monotonic clock by adding the time since the carrying response arrived.
-   *
-   *  It is an upper bound, not an estimate: the capture is TTL-shared, so a reader may be served
-   *  one up to `PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS` older than its own await, and the
-   *  producer stamps for that worst case. Erring old is the safe direction for every consumer —
-   *  the only one that acts destructively refuses stale evidence. */
+  /** Worst-case capture age on the observing host’s clock, including TTL-shared snapshot staleness.
+   * Receivers add elapsed time since response arrival on their monotonic clock. Overestimating age safely prevents destructive use of stale evidence. */
   capturedAgeMs: number
 }
 
@@ -17,24 +11,10 @@ export type ForegroundProcessEvidence =
   | ({
       verdict: 'live'
       processName: string | null
-      /** True only when the host observed BOTH units a forced stop can reach to hold nothing but
-       *  the shell: every process group attached to this PTY's terminal is the shell's own with
-       *  none of them stopped, AND the shell's own process group has no other member anywhere on
-       *  the host. I.e. nothing is running in the pane, in the foreground OR the background, and
-       *  nothing sits suspended.
-       *
-       *  Deliberately not `tpgid === pgid`: a job the user backgrounded with `&` and a job the user
-       *  suspended with Ctrl-Z both hand the terminal back to the shell, so a foreground-only
-       *  predicate reads them as idle. Deliberately not the tty alone either: with job control off
-       *  (`set +m`) a background job keeps the shell's pgid, and a child that drops the controlling
-       *  terminal leaves every tty index entirely — both are still inside `killpg`'s reach.
-       *
-       *  The name is tty-shaped for wire reasons only. It shipped that way and old clients read it;
-       *  the value has only ever become stricter, which makes an old client skip more, never less.
-       *
-       *  False means something IS running, named or not. Absent from a host that predates the
-       *  field, which is neither: a reader deciding whether the pane is idle must require `true`
-       *  and defer on anything else. */
+      /** True only when all PTY terminal groups contain solely the unstopped shell AND its process group has no other member anywhere on the host.
+       * Foreground-only checks miss background/suspended jobs; tty-only checks miss set +m jobs or detached children still reached by killpg.
+       * Retain the shipped wire name; stricter values make old clients skip more. False means busy; absent from old hosts is unknown.
+       * Destructive idle decisions must require explicit true. */
       shellOwnsEveryTtyProcessGroup?: boolean
     } & ForegroundEvidenceObservation)
   | ({ verdict: 'unverifiable'; reason: string } & ForegroundEvidenceObservation)
@@ -58,16 +38,9 @@ export type PosixFence = {
 
 export type WindowsFence = {
   platform: 'windows'
-  // Why SSH-to-Windows is always unverifiable: POSIX has a real foreground primitive
-  // (the controlling terminal's foreground process group, tpgid/pgid), so the host can
-  // read which process is in front. Windows has no equivalent. Local Windows approximates
-  // it by reading the native process table and walking descendants of the PTY root pid
-  // (windows-foreground-process-rows.ts), but the relay has neither piece: it does not
-  // import windows-process-table, its getForegroundProcessName is POSIX-shaped
-  // (/proc, pgrep, lsof), and relay hosts run stock node-pty, so no ConPTY job/console
-  // association is available. Returning a descendant name without a creation-time and
-  // session fence would be a guess. Lifting this requires teaching the relay the Windows
-  // process table plus a measured creation-time/session fence - a separate change.
+  // SSH Windows lacks POSIX tpgid/pgid and local Windows’s native process-table descendant walk.
+  // Relay uses POSIX probes and stock node-pty, with no ConPTY association. A descendant name without creation-time/session fences is unverifiable;
+  // support requires a Windows table plus measured identity fences.
   rootProcessId: number
   rootCreationTime: string
   sessionId: string

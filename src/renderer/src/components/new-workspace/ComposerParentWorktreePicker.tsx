@@ -14,17 +14,18 @@ import {
   getIndexedWorktreeMap
 } from '@/store/worktree-repo-index'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
-import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
+import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
-} from '@/components/sidebar/worktree-parent-picker-filtering'
+} from '@/components/sidebar/workspace-actions/parenting/worktree-parent-picker-filtering'
 import {
   PICKER_LIST_MAX_HEIGHT,
   PICKER_ROW_HEIGHT,
   PICKER_ROW_OVERSCAN
-} from '@/components/sidebar/worktree-parent-picker-placement'
+} from '@/components/sidebar/workspace-actions/parenting/worktree-parent-picker-placement'
 import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
@@ -44,14 +45,20 @@ import {
 } from '../../../../shared/execution-host'
 import { useRepoMap } from '@/store/selectors'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
+import { ParentMachineBadge } from '@/components/sidebar/workspace-actions/parenting/ParentMachineBadge'
+import {
+  getWorktreeHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
-/** Single-line row: text-sm leading (20px) over py-2. Set as the row's explicit height. */
+/** 20px text leading plus py-2 matches the explicit row height. */
 const NO_PARENT_ROW_HEIGHT = 36
 const NO_PARENT_ROW_KEY = 'no-parent'
 
 type ComposerParentWorktreePickerProps = {
   repoId: string
-  /** Parent must belong to the same execution host that will create the child. */
+  /** The child's destination host; parents on it nest as usual, others by a cross-machine link. */
   executionHostId?: ExecutionHostId | null
   projectId?: string | null
   value: string | null
@@ -70,13 +77,7 @@ type ParentWorktreeCandidateListProps = {
   onSelect: (id: string | null) => void
 }
 
-/**
- * Parent picker for the composer's Advanced drawer. Nesting only — the base
- * branch is unaffected.
- *
- * Everything that enumerates worktrees lives in the inner list, which Radix
- * mounts on open, so a closed picker costs one string selector and nothing else.
- */
+/** Pick nesting without changing the base branch; enumerate only in Radix’s open-only list, leaving closed state a string selector. */
 function ComposerParentWorktreePickerImpl({
   repoId,
   executionHostId,
@@ -86,24 +87,26 @@ function ComposerParentWorktreePickerImpl({
   disabled = false,
   activeFolderWorkspaceId = null
 }: ComposerParentWorktreePickerProps): React.JSX.Element {
-  // Why: subscribe so translate() copy refreshes on language change without a remount.
+  // Subscribe so translate() refreshes on language changes.
   useTranslation()
   const [open, setOpen] = useState(false)
   const labelId = `${useId()}label`
 
-  // Why: an archived parent is already gone from the candidate list and the sidebar would
-  // drop the edge, so showing its name would promise nesting the create can't deliver.
+  // Archived parents cannot produce sidebar nesting, so do not promise it with a retained name.
   const parentName = useAppStore((s) => {
     if (!value) {
       return null
     }
-    const parent = getIndexedWorktreeById(selectWorktreesByRepo(s), value)
+    // A parent on another machine is picked by host identity; ids can repeat across stores.
+    const parent = isWorktreeHostIdentity(value)
+      ? getIndexedAllWorktrees(selectWorktreesByRepo(s)).find(
+          (row) => getWorktreeHostIdentity(row) === value
+        )
+      : getIndexedWorktreeById(selectWorktreesByRepo(s), value)
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
-  // Why: the trigger goes inert when the Advanced drawer collapses, but the portaled
-  // popover does not — it would linger detached from a control the user can't reach.
-  // Adjusted during render (not in an effect) so the stale-open frame never paints.
+  // Close during render when the drawer disables its trigger; portaled content would otherwise linger through a stale-open frame.
   if (open && disabled) {
     setOpen(false)
   }
@@ -145,7 +148,7 @@ function ComposerParentWorktreePickerImpl({
             'flex w-[var(--radix-popover-trigger-width)] min-w-[17rem] flex-col p-0',
             COMBOBOX_POPOVER_SURFACE
           )}
-          // Why: Radix would focus the content wrapper; the search box is the real target.
+          // Focus search instead of Radix’s content wrapper.
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             const content = event.currentTarget
@@ -187,8 +190,7 @@ function getFolderWorkspaceSubtreeIds(
     if (lineage.parentWorkspaceKey !== folderKey) {
       continue
     }
-    // Why: the folder view drops archived and instance-stale rows, so accepting them here
-    // would offer a parent whose whole branch the folder never actually shows.
+    // Exclude archived/instance-stale parents whose subtree the folder view cannot show.
     const rootWorktree = getLineageChildWorktree(lineage, worktreeById)
     if (rootWorktree) {
       rootIds.add(rootWorktree.id)
@@ -225,12 +227,14 @@ function ParentWorktreeCandidateList({
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
-  const candidates = useMemo(() => {
+  const { candidates, valueOf, isCrossStoreCandidate } = useMemo(() => {
     // Legacy rows inherit their real repo host, including candidates from another project.
     const childRepo = repoMap.get(repoId)
     const childBoundary: WorktreeLineageBoundary = {
       hostId: executionHostId ?? (childRepo ? getRepoExecutionHostId(childRepo) : undefined)
     }
+    const isCrossStoreCandidate = (candidate: Worktree): boolean =>
+      isCrossStoreCreateParent(childBoundary.hostId, candidate)
     const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
     const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
     const folderSubtreeIds = activeFolderWorkspaceId
@@ -241,18 +245,25 @@ function ParentWorktreeCandidateList({
           worktreeMap
         )
       : null
-    return getIndexedAllWorktrees(worktreesByRepo)
+    const listed = getIndexedAllWorktrees(worktreesByRepo)
       .filter(
         (candidate) =>
           !candidate.isArchived &&
-          sharesWorktreeLineageBoundary(childBoundary, {
-            ...candidate,
-            hostId: getWorktreeExecutionHostId(candidate, repoMap.get(candidate.repoId))
-          }) &&
-          !cyclicLineageIds.has(candidate.id) &&
-          (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))
+          ((folderSubtreeIds === null && isCrossStoreCandidate(candidate)) ||
+            (sharesWorktreeLineageBoundary(childBoundary, {
+              ...candidate,
+              hostId: getWorktreeExecutionHostId(candidate, repoMap.get(candidate.repoId))
+            }) &&
+              !cyclicLineageIds.has(candidate.id) &&
+              (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))))
       )
       .sort(compareWorktreeDisplayName)
+    return {
+      candidates: listed,
+      valueOf: (candidate: Worktree): string =>
+        isCrossStoreCandidate(candidate) ? getWorktreeHostIdentity(candidate) : candidate.id,
+      isCrossStoreCandidate
+    }
   }, [
     activeFolderWorkspaceId,
     executionHostId,
@@ -267,20 +278,21 @@ function ParentWorktreeCandidateList({
     () => filterWorktreeParentCandidates(candidates, search, repoMap),
     [candidates, search, repoMap]
   )
-  // Index 0 is the pinned "No parent" row; candidates start at 1.
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length + 1)
 
-  // Why: the "No parent" row is virtualized as index 0 rather than pinned above the
-  // scroller. A row outside the virtual container shifts every item's true position
-  // without the virtualizer knowing, so scrollToIndex would land short by that height.
+  // Virtualize No parent at index 0; external rows would shift geometry and make scrollToIndex land short.
   const virtualizer = useVirtualizer({
     count: filtered.length + 1,
     getScrollElement: () => listRef.current,
     estimateSize: (index) => (index === 0 ? NO_PARENT_ROW_HEIGHT : PICKER_ROW_HEIGHT),
     overscan: PICKER_ROW_OVERSCAN,
-    getItemKey: (index) => (index === 0 ? NO_PARENT_ROW_KEY : (filtered[index - 1]?.id ?? index)),
-    // Why: the list mounts inside a popover that measures on the next frame, so
-    // seed the viewport to avoid a blank first paint.
+    getItemKey: (index) =>
+      index === 0
+        ? NO_PARENT_ROW_KEY
+        : filtered[index - 1]
+          ? getWorktreeHostIdentity(filtered[index - 1])
+          : index,
+    // Seed the viewport until the popover measures next frame to avoid blank first paint.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
 
@@ -294,9 +306,7 @@ function ParentWorktreeCandidateList({
 
   const handleSearchChange = useCallback(
     (nextSearch: string) => {
-      // Why: re-ranking on each keystroke makes any prior highlight meaningless. A query
-      // highlights the top match so Enter picks it; index 0 clears the parent, which is
-      // never what typing a name means. The clamp drops it back to 0 when nothing matches.
+      // Re-ranking invalidates the highlight; typing arms the top match, while no matches clamp to No parent.
       setSearch(nextSearch)
       setHighlightedIndex(nextSearch.trim().length > 0 ? 1 : 0)
       virtualizer.scrollToOffset(0)
@@ -325,15 +335,14 @@ function ParentWorktreeCandidateList({
         if (activeIndex === 0 || candidate) {
           event.preventDefault()
           event.stopPropagation()
-          onSelect(candidate?.id ?? null)
+          onSelect(candidate ? valueOf(candidate) : null)
         }
       }
     },
-    [activeIndex, filtered, moveHighlight, onSelect]
+    [activeIndex, filtered, moveHighlight, onSelect, valueOf]
   )
 
-  // Why: cmdk's Input owns aria-activedescendant and points it at its own empty
-  // item registry while we drive selection, so re-point it after every commit.
+  // cmdk points aria-activedescendant at its empty registry; restore our virtual selection after each commit.
   useEffect(() => {
     inputRef.current?.setAttribute('aria-activedescendant', `${optionIdPrefix}-${activeIndex}`)
   })
@@ -367,7 +376,7 @@ function ParentWorktreeCandidateList({
                 key={virtualRow.key}
                 id={`${optionIdPrefix}-${rowIndex}`}
                 role="option"
-                aria-selected={(candidate?.id ?? null) === value}
+                aria-selected={(candidate ? valueOf(candidate) : null) === value}
                 data-selected={isHighlighted || undefined}
                 // Why `jump-palette-item`: selection chrome lives in main.css — flat accent is invisible on light popovers.
                 className="jump-palette-item absolute left-0 top-0 flex w-full cursor-default select-none items-center gap-2 overflow-hidden rounded-sm px-2 py-2 text-sm outline-none"
@@ -376,18 +385,21 @@ function ParentWorktreeCandidateList({
                   transform: `translateY(${virtualRow.start}px)`
                 }}
                 onPointerMove={() => setHighlightedIndex(rowIndex)}
-                onClick={() => onSelect(candidate?.id ?? null)}
+                onClick={() => onSelect(candidate ? valueOf(candidate) : null)}
               >
                 <Check
                   className={cn(
                     'size-3.5 shrink-0',
-                    (candidate?.id ?? null) !== value && 'opacity-0'
+                    (candidate ? valueOf(candidate) : null) !== value && 'opacity-0'
                   )}
                 />
                 {candidate ? (
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium">{candidate.displayName}</div>
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
+                      {candidate.hostId && isCrossStoreCandidate(candidate) ? (
+                        <ParentMachineBadge hostId={candidate.hostId} />
+                      ) : null}
                       <GitBranch className="size-3 shrink-0" />
                       <span className="truncate">
                         {[
@@ -421,8 +433,7 @@ function ParentWorktreeCandidateList({
   )
 }
 
-/** Why: every prop is a primitive or a stable callback, so the composer's per-keystroke
- *  renders stop here instead of re-rendering the popover subtree. */
+/** Stable props let memo stop per-keystroke composer renders before the popover subtree. */
 export const ComposerParentWorktreePicker = React.memo(ComposerParentWorktreePickerImpl)
 
 export default ComposerParentWorktreePicker

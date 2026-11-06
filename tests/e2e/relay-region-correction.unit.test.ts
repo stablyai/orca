@@ -7,19 +7,18 @@ import type { IdleRegionalRehomeRequest } from '../../cloud/packages/relay-contr
 import {
   openInMemoryRelayDatabase,
   readRelayDatabasePoolPressure
-} from '../../cloud/apps/relay/src/database'
+} from '../../cloud/apps/relay/src/database/database'
 import { createRelayServer } from '../../cloud/apps/relay/src/relay-server'
-import { IDLE_REHOME_MIN_CONTROL_AGE_MS } from '../../cloud/apps/relay/src/host-session-registry'
-import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../../cloud/apps/relay/src/control-renewal-batch'
+import { IDLE_REHOME_MIN_CONTROL_AGE_MS } from '../../cloud/apps/relay/src/connections/host-session-registry'
+import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../../cloud/apps/relay/src/control-leases/control-renewal-batch'
 import { RELAY_PROTOCOL_LIMITS } from '../../cloud/packages/relay-contract/src/protocol-limits'
-import type { RelayConfig } from '../../cloud/apps/relay/src/config'
-import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/admin-token-verifier'
+import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/authentication/admin-token-verifier'
 import { RelayOriginPool } from '../../src/main/runtime/mobile-cloud-relay/relay-origin-pool'
 import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/mobile-cloud-relay/relay-control-protocol'
 import type { MobileSocketTransport } from '../../src/main/runtime/rpc/mobile-socket-wiring'
 import { createRelayExecutionProcess } from './helpers/relay-execution-process'
 
-vi.mock('../../cloud/apps/relay/src/relay-token-verifier', () => ({
+vi.mock('../../cloud/apps/relay/src/authentication/relay-token-verifier', () => ({
   createRelayTokenVerifier: () => async (hostId: string) => ({
     sub: 'transport-test-user',
     prof: 'profile-1',
@@ -31,10 +30,14 @@ vi.mock('../../cloud/apps/relay/src/relay-token-verifier', () => ({
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
-vi.mock('../../cloud/apps/relay/src/admin-token-verifier', async (importOriginal) => ({
-  ...(await importOriginal<typeof AdminTokenVerifier>()),
-  createRegionalRehomeTokenVerifier: () => async (token: string) => token === 'test-director-token'
-}))
+vi.mock(
+  '../../cloud/apps/relay/src/authentication/admin-token-verifier',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof AdminTokenVerifier>()),
+    createRegionalRehomeTokenVerifier: () => async (token: string) =>
+      token === 'test-director-token'
+  })
+)
 
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -100,6 +103,7 @@ async function topology() {
         assignmentSigningKey: new Uint8Array(32),
         adminAudience: 'https://director.example.test/v1/admin/drain',
         deployServiceAccount: 'deploy@example.test',
+        runtimeServiceAccount: 'relay-cell@example.test',
         rehomeAudience: 'https://director.example.test/v1/admin/host-drain',
         rehomeDirectorServiceAccount: 'director@example.test',
         databasePoolMax: 1,
@@ -111,7 +115,7 @@ async function topology() {
         publicResolveWaitMs: 5_000,
         publicAssignmentRetryAfterSeconds: 5,
         regionCorrectionCohortPercent: 100
-      } as RelayConfig,
+      },
       database,
       { now: () => clock, random: () => 0.5, cellIncarnation: incarnations[index] }
     )

@@ -8,10 +8,6 @@ import { useSourceControlHostedReviewState } from './use-hosted-review-state'
 import { useSourceControlLinkedReviews } from './use-linked-reviews'
 import { resolveSourceControlSuppressedGitHubPRState } from './suppressed-github-pr'
 
-/**
- * Resolves what review the active branch belongs to and which refs it is compared against — the
- * facts every review action later reads, before any of them can run.
- */
 export function useSourceControlReviewContext(panelState: SourceControlPanelState) {
   const {
     activeGitStatusHead,
@@ -33,7 +29,6 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     isFolder,
     remoteStatus,
     settings,
-    worktreeMap,
     worktreePath
   } = panelState
 
@@ -44,10 +39,12 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     branchName,
     hostedReviewCacheKey,
     hostedReviewEntryData,
+    currentHeadOid: activeWorktree?.head,
     linkedPR: activeWorktree?.linkedPR ?? null,
     suppressedGitHubPR: activeWorktree?.suppressedGitHubPR ?? null
   })
   const {
+    currentPrFromQueue,
     hasSuppressedGitHubPR,
     hostedReview,
     hostedReviewCreation,
@@ -79,16 +76,14 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
   })
   const createPrIntentTarget = useSourceControlCreatePrIntentTarget({
     activeRepoId,
-    activeRepoTarget,
     activeWorktreeId,
     branchName,
     createPrIntentCurrentTargetRef,
     effectiveBaseRef,
-    worktreeMap,
     worktreePath
   })
   const linkedReviews = useSourceControlLinkedReviews({
-    activePrFromQueue: hasSuppressedGitHubPR ? null : activePrFromQueue,
+    activePrFromQueue: hasSuppressedGitHubPR ? null : currentPrFromQueue,
     activeRepo,
     activeWorktree,
     branchName,

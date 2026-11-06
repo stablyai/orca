@@ -27,6 +27,7 @@ import {
   stringFlag
 } from './legacy-relay-cli-args'
 import type { LegacyRelayCliServer } from './legacy-relay-client'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connector-params'
 import {
   cappedInboxLimit,
   cappedWait,
@@ -76,7 +77,7 @@ function dispatcherFor(runtime: OrcaRuntimeService): RpcDispatcher {
   if (!dispatcher) {
     dispatcher = new RpcDispatcher({
       runtime,
-      // Why a registry of only these methods: even a bug upstream cannot reach anything else.
+      // Restrict registration too, so upstream scope bugs cannot invoke unrelated methods.
       methods: ALL_RPC_METHODS.filter((method) => METHODS.has(method.name)),
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
@@ -194,7 +195,7 @@ async function dispatchAsCaller(
   call: LegacyRelayCliCall,
   requestId: string
 ): Promise<RpcResponse> {
-  // Why: the runtime no longer hosts this terminal, so the attachment carries its verified identity.
+  // Attach verified identity because the runtime no longer hosts this legacy terminal.
   const authority = runtime.registerOrchestrationCompatibilitySshAttachment(
     deps.targetId,
     `legacy-relay:${randomUUID()}`,
@@ -205,8 +206,7 @@ async function dispatchAsCaller(
     }
   )
   try {
-    // A mutation this caller committed with this exact payload replays even after its assignment
-    // moved on; everything else, and every read, is scoped.
+    // Only exact committed mutations replay after assignment changes; all other calls remain scoped.
     const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call)
     const db = runtime.getOrchestrationDb()
     assertLegacyRelayCliScope(db, caller, call, deps.livePane, exactReplay)
@@ -273,12 +273,14 @@ async function serveCli(
     ? params.argv.filter((item): item is string => typeof item === 'string')
     : []
   const { command, flags } = parseLegacyRelayCliArgs(argv)
-  // Why before anything runs: `--help` on a valid command must never apply its effects.
+  // Handle help before execution so valid commands cannot apply effects with --help.
   if (flags.has('help') || argv.includes('-h')) {
     return { stdout: `${LEGACY_RELAY_CLI_HELP}\n`, stderr: '', exitCode: 0 }
   }
   if (!COMMANDS.has(command)) {
-    throw new Error(LEGACY_RELAY_CLI_UNSUPPORTED)
+    throw new Error(
+      command === 'connector reply' ? CONNECTOR_REPLY_UNAVAILABLE : LEGACY_RELAY_CLI_UNSUPPORTED
+    )
   }
   const retryRequestId = retryRequestFlag(flags)
   const invocation = admit(deps, env, signal, retryRequestId)

@@ -1,3 +1,4 @@
+import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -5,7 +6,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -17,7 +17,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -52,7 +51,6 @@ function githubDetailPayload(): Record<string, unknown> {
   }
 }
 
-/** The one hosted repository every task family queries, shaped the way `isHostedTaskRepo` needs. */
 const HOSTED_REPO = { id: REPO_ID, displayName: 'Repo', path: '/repo', provider: 'github' }
 
 const GITHUB_ISSUE_ITEM = {
@@ -60,6 +58,7 @@ const GITHUB_ISSUE_ITEM = {
   title: 'An issue',
   source: {
     id: 'github:issue:9',
+    url: 'https://github.com/owner/repo/issues/9',
     repoId: REPO_ID,
     number: 9,
     type: 'issue',
@@ -89,14 +88,11 @@ const LINEAR_ITEM = {
   }
 } as const
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
   readonly fixture: Record<string, unknown>
+  readonly observedFields?: readonly TaskActionObservedField[]
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
     readonly actions: () => Actions
@@ -107,12 +103,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskActionMountOwners(modules, context, model, spec.fixture, spec.observedFields)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -140,10 +138,7 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * The label and assignee pickers behind one item's metadata sheet, and the Linear team context the
- * composer and the status picker share. Both keep a `stale` guard between request and commit.
- */
+// Drive picker stale-response guards through their published state.
 export function taskItemMetadataMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -152,8 +147,17 @@ export function taskItemMetadataMountAdapters(
     const useEffects = load<
       typeof import('../../../tasks/use-mobile-tasks-item-detail-metadata-effects')
     >('use-mobile-tasks-item-detail-metadata-effects.tsx').useMobileTasksItemDetailMetadataEffects
-    return mountModelHook(context, {
+    return mountModelHook(modules, context, {
       useHook: (model) => useEffects(model),
+      observedFields: [
+        'itemBodyDraft',
+        'itemAvailableLabels',
+        'itemLabelsLoading',
+        'itemLabelsError',
+        'itemAssignableUsers',
+        'itemAssignableUsersLoading',
+        'itemAssignableUsersError'
+      ],
       fixture: {
         actionItem: GITHUB_ISSUE_ITEM,
         detailPayload: githubDetailPayload(),
@@ -182,7 +186,7 @@ export function taskItemMetadataMountAdapters(
     const useEffects = load<
       typeof import('../../../tasks/use-mobile-tasks-list-and-detail-effects')
     >('use-mobile-tasks-list-and-detail-effects.tsx').useMobileTasksListAndDetailEffects
-    return mountModelHook(context, {
+    return mountModelHook(modules, context, {
       useHook: (model) => useEffects(model),
       fixture: {
         actionItem: null,

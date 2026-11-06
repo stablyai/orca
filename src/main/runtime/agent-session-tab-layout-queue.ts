@@ -1,29 +1,34 @@
-// A layout-owner build's chat tab changes from this host (a chat it publishes, retires or
-// restores): main's own layout commands, with or without a window.
-
+import { savedSessionId } from './agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   chatTabLayoutCommand,
   loadChatTabLayout,
   type ChatTabChange,
   type ChatTabLayoutCommand
-} from './agent-session-tab-layout'
+} from './agent-session/agent-session-tab-layout'
 
-export type QueuedChatTabChange = { worktreeId: string; change: ChatTabChange }
+const MAX_STALE_PLACEMENT_RETRIES = 3
 
-/**
- * Runs each batch in order, every change read against the layout as it stands when the queue
- * reaches it, so a close follows the open it undoes. A refusal is logged, never thrown.
- */
+export type QueuedChatTabChange = {
+  worktreeId: string
+  change: ChatTabChange
+  eligible?: () => boolean
+}
+
+/** Serialize changes against the current layout so close follows open; log refusals and continue. */
 export function createChatTabLayoutQueue(deps: {
   sessionOf: (worktreeId: string) => WorkspaceSessionState | null
-  /** Read only for a worktree with a saved session; it throws for one the host cannot place. */
+  /** Called only with a saved session; unplaceable worktrees throw. */
   hostIdOf: (worktreeId: string) => ExecutionHostId
-  apply: (command: ChatTabLayoutCommand) => Promise<LayoutApplyReply>
-}): (changesNow: () => readonly QueuedChatTabChange[]) => void {
+  apply: (
+    command: ChatTabLayoutCommand,
+    run?: { admit: (partitions?: readonly WorkspaceSessionState[]) => boolean }
+  ) => Promise<LayoutApplyReply>
+}) {
   let queue: Promise<void> = Promise.resolve()
+  const pending = new Set<QueuedChatTabChange>()
   const commandNow = ({ worktreeId, change }: QueuedChatTabChange) => {
     const session = deps.sessionOf(worktreeId)
     if (!session) {
@@ -38,27 +43,93 @@ export function createChatTabLayoutQueue(deps: {
       change
     )
   }
-  return (changesNow) => {
+  const enqueue = (
+    input: readonly QueuedChatTabChange[] | (() => readonly QueuedChatTabChange[])
+  ) => {
+    if (typeof input !== 'function') {
+      for (const change of input) {
+        if ('open' in change.change) {
+          pending.add(change)
+        }
+      }
+    }
     queue = queue.then(async () => {
-      // A batch or change that fails is logged and the queue goes on: a later one must still land.
       let changes: readonly QueuedChatTabChange[]
       try {
-        changes = changesNow()
+        changes = typeof input === 'function' ? input() : input
       } catch (error) {
         console.warn('[agent-session-tabs] reading chat tab changes failed:', error)
         return
       }
       for (const queued of changes) {
         try {
-          const command = commandNow(queued)
-          const reply = command ? await deps.apply(command) : null
-          if (command && reply && !reply.ok) {
-            console.warn(`[agent-session-tabs] ${command.type} refused:`, reply.code)
+          let placementRetries = 0
+          for (let step = 0; step < 2;) {
+            if (queued.eligible && !queued.eligible()) {
+              break
+            }
+            const command = commandNow(queued)
+            let placementChanged = false
+            const reply = command
+              ? await deps.apply(command, {
+                  admit: (partitions) => {
+                    if (queued.eligible && !queued.eligible()) {
+                      return false
+                    }
+                    const current = commandNow(queued)
+                    if (JSON.stringify(current) !== JSON.stringify(command)) {
+                      placementChanged =
+                        command.type === 'openAgentSessionTab' &&
+                        current?.type === command.type &&
+                        current.workspace === command.workspace &&
+                        current.tabId === command.tabId &&
+                        current.sessionId === command.sessionId &&
+                        current.agent === command.agent
+                      return false
+                    }
+                    return (
+                      command.type !== 'closeTabs' ||
+                      !partitions ||
+                      partitions.every((partition) => {
+                        const tab = partition.unifiedTabs?.[queued.worktreeId]?.find(
+                          (candidate) => candidate.id === command.tabIds[0]
+                        )
+                        const sessionId =
+                          'open' in queued.change
+                            ? queued.change.open.sessionId
+                            : queued.change.close
+                        return !!tab && savedSessionId(tab) === sessionId
+                      })
+                    )
+                  }
+                })
+              : null
+            if (
+              placementChanged &&
+              reply &&
+              !reply.ok &&
+              reply.code === 'tab_not_found' &&
+              placementRetries < MAX_STALE_PLACEMENT_RETRIES
+            ) {
+              placementRetries++
+              continue
+            }
+            if (command && reply && !reply.ok) {
+              console.warn(`[agent-session-tabs] ${command.type} refused:`, reply.code)
+            }
+            if (!reply?.ok || !('open' in queued.change) || command?.type !== 'closeTabs') {
+              break
+            }
+            step++
           }
         } catch (error) {
           console.warn('[agent-session-tabs] a chat tab change failed:', error)
+        } finally {
+          pending.delete(queued)
         }
       }
     })
+    return queue
   }
+  return Object.assign(enqueue, { pendingOpens: () => [...pending] })
 }

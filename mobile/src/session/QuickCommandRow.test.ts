@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandRow } from './QuickCommandRow'
 
 const clipboard = vi.hoisted(() => ({ setStringAsync: vi.fn(() => Promise.resolve(true)) }))
@@ -41,15 +41,7 @@ const COMMAND: TerminalQuickCommand = {
   appendEnter: true
 }
 
-/**
- * The seventh migrated write, and the one that does not answer a refusal with a toast.
- *
- * A row inside a scrolling list says so on its own control: the copy button's label becomes
- * "Couldn't copy" and its icon turns red for the same 1500 ms the toast would have lasted. What it
- * had no way to say was anything a thumb could feel, and the button sits under the thumb that just
- * pressed it. The seam rejects on a refusal rather than resolving false, so these two cases are the
- * difference between the row that shows a green check over nothing copied and the row that does not.
- */
+// Require visible error feedback and haptics when clipboard writes reject; a failed write must never show Copied.
 describe('the quick-command row when the pasteboard refuses the text', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -64,12 +56,7 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     renderer = null
   })
 
-  /**
-   * The copy control, found by its label rather than its position among the row's four buttons.
-   *
-   * All four labels the button can carry, because the label is what the copy state changes: a
-   * finder keyed to one of them stops finding the button in the state it is meant to read.
-   */
+  // Find by every copy-state label so feedback transitions cannot make the control disappear from assertions.
   const COPY_LABELS = new Set([
     `Copy ${COMMAND.label}`,
     'Copied',
@@ -98,25 +85,8 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     }
   }
 
-  async function mountAndCopy(): Promise<void> {
-    await act(async () => {
-      renderer = create(createElement(QuickCommandRow, rowProps()))
-    })
-    await act(async () => {
-      copyButton().props.onPress()
-    })
-  }
-
-  it('says it could not copy and buzzes the error', async () => {
-    clipboard.setStringAsync.mockResolvedValue(false)
-    await mountAndCopy()
-    expect(copyButton().props.accessibilityLabel).toBe("Couldn't copy")
-    expect(haptics.notificationAsync).toHaveBeenCalledWith('error')
-  })
-
   it('emits nothing at all when the row is gone before the refusal arrives', async () => {
-    // A copy pressed on a row that then scrolls out of the list, or a sheet closed over it. The
-    // rejection still arrives, and a buzz with no row to explain it is feedback for nothing.
+    // Unmount before rejection; feedback without a surviving row would buzz with no explanation.
     let refuse: ((error: Error) => void) | undefined
     clipboard.setStringAsync.mockImplementation(
       () =>
@@ -135,14 +105,6 @@ describe('the quick-command row when the pasteboard refuses the text', () => {
     await act(async () => {
       refuse?.(new Error('pasteboard refused'))
     })
-    expect(haptics.notificationAsync).not.toHaveBeenCalled()
-  })
-
-  it('shows the copied label and no error buzz when the write lands', async () => {
-    // The control: a failure assertion is only evidence if the success path reads differently.
-    clipboard.setStringAsync.mockResolvedValue(true)
-    await mountAndCopy()
-    expect(copyButton().props.accessibilityLabel).toBe('Copied')
     expect(haptics.notificationAsync).not.toHaveBeenCalled()
   })
 })

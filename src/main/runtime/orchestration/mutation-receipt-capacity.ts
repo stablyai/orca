@@ -6,7 +6,7 @@ const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
 const MUTATION_RECEIPT_PRUNE_BATCH_SIZE = 64
 
 export function migrateMutationReceiptCapacity(db: Database.Database): void {
-  // Why: database triggers keep the count exact for concurrent connections and older binaries.
+  // Triggers preserve exact counts across concurrent connections and older binaries.
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mutation_receipts_completed_updated
       ON mutation_receipts(updated_at) WHERE state = 'completed';

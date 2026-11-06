@@ -23,8 +23,8 @@ import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -92,7 +92,7 @@ describe('SshConnection', () => {
       await advanceToNextSshClient(1)
       expect(clientInstances).toHaveLength(2)
 
-      // Why: a single published counter pinned every post-handshake drop at the 1000ms head step.
+      // Separate delay progression from failure count so post-handshake drops cannot stay at the1s rung.
       emitSshEvent('close')
       await vi.advanceTimersByTimeAsync(1999)
       expect(clientInstances).toHaveLength(2)
@@ -135,8 +135,7 @@ describe('SshConnection', () => {
   })
 
   it('restarts the ladder at the head when an explicit reconnect fails', async () => {
-    // Accepted delta: reset() puts the ladder at the head and the explicit attempt consumes no
-    // step, so the first failure publishes 0/1000ms where the single-counter version published 1/2000ms.
+    // Explicit retries reset the ladder and consume no step; their first failure stays at0/1000ms.
     vi.useFakeTimers()
     try {
       const published: { status: string; reconnectAttempt: number }[] = []
@@ -160,7 +159,6 @@ describe('SshConnection', () => {
       await vi.advanceTimersByTimeAsync(1)
       await reconnected
 
-      // Shipped published [0, 1] here; the ladder's reset() keeps the retry at the head instead.
       expect(
         published.filter((e) => e.status === 'reconnecting').map((e) => e.reconnectAttempt)
       ).toEqual([0, 0])
@@ -190,8 +188,7 @@ describe('SshConnection', () => {
       }
 
       expect(statuses).toContain('reconnection-failed')
-      // Pin the budget itself: the initial success plus exactly RECONNECT_BACKOFF_MS.length retries.
-      // Counting a failure twice, or giving up early, would strand a user on a flaky link.
+      // Enforce exactly the initial attempt plus the configured retry budget.
       expect(connectAttempts).toBe(1 + RECONNECT_BACKOFF_MS.length)
     } finally {
       vi.useRealTimers()
@@ -204,8 +201,7 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks())
       await connectWithFakeTimers(conn)
 
-      // Saturate the delay ladder on flaps alone; 45s reconnects each drop while staying under
-      // STABLE_CONNECTION_MS, so the ladder never resets to the head.
+      // Repeated short-lived successful handshakes saturate backoff without consuming failure budget.
       for (let drop = 0; drop < 12; drop++) {
         emitSshEvent('close')
         await advanceToNextSshClient(45_000)
@@ -214,8 +210,7 @@ describe('SshConnection', () => {
 
       const before = clientInstances.length
       emitSshEvent('close')
-      // The retry plus a worst-case handshake must land inside the shortest configurable relay grace,
-      // or the remote daemon shuts down and takes every PTY on that host with it.
+      // Retry plus worst-case handshake must fit the shortest relay grace or remote PTYs are destroyed.
       await advanceToNextSshClient(
         MIN_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000 - CONNECT_TIMEOUT_MS - 1
       )
@@ -334,7 +329,6 @@ describe('SshConnection', () => {
       await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
       await reconnected
 
-      // Shipped published 'error' here, stranding FIDO2 hosts with no path back short of a restart.
       expect(statuses).not.toContain('error')
       expect(conn.getState().status).toBe('reconnecting')
 
@@ -362,14 +356,13 @@ describe('SshConnection', () => {
       })
     )
 
-    // The ladder attempt parks inside ssh -G while the user presses Connect.
+    // Park automatic reconnect in ssh -G while the user starts a new connection.
     const parked = conn.reconnect()
     await conn.connect()
     releaseParked!()
     await parked
 
     expect(conn.getState().status).toBe('connected')
-    // Shipped published error:'SSH connection attempt was cancelled' over a live connection.
     expect(published.filter((entry) => entry.status === 'error')).toEqual([])
     expect(published.map((entry) => entry.error).filter(Boolean)).toEqual([])
   })

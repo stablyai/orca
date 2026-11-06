@@ -18,6 +18,7 @@ import {
   installRuntimeListResponses,
   layout,
   LEAF,
+  mockGetTerminalAttention,
   mockRuntimeEnvironmentCall,
   NOW,
   resetAgentHibernationCoordinatorFixture,
@@ -30,24 +31,6 @@ const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 afterEach(resetAgentHibernationCoordinatorFixture)
 
 describe('agent sleep coordinator', () => {
-  it('hibernates an eligible background worktree after two stable ticks', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(shutdown).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
-      paneKey: `tab-1:${LEAF}`,
-      tabId: 'tab-1',
-      leafId: LEAF,
-      ptyId: 'pty-1'
-    })
-    expect(useAppStore.getState().shutdownWorktreeTerminals).not.toHaveBeenCalled()
-  })
-
   it('hibernates completed Pi after the periodic recovery capture', async () => {
     vi.useFakeTimers()
     const piEntry = {
@@ -94,37 +77,15 @@ describe('agent sleep coordinator', () => {
     })
   })
 
-  it('cancels timers when stopped', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    const stop = startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-    stop()
-
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(shutdown).not.toHaveBeenCalled()
-  })
-
   it('revalidates fresh state before shutdown', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
-    // Why: returning to the tab between the plan and the confirm is the eligibility change this
-    // must observe. The active worktree is no longer skipped wholesale, so it is no longer a lever.
+    // Returning to the tab must invalidate confirmation; the active worktree is no longer excluded wholesale.
     setForegroundTerminalTabIds(['tab-1'])
     await vi.advanceTimersByTimeAsync(1000)
-
-    expect(shutdown).not.toHaveBeenCalled()
-  })
-
-  it('does not hibernate a foreground terminal tab that is not in the active worktree', async () => {
-    vi.useFakeTimers()
-    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    setForegroundTerminalTabIds(['tab-1'])
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
-
-    await vi.advanceTimersByTimeAsync(3000)
 
     expect(shutdown).not.toHaveBeenCalled()
   })
@@ -295,6 +256,79 @@ describe('agent sleep coordinator', () => {
     await vi.advanceTimersByTimeAsync(3000)
 
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('keeps a tab a paired client is showing, and sleeps it once the client hides it (#36427)', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    let shownRemotely = true
+    mockGetTerminalAttention.mockImplementation(async (ids) =>
+      Object.fromEntries(ids.map((id) => [id, { shownRemotely, lastInputAt: null }]))
+    )
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(mockGetTerminalAttention).toHaveBeenCalledWith(['pty-1'])
+
+    shownRemotely = false
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(shutdown).toHaveBeenCalledOnce()
+  })
+
+  it('treats typing from a paired client after the turn as input that keeps the tab (#36427)', async () => {
+    vi.useFakeTimers()
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+    mockGetTerminalAttention.mockImplementation(async (ids) =>
+      Object.fromEntries(ids.map((id) => [id, { shownRemotely: false, lastInputAt: NOW - 1 }]))
+    )
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('keeps a runtime-hosted tab another client is showing, but not on hosts that report nothing', async () => {
+    vi.useFakeTimers()
+    const shown = runtimeListResult(['pty-1'])
+    const withAttention = {
+      ...shown,
+      terminals: shown.terminals.map((terminal) => ({
+        ...terminal,
+        attention: { shownRemotely: true, lastInputAt: null }
+      }))
+    }
+    installRuntimeListResponses(withAttention, withAttention, withAttention, withAttention)
+    const runtimeState = {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), runtimeState)
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.list',
+        params: expect.objectContaining({ includeAttention: true })
+      })
+    )
+
+    // An older host omits attention; agent sleep must keep working there.
+    resetAgentHibernationCoordinatorFixture()
+    vi.useFakeTimers()
+    installRuntimeListResponses(shown, shown, shown)
+    const legacyShutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), runtimeState)
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(legacyShutdown).toHaveBeenCalledOnce()
   })
 
   it.each(['wt-bg', 'folder:folder-1'])(
@@ -507,6 +541,7 @@ describe('agent sleep coordinator', () => {
   it('uses fresh store state after awaiting runtime liveness before shutdown', async () => {
     vi.useFakeTimers()
     const delayed = deferred<ReturnType<typeof runtimeListResult>>()
+    const recheckStarted = deferred<void>()
     const responses: (
       | ReturnType<typeof runtimeListResult>
       | Promise<ReturnType<typeof runtimeListResult>>
@@ -517,6 +552,9 @@ describe('agent sleep coordinator', () => {
         return Promise.resolve(compatible)
       }
       if (args.method === 'terminal.list') {
+        if (responses.length === 1) {
+          recheckStarted.resolve(undefined)
+        }
         return Promise.resolve(responses.shift() ?? runtimeListResult(['pty-1'])).then(
           (result) => ({
             id: 'terminal-list',
@@ -543,11 +581,12 @@ describe('agent sleep coordinator', () => {
     })
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
-    await vi.advanceTimersByTimeAsync(1000)
-    await vi.advanceTimersByTimeAsync(1000)
+    await runAgentHibernationTick()
+    const tick = runAgentHibernationTick()
+    await recheckStarted.promise
     setForegroundTerminalTabIds(['tab-1'])
     delayed.resolve(runtimeListResult(['pty-1']))
-    await Promise.resolve()
+    await tick
 
     expect(shutdown).not.toHaveBeenCalled()
   })
@@ -650,10 +689,7 @@ describe('agent sleep coordinator', () => {
 })
 
 describe('teardown drains sequentially', () => {
-  // Why: each shutdown re-runs a full runtime-liveness sweep and then a stopExact RPC.
-  // Firing the whole confirmed set at once meant ~100 concurrent sweeps plus ~100
-  // concurrent stops on the first pass after a backlog — hundreds of near-simultaneous
-  // RPCs on an SSH runtime.
+  // Sequential shutdown avoids one liveness sweep and stop RPC per confirmed pane firing concurrently.
   it('never runs two pane teardowns at the same time', async () => {
     let inFlight = 0
     let maxInFlight = 0

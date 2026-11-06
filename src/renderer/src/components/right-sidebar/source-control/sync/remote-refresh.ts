@@ -2,9 +2,9 @@ import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
 } from '@/lib/source-control-remote-error'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from './action-error'
-import type { RemoteOpKind } from '../../source-control-primary-action'
+import type { RemoteOpKind } from '../review/source-control-primary-action-types'
 
 export function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
   return resolveRemoteOperationErrorMessage(error, {
@@ -30,7 +30,7 @@ export function refreshSourceControlAfterRemoteAction({
   refreshGitHistory: () => Promise<void>
   onError?: (error: unknown) => void
 }): void {
-  // Why: fetch/sync can move the remote base without touching local files; refresh all three projections so branch compare re-runs immediately.
+  // Fetch/sync can move the remote base without local file changes; refresh every projection.
   void Promise.all([refreshGitStatus(), refreshBranchCompare(), refreshGitHistory()]).catch(onError)
 }
 

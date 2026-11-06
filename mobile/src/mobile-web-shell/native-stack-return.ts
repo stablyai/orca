@@ -13,17 +13,14 @@ type NativeStackRoute = Readonly<{
   state?: NativeStackState
 }>
 
-/** A pop of `count` screens off the navigator keyed `target`, counted from its route `source`.
- *  `source` is explicit because a screen's `dispatch` stamps its own key there otherwise, and a parent
- *  navigator that cannot find that key among its routes drops the pop. */
+// Set source explicitly: screen dispatch otherwise stamps its own key, which a parent navigator cannot find and silently drops.
 export type NativeStackReturn = Readonly<{ target: string; source: string; count: number }>
 
-/** Expo-router file segments that name no part of the URL: `index`, `(group)` and its own `__root`. */
 function isUrlSegment(segment: string): boolean {
   return segment !== 'index' && !/^\(.*\)$/.test(segment) && !segment.startsWith('__')
 }
 
-/** A state not yet rehydrated may omit `index`; React Navigation reads that as its last route. */
+// Before rehydration, React Navigation treats absent index as the last route.
 function focusedIndex(state: NativeStackState): number {
   return state.index ?? state.routes.length - 1
 }
@@ -36,9 +33,7 @@ function decodeSegment(segment: string): string {
   }
 }
 
-/** One spelling per URL: decoded path segments and the query sorted, as expo-router parses both.
- *  An empty value is dropped because screens clear a param with `''` (session `paneKey`), and the
- *  fragment because expo-router keeps it as a param no href spells the same way. */
+// Decode paths and sort query for Expo URL equality; omit fragments and empty params because screens use empty strings to clear requests.
 function canonicalHref(href: string): string {
   const [path = '', search = ''] = href.split('#')[0].split('?')
   const segments = path.split('/').filter(Boolean).map(decodeSegment)
@@ -48,7 +43,6 @@ function canonicalHref(href: string): string {
   return `/${segments.join('/')}?${new URLSearchParams(query).toString()}`
 }
 
-/** The URL a route on the stack shows, or null when its params hold something no URL carries. */
 function routeHref(route: NativeStackRoute, parentNames: readonly string[]): string | null {
   const names = [...parentNames, route.name]
   const nested = route.state?.routes[focusedIndex(route.state)]
@@ -83,7 +77,7 @@ function returnWithin(
     return null
   }
   if (focused.state) {
-    // The deeper navigator first: its screens sit nearer the top than anything at this level.
+    // Search deeper navigators first because their entries are nearer the stack top.
     const deeper = returnWithin(focused.state, [...parentNames, focused.name], wanted)
     if (deeper) {
       return deeper
@@ -102,12 +96,7 @@ function returnWithin(
   return null
 }
 
-/**
- * Where `href` already sits on the native stack: `'current'` when it is the focused screen, the pop
- * that returns to the nearest screen below showing it, or null when it is nowhere on the stack.
- *
- * Path and query both count, so another worktree or tab under the same file is a different screen.
- */
+// Compare path and query so different worktrees/tabs are distinct; return the nearest matching entry, current, or no match.
 export function nativeStackReturn(
   state: NativeStackState,
   href: string

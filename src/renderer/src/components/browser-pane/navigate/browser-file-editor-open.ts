@@ -7,11 +7,7 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { openDocPreviewSource } from '../workspace-doc/doc-preview-document-actions'
 
-/**
- * A local browser page's file:// URL names a file on this computer, so its source can open in the
- * editor only where this computer owns the workspace; elsewhere the editor would read the
- * workspace host's file at that path.
- */
+/** file:// names this computer’s disk; a remote workspace editor would read the same path on another host. */
 export function canOpenBrowserFileInWorkspaceEditor(state: AppState, worktreeId: string): boolean {
   return (
     getConnectionIdFromState(state, worktreeId) === null &&
@@ -19,7 +15,6 @@ export function canOpenBrowserFileInWorkspaceEditor(state: AppState, worktreeId:
   )
 }
 
-/** Opens the file behind a local browser page as its editable source, as a document preview does. */
 export async function openBrowserFileSource(worktreeId: string, filePath: string): Promise<void> {
   const state = useAppStore.getState()
   if (!canOpenBrowserFileInWorkspaceEditor(state, worktreeId)) {

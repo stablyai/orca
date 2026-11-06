@@ -1,20 +1,17 @@
-// Layout-owner builds: main's close drops a tab's panes before their terminals exit. Until the
-// exit, a terminal no pane of main's layout holds is still the closed tab's, so its ownership is
-// released with that tab; one main moved to another tab keeps it.
+// Main drops panes before terminal exit: release terminals still in the closed tab or now unbound, but retain those moved to another tab.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 /** Whether the terminal belongs to the tab: main holds it there, or, switch-on, in no pane. */
 export function terminalIsOfTab(heldTabId: string | null, parentTabId: string): boolean {
   return heldTabId === parentTabId || (ORCA_LAYOUT_OWNER_IS_MAIN && heldTabId === null)
 }
 
-/** A row's live terminal. Switch-on it is read before main's close drops the panes it is found
- *  by; window-owned builds look it up when asked, after the close. */
+/** Capture main-owned terminals before close drops panes; window-owned layouts look up terminals after close. */
 export function liveTerminalsOfTab(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   parentTabId: string,

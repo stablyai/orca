@@ -46,7 +46,6 @@ async function openStore(seed: (window: WindowSession) => void): Promise<Store> 
   return restart(store, directory)
 }
 
-/** Quit and relaunch: what main loads is the profile on disk. */
 async function restart(store: Store, directory = directoryOf.get(store)!): Promise<Store> {
   const reopened = await reopenTopologyStore(store, directory)
   directoryOf.set(reopened, directory)
@@ -68,7 +67,6 @@ function livePty(ptyId: string, recorded?: { tabId: string; paneKey: string }): 
   }
 }
 
-/** Main's startup pass over a real profile, the host census answering with `ptys`. */
 async function placeOn(
   store: Store,
   ptys: LivePty[],
@@ -79,7 +77,6 @@ async function placeOn(
     refreshInventory: async () => ({ workspaceIds: new Set([WORKTREE]) }),
     ptys: () => ptys,
     isStillBinding: () => false,
-    // The pane each fake terminal names stands in for the host's answer.
     paneOf: (pty) => ({
       tabId: pty.tabId ?? null,
       paneKey: pty.paneKey ?? null,
@@ -121,7 +118,6 @@ describe('main shows a live terminal no pane shows, at startup with no window', 
     await placeOn(store, [livePty('pty-agent', { tabId: TAB, paneKey: `${TAB}:${LEAF}` })])
 
     expect(store.getPtyBindingGeneration('local', LEAF)).toBe(before + 1)
-    // A command that changes no binding (a rename) leaves it as it is.
     await store.applyLayoutCommand({
       type: 'renameTab',
       workspace: WORKTREE,
@@ -143,11 +139,10 @@ describe('main shows a live terminal no pane shows, at startup with no window', 
     const adopted = tabs.find((tab) => tab.id !== TAB)
     const bindings = relaunched.getWorkspaceSession().terminalLayoutsByTabId[adopted?.id ?? '']
     expect(Object.values(bindings?.ptyIdsByLeafId ?? {})).toEqual(['pty-cli'])
-    // A census then names the new pane as the terminal's, so a window reads it as shown.
+    // Publish adopted ownership so subsequent frames show the terminal in its pane.
     expect(placement.recordedPanes.get('pty-cli')).toBe(
       `${adopted?.id}:${Object.keys(bindings?.ptyIdsByLeafId ?? {})[0]}`
     )
-    // The next startup finds it shown and places nothing twice.
     expect((await placeOn(relaunched, [livePty('pty-cli')])).placed).toEqual([])
   })
 

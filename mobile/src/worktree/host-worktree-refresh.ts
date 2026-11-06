@@ -7,7 +7,7 @@ const WORKTREE_REFRESH_MS = 3000
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
-// The part of React Native's AppState this reads, spelled here so importers need no RN types.
+// Keep lifecycle callers independent of RN types.
 type HostAppState = {
   currentState: string
   addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
@@ -57,11 +57,7 @@ export function startHostWorktreeRefresh({
           return
         }
         void fetchWorktrees()
-        // Why: desktop Settings repo edits (icon/color/name, repo removal) now emit `reposChanged`
-        // (#11994), but a host on an older build does not; keep this periodic repo.list as the
-        // convergence safety-net. fetchRepoMetadata self-throttles to REPO_METADATA_REFRESH_MS
-        // (60s), so this is ~1 request/min while foregrounded — the AppState gate is what removes
-        // the waste (both stop while backgrounded).
+        // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
       }, WORKTREE_REFRESH_MS)
   const unsubscribe = client.subscribe(
@@ -113,8 +109,7 @@ export function startHostWorktreeRefresh({
   sidebarFeed?.refresh()
   void fetchWorktrees()
   void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-  // Why resend: each connected edge starts a new lifecycle, so a write the last connection lost is
-  // never seen by a replayed ready above.
+  // A lost write predates the new lifecycle’s replayed ready; explicitly resend it on reconnect.
   void syncViewSettings({ resend: true })
 
   return () => {

@@ -12,7 +12,8 @@ import {
   type AgentRowUnreadState
 } from './dashboard-row-bucket'
 import type { DashboardAgentRowWithLineage } from './agent-row-lineage'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import {
   createWorktreeAgentRowsCache,
   finishWorktreeAgentRowsCachePass,
@@ -61,14 +62,7 @@ export function createDashboardBucketCountsCache(): DashboardBucketCountsCache {
   }
 }
 
-/**
- * The workspace descriptor list, reused by identity while its inputs hold.
- *
- * `collectActiveDashboardWorkspaces(state, false)` allocates one descriptor per
- * workspace (hundreds, in a large install) and, with metadata off, reads only the
- * four slices keyed here — see the read-set note on `DashboardWorkspaceState`.
- * Every other slice it can touch sits behind an `includeMapMetadata` gate.
- */
+/** Metadata-free descriptors read four slices only; extend this memo key whenever DashboardWorkspaceState’s ungated read set grows. */
 function selectActiveDashboardWorkspaces(
   state: DashboardWorkspaceState,
   cache: DashboardBucketCountsCache | undefined
@@ -105,16 +99,7 @@ function countsEqual(
   )
 }
 
-/**
- * One worktree's bucket tally, reused while its rows and the acknowledgement map
- * both hold their identity.
- *
- * `dashboardRowBucketProjection` reads the row, the acknowledgement map, and the
- * live/retained records under the row's own key. Those records are this worktree's
- * row-cache inputs, so `rows` identity already covers them; keying on the ack slice
- * rather than folding it into the row cache keeps main's property that an
- * acknowledgement recounts without rebuilding rows.
- */
+/** Rows identity covers live/retained records; key acknowledgments separately so reading agents recounts without rebuilding rows. */
 function tallyWorktreeRows(
   rows: DashboardAgentRowWithLineage[],
   state: AgentRowUnreadState,
@@ -149,17 +134,7 @@ function tallyWorktreeRows(
   return tally
 }
 
-/**
- * Derive sidebar counts without allocating dashboard cards or metadata.
- *
- * With a cache, three layers reuse work independently: the workspace descriptor
- * list while its four slices hold, each worktree's row pipeline while its own
- * inputs hold (see worktree-agent-rows-cache), and each worktree's bucket tally
- * while its rows and the acknowledgement map hold. An acknowledgement write
- * therefore recounts without rebuilding any rows, as before. `generation` must
- * change whenever time-based freshness decay may have shifted a bucket
- * (agentStatusEpoch).
- */
+/** Reuse workspace descriptors, per-worktree rows and ack-sensitive tallies independently; generation must advance on possible freshness decay. */
 export function buildDashboardBucketCounts(
   state: DashboardSnapshotState,
   now: number,
@@ -217,9 +192,7 @@ export function buildDashboardBucketCounts(
   if (!cache) {
     return totals
   }
-  // Why: most recomputes are triggered by agent traffic that leaves all four
-  // totals where they were; a fresh object there would re-render the sidebar
-  // entry and miss every downstream memo keyed on this result.
+  // Reuse equal totals by identity so status chatter cannot re-render sidebar consumers.
   const stable =
     cache.lastCounts && countsEqual(cache.lastCounts, totals) ? cache.lastCounts : totals
   cache.lastCounts = stable

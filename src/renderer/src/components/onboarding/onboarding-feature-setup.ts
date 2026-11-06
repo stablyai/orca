@@ -205,11 +205,7 @@ export async function runOnboardingFeatureSetup(
   if (selection.computerUse) {
     try {
       const status = await deps.getComputerUsePermissionStatus()
-      // Why: when the macOS helper app is missing (e.g. dev builds without
-      // `pnpm build:computer-macos`), the status reports all permissions as
-      // not-granted alongside a helperUnavailableReason. Without this guard we
-      // would call openSetup, which throws an IPC handler error instead of
-      // degrading gracefully.
+      // A missing macOS helper reports ungranted permissions too; guard before openSetup to avoid an IPC error.
       if (status.helperUnavailableReason) {
         warnings.push({
           featureId: 'computerUse',

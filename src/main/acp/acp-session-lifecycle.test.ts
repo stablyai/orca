@@ -243,7 +243,6 @@ describe('ACP caller-owned waits', () => {
     const { agent, runtime } = fixture({
       onRequest: (method) =>
         new Promise((resolve, reject) => {
-          // '_vendor/silent' ignores the abort: the runtime never answers for it.
           if (method !== '_vendor/silent') {
             withdrawal.signal.addEventListener('abort', () =>
               method === '_vendor/plan'

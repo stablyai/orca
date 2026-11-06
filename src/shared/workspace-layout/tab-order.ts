@@ -82,10 +82,7 @@ export function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] 
   })
 }
 
-/**
- * Insert `tabId` after `anchorTabId` when both share a pin partition; otherwise at the end of the
- * new tab's partition. Siblings keep their relative order.
- */
+/** Insert after an anchor only within the same pin partition; otherwise append within the new tab’s partition, preserving sibling order. */
 export function insertTabIdIntoOrder(
   tabOrder: readonly string[],
   tabs: readonly PinnedTab[],
@@ -128,10 +125,7 @@ export function canReplacePreviewContentType(
 
 export type TabOrderMove = { tabId: string; index: number }
 
-/**
- * A `moveTab` anchor for slot `index` of the order the window drew: the tab before it, or null
- * for first. Main places by it, so a tab only main holds cannot shift the move (ledger L193).
- */
+/** Anchor against the window’s drawn order (null means first), so main-only tabs cannot shift the move (L193). */
 export function tabOrderAnchor(order: readonly string[], index: number): string | null | undefined {
   return index <= 0 ? null : order[index - 1]
 }
@@ -139,10 +133,7 @@ export function tabOrderAnchor(order: readonly string[], index: number): string 
 const sameOrder = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((id, index) => id === b[index])
 
-/**
- * `moveTab` steps (take the tab out, put it back at `index`) that turn `from` into `to`: one when a
- * single tab moved, else one per misplaced slot. None when the two orders hold different tabs.
- */
+/** Emit one move for a single-tab change, otherwise moves per misplaced slot; refuse different membership with no moves. */
 export function tabOrderMoves(from: readonly string[], to: readonly string[]): TabOrderMove[] {
   const held = new Set(from)
   if (held.size !== from.length || !sameOrder([...held].sort(), [...to].sort())) {

@@ -18,8 +18,7 @@ type WorktreeChangeOwner = {
 type WorktreeChangeEvent = {
   repoId: string
   renamed?: WorktreeRename
-  // Why: set on local worktrees:changed while a remote runtime is active, so the
-  // refresh pins to the local host instead of dropping the event (see useIpcEvents).
+  // Local change events must pin refresh to local ownership even while a remote runtime is active.
   forceLocalOwner?: boolean
   executionHostId?: ExecutionHostId
   sortOrderOnly?: boolean
@@ -114,10 +113,7 @@ export function createWorktreeChangeRefreshQueue(
         })
       } else {
         const lastQueued = state.queue.at(-1)
-        // Why: Windows/OneDrive can emit a burst for one checkout change. Keep a
-        // trailing refresh, but do not fan out adjacent identical repo scans.
-        // A differing forceLocalOwner is not identical — keep it as its own scan
-        // so a local-pinned refresh is never coalesced into a runtime-routed one.
+        // Coalesce identical Windows/OneDrive bursts with a trailing refresh; different forceLocalOwner values require distinct host scans.
         if (
           !lastQueued ||
           lastQueued.renamed !== undefined ||

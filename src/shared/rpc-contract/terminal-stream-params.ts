@@ -35,19 +35,8 @@ export const TerminalSubscribe = TerminalHandle.extend({
       writeUnavailable: z.literal(1).optional()
     })
     .optional(),
-  /**
-   * The bytes a mobile snapshot may occupy once it is JSON, when the subscriber has a frame cap.
-   *
-   * Additive and optional, so no negotiation is involved: a host that predates it ignores the field
-   * and trims on the raw byte budget it always did, and a subscriber that never sends one is served
-   * exactly as before (Rule 1 of docs/reference/remote-wire-compatibility.md). The page sends it
-   * because the shell measures the frame rather than the text, and an ANSI snapshot escapes every
-   * ESC byte into six — a 512 KiB budgeted screen serializes past the 640 KiB bridge cap and ends
-   * the stream before a live byte lands.
-   *
-   * Never inferred from `client.type`: a mobile subscriber on the socket has no frame cap at all,
-   * and one that sends this has whatever cap its own transport imposes.
-   */
+  /** Budget the JSON frame, not raw text: ESC expands sixfold and can push a 512 KiB snapshot past a 640 KiB bridge cap.
+   * Optional for legacy raw-byte trimming; never infer from client.type because mobile socket clients have no frame cap. */
   snapshotByteBudget: z.number().int().positive().optional()
 })
 

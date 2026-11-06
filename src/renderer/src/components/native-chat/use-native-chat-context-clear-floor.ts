@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
-} from '../../../../shared/agent-session-context-clear'
+} from '../../../../shared/agent-session/agent-session-context-clear'
 
 /** Matches the transcript's `duration-150` fade, so the swap happens while it is invisible. */
 export const NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS = 150
@@ -18,11 +18,7 @@ type ClearFloorState = {
   clears: number
 }
 
-/**
- * The rows a structured chat's transcript shows: from its latest `/clear` divider on. A clear
- * landing live fades the old transcript out before it goes; a divider paged in from history just
- * becomes the top, keeping the scroll.
- */
+/** Show history after the latest clear; fade live clears before swapping, but preserve scroll for historical dividers. */
 export function useNativeChatContextClearFloor(
   epoch: string | null,
   items: readonly AgentJournalRenderItem[]

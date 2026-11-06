@@ -9,12 +9,14 @@ import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
+import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
 
 type SendParamsInput = z.infer<typeof SendParams>
 
 type RemoteAttachment = {
   dispatch_id: string
+  home_run_id: string
   state: WorkerDispatchState
   protocol_version: number
 }
@@ -28,9 +30,9 @@ export async function sendRemoteMessage(args: {
   remoteAttachment: RemoteAttachment
   processIncarnation?: string | null
   signal?: AbortSignal
-}): Promise<unknown> {
+}) {
   const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
-  rejectFederatedExplicitTarget(params)
+  rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
   assertWorkerCanReport({
     dispatchId: remoteAttachment.dispatch_id,
     from,
@@ -108,6 +110,7 @@ export async function sendRemoteMessage(args: {
       destination: 'run_home',
       accepted: true
     },
-    ...(lifecycle ? { lifecycle } : {})
+    ...(lifecycle ? { lifecycle } : {}),
+    ...(lifecycle && lifecycle.action !== 'rejected' ? { next: WORKER_DONE_RECORDED_NEXT } : {})
   }
 }

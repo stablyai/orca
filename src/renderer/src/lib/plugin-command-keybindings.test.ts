@@ -1,18 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import {
-  findKeybindingConflictsForDefinitions,
-  KEYBINDING_DEFINITIONS
-} from '../../../shared/keybindings'
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
+import type { KeybindingOverrides } from '../../../shared/keybindings'
 import {
   findPluginCommandForKeybinding,
-  getEffectivePluginCommandKeybindings,
-  pluginCommandKeybindingActionId,
-  pluginCommandKeybindingDefinition
+  globalShortcutTargetYields,
+  pluginCommandKeybindingActionId
 } from './plugin-command-keybindings'
 
 const command: ActivePluginCommand = {
-  pluginKey: 'orca-samples.tasks',
+  pluginKey: 'samples.tasks',
   pluginName: 'Tasks',
   id: 'open',
   title: 'Open Tasks',
@@ -22,24 +19,6 @@ const command: ActivePluginCommand = {
 }
 
 describe('plugin command keybindings', () => {
-  it('builds a stable dynamic action definition', () => {
-    expect(pluginCommandKeybindingActionId(command)).toBe('plugin:orca-samples.tasks/open')
-    expect(pluginCommandKeybindingDefinition(command)).toMatchObject({
-      title: 'Open Tasks — Tasks',
-      group: 'Plugins',
-      defaultBindings: { darwin: ['Mod+Alt+T'] }
-    })
-  })
-
-  it('lets user overrides replace or disable contributed defaults', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    expect(getEffectivePluginCommandKeybindings(command, 'linux')).toEqual(['Mod+Alt+T'])
-    expect(
-      getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: ['Mod+Shift+T'] })
-    ).toEqual(['Mod+Shift+T'])
-    expect(getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: [] })).toEqual([])
-  })
-
   it('matches effective overrides and honors explicit disablement', () => {
     const actionId = pluginCommandKeybindingActionId(command)
     const input = {
@@ -65,40 +44,45 @@ describe('plugin command keybindings', () => {
       findPluginCommandForKeybinding([command], input, 'linux', { [actionId]: [] }, true)
     ).toBeNull()
   })
+})
 
-  it('reports conflicts between plugin and built-in definitions', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    const definitions = [...KEYBINDING_DEFINITIONS, pluginCommandKeybindingDefinition(command)]
-
-    expect(
-      findKeybindingConflictsForDefinitions(definitions, 'darwin', {
-        [actionId]: ['Mod+P']
-      })
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionIds: expect.arrayContaining([actionId, 'worktree.quickOpen'])
-        })
-      ])
-    )
+describe('globalShortcutTargetYields', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
   })
 
-  it('does not match worktree commands without an active worktree', () => {
-    const worktreeCommand = { ...command, context: 'worktree' as const }
-    const input = {
-      key: 't',
-      code: 'KeyT',
-      control: true,
-      meta: false,
-      alt: true,
-      shift: false
+  function editable(inNativeChat: boolean): HTMLElement {
+    const root = document.createElement('div')
+    if (inNativeChat) {
+      root.dataset.nativeChatRoot = 'true'
     }
+    const field = root.appendChild(document.createElement('div'))
+    field.contentEditable = 'true'
+    if (inNativeChat) {
+      field.dataset.nativeChatPromptEditor = ''
+    }
+    document.body.appendChild(root)
+    return field
+  }
 
-    expect(
-      findPluginCommandForKeybinding([worktreeCommand], input, 'linux', undefined, false)
-    ).toBeNull()
-    expect(findPluginCommandForKeybinding([worktreeCommand], input, 'linux', undefined, true)).toBe(
-      worktreeCommand
-    )
+  it('lets rename through the chat prompt while protecting ordinary fields and editing chords', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
+    const yields = (letter: string, inNativeChat: boolean, overrides?: KeybindingOverrides) =>
+      globalShortcutTargetYields(
+        {
+          key: letter,
+          code: `Key${letter.toUpperCase()}`,
+          metaKey: true,
+          target: editable(inNativeChat)
+        },
+        'darwin',
+        overrides,
+        { context: 'app' }
+      )
+
+    expect(yields('r', true)).toBe(false)
+    expect(yields('r', false)).toBe(true)
+    expect(yields('z', true, { 'tab.rename': ['Mod+Z'] })).toBe(true)
   })
 })

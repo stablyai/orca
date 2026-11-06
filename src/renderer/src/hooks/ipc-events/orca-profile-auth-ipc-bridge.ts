@@ -1,6 +1,5 @@
 import { useAppStore } from '../../store'
 
-/** Keeps auth status and the in-flight sign-in in step with main. */
 export function registerOrcaProfileAuthIpcBridge(unsubs: (() => void)[]): void {
   const api = window.api.orcaProfiles
   if (typeof api?.onAuthStatusChanged === 'function') {

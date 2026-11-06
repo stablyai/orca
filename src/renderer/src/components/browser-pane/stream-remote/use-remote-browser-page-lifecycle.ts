@@ -47,9 +47,7 @@ export function useRemoteBrowserPageLifecycle({
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
   const setFrameUrlRef = useRef(setFrameUrl)
   const setFrameMetadataRef = useRef(setFrameMetadata)
-  // The single source for what the stream is doing. busy, the notice, and whether the reconnect
-  // control renders are all derived below, so they cannot disagree — see
-  // remote-browser-stream-status.ts for the four ways they used to.
+  // Derive busy, notice and reconnect from one status so they cannot disagree.
   const [streamStatus, setStreamStatus] = useState<RemoteBrowserStreamStatus>(
     REMOTE_BROWSER_STREAM_IDLE
   )
@@ -65,8 +63,7 @@ export function useRemoteBrowserPageLifecycle({
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const runtimeWorktreeRef = useRef(runtimeWorktree)
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
-  // Why: the stream lifecycle is built once per pane, before the callbacks it needs exist. It
-  // reaches them through this bridge so it never captures a render's stale closure.
+  // The lifecycle is built once; bridge committed callbacks to avoid stale render closures.
   const streamBridgeRef = useRef<RemoteBrowserStreamBridge>(NO_REMOTE_BROWSER_STREAM_BRIDGE)
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
@@ -106,12 +103,7 @@ export function useRemoteBrowserPageLifecycle({
       getDeviceScaleFactor: getRemoteBrowserDeviceScaleFactor,
       setStatus: (status) => {
         setStreamStatus(status)
-        // Why every status change clears the pane's notice, not just the recovering ones: a pane
-        // notice describes the situation the PREVIOUS status described, so any transition makes it
-        // stale. Clearing only on live/opening left a 'direct' notice — which outranks the stream's
-        // own — on screen after the stream stopped, so a stranded pane showed "Enter a valid http(s)
-        // or localhost URL." beside its Reconnect button and never showed the actual cause.
-        // It also has no other owner: nothing else would dismiss it.
+        // Every transition invalidates the pane notice; stale direct feedback would outrank the stream’s failure beside Reconnect.
         setPaneNotice(null)
       },
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),

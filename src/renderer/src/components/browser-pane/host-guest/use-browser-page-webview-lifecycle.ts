@@ -182,8 +182,7 @@ export function useBrowserPageWebviewLifecycle({
   const syncNavigationState = useCallback(
     (webview: Electron.WebviewTag): void => {
       try {
-        // Parked panes miss guest events; only reconcile isLoading when the store already knows
-        // a navigation is active so an attach-time transient cannot flash a loading indicator.
+        // Reconcile parked guests only for known navigations; attach-time loading transients must not flash the indicator.
         const loading = browserTabLoadingRef.current ? webview.isLoading() : undefined
         onUpdatePageStateRef.current(browserTabId, {
           title: getBrowserDisplayTitle(
@@ -195,7 +194,7 @@ export function useBrowserPageWebviewLifecycle({
           canGoForward: webview.canGoForward()
         })
       } catch {
-        // Why: these getters only exist after the guest fully attaches; ignore the transient failure during attach.
+        // Guest getters can reject until attachment finishes.
       }
     },
     [browserTabId, browserTabUrlRef, onUpdatePageStateRef]
@@ -227,7 +226,6 @@ export function useBrowserPageWebviewLifecycle({
     invalidateBrowserAnnotationDocumentRef.current = invalidateBrowserAnnotationDocument
   }, [invalidateBrowserAnnotationDocument])
 
-  // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   useEffect(() => {
     return attachBrowserPageWebview({
       browserTabId,
@@ -270,8 +268,7 @@ export function useBrowserPageWebviewLifecycle({
       retryGuestRecoveryRef,
       setFindOpen
     })
-    // Why: wire listeners once per tab identity. browserTab.url is excluded (re-running would detach/reattach and cancel navigations; callbacks use refs).
-    // webviewPartition IS included: Electron can't change a webview's partition after creation, so a profile switch must recreate it.
+    // Exclude URL changes to avoid cancelling navigation; callbacks read refs. Include partition changes because Electron requires a new guest.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTabId,

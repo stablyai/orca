@@ -49,7 +49,7 @@ export function openWorkspaceEditorItem(
   }
   const drawHere = (id?: string): Tab | undefined => {
     const file =
-      contentType === 'editor'
+      contentType === 'editor' || contentType === 'check-details'
         ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
         : undefined
     return state.createUnifiedTab?.(worktreeId, contentType, {
@@ -100,7 +100,7 @@ export function getReplaceablePreviewFileId(
     if (!previewTab) {
       return null
     }
-    // Why: split groups can share one OpenFile; a group-scoped preview replacement must not mutate it out from under another group's tab.
+    // Split groups share OpenFile records; scoped preview replacement must not mutate files still shown elsewhere.
     const isSharedEntity = tabsForWorktree.some(
       (tab) =>
         tab.id !== previewTab.id &&

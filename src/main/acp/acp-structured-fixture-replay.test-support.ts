@@ -1,7 +1,4 @@
-// Plays a recorded Grok session back as the agent behind the real adapter. Orca's own frames
-// advance the recording: the agent's lines after each one are sent until the recording waits on
-// Orca again. The recording's prompt ids and session id are rewritten to the ones this run uses,
-// as the real agent echoes the prompt id it was sent.
+// Replay recorded traffic with this run's session and prompt IDs, advancing on Orca's frames.
 
 import { expect } from 'vitest'
 import { z } from 'zod'
@@ -9,7 +6,6 @@ import type { AcpFixtureFrame } from './acp-timeline-fixture.test-support'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import { PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 
-/** Recordings name their sessions `session-N`; a replay plays them all as this run's one. */
 const RECORDED_SESSION = /"session-\d+"/g
 const promptMetaSchema = z.object({ _meta: z.object({ promptId: z.string() }) })
 const messageSchema = z.object({
@@ -41,7 +37,6 @@ export class GrokFixtureReplay {
     agent.on('session/cancel', (frame) => this.orcaSent('session/cancel', frame))
   }
 
-  /** What the recording waits for Orca to send next; null once it has played to the end. */
   get awaiting(): string | null {
     if (this.responseFailure !== undefined) {
       throw this.responseFailure
@@ -76,7 +71,7 @@ export class GrokFixtureReplay {
       this.cursor += 1
       const message = this.rewrite(recorded.message)
       if (message.method !== undefined && message.id !== undefined) {
-        // The agent asks Orca something; the recording resumes once Orca answers it.
+        // Resume only after Orca answers the agent's request.
         void agent
           .request(message.id, message.method, message.params)
           .then((response) => {

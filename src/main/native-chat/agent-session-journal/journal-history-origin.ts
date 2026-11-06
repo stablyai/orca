@@ -14,7 +14,7 @@ const origin = z.object({
   importedAt: z.number().finite()
 })
 
-/** Raw annotations survive replacement even when this host cannot use their version/shape. */
+/** Preserve raw annotations even when this build cannot interpret them. */
 export type JournalHistoryOrigin = {
   providerHandle: JournalEpochRow['providerHandle']
   raw: unknown

@@ -5,11 +5,7 @@ import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './stat
 import { writableWebSessionTabsRecord } from './state-equality-core'
 import { isReadyBrowserTab } from './terminal-surfaces'
 
-/**
- * In a frame-drawn workspace the frames own every tab, but a page this desktop hosts never enters
- * the server's layout: the server's snapshot listing it is the proof its create landed. So only the
- * handle of a staged client-hosted page is adopted here, as the mirror would (L282).
- */
+/** Client-hosted pages never enter server layout. Adopt only their staged handles from session.tabs as landing proof; frames retain tab ownership (L282). */
 export function adoptFrameDrawnClientHostedBrowserHandles(
   state: WebSessionTabsSyncState,
   snapshot: RuntimeMobileSessionTabsResult,

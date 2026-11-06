@@ -1,7 +1,4 @@
-/**
- * The source as a confirmed "Move anyway" would export it, without recording the consent: lets the
- * offer appear only when leaving saved state behind would actually clear what refuses the move.
- */
+// Offer "Move anyway" only when a consent-free preview shows it clears the blockers.
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import { collectOrcadMigrationUntransferredDependencyCensus } from './orcad-source-dependency-census'
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
@@ -11,7 +8,7 @@ export function createOrcadMigrationLeaveBehindView(
   runtime: Pick<StoreRuntimeState, 'state' | 'terminalScrollbackSnapshotStorage'>,
   targetId: string
 ): OrcadMigrationDeltaView {
-  // Shallow: the collectors only read, and only the target row differs.
+  // Read-only collectors make a shallow copy sufficient.
   const state = {
     ...runtime.state,
     sshTargets: runtime.state.sshTargets.map((target) =>

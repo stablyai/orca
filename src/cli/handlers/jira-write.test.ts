@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../../shared/jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../../shared/jira/jira-agent-capability'
 import { RuntimeClientError } from '../runtime-client'
 import { JIRA_WRITE_HANDLERS } from './jira-write'
 

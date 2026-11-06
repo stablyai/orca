@@ -6,7 +6,6 @@ export const DIRECT_WIRE_DEVICE_TOKEN = 'device-token'
 
 export type DirectWire = ReturnType<typeof directWire>
 
-/** What the direct client writes to its socket, through the same builder it uses. */
 export function directWire() {
   const sent: string[] = []
   let counter = 0

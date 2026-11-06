@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -8,12 +8,17 @@ import {
   createMockTransport,
   createPane,
   captureCallbackTerminalWrites,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -55,6 +60,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('fails closed when the same SSH worktree id is projected by two HUBs', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('./pty-transport')
       mockStoreState = {
@@ -87,7 +94,10 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps({ restoredPtyIdByLeafId: { [LEAF_1]: null } }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({ restoredPtyIdByLeafId: { [LEAF_1]: null } }) as never,
+          agentTitleMocks
+        )
       )
       await flushAsyncTicks()
 
@@ -99,6 +109,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('fails a missing paired-client owner closed instead of creating a local PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('./pty-transport')
       mockStoreState = {
@@ -115,7 +127,10 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps({ restoredPtyIdByLeafId: { [LEAF_1]: null } }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({ restoredPtyIdByLeafId: { [LEAF_1]: null } }) as never,
+          agentTitleMocks2
+        )
       )
       await flushAsyncTicks()
 
@@ -126,6 +141,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('spawns fresh PTYs through the worktree owner runtime when focus differs', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const transport = createMockTransport('remote:owner-runtime@@terminal-1')
       transportFactoryQueue.push(transport)
@@ -160,7 +177,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
         }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
 
       expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith(
         'owner-runtime',
@@ -173,6 +194,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('spawns fresh PTYs locally for explicitly local worktrees while a runtime is focused', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createMockTransport('pty-local-1')
@@ -201,7 +224,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const manager = createManager(2)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
 
       expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
       expect(createIpcPtyTransport).toHaveBeenCalled()
@@ -211,6 +238,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('prints a terminal notice when the startup cwd fell back to the workspace root', async () => {
       const { connectPanePty, STARTUP_CWD_FALLBACK_NOTICE } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-fallback')
       transport.connect.mockResolvedValueOnce({
         id: 'pty-fallback',
@@ -228,7 +257,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const pane = createPane(2)
       const { writes } = captureCallbackTerminalWrites(pane)
 
-      connectPanePty(pane as never, createManager(2) as never, createDeps() as never)
+      connectPanePty(
+        pane as never,
+        createManager(2) as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks5)
+      )
       await flushAsyncTicks()
 
       expect(writes).toContain(STARTUP_CWD_FALLBACK_NOTICE)
@@ -236,6 +269,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('attaches restored remote PTYs for later split panes instead of spawning host tabs', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const existingTransport = createMockTransport('remote:env-1@@terminal-1')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -262,7 +297,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
         paneTransportsRef: { current: paneTransports }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
 
       expect(transport.connect).not.toHaveBeenCalled()
       expect(transport.attach).toHaveBeenCalledWith(
@@ -271,8 +310,10 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-2')
     })
 
-    it('persists a restarted pane PTY id and uses it on the next remount', async () => {
+    it('publishes a restarted pane PTY id and reuses its restored hint on remount', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
       const restartedTransport = createMockTransport()
       let spawnedPtyId: string | null = null
@@ -290,7 +331,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
         paneTransportsRef: { current: new Map([[99, createMockTransport('another-pane-pty')]]) }
       })
 
-      connectPanePty(restartPane as never, restartManager as never, restartDeps as never)
+      connectPanePty(
+        restartPane as never,
+        restartManager as never,
+        bindPaneAgentTitleMocks(restartDeps as never, agentTitleMocks7)
+      )
       await flushAsyncTicks()
 
       expect(spawnedPtyId).toBe('pty-restarted')
@@ -315,7 +360,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'pty-restarted' }
       })
 
-      connectPanePty(remountPane as never, remountManager as never, remountDeps as never)
+      connectPanePty(
+        remountPane as never,
+        remountManager as never,
+        bindPaneAgentTitleMocks(remountDeps as never, agentTitleMocks7)
+      )
 
       expect(remountTransport.connect).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: 'pty-restarted' })
@@ -325,9 +374,10 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
     })
 
-    // Why: BEL (0x07) is the attention signal — onBell raises the bell event + an OS notification.
-    it('wires onBell to the bell attention event and OS notification', async () => {
+    it('forwards onBell to pane attention and notification policy', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -336,7 +386,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!bellHandler) {
@@ -363,6 +417,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('hands the bell to the attention module with its pane even when pane attention is off', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState.settings = {
@@ -374,7 +430,11 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!bellHandler) {

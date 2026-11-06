@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeStore } from './runtime-store-contract'
-import { spawnInAdmittedPane } from './runtime-pane-admission'
+import { spawnInAdmittedPane } from './terminal/launch/runtime-pane-admission'
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 import { bindingOf } from './pane-live-facts'
 import { PaneStartStatuses, paneStartFactsOf, withPaneStartFacts } from './pane-start-statuses'
@@ -262,7 +262,6 @@ describe('a pane’s start status in the published layout', () => {
         }
       ]
     }
-    // A restart into a pane still bound to its old terminal: the status says that one is not live.
     const restarting = withPaneStartFacts(
       bound,
       paneStartFactsOf(bound, { paneStartFact: () => ({ status: 'starting' }) })
@@ -286,7 +285,6 @@ describe('a pane’s start status in the published layout', () => {
   it('ends it when the pane binds live again under the same terminal id (a restore)', () => {
     const { register } = statuses()
     register.set(PANE_KEY, { status: 'starting' })
-    // Every bind raises the pane's generation, a same-id respawn included.
     expect(register.get(PANE_KEY, bindingOf({ ptyId: 'p', ptyGeneration: 1 }))?.status).toBe(
       'starting'
     )

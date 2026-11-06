@@ -1,5 +1,16 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
+import {
+  useCallback,
+  type Dispatch,
+  type MutableRefObject,
+  type RefObject,
+  type SetStateAction
+} from 'react'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from './browser-page-feedback-badge'
+import { BrowserLinkStatusBubble } from './browser-link-status-bubble'
+import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
@@ -12,6 +23,7 @@ import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failu
 import BrowserFind from './BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
+import { BrowserPasswordFillDropdown } from '../passwords/BrowserPasswordFillDropdown'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
@@ -22,8 +34,8 @@ import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page
 
 export function BrowserPageViewportOverlays({
   markup,
-  browserZoomIndicatorState,
-  browserZoomPercent,
+  isActive,
+  feedbackBadgeRef,
   findOpen,
   setFindOpen,
   webviewRef,
@@ -47,8 +59,8 @@ export function BrowserPageViewportOverlays({
   grabAnnotations
 }: {
   markup: MarkupModeController
-  browserZoomIndicatorState: { ariaHidden: boolean; opacityClassName: string }
-  browserZoomPercent: number
+  isActive: boolean
+  feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   findOpen: boolean
   setFindOpen: Dispatch<SetStateAction<boolean>>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
@@ -71,6 +83,8 @@ export function BrowserPageViewportOverlays({
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
+  const getAgentCursorHost = useCallback(() => containerRef.current, [containerRef])
+  useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
   return (
     <>
       <BrowserGuestAnnotateOverlays
@@ -86,8 +100,20 @@ export function BrowserPageViewportOverlays({
         worktreeId={worktreeId}
         currentUrl={browserTab.url}
       />
-      <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
-      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
+      <BrowserPasswordFillDropdown
+        isActive={isActive}
+        browserPageId={browserTab.id}
+        containerRef={containerRef}
+        webviewRef={webviewRef}
+      />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={findOpen}
+        onClose={() => setFindOpen(false)}
+        webviewRef={webviewRef}
+      />
+      <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
           browserTab={browserTab}

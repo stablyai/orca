@@ -1,6 +1,4 @@
-// Tells a paired server which group this window shows in each workspace its frames draw
-// (`layout.reportView`), so a CLI or phone file opened on the server lands where the user looks.
-// Group ids are the server's own: frames draw its groups under their ids. Fire-and-forget.
+// Report each frame-drawn workspace’s shown group to server main so CLI/phone opens land in view; group IDs stay server-native. Fire-and-forget.
 
 import { errorMessage } from '../../../shared/error-message'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'

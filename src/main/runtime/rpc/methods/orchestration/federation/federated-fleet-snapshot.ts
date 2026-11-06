@@ -8,10 +8,12 @@ import {
 } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectFleetNextAction } from '../../../../../../shared/orchestration-fleet-worker-projection'
 import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
+import { liveFederatedHomeAutoReleaseAt } from '../../../../orchestration/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolvePinnedFederatedServer } from '../worker/worker-observation'
+import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
 const FLEET_HOST_CONCURRENCY = 4
 const FLEET_HOST_TIMEOUT_MS = 3_000
@@ -21,6 +23,9 @@ export type FederatedFleetObservation = {
   status: 'live' | 'unverifiable' | 'exited'
   exactWorker: boolean
   reason?: string
+  /** Hosts that release settled workers on their own report it; older hosts omit both. */
+  released?: boolean
+  autoReleaseAt?: string
 }
 
 export type FederatedFleetHostError = {
@@ -38,6 +43,7 @@ export async function readFederatedFleetSnapshots(args: {
   observations: Map<string, FederatedFleetObservation>
   errors: FederatedFleetHostError[]
   hosts: Map<string, string>
+  homeAutoReleases: Map<string, string>
 }> {
   const groups = groupFederatedDispatches(args)
   const deadline = Date.now() + FLEET_TOTAL_TIMEOUT_MS
@@ -98,7 +104,10 @@ export async function readFederatedFleetSnapshots(args: {
       const projectedDispatches = projectFleetRuntimeEpochs(
         args.db,
         observationFences,
-        snapshot.runtimeEpoch
+        snapshot.runtimeEpoch,
+        new Set(
+          snapshot.items.filter((item) => item.observation.released).map((item) => item.dispatchId)
+        )
       )
       const expected = new Set(dispatchIds)
       return {
@@ -142,9 +151,14 @@ export async function readFederatedFleetSnapshots(args: {
   const observations = new Map<string, FederatedFleetObservation>()
   const errors: FederatedFleetHostError[] = []
   const hosts = new Map<string, string>()
+  const homeAutoReleases = new Map<string, string>()
   for (const group of groups) {
     for (const dispatch of group.dispatches) {
       hosts.set(dispatch.dispatch_id, group.environmentId)
+      const homeAutoReleaseAt = liveFederatedHomeAutoReleaseAt(dispatch)
+      if (homeAutoReleaseAt) {
+        homeAutoReleases.set(dispatch.dispatch_id, homeAutoReleaseAt)
+      }
     }
   }
   for (const result of results) {
@@ -155,7 +169,7 @@ export async function readFederatedFleetSnapshots(args: {
       errors.push(result.error)
     }
   }
-  return { observations, errors, hosts }
+  return { observations, errors, hosts, homeAutoReleases }
 }
 
 function projectFleetRuntimeEpochs(
@@ -164,13 +178,17 @@ function projectFleetRuntimeEpochs(
     string,
     NonNullable<ReturnType<OrchestrationDb['captureFederatedDispatchObservationFence']>>
   >,
-  runtimeEpoch: string
+  runtimeEpoch: string,
+  releasedDispatchIds: ReadonlySet<string> = new Set()
 ): Set<string> {
   const projectedDispatches = new Set<string>()
   for (const [dispatchId, fence] of fences) {
     if (
       db.projectFederatedDispatchObservation(fence, () => {
         db.updateFederatedDispatchRuntimeEpoch(dispatchId, runtimeEpoch)
+        if (releasedDispatchIds.has(dispatchId)) {
+          applyConfirmedFederatedReleaseHomeProjection(db, dispatchId)
+        }
       })
     ) {
       projectedDispatches.add(dispatchId)
@@ -181,7 +199,9 @@ function projectFleetRuntimeEpochs(
 
 export function applyFederatedFleetObservations(
   fleet: OrchestrationFleetPage,
-  federated: Awaited<ReturnType<typeof readFederatedFleetSnapshots>>,
+  federated: Omit<Awaited<ReturnType<typeof readFederatedFleetSnapshots>>, 'homeAutoReleases'> & {
+    homeAutoReleases?: ReadonlyMap<string, string>
+  },
   durable: ReadonlyMap<string, FleetDurableWorker>,
   observedAt = Date.now()
 ): void {
@@ -224,9 +244,18 @@ export function applyFederatedFleetObservations(
     worker.evidence.lastObservedAt = observation.status === 'unverifiable' ? null : observedAt
     refreshFleetWorkerVerdict(worker, durable)
   }
+  for (const worker of fleet.workers) {
+    // An older host reports no deadline; the home keeps one for it instead.
+    const autoReleaseAt =
+      federated.observations.get(worker.dispatchId)?.autoReleaseAt ??
+      federated.homeAutoReleases?.get(worker.dispatchId)
+    if (autoReleaseAt) {
+      worker.autoReleaseAt = autoReleaseAt
+      worker.nextAction = { kind: 'none', argv: [] }
+    }
+  }
 }
 
-// Recompute every projection derived from the host's verdict.
 export function refreshFleetWorkerVerdict(
   worker: OrchestrationFleetPage['workers'][number],
   durable: ReadonlyMap<string, FleetDurableWorker>

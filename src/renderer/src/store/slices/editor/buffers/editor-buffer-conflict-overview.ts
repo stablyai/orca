@@ -86,11 +86,7 @@ function resolveConflictOverviewView(
   )
 }
 
-/**
- * The open view a conflict-review overview reads a file through, so it shows that record's current
- * text and model (read-only; the overview is never a view itself). This workspace's view of the
- * file's record, else its own edit tab, else another workspace's view; null shows disk text.
- */
+/** Read current record/model through this workspace’s view, then its edit tab, then another workspace’s view. Overview is read-only and never a view; null reads disk. */
 export function conflictOverviewView(
   state: ConflictOverviewState,
   worktreeId: string,

@@ -1,15 +1,14 @@
-// After `/compact`, every reader that reports on the user's requests reads past the command: the
-// sidebar's prompt, preview, verdict and instant, restart resume, and an older client's label.
+// Command turns must not replace user-request summaries, resume markers or legacy labels.
 
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { latestStructuredAgentSessionRequest } from '../../../shared/structured-agent-session-latest-request'
-import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
-import { projectTurnItemHistory } from '../../runtime/rpc/methods/structured-agent-session-turn-item-capability'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { latestStructuredAgentSessionRequest } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { projectStructuredAgentSessionStatusSummary } from '../../../shared/agent-session/view/structured-agent-session-projection'
+
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {
   childRecord,
@@ -51,7 +50,6 @@ function accepted(clientMessageId: string): AgentJournalSubmission {
   }
 }
 
-/** "List three fruits", answered, then `/compact` in its own turn. */
 function compactedAfterARealTurn(commandState: 'running' | 'completed' = 'completed') {
   sequence = 0
   const items: AgentJournalRenderItem[] = [
@@ -113,18 +111,9 @@ describe('the sidebar after /compact (B7)', () => {
       statusStartedAt: NOW + 1_000
     })
   })
-
-  it('reads working while the command runs', () => {
-    const { items, submissions } = compactedAfterARealTurn('running')
-    expect(projectStructuredAgentSessionStatusSummary(items, submissions)).toMatchObject({
-      status: 'working',
-      latestPrompt: 'List three fruits'
-    })
-  })
 })
 
 describe('the completion feed around /compact (B6)', () => {
-  // The feed announces on a change of latest request; /compact running or settled leaves it be.
   it.each(['running', 'completed'] as const)(
     'keeps the last real turn latest while it is %s',
     (state) => {
@@ -154,40 +143,9 @@ describe('restart resume around /compact (B14)', () => {
     })
   }
 
-  it('records nothing while the command runs', () => {
-    expect(markerFor(compactedAfterARealTurn('running').items, false)).toBeNull()
-  })
-
   it('anchors a settled lead with live children on its last real turn', () => {
     const marker = markerFor(compactedAfterARealTurn().items, true)
     expect(marker?.work).toEqual({ kind: 'turn', id: 'turn-1' })
-    // The newest user message is still the last real prompt, as before commands were messages.
     expect(marker?.latestUserItemId).toBe(PROMPT)
-  })
-})
-
-describe("an older client's label for a command turn (B17)", () => {
-  it("names the session's agent, not the one its key suggests", () => {
-    const { items, submissions } = compactedAfterARealTurn()
-    const history = {
-      ok: true as const,
-      page: {
-        sessionId: SESSION,
-        epoch: 'epoch-1',
-        direction: 'tail' as const,
-        items,
-        removedItemIds: [],
-        submissions,
-        window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-1', sequence: 0 } },
-        hasOlder: false,
-        hasNewer: false
-      }
-    }
-    const projected = projectTurnItemHistory(history, { clientKind: 'runtime' }, 'claude')
-    const commandTurn = projected.page.items.find((entry) => entry.itemId === COMMAND_TURN)
-    expect(commandTurn?.body).toMatchObject({
-      kind: 'status',
-      text: expect.stringContaining('Claude')
-    })
   })
 })

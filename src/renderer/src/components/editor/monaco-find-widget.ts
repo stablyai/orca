@@ -3,9 +3,7 @@ function getOpenMonacoFindWidget(root: ParentNode | null | undefined): HTMLEleme
     return null
   }
   const widget = root.querySelector('.find-widget')
-  // Why: Monaco marks the find widget `aria-hidden="true"` while closed; the
-  // e2e probe uses the same signal so Escape can close find without dismissing
-  // a wrapping dialog.
+  // Use Monaco’s aria-hidden signal so Escape closes find without dismissing a wrapping dialog.
   if (!(widget instanceof HTMLElement) || widget.getAttribute('aria-hidden') === 'true') {
     return null
   }
@@ -28,8 +26,7 @@ export function closeMonacoFindWidget(root: ParentNode | null | undefined): bool
   if (!widget) {
     return false
   }
-  // Why: CloseFindWidgetCommand only runs while the editor has focus, so an
-  // unfocused widget has to be closed through its own close control.
+  // The close command requires editor focus; unfocused widgets need their own close control.
   const closeButton = widget.querySelector<HTMLElement>('.codicon-widget-close')
   if (!closeButton) {
     return false

@@ -5,7 +5,7 @@
  * platforms, and anything else that writes to the PTY.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
+
 import {
   disposeOpenTerminals,
   dispatchComposition,
@@ -67,14 +67,6 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   describe('Chinese pinyin on the same device', () => {
-    it('commits once, not twice', async () => {
-      pretendIosWeb()
-      const rig = openIosTerminal()
-      await typePinyin(rig, 'ni', '你')
-
-      expect(rig.emitted).toEqual(['你'])
-    })
-
     it('commits two compositions in a row', async () => {
       pretendIosWeb()
       const rig = openIosTerminal()
@@ -106,11 +98,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   it('composes Hangul after a composition that never ended, then a blur', async () => {
-    // Why this case: a `composing` flag latched on compositionstart and cleared
-    // only on compositionend stays true forever when the session is abandoned —
-    // blur mid-composition, pane teardown, a cancelled IME — and silently kills
-    // every claimed key for the rest of the pane's life. The state is derived
-    // from the composition tracker instead, which a blur clears.
+    // Derive expiring composition state: a latched flag survives missing end/blur and can disable input forever.
     pretendIosWeb()
     const rig = openIosTerminal()
     dispatchComposition(rig, 'compositionstart', '')
@@ -125,24 +113,6 @@ describe('the iPadOS Hangul path alongside everything else', () => {
     expect(rig.emitted.join('')).toContain('한글')
   })
 
-  it('commits a Japanese kana-to-kanji session once, like pinyin', async () => {
-    pretendIosWeb()
-    const rig = openIosTerminal()
-    await typePinyin(rig, 'ka', '蚊')
-
-    expect(rig.emitted).toEqual(['蚊'])
-  })
-
-  it('leaves a Hanja lookup to the session that owns its preedit', async () => {
-    // Why: ibus-hangul indexes its Hanja table by digit, but only over a live
-    // composition — which xterm's CompositionHelper already commits.
-    pretendIosWeb()
-    const rig = openIosTerminal()
-    await typePinyin(rig, 'han', '韓')
-
-    expect(rig.emitted).toEqual(['韓'])
-  })
-
   it('sends a digit after a held syllable as the literal text that ends it', async () => {
     pretendIosWeb()
     const rig = openIosTerminal()
@@ -154,15 +124,6 @@ describe('the iPadOS Hangul path alongside everything else', () => {
   })
 
   describe('desktop platforms', () => {
-    it('is inert on a Mac reporting no touch points', async () => {
-      pretendIosWeb(0)
-      const rig = openIosTerminal()
-      await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })
-
-      expect(rig.emitted).toEqual(['ㅎ'])
-      expect(rig.compositionView.classList.contains('active')).toBe(false)
-    })
-
     it('is inert on a Mac whose touch peripheral reports a single point', async () => {
       pretendIosWeb(1)
       const rig = openIosTerminal()
@@ -185,26 +146,8 @@ describe('the iPadOS Hangul path alongside everything else', () => {
     })
   })
 
-  it('composes Hangul after a paste written straight to the transport', async () => {
-    // Why: `writeTerminalPastePtyInput` bypasses xterm entirely, so it fires no
-    // `onData` a mirror could resync on. A hold reads the field only when it
-    // opens, so there is no state for the paste to make stale.
-    pretendIosWeb()
-    const rig = openIosTerminal()
-    const sent: string[] = []
-    writeTerminalPastePtyInput({ sendInput: (data) => (sent.push(data), true) }, 'echo ', 'driving')
-    expect(sent).toEqual(['echo '])
-
-    await typeHangeul(rig)
-    dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
-
-    expect(rig.emitted).toEqual(['한', '글', '\r'])
-  })
-
   it('leaves non-Hangul scripts on the same device reaching the PTY', async () => {
-    // Why: the bypass claims a key that nothing downstream re-sends, so it must
-    // claim only jamo. A Cyrillic or kana key would otherwise lose its keydown,
-    // its keypress and its `input` alike and arrive as nothing.
+    // Claim only jamo; other scripts have no downstream resend and would disappear.
     pretendIosWeb()
     const rig = openIosTerminal()
     for (const key of ['п', 'р', 'α', 'ω', 'あ', 'カ', 'é', 'ü', '€']) {

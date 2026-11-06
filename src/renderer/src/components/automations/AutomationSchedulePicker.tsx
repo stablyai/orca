@@ -75,8 +75,7 @@ export function AutomationSchedulePicker({
 }): React.JSX.Element {
   const customSchedule = draft.customSchedule.trim()
   const weekdayNames = getUiWeekdayNames()
-  // Same gate the save path uses, so an untouched legacy cadence is not flagged red for a
-  // rule it only has to satisfy as new input.
+  // Match save validation: an untouched legacy cadence is not new input and must not show a strict-validation error.
   const acceptsSchedule = (schedule: string): boolean =>
     acceptsAutomationDraftSchedule({
       customSchedule: schedule,

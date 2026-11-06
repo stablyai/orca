@@ -127,7 +127,8 @@ export function runProcess(
           signal,
           stdout: spec.captureStdoutAsBytes ? '' : stdout.text(),
           ...(spec.captureStdoutAsBytes ? { stdoutBytes: stdout.buffer() } : {}),
-          stderr: stderr.text(),
+          stderr: spec.captureStderrAsBytes ? '' : stderr.text(),
+          ...(spec.captureStderrAsBytes ? { stderrBytes: stderr.buffer() } : {}),
           timedOut,
           outputTruncated: stdout.truncated() || stderr.truncated()
         })
@@ -330,7 +331,8 @@ function runResolvedProcessSync(spec: ProcessSpec, resolved: ResolvedSpawn): Pro
     signal: result.signal,
     stdout: spec.captureStdoutAsBytes ? '' : (result.stdout?.toString('utf8') ?? ''),
     ...(spec.captureStdoutAsBytes ? { stdoutBytes: result.stdout ?? Buffer.alloc(0) } : {}),
-    stderr: result.stderr?.toString('utf8') ?? '',
+    stderr: spec.captureStderrAsBytes ? '' : (result.stderr?.toString('utf8') ?? ''),
+    ...(spec.captureStderrAsBytes ? { stderrBytes: result.stderr ?? Buffer.alloc(0) } : {}),
     // ENOBUFS is rethrown above, so truncated output never reaches this result.
     outputTruncated: false,
     // SIGTERM can be deliberate; only ETIMEDOUT proves a timeout.

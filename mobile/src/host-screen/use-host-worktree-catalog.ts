@@ -1,3 +1,6 @@
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { readWorktreeFirstPage } from '../worktree/worktree-catalog-first-page'
+import type { Worktree } from '../worktree/workspace-list-types'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
@@ -21,6 +24,7 @@ import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,
+  ServerRowSnapshots,
   NO_SERVER_WORKSPACES
 } from '../worktree/server-workspaces'
 
@@ -31,7 +35,6 @@ export function useHostWorktreeCatalog(args: {
   fetchRepoMetadata: FetchHostRepoMetadata
   hostCapabilities: readonly string[]
   hostId: string | undefined
-  /** Null in a build that lists without the feed. */
   sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
   syncViewSettingsFromDesktop: (options?: { resend?: boolean }) => Promise<void>
@@ -48,6 +51,7 @@ export function useHostWorktreeCatalog(args: {
     syncViewSettingsFromDesktop
   } = args
   const {
+    catalogError,
     clientRef,
     fetchWorktreesInFlightRef,
     newWorktreeModalVisibleRef,
@@ -60,12 +64,22 @@ export function useHostWorktreeCatalog(args: {
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
-    worktreeCatalogRef
+    worktreeCatalogRef,
+    worktrees,
+    worktreesLoaded
   } = state
   // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
   const serverFetchInFlightRef = useRef<RpcClient | null>(null)
+  const firstPageRef = useRef<Worktree[] | null>(null)
+  const serverRowSnapshotsRef = useRef<ServerRowSnapshots | null>(null)
+  // A first page only helps a never-loaded empty screen whose full read is not already failing.
+  const firstPageUseful = !worktreesLoaded && worktrees.length === 0 && catalogError === null
+  const firstPageUsefulRef = useRef(firstPageUseful)
+  useEffect(() => {
+    firstPageUsefulRef.current = firstPageUseful
+  }, [firstPageUseful])
 
-  // Why beside worktree.ps, not inside it: a slow server must not hold back the desktop's own rows.
+  // Fetch server rows separately so a slow server cannot delay desktop rows.
   const fetchServerRows = useCallback(
     async (requestClient: RpcClient) => {
       if (!relaysToServers(requestClient, hostCapabilities)) {
@@ -78,7 +92,13 @@ export function useHostWorktreeCatalog(args: {
       }
       serverFetchInFlightRef.current = requestClient
       try {
-        const fetched = await fetchServerWorkspaces(requestClient)
+        const deltas = hostCapabilities.includes(
+          MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
+        )
+        if (serverRowSnapshotsRef.current?.deltas !== deltas) {
+          serverRowSnapshotsRef.current = new ServerRowSnapshots(deltas)
+        }
+        const fetched = await fetchServerWorkspaces(requestClient, serverRowSnapshotsRef.current)
         if (fetched && clientRef.current === requestClient) {
           setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
         }
@@ -103,7 +123,7 @@ export function useHostWorktreeCatalog(args: {
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
         return
       }
-      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
+      // Coalesce overlapping polls so slow remote hosts cannot accumulate worktree.ps requests.
       if (fetchWorktreesInFlightRef.current) {
         fetchWorktreesQueuedRef.current ||= options.queueIfInFlight === true
         return
@@ -112,33 +132,54 @@ export function useHostWorktreeCatalog(args: {
       const requestClient = client
       const requestHostId = hostId
       void fetchServerRows(requestClient)
+      // With nothing to show yet, draw the host's first rows while the full catalog arrives.
+      let fullSettled = false
+      if (firstPageUsefulRef.current) {
+        void readWorktreeFirstPage(requestClient)
+          .then((rows) => {
+            const current = clientRef.current === requestClient && hostId === requestHostId
+            if (rows && current && !fullSettled) {
+              firstPageRef.current = rows
+              setWorktrees((current) => (current.length === 0 ? rows : current))
+            }
+          })
+          .catch(() => {})
+      }
+      // A failed full read must not leave the first page looking like the whole host.
+      const dropFirstPage = () =>
+        setWorktrees((current) => (current === firstPageRef.current ? [] : current))
 
       try {
-        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+        const fetched = await worktreeCatalogRef.current
+          .fetch(requestClient, requestHostId)
+          .finally(() => {
+            fullSettled = true
+          })
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
-        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
-        // surface it so a broken remote host is diagnosable instead of looking empty.
+        // Report catalog failure rather than zero workspaces so broken remote hosts remain diagnosable (STA-3123).
         if (fetched.kind === 'request_failed') {
           setCatalogError(fetched.code)
+          dropFirstPage()
           return
         }
         if (fetched.pending.admission.kind === 'invalid') {
           setCatalogError('invalid_response')
+          dropFirstPage()
         }
-        // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
-        // host truth over optimistic local edits regardless of payload size.
+        // Even unchanged replies reassert host truth over optimistic local edits.
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
+          // Confirmed rows may keep the first page's array; a later failed poll must not clear them.
+          firstPageRef.current = null
           setCatalogError(null)
-          // A confirmed list is the host answering, which is the evidence a transient action
-          // failure was about a moment that has passed.
+          // A confirmed catalog proves a transient action failure is no longer current.
           setActionError('')
-          // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
+          // Reuse identical snapshot arrays to avoid rebuilding SectionList/sorts on the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
@@ -146,7 +187,7 @@ export function useHostWorktreeCatalog(args: {
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
           setWorktreesLoaded(true)
-          // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
+          // Replace the home-written cache with confirmed data so reconnect/remount cannot restore stale rows (#8498).
           if (hostId) {
             setCachedWorktrees(hostId, confirmed, { proven: true })
           }
@@ -158,8 +199,7 @@ export function useHostWorktreeCatalog(args: {
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
           setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
 
-          // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
-          // Switch point: a feed-built list keeps no pin cache of its own.
+          // Sync server pins only without the feed; feed-built lists keep no local pin cache.
           const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
           if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
             setPinnedIds((prev) => {
@@ -177,13 +217,12 @@ export function useHostWorktreeCatalog(args: {
           }
         }
       } catch (error) {
-        // Will retry on reconnect
         if (clientRef.current === requestClient && hostId === requestHostId) {
-          // Why the branch: this code is printed to the user verbatim, and a reply the reader
-          // refused is a host-payload defect, not a connectivity one (STA-3123).
+          // Distinguish refused host payloads from connectivity failures; this code is shown verbatim (STA-3123).
           setCatalogError(
             error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
           )
+          dropFirstPage()
         }
       } finally {
         fetchWorktreesInFlightRef.current = false
@@ -203,8 +242,7 @@ export function useHostWorktreeCatalog(args: {
 
   useFocusEffect(
     useCallback(() => {
-      // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
+      // Focus must probe half-open sockets without suspending healthy relay sessions; state-dependent focus callbacks would defeat reconnect backoff.
       clientRef.current?.notifyForeground('focus')
     }, [])
   )
@@ -232,21 +270,20 @@ export function useHostWorktreeCatalog(args: {
 
   useFocusEffect(
     useCallback(() => {
-      // The embedded sidebar isn't a routed screen (focus never fires); it refreshes via the mount effect below.
       if (!embedded) {
         return startWorktreeRefresh()
       }
     }, [embedded, startWorktreeRefresh])
   )
 
-  // Why: the embedded sidebar is never the focused route, so wire its refresh lifecycle from a mount effect.
+  // Embedded sidebars never receive route focus; start their refresh lifecycle on mount.
   useEffect(() => {
     if (embedded) {
       return startWorktreeRefresh()
     }
   }, [embedded, startWorktreeRefresh])
 
-  // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
+  // Refresh on transition to connected; steady polls can miss the stalest post-sleep cache (#8498).
   const { refreshing, onRefresh } = useWorktreeResync({
     client,
     connState,

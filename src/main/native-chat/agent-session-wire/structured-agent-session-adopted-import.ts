@@ -1,25 +1,45 @@
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError,
   refuse,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
-import {
-  importLegacyTranscriptIntoJournal,
-  prepareLegacyTranscriptImport
-} from '../agent-session-journal/journal-legacy-import'
+import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+
+export async function prepareCreateTranscript(
+  context: StructuredAgentSessionAttachContext,
+  params: AgentSessionAttachParams
+) {
+  const acquisition = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  try {
+    return await prepareAdoptedTranscript(params, acquisition.signal)
+  } finally {
+    acquisition.end()
+  }
+}
 
 export async function prepareAdoptedTranscript(
-  params: AgentSessionAttachParams
+  params: AgentSessionAttachParams,
+  signal?: AbortSignal
 ): Promise<
   | { ok: true; items: JournalReplacementItem[] | null }
   | { ok: false; refusal: AgentSessionWireRefusal }
 > {
+  if (!params.adopt) {
+    return { ok: true, items: null }
+  }
   try {
-    return { ok: true, items: await readAdoptedTranscript(params) }
+    throwIfSignalAborted(signal)
+    const items = await readAdoptedTranscript(params, signal)
+    throwIfSignalAborted(signal)
+    return { ok: true, items }
   } catch (error) {
     return {
       ok: false,
@@ -34,9 +54,10 @@ export async function prepareAdoptedTranscript(
   }
 }
 
-// Validate source input before a new record can claim the provider conversation.
+// Validate before a new record can claim the provider conversation.
 async function readAdoptedTranscript(
-  params: AgentSessionAttachParams
+  params: AgentSessionAttachParams,
+  signal?: AbortSignal
 ): Promise<JournalReplacementItem[] | null> {
   const adopt = params.adopt
   if (!adopt) {
@@ -50,7 +71,7 @@ async function readAdoptedTranscript(
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
     sessionId: adopt.providerHandle.nativeId,
-    options: { filePath: adopt.transcriptPath, source: adopt.source }
+    options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
   })
   if (!prepared.ok) {
     throw new Error(prepared.error)
@@ -63,16 +84,16 @@ async function readAdoptedTranscript(
   return prepared.items
 }
 
-// Import before publication so the first visible chat agrees with the provider's resumed context.
+// Import before publication so visible history agrees with resumed provider context.
 export async function importAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
-  options: { uncommittedCreate?: true } = {}
+  options: { uncommittedCreate?: true; store?: AgentSessionRecordStore } = {}
 ): Promise<void> {
   if (options.uncommittedCreate) {
-    // A rolled-back create can leave imported history, but no conversation owns it yet.
+    // Rolled-back creates may leave unowned imported history.
     if (prepared || attached.journal.cursor().sequence > 1) {
       await attached.journal.replaceEpochItems(
         params.adopt ? 'legacy_import' : 'session_created',
@@ -82,23 +103,42 @@ export async function importAdoptedTranscript(
     }
     return
   }
-  // The journal is the conversation's, which outlives a failed import; nothing here closes it.
-  await applyAdoptedTranscript(params, attached, record, prepared)
+  // Failed import must not close the conversation-owned journal.
+  await applyAdoptedTranscript(params, attached, record, prepared, options.store)
 }
 
 async function applyAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null
+  prepared: JournalReplacementItem[] | null,
+  store?: AgentSessionRecordStore
 ): Promise<void> {
   const adopt = params.adopt
-  // A new journal contains only its epoch row; replay must preserve subsequent durable writes.
+  // Preserve durable writes after the initial epoch row.
   if (!adopt || attached.journal.cursor().sequence > 1) {
     return
   }
   if (prepared) {
-    await attached.journal.replaceEpochItems('legacy_import', record.lease.runtimeFence, prepared)
+    await params.fork?.revalidate()
+    const fork = params.fork
+    const last = prepared.at(-1)
+    const receipt =
+      fork && store
+        ? store.conversationReceipts.forkBoundary(record.sessionId, {
+            sessionId: fork.sessionId,
+            itemId: fork.itemId,
+            childBoundary: last
+              ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
+              : { kind: 'start' }
+          })
+        : undefined
+    await attached.journal.replaceEpochItems(
+      'legacy_import',
+      record.lease.runtimeFence,
+      prepared,
+      receipt ? () => receipt : undefined
+    )
     return
   }
   if (!adopt.transcriptPath) {
@@ -106,21 +146,11 @@ async function applyAdoptedTranscript(
       reason: 'transcriptNotFound'
     })
   }
-  const imported = await importLegacyTranscriptIntoJournal({
-    journal: attached.journal,
-    agent: params.agent,
-    sessionId: adopt.providerHandle.nativeId,
-    fence: record.lease.runtimeFence,
-    options: { filePath: adopt.transcriptPath, source: adopt.source }
-  })
-  if (!imported.ok) {
-    throw new Error(imported.error)
-  }
-  // `replaced: false` means the transcript decoded to nothing. The row promised a conversation and
-  // the provider resumed one, so an empty journal here is a disagreement, not an empty chat.
-  if (!imported.replaced) {
+  const read = await readAdoptedTranscript(params)
+  if (!read?.length) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptUnreadable'
     })
   }
+  await applyAdoptedTranscript(params, attached, record, read, store)
 }

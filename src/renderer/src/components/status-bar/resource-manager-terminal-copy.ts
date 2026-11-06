@@ -4,17 +4,11 @@ export function formatTerminalSessionCount(count: number | null): string {
   if (count === null) {
     return translate('resourceManager.countUnavailable', 'terminal count unavailable')
   }
-  return count === 1
-    ? translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_one',
-        '{{count}} terminal session',
-        { count }
-      )
-    : translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_other',
-        '{{count}} terminal sessions',
-        { count }
-      )
+  return translate(
+    'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount',
+    '{{count}} terminal sessions',
+    { count, defaultValue_one: '{{count}} terminal session' }
+  )
 }
 
 function spaceScanReadyLabel(): string {
@@ -24,15 +18,7 @@ function spaceScanReadyLabel(): string {
   )
 }
 
-/**
- * `emphasized` marks the space-scan row the tooltip tints. The segment used to
- * recognize that row by comparing it against the English text, which stops
- * matching the moment the copy comes from the catalog.
- *
- * `id` names the row's role. Each role appears at most once per tooltip, so it is
- * a unique React key that survives locale switches and memory/count updates —
- * unlike the translated text, which locales are free to duplicate across rows.
- */
+/** Use stable role IDs for React keys and emphasis flags instead of locale-dependent text matching. */
 export type ResourceManagerTooltipLine = {
   id: 'summary' | 'space-scan' | 'sessions-hint'
   text: string
@@ -52,8 +38,7 @@ export function getResourceManagerTooltipLines(args: {
           'memory unavailable'
         )
       : rawMemoryLabel
-  // Why: whole lines are single keys — locales reorder the summary and repunctuate
-  // its separators, so it can't be concatenated from translated fragments here.
+  // Translate whole summary lines so locales can reorder fields and separators.
   const lines: ResourceManagerTooltipLine[] = [
     {
       id: 'summary',

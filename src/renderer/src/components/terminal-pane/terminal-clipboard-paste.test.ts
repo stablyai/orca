@@ -276,7 +276,7 @@ describe('terminal clipboard paste', () => {
     expect(result).toEqual({ status: 'skipped', reason: 'image-paste-failed' })
   })
 
-  it('forces Windows multi-line text paste onto the bracketed-paste path', async () => {
+  it('delegates multiline protection to the terminal paste coordinator', async () => {
     const saveClipboardImageAsTempFile = vi.fn()
     const pasteText = vi.fn()
 
@@ -284,28 +284,13 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
       saveClipboardImageAsTempFile,
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      protectedMultilineTextPasteOptions: { forceBracketedPasteForMultiline: true }
     })
 
     expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
       forceBracketedPasteForMultiline: true
     })
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
-  })
-
-  it('delegates multiline protection to the terminal paste coordinator', async () => {
-    const pasteText = vi.fn()
-
-    await pasteTerminalClipboard({
-      readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
-      saveClipboardImageAsTempFile: vi.fn(),
-      pasteText,
-      forceBracketedMultilineTextPaste: true
-    })
-
-    expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
-      forceBracketedPasteForMultiline: true
-    })
   })
 
   it('delegates Windows input-record newline protection without scanning text', async () => {
@@ -331,7 +316,7 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue('hello'),
       saveClipboardImageAsTempFile,
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      protectedMultilineTextPasteOptions: { forceBracketedPasteForMultiline: true }
     })
 
     expect(pasteText).toHaveBeenCalledWith('hello', {
@@ -350,7 +335,7 @@ describe('terminal clipboard paste', () => {
         readClipboardText: vi.fn().mockResolvedValue('x'.repeat(64)),
         saveClipboardImageAsTempFile,
         pasteText,
-        forceBracketedMultilineTextPaste: true
+        protectedMultilineTextPasteOptions: { forceBracketedPasteForMultiline: true }
       })
 
       expect(codePointAtSpy).not.toHaveBeenCalled()
@@ -387,5 +372,47 @@ describe('terminal clipboard paste', () => {
     expect(terminal.paste).toHaveBeenCalledWith('a69ce28e1d092e0c8825cd1a109ac36409962bc1')
     expect(observedIgnoreBracketedPasteMode).toEqual([true])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('pastes Finder-copied files as paths instead of their name labels', async () => {
+    const pasteText = vi.fn()
+    const pasteFiles = vi.fn().mockResolvedValue(undefined)
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('a b.png\nnotes.txt'),
+      saveClipboardImageAsTempFile: vi.fn(),
+      copiedFiles: {
+        readPaths: vi.fn().mockResolvedValue(['/Users/me/a b.png', '/Users/me/notes.txt']),
+        hasImage: vi.fn().mockResolvedValue(true),
+        paste: pasteFiles
+      },
+      pasteText
+    })
+
+    expect(result).toEqual({ status: 'pasted', kind: 'file-paths' })
+    expect(pasteFiles).toHaveBeenCalledWith(['/Users/me/a b.png', '/Users/me/notes.txt'])
+    expect(pasteText).not.toHaveBeenCalled()
+  })
+
+  it('keeps the image path for an unlabelled file copied beside its picture', async () => {
+    const pasteText = vi.fn()
+    const pasteFiles = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(''),
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/orca-paste-1-id.png'),
+      copiedFiles: {
+        readPaths: vi.fn().mockResolvedValue(['/Users/me/Desktop/Screenshot.png']),
+        hasImage: vi.fn().mockResolvedValue(true),
+        paste: pasteFiles
+      },
+      pasteText
+    })
+
+    expect(pasteFiles).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
   })
 })

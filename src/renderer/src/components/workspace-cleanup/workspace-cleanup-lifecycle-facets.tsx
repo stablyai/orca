@@ -5,7 +5,7 @@ import {
   WORKSPACE_CLEANUP_IDLE_SIGNAL_VALUES,
   WORKSPACE_CLEANUP_PRESENCE_VALUES,
   WORKSPACE_CLEANUP_TRI_STATE_VALUES
-} from '../../../../shared/workspace-cleanup-facet-rankings'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import {
   FacetCheckbox,
   FacetChoice,
@@ -25,7 +25,6 @@ import {
   type WorkspaceCleanupFacetGroupProps
 } from './workspace-cleanup-facet-panel-model'
 
-/** Activity, size, workspace status, agent state, and local context. */
 export function WorkspaceCleanupLifecycleFacets({
   filters,
   counts,

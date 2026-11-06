@@ -1,28 +1,30 @@
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import {
   hostTestAttachParams,
   hostTestOperationId,
   HOST_TEST_SESSION
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export const CREATE_TEST_CALLER = { callerKey: 'client-1' }
 
 export function createTestParams(
   firstMessage?: StructuredAgentSessionFirstMessage,
-  overrides: Partial<AgentSessionAttachParams> = {}
+  overrides: Partial<AgentSessionAttachParams> = {},
+  sessionId = overrides.envelope?.sessionId ?? HOST_TEST_SESSION
 ): AgentSessionAttachParams {
   const params = hostTestAttachParams(null, { providerHandle: undefined, ...overrides })
   return {
     ...params,
     envelope: {
       ...params.envelope,
+      sessionId,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.create',
-        sessionId: params.envelope.sessionId,
+        sessionId,
         fields: {
           worktree: `id:${params.location.workspaceId}`,
           agent: params.agent,

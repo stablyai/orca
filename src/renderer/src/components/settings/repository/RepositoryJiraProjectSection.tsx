@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { JiraProjectReference } from '../../../../../shared/jira-project-reference'
+import type { JiraProjectReference } from '../../../../../shared/jira/jira-project-reference'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import { useAppStore } from '@/store/index'
 import { useJiraProjectInventory } from '../../use-jira-project-inventory'
 import { JiraProjectPicker } from '../../jira-project-picker'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
 export function RepositoryJiraProjectSection({

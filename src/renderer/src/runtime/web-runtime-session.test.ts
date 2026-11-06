@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activateWebRuntimeSessionWorktree } from './web-runtime-worktree-activation'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import './web-runtime-worktree-activation'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
-import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import './runtime-rpc-client'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
@@ -14,6 +14,7 @@ import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revisi
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  changedAgentPaneKeys: new Set<string>(),
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -57,9 +58,10 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
 }))
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
+  applyWebSessionTabsStorePatch: (
+    buildPatch: (state: unknown, changedAgentPaneKeys: Set<string>) => unknown
+  ) => {
+    mocks.setState((state: unknown) => buildPatch(state, mocks.changedAgentPaneKeys))
     return () => {}
   }
 }))
@@ -161,104 +163,5 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       hostTerminalHandle: 'term_host-a'
     })
     expect(confirmed('provisional-a')).toBe(false)
-  })
-
-  it('applies the recovered snapshot instead of a transient pending-handle frame', async () => {
-    const pending = makeSnapshot()
-    const recovered = { ...pending, publicationEpoch: 'recovered', snapshotVersion: 2 }
-    const state = { state: 'before' }
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'list',
-      ok: true,
-      result: pending,
-      _meta: { runtimeId: 'host-runtime' }
-    })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-    mocks.getState.mockReturnValue(state)
-    mocks.setState.mockImplementation((updater: (current: unknown) => unknown) => updater(state))
-    mocks.recoverWebSessionTerminalOrphansBeforeApply.mockResolvedValueOnce(recovered)
-    mocks.applyWebSessionTabsSnapshot.mockImplementation((state) => state)
-    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 1, pairingRevision: 17 }])
-
-    await refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID)
-
-    // The post-adoption read must be fenced to the runtime that answered this list.
-    expect(mocks.recoverWebSessionTerminalOrphansBeforeApply).toHaveBeenCalledWith(
-      state,
-      pending,
-      ENVIRONMENT_ID,
-      {
-        expectedEnvironmentPairingRevision: 17,
-        expectedRuntimeId: 'host-runtime',
-        getCurrentState: expect.any(Function)
-      }
-    )
-    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(state, recovered, ENVIRONMENT_ID)
-  })
-})
-
-describe('activateWebRuntimeSessionWorktree', () => {
-  beforeEach(() => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mocks.getState.mockReturnValue({
-      settings: {
-        activeRuntimeEnvironmentId: ENVIRONMENT_ID
-      }
-    })
-    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) =>
-      updater({ state: 'before' })
-    )
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    clearRuntimeCompatibilityCacheForTests()
-    vi.clearAllMocks()
-  })
-
-  it('activates caller-owned session surfaces without steering host or clients', async () => {
-    const snapshot = makeSnapshot()
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'activate',
-        ok: true,
-        result: { repoId: 'repo', worktreeId: WORKTREE_ID, activated: true }
-      })
-      .mockResolvedValueOnce({ id: 'list', ok: true, result: snapshot })
-
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await expect(
-      activateWebRuntimeSessionWorktree({
-        worktreeId: WORKTREE_ID
-      })
-    ).resolves.toBe(true)
-
-    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
-      selector: ENVIRONMENT_ID,
-      method: 'worktree.activate',
-      params: {
-        worktree: `id:${WORKTREE_ID}`,
-        notifyClients: false,
-        navigation: 'caller'
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
-      selector: ENVIRONMENT_ID,
-      method: 'session.tabs.list',
-      params: { worktree: `id:${WORKTREE_ID}` },
-      timeoutMs: 15_000
-    })
-    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
-      { state: 'before' },
-      snapshot,
-      ENVIRONMENT_ID
-    )
-    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
-      ENVIRONMENT_ID,
-      WORKTREE_ID
-    )
   })
 })

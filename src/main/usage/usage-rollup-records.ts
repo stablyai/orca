@@ -1,9 +1,4 @@
-/**
- * Record shapes every event-based usage provider (Codex, OpenCode, future plugin sources)
- * rolls up to. Each provider carries exactly one extra metric alongside the token counters —
- * Codex tracks inferred pricing, OpenCode tracks cost — so that metric stays generic instead
- * of forcing a nullable union onto both.
- */
+/** Event providers share token rollups but keep their extra metric generic: Codex pricing and OpenCode cost need no nullable union. */
 
 export type UsageAttributedEventFields = {
   sessionId: string

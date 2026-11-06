@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_GRAPHIC_RENDITION,
   RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../shared/startup-cwd-fallback'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -32,7 +32,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildReattachPaneTitleState,
@@ -43,6 +47,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionReattachModeResetTests(): void {
   let mockStoreState: StoreState
@@ -90,6 +95,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('retries a fresh-spawn native follow reset when renderer dimensions return', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { getTerminalScrollIntentKind } =
         await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('fresh-pty')
@@ -115,7 +122,13 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           pane.terminal.buffer.active.viewportY = pane.terminal.buffer.active.baseY
         })
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks)
+        )
+      )
       await flushAsyncTicks()
       expect(pane.terminal.buffer.active.viewportY).toBe(40)
       expect(renderListener.current).not.toBeNull()
@@ -130,6 +143,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('writes the daemon pendingEscapeTailAnsi after the reset on local reattach (#7329)', async () => {
       // Why: re-arm the mid-escape tail LAST, after the reattach reset whose ESC would abort it, so a live continuation completes it.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -156,7 +171,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+      )
       await flushAsyncTicks(20)
 
       const tailWriteCall = pane.terminal.write.mock.invocationCallOrder.find(
@@ -167,22 +184,22 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       )
       expect(tailWriteCall).toBeDefined()
       expect(resetWriteCall).toBeDefined()
-      // The dangling tail is written AFTER the reset.
       expect(resetWriteCall as number).toBeLessThan(tailWriteCall as number)
     })
 
     it('answers cursor queries while an account notice blocks user input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
       mockStoreState.codexRestartNoticeByPtyId = {
         'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
       }
       const pane = createPane(1)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixtures implement the connection's pane, manager and dependency contract.
-      const args = [pane, createManager(1), createDeps()] as unknown as Parameters<
-        typeof connectPanePty
-      >
+      const args = mockPanePtyArgs(pane, createManager(1), createDeps())
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks3)
+
       const binding = connectPanePty(...args)
       transport.getPtyId.mockReturnValue('pty-live')
       mockStoreState.codexRestartNoticeByPtyId = {
@@ -198,6 +215,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('routes native onData query replies through sendInputImmediate, typed input through sendInput (#7329)', async () => {
       // Why this test: the mock aliases sendInputImmediate to sendInput, so other tests can't tell them apart; this pins the routing decision.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const transport = createMockTransport('remote:web-env-1@@pty-7329')
@@ -205,7 +224,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks4))
+      )
       await flushAsyncTicks()
 
       // xterm answers CSI 6n natively with a CPR via onData; it must take the immediate path (skips the remote 8ms debounce that corrupted it).
@@ -215,7 +236,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       // Ordinary typed input must stay on the debounced path — never immediate.
       transport.sendInputImmediate.mockClear()
       sendTerminalInputThroughPane(pane, 'yes')
-      sendTerminalInputThroughPane(pane, '\x1b[A') // arrow-key auto-repeat stays batched
+      sendTerminalInputThroughPane(pane, '\x1b[A')
       expect(transport.sendInput).toHaveBeenCalledWith('yes', 'query-reply')
       expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
       expect(transport.sendInputImmediate).not.toHaveBeenCalled()
@@ -240,6 +261,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {
       // Why this test: the onReplayData meta pass-through had no failing test — severing it kept the suite green.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const writes: string[] = []
@@ -266,7 +289,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks5))
+      )
       await flushAsyncTicks(20)
       expect(replayCallback.current).toBeTypeOf('function')
 
@@ -280,7 +305,6 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const tailIndex = writes.lastIndexOf('\x1b[3')
       expect(snapshotIndex).toBeGreaterThanOrEqual(0)
       expect(tailIndex).toBeGreaterThanOrEqual(0)
-      // The dangling tail is re-armed after the snapshot/reset, so the next live chunk completes it instead of rendering literally.
       expect(tailIndex).toBeGreaterThan(snapshotIndex)
       expect(writes.slice(tailIndex + 1)).toEqual([])
     })
@@ -307,8 +331,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks6 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks6))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
@@ -326,6 +354,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('lets fresh host shell proof outrank stale live-agent metadata on reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -344,12 +374,17 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          restoredLeafId: LEAF_1,
-          restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          bindPaneAgentTitleMocks(
+            createDeps({
+              restoredLeafId: LEAF_1,
+              restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+            }),
+            agentTitleMocks7
+          )
+        )
       )
       await flushAsyncTicks(20)
 
@@ -364,10 +399,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it.each([false, true])('cold restore fallback notice: %s', async (fallback) => {
-      // Why: pane status and title are persisted, so after a cold restore they still
-      // describe the process that died and make the pane look agent-owned. Preserving
-      // "its" modes arms mouse/focus/paste reporting against the replacement shell,
-      // which then prints the reports as junk at the prompt (#12101).
+      // Persisted titles/status describe the dead agent after cold restore; preserving its modes sends junk reports to the replacement shell (#12101).
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -393,8 +425,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks8 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks8))
+        )
         await flushAsyncTicks(20)
 
         const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -417,9 +453,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('applies the fresh-shell reset when a spawn is answered with a cold-restore reattach', async () => {
-      // Why: main can answer a *spawn* with an adopted session, so the reattach handler
-      // is reachable by a second door that skips the restored-session path entirely. The
-      // cold-restore signal has to survive that door too, or #12101 returns on it.
+      // Main can adopt during apparent fresh spawn; cold-restore mode reset must survive this second entry path (#12101).
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       let activePtyId = 'tab-pty'
@@ -428,15 +462,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         if (sessionId === 'tab-pty') {
           throw new Error('restored session is gone')
         }
-        // Main answered the spawn by adopting a durable session instead; switch on, main's start
-        // bound the pane to it and the window's attach is answered so.
+        // Main’s start adopted a durable session; answer the window’s attach with that payload.
         activePtyId = 'adopted-pty'
         return {
           id: 'adopted-pty',
           isReattach: true,
-          // Keep this snapshot free of ?25l: the live agent reset is built from the
-          // payload and only equals the constant negated below when the cursor is left
-          // visible. Ending it hidden would quietly retire that assertion.
+          // Leave the cursor visible so the live-agent reset equals the constant this assertion negates.
           snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ',
           coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
         }
@@ -459,8 +490,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
             bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
           })
         }
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
+        )
         await flushAsyncTicks(30)
 
         expect(transport.connect).toHaveBeenCalledTimes(2)
@@ -513,8 +548,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks10))
+        )
         await flushAsyncTicks(20)
 
         expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -546,8 +585,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks11 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks11))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -582,8 +625,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks12 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks12))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -598,8 +645,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
     })
 
-    // Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
-    // rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
+    // Reattach must preserve snapshot-restored mouse modes or xterm selection overrides the live TUI (#8291).
     const reattachSnapshotResetFor = async (snapshot: string): Promise<string | undefined> => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
@@ -618,7 +664,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
-        connectPanePty(pane as never, manager as never, deps as never)
+        const agentTitleMocks13 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks13))
+        )
         await flushAsyncTicks(20)
         return (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls
           .map((call) => String(call[0]))
@@ -667,8 +718,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks14 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks14))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -705,8 +760,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks15 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks15))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -746,8 +805,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks16 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks16))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -764,6 +827,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks17 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -802,8 +867,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixtures implement the connection's pane, manager and dependency contract.
-      const args = [pane, manager, deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(pane, manager, deps)
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks17)
+
       const binding = connectPanePty(...args)
       await flushAsyncTicks(20)
 

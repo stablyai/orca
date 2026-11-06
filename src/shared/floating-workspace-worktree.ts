@@ -1,16 +1,8 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import type { Worktree } from './worktree/types'
 
-/**
- * The floating workspace is a directory the user points Orca at, with no repo, worktree or folder
- * row behind it. Anything that resolves a workspace to a filesystem location needs an answer for
- * it, so this mints the same synthetic `Worktree` shape folder workspaces use.
- *
- * Its id stays the sentinel constant: the session journal and every status subject are keyed by
- * workspace id, so inventing a second identity here would split one workspace into two.
- *
- * Minting and recognising it live together so the two cannot drift.
- */
+/** Floating workspaces have no repo/worktree/folder row; synthesize a Worktree for filesystem resolution.
+ * Keep the sentinel id: session journals and status subjects key by workspace id, so another identity would split the workspace. */
 export function isFloatingWorkspaceId(worktreeId: string | null | undefined): boolean {
   return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
 }
@@ -26,8 +18,7 @@ export function isFloatingWorkspaceSelector(selector: string | null | undefined)
 export function floatingWorkspaceToWorktree(path: string): Worktree {
   return {
     id: FLOATING_TERMINAL_WORKTREE_ID,
-    // Why: no project group stands behind it, unlike a folder workspace. Readers that resolve a
-    // display name must test the id, not this slot.
+    // No project group owns this workspace; display-name readers must check id rather than repoId.
     repoId: FLOATING_TERMINAL_WORKTREE_ID,
     displayName: 'Floating workspace',
     comment: '',

@@ -56,9 +56,7 @@ export default function ProjectRow({
   sourceTarget
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
-  // Why: design doc §Row actions — draft-issue rows have no URL or number, so
-  // the title is non-interactive. Surface the draft body in a hover card so
-  // the user can still read context without round-tripping to GitHub.
+  // Drafts lack a navigable URL/number; expose their body on hover without fetching GitHub details.
   const draftBody =
     row.itemType === 'DRAFT_ISSUE' && row.content.body && row.content.body.trim().length > 0
       ? row.content.body

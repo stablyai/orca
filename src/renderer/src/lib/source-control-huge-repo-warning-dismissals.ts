@@ -1,5 +1,4 @@
-// Why: keep a generous live/recent session working set while guaranteeing a
-// fixed ceiling without trusting visibility-filtered worktree ownership maps.
+// Bound the recent working set independently of visibility-filtered ownership maps.
 export const HUGE_REPO_WARNING_DISMISSAL_MAX_WORKTREES = 1024
 
 export type HugeRepoWarningWorktreeIdentity = {
@@ -83,8 +82,7 @@ export function migrateHugeRepoWarningDismissal(
     return
   }
   hugeRepoWarningStateByWorktreeId.delete(oldWorktreeId)
-  // Why: preserve the once-per-worktree choice while invalidating actions that
-  // captured the path before the rename.
+  // Preserve once-per-worktree dismissal while invalidating probes that captured the pre-rename path.
   refreshHugeRepoWarningState(newWorktreeId, {
     ...state,
     lifecycleToken: Symbol(newWorktreeId)
@@ -99,8 +97,7 @@ export function forgetHugeRepoWarningDismissalsForWorktrees(
     return
   }
   for (const worktreeId of removedIds) {
-    // Why: deleting the state also invalidates every outstanding probe token,
-    // so late async completions cannot resurrect a removed worktree dismissal.
+    // Invalidate outstanding probe tokens on removal so late completions cannot resurrect dismissals.
     hugeRepoWarningStateByWorktreeId.delete(worktreeId)
   }
 }

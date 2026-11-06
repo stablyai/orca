@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, electronMocks, ipcMain } from '../orca-runtime-test-mocks.spec'
+import { bindPaneFirst, committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { ipcMain } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   HEADLESS_LEAF_ID,
@@ -10,7 +13,7 @@ import {
   TEST_WORKTREE_PATH,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('rejects startup prompts for agents that require post-ready stdin', async () => {
@@ -304,7 +307,6 @@ describe('OrcaRuntimeService', () => {
         ptyId: 'pty-renderer',
         viewMode: 'chat'
       })
-      // As the renderer's spawn commit: the bound terminal registers.
       registerBoundPty(runtime, 'pty-renderer', TEST_WORKTREE_ID, null, {
         tabId: 'tab-renderer',
         leafId: HEADLESS_LEAF_ID
@@ -457,7 +459,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
-    // With the switch on the window's graph does not edit main's layout, which still binds the pane.
+    // A renderer graph cannot clear a binding held by main's layout.
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? [expect.objectContaining({ parentTabId: 'tab-renderer', ptyId: 'pty-renderer' })]
@@ -618,7 +620,7 @@ describe('OrcaRuntimeService', () => {
       activate: false,
       clientMutationId: 'mutation-lost-response'
     })
-    // Why: the phone retries the same key when the create response was lost; within the retention window it must reuse the terminal.
+    // A retry within the retention window must reuse the terminal when its create reply was lost.
     const retried = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       activate: false,
       clientMutationId: 'mutation-lost-response'

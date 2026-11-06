@@ -5,7 +5,6 @@ import { nativeChatLinkActions } from './native-chat-link-target-actions'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 
-/** What a right-click landed on that the menu can act on; each part is null where it does not apply. */
 export type NativeChatContextMenuTarget = {
   /** The selection the "Add to chat" offer would quote. */
   quoteText: string | null
@@ -36,7 +35,6 @@ export function readNativeChatContextMenuTarget(
   { root, composer, messageList, linkContext }: NativeChatContextMenuTargetSources
 ): NativeChatContextMenuTarget {
   const element = target instanceof Element ? target : null
-  // Offered only where the selection quote popover would offer it.
   const quotable = root && composer?.acceptsText() ? readNativeChatQuotableSelection(root) : null
   // The attribute, not the resolved `href` property, which rewrites chat file links into page URLs.
   const link = element?.closest('a[href], [data-native-chat-link-href]')

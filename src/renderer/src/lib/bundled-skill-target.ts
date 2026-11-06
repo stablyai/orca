@@ -1,3 +1,4 @@
+import type { SkillInstallProviderId } from '../../../shared/skill-install-providers'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -12,7 +13,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** The host whose Orca skills the Update dialog, badge and nudge plan and update. */
 export type BundledSkillTarget =
-  | { kind: 'local' }
+  | { kind: 'local'; agent?: SkillInstallProviderId }
   /** A paired server or the managed server on an SSH host; it plans its own disk. */
   | { kind: 'environment'; environmentId: string }
   /** An SSH host no Orca server serves yet: nothing can plan it until it connects. */
@@ -22,7 +23,7 @@ export type BundledSkillTarget =
 export function bundledSkillTargetKey(target: BundledSkillTarget): string {
   switch (target.kind) {
     case 'local':
-      return 'local'
+      return target.agent ? `local:${target.agent}` : 'local'
     case 'environment':
       return `runtime:${target.environmentId}`
     case 'ssh':
@@ -45,12 +46,7 @@ export function servingExecutionHostId(
   return server ? toRuntimeExecutionHostId(server.id.trim()) : hostId
 }
 
-/**
- * Where the agents run, never the client by default: null while the owning runtime is
- * unknown or the project runs in WSL. Pass the active workspace's owner
- * through `servingExecutionHostId`, so an SSH host with a managed server plans on that server.
- * An omitted owner means no active workspace; null means its owner is unresolved.
- */
+/** Plan where agents run; return null for unresolved owners or WSL. servingExecutionHostId routes SSH through its managed server; omitted means no active workspace, null means unresolved. */
 export function resolveBundledSkillTarget(
   runtimeTarget: RuntimeClientTarget | null,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined,

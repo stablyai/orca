@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import {
   usageSourceCachePath,

@@ -1,7 +1,4 @@
-/**
- * The host-agnostic hostile-host setup: app environment and a real SshConnection. The Docker
- * matrix and the Windows SSH-host lanes both run cells through it.
- */
+/** Share app isolation and real SSH setup across Docker, loopback and Windows hostile-host lanes. */
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

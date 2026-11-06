@@ -192,10 +192,7 @@ export function isValidAutomationCronSchedule(schedule: string): boolean {
   return cronScheduleRuns(schedule, { rejectOversizedStep: true })
 }
 
-// Whether Orca can still run a schedule it did not just receive. A row saved before the
-// oversized-step gate, or one a provider owns, keeps running the cadence it has, so reading
-// it back must not re-judge it as input — otherwise renaming an automation would demand
-// re-authoring a schedule the user never touched.
+// Read saved/provider-owned schedules under legacy cadence, not new-input step gates, so renames cannot force schedule re-authoring.
 export function isRunnableAutomationSchedule(schedule: string): boolean {
   return scheduleRuns(schedule, {})
 }

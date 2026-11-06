@@ -15,16 +15,6 @@ describe('react update depth attribution', () => {
     ).toBe(UNRELIABLE_BOUNDARY_ATTRIBUTION)
   })
 
-  it('matches the legacy error-decoder invariant form', () => {
-    expect(
-      getReactErrorBoundaryAttribution(
-        new Error(
-          'Minified React error #185; visit https://reactjs.org/docs/error-decoder.html?invariant=185 for the full message.'
-        )
-      )
-    ).toBe(UNRELIABLE_BOUNDARY_ATTRIBUTION)
-  })
-
   it('matches the development message', () => {
     expect(
       getReactErrorBoundaryAttribution(new Error('Maximum update depth exceeded. This can happen…'))

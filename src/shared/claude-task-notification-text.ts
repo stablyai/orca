@@ -3,9 +3,7 @@ export const CLAUDE_TASK_NOTIFICATION_MARKER = '<task-notification>'
 const TASK_ID_PATTERN = /<task-id>([^<]+)<\/task-id>/
 const TASK_STATUS_PATTERN = /<status>([a-z_]+)<\/status>/
 
-/** `status` is present only once the task has ended: a Monitor's `<event>` turns reuse the tag and
- *  the task id while the task is still running (captured on Claude Code 2.1.287). Claude writes it
- *  before `<summary>`; anything after is task output, which may itself contain a status tag. */
+/** Claude 2.1.287 Monitor events reuse task tags before completion. Read status only before summary; output may contain its own status tag. */
 export function readClaudeTaskNotification(
   text: string
 ): { taskId: string; status?: string } | null {

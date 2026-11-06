@@ -1,8 +1,8 @@
 import { OrchestrationError } from './orchestration-error'
-import type { WorkerDispatchState } from './types'
+import { AGENT_PROMPT_STALLED_ERROR } from '../terminal/input/agent-prompt-submission-verification'
+import type { DispatchContextRow, TaskRow, WorkerDispatchState } from './types'
 
-// Why: an unknown start or stop is unverifiable, not exited (docs/reference/ssh-execution-boundary.md),
-// so the worker's own report outranks it, locally and on a connected server.
+// Unknown start/stop cannot prove exit; the worker's report outranks uncertainty (docs/reference/ssh-execution-boundary.md).
 export const UNPROVEN_WORKER_STATES = [
   'start_unknown',
   'stop_unknown'
@@ -52,4 +52,16 @@ export function assertWorkerCanReport(args: Parameters<typeof workerReportRefusa
   if (refusal) {
     throw new OrchestrationError(refusal.code, refusal.reason)
   }
+}
+
+/** A first-hand worker report can correct an unobserved prompt failure, even after circuit break. */
+export function reportCorrectsUnobservedPrompt(
+  dispatch: Pick<DispatchContextRow, 'status' | 'last_failure'>,
+  task: Pick<TaskRow, 'status'>
+): boolean {
+  return (
+    (dispatch.status === 'failed' || dispatch.status === 'circuit_broken') &&
+    dispatch.last_failure === AGENT_PROMPT_STALLED_ERROR &&
+    task.status === 'failed'
+  )
 }

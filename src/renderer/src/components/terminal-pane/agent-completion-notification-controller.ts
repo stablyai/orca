@@ -2,13 +2,13 @@ import type {
   AgentCompletionCoordinatorOptions,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentCompletionIdentityScope,
   LastCompletionIdentity
 } from './agent-completion-identity-store'
 import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
-import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-transitions'
+import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-status/lifecycle/agent-transitions'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 
@@ -72,9 +72,7 @@ export function createAgentCompletionNotificationController({
   }
 
   function hookCompletionIdentity(payload: AgentCompletionStatusSnapshot): string | null {
-    // Why: `stateStartedAt` is pinned while the reported state does not change. A Claude pane held at `working` by background inventory would otherwise give every turn in the run the same identity.
-    // Why: `stateStartedAt` is also pinned across done→done, so a later turn end in one done
-    // segment is told from a restatement only by the host's turn-end stamp.
+    // State clocks can remain pinned across turns/done restatements; host turn-end stamps distinguish actual completions.
     const timestamp = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
       : payload.state === 'done' && isFiniteTurnCompletedAt(payload.turnEndedAt)

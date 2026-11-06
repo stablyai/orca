@@ -77,7 +77,7 @@ export function createRecentlyClosedEditorTabs(
       const closingFiles = state.openFiles.filter(
         (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
       )
-      // Why: close-all bypasses closeFile, so notify mirrored host-owned editors here or the next host snapshot reopens them.
+      // closeAll bypasses closeFile; notify removed mirrors’ hosts or next snapshot reopens them.
       for (const file of closingFiles) {
         notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
       }
@@ -112,7 +112,6 @@ export function createRecentlyClosedEditorTabs(
               pendingEditorFocusRequest: null
             }
           }
-          // Only close files for the current worktree
           const newFiles = s.openFiles.filter(
             (f) => f.worktreeId !== activeWorktreeId || kept.has(f.id)
           )
@@ -177,10 +176,10 @@ export function createRecentlyClosedEditorTabs(
           )
           let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
           let capturedCloseCount = 0
-          // Why: one shared index — a per-file position lookup rescans tab order and group membership, making close-all cubic.
+          // Share one position index or per-file tab/group rescans make close-all cubic.
           const positionIndex = createRecentlyClosedTabPositionIndex(records, activeWorktreeId)
           for (const f of [...closingFiles].toReversed()) {
-            // Why: skip untitled non-dirty files (deleted from disk after close), ephemeral preview tabs, and chat visuals (one click away in their chat) so the reopen stack has no vanished/junk paths.
+            // Skip deleted empty placeholders, ephemeral previews and chat visuals so undo retains useful paths only.
             if (untitledIdsToDelete.has(f.id) || f.mode === 'markdown-preview') {
               continue
             }
@@ -246,8 +245,7 @@ export function createRecentlyClosedEditorTabs(
           }
         }
       }
-      // Switch point: content goes once main's frames dropped the tabs; a refused close or a
-      // reopen in flight keeps its file. Records are read before the frames drop them.
+      // Capture records before frames; drop content only after accepted closes, retaining files for refusals or pending reopen.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && closingItemIds.length > 0) {
         for (const itemId of closingItemIds) {
           get().closeUnifiedTab?.(itemId)

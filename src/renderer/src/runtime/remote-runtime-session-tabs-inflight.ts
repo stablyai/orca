@@ -1,13 +1,7 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
 
-/**
- * A list's answer, carrying the identity of the request that produced it.
- *
- * A joiner never runs `load`, so anything it needs to rank the answer has to travel with the answer:
- * minting a fresh receipt position for a response that was reserved before the join would let a
- * pre-close list out-rank the retraction that overtook it.
- */
+/** Share request identity with joiners. A fresh join-time receipt could rank a pre-close list above the retraction that overtook it; joiners never run load themselves. */
 export type RemoteRuntimeSessionTabsAnswer = {
   snapshot: RuntimeMobileSessionTabsResult
   receivedFrame: number
@@ -35,8 +29,7 @@ export function listRemoteRuntimeSessionTabsDeduped(
     return existing
   }
   const receivedFrame = nextReceivedSessionTabsFrame()
-  // Why: one runtime snapshot answers every pane in the worktree, so split-pane
-  // reconnects should share the same in-flight inventory RPC.
+  // One workspace inventory answers every split pane; share reconnects’ in-flight RPC.
   const request = args
     .load()
     .then(({ snapshot, runtimeId }) => ({
@@ -58,8 +51,7 @@ export async function listRemoteRuntimeSessionTabsAfterCurrentInFlight(
 ): Promise<RemoteRuntimeSessionTabsAnswer> {
   const current = inFlightBySession.get(remoteRuntimeSessionTabsKey(args))
   if (current) {
-    // Why: a post-operation absence proof cannot join an inventory request that
-    // began before the operation committed.
+    // Post-operation absence proof must start after commit, never join older inventories.
     await current.catch(() => undefined)
   }
   return listRemoteRuntimeSessionTabsDeduped(args)

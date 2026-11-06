@@ -12,8 +12,7 @@ const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRY_BYTES = 512 * 1024
 type WorkerListSnapshot = {
   runId: string | null
   terminalState: WorkerTerminalListState
-  /** Dispatch-context watermark the ids were selected under; counts reuse it so later pages
-   *  never report an inventory that includes rows the cursor cannot reach. */
+  /** Reuse the selection watermark for counts so later pages never report rows the cursor cannot reach. */
   databaseId: number
   dispatchIds: string[]
 }

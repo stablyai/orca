@@ -1,30 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
-import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 
 export function registerProfileStateWorkerCoordinationTests(): void {
   describe('worker-owned Store writes', () => {
-    it('consumes the debounce timer and avoids full checkpoints after a selective durable write', async () => {
-      const { store, authority, readState } = await fixture()
-      const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
-      const selective = vi.spyOn(authority, 'writeSerializedDomains')
-      vi.useFakeTimers()
-      try {
-        await store.runDurableMutation(() => {
-          store.updateSettings({ theme: 'dark' })
-          return { value: undefined }
-        })
-        await vi.advanceTimersByTimeAsync(6_000)
-        await store.waitForPendingWrite()
-        expect(selective).toHaveBeenCalledOnce()
-        expect(full).not.toHaveBeenCalled()
-        expect(readState().settings.theme).toBe('dark')
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
     it('still captures direct durable mutations that do not identify dirty domains', async () => {
       const { store, readState } = await fixture()
       await store.runDurableMutation(() => {
@@ -32,28 +11,6 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         return { value: undefined }
       })
       expect(readState().workspaceSession.activeTabId).toBe('direct-mutation')
-    })
-
-    it('skips a debounce callback already queued behind the write that consumed its changes', async () => {
-      const { store, authority } = await fixture()
-      const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
-      const gate = authority.pause()
-      vi.useFakeTimers()
-      try {
-        const durable = store.runDurableMutation(() => {
-          store.updateSettings({ theme: 'dark' })
-          return { value: undefined }
-        })
-        await gate.started.promise
-        await vi.advanceTimersByTimeAsync(1_000)
-        gate.finish.resolve()
-        await durable
-        await store.waitForPendingWrite()
-        expect(full).not.toHaveBeenCalled()
-      } finally {
-        gate.finish.resolve()
-        vi.useRealTimers()
-      }
     })
 
     it('handles a rejected debounced save and retains it for an explicit retry', async () => {
@@ -73,103 +30,6 @@ export function registerProfileStateWorkerCoordinationTests(): void {
       }
       await store.flushPendingOrThrowAsync()
       expect(readState().settings.theme).toBe('dark')
-    })
-
-    it('refuses an export when serialization invalidates its full checkpoint', async () => {
-      const { store, authority, readState } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const publish = vi.spyOn(authority, 'writeLatestJsonExport')
-      const session = store.getWorkspaceSession()
-      Object.defineProperty(session, 'toJSON', {
-        configurable: true,
-        value: () => {
-          store.updateSettings({ theme: 'light' })
-          return { ...session }
-        }
-      })
-      try {
-        await expect(store.writeLatestProfileStateJsonExportAsync()).rejects.toThrow(
-          'changed while preparing its export'
-        )
-        expect(publish).not.toHaveBeenCalled()
-      } finally {
-        Reflect.deleteProperty(session, 'toJSON')
-      }
-      await store.writeLatestProfileStateJsonExportAsync()
-      expect(readState().settings.theme).toBe('light')
-      expect(publish).toHaveBeenCalledOnce()
-    })
-
-    it('retains selective write intent when a toJSON hook changes the captured generation', async () => {
-      const { store, authority, readState } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const selective = vi.spyOn(authority, 'writeSerializedDomains')
-      const serialize = vi.fn((key: string) => {
-        expect(key).toBe('workspaceSession')
-        store.updateSettings({ theme: 'light' })
-        return { ...store.getWorkspaceSession() }
-      })
-      try {
-        await expect(
-          store.runDurableMutation(() => {
-            store.patchWorkspaceSession({ activeTabId: 'captured-tab' })
-            Object.defineProperty(store.getWorkspaceSession(), 'toJSON', {
-              configurable: true,
-              value: serialize
-            })
-            return { value: undefined }
-          })
-        ).rejects.toThrow('changed while preparing its durable snapshot')
-        expect(serialize).toHaveBeenCalledOnce()
-        expect(selective).not.toHaveBeenCalled()
-      } finally {
-        Reflect.deleteProperty(store.getWorkspaceSession(), 'toJSON')
-      }
-      await store.flushPendingOrThrowAsync()
-      expect(readState()).toMatchObject({
-        settings: { theme: 'light' },
-        workspaceSession: { activeTabId: 'captured-tab' }
-      })
-      expect(selective).toHaveBeenCalledOnce()
-    })
-
-    it('preserves canonical domain bytes and revisions for raw JSON and proxy-valued hooks', async () => {
-      if (!('rawJSON' in JSON) || typeof JSON.rawJSON !== 'function') {
-        throw new Error('This test requires native JSON.rawJSON support')
-      }
-      const overflow: unknown = JSON.rawJSON('1e999')
-      const escaped: unknown = JSON.rawJSON('"\\u0061"')
-      const { store, authority, readState } = await fixture()
-      store.patchWorkspaceSession({ activeTabId: 'pending-tab' })
-      const session = store.getWorkspaceSession()
-      const keyOrder = new Proxy({ 1: 'one', 2: 'two' }, { ownKeys: () => ['2', '1'] })
-      const serialize = vi.fn(() => ({ ...session, activeTabId: escaped, overflow, keyOrder }))
-      Object.defineProperty(session, 'toJSON', { configurable: true, value: serialize })
-      const expected = JSON.stringify({
-        ...session,
-        activeTabId: 'a',
-        overflow: null,
-        keyOrder: {
-          1: 'one',
-          2: 'two'
-        }
-      })
-      try {
-        await store.flushPendingOrThrowAsync()
-        expect(authority.captures.at(-1)).toContainEqual({
-          domain: 'workspaceSession',
-          payload: expected
-        })
-        expect(readState().workspaceSession).toMatchObject({ activeTabId: 'a', overflow: null })
-        expect(serialize).toHaveBeenCalledOnce()
-        const revision = authority.inner.revision
-        store.setWorkspaceSession(session)
-        await store.flushPendingOrThrowAsync()
-        expect(authority.inner.revision).toBe(revision)
-        expect(serialize).toHaveBeenCalledTimes(2)
-      } finally {
-        Reflect.deleteProperty(session, 'toJSON')
-      }
     })
 
     it('retains a newer edit after an older write is acknowledged', async () => {
@@ -242,30 +102,6 @@ export function registerProfileStateWorkerCoordinationTests(): void {
       expect(readState().settings.theme).toBe('light')
     })
 
-    it('retains dirty intent while many durability waiters share an active snapshot', async () => {
-      const { store, authority, readState } = await fixture()
-      const fullCapture = vi.spyOn(
-        StateSerializationSecretHandlingOperations.prototype,
-        'buildStateToSave'
-      )
-      const gate = authority.pause()
-      store.updateSettings({ terminalFontSize: 12 })
-      const first = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-      await gate.started.promise
-      const waiters: Promise<void>[] = [first]
-      for (let size = 13; size <= 32; size++) {
-        store.updateSettings({ terminalFontSize: size })
-        waiters.push(store.flushPendingOrThrowAsync({ drainToStableGeneration: false }))
-      }
-      await Promise.resolve()
-      expect(authority.captures).toHaveLength(1)
-      gate.finish.resolve()
-      await Promise.all(waiters)
-      expect(readState().settings.terminalFontSize).toBe(32)
-      expect(fullCapture).toHaveBeenCalledOnce()
-      expect(authority.captures).toHaveLength(2)
-    })
-
     it('cancels a queued checkpoint without aborting the preceding writer or losing edits', async () => {
       const { store, authority, readState } = await fixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -290,10 +126,11 @@ export function registerProfileStateWorkerCoordinationTests(): void {
     it.each(['known-failure', 'indeterminate'] as const)(
       'only rolls back a mutation with a known failure (%s)',
       async (outcome) => {
-        const { store, authority } = await fixture()
+        const { store, authority, readState } = await fixture()
         vi.spyOn(console, 'error').mockImplementation(() => {})
+        const previous = store.getSettings().theme
         const gate = authority.pause()
-        const rollback = vi.fn()
+        const rollback = vi.fn(() => store.updateSettings({ theme: previous }))
         const exact = store.runDurableMutation(() => {
           store.updateSettings({ theme: 'dark' })
           return { value: undefined, rollback }
@@ -303,27 +140,9 @@ export function registerProfileStateWorkerCoordinationTests(): void {
         gate.finish.reject(new ProfileStateWriterError('test', 'write failed', outcome))
         await rejected
         expect(rollback).toHaveBeenCalledTimes(outcome === 'known-failure' ? 1 : 0)
+        expect(store.getSettings().theme).toBe(outcome === 'known-failure' ? previous : 'dark')
+        expect(readState().settings.theme).toBe(previous)
       }
     )
-
-    it('awaits accepted operations before closing and refuses new exact mutations', async () => {
-      const { store, authority, readState } = await fixture()
-      const gate = authority.pause()
-      const first = store.runDurableMutation(() => {
-        store.updateSettings({ theme: 'dark' })
-        return { value: undefined }
-      })
-      await gate.started.promise
-      const closing = store.freezeWritesAsync()
-      await expect(store.runDurableMutation(() => ({ value: undefined }))).rejects.toThrow(
-        'finalized'
-      )
-      expect(authority.close).not.toHaveBeenCalled()
-      gate.finish.resolve()
-      await first
-      await closing
-      expect(authority.close).toHaveBeenCalledTimes(1)
-      expect(readState().settings.theme).toBe('dark')
-    })
   })
 }

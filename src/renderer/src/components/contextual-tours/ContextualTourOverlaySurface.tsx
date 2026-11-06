@@ -9,14 +9,16 @@ import {
   type RefObject
 } from 'react'
 import { ArrowLeft, ArrowRight, X } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import type {
-  ContextualTourId,
-  ContextualTourStepPlacement,
-  ContextualTourStepControl,
-  ContextualTourStepAction
+import {
+  getContextualTour,
+  type ContextualTourId,
+  type ContextualTourStepPlacement,
+  type ContextualTourStepControl,
+  type ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
 import { ContextualTourArrow } from './ContextualTourArrow'
 import { ContextualTourControl } from './ContextualTourControl'
@@ -27,16 +29,19 @@ import {
 } from './contextual-tour-floating-position'
 import { translate } from '@/i18n/i18n'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { getMeasurableContextualTourTarget } from './contextual-tour-gate'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-const SKIP_BUTTON_SELECTOR = 'button[aria-label^="Skip"], button[aria-label="Dismiss tour"]'
+const SKIP_BUTTON_SELECTOR = '[data-contextual-tour-dismiss]'
 
 export type ActiveTourRenderState = {
   rect: DOMRect
   targetElement: Element
   progress: { current: number; total: number }
   title: string
+  badge?: 'new'
   body: string
   control?: ContextualTourStepControl
   primaryAction?: ContextualTourStepAction
@@ -86,8 +91,7 @@ if (typeof window !== 'undefined') {
 }
 
 if (import.meta !== undefined && import.meta.hot) {
-  // Vite can replace this module without a full renderer reload. Remove the
-  // global key guard so dev sessions do not retain stale module closures.
+  // Dispose the global key guard on HMR to avoid retaining old module closures.
   import.meta.hot.dispose(disposeContextualTourGlobalKeyGuard)
 }
 
@@ -160,8 +164,7 @@ export function ContextualTourOverlaySurface({
       return
     }
 
-    // Why: hide only until the new step's first measurement; autoUpdate then
-    // tracks the target continuously, so the panel never blinks mid-step.
+    // Hide until the new step’s first measurement; continuous tracking must not blink an existing step.
     setFloatingPosition(null)
     return watchContextualTourFloatingPosition({
       arrowElement,
@@ -178,7 +181,7 @@ export function ContextualTourOverlaySurface({
       ref={panelRef}
       aria-live="polite"
       aria-label={renderState.title}
-      data-contextual-tour-panel=""
+      data-contextual-tour-panel={activeTourId}
       data-placement={floatingPosition?.panelPlacement ?? undefined}
       role="dialog"
       tabIndex={-1}
@@ -195,6 +198,7 @@ export function ContextualTourOverlaySurface({
           type="button"
           variant="ghost"
           size="icon-xs"
+          data-contextual-tour-dismiss=""
           aria-label={
             renderState.isLastStep
               ? translate(
@@ -211,8 +215,13 @@ export function ContextualTourOverlaySurface({
         >
           <X />
         </Button>
-        <h2 className="pr-6 text-sm font-semibold tracking-tight text-foreground">
-          {renderState.title}
+        <h2 className="flex items-center gap-2 pr-6 text-sm font-semibold tracking-tight text-foreground">
+          {renderState.badge === 'new' ? (
+            <Badge variant="secondary">
+              {translate('components.contextualTours.badgeNew', 'New')}
+            </Badge>
+          ) : null}
+          <span className="min-w-0">{renderState.title}</span>
         </h2>
         <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{renderState.body}</p>
         {renderState.control ? <ContextualTourControl control={renderState.control} /> : null}
@@ -274,11 +283,10 @@ export function ContextualTourOverlaySurface({
   return (
     <div
       className={cn(
-        // Why: tours are callouts, not modality. Let pointer events reach the
-        // underlying surface; only the panel itself captures interaction.
+        // Tours leave underlying UI interactive; only the callout panel captures pointer events.
         'fixed inset-0 z-[70] pointer-events-none'
       )}
-      data-contextual-tour-overlay=""
+      data-contextual-tour-overlay={activeTourId}
       role="presentation"
       onKeyDownCapture={onOverlayKeyDownCapture}
     >
@@ -305,12 +313,12 @@ export function handleContextualTourOverlayKeyDown(event: KeyboardEvent<HTMLDivE
     skipButton?.click()
   }
 
-  // Why: tours are non-modal callouts over live UI. Keyboard users must be able
-  // to tab into the highlighted surface just as pointer users can click it.
+  // Leave highlighted UI keyboard-reachable, matching pointer access through the non-modal overlay.
 }
 
 export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEvent): void {
-  const activeTourId = useAppStore.getState().activeContextualTourId
+  const { activeContextualTourId: activeTourId, activeContextualTourStepIndex } =
+    useAppStore.getState()
   if (!activeTourId || event.key !== 'Escape') {
     return
   }
@@ -318,6 +326,12 @@ export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEven
   const overlay = document.querySelector<HTMLElement>('[data-contextual-tour-overlay]')
   const focusRoot = document.querySelector<HTMLElement>('[data-contextual-tour-panel]') ?? overlay
   if (!overlay || !focusRoot) {
+    return
+  }
+  const step = getContextualTour(activeTourId).steps[activeContextualTourStepIndex]
+  const target = step ? getMeasurableContextualTourTarget(step.targetSelector)?.element : null
+  // A menu containing the lesson's target belongs to the tour; other popups own Escape first.
+  if (hasVisibleOverlay({ ignoreContaining: target ? [focusRoot, target] : focusRoot })) {
     return
   }
 

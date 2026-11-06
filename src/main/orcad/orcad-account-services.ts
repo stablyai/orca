@@ -1,8 +1,4 @@
-/**
- * The Claude/Codex accounts this server owns, so `accounts.*` and the launches it starts use the
- * account selected here, as desktop `orca serve` did (#28962).
- */
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   GetSelectedCodexHomePath,
@@ -12,15 +8,15 @@ import type {
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { createProviderAccountServices } from '../provider-account-services'
-import { createCodexRuntimeHomeLaunchPreparation } from '../codex/codex-runtime-home-launch-preparation'
-import { createCodexSessionResumeLaunchPreparation } from '../codex/codex-session-resume-launch-preparation'
-import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
+import { createCodexRuntimeHomeLaunchPreparation } from '../codex/configuration/homes/codex-runtime-home-launch-preparation'
+import { createCodexSessionResumeLaunchPreparation } from '../codex/history/resume/codex-session-resume-launch-preparation'
+import { prepareCodexAiVaultSessionResume } from '../codex/history/resume/codex-ai-vault-session-resume'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
@@ -29,9 +25,8 @@ type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }
 type OrcadAccountServices = {
   prepareCodexHome: ReturnType<typeof createCodexRuntimeHomeLaunchPreparation>
   prepareClaudeAuth: PrepareClaudeAuth
-  /** Pins an automatic resume to the account home its session was recorded in. */
+  /** Pin auto-resume to the account home that recorded the session. */
   prepareCodexSessionResume: PrepareCodexSessionResume
-  /** Runtime constructor deps: structured chats and catalog reads follow this host's Codex selection. */
   runtimeDeps: {
     prepareCodexStructuredLaunch: (input: StructuredLaunchInput) => Promise<string | null>
     resolveCodexStructuredLaunchHome: (input: StructuredLaunchInput) => string | null
@@ -40,7 +35,6 @@ type OrcadAccountServices = {
       args: AiVaultPrepareSessionResumeArgs
     ) => Promise<AiVaultPrepareSessionResumeResult>
   }
-  /** The managed Codex homes this host's launches write sessions into. */
   listCodexSessionHomes: () => string[]
   attachToRuntime: (
     runtime: Pick<
@@ -50,22 +44,20 @@ type OrcadAccountServices = {
   ) => void
 }
 
-/** Null on a WSL host, whose runtime must keep the desktop-pushed CODEX_HOME (no structured resolvers). */
+/** WSL accounts remain desktop-owned, including pushed CODEX_HOME and structured launch selection. */
 export function createOrcadAccountServices(args: {
   store: Store
   setClaudeStatusLineListener: (
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ) => void
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
-  /** A client-sent account home (launch env CODEX_HOME) wins over this host's selection, as for PTYs. */
+  /** Client-provided account homes override host selection, as for PTYs. */
   clientCodexHomes: {
     selectLaunchHome: GetSelectedCodexHomePath
     readLaunchHome: (launchEnv?: NodeJS.ProcessEnv) => string | null
   }
   isWslHost?: () => boolean
 }): OrcadAccountServices | null {
-  // Why: the Windows desktop owns a WSL host's accounts and pushes them (accounts.setHostLaunchEnv),
-  // which a host with services of its own refuses.
   if ((args.isWslHost ?? isWslHostOrcadProcess)()) {
     return null
   }
@@ -73,7 +65,6 @@ export function createOrcadAccountServices(args: {
   const services = createProviderAccountServices(store, {
     setClaudeStatusLineListener: args.setClaudeStatusLineListener
   })
-  // Why no start(): like headless desktop serve, usage refreshes on demand (accounts.list, subscribe).
   args.registerCleanup(() => {
     services.rateLimits.stop()
     args.setClaudeStatusLineListener(null)
@@ -92,7 +83,7 @@ export function createOrcadAccountServices(args: {
   return {
     prepareCodexHome,
     prepareClaudeAuth,
-    // Why skip a client-sent home: its sessions live there, outside this host's trusted homes.
+    // Client-owned sessions live outside the host’s trusted home list.
     prepareCodexSessionResume: async (resumeArgs) =>
       clientCodexHomes.readLaunchHome(resumeArgs.launchEnv)
         ? null
@@ -107,7 +98,7 @@ export function createOrcadAccountServices(args: {
       prepareCodexCatalogProbeHome: (homePath) =>
         codexRuntimeHome.prepareHostCodexHomeForReadOnlyAppServer(
           homePath,
-          resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+          resolveTuiAgentLaunchEnv('codex', store.getSettings())
         ),
       prepareAiVaultSessionResume: (resumeArgs) =>
         prepareCodexAiVaultSessionResume(resumeArgs, {

@@ -9,9 +9,7 @@ export type RecentlyClosedTabPosition = {
   groupIndex?: number
 }
 
-/** Reusable position lookup for one worktree. Bulk closes resolve a position per
- *  closed tab; without a shared index every lookup rescans tab order and group
- *  membership, which makes close-all cubic in the tab count. */
+/** Share worktree position index across bulk closes; per-tab order/group rescans make close-all cubic. */
 export type RecentlyClosedTabPositionIndex = {
   positionFor: (entityId: string) => RecentlyClosedTabPosition | undefined
 }

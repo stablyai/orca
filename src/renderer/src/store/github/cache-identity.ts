@@ -16,10 +16,10 @@ import {
   composeRepoCacheKey,
   getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
-  repoCacheKeyHostId
+  repoCacheKeyHostId,
+  type RuntimeFocusSettings
 } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
-import type { AppState } from '../types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { CacheEntry } from './cache-model'
 
@@ -71,14 +71,15 @@ export function workItemsCacheKey(
   repoId: string,
   limit: number,
   query: string,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  binding?: string
 ): string {
   const scope = executionHostId?.trim() ?? ''
   const hostId = normalizeExecutionHostId(scope)
   return composeRepoCacheKey(
     hostId ? (hostId !== LOCAL_EXECUTION_HOST_ID ? hostId : null) : scope,
     repoId,
-    `${limit}::${query}`
+    `${binding ? `binding=${encodeURIComponent(binding)}::` : ''}${limit}::${query}`
   )
 }
 
@@ -115,7 +116,7 @@ export function runtimeScopedRepoCacheKey(
   repoPath: string,
   repoId: string | undefined,
   suffix: string,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false
@@ -135,7 +136,7 @@ export function sourceScopedRepoCacheKey(
   repoPath: string,
   repoId: string | undefined,
   suffix: string,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   sourceContext?: TaskSourceContext | null,
@@ -159,7 +160,7 @@ export function prCacheKey(
   repoPath: string,
   repoId: string | undefined,
   branch: string,
-  settings?: AppState['settings'],
+  settings?: RuntimeFocusSettings,
   connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false

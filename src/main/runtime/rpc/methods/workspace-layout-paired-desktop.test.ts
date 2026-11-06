@@ -1,6 +1,4 @@
-// A paired desktop and a layout-owner server: the server advertises that it takes layout
-// intents, serves the layout methods to the desktop but not to phones, and still serves an older
-// desktop every session.tabs mutation it sends today.
+// Layout-owner servers offer intents to desktops only, while retaining every legacy session.tabs mutation.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -9,7 +7,7 @@ import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
 } from '../../../../shared/workspace-layout/layout-intents-capability'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcCallerScope } from '../rpc-caller-scope'
 
@@ -30,17 +28,10 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-// Fresh modules, so the method registry is built under this switch.
-async function switchedBuild(layoutOwnerIsMain: boolean) {
-  layoutOwner.isMain = layoutOwnerIsMain
-  vi.resetModules()
-  const [{ OrcaRuntimeService }, { RpcDispatcher }, { ALL_RPC_METHODS }] = await Promise.all([
-    import('../../orca-runtime'),
-    import('../dispatcher'),
-    import('./index')
-  ])
-  return { OrcaRuntimeService, RpcDispatcher, ALL_RPC_METHODS }
-}
+// Loaded once as a layout-owner build; window-owned registration is covered in workspace-layout-apply.test.ts.
+import { OrcaRuntimeService } from '../../orca-runtime'
+import { RpcDispatcher } from '../dispatcher'
+import { ALL_RPC_METHODS } from './index'
 
 const Frame = z.object({ type: z.string(), subscriptionId: z.string().optional() })
 const StreamReply = z.object({ ok: z.literal(true), result: Frame })
@@ -58,23 +49,20 @@ afterEach(() => {
 })
 
 describe('the layout intents capability', () => {
-  it('is advertised only by a layout-owner build', async () => {
-    const on = await switchedBuild(true)
-    expect(new on.OrcaRuntimeService().getStatus().capabilities).toEqual(
+  it('is advertised only by a layout-owner build', () => {
+    expect(new OrcaRuntimeService().getStatus().capabilities).toEqual(
       expect.arrayContaining([
         LAYOUT_INTENTS_RUNTIME_CAPABILITY,
         LAYOUT_REOPEN_HELD_PANES_CAPABILITY
       ])
     )
-    const off = await switchedBuild(false)
-    const offCapabilities = new off.OrcaRuntimeService().getStatus().capabilities
+    layoutOwner.isMain = false
+    const offCapabilities = new OrcaRuntimeService().getStatus().capabilities
     expect(offCapabilities).not.toContain(LAYOUT_INTENTS_RUNTIME_CAPABILITY)
     expect(offCapabilities).not.toContain(LAYOUT_REOPEN_HELD_PANES_CAPABILITY)
-    expect(off.ALL_RPC_METHODS.map((method) => method.name)).not.toContain('layout.reopenHeldPanes')
   })
 
-  it('comes with the layout methods registered', async () => {
-    const { ALL_RPC_METHODS } = await switchedBuild(true)
+  it('comes with the layout methods registered', () => {
     const registered = new Set(ALL_RPC_METHODS.map((method) => method.name))
     for (const method of LAYOUT_METHODS) {
       expect(registered.has(method), method).toBe(true)
@@ -83,7 +71,6 @@ describe('the layout intents capability', () => {
 })
 
 describe('layout methods on a layout-owner server', () => {
-  // Past the scope check: a stream asked for as a request, or bad params.
   it.each([
     ['layout.subscribe', 'method_not_supported'],
     ['layout.unsubscribe', 'invalid_argument'],
@@ -91,7 +78,6 @@ describe('layout methods on a layout-owner server', () => {
     ['layout.reopenHeldPanes', 'invalid_argument'],
     ['layout.reportView', 'invalid_argument']
   ] as const)('admits a paired desktop and refuses a phone: %s', async (method, nextCheck) => {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const dispatcher = new RpcDispatcher({ runtime: new OrcaRuntimeService() })
     const asDesktop = await dispatcher.dispatch(request(method, { bad: 1 }), {
       callerScope: PAIRED_DESKTOP
@@ -102,7 +88,6 @@ describe('layout methods on a layout-owner server', () => {
   })
 
   it('streams a snapshot to a paired desktop', async () => {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const runtime = new OrcaRuntimeService()
     const dispatcher = new RpcDispatcher({ runtime })
     const frames: z.infer<typeof Frame>[] = []
@@ -131,7 +116,6 @@ describe('layout.reportView', () => {
   }
 
   it("records the desktop's groups under its connection", async () => {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const runtime = new OrcaRuntimeService()
     const reported = vi.spyOn(runtime, 'reportClientView')
     const dispatcher = new RpcDispatcher({ runtime })
@@ -144,7 +128,6 @@ describe('layout.reportView', () => {
   })
 
   it('passes a refresh on as one', async () => {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const runtime = new OrcaRuntimeService()
     const reported = vi.spyOn(runtime, 'reportClientView')
     const reply = await new RpcDispatcher({ runtime }).dispatch(
@@ -156,7 +139,6 @@ describe('layout.reportView', () => {
   })
 
   it('refuses a caller with no connection to tie the report to', async () => {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const runtime = new OrcaRuntimeService()
     const reported = vi.spyOn(runtime, 'reportClientView')
     const reply = await new RpcDispatcher({ runtime }).dispatch(
@@ -174,7 +156,6 @@ describe('layout.reportView', () => {
     [{ activeGroupByWorkspace: ['g1'] }],
     [{ activeGroupByWorkspace: {}, refresh: false }]
   ])('refuses params it cannot read: %j', async (params) => {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const runtime = new OrcaRuntimeService()
     const reported = vi.spyOn(runtime, 'reportClientView')
     const reply = await new RpcDispatcher({ runtime }).dispatch(
@@ -184,17 +165,12 @@ describe('layout.reportView', () => {
     expect(errorCode(reply)).toBe('invalid_argument')
     expect(reported).not.toHaveBeenCalled()
   })
-
-  it('is not registered by a window-owned build', async () => {
-    const { ALL_RPC_METHODS } = await switchedBuild(false)
-    expect(ALL_RPC_METHODS.map((method) => method.name)).not.toContain('layout.reportView')
-  })
 })
 
 describe('an older desktop on a layout-owner server', () => {
   const WT = 'wt-1'
   const SELECTOR = `id:${WT}`
-  // An older desktop: the capability is the server's, so it differs only in never sending intents.
+  // Older desktops never send intents; capability belongs to the server.
   const OLDER_DESKTOP = {
     callerScope: PAIRED_DESKTOP,
     clientKind: 'runtime' as const,
@@ -231,8 +207,6 @@ describe('an older desktop on a layout-owner server', () => {
 
   /** A windowless (serve) host: no notifier, its tabs already published. */
   async function headlessServer() {
-    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
-    // Seeding stands in for a prior publication.
     class HeadlessServer extends OrcaRuntimeService {
       seed(): void {
         this.storeMobileSessionSnapshot(WT, published())
@@ -249,7 +223,6 @@ describe('an older desktop on a layout-owner server', () => {
     return { runtime, send, current: () => runtime.current() }
   }
 
-  // Every session.tabs mutation a desktop sends, and the runtime method that serves it.
   const MUTATIONS = [
     ['session.tabs.activate', 'activateMobileSessionTab', { tabId: 'tab-b' }],
     [
@@ -279,7 +252,7 @@ describe('an older desktop on a layout-owner server', () => {
 
   it.each(MUTATIONS)('still serves %s', async (method, runtimeMethod, params) => {
     const { runtime, send } = await headlessServer()
-    // Its own refusal proves the request got past registration, scope and the client's projection.
+    // The method's own refusal proves registration, scope and projection admitted the request.
     const served = vi.spyOn(runtime, runtimeMethod).mockRejectedValue(new Error('reached'))
     const response = await send(method, { worktree: SELECTOR, ...params })
     expect(response.ok ? null : response.error.message).toBe('reached')

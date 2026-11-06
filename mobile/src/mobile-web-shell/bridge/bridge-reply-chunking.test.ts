@@ -20,7 +20,6 @@ import {
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA'
 const OTHER_ID = 'BBBBBBBBBBBBBBBBBBBBBB'
-/** A control character is the worst a JSON string literal can do to a byte: one becomes six. */
 const WORST_ESCAPING_CHARACTER = String.fromCharCode(1)
 
 function payloadOf(result: unknown): BridgeReplyPayload {
@@ -89,7 +88,6 @@ function splitInsidePair(extra = ''): BridgeReplyMessage[] {
 const ASTRAL = String.fromCodePoint(0x1f600)
 const LONE_HIGH_SURROGATE = String.fromCharCode(0xd800)
 
-/** A payload whose serialized form is exactly the ceiling, `ASTRAL` all the way to the last bytes. */
 function ceilingPayload(): BridgeReplyPayload {
   const overhead = JSON.stringify(payloadOf('')).length
   const pairs = Math.floor((BRIDGE_MAX_REPLY_BYTES - overhead) / 4)
@@ -97,7 +95,6 @@ function ceilingPayload(): BridgeReplyPayload {
   return payloadOf(ASTRAL.repeat(pairs) + 'x'.repeat(padding))
 }
 
-/** Feeds frames in the given order and returns the assembler's answer to the last one. */
 function assemble(frames: BridgeReplyMessage[]): ReturnType<BridgeReplyAssembler['accept']> {
   const assembler = new BridgeReplyAssembler()
   let answer: ReturnType<BridgeReplyAssembler['accept']> = { status: 'pending' }
@@ -131,8 +128,7 @@ describe('splitBridgeReply', () => {
   })
 
   it('splits the worst reply the ceiling admits into fewer parts than the schema allows', () => {
-    // Every character re-escapes, which is the most a chunk can grow by, at the largest reply that
-    // can be sent at all. If this count ever reaches the part cap, the cap is the wrong number.
+    // Use maximum-size fully re-escaped content to prove every accepted reply stays below the part-count ceiling.
     const empty = payloadOf('')
     const backslashes = Math.floor((BRIDGE_MAX_REPLY_BYTES - JSON.stringify(empty).length) / 2)
     const payload = payloadOf('\\'.repeat(backslashes))
@@ -182,7 +178,6 @@ describe('splitBridgeReply', () => {
   })
 
   it('refuses a lone-surrogate reply over the ceiling rather than splitting it', () => {
-    // A lone surrogate is escaped to six characters, so this is past the ceiling six times over.
     const payload = payloadOf(LONE_HIGH_SURROGATE.repeat(BRIDGE_MAX_REPLY_BYTES / 6))
     expect(splitBridgeReply(ID, payload)).toEqual({ ok: false, refusal: 'reply-too-large' })
   })
@@ -229,8 +224,7 @@ describe('round trip', () => {
   }
 
   it('restores a surrogate pair that was cut in half between two frames', () => {
-    // Each half is a lone surrogate, which `JSON.stringify` escapes rather than corrupting, so the
-    // pair comes back whole once the halves are joined.
+    // JSON escapes lone surrogate halves; joining the decoded parts must restore the original pair.
     const head = '{"id":"r1","ok":true,"result":"\ud83d'
     const tail = '\ude00","_meta":{"runtimeId":"runtime-a"}}'
     expect(JSON.parse(JSON.stringify(head))).toBe(head)
@@ -289,7 +283,6 @@ describe('BridgeReplyAssembler refusals', () => {
       status: 'failed',
       refusal: 'duplicate-part'
     })
-    // A whole set for the same id would otherwise complete, the refusal forgotten.
     const payload = payloadOf('small')
     const serialized = JSON.stringify(payload)
     const size = Math.ceil(serialized.length / 3)
@@ -354,7 +347,6 @@ describe('BridgeReplyAssembler refusals', () => {
       status: 'failed',
       refusal: 'too-many-pending'
     })
-    // A part for an id already held still lands: the bound is on ids, not on parts.
     expect(assembler.accept(part(1, 2, 'b', idOf(0)))).toEqual({
       status: 'failed',
       refusal: 'malformed-json'

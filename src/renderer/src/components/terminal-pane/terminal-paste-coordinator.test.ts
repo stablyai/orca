@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { PASTE_PAYLOAD_CORPUS } from '../../lib/paste-payload-corpus'
+import './terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   normalizeTerminalPasteLineEndings
-} from './terminal-bracketed-paste'
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
@@ -216,8 +217,7 @@ describe('terminal paste coordinator', () => {
   })
 
   it('normalizes forced multiline chunked paste line endings like xterm native paste', () => {
-    // Why: 4-byte chunks would split this CRLF pair ('abc\r' | '\ndef'), so the
-    // pre-chunk normalization is what keeps the LF half away from ConPTY.
+    // Normalize before chunking so the CRLF split cannot leak LF into ConPTY.
     const plan = planTerminalPaste({
       text: 'abc\r\ndef\nghi',
       source: 'keyboard',
@@ -798,8 +798,7 @@ describe('terminal paste coordinator', () => {
   })
 
   it('skips the bracketed close when the paste target is already gone', async () => {
-    // Why: canContinue false means the pane/PTY is unmounted, so an end marker has
-    // nowhere to land — the frame dies with the target.
+    // A vanished pane/PTY cannot receive the end marker; its open frame dies with the target.
     let writable = true
     const writes: string[] = []
 

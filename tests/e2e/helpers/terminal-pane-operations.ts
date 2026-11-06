@@ -107,8 +107,7 @@ export async function splitActiveTerminalPane(
       if (!manager?.getActivePane?.() && !manager?.getPanes?.()[0]) {
         throw new Error('splitActiveTerminalPane: active pane manager not ready')
       }
-      // Why: Electron key delivery to the terminal pane layer is flaky in E2E. The pane menu's
-      // split request takes the user's split path, which a layout-owner build sends to main.
+      // Hidden-window key delivery is unreliable; the pane-menu split event still commits through main.
       window.dispatchEvent(new CustomEvent(splitEvent, { detail: { tabId, direction } }))
     },
     { tabId, direction, splitEvent: REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT }
@@ -123,11 +122,7 @@ export async function closeActiveTerminalPane(page: Page): Promise<void> {
   await requestTerminalPaneClose(page, tabId, 'active')
 }
 
-/**
- * Closes one of a tab's split panes the way the user's close does (pane menu, shortcut), then waits
- * for it to go. A bare `PaneManager.closePane` skips the close command main applies first in a
- * layout-owner build, so main keeps a pane whose terminal had not attached yet.
- */
+// Use the user close command so main drops the pane before PaneManager cleanup, including unattached panes.
 export async function requestTerminalPaneClose(
   page: Page,
   tabId: string,
@@ -191,8 +186,7 @@ export async function focusLastTerminalPane(page: Page): Promise<void> {
   }, tabId)
 }
 
-// Why: hidden-window E2E mode keeps DOM visibility signals false. The pane
-// manager tracks the authoritative active split layout independently of CSS.
+// Hidden-window visibility stays false; count the pane manager’s active layout instead.
 export async function countVisibleTerminalPanes(page: Page): Promise<number> {
   const tabId = await resolveActiveTabId(page)
   if (!tabId) {
@@ -209,7 +203,7 @@ export async function countVisibleTerminalPanes(page: Page): Promise<number> {
       return 0
     }
 
-    // Why: `root: null` means the default single-pane tab (no splits yet).
+    // A null root represents the default single pane.
     type N = { type: 'leaf' } | { type: 'split'; first: N | null; second: N | null } | null
     const countLeaves = (node: N): number => {
       if (!node || node.type === 'leaf') {

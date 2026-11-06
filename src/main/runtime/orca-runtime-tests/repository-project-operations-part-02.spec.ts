@@ -1,39 +1,43 @@
-import { realpath } from 'node:fs/promises'
+import * as gitSpawn from '../../git/command-runner/git-spawn'
+import { realpath, lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
+import { EventEmitter } from 'node:events'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  DEFAULT_REPO_BADGE_COLOR,
-  EventEmitter,
-  OrcaRuntimeService,
   clearSubmodulePathsCacheForTests,
-  execFileSync,
+  listSubmodulePaths
+} from '../../git/source-control/submodule-paths'
+import { execFileSync } from 'node:child_process'
+import {
   getRepoUpstreamMock,
-  gitRunner,
   invalidateAuthorizedRootsCacheMock,
-  join,
-  listSubmodulePaths,
-  lstat,
-  mkdir,
-  mkdirSync,
-  mkdtemp,
-  prepareLocalWorktreeRootForRepoMock,
-  projectHostSetupProjectionFromRepos,
-  rm,
-  tmpdir,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
+  prepareLocalWorktreeRootForRepoMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { join } from 'node:path'
+
+import { mkdirSync } from 'node:fs'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { tmpdir } from 'node:os'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
   createRuntime,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
+
+// Clone and create register resolved paths (macOS tmpdir is a /var symlink).
+async function mkdtempReal(prefix: string): Promise<string> {
+  return realpath(await mkdtemp(prefix))
+}
 
 describe('OrcaRuntimeService', () => {
   it('adopts public clone repos into host-qualified project setup', async () => {
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -101,9 +105,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps project clone repos split by runtime host on the same clone path', async () => {
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = [
       {
         id: 'repo-host-a',
@@ -187,7 +191,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
     const runtime = new OrcaRuntimeService(colorStore as never)
-    const parentDir = await mkdtemp('/tmp/orca-runtime-create-')
+    const parentDir = await mkdtempReal('/tmp/orca-runtime-create-')
     try {
       const result = await runtime.createRepo(parentDir, 'runtime-create-default', 'folder')
       if ('error' in result) {
@@ -212,7 +216,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
     const runtime = new OrcaRuntimeService(createStore as never)
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-create-parent-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-create-parent-'))
     const parentDir = join(tempRoot, 'orca', 'projects')
     try {
       const result = await runtime.createRepo(parentDir, 'first-project', 'folder')
@@ -239,7 +243,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-create-root-prep-'))
+    const parentDir = await mkdtempReal(join(tmpdir(), 'orca-runtime-create-root-prep-'))
     try {
       const result = await runtime.createRepo(parentDir, 'runtime-create-root-prep', 'folder')
       if ('error' in result) {
@@ -275,7 +279,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('defaults runtime cloneRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const added: Record<string, unknown>[] = []
     const colorStore = {
       ...store,
@@ -314,8 +318,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('drops a same-path negative submodule cache before runtime cloneRepo', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-reclone-'))
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-reclone-'))
     const clonePath = join(destination, 'reclone')
     const added: Record<string, unknown>[] = []
     const cloneStore = {
@@ -351,11 +355,11 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('preserves existing badgeColor on runtime cloneRepo folder->git dedupe upgrade', async () => {
-    const destination = await mkdtemp(
+    const destination = await mkdtempReal(
       join(await realpath(tmpdir()), 'orca-runtime-folder-upgrade-')
     )
     const clonePath = join(destination, 'repo-badge-color')
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -466,9 +470,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rejects runtime cloneRepo dot-segment URLs before spawning git', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const runtime = createRuntime()
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const destination = join(tempRoot, 'destination')
 
     try {
@@ -483,9 +487,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rejects runtime cloneRepo parent-segment URLs before spawning git', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const runtime = createRuntime()
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const destination = join(tempRoot, 'destination')
 
     try {
@@ -500,12 +504,12 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('removes an owned runtime clone target when git exits unsuccessfully', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
     proc.stderr = new EventEmitter()
     spawnSpy.mockResolvedValue(proc as never)
     const runtime = createRuntime()
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const clonePath = join(destination, 'repo-badge-color')
 
     try {
@@ -527,12 +531,12 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('preserves an existing runtime clone target when git exits unsuccessfully', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
     proc.stderr = new EventEmitter()
     spawnSpy.mockResolvedValue(proc as never)
     const runtime = createRuntime()
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const clonePath = join(destination, 'repo-badge-color')
 
     try {
@@ -554,12 +558,12 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('skips runtime clone failure cleanup when the owned target is replaced', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
     proc.stderr = new EventEmitter()
     spawnSpy.mockResolvedValue(proc as never)
     const runtime = createRuntime()
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const clonePath = join(destination, 'repo-badge-color')
     const replacementFile = join(clonePath, 'replacement.txt')
 
@@ -583,7 +587,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('serializes concurrent runtime clones for the same target', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const firstProc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
     firstProc.stderr = new EventEmitter()
     spawnSpy.mockResolvedValueOnce(firstProc as never)
@@ -597,7 +601,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
     const runtime = new OrcaRuntimeService(colorStore as never)
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
 
     try {
       const url = 'https://example.com/repo-badge-color.git'
@@ -639,8 +643,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('refuses a saved project at the clone path whose folder is not a clone of the URL', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const saved = {
       id: 'saved-project',
       path: join(destination, 'orca'),
@@ -663,8 +667,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('clones past a saved SSH project that shares the clone path', async () => {
-    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
-    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
+    const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
+    const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-clone-'))
     const sshProject = {
       id: 'ssh-project',
       path: join(destination, 'orca'),
@@ -676,7 +680,7 @@ describe('OrcaRuntimeService', () => {
     const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([sshProject])
 
     try {
-      // The SSH project's folder is on another machine, so git runs here; this source doesn't exist.
+      // The SSH project's same path must not block a local clone; a missing source makes the attempted clone fail.
       await expect(
         createRuntime().cloneRepo(join(destination, 'missing', 'orca'), destination)
       ).rejects.toThrow('Clone failed')

@@ -1,6 +1,7 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   readClaudeOAuthCredentials,
+  type ClaudeOAuthCredentialReadResult,
   resolveClaudeOAuthCredentialReadOptions
 } from './claude-oauth-credentials'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
@@ -32,7 +33,7 @@ export async function fetchActiveClaudeRateLimits(
     credentialSource: credentials.source,
     authProvenance: options?.authPreparation?.provenance ?? 'system'
   }
-  // Why: System Default with no Claude login is an API-key or non-Claude user, not a signed-out account.
+  // System Default without login may be an API-key/non-Claude user, not a signed-out account.
   if (
     !credentials.token &&
     !credentials.unavailable &&
@@ -62,15 +63,20 @@ export async function fetchActiveClaudeRateLimits(
     return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
   } catch (error) {
     const { failureKind } = classifyClaudeOAuthUsageError(error)
-    // Why: the 429 wait gates the poll, and both messages tell the user why usage is missing.
+    if (failureKind === 'stale-token' && !canClaudeRenewLogin(credentials, error)) {
+      return makeClaudeUsageResult('error', 'Sign in again to use this account.', {
+        ...metadata,
+        failureKind: 'missing-credentials',
+        attemptedSources: ['oauth']
+      })
+    }
+    // Retain both the 429 polling delay and its user-visible cause.
     const retryAfterMs = error instanceof OAuthUsageError ? error.retryAfterMs : null
     return makeClaudeUsageResult(
       'error',
       failureKind === 'stale-token'
-        ? // Why: Claude refreshes its own login when it next runs; System Default has no "account".
-          metadata.authProvenance === 'system'
-          ? 'Claude usage updates the next time Claude runs.'
-          : 'Claude usage has expired. Start Claude in this account to refresh it.'
+        ? // Idle login's access token lapsed, not the login; Claude refreshes it when it next runs.
+          'Claude usage updates the next time Claude runs.'
         : (failureKind === 'rate-limited' || failureKind === 'missing-scope') &&
             error instanceof OAuthUsageError
           ? error.message
@@ -83,4 +89,17 @@ export async function fetchActiveClaudeRateLimits(
       }
     )
   }
+}
+
+// Mirrors Claude Code's own refreshability check; anything else needs a new sign-in.
+function canClaudeRenewLogin(
+  credentials: ClaudeOAuthCredentialReadResult,
+  error: unknown
+): boolean {
+  const refreshTokenExpiresAt = credentials.refreshTokenExpiresAt
+  return (
+    credentials.hasRefreshableCredentials &&
+    (refreshTokenExpiresAt === undefined || refreshTokenExpiresAt > Date.now()) &&
+    !(error instanceof OAuthUsageError && /revoked/i.test(error.message))
+  )
 }

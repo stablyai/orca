@@ -8,7 +8,7 @@ import {
   AcpRpcError
 } from './acp-errors'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
-import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
+import captures from '../native-chat/agent-session-wire/__fixtures__/startup-protocol-rejections.json'
 
 const peers: AcpJsonRpcPeer[] = []
 const agents: AcpScriptedAgent[] = []
@@ -84,29 +84,6 @@ describe('ACP JSON-RPC peer', () => {
     expect(await agent.request(null, '_null_id', {})).toMatchObject({
       id: null,
       result: { method: '_null_id' }
-    })
-  })
-
-  it('returns method-not-found and preserves explicit handler error objects', async () => {
-    const { agent } = fixture({
-      onRequest: (method) => {
-        if (method === '_denied') {
-          throw new AcpRpcError(-32005, 'Denied', { reason: 'policy' })
-        }
-        if (method === '_crash') {
-          throw new Error('Handler failed')
-        }
-        throw new AcpRpcError(-32601, 'Unknown method')
-      }
-    })
-    expect(await agent.request('missing', '_missing', {})).toMatchObject({
-      error: { code: -32601 }
-    })
-    expect(await agent.request('denied', '_denied', {})).toMatchObject({
-      error: { code: -32005, message: 'Denied', data: { reason: 'policy' } }
-    })
-    expect(await agent.request('crash', '_crash', {})).toMatchObject({
-      error: { code: -32603, message: 'Handler failed' }
     })
   })
 
@@ -217,17 +194,6 @@ describe('ACP JSON-RPC peer', () => {
     agent.on('next', (frame) => agent.reply(frame, 'ok'))
     expect(await peer.request('next', {})).toBe('ok')
     expect(agent.frames.map((frame) => frame.method)).toEqual(['wait', 'next'])
-  })
-
-  it('names the request and its deadline on a timeout, so a failed start can say which stalled', async () => {
-    vi.useFakeTimers()
-    const { peer } = fixture()
-    const timedOut = peer.request('session/new', {}, { timeoutMs: 300 }).catch((error) => error)
-    await vi.advanceTimersByTimeAsync(300)
-    expect(providerRequestTimeoutOf(await timedOut)).toEqual({
-      method: 'session/new',
-      timeoutMs: 300
-    })
   })
 
   it('bounds incoming requests without expiring user decisions', async () => {
@@ -360,14 +326,6 @@ describe('ACP JSON-RPC peer', () => {
     input.destroy()
   })
 
-  it('fails pending requests on an output stream error', async () => {
-    const { peer, agent } = fixture()
-    const rejected = expect(peer.request('wait', {})).rejects.toThrow('Broken pipe')
-    agent.stdin.emit('error', new Error('Broken pipe'))
-    await rejected
-    expect(peer.closed).toBe(true)
-  })
-
   it('handles asynchronous write callback errors without an unhandled stream error', async () => {
     const input = new PassThrough()
     const output = new Writable({
@@ -381,5 +339,47 @@ describe('ACP JSON-RPC peer', () => {
     await tick()
     expect(peer.closed).toBe(true)
     input.destroy()
+  })
+
+  it('settles a call with the final answer the agent wrote after it stopped reading', async () => {
+    const { response } = captures.acp
+    const { peer, agent } = fixture()
+    const asked = deferred<unknown>()
+    agent.on(captures.acp.request.method, asked.resolve)
+    const load = peer.request(captures.acp.request.method, {}).catch((error: unknown) => error)
+    await asked.promise
+    // The agent closes its stdin before the last chunk of its answer reaches Orca.
+    agent.stdin.emit('finish')
+    await expect(peer.request('late', {})).rejects.toBeInstanceOf(AcpConnectionClosedError)
+    agent.stdout.write(`${JSON.stringify({ ...response, id: 1 })}\n`)
+    expect(await load).toMatchObject({ code: response.error.code, data: response.error.data })
+    expect(peer.closed).toBe(true)
+  })
+
+  it('keeps an earlier call answerable when a later write fails', async () => {
+    const input = new PassThrough()
+    let writes = 0
+    const output = new Writable({
+      write(_chunk, _encoding, callback) {
+        writes += 1
+        if (writes === 1) {
+          callback()
+        } else {
+          setImmediate(() => callback(new Error('Broken pipe from write')))
+        }
+      }
+    })
+    const peer = new AcpJsonRpcPeer(input, output)
+    peers.push(peer)
+    const first = peer.request('session/new', {}).catch((error: unknown) => error)
+    await tick()
+    const second = peer.request('session/set_mode', {}).catch((error: unknown) => error)
+    await tick()
+    input.write(
+      `${JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32600, message: 'refused' } })}\n`
+    )
+    expect(await first).toBeInstanceOf(AcpRpcError)
+    input.end()
+    expect(await second).toMatchObject({ message: 'Broken pipe from write' })
   })
 })

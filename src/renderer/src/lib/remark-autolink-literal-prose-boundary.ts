@@ -27,9 +27,7 @@ function removePositions(node: MarkdownNode): void {
   node.children?.forEach(removePositions)
 }
 
-// Why: GFM ends a bare url only at whitespace and trims only ASCII punctuation, so the url
-// in `(https://…/1078)。` kept `)。`; parsing each piece between prose punctuation lets GFM's
-// own trim and balanced-paren rule run on just the url.
+// GFM stops bare URLs at whitespace and trims ASCII punctuation only; split prose punctuation so its own balanced-parenthesis rules exclude trailing )。 correctly.
 export function remarkAutolinkLiteralProseBoundary(this: Processor): (tree: MarkdownNode) => void {
   const parseInline = (text: string): MarkdownNode[] => {
     const tree: MarkdownNode = this.parse(text)

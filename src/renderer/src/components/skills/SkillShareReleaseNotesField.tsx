@@ -4,10 +4,7 @@ import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 import { SkillDisclosureTrigger } from './SkillDisclosureTrigger'
 
-/**
- * Collapsed on a first publish, where "what changed" has no answer yet, and open
- * for a new version, where the notes are the reason to read the dialog.
- */
+/** Open notes for a new version; first publication has no prior version to explain changes against. */
 export function SkillShareReleaseNotesField({
   value,
   newVersion,
@@ -41,9 +38,7 @@ export function SkillShareReleaseNotesField({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
-            // Why: a textarea owns Enter, so the keyboard needs its own way back
-            // to the primary action — but not while an IME is composing, where
-            // Enter is still committing the candidate.
+            // Provide a shortcut back to Publish without stealing Enter while IME composition commits a candidate.
             if (event.nativeEvent.isComposing) {
               return
             }

@@ -38,9 +38,6 @@ describe('computeNextGitLabRecents', () => {
     const result = computeNextGitLabRecents(existing, 'gitlab.com', 'g/new', fixedNow)
     expect(result).toHaveLength(GITLAB_RECENTS_MAX)
     expect(result[0].path).toBe('g/new')
-    // Why: oldest entry (the one that was at the tail before the prepend)
-    // must be the one that fell off — verify by checking it's no longer
-    // in the result.
     expect(result.find((r) => r.path === `g/p${GITLAB_RECENTS_MAX - 1}`)).toBeUndefined()
   })
 

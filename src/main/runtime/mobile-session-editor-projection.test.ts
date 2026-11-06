@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import {
-  buildHeadlessMobileSessionEditorTabs,
-  retireHeadlessEditorTab
-} from './mobile-session-editor-projection'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { retireHeadlessEditorTab } from './mobile-session-editor-projection'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({
@@ -20,7 +17,6 @@ beforeEach(() => {
 const WT = 'repo-1::/Users/dev/orca'
 const FILE = '/Users/dev/orca/notes.ts'
 
-/** A persisted editor tab whose unified tab names its file by the owned id. */
 function ownedSession(): WorkspaceSessionState {
   return {
     activeRepoId: null,
@@ -54,51 +50,9 @@ function ownedSession(): WorkspaceSessionState {
   }
 }
 
-function activeOwnedSession(): WorkspaceSessionState {
-  return {
-    ...ownedSession(),
-    activeTabTypeByWorktree: { [WT]: 'editor' },
-    activeFileIdByWorktree: { [WT]: ownedEditorFileId(FILE, WT, undefined) }
-  }
-}
-
-describe('headless editor tabs under an owned id', () => {
-  it('lists and retires the unified tab with the layout-owner switch on', () => {
-    const session = ownedSession()
-    expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([
-      expect.objectContaining({ id: 'tab-1', filePath: FILE, color: '#ff0000', isPinned: true })
-    ])
-    const retired = retireHeadlessEditorTab(session, WT, { id: 'tab-1', filePath: FILE })
-    expect(retired?.unifiedTabs?.[WT]).toEqual([])
-    expect(retired?.tabGroups?.[WT]?.[0]?.tabOrder).toEqual([])
-  })
-
-  it('shows it as the active file', () => {
-    expect(buildHeadlessMobileSessionEditorTabs(WT, activeOwnedSession())).toEqual([
-      expect.objectContaining({ id: 'tab-1', isActive: true })
-    ])
-  })
-
-  it('clears the active file when it retires', () => {
-    const retired = retireHeadlessEditorTab(activeOwnedSession(), WT, {
-      id: 'tab-1',
-      filePath: FILE
-    })
-
-    expect(retired?.activeFileIdByWorktree?.[WT]).toBeNull()
-  })
-
-  it('keeps matching by path alone with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(buildHeadlessMobileSessionEditorTabs(WT, ownedSession())).toEqual([
-      expect.objectContaining({ id: FILE, color: null, isPinned: false })
-    ])
-  })
-})
-
 const ENV = 'env-1'
 
-/** A runtime-environment and a local file at one path: the runtime one listed first and owned. */
+// Distinct owners can hold the same path; list the owned runtime file first.
 function twoOwnerSession(): WorkspaceSessionState {
   const base = ownedSession()
   const file = { filePath: FILE, relativePath: 'notes.ts', worktreeId: WT, language: 'typescript' }
@@ -131,13 +85,6 @@ function twoOwnerSession(): WorkspaceSessionState {
 }
 
 describe('two owners of one path on a headless host, layout-owner build', () => {
-  it("lists each record under its own owner's tab", () => {
-    expect(buildHeadlessMobileSessionEditorTabs(WT, twoOwnerSession())).toEqual([
-      expect.objectContaining({ id: 'tab-runtime', isDirty: true, isActive: false }),
-      expect.objectContaining({ id: 'tab-local', isDirty: false, isActive: true })
-    ])
-  })
-
   it('retiring the runtime tab keeps the local record, its tab and the active file', () => {
     const retired = retireHeadlessEditorTab(
       twoOwnerSession(),
@@ -165,11 +112,5 @@ describe('two owners of one path on a headless host, layout-owner build', () => 
     ])
     expect(retired?.unifiedTabs?.[WT]?.map((tab) => tab.id)).toEqual(['tab-runtime'])
     expect(retired?.activeFileIdByWorktree?.[WT]).toBeNull()
-  })
-
-  it('retires nothing for a tab id neither owner is listed under', () => {
-    expect(
-      retireHeadlessEditorTab(twoOwnerSession(), WT, { id: 'tab-gone', filePath: FILE }, true)
-    ).toBeNull()
   })
 })

@@ -33,6 +33,8 @@ type CreateUntitledMarkdownOptions = {
   template?: MarkdownDocumentTemplate
   /** Recovered text goes into a new `<name> (recovered)<ext>` file, never the original path. */
   recoveredDocument?: { originalPath: string; content: string }
+  /** A plugin's new-file type: `untitled<extension>` seeded with its template text, unchanged. */
+  newFile?: { extension: string; content: string }
   now?: Date
   operationProvenance?: EditorFileOperationProvenance
   expectedSshTargetId?: string
@@ -41,13 +43,7 @@ type CreateUntitledMarkdownOptions = {
   assertOperationCurrent?: () => void
 }
 
-/**
- * Creates an untitled markdown file on disk and returns the metadata
- * needed by the editor store's `openFile` action.
- *
- * Throws on permission errors or name-collision exhaustion so callers
- * can surface the failure instead of silently dropping it.
- */
+/** Create a file and return openFile metadata; throw permission/collision exhaustion errors so callers cannot silently drop failures. */
 export async function createUntitledMarkdownFile(
   worktreePath: string,
   worktreeId: string,
@@ -56,7 +52,10 @@ export async function createUntitledMarkdownFile(
   options: CreateUntitledMarkdownOptions = {}
 ): Promise<UntitledMarkdownFileInfo> {
   const recovered = options.recoveredDocument
-  const fileNameFor = recovered ? recoveredFileName(recovered.originalPath) : untitledFileName
+  const newFile = options.newFile
+  const fileNameFor = recovered
+    ? recoveredFileName(recovered.originalPath)
+    : untitledFileNameWith(newFile?.extension ?? '.md')
   const MAX_ATTEMPTS = 100
   const context = {
     target,
@@ -76,14 +75,7 @@ export async function createUntitledMarkdownFile(
     ? await readMarkdownDocumentTemplateContent(context, options.template)
     : null
 
-  // Why: createFile uses the 'wx' flag, so pathExists is only a hint. Another
-  // create can still win the race after our last probe, especially when the
-  // user fires the shortcut repeatedly or two split groups create files at
-  // nearly the same time. Retrying EEXIST keeps "New Markdown" advancing to
-  // the next untitled-N name instead of surfacing a spurious error toast.
-  //
-  // Why: existence probing must go through the same runtime/SSH-aware file
-  // surface as creation; the shell probe only sees the client filesystem.
+  // Existence is only a hint: createFile uses wx, so retry EEXIST races with the next name. Probe via the same runtime/SSH-aware files API, never the local shell.
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const fileName = fileNameFor(attempt)
     const filePath = joinPath(worktreePath, fileName)
@@ -98,6 +90,7 @@ export async function createUntitledMarkdownFile(
       await createRuntimePath(context, filePath, 'file')
       const content =
         recovered?.content ??
+        (newFile ? newFile.content || null : null) ??
         (templateContent === null
           ? null
           : applyMarkdownTemplatePlaceholders(templateContent, {
@@ -132,7 +125,8 @@ export async function createUntitledMarkdownFile(
         worktreeId,
         language: detectLanguage(fileName),
         isUntitled: true,
-        deleteUntouchedOnClose: recovered || templateContent !== null ? false : undefined,
+        deleteUntouchedOnClose:
+          recovered || templateContent !== null || newFile?.content ? false : undefined,
         operationProvenance: options.operationProvenance,
         mode: 'edit'
       }
@@ -189,8 +183,8 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
   })
 }
 
-function untitledFileName(attempt: number): string {
-  return attempt === 1 ? 'untitled.md' : `untitled-${attempt}.md`
+function untitledFileNameWith(extension: string): (attempt: number) => string {
+  return (attempt) => (attempt === 1 ? `untitled${extension}` : `untitled-${attempt}${extension}`)
 }
 
 function recoveredFileName(originalPath: string): (attempt: number) => string {

@@ -1,10 +1,6 @@
-// This window's view and content facts for some workspaces, read from the store's records the way
-// the Loader reads them back from the window's save, so a workspace's frame slices build without
-// serializing the window's session (design phase E2a). The save's own writers trim what it keeps
-// (editor selection, groups, browser and scrollback state), so those run here too, over these
-// workspaces' records only.
+// Read frame view/facts directly from scoped store records instead of serializing the session (E2a); reuse save trimming for editor, group, browser and scrollback state.
 
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   BROWSER_TAB_LAYOUT_FIELDS,
   BROWSER_TAB_WORKSPACE_FIELDS,
@@ -16,7 +12,7 @@ import {
   omitStoredFields,
   pickStoredFields
 } from '../../../shared/workspace-layout/stored-record-fields'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
 import {
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree

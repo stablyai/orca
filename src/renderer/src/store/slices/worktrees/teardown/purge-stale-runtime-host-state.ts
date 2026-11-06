@@ -38,7 +38,7 @@ export function createPurgeStaleRuntimeHostState(
       set,
       get,
       () =>
-        set((s) => {
+        get().updateAgentStatusState((s, changedPaneKeys) => {
           const repoIdsWithRemovedOwners = new Set<string>()
           const survivingRepoIds = new Set<string>()
           const repoIdsWithSurvivingOwners = new Set<string>()
@@ -143,9 +143,7 @@ export function createPurgeStaleRuntimeHostState(
             repoIdsWithoutSurvivingOwners.delete(repoId)
           }
 
-          // Preserve host ownership for recency teardown. The other bulk maps are
-          // keyed by raw worktree id, but a host-qualified visit must not be
-          // removed when an id twin survives on another host.
+          // Preserve host-qualified visit recency for surviving twins even though other bulk maps use bare IDs.
           const addRemovedWorktreeTarget = (
             worktreeId: string,
             hostId: ExecutionHostId | undefined
@@ -217,7 +215,9 @@ export function createPurgeStaleRuntimeHostState(
           })
           // Why full: survivor ids were dropped above unless the session partition proves the bare-id state is the removed host's.
           const purgeState =
-            purgeTargets.length > 0 ? buildFullWorktreePurgeState(s, purgeTargets) : {}
+            purgeTargets.length > 0
+              ? buildFullWorktreePurgeState(s, purgeTargets, changedPaneKeys)
+              : {}
           const visitPurgeTargets = [
             ...removedWorktreeTargets,
             ...purgeTargets.filter(

@@ -1,8 +1,4 @@
-/**
- * The global selection fields (active tab, file, browser tab and tab type) project the active
- * workspace. A selection in any other workspace — a retained worktree, or the floating panel on
- * screen beside the active one — lands only in that workspace's own maps.
- */
+// Global selection projects only the active workspace; retained/floating workspaces write their own maps without moving it.
 export function ownsGlobalSelection(
   state: { activeWorktreeId: string | null },
   worktreeId: string | null

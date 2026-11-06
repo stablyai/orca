@@ -11,8 +11,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/structured-agent-session-reducer'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/use-native-chat-rewind'
 
 const toastError = vi.hoisted(() => vi.fn())
@@ -157,6 +157,7 @@ test('an older rewind-capable desktop releases its temporary same-epoch hold wit
     vi.useFakeTimers()
     const input: RewindInput = {
       sessionId: SESSION,
+      capturePresentation: () => () => true,
       composerScopeKey: 'old-rewind-clear-compat',
       state: {
         ...EMPTY_STRUCTURED_AGENT_SESSION,

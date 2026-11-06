@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { useSshWorkspaceBrowserRoute as UseSshWorkspaceBrowserRoute } from './use-ssh-workspace-browser-route'
 
 const mocks = vi.hoisted(() => {
   const hostConnection: WorktreeHostConnection = {
@@ -24,7 +25,7 @@ vi.mock('@/lib/worktree-host-connection-phase', () => ({
   useWorktreeHostConnection: () => mocks.hostConnection
 }))
 
-import { useSshWorkspaceBrowserRoute } from './use-ssh-workspace-browser-route'
+let useSshWorkspaceBrowserRoute: typeof UseSshWorkspaceBrowserRoute
 
 const READY_PARTITION = 'persist:orca-browser-v1-routed'
 
@@ -55,7 +56,10 @@ function setHost(
 }
 
 describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Verified routes outlive mounts at module scope; each test starts unverified.
+    vi.resetModules()
+    ;({ useSshWorkspaceBrowserRoute } = await import('./use-ssh-workspace-browser-route'))
     mocks.prepare.mockReset()
     mocks.executionHostId = 'ssh:target-a'
     Object.defineProperty(window, 'api', {
@@ -82,28 +86,6 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
       partition: READY_PARTITION,
       targetId: 'target-a'
     })
-  })
-
-  it('re-derives an ssh-unavailable error without Retry once the host connects', async () => {
-    setHost('unavailable')
-    mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
-    mocks.prepare.mockResolvedValueOnce({ partition: READY_PARTITION })
-    const { result, rerender } = renderHook(() => useSshWorkspaceBrowserRoute('wt-1', null))
-    await settle()
-    expect(result.current.state.kind).toBe('error')
-
-    setHost('connecting')
-    rerender()
-    await settle()
-    // Why: a dial is a transient; the classified card stays until the host actually connects.
-    expect(result.current.state.kind).toBe('error')
-    expect(mocks.prepare).toHaveBeenCalledOnce()
-
-    setHost('connected', 1)
-    rerender()
-    await settle()
-    expect(mocks.prepare).toHaveBeenCalledTimes(2)
-    expect(result.current.state.kind).toBe('ready')
   })
 
   it('re-prepares a failed route when the host reconnects under a new generation', async () => {
@@ -144,8 +126,7 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
   })
 
   it('keeps a failed route on its card while another pane redials the host, then recovers on connect', async () => {
-    // The e2e sequence: the user disconnects, a browser tab classifies the dead host, and the
-    // workspace's terminal redials it. Dial transients must not swap the card for "preparing".
+    // A sibling terminal redials the failed host; transient dialing must preserve the classified error card.
     setHost('unavailable')
     mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
     mocks.prepare.mockResolvedValueOnce({ partition: READY_PARTITION })

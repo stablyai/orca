@@ -22,9 +22,7 @@ function Probe(props: { client: RpcClient; query: string }) {
   return null
 }
 
-// The picker makes two independent host round trips for a pasted PR number: the
-// provider fan-out and the exact-item lookup. Awaiting the fan-out first stacked
-// them, so the rows appeared a whole extra round trip late.
+// Fan-out and exact lookup are independent round trips; serializing them adds a full host round trip to pasted PRs.
 describe('smart source paste lookup concurrency', () => {
   const mounted: ReactTestRenderer[] = []
 
@@ -43,7 +41,7 @@ describe('smart source paste lookup concurrency', () => {
     const sent: string[] = []
     const sendRequest = vi.fn((method: string) => {
       sent.push(method)
-      // Nothing ever settles: only requests issued concurrently can be observed.
+      // Leave requests pending so only concurrently issued requests can be observed.
       return new Promise(() => {})
     })
     const client = { sendRequest } as unknown as RpcClient

@@ -1,19 +1,19 @@
-// L80 (P3): a terminal record that arrives, or changes incarnation, after main composed its panes
-// re-composes them, so a pane its saved layout binds lists once, with that terminal.
+// Late terminal records and incarnation changes must recompose main-owned panes, listing each bound terminal once.
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-test-fixtures.spec')
+} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 type Listed = { id: string; incarnationId: string; connected: boolean }
 
@@ -24,8 +24,7 @@ function restartedHost(stamp: string, listedByHost: () => Listed[]) {
       terminalPtyIncarnationsByPaneKey: { [`host-tab:${HEADLESS_LEAF_ID}`]: stamp }
     })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(runtimeStore as never)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -73,7 +72,6 @@ describe('a terminal record arriving after main composed its panes (switch on)',
     ])
     await hostTabRows(runtime)
 
-    // The same connected terminal adopts the stamped process: no connection change.
     incarnationId = 'inc-now'
 
     expect(await hostTabRows(runtime)).toEqual([
@@ -108,13 +106,11 @@ describe('a terminal record arriving after main composed its panes (switch on)',
 
     await new Promise((resolve) => setImmediate(resolve))
     const published = vi.spyOn(runtime, 'syncWindowGraph')
-    // A writer that resolves the terminal to another workspace (a worktree-identity migration).
+    // Simulate a worktree-identity migration.
     runtime['recordPtyWorktree']('persisted-pty', 'repo-1::/tmp/worktree-b')
     await new Promise((resolve) => setImmediate(resolve))
 
-    // The saved pane no longer holds a terminal of another workspace.
     expect(runtime['paneOfPty'](runtime['ptysById'].get('persisted-pty')).tabId).toBeNull()
-    // Main republished its panes: both workspaces' leaves re-compose against the moved record.
     expect(published).toHaveBeenCalled()
   })
 })

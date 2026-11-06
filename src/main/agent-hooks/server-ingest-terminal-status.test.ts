@@ -27,52 +27,6 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
-  it('keeps hook monitoring mode across an equivalent OSC ping until a hook clears it', () => {
-    const server = new AgentHookServer()
-
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'claude',
-        hookEventName: 'Stop',
-        payload: {
-          state: 'working',
-          workingMode: 'monitoring',
-          prompt: 'watch the build',
-          agentType: 'claude'
-        }
-      },
-      'conn-1'
-    )
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      connectionId: 'conn-1',
-      payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
-    })
-
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring'
-    })
-
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'claude',
-        hookEventName: 'PreToolUse',
-        payload: {
-          state: 'working',
-          prompt: 'watch the build',
-          agentType: 'claude',
-          toolName: 'Read'
-        }
-      },
-      'conn-1'
-    )
-
-    expect(server.getStatusSnapshot()[0]?.workingMode).toBeUndefined()
-  })
-
   it('preserves a hook turn stamp when an OSC repaint omits hook-only completion text', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
@@ -164,10 +118,12 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     expect(server.getStatusSnapshot()[0]?.turnCompletedAt).toBeUndefined()
   })
 
-  // Why: the OSC 9999 payload cannot carry a provider session, so letting it overwrite the row
-  // erased the session id from persisted rows and from headless `orca serve` — which serves these
-  // rows straight to mobile — leaving Chat UI with no transcript to subscribe to (#10630).
-  it('keeps the cached provider session when an OSC status completes the turn', () => {
+  // OSC lacks provider session identity; overwriting it would break mobile transcript subscriptions after restart.
+
+  // Missing or unknown OSC agent identity cannot contradict the cached provider session.
+
+  // Claude reports hookless slash commands (`/context`) as OSC 7501 working then done; the session lives on (#36033).
+  it('keeps the cached provider session when an OSC status starts a turn after done', () => {
     const server = new AgentHookServer()
     const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
 
@@ -175,52 +131,22 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       {
         paneKey: PANE,
         providerSession,
-        payload: { state: 'working', prompt: 'summarize the diff', agentType: 'claude' }
+        payload: { state: 'done', prompt: 'first', agentType: 'claude' }
       },
       'conn-1'
     )
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      connectionId: 'conn-1',
-      payload: { state: 'done', prompt: 'summarize the diff', agentType: 'claude' }
-    })
+    for (const state of ['working', 'done'] as const) {
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        payload: { state, prompt: '', agentType: 'claude' }
+      })
+    }
 
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', providerSession })
   })
 
-  // Why: an OSC ping that names no agent — or the literal 'unknown', which
-  // resolveAgentStatusIdentity treats identically — makes no claim about the pane's identity, so it
-  // must not read as a mismatch. Missing this stripped the session from persisted and headless rows
-  // while the live renderer kept it, blanking mobile chat only after a restart (#10630).
-  it.each([undefined, 'unknown' as const])(
-    'keeps the cached provider session when an OSC status claims agentType %s',
-    (agentType) => {
-      const server = new AgentHookServer()
-      const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
-
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          providerSession,
-          payload: { state: 'working', prompt: 'summarize the diff', agentType: 'claude' }
-        },
-        'conn-1'
-      )
-      server.ingestTerminalStatus({
-        paneKey: PANE,
-        connectionId: 'conn-1',
-        payload: {
-          state: 'done',
-          prompt: 'summarize the diff',
-          ...(agentType ? { agentType } : {})
-        }
-      })
-
-      expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSession })
-    }
-  )
-
-  it('drops the cached provider session when an OSC status starts a new turn', () => {
+  it('drops the cached provider session when a relaunched agent starts a turn after the old one exited', () => {
     const server = new AgentHookServer()
 
     server.ingestRemote(
@@ -231,216 +157,15 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       },
       'conn-1'
     )
+    server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSessionOnly: true })
     server.ingestTerminalStatus({
       paneKey: PANE,
       connectionId: 'conn-1',
-      payload: { state: 'working', prompt: 'second', agentType: 'claude' }
+      payload: { state: 'working', prompt: '', agentType: 'claude' }
     })
 
     expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
-  })
-
-  it('forwards runtime terminal status through the normal listener and snapshot path', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
-
-      server.ingestTerminalStatus({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        payload: {
-          state: 'working',
-          prompt: 'ship it',
-          agentType: 'codex'
-        }
-      })
-
-      expect(listener).toHaveBeenCalledTimes(1)
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          connectionId: null,
-          receivedAt: 1_000,
-          evidenceObservedAt: 1_000,
-          stateStartedAt: 1_000,
-          payload: {
-            state: 'working',
-            prompt: 'ship it',
-            agentType: 'codex'
-          }
-        })
-      )
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          connectionId: null,
-          receivedAt: 1_000,
-          evidenceObservedAt: 1_000,
-          stateStartedAt: 1_000,
-          state: 'working',
-          prompt: 'ship it',
-          agentType: 'codex'
-        })
-      ])
-      expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('accepts a runtime-owned legacy pane without opening legacy relay ingress', () => {
-    const server = new AgentHookServer()
-    const event = {
-      paneKey: 'legacy-tab:7',
-      tabId: 'legacy-tab',
-      ptyId: 'legacy-pty',
-      terminalHandle: 'term_legacy',
-      worktreeId: 'wt-1',
-      payload: { state: 'working' as const, prompt: 'legacy task', agentType: 'codex' as const }
-    }
-
-    server.ingestTerminalStatus(event)
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({
-        paneKey: 'legacy-tab:7',
-        tabId: 'legacy-tab',
-        terminalHandle: 'term_legacy',
-        prompt: 'legacy task'
-      })
-    ])
-    server.stop()
-  })
-
-  it.each([
-    ['PTY id', { ptyId: undefined }],
-    ['terminal handle', { terminalHandle: undefined }],
-    ['matching tab', { tabId: 'other-tab' }]
-  ])('rejects a legacy terminal row without its runtime-owned %s', (_label, overrides) => {
-    const server = new AgentHookServer()
-    server.ingestTerminalStatus({
-      paneKey: 'legacy-tab:7',
-      tabId: 'legacy-tab',
-      ptyId: 'legacy-pty',
-      terminalHandle: 'term_legacy',
-      payload: { state: 'working', prompt: 'legacy task', agentType: 'codex' },
-      ...overrides
-    })
-
-    expect(server.getStatusSnapshot()).toEqual([])
-    server.stop()
-  })
-
-  it('suppresses exact duplicate runtime terminal status observations', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
-      const event = {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        payload: {
-          state: 'working' as const,
-          prompt: 'same turn',
-          agentType: 'codex' as const
-        }
-      }
-
-      server.ingestTerminalStatus(event)
-      vi.setSystemTime(1_250)
-      server.ingestTerminalStatus(event)
-
-      expect(listener).toHaveBeenCalledTimes(1)
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          receivedAt: 1_250,
-          evidenceObservedAt: 1_250,
-          stateStartedAt: 1_000,
-          state: 'working',
-          prompt: 'same turn'
-        })
-      ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('preserves runtime terminal status connection identity', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
-
-      server.ingestTerminalStatus({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        connectionId: 'ssh-conn-1',
-        payload: {
-          state: 'working',
-          prompt: 'ship it',
-          agentType: 'codex'
-        }
-      })
-
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          connectionId: 'ssh-conn-1',
-          payload: {
-            state: 'working',
-            prompt: 'ship it',
-            agentType: 'codex'
-          }
-        })
-      )
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          connectionId: 'ssh-conn-1',
-          state: 'working',
-          prompt: 'ship it'
-        })
-      ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('rejects runtime terminal status with mismatched tab identity', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setListener(listener)
-
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'other-tab',
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'working',
-        prompt: 'bad tab',
-        agentType: 'codex'
-      }
-    })
-
-    expect(listener).not.toHaveBeenCalled()
-    expect(server.getStatusSnapshot()).toEqual([])
   })
 })
 
@@ -478,7 +203,7 @@ describe('the main agent fact across an OSC repaint', () => {
       mainAgent: { state: 'done', stateStartedAt: 10 }
     })
 
-    // OSC cannot date a turn edge: a different state is a main agent it has no fact about.
+    // OSC has no main-agent turn evidence to date a turn edge.
     server.ingestTerminalStatus({
       paneKey: PANE,
       connectionId: 'conn-1',

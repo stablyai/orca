@@ -1,18 +1,19 @@
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
-import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-reply'
+import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-record'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
+import { PiRpcCompaction } from './rpc-compaction'
 import { PiRpcContextUsage } from './rpc-context-usage'
-import { PiRpcMessages } from './rpc-messages'
+import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
-import { piRpcMessageSchema } from './rpc-protocol'
+import { type PiRpcState, piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
 
 export type PiRpcTurnDeps = {
   lane: JsonlRpcTimelineLane
@@ -25,10 +26,11 @@ export type PiRpcTurnDeps = {
   ) => Promise<unknown>
   settled: (id: string, outcome: AgentSessionDispatchOutcome) => void
   idle: () => void
-  /** A turn's end reached the timeline. */
+  /** Called after the timeline accepts the turn end. */
   turnEnded?: () => void
   failed: (error: Error) => void
   diagnostic?: (error: unknown) => void
+  prepareStateObservation?: () => (state: PiRpcState) => void
 }
 
 /** Prompt replies can be idless and arrive after dialogs; they have no elapsed-time deadline. */
@@ -41,7 +43,7 @@ export class PiRpcTurns {
   private turn = 0
   private active?: string
   private settling = false
-  private compacting = false
+  readonly compaction = new PiRpcCompaction(this.context)
   private stopped = false
   private ended = false
   private failure?: string
@@ -51,8 +53,9 @@ export class PiRpcTurns {
     this.messages = new PiRpcMessages(deps.generation, this.context)
     this.idleCheck = new PiRpcIdleCheck({
       request: () => deps.request('get_state'),
+      prepareObservation: deps.prepareStateObservation,
       current: (revision) =>
-        !this.ended && this.settling && !this.compacting && revision === this.revision,
+        !this.ended && this.settling && !this.compaction.running && revision === this.revision,
       settled: (state) => {
         this.deps.lane.apply(this.context.setModel(state.model ?? undefined, Date.now()))
         this.finish()
@@ -70,8 +73,7 @@ export class PiRpcTurns {
       },
       commandOnly: () => {
         this.awaitingRunTrigger = false
-        this.settling = true
-        this.probe()
+        this.commandCompleted()
       },
       rejectedAfterAcceptance: (error) => {
         this.failure = error
@@ -92,7 +94,6 @@ export class PiRpcTurns {
   get working(): boolean {
     return this.active !== undefined
   }
-  /** Moves whenever Pi or a send does anything. */
   get activity(): number {
     return this.revision
   }
@@ -166,19 +167,16 @@ export class PiRpcTurns {
         // This can precede automatic retry or detached compaction.
         break
       case 'agent_settled':
-        this.settling = true
-        this.probe()
+        this.commandCompleted()
         return
       case 'compaction_start':
       case 'auto_compaction_start':
         this.revision++
-        this.compacting = true
-        this.deps.lane.apply(this.context.compacting())
+        this.deps.lane.apply(this.compaction.start())
         return
       case 'compaction_end':
       case 'auto_compaction_end':
-        this.compacting = false
-        this.context.compacted(frame.result)
+        this.deps.lane.apply(this.compaction.end(frame.result))
         if (frame.willRetry === true) {
           this.failure = undefined
           this.lastStopReason = undefined
@@ -202,6 +200,17 @@ export class PiRpcTurns {
             typeof frame.finalError === 'string' ? frame.finalError : 'Pi auto-retry failed'
         }
         break
+    }
+  }
+
+  /** Settlement rides on the small agent_settled; a skipped event still applies its head. */
+  skipped(type: string, prefix: string): void {
+    const { head, contentLost } = piRpcSkippedEvent(type, prefix)
+    if (head) {
+      this.receive(head)
+    }
+    if (contentLost && this.active && !this.ended) {
+      this.deps.lane.apply([piRpcSkippedEventNotice(this.active)])
     }
   }
 
@@ -240,6 +249,7 @@ export class PiRpcTurns {
     this.revision++
     this.idleCheck.dispose()
     this.delivery.end()
+    this.compaction.release()
   }
 
   private awaitingRunTrigger = false

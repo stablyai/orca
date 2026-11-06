@@ -4,10 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { showPlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
 
-/**
- * The way to keep working on a host whose move is blocked. Only offered then, and only for a host
- * this desktop dials itself: a remote Orca server's host is that server's to reach.
- */
+/** Offer escape-hatch terminals only for blocked hosts this desktop can dial; paired-server hosts are that server’s responsibility. */
 export function OpenPlainSshTerminalButton({
   targetId,
   targetLabel,
@@ -32,7 +29,6 @@ export function OpenPlainSshTerminalButton({
       >
         {translate('auto.components.plainSshTerminal.open', 'Open plain SSH terminal')}
       </Button>
-      {/* The next step for any block, including ones retrying can't clear. */}
       <span className="text-xs text-muted-foreground">
         {translate(
           'auto.components.plainSshTerminal.openHint',

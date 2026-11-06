@@ -1,4 +1,3 @@
-// Layout-owner build: attaching the hook server's store also follows its rows for main's tab titles.
 import { describe, expect, it, vi } from 'vitest'
 import { setupMainOwnedWorkspace } from './main-owned-workspace-runtime-fixture'
 
@@ -17,7 +16,7 @@ function hookStore() {
 }
 
 describe("main's tab titles from the attached hook store", () => {
-  it('follows its rows once, and stops on detach', () => {
+  it('subscribes once to enriched status and unsubscribes on detach', () => {
     const { runtime } = setupMainOwnedWorkspace()
     const store = hookStore()
 

@@ -1,5 +1,8 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
@@ -23,8 +26,7 @@ export function resolveWindowsShiftEnterEncoding(
   if (signals.foreground?.shellForeground) {
     return 'alt-enter'
   }
-  // Why: a pending confirmation retains the last allowlisted byte capability;
-  // CSI-u is inert in a shell, while Esc+CR can submit in Pi.
+  // Retain allowlisted encoding during confirmation: CSI-u is inert in shells, while Esc+CR can submit in Pi.
   const agent =
     signals.foreground?.routingTrusted === true ||
     signals.foreground?.routingConfirmationPending === true

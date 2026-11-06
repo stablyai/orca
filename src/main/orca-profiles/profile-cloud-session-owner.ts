@@ -17,16 +17,14 @@ import {
   type OrcaCloudSessionReadResult
 } from './profile-cloud-session-store'
 
-// The one owner of each profile's cloud session: every read and write of the session goes
-// through here. Callers ask for changes; they never write a session they built themselves.
+// All session reads/writes pass through this owner; callers request changes instead of replacing state.
 
 type SessionOwnerState = {
-  // Bumped by sign-in and sign-out: a change begun before either may not land.
+  // Sign-in/out fences older in-flight changes.
   generation: number
-  // Bumped when the profile's org link moves: a server reply begun before it describes the
-  // old org, so only its tokens may land.
+  // Org changes invalidate old metadata replies, but their rotated tokens must still land.
   linkVersion: number
-  // Signed out this run: the file is ignored even if it could not be removed.
+  // Ignore disk after sign-out even if deletion failed.
   signedOut: boolean
 }
 
@@ -85,7 +83,7 @@ export function readCloudSession(
   return readOrcaCloudSession(profileId, userDataPath)
 }
 
-// Take before a request whose reply will change the session.
+/** Take before requests whose replies mutate the session. */
 export function takeCloudSessionTicket(
   profileId: string,
   userDataPath: string
@@ -110,7 +108,6 @@ export function signInCloudSession(
   ownerOf(profileId, userDataPath).signedOut = false
 }
 
-// Fences off every change in flight, e.g. before sign-out's network revoke.
 export function invalidateCloudSessionChanges(profileId: string, userDataPath: string): void {
   const owner = ownerOf(profileId, userDataPath)
   owner.generation++
@@ -127,8 +124,7 @@ export function signOutCloudSession(profileId: string, userDataPath: string): vo
   }
 }
 
-// Why: with rotation, only the session that actually failed may be cleared; a loser of a
-// concurrent refresh race must not wipe the winner's rotated session. Returns whether it cleared.
+// Clear only the token that failed; losing refresh racers must not erase the winner’s session.
 export function signOutRevokedCloudSession(
   profileId: string,
   userDataPath: string,
@@ -138,8 +134,7 @@ export function signOutRevokedCloudSession(
   if (current.status === 'found' && current.session.refreshToken !== failed.refreshToken) {
     return false
   }
-  // A session we were denied is not a session we may delete: the token we would be clearing
-  // might not even be the one that failed.
+  // An unreadable token may differ from the failed one, so deletion is unsafe.
   if (current.status === 'unreadable') {
     return false
   }
@@ -147,12 +142,8 @@ export function signOutRevokedCloudSession(
   return true
 }
 
-/**
- * Lands a refresh reply. Why the tokens always land unless the session was signed out or
- * replaced: the token we sent is spent once the server rotates, and keeping it means the next
- * refresh replays it and the server revokes the family. Orgs, capabilities and the link follow
- * only when the org link did not move meanwhile; the link is best effort, after the tokens.
- */
+/** Save rotated tokens unless signed out/replaced: retaining spent tokens can revoke the family.
+ * Apply org metadata only if the link has not moved; persist tokens before the best-effort link. */
 export function commitCloudSessionRotation(
   profileId: string,
   userDataPath: string,
@@ -189,8 +180,7 @@ export function commitCloudSessionRotation(
   return next
 }
 
-// Org selection moves the link before its request, so a refresh already in flight lands
-// only its tokens and cannot relink to the old org.
+// Move the org link before requesting so in-flight refreshes cannot restore the old org.
 export function beginCloudSessionRelink(
   profileId: string,
   userDataPath: string
@@ -224,10 +214,7 @@ function commitServerReply(
     : getOrcaProfileListState(userDataPath)
 }
 
-/**
- * Lands an org-selection reply; tokens are untouched. A link that already moved to the
- * selected org still counts as done.
- */
+/** Leave tokens untouched; an already-selected org still counts as committed. */
 export function commitCloudSessionRelink(
   profileId: string,
   userDataPath: string,
@@ -237,7 +224,7 @@ export function commitCloudSessionRelink(
   return commitServerReply(profileId, userDataPath, ticket, reply, true)
 }
 
-/** Lands a capability reply; refused if the org link moved at all since the ticket. */
+/** Refuse capability replies if the org link moved after the ticket. */
 export function commitCloudSessionCapabilities(
   profileId: string,
   userDataPath: string,
@@ -247,7 +234,6 @@ export function commitCloudSessionCapabilities(
   return commitServerReply(profileId, userDataPath, ticket, reply, false)
 }
 
-// Writes any rotation still held only in memory; called on quit and OS shutdown.
 export function flushUnsavedCloudSessions(): void {
   flushUnsavedOrcaCloudSessions()
 }

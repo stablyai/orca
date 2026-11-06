@@ -1,6 +1,3 @@
-// A close, dispose or quit while a turn runs: the agent is asked to cancel it and given the Stop's
-// grace to end it before its process goes, as a Stop does; an idle close goes at once.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeProviderTimelineRigs,
@@ -16,13 +13,13 @@ import {
 } from './acp-structured-adapter.test-support'
 import { framesOf, openAttachedHostRig, send } from './acp-structured-host.test-support'
 import { ACP_STOP_GRACE_MS } from './acp-structured-session-adapter-deps'
+import { PROVIDER_EXIT_OUTPUT_DRAIN_MS } from '../provider-process/provider-exit-output-drain'
 
 afterEach(async () => {
   vi.useRealTimers()
   await closeProviderTimelineRigs()
 })
 
-/** What Orca had written, and whether the turn had ended, when it first asked the child to close. */
 function watchClose(child: FakeAcpChild, turn: { ended: boolean }) {
   const atClose: { cancels: number | null; turnEnded: boolean | null } = {
     cancels: null,
@@ -151,7 +148,10 @@ describe('ACP teardown with nothing to cancel', () => {
       return proves
     }
     child.agent.stdin.destroy()
-    await vi.waitFor(() => expect(child.closes).toBe(1))
+    // The running prompt may still be answered, so the broken connection closes after the drain.
+    await vi.waitFor(() => expect(child.closes).toBe(1), {
+      timeout: PROVIDER_EXIT_OUTPUT_DRAIN_MS + 1_000
+    })
     proves = true
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
     expect(cancel).not.toHaveBeenCalled()

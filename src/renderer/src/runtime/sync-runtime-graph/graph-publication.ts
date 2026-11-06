@@ -10,8 +10,8 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
 } from '../../../../shared/runtime-types'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
@@ -51,8 +51,7 @@ export async function syncRuntimeGraph(): Promise<void> {
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     const tabsById = new Map<string, TerminalTab>()
     for (const tab of tabs) {
-      // Duplicate ids in one worktree are malformed persisted state; don't
-      // guess which PTY a mounted surface owns.
+      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
       if (tabsById.has(tab.id)) {
         tabsById.delete(tab.id)
         continue
@@ -77,6 +76,7 @@ export async function syncRuntimeGraph(): Promise<void> {
   const activeGroupByWorkspace = ORCA_LAYOUT_OWNER_IS_MAIN
     ? changedActiveGroups(state.activeGroupIdByWorktree, graphState.publishedActiveGroups)
     : undefined
+  const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -90,7 +90,9 @@ export async function syncRuntimeGraph(): Promise<void> {
     ...(projectSectionCatalog && projectSectionCatalog !== graphState.publishedProjectSectionCatalog
       ? { projectSectionCatalog }
       : {}),
-    ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {})
+    ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {}),
+    // Only what this window applied: main then answers "unchanged" instead of resending rows.
+    ...(senderBase ? { agentSenderBase: senderBase } : {})
   }
 
   for (const [registrationKey, registeredTab] of mountedTerminalTabEntries()) {
@@ -154,8 +156,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     }
   }
 
-  // Inactive automation/cold-parked tabs do not mount a TerminalPane; publish persisted leaves
-  // only when a live eager buffer or parked watcher proves the PTY is still owned.
+  // Unmounted automation/parked tabs publish saved leaves only with live eager-buffer/watcher proof.
   const parkedWatcherPtyIds = collectParkedTerminalWatcherPtyIds()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
@@ -236,6 +237,9 @@ export async function syncRuntimeGraph(): Promise<void> {
     }
     commitMobileSessionPublication(mobileSessionTabs, result?.mobileSessionResyncWorktrees)
     const currentState = graphState.getStoreState()
+    if (!result?.agentSenderRevision) {
+      currentState?.setAgentSenderPublication?.('local', result?.agentSenderAssociations)
+    }
     currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
       if (currentState) {

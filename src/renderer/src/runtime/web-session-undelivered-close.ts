@@ -1,14 +1,11 @@
-// A user's close of a paired host's tab that never reached the host: which failures mean that, and
-// how the close is held for a replay.
+// Hold undelivered paired-tab closes for replay.
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { holdWebSessionCloseForReplay } from './web-session-close-replay'
 import { appPairedTerminalTabCloseIntentStore } from './paired-terminal-tab-close-intent-store'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
 
-// Why these and a bare rejection only: they mean the close never reached the host, so sending it
-// again is the user's own close. A structured refusal (e.g. a re-paired host) is an answer.
-// A Disconnect is answered by this client, not the host, so a tab closed meanwhile stays closed.
+// Only undelivered/bare rejection means replay the same user close; structured refusals are host answers. Disconnect is client-answered and must retain close.
 const UNDELIVERED_CLOSE_CODES = new Set([
   'runtime_manually_disconnected',
   'runtime_unavailable',
@@ -40,8 +37,7 @@ export function holdUndeliveredUserClose(
 
 const WEB_SESSION_CLOSE_REPLAY_RETRY_DELAY_MS = 5_000
 
-// Why a re-list: subscriptions are change-driven, so an idle worktree may never publish the
-// snapshot that makes the next attempt due. The re-list's receipt does.
+// Idle subscriptions may never change; re-list receipt makes held close replay due.
 export function scheduleWebSessionCloseReplayRelist(
   environmentId: string,
   worktreeId: string

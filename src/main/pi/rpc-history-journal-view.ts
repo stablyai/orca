@@ -1,15 +1,9 @@
 import { z } from 'zod'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
-import { isQueuedAgentJournalSubmission } from '../../shared/agent-session-queued-submission'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
-/**
- * Pi's entries up to `entry` are accounted for (shown, or deliberately skipped) by the chat's journal
- * up to `sequence` of `epoch`. Saved as the Pi handle's resume cursor, which only Pi's adapter reads.
- */
+/** Pi entries through entry are accounted for through this journal epoch/sequence; encoded in the Pi resume cursor. */
 export type PiHistoryClaim = { entry: string; epoch: string; sequence: number }
 
 const claimSchema = z.object({
@@ -22,7 +16,7 @@ export function encodePiHistoryClaim(claim: PiHistoryClaim): string {
   return JSON.stringify(claim)
 }
 
-/** A cursor an older build left, or one this build can't read, is no claim at all. */
+/** Unknown or unreadable cursors provide no history claim. */
 export function decodePiHistoryClaim(value: string | undefined): PiHistoryClaim | null {
   if (value === undefined) {
     return null
@@ -39,9 +33,9 @@ export type PiHistoryJournalView = {
   epoch: string
   sequence: number
   hasRows: boolean
-  /** Pi entries the journal already holds as rows, from any file of this conversation. */
+  /** Include entries from every file in the conversation lineage. */
   accounted: ReadonlySet<string>
-  /** Where the chat's own newest work was created: a turn its Pi ran, or a prompt handed to it. */
+  /** Newest chat turn or accepted prompt, including prompts whose turn row never landed. */
   ownWorkSequence: number
 }
 
@@ -50,12 +44,6 @@ export function readPiHistoryJournalView(
   lineage: ReadonlySet<string>
 ): PiHistoryJournalView {
   const accounted = new Set<string>()
-  const submissions = journal.submissions()
-  const queued = new Set(
-    submissions
-      .filter(isQueuedAgentJournalSubmission)
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-  )
   let hasRows = false
   let ownWorkSequence = 0
   journal.visitItems((itemId, sequence, body) => {
@@ -71,18 +59,18 @@ export function readPiHistoryJournalView(
     }
     if (
       body.kind === 'turn' ||
-      (identity?.provider === 'orca' && body.kind === 'message' && !queued.has(itemId))
+      (identity?.provider === 'orca' &&
+        body.kind === 'message' &&
+        !(
+          journal.inputOrder.inputForItem(itemId) &&
+          isQueuedAgentJournalSubmission(journal.inputOrder.inputForItem(itemId)!)
+        ))
     ) {
       ownWorkSequence = Math.max(ownWorkSequence, sequence)
     }
   })
   // A prompt Pi accepted before its turn row landed still counts from its acceptance.
-  for (const submission of submissions) {
-    const receipt = journal.receiptFor(submission.clientMessageId)
-    if (receipt?.cursor.epoch === journal.epoch) {
-      ownWorkSequence = Math.max(ownWorkSequence, receipt.cursor.sequence)
-    }
-  }
+  ownWorkSequence = Math.max(ownWorkSequence, journal.inputOrder.latestReceiptSequence())
   const cursor = journal.cursor()
   return { epoch: cursor.epoch, sequence: cursor.sequence, hasRows, accounted, ownWorkSequence }
 }

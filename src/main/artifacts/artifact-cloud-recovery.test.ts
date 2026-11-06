@@ -328,7 +328,6 @@ async function publishedLink(userDataPath: string): Promise<string | null> {
   return result.status === 'ok' ? (result.value?.shareUrl ?? null) : null
 }
 
-/** JSON payload the fake artifact API serialises for a response. */
 type ArtifactResponseBody = Record<string, unknown>
 
 function jsonResponse(body: ArtifactResponseBody, status: number): Response {

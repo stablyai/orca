@@ -1,3 +1,4 @@
+import { registerFederationAnswerAtomicityTest } from './federation-answer-atomicity.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -172,7 +173,7 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
 
     const response = await homeDispatcher.dispatch(
-      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+      startRequest(task.id, { agent: 'gemini', model: 'unsupported-model' })
     )
 
     expect(response).toMatchObject({
@@ -180,7 +181,7 @@ describe('orchestration federation', () => {
       result: {
         state: 'failed',
         launch: {
-          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          requested: { agent: 'gemini', model: 'unsupported-model', effort: null },
           effective: null
         }
       }
@@ -360,6 +361,9 @@ describe('orchestration federation', () => {
       body: 'Should I include slow integration tests?'
     })
 
+    const snapshot = vi
+      .spyOn(homeRuntime.orchestrationSenderNames, 'snapshotOf')
+      .mockReturnValue({ name: 'Known coordinator A', agent: 'codex' })
     const reply = await homeDispatcher.dispatch({
       id: 'rpc_home_reply',
       authToken: 'coordinator-token',
@@ -373,7 +377,19 @@ describe('orchestration federation', () => {
       }
     })
     expect(reply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
+    snapshot.mockReturnValue({ name: 'Later coordinator B', agent: 'claude' })
     await syncFederationBarrier(homeRuntime, homeDb)
+    const acceptedAnswer = workerDb.getMessageById(
+      workerDb.getRemoteQuestion(question!.id)!.answer_message_id!
+    )!
+    expect(JSON.parse(acceptedAnswer.answer_sender_snapshot!)).toMatchObject({
+      version: 1,
+      sender: {
+        name: 'Known coordinator A',
+        agent: 'codex',
+        party: { terminalHandle: null, orcaSessionId: null }
+      }
+    })
 
     await expect(ask).resolves.toMatchObject({
       ok: true,
@@ -391,6 +407,14 @@ describe('orchestration federation', () => {
       })[0]
     ).toMatchObject({ acked_at: expect.any(String) })
   })
+
+  registerFederationAnswerAtomicityTest(() => ({
+    homeDb,
+    workerDb,
+    homeRuntime,
+    homeDispatcher,
+    createHomeTask
+  }))
 
   it('keeps a timed-out remote question resumable', async () => {
     const task = createHomeTask()
@@ -611,8 +635,7 @@ describe('orchestration federation', () => {
       ok: true,
       result: {
         observation: { status: 'live', exactWorker: true },
-        // The execution host answered; the push-fed status snapshot only covers local panes,
-        // so this projection used to contradict the observation printed beside it.
+        // Host evidence must drive projection; local-only push snapshots previously contradicted the adjacent remote observation.
         projection: {
           host: { kind: 'remote', id: 'environment_windows' },
           liveness: { verdict: 'live', source: 'execution_host' },
@@ -757,6 +780,9 @@ describe('orchestration federation', () => {
       async (_selector, method) => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
+        }
+        if (method === 'orchestration.federationShow') {
+          return {}
         }
         if (method === 'orchestration.federationStop') {
           throw new Error('connection lost')

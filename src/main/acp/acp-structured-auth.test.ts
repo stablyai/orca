@@ -1,6 +1,3 @@
-// Grok signs in on the machine it runs on: on auth required, with the API key in its own launch
-// environment, else the sign-in it already cached; with neither, the chat reports it signed out.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
@@ -22,7 +19,6 @@ const BOTH = [
   { id: 'cached_token', name: 'Cached sign-in' }
 ]
 
-/** Grok refuses to open a session until it is authenticated. */
 function requiresSignIn(agent: AcpScriptedAgent): void {
   let signedIn = false
   agent.on('authenticate', (frame) => {

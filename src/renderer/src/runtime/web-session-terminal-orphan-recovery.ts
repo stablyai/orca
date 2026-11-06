@@ -1,3 +1,4 @@
+import type { TerminalOrphanRecoveryOptions } from './web-session-terminal-orphan-recovery-options'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
@@ -45,20 +46,15 @@ import {
   clearTerminalRecoveryRpcLaneForTests,
   runInTerminalRecoveryRpcLane
 } from './web-session-terminal-orphan-recovery-rpc-lane'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import { buildWebTerminalOrphanTopologyProposal } from './web-session-terminal-orphan-topology'
 import {
   clearRetainedTerminalRetirementProofsForTests,
   mergeRetainedTerminalRetirementProofs
 } from './web-session-terminal-retirement-proof-ledger'
-
-export type TerminalOrphanRecoveryOptions = {
-  expectedEnvironmentPairingRevision?: number
-  expectedRuntimeId?: string
-  call?: TerminalOrphanRecoveryCall
-  /** Reads live renderer topology so an RPC cannot apply a stale local claim. */
-  getCurrentState?: () => TerminalOrphanRecoveryState
-}
 
 function recoveryKey(
   environmentId: string,
@@ -182,13 +178,11 @@ async function recoverTerminalOrphans(
   if (!isCurrent()) {
     return null
   }
-  // Adoption mutates host ownership. If the local pane disappeared or moved
-  // while it was in flight, never publish the response against old topology.
+  // Adoption mutates host ownership; discard replies if local pane topology moved/disappeared during RPC.
   if (!localTopologyIsCurrent()) {
     return null
   }
-  // A lane refusal (queue pressure or supersession) is transient. Do not
-  // turn it into an inventory retain entry that would suppress the next frame.
+  // Lane pressure/supersession is transient; caching inventory retain would suppress the next retry.
   if (adoptionResponse === null) {
     return retainAfterAdoptionFailure(false)
   }
@@ -196,8 +190,7 @@ async function recoverTerminalOrphans(
     return retainAfterAdoptionFailure(isStableAdoptionFailure(thrownAdoptionError))
   }
   if (!isRpcResponse(adoptionResponse)) {
-    // A malformed envelope/result is a stable protocol incompatibility for
-    // this exact semantic frame, so bounded deduplication is safe.
+    // Malformed results are stable protocol faults for this semantic frame; bounded deduplication is safe.
     return retainAfterAdoptionFailure(true)
   }
   if (!isCurrent()) {
@@ -210,8 +203,7 @@ async function recoverTerminalOrphans(
     return retainAfterAdoptionFailure(true)
   }
   if (adoptionResponse.result.snapshot.worktree !== snapshot.worktree) {
-    // A valid response for another worktree is stale routing evidence; retry
-    // on the next replay instead of pinning this surface as a protocol fault.
+    // Another worktree’s valid reply is stale routing, not protocol incompatibility; retry on replay.
     return retainAfterAdoptionFailure(false)
   }
 
@@ -251,8 +243,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
   optionsOrCall?: TerminalOrphanRecoveryOptions | TerminalOrphanRecoveryCall
 ): Promise<RuntimeMobileSessionTabsResult | null> {
   const options = normalizeOptions(optionsOrCall)
-  // Why: every host frame enters recovery here, so this is where a delta frame regains the proofs
-  // the host already sent this client (see the ledger for the negotiated contract).
+  // Every delta enters here; recover previously sent proofs per the negotiated ledger contract.
   const snapshot = suppressCancelledStructuredSessionTabs(
     mergeRetainedTerminalRetirementProofs(environmentId, frame),
     { kind: 'environment', environmentId }
@@ -284,8 +275,7 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
     return Promise.resolve(snapshot)
   }
   if (prepared.candidates.length === 0 && prepared.unresolved.length === 0) {
-    // Preserve stale off-tree evidence while superseding any older recovery
-    // queued for this worktree.
+    // Supersede queued recovery but retain stale off-tree evidence.
     supersedeTerminalRecovery(key)
     return Promise.resolve(mergeRetainedTerminalSurfaces(snapshot, prepared.retained))
   }

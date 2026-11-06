@@ -1,7 +1,4 @@
-/**
- * How real host-side failures surface: system-ssh directory upload, system sftp, and the warm
- * runtime check. Each runs real processes where it can.
- */
+/** Exercise real failure producers for directory upload, system SFTP and runtime self-test. */
 import { randomBytes } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -75,8 +72,7 @@ describe.runIf(posix)('system-ssh directory upload', () => {
   })
 
   it('keeps the remote ENOSPC when the far end closes mid-stream and local tar then fails to write', async () => {
-    // Why 8 MiB of noise: tar is still writing when ssh exits, so it fails downstream (BSD tar:
-    // exit 1 "Write error", no signal) instead of finishing first.
+    // Keep tar writing past SSH exit so downstream failure occurs on BSD tar too.
     const dir = join(scratch, 'large')
     await mkdir(dir)
     await writeFile(join(dir, 'runtime.bin'), randomBytes(8 * 1024 * 1024))
@@ -115,6 +111,20 @@ describe.runIf(posix)('system-ssh directory upload', () => {
       '/remote'
     ).catch((e: unknown) => e)
     expect(String(error)).toContain('local tar relay upload')
+    expect(isHostAnsweredSystemSshExit(error)).toBe(false)
+  })
+
+  it('blames the local tar failure even when the remote exit is observed first', async () => {
+    // Local tar closes its output, so remote tar sees EOF and exits, before tar reports its own failure.
+    await script('tar', 'exec 1>&-\nsleep 1\necho "tar: could not chdir to missing" >&2\nexit 1')
+    vi.stubEnv('PATH', `${scratch}:${process.env.PATH}`)
+    vi.mocked(findSystemSsh).mockReturnValue(
+      await script('ssh', 'cat >/dev/null\necho "tar: Unexpected EOF in archive" >&2\nexit 2')
+    )
+    const error = await uploadDirectoryViaSystemSsh(target, scratch, '/remote').catch(
+      (e: unknown) => e
+    )
+    expect(String(error)).toContain('could not chdir to missing')
     expect(isHostAnsweredSystemSshExit(error)).toBe(false)
   })
 })

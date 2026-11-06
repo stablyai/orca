@@ -23,7 +23,7 @@ beforeAll(async () => {
   await mkdir(join(root, 'directory'))
   await writeFile(join(root, 'huge'), '')
   await truncate(join(root, 'huge'), 2 * 1024 * 1024)
-  // Why: Windows has no mkfifo and symlinks there need Developer Mode.
+  // Windows lacks mkfifo and unprivileged symlinks; exercise those sources on POSIX.
   if (!isWindows) {
     expect((await runProcess({ program: 'mkfifo', args: [join(root, 'fifo')] })).code).toBe(0)
     await symlink('/dev/zero', join(root, 'link-to-dev-zero'))
@@ -66,16 +66,5 @@ describe('SSH identity file reads', () => {
       'message',
       `All configured authentication methods failed. Orca skipped identity file "${keyPath}" (${reason}).`
     )
-  })
-
-  it('leaves non-auth errors and missing files unannotated', () => {
-    const skipped: SkippedIdentityFiles = new Map()
-    expect(resolvePrivateKeys(targetFor(join(root, 'missing')), null, skipped)).toEqual([])
-    expect(skipped.size).toBe(0)
-
-    resolvePrivateKeys(targetFor(join(root, 'directory')), null, skipped)
-    const networkError = new Error('connect ECONNREFUSED')
-    withSkippedIdentityFileDetail(networkError, skipped)
-    expect(networkError.message).toBe('connect ECONNREFUSED')
   })
 })

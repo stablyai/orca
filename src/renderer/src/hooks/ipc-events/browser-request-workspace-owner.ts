@@ -2,10 +2,7 @@ import { resolveOwner } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { AppState } from '../../store/types'
 
-/**
- * Whether a paired server owns (or may own) `worktreeId`. This desktop's runtime must not create or close browser
- * tabs there: that server's own page registry and snapshot are authoritative for them.
- */
+/** Refuse desktop-runtime browser commands where a paired server owns or may own the workspace; its page registry is authoritative. */
 export function isBrowserWorkspaceOwnedByPairedServer(
   state: WorktreeOperationRouteState,
   worktreeId: string
@@ -18,10 +15,7 @@ export function isBrowserWorkspaceOwnedByPairedServer(
   )
 }
 
-/**
- * Whether `environmentId`'s own machine is the single owner of `worktreeId`. Gates the browser
- * commands a managed SSH host forwards, so a host reaches only its own workspaces' tabs.
- */
+/** Forward managed-host commands only to workspaces provably owned by that environment. */
 function isBrowserWorkspaceOwnedByEnvironment(
   state: WorktreeOperationRouteState,
   worktreeId: string,
@@ -36,10 +30,7 @@ function isBrowserWorkspaceOwnedByEnvironment(
   )
 }
 
-/**
- * The workspace a managed SSH host's forwarded command may use: the named page's workspace (it may
- * not have mounted yet, so main cannot know it), or the named workspace, owned by that host.
- */
+/** Resolve the named page’s workspace or explicit workspace under the forwarding host’s ownership; pages may precede workspace mounting. */
 export function resolveRemoteCliBrowserWorkspace(
   state: WorktreeOperationRouteState &
     Pick<AppState, 'browserTabsByWorktree' | 'browserPagesByWorkspace'>,
@@ -59,10 +50,7 @@ export function resolveRemoteCliBrowserWorkspace(
     : null
 }
 
-/**
- * Whether this desktop renders the tab: every page records an explicit null runtime, as the tab
- * bar's + and a managed SSH host's bridged create do. A paired server's streamed page never does.
- */
+/** Desktop-rendered pages record explicit null runtime, including bridged managed-SSH pages; streamed paired-server pages do not. */
 export function isDesktopRenderedBrowserTab(
   state: Pick<AppState, 'browserTabsByWorktree' | 'browserPagesByWorkspace'>,
   tabOrPageId: string
@@ -78,7 +66,6 @@ export function isDesktopRenderedBrowserTab(
   return false
 }
 
-/** The workspace holding a browser tab, addressed by its tab (workspace) id or one of its page ids. */
 export function findBrowserTabWorktreeId(
   state: Pick<AppState, 'browserTabsByWorktree' | 'browserPagesByWorkspace'>,
   tabOrPageId: string

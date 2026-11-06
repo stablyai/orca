@@ -1,9 +1,5 @@
-// `agentSessionAttachment.*` — files a client attaches to a structured chat, stored on this host.
-//
-// Behind the same gate as `agentSession.*`: only a client that reads structured sessions may write
-// into their store. A namespace of its own, because these reach the attachment store rather than
-// the session host. Clients call them only where the host advertises
-// `agent-session.attachments.v1`; an older host answers `method_not_found`.
+// Store client chat attachments on this host under the structured-session gate, separate from session-host access.
+// Negotiate attachments.v1; older hosts return method_not_found.
 
 import { defineMethod, type RpcContext } from '../core'
 import {
@@ -12,6 +8,7 @@ import {
 } from './structured-agent-session-gate'
 import {
   AttachmentReadParams,
+  AttachmentTextReadParams,
   AttachmentUploadAppendParams,
   AttachmentUploadIdParams,
   AttachmentUploadStartParams
@@ -32,6 +29,15 @@ async function requireStore(
 }
 
 export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
+  defineMethod({
+    name: 'agentSessionAttachment.readTextChunk',
+    permission: 'workspace',
+    params: AttachmentTextReadParams,
+    handler: async (params, ctx) => {
+      const { store } = await requireStore(ctx)
+      return store.readTextChunk(params, remoteFileContentBudget(ctx.clientKind, ctx.requestId))
+    }
+  }),
   defineMethod({
     name: 'agentSessionAttachment.uploadStart',
     permission: 'workspace',
@@ -74,7 +80,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
     params: AttachmentReadParams,
     handler: async (params, ctx) => {
       const { store } = await requireStore(ctx)
-      // A remote reply must fit the connection's outbound budget, or the server closes the socket.
+      // Bound remote replies or outbound-budget overflow closes the socket.
       return store.readPreview(params.path, remoteFileContentBudget(ctx.clientKind, ctx.requestId))
     }
   })

@@ -1,26 +1,25 @@
 import { hostPlatformDisplayName } from './host-platform-label'
+import { formatHostMachineLine, type HostMachine, type HostMachineKind } from './host-machine-line'
 
 export type HostDisplayResolutionInput = {
   /** The label the caller already owns: a stored resolved name, or a desktop-local server label. */
   name: string
   machineName?: string | null
   platform?: NodeJS.Platform | null
+  machine?: HostMachine | null
 }
 
 export type HostDisplayResolution = {
   title: string
-  /**
-   * "OS · machine name" when the machine name differs from the shown title, the OS alone when it
-   * matches (the OS is always shown when known), or null when the host reported neither.
-   */
+  /** OS plus a distinct machine name, OS alone when names match, or null when neither is known. */
   descriptorLine: string | null
+  /** Null when the desktop predates machine info. */
+  machineKind: HostMachineKind | null
+  /** Model or kind plus OS ("MacBook Pro · macOS"), OS alone for older desktops. */
+  machineLine: string | null
 }
 
-/**
- * The one display rule for host rows and headers. The title is always the caller's own label —
- * a machine name can appear only on the descriptor line, never as the title, so a late-arriving
- * descriptor can never retitle a row.
- */
+/** Titles always use the caller’s label; machine names belong only in descriptors so late metadata cannot retitle rows. */
 export function resolveHostDisplay(input: HostDisplayResolutionInput): HostDisplayResolution {
   const title = normalize(input.name) ?? 'Host'
   const machineName = normalize(input.machineName)
@@ -28,7 +27,12 @@ export function resolveHostDisplay(input: HostDisplayResolutionInput): HostDispl
     [hostPlatformDisplayName(input.platform ?? null), machineName === title ? null : machineName]
       .filter(Boolean)
       .join(' · ') || null
-  return { title, descriptorLine }
+  return {
+    title,
+    descriptorLine,
+    machineKind: input.machine?.kind ?? null,
+    machineLine: formatHostMachineLine(input.machine, input.platform)
+  }
 }
 
 function normalize(value: string | null | undefined): string | null {
