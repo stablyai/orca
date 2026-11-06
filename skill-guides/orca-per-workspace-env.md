@@ -319,7 +319,7 @@ Inside the environment, in Orca-server mode, run exactly this. These flags are v
 improvise them.
 
 ```bash
-orca serve \
+ORCA_INSTANCE_ID="$ORCA_VM_INSTANCE_ID" orca serve \
   --port "$PORT" \
   --project-root "$ABS_REPO_PATH_ON_REMOTE" \
   --pairing-address "$EXTERNAL_WSS_URL" \
@@ -330,6 +330,12 @@ In an environment built from source, run it as `pnpm exec orca-dev serve …` fr
 `orca-dev` is the in-repo entrypoint. Plain `orca serve …` is the same command when the built CLI is
 on that machine's PATH, and the flags and output are identical either way. There is no `--host` flag,
 and `--project-root` must be an absolute directory on the remote.
+
+Forward `ORCA_VM_INSTANCE_ID` from the create script's environment into the remote command as
+`ORCA_INSTANCE_ID`. It is unique per workspace and unchanged on resume, so a workspace keeps its
+pairing across suspend and resume. When the runtime data in an image was recorded under a different
+`ORCA_INSTANCE_ID`, the workspace starts with a new pairing key and no paired devices. Data recorded
+without the variable is only adopted, so the snapshot rule in section 3 still applies.
 
 `pairingCode` embeds whatever you passed as `--pairing-address`, so pass the externally reachable
 address there and never hand-edit the code. Tunneling and port mapping are the script's job. With
