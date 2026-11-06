@@ -173,13 +173,12 @@ export function buildNativeChatTranscriptSlots(
     const receipt = receipts.get(message.id)
     const bar = turnKey === undefined ? undefined : bars.get(turnKey)
     // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
-    const candidateStatus =
+    const status =
       turnKey === undefined || bar?.index !== index
         ? undefined
         : turnKey === liveTurnKey
-          ? turnStatuses.active
-          : turnStatuses.completedByTurn[turnKey]
-    const status = candidateStatus ?? undefined
+          ? (turnStatuses.active ?? undefined)
+          : (turnStatuses.completedByTurn[turnKey] ?? undefined)
     const endsTurn = turnKey !== undefined && lastRowByTurn.get(turnKey) === index
     const turnDiff = endsTurn ? turnDiffs.get(turnKey) : undefined
     const openedPullRequests = endsTurn ? openedPullRequestsByTurn?.get(turnKey) : undefined
@@ -300,15 +299,14 @@ export function nativeChatSlotIndexOf(
   slots: readonly NativeChatTranscriptSlot[],
   messageId: string | undefined
 ): number {
-  if (messageId === undefined) {
-    return -1
-  }
-  return slots.findIndex(
-    (slot) =>
-      slot.kind === 'message' &&
-      (slot.message.id === messageId ||
-        slot.workRun?.some((member) => member.id === messageId) === true)
-  )
+  return messageId === undefined
+    ? -1
+    : slots.findIndex(
+        (slot) =>
+          slot.kind === 'message' &&
+          (slot.message.id === messageId ||
+            slot.workRun?.some((member) => member.id === messageId) === true)
+      )
 }
 
 /** Place queued and unjournaled not-sent messages after live activity, outside its turn. */
