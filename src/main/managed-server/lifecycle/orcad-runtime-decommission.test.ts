@@ -25,7 +25,8 @@ const mocks = vi.hoisted(() => {
     keepServing: vi.fn(),
     closeTunnel: vi.fn(),
     ensureTunnel: vi.fn(),
-    retire: vi.fn()
+    retire: vi.fn(),
+    releaseHost: vi.fn()
   }
 })
 
@@ -71,7 +72,11 @@ const stop = (isActive = false) =>
   stopManagedOrcadEnvironment(
     harness.userDataPath,
     { selector: 'Managed' },
-    { isActiveEnvironment: () => isActive, retireLocalState: mocks.retire }
+    {
+      isActiveEnvironment: () => isActive,
+      retireLocalState: mocks.retire,
+      releaseHostTransport: mocks.releaseHost
+    }
   )
 
 function expectStillLinked(): void {
@@ -123,6 +128,7 @@ describe('stopManagedOrcadEnvironment', () => {
     expect(harness.flushes).toHaveLength(1)
     expect(mocks.retire).toHaveBeenCalledWith('environment-1')
     expect(mocks.closeTunnel).toHaveBeenCalledWith('environment-1')
+    expect(mocks.releaseHost).toHaveBeenCalledWith('ssh-1')
     // Retained journals would block later conversions of this host.
     expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
   })

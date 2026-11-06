@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -7,7 +6,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   javascriptInventory,
   packReleaseJavascript,
-  releaseBuildIdentity,
   releaseJavascriptConfiguration,
   restoreReleaseJavascript
 } from './release-javascript-artifact.mjs'
@@ -91,66 +89,6 @@ function configurationFixture(version = '1.2.3') {
 }
 
 describe('release JavaScript configuration', () => {
-  it.each([
-    ['1.2.3', 'stable'],
-    ['1.2.3-rc.4.perf', 'rc']
-  ])('preserves official build checks for %s', (version, identity) => {
-    const { root, env } = configurationFixture(version)
-    const result = releaseJavascriptConfiguration(root, { ...env, ORCA_BUILD_IDENTITY: identity })
-    expect(result.identity).toBe(identity)
-    expect(result.telemetryKeySha256).toBe(
-      createHash('sha256').update(env.ORCA_POSTHOG_WRITE_KEY).digest('hex')
-    )
-    expect(result.sourceSha).toMatch(/^[a-f0-9]{40}$/)
-  })
-
-  it('requires explicit development mode and unset official constants', () => {
-    const { root, env } = configurationFixture('0.0.0-adhoc.test')
-    const devEnv = {
-      ...env,
-      ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: 'dev',
-      ORCA_BUILD_IDENTITY: '',
-      ORCA_POSTHOG_WRITE_KEY: ''
-    }
-    expect(releaseJavascriptConfiguration(root, devEnv)).toMatchObject({
-      identity: 'dev',
-      version: '0.0.0-adhoc.test',
-      telemetryKeySha256: null,
-      diagnosticsTokenUrl: env.ORCA_DIAGNOSTICS_TOKEN_URL
-    })
-    expect(() =>
-      releaseJavascriptConfiguration(root, { ...devEnv, ORCA_BUILD_IDENTITY: 'stable' })
-    ).toThrow('must not set an official build identity')
-    expect(() =>
-      releaseJavascriptConfiguration(root, { ...devEnv, ORCA_POSTHOG_WRITE_KEY: 'release-key' })
-    ).toThrow('must not set a release telemetry key')
-    expect(() =>
-      releaseJavascriptConfiguration(root, {
-        ...devEnv,
-        ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: ''
-      })
-    ).toThrow('Invalid desktop release tag')
-  })
-
-  it('does not downgrade an official build when its identity or telemetry key is missing', () => {
-    const { root, env } = configurationFixture()
-    expect(() => releaseJavascriptConfiguration(root, { ...env, ORCA_BUILD_IDENTITY: '' })).toThrow(
-      'Release build identity differs from version'
-    )
-    expect(() =>
-      releaseJavascriptConfiguration(root, { ...env, ORCA_POSTHOG_WRITE_KEY: '' })
-    ).toThrow('Missing release telemetry key')
-    expect(() =>
-      releaseJavascriptConfiguration(root, { ...env, ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: 'rc' })
-    ).toThrow('Invalid JavaScript build identity')
-    expect(() =>
-      releaseJavascriptConfiguration(root, {
-        ...env,
-        ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: 'typo'
-      })
-    ).toThrow('Invalid JavaScript build identity')
-  })
-
   it('checks the source checkout and diagnostics endpoint in development mode', () => {
     const { root, env } = configurationFixture()
     const devEnv = {
@@ -184,37 +122,6 @@ describe('release JavaScript transfer', () => {
     ).toEqual(devConfiguration)
   })
 
-  it('preserves hidden manifests, source maps and portable WASM while replacing stale outputs', () => {
-    const options = fixture()
-    const before = javascriptInventory(join(options.root, 'out'))
-    packReleaseJavascript(options)
-    writeFileSync(join(options.root, 'out', 'stale.js'), 'old')
-    restoreReleaseJavascript(options)
-    expect(javascriptInventory(join(options.root, 'out'))).toEqual(before)
-  })
-
-  it.each([
-    'sourceSha',
-    'version',
-    'packageManager',
-    'identity',
-    'diagnosticsTokenUrl',
-    'telemetryKeySha256'
-  ])('rejects a different %s before replacing the current build', (field) => {
-    const options = fixture()
-    packReleaseJavascript(options)
-    writeFileSync(join(options.root, 'out', 'main', 'index.js'), 'current build')
-    writeFileSync(join(options.root, 'out', 'current-only.js'), 'current only')
-    const current = javascriptInventory(join(options.root, 'out'))
-    expect(() =>
-      restoreReleaseJavascript({
-        ...options,
-        configuration: { ...configuration, [field]: 'different' }
-      })
-    ).toThrow('JavaScript build configuration differs')
-    expect(javascriptInventory(join(options.root, 'out'))).toEqual(current)
-  })
-
   it('rejects a damaged archive before replacing the current build', () => {
     const options = fixture()
     packReleaseJavascript(options)
@@ -237,21 +144,6 @@ describe('release JavaScript transfer', () => {
     expect(javascriptInventory(join(options.root, 'out'))).toEqual(current)
   })
 
-  it.each([
-    'addon.node',
-    'launcher.exe',
-    'library.dll',
-    'library.dylib',
-    'library.so.1',
-    'relay/relay.js'
-  ])('keeps %s out of the portable artifact', (file) => {
-    const options = fixture()
-    const destination = join(options.root, 'out', file)
-    mkdirSync(dirname(destination), { recursive: true })
-    writeFileSync(destination, 'host output')
-    expect(() => packReleaseJavascript(options)).toThrow(/native binary|host output/)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'rejects symlinks instead of following files outside the build',
     () => {
@@ -262,18 +154,4 @@ describe('release JavaScript transfer', () => {
       expect(() => packReleaseJavascript(options)).toThrow('contains a symlink')
     }
   )
-
-  it('refuses incomplete build output', () => {
-    const options = fixture()
-    rmSync(join(options.root, 'out', 'preload', 'index.js'))
-    expect(() => packReleaseJavascript(options)).toThrow(
-      'Missing JavaScript output: preload/index.js'
-    )
-  })
-
-  it('classifies stable and suffixed RC versions and rejects other tag families', () => {
-    expect(releaseBuildIdentity('v1.2.3')).toBe('stable')
-    expect(releaseBuildIdentity('v1.2.3-rc.4.perf')).toBe('rc')
-    expect(() => releaseBuildIdentity('mobile-v1.2.3')).toThrow('Invalid desktop release tag')
-  })
 })

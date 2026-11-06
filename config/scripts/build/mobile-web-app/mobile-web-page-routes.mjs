@@ -40,13 +40,13 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     // Older shells cannot open PDFs; the preview asks for an app update instead.
     // Match preview grants for in-document navigation; older shells render inert HTML links.
-    optionalGrants: ['externalNavigation', 'native.pdf.view']
+    optionalGrants: ['externalNavigation', 'native.pdf.view', 'native.image.act']
   },
   // Preview itself uses Markdown externalLink and Source Copy clipboard; explorer inherits same grants for in-document hop.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    optionalGrants: ['externalNavigation', 'native.pdf.view']
+    optionalGrants: ['externalNavigation', 'native.pdf.view', 'native.image.act']
   },
   // Hub grants cover Back/review navigation, shared storage, PR link openers and conflict-command Copy.
   // Keep pr/history Redirects native: listing them would leave page session bound to pathname redirect already left; native replaces into hub once.
@@ -81,11 +81,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
+      'native.image.act',
       'terminalKeyRail'
     ]
   }

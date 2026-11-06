@@ -131,7 +131,7 @@ export function SidebarSeamScrollbarStrip({
   return (
     <div
       data-sidebar-seam-scrollbar-strip=""
-      className="absolute -right-1 top-0 z-10 h-full w-1"
+      className="absolute -right-1 top-0 z-20 h-full w-1"
       onMouseMove={handleMouseMove}
       onMouseDown={handleMouseDown}
     />

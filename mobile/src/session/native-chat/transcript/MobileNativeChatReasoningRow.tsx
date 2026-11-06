@@ -85,6 +85,7 @@ export function MobileNativeChatReasoningRow({
         <MobileNativeChatReasoningBody
           positionKey={nativeChatReasoningDisclosureKey(message.id)}
           markdown={markdown}
+          streaming={live}
           fontScale={fontScale}
           onLongPress={onLongPress}
         />
@@ -97,11 +98,14 @@ export function MobileNativeChatReasoningRow({
 export function MobileNativeChatReasoningBody({
   positionKey,
   markdown,
+  streaming = false,
   fontScale,
   onLongPress
 }: {
   positionKey: string
   markdown: string
+  /** The turn is live, so the text may end mid-path. */
+  streaming?: boolean
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
@@ -115,6 +119,7 @@ export function MobileNativeChatReasoningBody({
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>
         <MobileNativeChatMarkdown
           content={markdown}
+          streaming={streaming}
           rangeSelectable
           textScale={CHAT_PROSE_SCALE * fontScale}
           onLongPress={onLongPress}

@@ -88,4 +88,70 @@ describe('useNativeChatComposerKeyDown', () => {
       expect(press('ArrowUp')).toEqual({ draft: 'two', claimed: false })
     })
   })
+
+  describe('steer chord', () => {
+    function Composer({
+      initialDraft,
+      alternateSteers,
+      send,
+      steerHead
+    }: {
+      initialDraft: string
+      alternateSteers: boolean
+      send: (intent?: { alternate?: boolean }) => void
+      steerHead: () => boolean
+    }): React.JSX.Element {
+      const [draft, setDraft] = useState(initialDraft)
+      const onKeyDown = useNativeChatComposerKeyDown({
+        autocomplete: { mode: 'none' },
+        activeSuggestion: 0,
+        draft,
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
+        isComposing: () => false,
+        completePickerItem: vi.fn(),
+        dispatchPickerCommand: vi.fn(),
+        dismissPicker: vi.fn(),
+        interrupt: vi.fn(),
+        send,
+        steerHead,
+        alternateSteers,
+        setActiveSuggestion: vi.fn(),
+        setDraft,
+        setCaret: vi.fn()
+      })
+      return (
+        <textarea aria-label="composer" value={draft} onChange={() => {}} onKeyDown={onKeyDown} />
+      )
+    }
+
+    function pressModEnter(
+      initialDraft: string,
+      { alternateSteers = true, ...init }: KeyboardEventInit & { alternateSteers?: boolean } = {}
+    ) {
+      const send = vi.fn()
+      const steerHead = vi.fn(() => true)
+      const field = render(
+        <Composer
+          initialDraft={initialDraft}
+          alternateSteers={alternateSteers}
+          send={send}
+          steerHead={steerHead}
+        />
+      ).container.querySelector('textarea')!
+      // Both modifiers: the platform picks which one is the chord's.
+      fireEvent.keyDown(field, { key: 'Enter', metaKey: true, ctrlKey: true, ...init })
+      return { send, steerHead }
+    }
+
+    it('steers the head card from an empty composer, once per press, only where the chord steers', () => {
+      const { send, steerHead } = pressModEnter('')
+      expect(steerHead).toHaveBeenCalledTimes(1)
+      expect(send).not.toHaveBeenCalled()
+      expect(pressModEnter('', { repeat: true }).steerHead).not.toHaveBeenCalled()
+      // With follow-ups off the chord queues, so a second press never steers the card just queued.
+      expect(pressModEnter('', { alternateSteers: false }).steerHead).not.toHaveBeenCalled()
+      expect(pressModEnter('steer this').steerHead).not.toHaveBeenCalled()
+    })
+  })
 })

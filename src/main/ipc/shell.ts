@@ -1,5 +1,6 @@
 import { translateMain } from '../i18n/main-i18n'
-import { ipcMain, shell, dialog } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
+import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -201,12 +202,15 @@ export function registerShellHandlers(
 
   ipcMain.handle(
     'shell:pickDirectory',
-    async (_event, args: { defaultPath?: string }): Promise<string | null> => {
-      const result = await dialog.showOpenDialog({
-        defaultPath: args.defaultPath,
-        // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
-        properties: ['openDirectory']
-      })
+    async (event, args: { defaultPath?: string }): Promise<string | null> => {
+      const result = await showSingleFlightOpenDialog(
+        {
+          defaultPath: args.defaultPath,
+          // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
+          properties: ['openDirectory']
+        },
+        BrowserWindow.fromWebContents(event.sender)
+      )
       if (result.canceled || result.filePaths.length === 0) {
         return null
       }
@@ -215,10 +219,13 @@ export function registerShellHandlers(
   )
 
   // Native dialogs avoid Electron prompt/file-input reliability issues.
-  ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile']
-    })
+  ipcMain.handle('shell:pickAttachment', async (event): Promise<string | null> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile']
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
@@ -226,39 +233,48 @@ export function registerShellHandlers(
   })
 
   // Keep single-file callers, including interpreter selection, on pickAttachment.
-  ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile', 'multiSelections']
-    })
+  ipcMain.handle('shell:pickAttachments', async (event): Promise<string[]> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile', 'multiSelections']
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     return result.canceled ? [] : result.filePaths
   })
 
-  ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [
-        {
-          name: translateMain('native.dialog.images', 'Images'),
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
-        }
-      ]
-    })
+  ipcMain.handle('shell:pickImage', async (event): Promise<string | null> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile'],
+        filters: [
+          {
+            name: translateMain('native.dialog.images', 'Images'),
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
+          }
+        ]
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
     return result.filePaths[0]
   })
 
-  ipcMain.handle('shell:pickRepoIconImage', async (): Promise<RepoIconPickResult> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [
-        {
-          name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
-          extensions: ['png']
-        }
-      ]
-    })
+  ipcMain.handle('shell:pickRepoIconImage', async (event): Promise<RepoIconPickResult> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile'],
+        filters: [
+          {
+            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
+            extensions: ['png']
+          }
+        ]
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
@@ -282,16 +298,19 @@ export function registerShellHandlers(
     }
   })
 
-  ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [
-        {
-          name: translateMain('native.dialog.audio', 'Audio'),
-          extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac']
-        }
-      ]
-    })
+  ipcMain.handle('shell:pickAudio', async (event): Promise<string | null> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile'],
+        filters: [
+          {
+            name: translateMain('native.dialog.audio', 'Audio'),
+            extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac']
+          }
+        ]
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }

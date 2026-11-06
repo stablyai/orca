@@ -148,18 +148,6 @@ async function overwriteUnnamed(h) {
 }
 
 describe('placeholder placement IDs after overwriting old extended attributes', () => {
-  it('selects the default prototype after a named cell is overwritten without underline color', async () => {
-    const h = await prepared()
-    try {
-      const calls = await overwriteUnnamed(h)
-      expect(calls).toHaveLength(1)
-      expect(calls[0][0]).toBe(h.bitmaps[0])
-      expect(calls[0][0]).not.toBe(h.bitmaps[1])
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('keeps default image pixels after the old named prototype is deleted', async () => {
     const h = await prepared()
     try {

@@ -1,4 +1,5 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../shared/files-runtime-capabilities'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
   TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
@@ -165,4 +166,17 @@ export function isSshWorkspaceGrantRefusal(error: unknown): boolean {
     error.code === 'runtime_error' &&
     error.message === SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE
   )
+}
+
+/** Older hosts read a granted file only whole and as text, so it opens in Orca instead of downloading. */
+export async function hostStreamsGrantedFiles(environmentId: string): Promise<boolean> {
+  try {
+    return await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY,
+      15_000
+    )
+  } catch {
+    return false
+  }
 }
