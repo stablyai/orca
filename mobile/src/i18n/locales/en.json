@@ -4687,5 +4687,8 @@
         }
       }
     }
+  },
+  "markdownTextScale": {
+    "button": "Markdown text size"
   }
 }

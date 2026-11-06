@@ -3,6 +3,8 @@ import { View } from 'react-native'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MarkdownTextSizeButton } from '../markdown-text-scale/MarkdownTextSizeButton'
+import { useMarkdownTextScale } from '../markdown-text-scale/use-markdown-text-scale'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
@@ -39,6 +41,7 @@ export function MobileMarkdownPreviewModeBar({
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const { textScale, commitTextScale } = useMarkdownTextScale()
   return (
     <View style={styles.modeBar}>
       <MobileSegmentedControl
@@ -62,6 +65,9 @@ export function MobileMarkdownPreviewModeBar({
         testIDPrefix="markdown-preview-mode-"
         style={styles.modeSwitch}
       />
+      {mode === 'preview' ? (
+        <MarkdownTextSizeButton textScale={textScale} onSelect={commitTextScale} />
+      ) : null}
       <MobileSourceCopyButton
         key={relativePath}
         text={content}
