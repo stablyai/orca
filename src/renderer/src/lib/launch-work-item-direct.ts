@@ -282,7 +282,7 @@ export async function launchWorkItemDirect(
     }
 
     const primaryTabId = activation.primaryTabId
-    if (context.target.kind === 'environment') {
+    if (context.target.kind === 'environment' && startupPlan && !startupPlanFailed) {
       // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
       return (
         directWorkItemStartupAccepted(activation, startupPlan, startupPlanFailed) ||
