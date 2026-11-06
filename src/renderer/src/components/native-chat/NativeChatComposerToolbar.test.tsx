@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { Editor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { focusMountedNativeChatEditor } from './native-chat-mounted-editor-view'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatComposerToolbar } from './NativeChatComposerToolbar'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import type {
   SessionOptionDescriptor,
@@ -33,22 +37,26 @@ afterEach(() => {
 
 it('keeps current mode, permissions and Goal reachable through overflow, including pending writes, then restores direct controls', async () => {
   let width = 140
-  const observers = new Set<ResizeObserverCallback>()
+  const observers = new Set<() => void>()
   vi.stubGlobal(
     'ResizeObserver',
     class {
       constructor(callback: ResizeObserverCallback) {
-        observers.add(callback)
+        observers.add(() => callback([], this))
       }
       observe() {}
       unobserve() {}
       disconnect() {}
     }
   )
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function () {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
     return this.hasAttribute('data-compact') ? width : 0
   })
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
     const compact = this.closest('[data-compact]')?.getAttribute('data-compact') === 'true'
     const sizes: Record<string, [number, number]> = {
       attach: [32, 32],
@@ -124,9 +132,18 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
     }
   ]
   const exitGoal = vi.fn()
-  const focus = vi.fn()
+  const editor = new Editor({
+    extensions: [StarterKit],
+    editorProps: { attributes: { role: 'textbox', 'aria-label': 'Chat message' } }
+  })
+  const focus = () => focusMountedNativeChatEditor(editor)
+  const resize = (next: number) => {
+    width = next
+    act(() => observers.forEach((observer) => observer()))
+  }
   const view = render(
     <TooltipProvider>
+      <EditorContent editor={editor} />
       <NativeChatComposerActions
         attachDisabled={false}
         dictationDisabled={false}
@@ -148,12 +165,30 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
     </TooltipProvider>
   )
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
+  const partial = screen.getByRole('dialog')
+  const inlineMode = screen.getByRole('button', { name: 'Plan' })
+  expect(partial.contains(inlineMode)).toBe(false)
+  const menuPermission = within(partial).getByRole('button', { name: 'Permissions Full access' })
+  menuPermission.focus()
+  resize(1000)
+  expect(screen.getByRole('button', { name: 'Plan' })).toBe(inlineMode)
+  expect(within(partial).getByRole('button', { name: 'Permissions Full access' })).toBe(
+    menuPermission
+  )
+  expect(document.activeElement).toBe(menuPermission)
+  fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  resize(100)
+  fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   const popup = screen.getByRole('dialog')
   expect(within(popup).getByRole('button', { name: 'Plan' }).getAttribute('aria-pressed')).toBe(
     'true'
   )
   await act(async () => fireEvent.click(within(popup).getByRole('button', { name: 'Build' })))
   expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Chat message' }))
+  )
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Plan' })).toHaveProperty(
     'disabled',
@@ -171,13 +206,7 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
     within(screen.getByRole('dialog')).getByRole('button', { name: 'Exit goal mode' })
   )
   expect(exitGoal).toHaveBeenCalledOnce()
-  expect(focus).toHaveBeenCalled()
-  width = 1000
-  act(() => {
-    for (const observer of observers) {
-      observer([], {} as ResizeObserver)
-    }
-  })
+  resize(1000)
   const buttons = screen
     .getAllByRole('button')
     .map((button) => button.getAttribute('aria-label') ?? button.textContent)
@@ -190,4 +219,60 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   expect(screen.queryByRole('button', { name: 'More chat controls' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Model with a long provider label' })).toBeTruthy()
   view.unmount()
+  editor.destroy()
+})
+
+it('limits a footer resize to its own controls with five and fifty mounted composers', () => {
+  const callbacks = new Map<Element, () => void>()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        callbacks.set(target, () => this.callback([], this))
+      }
+      unobserve(target: Element) {
+        callbacks.delete(target)
+      }
+      disconnect() {}
+    }
+  )
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(120)
+  const measured: HTMLElement[] = []
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    if (this.hasAttribute('data-composer-control')) {
+      measured.push(this)
+    }
+    return new DOMRect(0, 0, 40, 24)
+  })
+  for (const population of [5, 50]) {
+    const view = render(
+      <>
+        {Array.from({ length: population }, (_, index) => (
+          <section key={index} aria-label={`Chat ${index}`}>
+            <NativeChatComposerToolbar
+              left={[{ id: 'mode', priority: 1, content: <button>Plan</button> }]}
+              right={[{ id: 'model', content: <button>Model</button> }]}
+              primary={<button>Send</button>}
+            />
+          </section>
+        ))}
+      </>
+    )
+    const chat = screen.getByRole('region', { name: 'Chat 0' })
+    const toolbar = chat.querySelector('[data-compact]')
+    if (!toolbar) {
+      throw new Error('Expected the mounted composer toolbar')
+    }
+    measured.length = 0
+    act(() => callbacks.get(toolbar)?.())
+    // The changed footer needs at most full and compact widths for its two controls.
+    expect(measured.length).toBeGreaterThan(0)
+    expect(measured.length).toBeLessThanOrEqual(4)
+    expect(measured.every((control) => chat.contains(control))).toBe(true)
+    view.unmount()
+    callbacks.clear()
+  }
 })

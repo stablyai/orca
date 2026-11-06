@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Ellipsis } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
+import { useNativeChatPickerFocusReturn } from './native-chat-picker-focus-return'
 
 export type NativeChatComposerControl = {
   id: string
@@ -17,20 +18,23 @@ type Layout = { compact: boolean; hidden: string[] }
 export function NativeChatComposerToolbar({
   left,
   right,
-  primary
+  primary,
+  focusComposer
 }: {
   left: NativeChatComposerControl[]
   right: NativeChatComposerControl[]
   primary: ReactNode
+  focusComposer?: () => void
 }): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null)
   const primaryRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<Layout>({ compact: false, hidden: [] })
   const [open, setOpen] = useState(false)
+  const menuControls = useRef<string[]>([])
+  const focusReturn = useNativeChatPickerFocusReturn(focusComposer)
   const controls = [...left, ...right]
-  const measure = useRef(() => {})
-  measure.current = () => {
+  const measure = useEffectEvent(() => {
     const bar = root.current
     if (!bar || bar.clientWidth === 0) {
       return
@@ -61,28 +65,35 @@ export function NativeChatComposerToolbar({
     }
     let next: Layout = { compact: false, hidden: [] }
     // Probe the same mounted controls before paint; hidden controls retain their natural measure.
-    for (const compact of [false, true]) {
+    for (const compact of open ? [true] : [false, true]) {
       bar.dataset.compact = String(compact)
       for (const node of nodes) {
         widths.set(node.dataset.composerControl!, node.getBoundingClientRect().width)
       }
-      next = { compact, hidden: [] }
-      if (!open && required([]) <= bar.clientWidth) {
+      next = { compact, hidden: open ? [...menuControls.current] : [] }
+      if (required(next.hidden) <= bar.clientWidth) {
         break
       }
       if (compact) {
         const active = nodes.find((node) => node.querySelector('[aria-expanded="true"]'))?.dataset
           .composerControl
         const candidates = controls
-          .filter((item) => item.priority !== undefined && (open || item.id !== active))
+          .filter(
+            (item) =>
+              item.priority !== undefined && item.id !== active && !next.hidden.includes(item.id)
+          )
           .sort((a, b) => a.priority! - b.priority!)
         for (const item of candidates) {
-          if (!open && required(next.hidden) <= bar.clientWidth) {
+          if (required(next.hidden) <= bar.clientWidth) {
             break
           }
           next.hidden.push(item.id)
         }
       }
+    }
+    // An open menu keeps its actions mounted through resize until the user dismisses it.
+    if (open) {
+      menuControls.current = next.hidden
     }
     bar.dataset.compact = String(next.compact)
     setLayout((previous) =>
@@ -90,14 +101,14 @@ export function NativeChatComposerToolbar({
         ? previous
         : next
     )
-  }
-  useLayoutEffect(() => measure.current(), [open])
+  })
+  useLayoutEffect(() => measure(), [open])
   useLayoutEffect(() => {
     const bar = root.current
     if (!bar) {
       return
     }
-    const resize = new ResizeObserver(() => measure.current())
+    const resize = new ResizeObserver(() => measure())
     const observe = (): void => {
       resize.disconnect()
       resize.observe(bar)
@@ -110,7 +121,7 @@ export function NativeChatComposerToolbar({
       if (moreRef.current) {
         resize.observe(moreRef.current)
       }
-      measure.current()
+      measure()
     }
     const mutations = new MutationObserver(observe)
     mutations.observe(bar, {
@@ -152,7 +163,13 @@ export function NativeChatComposerToolbar({
     >
       <div className="flex shrink-0 items-center gap-0.5">
         {left.map(renderControl)}
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover
+          open={open}
+          onOpenChange={(value) => {
+            menuControls.current = value ? layout.hidden : []
+            setOpen(value)
+          }}
+        >
           <div
             ref={moreRef}
             inert={!more || undefined}
@@ -161,6 +178,7 @@ export function NativeChatComposerToolbar({
           >
             <PopoverTrigger asChild>
               <Button
+                ref={focusReturn.triggerRef}
                 type="button"
                 variant="ghost"
                 size="icon-xs"
@@ -173,14 +191,26 @@ export function NativeChatComposerToolbar({
               </Button>
             </PopoverTrigger>
           </div>
-          <PopoverContent side="top" align="start" className="flex w-72 flex-col gap-2">
-            {controls
-              .filter((item) => item.priority !== undefined)
-              .map((item) => (
-                <div key={item.id} className="flex items-center">
-                  {item.overflow?.(() => setOpen(false)) ?? item.content}
-                </div>
-              ))}
+          <PopoverContent
+            side="top"
+            align="start"
+            className="w-72"
+            onInteractOutside={focusReturn.onInteractOutside}
+            onCloseAutoFocus={focusReturn.onCloseAutoFocus}
+          >
+            <div className="flex flex-col gap-2">
+              {controls
+                .filter((item) => layout.hidden.includes(item.id))
+                .map((item) => (
+                  <div key={item.id} className="flex items-center">
+                    {item.overflow?.(() => {
+                      focusReturn.notePick()
+                      menuControls.current = []
+                      setOpen(false)
+                    }) ?? item.content}
+                  </div>
+                ))}
+            </div>
           </PopoverContent>
         </Popover>
       </div>

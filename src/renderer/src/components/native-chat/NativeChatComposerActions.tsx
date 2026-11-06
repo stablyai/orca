@@ -333,6 +333,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   return (
     <NativeChatComposerToolbar
       left={left}
+      focusComposer={focusComposer}
       right={right}
       primary={
         sendHint ? (
