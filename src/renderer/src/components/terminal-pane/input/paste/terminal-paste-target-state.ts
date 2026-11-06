@@ -1,4 +1,4 @@
-import { isEditableKeyboardTarget } from '../browser-pane/host-guest/browser-keyboard'
+import { isEditableKeyboardTarget } from '@/components/browser-pane/host-guest/browser-keyboard'
 
 type TerminalPastePaneIdentity = {
   id: number
@@ -62,32 +62,17 @@ export function isTerminalPanePasteFocusCurrent({
   if (activeElement === activeElementAtDispatch) {
     return true
   }
-  // Permission/dictation handoffs can blur xterm to body or replace its textarea mid-paste.
-  if (isInertDocumentFocus(activeElement)) {
+  // xterm can replace its helper textarea mid-paste.
+  if (paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)) {
     return true
   }
-  if (activeElement === paneContainer) {
-    return true
-  }
-  if (paneContainer.contains(activeElement)) {
-    return isXtermHelperTextarea(activeElement)
-  }
-  // External dictation and overlays can leave focus on a non-input control; cancel only if another paste target took it.
+  // Blur to body, overlays and external dictation move focus mid-paste; cancel only if another typing surface took it.
   return !isOtherPasteTarget(activeElement)
 }
 
 function isOtherPasteTarget(element: Element | null): boolean {
   const tagName = element?.tagName?.toUpperCase()
-  // Editable surfaces include other xterm helper textareas and Monaco's EditContext div.
   return isEditableKeyboardTarget(element) || tagName === 'IFRAME' || tagName === 'WEBVIEW'
-}
-
-function isInertDocumentFocus(element: Element | null): boolean {
-  if (!element) {
-    return true
-  }
-  const tagName = element.tagName?.toUpperCase()
-  return tagName === 'BODY' || tagName === 'HTML'
 }
 
 function isXtermHelperTextarea(element: Element | null): boolean {
