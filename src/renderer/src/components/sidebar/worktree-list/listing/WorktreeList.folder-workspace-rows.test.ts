@@ -154,8 +154,12 @@ describe('WorktreeList folder project row create', () => {
     const createFolderWorkspace = vi.fn().mockResolvedValue(createdWorkspace)
     mockStore.state.createFolderWorkspace = createFolderWorkspace
     mockStore.state.setVisibleReviewCardWorktreeIds = vi.fn()
+    mockStore.state.suppressContextualTour = vi.fn()
     mockStore.state.activeWorkspaceKey = 'worktree:current-git-worktree'
     mockStore.state.activeWorktreeId = 'current-git-worktree'
+    Object.assign(window, {
+      api: { ui: { set: () => Promise.resolve(), onToggleProjectsCollapse: () => () => {} } }
+    })
     const { default: WorktreeList } = await import('./WorktreeList')
     const container = document.createElement('div')
     document.body.append(container)
