@@ -11,6 +11,7 @@ import type {
   RuntimeMobileSessionTabGroup
 } from '../../../src/shared/runtime-session-contracts'
 import * as selection from '../../../src/main/runtime/session-tabs/mobile-session-tab-selection'
+import * as membership from '../../../src/main/runtime/session-lifecycle/projection/mobile-session-tab-merge'
 import { normalizeMobileSessionTabSelection } from '../../../src/main/runtime/session-tabs/mobile-session-tab-selection'
 import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import { finalizeRuntimeMobileSessionTabsResult } from '../../../src/main/runtime/session-lifecycle/projection/runtime-mobile-session-result-finalization'
@@ -84,6 +85,51 @@ afterEach(() => {
 })
 
 describe('active-tab selection performance contract', () => {
+  it('bounds admitted placement reconciliation during supported reads at N and 10N', async () => {
+    vi.useFakeTimers()
+    const merge = membership.mergeMobileSessionTabGroups
+    const measurements: number[] = []
+    for (const count of [50, 500]) {
+      const { runtime, getSession, setSession } = createRuntimeFixture()
+      const savedGroups = frame(count).tabGroups!
+      savedGroups[0]!.tabOrder.push('serve-tab')
+      setSession({ ...getSession(), tabGroups: { [WT]: savedGroups } })
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [frame(count)]
+      })
+      await vi.runAllTimersAsync()
+      let visits = 0
+      let reconciliations = 0
+      const spy = vi
+        .spyOn(membership, 'mergeMobileSessionTabGroups')
+        .mockImplementation((worktreeId, groups, tabs, activeTab, placementGroups) => {
+          if (placementGroups !== savedGroups) {
+            return merge(worktreeId, groups, tabs, activeTab, placementGroups)
+          }
+          reconciliations++
+          const orders = savedGroups.map((group) => counted(group.tabOrder))
+          const source = counted(
+            savedGroups.map((group, index) => ({ ...group, tabOrder: orders[index]!.rows }))
+          )
+          const result = merge(worktreeId, groups, tabs, activeTab, source.rows)
+          visits += source.visits() + orders.reduce((total, order) => total + order.visits(), 0)
+          return result
+        })
+      const result = await runtime.listMobileSessionTabs(`id:${WT}`)
+      expect(result.activeGroupId).toBe(`g-${count - 1}`)
+      expect(result.tabGroups?.find((group) => group.id === 'g-0')?.tabOrder).toContain('serve-tab')
+      expect(reconciliations).toBe(1)
+      // Placement needs one visit per source group and member, independently of the selected row.
+      expect(visits).toBeGreaterThan(0)
+      expect(visits).toBeLessThanOrEqual(2 * (count + 1))
+      measurements.push(visits)
+      spy.mockRestore()
+    }
+    expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
+  })
+
   it('bounds selection input visits at 50 and 500 rows, including unavailable-target projection', () => {
     const measurements: number[] = []
     for (const count of [50, 500]) {

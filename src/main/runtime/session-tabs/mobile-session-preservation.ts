@@ -62,7 +62,8 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
           snapshot.worktree,
           snapshot.tabGroups ?? existing?.tabGroups ?? [],
           tabs,
-          activeTab?.type === 'terminal' ? activeTab : null
+          activeTab?.type === 'terminal' ? activeTab : null,
+          existing.tabGroups
         ),
         browserTabIds,
         undefined,

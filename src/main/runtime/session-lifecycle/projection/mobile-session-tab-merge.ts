@@ -101,7 +101,8 @@ export function mergeMobileSessionTabGroups(
   worktreeId: string,
   groups: readonly RuntimeMobileSessionTabGroup[],
   tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  activeTab: RuntimeMobileSessionTerminalTab | null
+  activeTab: RuntimeMobileSessionTerminalTab | null,
+  placementGroups?: readonly RuntimeMobileSessionTabGroup[]
 ): RuntimeMobileSessionTabGroup[] {
   const parentTabOrder = collectHeadlessParentTabOrder(
     tabs.filter((tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal')
@@ -120,11 +121,24 @@ export function mergeMobileSessionTabGroups(
             tabOrder: []
           }
         ]
-  // Preserve existing group ownership; assign only new tabs to the active group.
+  // Current membership wins; admitted placement fills omissions without importing navigation.
   const ownerGroupId = new Map<string, string>()
   for (const group of nextGroups) {
     for (const tabId of group.tabOrder) {
       ownerGroupId.set(tabId, group.id)
+    }
+  }
+  if (placementGroups && placementGroups !== groups) {
+    const currentGroupIds = new Set(nextGroups.map((group) => group.id))
+    for (const group of placementGroups) {
+      if (!currentGroupIds.has(group.id)) {
+        continue
+      }
+      for (const tabId of group.tabOrder) {
+        if (!ownerGroupId.has(tabId)) {
+          ownerGroupId.set(tabId, group.id)
+        }
+      }
     }
   }
   // Publishers place chats/editors/browsers; preserve listed chat positions before their rows restore.

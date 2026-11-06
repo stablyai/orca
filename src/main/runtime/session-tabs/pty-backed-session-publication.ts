@@ -169,7 +169,8 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
           worktreeId,
           existing?.tabGroups ?? [],
           tabs,
-          activeTab?.type === 'terminal' ? activeTab : null
+          activeTab?.type === 'terminal' ? activeTab : null,
+          this.getWorkspaceSessionForWorktree(worktreeId)?.tabGroups?.[worktreeId]
         ),
         existing?.tabGroups ?? [],
         tabs

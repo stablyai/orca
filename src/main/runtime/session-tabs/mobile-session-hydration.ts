@@ -265,7 +265,8 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               entryWorktreeId,
               navigationGroups,
               mergedTabs,
-              mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
+              mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null,
+              session.tabGroups?.[entryWorktreeId]
             ),
             mergedBrowserOrder
           )
