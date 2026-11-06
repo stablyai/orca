@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type { BranchPickerRow } from './branch-picker-rows'
 import { useBranchPicker, type BranchPickerOptions } from './use-branch-picker'
@@ -14,6 +15,7 @@ export type BranchPickerProps = BranchPickerOptions & {
   agentHint?: ReactNode
 }
 export function BranchPicker({ branch, blocker, agentHint, ...options }: BranchPickerProps) {
+  useUiLanguageRevision()
   const picker = useBranchPicker(options)
   const disabled = blocker !== null || picker.pending
   return (
@@ -104,6 +106,7 @@ const BranchRow = memo(function BranchRow({
   disabled: boolean
   onSelect: (row: BranchPickerRow) => Promise<void>
 }) {
+  useUiLanguageRevision()
   return (
     <CommandItem
       value={`${row.target.kind}:${row.target.name}`}

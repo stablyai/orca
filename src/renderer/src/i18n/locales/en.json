@@ -21771,6 +21771,27 @@
       "loading": "Loading submodule changes…",
       "empty": "No changes in submodule",
       "loadFailed": "Failed to load submodule changes"
+    },
+    "branchPicker": {
+      "switch": "Switch branch: {{branch}}",
+      "search": "Search branches",
+      "more": "Keep typing to find more branches.",
+      "recover": "Switch to {{branch}}",
+      "create": "Create branch {{name}} from {{branch}}",
+      "open": "Open workspace",
+      "occupied": "Checked out in {{path}}",
+      "remote": "remote",
+      "statusFailed": "Orca couldn't read this checkout's changes. Refresh Source Control before switching.",
+      "statusUnknown": "Read this checkout’s changes before switching.",
+      "conflict": "Finish or abort the {{operation}} before switching branches.",
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches.",
+      "agentHint": "An agent last reported work here. Orca checks whether it is still working when you switch.",
+      "listFailed": "Orca couldn't list local branches. Try reopening the picker.",
+      "discoveryFailed": "Orca couldn't find remote branches. You can still switch local branches or create a branch.",
+      "switchFailed": "Orca couldn't switch branches. Try again.",
+      "thisComputer": "this computer",
+      "updateHost": "Update Orca on {{host}} to switch branches from here."
     }
   },
   "agentsSidebarIntro": {

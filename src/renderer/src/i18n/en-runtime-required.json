@@ -2315,6 +2315,10 @@
     }
   },
   "sourceControl": {
+    "branchPicker": {
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches."
+    },
     "createReviewFailure": {
       "stacked": {
         "stackConflict": "The pull request already belongs to a different GitHub stack.",

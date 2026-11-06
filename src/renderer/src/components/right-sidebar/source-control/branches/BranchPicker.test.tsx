@@ -207,3 +207,43 @@ it('renders a translated local-list recovery message', async () => {
     await i18n.changeLanguage('en')
   }
 })
+
+it('updates an open memoized row when the UI language changes', async () => {
+  i18n.addResourceBundle(
+    'de',
+    'translation',
+    { sourceControl: { branchPicker: { open: 'Arbeitsbereich öffnen' } } },
+    true,
+    true
+  )
+  vi.mocked(listRuntimeGitBranches).mockResolvedValueOnce({
+    current: 'main',
+    branches: ['held'],
+    worktreePaths: { held: '/held' }
+  })
+  vi.mocked(searchRuntimeRemoteBranches).mockResolvedValue({ refs: [], truncated: false })
+  try {
+    await act(async () =>
+      root.render(
+        <BranchPicker
+          branch="main"
+          blocker={null}
+          context={{ target: { kind: 'local' }, worktreeId: 'original', worktreePath: '/repo' }}
+          repoId="repo"
+          hostId="local"
+          hostLabel="This computer"
+          workspaces={new Map([['held', { id: 'held', repoId: 'repo', path: '/held' }]])}
+          onOpenWorkspace={vi.fn()}
+          onSwitched={vi.fn()}
+        />
+      )
+    )
+    await act(async () => container.querySelector('button')?.click())
+    expect(container.textContent).toContain('Open workspace')
+    await act(async () => i18n.changeLanguage('de'))
+    expect(container.textContent).toContain('Arbeitsbereich öffnen')
+    expect(container.textContent).not.toContain('Open workspace')
+  } finally {
+    await act(async () => i18n.changeLanguage('en'))
+  }
+})
