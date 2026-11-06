@@ -57,8 +57,12 @@ it.each(['imported', 'external'] as const)(
         name: `${repo.id} group`,
         parentGroupId: null,
         parentPath: '/',
+        createdFrom: 'manual',
         tabOrder: 0,
-        createdAt: 0
+        isCollapsed: false,
+        color: null,
+        createdAt: 0,
+        updatedAt: 0
       })),
       placeholderRepoIds: new Set(),
       importedWorktreesByRepo:

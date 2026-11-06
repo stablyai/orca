@@ -130,7 +130,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     list.push(creation)
     pendingByRepo.set(creation.repoId, list)
   }
-  const nonemptyProjectKeys =
+  const keptProjects =
     inputs.hideEmptyProjects && groupBy === 'repo'
       ? new Set(
           [...worktrees.map((worktree) => worktree.repoId), ...pendingByRepo.keys()].map(
@@ -177,8 +177,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               projectOrderBy,
               folderWorkspaces: renderableFolderWorkspaces
             }).filter(
-              ([key, group]) =>
-                !nonemptyProjectKeys || group.items.length > 0 || nonemptyProjectKeys.has(key)
+              ([key, group]) => !keptProjects || group.items.length > 0 || keptProjects.has(key)
             )
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
