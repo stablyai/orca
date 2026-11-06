@@ -72,14 +72,16 @@ export class AgentModelCatalogListingWaiters {
 export async function waitForAgentModelCatalogRead(input: {
   params: AgentModelCatalogReadParams & { deadline: number }
   store: AgentModelCatalogStore
-  resolve: (params: AgentModelCatalogReadParams) => Promise<void>
-  claim: () => { ready: Promise<void>; promise: Promise<void> } | undefined
+  /** Starts this read's own claim; the read waits on that claim, not another reader's. */
+  resolve: (
+    params: AgentModelCatalogReadParams
+  ) => { ready: Promise<void>; promise: Promise<void> } | undefined
   binding: () => AgentModelCatalogBinding | undefined
 }): Promise<void> {
   const { params, store } = input
   const wait = async (): Promise<void> => {
-    void input.resolve(params)
-    await input.claim()?.ready
+    const claim = input.resolve(params)
+    await claim?.ready
     const bound = input.binding()
     await bound?.projecting
     if (Date.now() >= params.deadline) {
@@ -99,7 +101,7 @@ export async function waitForAgentModelCatalogRead(input: {
       )
     }
     if (bound && !store.isListing(bound.fingerprint)) {
-      await input.claim()?.promise
+      await claim?.promise
     }
   }
   const remaining = params.deadline - Date.now()
@@ -111,7 +113,7 @@ export async function waitForAgentModelCatalogRead(input: {
 /** The operation owns its original budget even while a resolver cannot be cancelled. */
 export function runAgentModelCatalogOperation(
   run: () => Promise<void>,
-  remaining: number | (() => number),
+  remaining: number,
   controller: AbortController,
   finished: () => void
 ): Promise<void> {
@@ -122,19 +124,7 @@ export function runAgentModelCatalogOperation(
     .finally(() => {
       settled = true
     })
-  // A budget a later reader extends is rechecked when the earlier one runs out.
-  const end = Date.now() + (typeof remaining === 'number' ? remaining : 0)
-  const left = typeof remaining === 'number' ? () => end - Date.now() : remaining
-  // Aborting the operation ends its wait at once rather than at a budget it no longer has.
-  const stopped = new Promise<void>((resolve) =>
-    controller.signal.addEventListener('abort', () => resolve(), { once: true })
-  )
-  const bounded = async (): Promise<void> => {
-    for (let wait = left(); !settled && !controller.signal.aborted && wait > 0; wait = left()) {
-      await withTimeout(Promise.race([operation, stopped]), wait, undefined)
-    }
-  }
-  return bounded().finally(() => {
+  return withTimeout(operation, remaining, undefined).finally(() => {
     if (!settled) {
       controller.abort()
     }

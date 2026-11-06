@@ -260,36 +260,44 @@ export function retireAgentModelCatalogRequests(
   bindings: Map<string, AgentModelCatalogBinding>,
   claims: Map<
     string,
-    {
+    Set<{
       identity: string
       params: AgentModelCatalogReadParams
       controller: AbortController
-      current?: () => boolean
-    }
+      current: () => boolean
+    }>
   >,
   workspaceId?: string
 ): void {
-  for (const [key, claim] of claims) {
-    if (
-      !(
-        claim.current?.() ?? claim.identity === agentModelCatalogScopeIdentity(deps, claim.params)
-      ) ||
-      (workspaceId !== undefined &&
-        claim.params.sessionId !== undefined &&
-        deps.getConversation(claim.params.sessionId)?.location.workspaceId === workspaceId)
-    ) {
-      claim.controller.abort()
-      claims.delete(key)
+  // Each reader's claim ends on its own request alone.
+  for (const readers of claims.values()) {
+    for (const claim of readers) {
+      if (
+        !claim.current() ||
+        (workspaceId !== undefined &&
+          claim.params.sessionId !== undefined &&
+          deps.getConversation(claim.params.sessionId)?.location.workspaceId === workspaceId)
+      ) {
+        claim.controller.abort()
+        readers.delete(claim)
+      }
     }
   }
   for (const [key, bound] of bindings) {
+    // Scope facts outlive the reader that found them while another reader of that scope remains.
+    const survivor =
+      bound.identity === agentModelCatalogScopeIdentity(deps, bound.params)
+        ? bound.params
+        : [...(claims.get(key) ?? [])].find((claim) => claim.identity === bound.identity)?.params
     if (
       !bound.current() ||
-      bound.identity !== agentModelCatalogScopeIdentity(deps, bound.params) ||
+      !survivor ||
       (workspaceId !== undefined && bound.workspaceId === workspaceId)
     ) {
       bound.cancel()
       bindings.delete(key)
+    } else {
+      bound.params = survivor
     }
   }
 }

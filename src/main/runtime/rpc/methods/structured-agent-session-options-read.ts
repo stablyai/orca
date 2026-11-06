@@ -136,7 +136,8 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
             }
           )
         }
-        if (!host && !params.savedOnly) {
+        // A floating read lists the folder it resolves to (above), never the unresolved one.
+        if (!host && !params.savedOnly && !follows) {
           void catalog.demand(request)
         }
         const result = host ? await host.readModelCatalog(request) : await catalog.read(request)

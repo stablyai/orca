@@ -126,28 +126,33 @@ export async function recordConfiguredDefault(
 }
 
 /** Default provenance belongs to the resolved binding and the operation projecting it. */
-export async function projectAgentModelCatalogDefault(
+export type AgentModelCatalogListedDefaults = Awaited<
+  ReturnType<typeof workspaceKeepsListedDefaults>
+>
+
+/** The workspace's own settings, checked once per setup for every reader sharing it. */
+export function agentModelCatalogListedDefaults(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
+  workspacePath: string | null | undefined,
+  home: AgentSessionAccountHome | null
+): Promise<AgentModelCatalogListedDefaults | null> {
+  const accountHomePath = home && isLegacyAgentSessionAccountHome(home) ? home.path : null
+  // A failed provenance read leaves each binding's conservative projection.
+  return workspaceKeepsListedDefaults(deps, agent, workspacePath, accountHomePath).catch(() => null)
+}
+
+/** One listing serves every folder on the account; the project decides only its own defaults,
+ *  and settings that change only the effort leave the account's model standing. */
+export async function projectAgentModelCatalogDefault(
+  agent: string,
   bound: AgentModelCatalogBinding,
-  home: AgentSessionAccountHome | null,
+  defaults: Promise<AgentModelCatalogListedDefaults | null>,
   current: () => boolean
 ): Promise<void> {
-  const accountHomePath = home && isLegacyAgentSessionAccountHome(home) ? home.path : null
-  try {
-    // One listing serves every folder on the account; the project decides only its own defaults,
-    // and settings that change only the effort leave the account's model standing.
-    const keeps = await workspaceKeepsListedDefaults(
-      deps,
-      agent,
-      bound.workspacePath,
-      accountHomePath
-    )
-    if (current()) {
-      bound.keepDefault = independentAgentModelCatalog(agent) ? keeps.model : keeps.effort
-      bound.keepEffort = keeps.effort
-    }
-  } catch {
-    /* A failed provenance read leaves the binding's conservative projection. */
+  const keeps = await defaults
+  if (keeps && current()) {
+    bound.keepDefault = independentAgentModelCatalog(agent) ? keeps.model : keeps.effort
+    bound.keepEffort = keeps.effort
   }
 }

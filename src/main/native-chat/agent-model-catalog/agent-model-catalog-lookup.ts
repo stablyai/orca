@@ -5,20 +5,9 @@ import type {
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
-import { agentModelCatalogReadRecords } from './agent-model-catalog-read-scope'
-import { recordCatalogKey } from './agent-model-catalog-fingerprint'
-import {
-  scopedAgentModelCatalogLister,
-  type AgentModelCatalogListingDemand
-} from './agent-model-catalog-lister'
-import { newChatCatalogKey } from './agent-model-catalog-prewarm'
-import { agentModelCatalogClaimReaders } from './agent-model-catalog-claim-readers'
-import {
-  catalogFolder,
-  sessionWorkspacePath,
-  projectAgentModelCatalogDefault
-} from './agent-model-catalog-workspace'
-import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
+import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
+import { createAgentModelCatalogSetups } from './agent-model-catalog-setup'
+import { projectAgentModelCatalogDefault } from './agent-model-catalog-workspace'
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
@@ -33,6 +22,7 @@ import {
   runAgentModelCatalogOperation
 } from './agent-model-catalog-listing-waiters'
 
+/** One reader's claim: its own deadline and cancellation, from setup through the listing wait. */
 export type AgentModelCatalogClaim = Pick<
   AgentModelCatalogBinding,
   'identity' | 'params' | 'current'
@@ -40,116 +30,65 @@ export type AgentModelCatalogClaim = Pick<
   controller: AbortController
   promise: Promise<void>
   ready: Promise<void>
-  demandModel: (model: string | undefined) => void
-  /** Another reader of the same request wants this claim's listing until its own deadline. */
-  join: (demand: AgentModelCatalogListingDemand) => void
 }
+
+/** Every reader's claim, by request; readers of one request share setup, never each other's life. */
+export type AgentModelCatalogClaims = Map<string, Set<AgentModelCatalogClaim>>
 
 export function createAgentModelCatalogLookup(
   deps: AgentModelCatalogServiceDeps,
   lifetime: AbortController,
   admission: PrioritySemaphore,
   bindings: Map<string, AgentModelCatalogBinding>,
-  claims: Map<string, AgentModelCatalogClaim>,
+  claims: AgentModelCatalogClaims,
   requestKey: (params: AgentModelCatalogReadParams) => string,
   capture: (params: AgentModelCatalogReadParams) => string,
   captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation,
   tasks: Set<Promise<unknown>>
 ) {
-  return (params: AgentModelCatalogReadParams): Promise<void> => {
+  const setups = createAgentModelCatalogSetups(deps, lifetime.signal)
+  return (params: AgentModelCatalogReadParams): AgentModelCatalogClaim | undefined => {
     const operation = params.operation ?? captureRead(params)
     const deadline = operation.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
     const remaining = deadline - Date.now()
     if (!operation.current() || remaining <= 0) {
-      return Promise.resolve()
+      return undefined
     }
     const bindingKey = requestKey(params)
     const key = params.savedOnly ? `${bindingKey}:saved` : bindingKey
     const identity = capture(params)
     const retirement = operation.retirement
-    const previous = claims.get(key)
-    const selectedModel = usesModelSpecificAcpEfforts(params.agent)
+    const target = usesModelSpecificAcpEfforts(params.agent)
       ? (params.selectedModel ??
         (params.sessionId ? deps.getConversation(params.sessionId)?.options?.model : undefined))
       : undefined
-    const reader = { current: operation.current, signal: operation.signal, deadline }
-    // Every reader of the same request shares one claim, which lives until its last reader's
-    // deadline, so later readers neither repeat its setup nor lose its listing.
-    if (previous?.identity === identity && previous.current?.() !== false) {
-      previous.demandModel(selectedModel)
-      previous.join(reader)
-      return previous.promise
-    }
-    previous?.controller.abort()
-    // The claim's own: retirement, a different request or its last reader leaving ends it.
-    const controller = new AbortController()
-    const readers = agentModelCatalogClaimReaders(controller)
-    let listing: string | undefined
-    const join = (entry: AgentModelCatalogListingDemand): void => {
-      readers.add(entry)
-      if (listing) {
-        deps.store.isListing(listing, readers.ownership(entry, current))
-      }
-    }
-    let target = selectedModel
-    let targetFingerprint: string | undefined
-    const demandModel = (model: string | undefined) => {
-      target = model
-      if (targetFingerprint) {
-        deps.store.efforts.demand(targetFingerprint, model)
-      }
-    }
+    const controller = operation.controller
+    const readers = claims.get(key) ?? new Set<AgentModelCatalogClaim>()
+    claims.set(key, readers)
     const ready = Promise.withResolvers<void>()
     const valid = (): boolean =>
+      Date.now() < deadline &&
       !controller.signal.aborted &&
       !lifetime.signal.aborted &&
-      readers.any() &&
-      deps.store.retirementRevision(params.agent) === retirement
-    const current = (): boolean => valid() && claims.get(key)?.controller === controller
-    // Bounded work below runs until the last reader's deadline, however late it joined.
-    const bounded = {
-      current,
-      signal: AbortSignal.any([lifetime.signal, controller.signal]),
-      get deadline() {
-        return readers.latest()
-      }
-    }
-    join(reader)
+      operation.current() &&
+      deps.store.retirementRevision(params.agent) === retirement &&
+      requestKey(params) === bindingKey &&
+      capture(params) === identity
+    const current = (): boolean => valid() && readers.has(claim)
+    const signal = AbortSignal.any([lifetime.signal, controller.signal, operation.signal])
     const run = async (): Promise<void> => {
-      if (!current()) {
+      // A setup that ran out of its own budget leaves a reader with time left to start another.
+      const share = () => setups(`${key}\n${identity}`, params, deadline)
+      let setup = share()
+      let facts = await setup.account
+      if (!facts && current() && setup.lapsed()) {
+        setup = share()
+        facts = await setup.account
+      }
+      if (!current() || !facts) {
         return
       }
-      const records = agentModelCatalogReadRecords(deps, params)
-      if (!records) {
-        return
-      }
-      const { record, scoped } = records
-      const savedOnly = params.savedOnly || records.savedOnly
-      const workspacePath =
-        params.inSessionWorkspace ||
-        (record &&
-          params.workspacePath === undefined &&
-          !params.legacy &&
-          (independentAgentModelCatalog(params.agent) ||
-            deps.agentReadsProjectModelConfig?.(params.agent) === true))
-          ? record
-            ? await sessionWorkspacePath(deps, record)
-            : null
-          : params.workspacePath
-      if (!current()) {
-        return
-      }
-      const folder = await catalogFolder(deps, params.agent, workspacePath, scoped)
-      if (!current()) {
-        return
-      }
-      const account = scoped
-        ? recordCatalogKey(scoped, folder)
-        : await newChatCatalogKey(deps, params.agent, folder)
-      if (!current() || !account) {
-        return
-      }
-      const { fingerprint: base, accountHome: probeHome } = account
+      const { record, scoped, savedOnly, workspacePath, folder, base, probeHome } = facts
       let bindingCurrent = true
       const bound: AgentModelCatalogBinding = {
         identity,
@@ -159,9 +98,9 @@ export function createAgentModelCatalogLookup(
           !lifetime.signal.aborted &&
           deps.store.retirementRevision(params.agent) === retirement,
         workspaceId: record?.location.workspaceId,
+        // Scope facts only: retiring them never ends a reader's claim or a shared listing.
         cancel: () => {
           bindingCurrent = false
-          controller.abort()
         },
         fingerprint: base,
         base,
@@ -182,27 +121,21 @@ export function createAgentModelCatalogLookup(
       ) {
         bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey, true)
       }
-      const scope = await resolveAgentModelCatalogScope(
-        deps,
-        { ...params, workspacePath, savedOnly },
-        scoped,
-        base,
-        probeHome,
-        current,
-        bounded
-      )
+      let scope = await setup.scope
+      if (!scope && current() && setup.lapsed()) {
+        setup = share()
+        scope = await setup.scope
+      }
       if (!current() || !scope) {
         return
       }
       const { fingerprint, exact, resolved, cwd } = scope
-      targetFingerprint = fingerprint
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
       bound.projecting = projectAgentModelCatalogDefault(
-        deps,
         params.agent,
         bound,
-        probeHome,
+        setup.defaults,
         () => valid() && bindings.get(bindingKey) === bound
       )
       if (savedOnly) {
@@ -213,11 +146,9 @@ export function createAgentModelCatalogLookup(
         return
       }
       const probe = deps.probes?.[params.agent]
-      // A listing is shared by every reader of its scope and lives while any of them still wants
-      // it (the store counts each reader's demand); its process runs only under the service.
       const list = scopedAgentModelCatalogLister({
         legacy: params.legacy,
-        operation: bounded,
+        operation: { deadline, current, signal },
         // A chat's deletion doesn't stop a listing other chats or folders share.
         canList: () => resolved !== undefined || !record || !!deps.getRecord(record.sessionId),
         admission,
@@ -234,7 +165,7 @@ export function createAgentModelCatalogLookup(
           deps.store.efforts.due(fingerprint, target) ||
           deps.store.isListing(fingerprint))
       ) {
-        const [first, ...rest] = readers.all()
+        // Each reader owns the shared listing until its own deadline or cancellation.
         void deps.store.refresh(
           fingerprint,
           params.agent,
@@ -244,13 +175,9 @@ export function createAgentModelCatalogLookup(
             void task.finally(() => tasks.delete(task)).catch(() => {})
             return task
           },
-          first && readers.ownership(first, current),
+          { current, signal, deadline },
           target
         )
-        listing = fingerprint
-        for (const entry of rest) {
-          deps.store.isListing(fingerprint, readers.ownership(entry, current))
-        }
       }
       // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
       ready.resolve()
@@ -262,30 +189,24 @@ export function createAgentModelCatalogLookup(
         seedAccountList(deps, scope, params.agent)
       }
     }
-    const promise = runAgentModelCatalogOperation(
-      run,
-      () => readers.latest() - Date.now(),
-      controller,
-      () => {
-        ready.resolve()
-        readers.clear()
-        if (claims.get(key)?.controller === controller) {
-          claims.delete(key)
-        }
-      }
-    )
-    tasks.add(promise)
-    void promise.finally(() => tasks.delete(promise)).catch(() => {})
-    claims.set(key, {
+    const claim: AgentModelCatalogClaim = {
       identity,
       controller,
-      promise,
+      promise: Promise.resolve(),
       ready: ready.promise,
       params,
-      current,
-      demandModel,
-      join
+      current
+    }
+    readers.add(claim)
+    claim.promise = runAgentModelCatalogOperation(run, remaining, controller, () => {
+      ready.resolve()
+      readers.delete(claim)
+      if (readers.size === 0 && claims.get(key) === readers) {
+        claims.delete(key)
+      }
     })
-    return promise
+    tasks.add(claim.promise)
+    void claim.promise.finally(() => tasks.delete(claim.promise)).catch(() => {})
+    return claim
   }
 }

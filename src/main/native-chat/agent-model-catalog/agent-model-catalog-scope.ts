@@ -41,7 +41,9 @@ export async function resolveAgentModelCatalogScope(
     return { base, fingerprint: base, exact: false }
   }
   const probe = deps.probes?.[params.agent]
-  const savedOnly = () => params.savedOnly || !!(record && !deps.getRecord(record.sessionId))
+  // Fixed when resolution starts: a chat closing later doesn't turn a shared setup passive.
+  const passive = params.savedOnly || !!(record && !deps.getRecord(record.sessionId))
+  const savedOnly = () => passive
   if (params.legacy) {
     const fingerprint = agentModelCatalogScopeFingerprint(base, 'legacy-account')
     const resolved =

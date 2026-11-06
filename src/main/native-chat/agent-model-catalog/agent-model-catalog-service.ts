@@ -5,7 +5,7 @@ import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
 import {
   createAgentModelCatalogLookup,
-  type AgentModelCatalogClaim
+  type AgentModelCatalogClaims
 } from './agent-model-catalog-lookup'
 import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
 import { prewarmAgentModelCatalog } from './agent-model-catalog-prewarm'
@@ -40,7 +40,7 @@ export function createAgentModelCatalogService(
   const admission = new PrioritySemaphore(2)
 
   const bindings = new Map<string, AgentModelCatalogBinding>()
-  const claims = new Map<string, AgentModelCatalogClaim>()
+  const claims: AgentModelCatalogClaims = new Map()
   const requestKey = agentModelCatalogRequestKey.bind(null, deps)
   const capture = agentModelCatalogScopeIdentity.bind(null, deps)
   const retireContext = (workspaceId?: string, sources = true): void => {
@@ -58,10 +58,16 @@ export function createAgentModelCatalogService(
   const snapshot = createAgentModelCatalogSnapshot(
     deps,
     memoryBinding,
-    (params, bound) =>
-      bound
-        ? claims.has(requestKey(params))
-        : claims.get(requestKey(params))?.identity === capture(params),
+    // In progress while a reader of this request still waits on its own claim.
+    (params, bound) => {
+      const identity = bound ? undefined : capture(params)
+      for (const claim of claims.get(requestKey(params)) ?? []) {
+        if (claim.current() && (identity === undefined || claim.identity === identity)) {
+          return true
+        }
+      }
+      return false
+    },
     () => lifetime.signal.aborted
   )
 
@@ -81,10 +87,14 @@ export function createAgentModelCatalogService(
   return {
     captureRead,
     snapshot,
-    demand: (params) => (params.savedOnly ? Promise.resolve() : resolve(params)),
+    demand: async (params) => {
+      if (!params.savedOnly) {
+        await resolve(params)?.promise
+      }
+    },
     async prepareSaved(params) {
       if (!memoryBinding(params)) {
-        await resolve({ ...params, savedOnly: true })
+        await resolve({ ...params, savedOnly: true })?.promise
       }
       return snapshot({ ...params, savedOnly: true })
     },
@@ -102,7 +112,6 @@ export function createAgentModelCatalogService(
           params: { ...params, deadline },
           store: deps.store,
           resolve,
-          claim: () => claims.get(requestKey(params)),
           binding: () => bindings.get(requestKey(params))
         })
       }

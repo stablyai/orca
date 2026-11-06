@@ -44,7 +44,7 @@ export type InFlightListing = {
   targets: Set<string>
   /** Readers share one listing; it lives while any of them still wants it, queued or running. */
   current: () => boolean
-  join: (demand: ListingDemand | undefined) => void
+  join: (demand: ListingDemand) => void
   promise: Promise<AgentModelCatalogEntry | null>
   finish: (entry: AgentModelCatalogEntry | null) => void
   cleanup: () => void
@@ -121,7 +121,7 @@ export function refreshAgentModelCatalogListing(input: {
       return false
     },
     join: (entry) => {
-      if (!entry || demands.has(entry)) {
+      if (demands.has(entry)) {
         return
       }
       // A reader whose deadline passes stops wanting the listing even if nothing aborts it.
