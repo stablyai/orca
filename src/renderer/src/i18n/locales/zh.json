@@ -2612,6 +2612,8 @@
         "loadGitHubWorkFailed": "加载 GitHub 工作项失败。",
         "gitlabViewIssues": "议题",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "所有人",
+        "gitlabInvolvementReviewing": "审阅中",
         "gitlabViewTodos": "我的待办",
         "startWorkspaceFromMr": "从 MR {{number}} 启动工作区",
         "startWorkspaceFromIssue": "从议题 {{number}} 启动工作区",

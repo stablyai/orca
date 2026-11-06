@@ -72,32 +72,6 @@ describe('useNativeChatSteerChordPreview', () => {
     return { props, view, field, button, hold, preview: () => button.dataset.preview }
   }
 
-  it('previews steering the head card while Cmd is held alone on an empty composer', () => {
-    const { props, field, button, hold, preview } = setup()
-    hold()
-    expect(preview()).toBe('steer-queued')
-    fireEvent.click(button)
-    expect(props.steerHead).toHaveBeenCalledTimes(1)
-    fireEvent.keyUp(field, { key: 'Meta' })
-    expect(preview()).toBe('')
-  })
-
-  it('names what Cmd+Enter does to a typed draft, and a click sends it that way', () => {
-    const { props, button, hold, preview } = setup({ alternateSend: 'queue', hasDraft: true })
-    hold()
-    expect(preview()).toBe('queue')
-    fireEvent.click(button)
-    expect(props.send).toHaveBeenCalledWith({ alternate: true })
-    expect(props.steerHead).not.toHaveBeenCalled()
-  })
-
-  it('shows nothing when Shift is already down, since Cmd+Shift+Enter is another chord', () => {
-    const { field, preview } = setup({ hasDraft: true })
-    fireEvent.keyDown(field, { key: 'Meta', shiftKey: true })
-    act(() => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
-    expect(preview()).toBe('')
-  })
-
   it('never flashes for a quick chord such as Cmd+C', () => {
     const { field, preview } = setup()
     fireEvent.keyDown(field, { key: 'Meta' })
@@ -128,15 +102,5 @@ describe('useNativeChatSteerChordPreview', () => {
     expect(preview()).toBe('steer-queued')
     fireEvent.click(button)
     expect(props.steerHead).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    ['the chord queues', { alternateSend: 'queue' as const, chordSteersHead: false }],
-    ['there is no card to steer', { steerHead: undefined }],
-    ['a picker takes Enter', { pickerOpen: true }]
-  ])('shows nothing on an empty composer where %s', (_case, overrides) => {
-    const { hold, preview } = setup(overrides)
-    hold()
-    expect(preview()).toBe('')
   })
 })

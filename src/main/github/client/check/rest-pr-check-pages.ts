@@ -13,12 +13,15 @@ const checkRunSchema = z.object({
   conclusion: z.string().nullable(),
   html_url: z.string().nullish(),
   details_url: z.string().nullish(),
+  started_at: z.string().nullish(),
+  completed_at: z.string().nullish(),
   check_suite: z.object({ id: z.number() }).nullish()
 })
 const commitStatusSchema = z.object({
   context: z.string().optional(),
   state: z.string(),
-  target_url: z.string().nullish()
+  target_url: z.string().nullish(),
+  created_at: z.string().nullish()
 })
 const checkSuiteSchema = z.object({
   id: z.number().optional(),

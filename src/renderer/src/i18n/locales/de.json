@@ -3130,6 +3130,8 @@
         "loadGitHubWorkFailed": "GitHub-Aufgaben konnten nicht geladen werden.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Alle Personen",
+        "gitlabInvolvementReviewing": "Als Reviewer",
         "gitlabViewTodos": "Meine Aufgaben",
         "startWorkspaceFromMr": "Arbeitsbereich aus MR {{number}} starten",
         "startWorkspaceFromIssue": "Arbeitsbereich aus Issue {{number}} starten",
