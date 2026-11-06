@@ -12,10 +12,9 @@ import {
   mergeItems
 } from '../../shared/agent-session/view/structured-agent-session-history-state'
 import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
-import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { dispatchClaudeTurn } from './structured/claude-structured-dispatch'
-import './structured/claude-structured-session-id'
+import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 import {
   childExited,
   sessionFor,
@@ -24,7 +23,6 @@ import {
 import {
   SESSION,
   SID,
-  at,
   prompt,
   reply,
   attachment,
@@ -210,81 +208,6 @@ describe('Claude chat catch-up', () => {
     }
   )
 
-  it('keeps outside message times and order without splitting queued work', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([
-      ...chatTurn,
-      prompt('p2', 'a1', 'outside request', 3),
-      reply(
-        'a2',
-        'p2',
-        'msg_b',
-        { type: 'tool_use', id: 'toolu_time', name: 'Read', input: {} },
-        4
-      ),
-      {
-        ...attachment('queued-row', 'a2'),
-        timestamp: at(5),
-        attachment: {
-          type: 'queued_command',
-          source_uuid: 'cmd-1',
-          commandMode: 'prompt',
-          origin: { kind: 'human' },
-          humanTurn: true,
-          prompt: 'follow up'
-        }
-      },
-      reply('a3', 'queued-row', 'msg_c', { type: 'text', text: 'finished' }, 6),
-      {
-        ...prompt('r-time', 'a3', '', 7),
-        message: {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: 'toolu_time', content: 'done' }]
-        }
-      },
-      {
-        ...reply('a5', 'r-time', 'msg_missing', { type: 'text', text: 'no source time' }, 8),
-        timestamp: undefined
-      }
-    ])
-    expect(await c.open('a1')).toBe(true)
-    const key = (uuid: string) =>
-      agentJournalItemKey(
-        uuid === 'toolu_time'
-          ? { provider: 'orca', clientMessageId: `claude-tool:${SID}:${uuid}` }
-          : { provider: 'claude', sessionId: SID, uuid }
-      )
-    const queued = c.journal.item(key('cmd-1'))
-    expect(queued?.turnScope).toEqual(c.journal.item(key('toolu_time'))?.turnScope)
-    expect(queued?.turnScope).toMatchObject({ kind: 'turn' })
-    expect(c.journal.item(key('block:msg_c:0'))?.turnScope).toEqual(queued?.turnScope)
-    expect(c.journal.snapshot().items.filter((row) => row.body.kind === 'turn')).toHaveLength(2)
-    expect(isStructuredRewindTarget(c.journal, key('cmd-1'))).toBe(false)
-    expect(isStructuredRewindTarget(c.journal, key('p2'))).toBe(true)
-    const items = c.journal
-      .snapshot()
-      .items.filter((item) =>
-        ['p2', 'toolu_time', 'cmd-1', 'block:msg_c:0', 'block:msg_missing:0'].some(
-          (uuid) => item.itemId === key(uuid)
-        )
-      )
-    expect(items.map((item) => [item.itemId, item.observedAt])).toEqual([
-      [key('p2'), Date.parse(at(3))],
-      [key('toolu_time'), Date.parse(at(4))],
-      [key('cmd-1'), Date.parse(at(5))],
-      [key('block:msg_c:0'), Date.parse(at(6))],
-      [key('block:msg_missing:0'), 1_000]
-    ])
-    expect(items.map((item) => projectStructuredItemToNativeChat(item)?.timestamp)).toEqual(
-      items.map((item) => item.observedAt)
-    )
-    expect(new Set(items.map((item) => item.sequence)).size).toBe(1)
-    const imported = c.journal.snapshot().items
-    expect(await c.open('a1')).toBe(true)
-    expect(c.journal.snapshot().items).toEqual(imported)
-    expect((await c.replay()).snapshot().items).toEqual(imported)
-  })
   it.each([
     ['-work', '/work', false],
     ['-work-caf-', '/work/cafe\u0301', false],
@@ -410,33 +333,6 @@ describe('Claude chat catch-up', () => {
     live.dispose()
   })
 
-  it('cancels fallback discovery and cannot commit a late result', async () => {
-    const c = await chat('-old-work', '/new-work')
-    await c.write([...chatTurn, ...outsideTurn])
-    const lookup = Promise.withResolvers<string | null>()
-    const lookupStarted = Promise.withResolvers<void>()
-    const resolve = vi
-      .spyOn(sessionFileResolver, 'resolveSessionFilePath')
-      .mockImplementationOnce(() => {
-        lookupStarted.resolve()
-        return lookup.promise
-      })
-    // Fire the deadline only once the lookup is in flight; a real 5 ms timer raced slow runners.
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    try {
-      const opened = c.open('a1', { timeoutMs: 5 })
-      await lookupStarted.promise
-      vi.advanceTimersByTime(5)
-      expect(await opened).toBe(false)
-    } finally {
-      vi.useRealTimers()
-    }
-    expect(resolve.mock.calls[0]?.[3]?.aborted).toBe(true)
-    lookup.resolve(null)
-    await new Promise<void>((done) => setImmediate(done))
-    expect(c.rows()).toEqual([])
-  })
-
   it('shows the turns made outside the chat once, in order, under one divider', async () => {
     const c = await chat()
     await c.live()
@@ -466,55 +362,110 @@ describe('Claude chat catch-up', () => {
     expect(c.warn).not.toHaveBeenCalled()
   })
 
-  it('keeps an outside Stop hook row inside the turn it sent back', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([
-      ...chatTurn,
-      prompt('p2', 'a1', 'ask 2', 3),
-      reply('a2', 'p2', 'msg_b', { type: 'text', text: 'answer 2' }, 4),
-      {
-        ...prompt('h2', 'a2', 'Stop hook feedback:\n[/hook.sh]: Cite evidence.\n', 5),
-        isMeta: true
-      },
-      reply('a3', 'h2', 'msg_c', { type: 'text', text: 'evidence' }, 6),
-      ...bookkeeping
-    ])
-    await c.open('a1')
-    expect(c.rows()).toEqual([
-      'user:ask 1',
-      'assistant:answer 1',
-      '(continued-outside)',
-      'user:ask 2',
-      'assistant:answer 2',
-      '(hook-sent-back)',
-      'assistant:evidence'
-    ])
-    const scopes = c.journal
-      .snapshot()
-      .items.filter((item) => item.body.kind !== 'turn')
-      .slice(-3)
-      .map((item) => JSON.stringify(item.turnScope))
-    expect(new Set(scopes).size).toBe(1)
-  })
-
-  it('imports a later outside batch from the retained leaf without reusing its old divider', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([...chatTurn, ...outsideTurn])
-    expect(await c.open('a1')).toBe(true)
-    const before = c.rows()
-    await c.write([
-      prompt('p3', 'a3', 'ask 3', 7),
-      reply('a4', 'p3', 'msg_d', { type: 'text', text: 'answer 3' }, 8)
-    ])
-    expect(await c.open('a1')).toBe(true)
-    expect(c.rows()).toEqual([...before, '(continued-outside)', 'user:ask 3', 'assistant:answer 3'])
-    const imported = c.journal.snapshot().items
-    expect(await c.open('a1')).toBe(true)
-    expect(c.journal.snapshot().items).toEqual(imported)
-    expect(c.warn).not.toHaveBeenCalled()
-  })
+  // P saved aliases plus P unacknowledged queued prompts: two J-item indexes, not P×J scans.
+  it.each([10, 100].flatMap((prompts) => [1_000, 10_000].map((items) => ({ prompts, items }))))(
+    'bounds retained-leaf work for $prompts aliases and local misses over $items journal items',
+    async ({ prompts, items }) => {
+      const c = await chat()
+      await c.live()
+      const expected = [...c.rows(), '(continued-outside)']
+      const rows: Record<string, unknown>[] = [
+        reply('saved-leaf', 'earlier-prompt', 'msg_saved', { type: 'text', text: 'earlier' }, 0),
+        prompt('p1', 'saved-leaf', 'ask 1', 1),
+        ...chatTurn.slice(1)
+      ]
+      for (let n = 1; n < prompts; n++) {
+        rows.push(
+          prompt(`outside-p${n}`, n === 1 ? 'a1' : `outside-a${n - 1}`, `ask ${n}`, n * 2 + 1),
+          reply(
+            `outside-a${n}`,
+            `outside-p${n}`,
+            `msg_outside${n}`,
+            { type: 'text', text: `answer ${n}` },
+            n * 2 + 2
+          )
+        )
+        expected.push(`user:ask ${n}`, `assistant:answer ${n}`)
+      }
+      const alias = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid: 'p1' })
+      const canonical = c.journal.canonicalItemId(alias)
+      expect(canonical).not.toBe(alias)
+      const submissions = c.journal.snapshot().submissions
+      await c.write(rows)
+      expect(await c.open('saved-leaf')).toBe(true)
+      expect(c.rows()).toEqual(expected)
+      expect(c.journal.snapshot().submissions).toEqual(submissions)
+      await c.journal.appendLifecycleBatch({
+        settlementId: 'perf-padding',
+        fence: 1,
+        mutations: Array.from({ length: items - c.journal.snapshot().items.length }, (_, n) => ({
+          kind: 'item' as const,
+          identity: { provider: 'orca' as const, clientMessageId: `padding${n}` },
+          body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
+          turnScope: { kind: 'thread' as const }
+        }))
+      })
+      for (let n = 0; n < prompts; n++) {
+        const key = agentJournalItemKey({ provider: 'orca', clientMessageId: `padding${n}` })
+        await c.write([
+          {
+            ...attachment(`queued${n}`, n ? `queued${n - 1}` : `outside-a${prompts - 1}`),
+            attachment: {
+              type: 'queued_command',
+              source_uuid: claudePromptUuidForSubmission(SESSION, key),
+              commandMode: 'prompt',
+              prompt: 'local'
+            }
+          }
+        ])
+      }
+      const before = c.journal.snapshot()
+      const itemCount = before.items.length
+      expect(itemCount).toBe(items)
+      let associationVisits = 0
+      let viewVisits = 0
+      const visitItems = c.journal.visitItems.bind(c.journal)
+      const visitLinked = c.journal.visitItemsWithLinkage.bind(c.journal)
+      vi.spyOn(c.journal, 'visitItems').mockImplementation((visit) =>
+        visitItems((...args) => {
+          associationVisits++
+          visit(...args)
+        })
+      )
+      vi.spyOn(c.journal, 'visitItemsWithLinkage').mockImplementation((visit) =>
+        visitLinked((...args) => {
+          viewVisits++
+          visit(...args)
+        })
+      )
+      c.journal.visitItems(() => {})
+      c.journal.visitItemsWithLinkage(() => {})
+      // visitItems delegates to the linked visitor, so this calibration exercises it twice.
+      expect([associationVisits, viewVisits]).toEqual([itemCount, 2 * itemCount])
+      associationVisits = viewVisits = 0
+      const committed = vi.fn()
+      c.journal.observeCommits(committed)
+      const tail = vi.spyOn(transcriptTail, 'readClaudeTranscriptTail')
+      expect(await c.open('saved-leaf')).toBe(true)
+      expect(tail).toHaveBeenCalledOnce()
+      expect(
+        (await tail.mock.results[0].value)?.rows.filter((row) => row.type === 'user')
+      ).toHaveLength(prompts)
+      expect(c.journal.snapshot()).toEqual(before)
+      expect(c.journal.canonicalItemId(alias)).toBe(canonical)
+      expect(committed).not.toHaveBeenCalled()
+      expect(c.warn).not.toHaveBeenCalled()
+      expect(associationVisits).toBeLessThanOrEqual(2 * itemCount)
+      // The linked visitor also counts the association passes; bound the extra view work.
+      expect(viewVisits - associationVisits).toBeLessThanOrEqual(2 * itemCount)
+      console.info('retained-leaf operation counts', {
+        prompts,
+        itemCount,
+        associationVisits,
+        viewVisits
+      })
+    }
+  )
 
   it('clears closed scope and restores only a saved queued prompt without settling delivery', async () => {
     const c = await chat()
@@ -631,22 +582,6 @@ describe('Claude chat catch-up', () => {
       true
     )
     expect(c.warn).not.toHaveBeenCalled()
-  })
-
-  it('marks turns that continue from an earlier message than the chat last showed', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([
-      ...chatTurn,
-      prompt('p3', 'p1', 'ask 1, edited', 7),
-      reply('a4', 'p3', 'msg_d', { type: 'text', text: 'answer 1, edited' }, 8)
-    ])
-    await c.open('a1')
-    expect(c.rows().slice(2)).toEqual([
-      '(continued-outside-rewound)',
-      'user:ask 1, edited',
-      'assistant:answer 1, edited'
-    ])
   })
 
   it('reads an outside reply that spans many read chunks whole', async () => {

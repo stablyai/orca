@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
-import type { NativeChatSplitDirection } from './native-chat-split-shortcut'
+import type { NativeChatSplitDirection } from './native-chat-pane-shortcut'
 
 export type NativeChatSplitTarget =
   | { kind: 'terminal-pane'; terminalTabId: string }

@@ -8591,7 +8591,7 @@
       "id": "agent-status.manual-compact-identity",
       "title": "A finished Claude compact clears the pane, and an aborted one never strands it",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "agent-session",
       "layer": "shared-main-relay-contract",
       "surfaces": [
@@ -8602,50 +8602,19 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Audit1595 removes canned hook/installer/status/capture inventories and fixture-owned command scanners without equivalent replacement coverage. Retained checks cover local filesystem/symlink/shell/pipe and TCP deadlines, ACP timeline/journal failures, naming ownership/races and numeric release helper composition; provider/remote/process inventories remain injected. Native Windows cases are platform-gated; no actual remote deployment, Fastlane/Apple API or native provider identity proof. Historical scope before this audit: Audit1340 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic listener, loopback HTTP, relay-restart, persisted-restore, and fake-SSH transport contracts run on macOS. Behavior tests deliver only events present in CLAUDE_EVENTS, so a mapping that is not registered cannot pass -- the failure mode that let the earlier compact correlation ship unreachable. Claude Code 2.1.227 PTY captures prove a successful manual compact emits PreCompact, a start-less summarizer SubagentStop, SessionStart(source=compact), then PostCompact, that an aborted compact emits PreCompact ALONE, that /compact emits no UserPromptSubmit, and that session_id is stable across the window. The shared Node paths are platform-independent; live Linux, Windows, WSL, and paired-runtime journeys remain gaps. The entire Claude-compatible vendor mapping suite is removed by Audit1297, including remaining vendor normalization samples. Audit1287 removes agent-hook-relay.test.ts, an isolated object/digest suite. Its unavailable-envelope normalization, identity-change and attribution alarms are intentionally lost; retained transport tests are not claimed equivalent. Audit1297: src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-compatible-vendors.test.ts removed. Lose resumed Kimi session capture, harness prompt suppression and Muse permission/question/lifecycle/provider-session samples. No equivalent replacement coverage is claimed. Audit1318: src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-turn-state.test.ts: Synthetic Claude hook/state histories and a normalization/acceptance harness assert option/field mappings, internal caches and private lead-state mutation; no actual Claude lifecycle/cwd/interrupt producer. Intentionally lose resume/compact/clear/cwd/effort/child-wait/cancel restoration and cache-bound alarms. Reduced selectors need fresh validation; historical full-suite receipts do not validate the changed coverage. No equivalent replacement or physical-provider claim. Audit1340: src/main/agent-hooks/manual-compact-status-cleanup.test.ts removed. Late PostCompact cannot revive cleaned status across three cleanup APIs. No equivalent replacement coverage is claimed. Audit1352: focused Linux unit selections validated on source head b638e07d395b76af3ba6b03761a1a0fe7e5e026e. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1360: focused Linux unit selections validated on source head 415c9cffc2d10024131ec4b6721767a22195de6d. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1610 deletes compact-status-registration.test.ts, a mock-only registration inventory. Its alarms are retired without equivalent replacement coverage; this gate has no remaining active assertion references. Historical scope before this audit: Audit1595 removes canned hook/installer/status/capture inventories and fixture-owned command scanners without equivalent replacement coverage. Retained checks cover local filesystem/symlink/shell/pipe and TCP deadlines, ACP timeline/journal failures, naming ownership/races and numeric release helper composition; provider/remote/process inventories remain injected. Native Windows cases are platform-gated; no actual remote deployment, Fastlane/Apple API or native provider identity proof. Historical scope before this audit: Audit1340 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Deterministic listener, loopback HTTP, relay-restart, persisted-restore, and fake-SSH transport contracts run on macOS. Behavior tests deliver only events present in CLAUDE_EVENTS, so a mapping that is not registered cannot pass -- the failure mode that let the earlier compact correlation ship unreachable. Claude Code 2.1.227 PTY captures prove a successful manual compact emits PreCompact, a start-less summarizer SubagentStop, SessionStart(source=compact), then PostCompact, that an aborted compact emits PreCompact ALONE, that /compact emits no UserPromptSubmit, and that session_id is stable across the window. The shared Node paths are platform-independent; live Linux, Windows, WSL, and paired-runtime journeys remain gaps. The entire Claude-compatible vendor mapping suite is removed by Audit1297, including remaining vendor normalization samples. Audit1287 removes agent-hook-relay.test.ts, an isolated object/digest suite. Its unavailable-envelope normalization, identity-change and attribution alarms are intentionally lost; retained transport tests are not claimed equivalent. Audit1297: src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-compatible-vendors.test.ts removed. Lose resumed Kimi session capture, harness prompt suppression and Muse permission/question/lifecycle/provider-session samples. No equivalent replacement coverage is claimed. Audit1318: src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-turn-state.test.ts: Synthetic Claude hook/state histories and a normalization/acceptance harness assert option/field mappings, internal caches and private lead-state mutation; no actual Claude lifecycle/cwd/interrupt producer. Intentionally lose resume/compact/clear/cwd/effort/child-wait/cancel restoration and cache-bound alarms. Reduced selectors need fresh validation; historical full-suite receipts do not validate the changed coverage. No equivalent replacement or physical-provider claim. Audit1340: src/main/agent-hooks/manual-compact-status-cleanup.test.ts removed. Late PostCompact cannot revive cleaned status across three cleanup APIs. No equivalent replacement coverage is claimed. Audit1352: focused Linux unit selections validated on source head b638e07d395b76af3ba6b03761a1a0fe7e5e026e. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1360: focused Linux unit selections validated on source head 415c9cffc2d10024131ec4b6721767a22195de6d. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11352",
         "https://github.com/stablyai/orca/pull/11353"
       ],
       "invariant": "PreCompact is never registered and may never move a pane, because it fires before the compact is validated and an aborted compact emits it alone. Only a manual PostCompact may mark done, and it does so as a session boundary so completion-reactive consumers stay out of it; an automatic PostCompact claims nothing and writes no compact-scoped state, since its turn resumes and emits its own Stop. A completion either CLEARS a row or publishes nothing at all: it never creates a row, so a retired pane cannot be resurrected, and it never restates one it cannot clear, because a restated row loses restoredUnconfirmed and restarts the staleness clock. A manual /compact only completes at an idle prompt, so it retires a subagent that exists ONLY as a disk snapshot; live evidence -- a child observed in this runtime, an unclassifiable running background task, a registered session cron -- still holds the pane at working. A completion requires a valid provider prompt UUID, matches the pane owner by connection and provider session -- except on a restored row, which carries the previous connection and may carry no session at all -- and is applied at most once per compact. Ownership is enforced by the client that owns pane identity; a relay forwards and defers, so a cold relay cache cannot swallow the clearing event. A relay predating this contract forwards its own mapping, so ingest drops automatic envelopes, stamps the boundary on manual ones, carries the summarized turn label onto a promptless completion with or without a trigger, and classifies a trigger-stripped replay by payload state while still enforcing ownership. Kimi and other Claude-compatible vendors remain fail-closed.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Replay the measured Claude compact streams through a harness gated on the real CLAUDE_EVENTS, plus local HTTP, relay, SSH, and persisted-restore transports. Require the successful manual stream to end done with sessionBoundary set, and require PreCompact delivered directly past the registration gate to produce no normalized event. Drive the restart shape end to end over loopback HTTP from a hydrated row: a pane held only by a snapshot child must reach done with an empty roster, while a pane a runtime child still owns must emit NOTHING and keep its row object identical, so receivedAt and restoredUnconfirmed both survive. Deliver the restored-row cases with the hydrated row still cached at completion time and assert the summarizer published nothing, so the restored-row branch is the branch under test. Require rejection of an automatic completion, a completion with absent prompt UUID, a foreign provider session, a duplicate, and a completion for a pane with no cached row; require an automatic completion to leave the live turn working until its own Stop closes it. Require a relay with a COLD cache to forward the completion while the client still refuses to mint a row it never had. Require ingest to drop legacy automatic envelopes, stamp the boundary on legacy manual ones, carry the summarized turn label onto a promptless completion with and without a trigger, and leave a FINISHED pane finished when a trigger-stripped working replay arrives. Require pane, tab, and server cleanup to revoke compact completion authority. Assert managed hook settings, emitted event order, and the authoritative lastStatusByPaneKey snapshot.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts --reporter=dot",
-        "Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both"
-      ],
-      "testFiles": [
-        "src/main/claude/compact-status-registration.test.ts",
-        "src/wsl-guest/agent-hook-server.test.ts",
-        "src/main/agent-hooks/server-claude-normalization.test.ts",
-        "src/main/agent-hooks/server-last-status-write.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/claude/compact-status-registration.test.ts",
-          "assertions": [
-            "PostCompact is written into the settings Claude reads, and PreCompact is absent from those settings",
-            "the measured successful manual compact ends a stuck working row as a done with sessionBoundary",
-            "PreCompact delivered directly past the registration gate produces no normalized event",
-            "an automatic completion emits nothing, leaves the live turn working, and the turn's own Stop still closes it",
-            "a completion retires a child that exists only as a disk snapshot, but a runtime child or an active session cron still holds the pane and the completion then publishes nothing at all",
-            "a completion clears a restored row -- delivered while that hydrated row is still the cached owner -- despite a stale connection id or a missing provider session, but never resurrects a retired pane",
-            "absent prompt UUID, foreign provider session, and duplicate delivery fail closed"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-17",
-          "runner": "manual",
-          "platform": "macos",
-          "command": "Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both",
-          "result": "passed",
-          "durationSeconds": 1080,
-          "summary": "Claude Code 2.1.227. Aborted compact emitted PreCompact(manual) ALONE with no PostCompact and no SessionStart(compact). Successful compact emitted PreCompact(manual), a start-less SubagentStop (agent_type empty, no matching SubagentStart), SessionStart(source=compact), PostCompact(manual), then Notification(idle_prompt). /compact emitted no UserPromptSubmit in either the TUI or print mode; session_id was stable across the whole window while the compact allocated its own prompt_id."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 20,
         "scope": "Historical pre-audit selector budget; changed selectors have no new runtime measurement. Unchanged receipts remain scoped to their own commands."
@@ -8668,6 +8637,8 @@
         "Keep automatic compact completion disabled until a generation-unique provider identity is proven."
       ],
       "knownGaps": [
+        "No active assertion references remain after this audit; surviving unaffected receipts record historical scope only.",
+        "Audit1610 deletes compact-status-registration.test.ts, a mock-only registration inventory. Its alarms are retired without equivalent replacement coverage; this gate has no remaining active assertion references.",
         "Audit1595 removes canned hook/installer/status/capture inventories and fixture-owned command scanners without equivalent replacement coverage. Retained checks cover local filesystem/symlink/shell/pipe and TCP deadlines, ACP timeline/journal failures, naming ownership/races and numeric release helper composition; provider/remote/process inventories remain injected. Native Windows cases are platform-gated; no actual remote deployment, Fastlane/Apple API or native provider identity proof.",
         "No live Linux, Windows, WSL, paired-runtime, or real-SSH manual compact journey was run.",
         "Claude versions before prompt_id support intentionally cannot complete a manual compact row through PostCompact.",
@@ -8680,7 +8651,8 @@
         "Audit1318 retired the complete dated receipt after source coverage changed. Its result does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-11-04\",\n          \"runner\": \"local\",\n          \"platform\": \"linux\",\n          \"command\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm --config.verifyDepsBeforeRun=false test src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-turn-state.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts --maxWorkers=2\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener/normalization/agent-hook-listener-claude-turn-state.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts --reporter=dot\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 4.7,\n          \"summary\": \"Test Files  7 passed (7); Tests  87 passed (87). Deterministic fixtures; no physical phone or deployed mixed-host claim.\"\n        }",
         "Audit1340: src/main/agent-hooks/manual-compact-status-cleanup.test.ts removed. Late PostCompact cannot revive cleaned status across three cleanup APIs. No equivalent replacement coverage is claimed.",
         "Audit1340 historical platform/provider scope before source changes: {\"coveredPlatforms\":[\"macos\",\"linux\"],\"coveredProviders\":[\"local\",\"ssh\"]}. Remaining provider scope applies only to unchanged-source receipts.",
-        "Audit1340 historical assertion inventory for deleted/reduced sources; not current validated assertions:\n[\n  {\n    \"file\": \"src/main/agent-hooks/manual-compact-status-cleanup.test.ts\",\n    \"assertions\": [\n      \"pane, tab, and server cleanup revoke compact completion authority\"\n    ]\n  }\n]"
+        "Audit1340 historical assertion inventory for deleted/reduced sources; not current validated assertions:\n[\n  {\n    \"file\": \"src/main/agent-hooks/manual-compact-status-cleanup.test.ts\",\n    \"assertions\": [\n      \"pane, tab, and server cleanup revoke compact completion authority\"\n    ]\n  }\n]",
+        "Audit1610 retains this receipt as historical scope only after removing the gate’s last active assertion reference. Receipt fields preserved verbatim:\n{\n  \"date\": \"2026-08-17\",\n  \"runner\": \"manual\",\n  \"platform\": \"macos\",\n  \"command\": \"Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both\",\n  \"result\": \"passed\",\n  \"durationSeconds\": 1080,\n  \"summary\": \"Claude Code 2.1.227. Aborted compact emitted PreCompact(manual) ALONE with no PostCompact and no SessionStart(compact). Successful compact emitted PreCompact(manual), a start-less SubagentStop (agent_type empty, no matching SubagentStart), SessionStart(source=compact), PostCompact(manual), then Notification(idle_prompt). /compact emitted no UserPromptSubmit in either the TUI or print mode; session_id was stable across the whole window while the compact allocated its own prompt_id.\"\n}"
       ],
       "demotionRule": "Demote or quarantine if identity-mismatched completion can retire newer work, cleanup retains compact authority, or the focused gate flakes without a product or harness bug."
     },
@@ -16490,7 +16462,7 @@
       "id": "codex.state-db-backfill-recovery-bounds",
       "title": "Codex state DB backfill recovery has bounded process and timer use",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "codex-runtime",
       "layer": "main-process-supervisor",
       "surfaces": [
@@ -16500,44 +16472,16 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "wsl", "paired-runtime-host"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "wsl"],
-      "coverageNotes": "A deterministic injected claimant and clock cover exits before and after the former ten-second classification boundary, exact spawn/poll/backoff counts, transient exit and spawn-error recovery, owner-lock reacquisition, WSL routing, and cleanup. Live Windows, WSL, and paired-runtime-host process evidence remains uncollected.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1614 removes mocked backfill retry/private state assertions without equivalent replacement coverage. Retained tests exercise selected real child termination and timeout boundaries; they do not establish the retired gate assertions. Any historical receipts are retired when no current passed evidence remains. Historical scope before this audit: A deterministic injected claimant and clock cover exits before and after the former ten-second classification boundary, exact spawn/poll/backoff counts, transient exit and spawn-error recovery, owner-lock reacquisition, WSL routing, and cleanup. Live Windows, WSL, and paired-runtime-host process evidence remains uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/releases/tag/v1.4.177-rc.0"],
       "invariant": "One authoritative Codex state DB backfill supervisor spawns at most five claimants regardless of process lifetime, retains at most one child and one timer, rejects later automatic restarts after claimant exhaustion, and bounds pre-claim coordinator failures to five triggers while transient claimant and owner-lock failures can recover within those budgets.",
       "oracle": "Use an injected process and clock to exit every claimant at 10,001ms without waiting. Permanent failure must give up after five spawns and exits with exactly 15 poll timers and four backoffs, no live child or pending timer, and no safety-fuse abort; repeated triggers must reuse the exhausted result with zero new lock or runner calls. Separately fail twice at 10,001ms and complete on the third claimant, recover from a first-spawn error on attempt two, reacquire after a transient owner-lock failure, and cap permanent lock-root failures at five attempts across six triggers.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts"
-      ],
-      "testFiles": ["src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts"],
-      "assertionRefs": [
-        {
-          "file": "src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts",
-          "assertions": [
-            "does not restart an exhausted supervisor when later triggers arrive",
-            "releases a completed supervisor entry",
-            "releases a failed owner-lock attempt for later arbitration",
-            "bounds permanent coordinator failures across later triggers",
-            "bounds permanent claimant exits just beyond the fast-failure window",
-            "recovers after claimant exits just beyond the old fast-failure window",
-            "recovers after a transient process spawn error",
-            "routes a WSL managed home through its distro and Linux CODEX_HOME",
-            "does not interfere with a live supervisor from another Orca instance"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-07",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/codex-state-db-backfill-recovery.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/codex/history/index/codex-state-db-backfill-recovery.test.ts",
-          "durationSeconds": 0.4,
-          "summary": "Twelve deterministic recovery and owner-lock tests passed, including exact permanent and transient 10,001ms exit accounting, spawn-error recovery, trigger-level exhaustion memoization, bounded coordinator failure, successful owner-lock reacquisition, and zero retained children or timers."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 2,
         "scope": "deterministic main-process supervisor and owner-lock contract"
@@ -16560,6 +16504,7 @@
         "Keep exact spawn, exit, timer, backoff, cleanup, and transient-recovery assertions green."
       ],
       "knownGaps": [
+        "Audit1614 removes mocked backfill retry/private state assertions without equivalent replacement coverage. Retained tests exercise selected real child termination and timeout boundaries; they do not establish the retired gate assertions. Any historical receipts are retired when no current passed evidence remains.",
         "Live child-process behavior is represented by an injected EventEmitter claimant.",
         "Physical Windows, WSL, SSH, and paired-runtime-host journeys were not run."
       ],

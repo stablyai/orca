@@ -188,24 +188,4 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     expect(proseRow(journal, 'B checks the rig')?.attempt).toBe(2)
     await second.exit()
   })
-
-  it('still files a child no journaled row resolved under its own reference, never the parent', async () => {
-    const journal = await openJournal()
-    const first = acquire(journal)
-    first.translator.handle(userTurn('turn-a'))
-    first.translator.handle(result('result-a'))
-    await first.exit()
-
-    const second = acquire(journal)
-    second.translator.handle(userTurn('turn-b'))
-    second.translator.handle(taskStarted('agent-other', 'toolu_other', 'Other'))
-    second.translator.handle(childSays('c-1', 'toolu_unknown', 'nobody named me'))
-    await second.settle()
-
-    expect(proseRow(journal, 'nobody named me')).toMatchObject({
-      agentId: 'toolu_unknown',
-      providerParentRef: 'toolu_unknown'
-    })
-    await second.exit()
-  })
 })

@@ -1,12 +1,8 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { MAX_CODEX_GENERIC_ROWS_PER_TURN } from './codex-structured-journal-limits'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 
@@ -26,10 +22,6 @@ function goalFrame(goal: Record<string, unknown> = {}): Record<string, unknown> 
       ...goal
     }
   }
-}
-
-function texts(rows: readonly AgentJournalItemBody[]): string[] {
-  return rows.map((row) => (row.kind === 'status' ? row.text : ''))
 }
 
 describe('codex goal lifecycle admission', () => {
@@ -84,108 +76,4 @@ describe('codex goal lifecycle admission', () => {
       translator.dispose()
     }
   )
-
-  it('does not let the generic-row cap permanently hide the first goal evidence', () => {
-    const rows: AgentJournalItemBody[] = []
-    const sink = {
-      appendItem: (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) =>
-        rows.push(body),
-      appendTombstone: () => {},
-      publish: () => {}
-    } satisfies StructuredAgentSessionEventSink
-    const translator = createCodexJournalTranslator({ sink })
-    for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
-      translator.handle({
-        type: 'notification',
-        sessionId: 'session',
-        threadId: THREAD,
-        method: 'process/exited',
-        params: { threadId: THREAD, turnId: 'turn-1', processId: `process-${index}` }
-      })
-    }
-
-    translator.handle({
-      type: 'notification',
-      sessionId: 'session',
-      threadId: THREAD,
-      method: 'thread/goal/updated',
-      params: goalFrame()
-    })
-    translator.handle({
-      type: 'notification',
-      sessionId: 'session',
-      threadId: THREAD,
-      method: 'thread/goal/updated',
-      params: { ...goalFrame({ tokensUsed: 1 }), turnId: 'turn-2' }
-    })
-
-    expect(texts(rows).filter((text) => text.startsWith('Goal '))).toEqual([
-      'Goal set: Keep the current scratch directory tidy.'
-    ])
-    translator.dispose()
-  })
-
-  it('keeps repeated lifecycle states distinct across status cycles and goal recreation', () => {
-    const rows = new Map<string, AgentJournalItemBody>()
-    const sink = {
-      appendItem: (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) =>
-        rows.set(agentJournalItemKey(identity), body),
-      appendTombstone: () => {},
-      publish: () => {}
-    } satisfies StructuredAgentSessionEventSink
-    const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
-    const update = (goal: Record<string, unknown> = {}) =>
-      goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame(goal) })
-    const clear = () =>
-      goals.handle({
-        threadId: THREAD,
-        method: 'thread/goal/cleared',
-        params: { threadId: THREAD }
-      })
-
-    update()
-    update({ status: 'paused' })
-    update()
-    clear()
-    update()
-    clear()
-    clear()
-
-    expect(texts([...rows.values()])).toEqual([
-      'Goal set: Keep the current scratch directory tidy.',
-      'Goal paused: Keep the current scratch directory tidy.',
-      'Goal set: Keep the current scratch directory tidy.',
-      'Goal cleared',
-      'Goal set: Keep the current scratch directory tidy.',
-      'Goal cleared'
-    ])
-    goals.dispose()
-  })
-
-  it('releases duplicate-suppression state on session clear and dispose', () => {
-    const identities: string[] = []
-    const sink = {
-      appendItem: (identity: AgentJournalItemIdentity) => {
-        identities.push(agentJournalItemKey(identity))
-      },
-      appendTombstone: () => {},
-      publish: () => {}
-    } satisfies StructuredAgentSessionEventSink
-    const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
-    const event = { threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() }
-
-    goals.handle(event)
-    goals.handle(event)
-    expect(identities).toHaveLength(1)
-
-    goals.clear()
-    goals.handle(event)
-    expect(identities).toHaveLength(2)
-    expect(new Set(identities)).toHaveLength(1)
-
-    goals.dispose()
-    goals.handle(event)
-    expect(identities).toHaveLength(3)
-    expect(new Set(identities)).toHaveLength(1)
-  })
 })

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  appendFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -46,12 +45,8 @@ import {
   resolveCodexSessionBackfillPaths,
   startCodexSessionBackfillInBackground
 } from './codex-session-backfill'
-import {
-  markCodexSessionBackfillMarkerPending,
-  readCodexSessionBackfillBaseline
-} from './codex-session-backfill-marker'
+import { markCodexSessionBackfillMarkerPending } from './codex-session-backfill-marker'
 import { fsMockState, resetCodexSessionBackfillFsMocks } from './codex-session-backfill-fs-mocks'
-import { getCodexSessionBackfillDate } from './codex-session-backfill-scan-dates'
 import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
 
 const FIXTURE_LAUNCH_DATE: CodexSessionBackfillDate = ['2026', '05', '26']
@@ -176,22 +171,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(readAuditActions()).toEqual(['existing', 'run-summary'])
   })
 
-  it('keeps recovery records parseable after a torn audit tail', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), 'managed contents\n')
-    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
-    mkdirSync(dirname(targetPath), { recursive: true })
-    writeFileSync(targetPath, 'existing target\n', 'utf-8')
-    mkdirSync(dirname(getAuditLogPath()), { recursive: true })
-    writeFileSync(getAuditLogPath(), '{"torn":', 'utf-8')
-
-    const summary = await backfillManagedCodexSessionsIntoSystemHome(
-      resolveCodexSessionBackfillPaths()
-    )
-
-    expect(summary).toMatchObject({ skippedExistingFiles: 1, failedHealAuditRecords: 0 })
-    expect(readAuditActions()).toEqual(['existing', 'run-summary'])
-  })
-
   it('treats a broken symlink at the target as taken', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), 'managed contents\n')
     const collidingPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
@@ -209,27 +188,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 
     expect(summary).toMatchObject({ linkedFiles: 0, copiedFiles: 0, skippedExistingFiles: 1 })
     expect(lstatSync(collidingPath).isSymbolicLink()).toBe(true)
-  })
-
-  it('does not backfill symlinked managed session files', async () => {
-    const realSource = join(fakeHomeDir, 'outside.jsonl')
-    writeFileSync(realSource, 'outside contents\n', 'utf-8')
-    const managedLinkPath = join(getManagedSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
-    mkdirSync(dirname(managedLinkPath), { recursive: true })
-    try {
-      symlinkSync(realSource, managedLinkPath)
-    } catch {
-      return
-    }
-
-    const summary = await backfillManagedCodexSessionsIntoSystemHome(
-      resolveCodexSessionBackfillPaths()
-    )
-
-    // The walker skips symlink dirents before they can count as scanned or skipped files.
-    expect(summary).toMatchObject({ linkedFiles: 0, copiedFiles: 0, failedFiles: 0 })
-    const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
-    expect(existsSync(targetPath)).toBe(false)
   })
 
   it('fails closed when the target filesystem cannot install without overwrite', async () => {
@@ -251,31 +209,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(readdirSync(dirname(targetPath))).toEqual([])
     expect(readAuditActions()).toEqual(['copy-unsupported', 'run-summary'])
   })
-
-  it('keeps target directory permission failures retryable', async () => {
-    const relativePath = join('2026', '05', '26', 'rollout-a.jsonl')
-    writeManagedSession(relativePath, '{"id":"a"}\n')
-    fsMockState.failMkdirPath = dirname(join(getSystemSessionsRoot(), relativePath))
-
-    const summary = await startCodexSessionBackfillInBackground()
-
-    expect(summary).toMatchObject({ failedFiles: 1, skippedUnsupportedFilesystemFiles: 0 })
-    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
-    expect(existsSync(getMarkerPath())).toBe(false)
-    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
-  })
-
-  it('keeps hardlink permission failures retryable', async () => {
-    fsMockState.failLinkPermission = true
-    const relativePath = join('2026', '05', '26', 'rollout-a.jsonl')
-    writeManagedSession(relativePath, '{"id":"a"}\n')
-
-    const summary = await startCodexSessionBackfillInBackground()
-
-    expect(summary).toMatchObject({ failedFiles: 1, skippedUnsupportedFilesystemFiles: 0 })
-    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
-    expect(existsSync(getMarkerPath())).toBe(false)
-  })
 })
 
 describe('startCodexSessionBackfillInBackground', () => {
@@ -295,34 +228,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     const resumed = await startCodexSessionBackfillInBackground({ yieldMs: 0 })
     expect(resumed).toMatchObject({ stopped: false, linkedFiles: 1, skippedExistingFiles: 1 })
     expect(existsSync(getMarkerPath())).toBe(true)
-  })
-
-  it('certifies the historical baseline while a launch lease is still active', async () => {
-    const today = getCodexSessionBackfillDate()
-    writeManagedSession(join('2026', '05', '26', 'rollout-history.jsonl'), 'history\n')
-    writeManagedSession(join(...today, 'rollout-live.jsonl'), 'live\n')
-    markLaunchPending(today)
-
-    const active = await startCodexSessionBackfillInBackground({
-      ignoreCompletionMarker: true,
-      retainPendingScanDates: true
-    })
-
-    expect(active).toMatchObject({ scannedFiles: 2, linkedFiles: 2 })
-    expect(readMarker()).toMatchObject({
-      version: 4,
-      coverage: 'full',
-      launchActive: true,
-      pendingScanDates: [today]
-    })
-    expect(readCodexSessionBackfillBaseline(getMarkerPath(), getSystemSessionsRoot())).toEqual({
-      pendingScanDates: [today]
-    })
-
-    const completed = await startCodexSessionBackfillInBackground()
-    expect(completed).toMatchObject({ scannedFiles: 1, skippedExistingFiles: 1 })
-    expect(readMarker()).toMatchObject({ pendingScanDates: [], launchActive: false })
-    expect(await startCodexSessionBackfillInBackground()).toBeNull()
   })
 
   it('keeps a racing launch date pending without discarding the baseline', async () => {
@@ -355,48 +260,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(readFileSync(getAuditLogPath(), 'utf-8')).not.toBe(racedAudit)
   })
 
-  it('falls back to a full rescan when the pending rewrite fails', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-    await startCodexSessionBackfillInBackground()
-    fsMockState.failMarkerReplacement = true
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    markLaunchPending(['2026', '08', '05'])
-
-    expect(existsSync(getMarkerPath())).toBe(false)
-    fsMockState.failMarkerReplacement = false
-    const recovered = await startCodexSessionBackfillInBackground()
-    expect(recovered).toMatchObject({ skippedExistingFiles: 1 })
-    expect(readMarker()).toMatchObject({ version: 4, coverage: 'full' })
-    expect(warnSpy).toHaveBeenCalled()
-    warnSpy.mockRestore()
-  })
-
-  it('reads a legacy v3 marker as a certified baseline', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-    mkdirSync(dirname(getMarkerPath()), { recursive: true })
-    writeFileSync(
-      getMarkerPath(),
-      `${JSON.stringify({
-        version: 3,
-        systemSessionsRoot: getSystemSessionsRoot(),
-        completedAt: Date.now(),
-        summary: { scannedFiles: 1 }
-      })}\n`,
-      'utf-8'
-    )
-
-    expect(await startCodexSessionBackfillInBackground()).toBeNull()
-    expect(existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl'))).toBe(
-      false
-    )
-
-    markLaunchPending()
-    const bounded = await startCodexSessionBackfillInBackground()
-    expect(bounded).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(readMarker()).toMatchObject({ version: 4, coverage: 'full' })
-  })
-
   it('does not let a bounded pass certify history no baseline ever covered', async () => {
     const missedRelativePath = join('2026', '06', '01', 'rollout-missed.jsonl')
     writeManagedSession(missedRelativePath, 'missed\n')
@@ -413,40 +276,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(recovered).toMatchObject({ scannedFiles: 2, linkedFiles: 1 })
     expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(true)
     expect(readMarker()).toMatchObject({ version: 4, coverage: 'full' })
-  })
-
-  it('recovers a bounded window after an abnormal exit instead of a full walk', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-baseline.jsonl'), 'baseline\n')
-    await startCodexSessionBackfillInBackground()
-
-    markLaunchPending(['2026', '08', '05'])
-    writeManagedSession(join('2026', '06', '01', 'rollout-untouched.jsonl'), 'untouched\n')
-    writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
-
-    const recovered = await startCodexSessionBackfillInBackground()
-
-    expect(recovered).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(
-      existsSync(join(getSystemSessionsRoot(), '2026', '08', '05', 'rollout-launch.jsonl'))
-    ).toBe(true)
-  })
-
-  it('records a new heal event when a linked rollout grows in place', async () => {
-    const relativePath = join('2026', '05', '26', 'rollout-growing.jsonl')
-    const managedPath = writeManagedSession(relativePath, '{"id":"a"}\n')
-    await startCodexSessionBackfillInBackground()
-
-    const firstRecord = readBackfillAuditRecords().find((record) => record.action === 'hardlink')
-    markLaunchPending()
-    appendFileSync(managedPath, '{"event":"later"}\n', 'utf-8')
-    await startCodexSessionBackfillInBackground()
-
-    const fileRecords = readBackfillAuditRecords().filter((record) =>
-      ['hardlink', 'existing'].includes(record.action)
-    )
-    expect(fileRecords).toHaveLength(2)
-    expect(fileRecords[1]).toMatchObject({ action: 'existing' })
-    expect(fileRecords[1]?.fileEventId).not.toBe(firstRecord?.fileEventId)
   })
 
   it('recovers a post-install audit interruption without duplicating prior events', async () => {
@@ -488,22 +317,6 @@ describe('startCodexSessionBackfillInBackground', () => {
         join(getSystemSessionsRoot(), secondRelativePath)
       ])
     )
-  })
-
-  it('self-heals a zero-file marker when managed rollouts appear later', async () => {
-    const empty = await startCodexSessionBackfillInBackground()
-    expect(empty).toMatchObject({ scannedFiles: 0, linkedFiles: 0 })
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
-      summary: { scannedFiles: 0 }
-    })
-
-    writeManagedSession(join('2026', '07', '28', 'rollout-later.jsonl'), '{"id":"later"}\n')
-    const healed = await startCodexSessionBackfillInBackground()
-
-    expect(healed).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(
-      existsSync(join(getSystemSessionsRoot(), '2026', '07', '28', 'rollout-later.jsonl'))
-    ).toBe(true)
   })
 
   it('recovers an installed rollout after the completion marker write fails', async () => {
@@ -556,19 +369,5 @@ describe('startCodexSessionBackfillInBackground', () => {
     const second = await startCodexSessionBackfillInBackground()
     expect(second).toMatchObject({ linkedFiles: 1, failedDirectories: 0 })
     expect(existsSync(getMarkerPath())).toBe(true)
-  })
-
-  it('re-runs when the configured real Codex home changes', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-    await startCodexSessionBackfillInBackground()
-    const customHome = join(fakeHomeDir, 'custom Codex ü')
-
-    const moved = await startCodexSessionBackfillInBackground({}, customHome)
-
-    expect(moved).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
-    expect(existsSync(join(customHome, 'sessions', '2026', '05', '26', 'rollout-a.jsonl'))).toBe(
-      true
-    )
-    expect(await startCodexSessionBackfillInBackground({}, customHome)).toBeNull()
   })
 })

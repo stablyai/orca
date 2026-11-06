@@ -60,7 +60,7 @@ import { useNativeChatFileLinkContext } from './use-native-chat-file-link-contex
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
-import { handleNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import { handleNativeChatPaneShortcut } from './native-chat-pane-shortcut'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function NativeChatResolvedView({
@@ -328,7 +328,7 @@ export function NativeChatResolvedView({
       }}
       onKeyDownCapture={(event) => {
         find.onKeyDownCapture(event)
-        if (handleNativeChatSplitShortcut(event, keybindings, contextMenuActions)) {
+        if (handleNativeChatPaneShortcut(event, keybindings, contextMenuActions)) {
           return
         }
         rootInput.onKeyDownCapture(event)
