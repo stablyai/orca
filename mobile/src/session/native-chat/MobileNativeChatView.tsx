@@ -233,7 +233,7 @@ export function MobileNativeChatView({
     readSubagentPage
   })
   const { data, history, focusedId, shownFolded, rowSource, scopeKey } = subagent
-  const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
+  const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey })
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
   const { handleSend, loadEarlier, loadEarlierNearTop, onScroll } = useMobileNativeChatListActions({
