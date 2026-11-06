@@ -234,7 +234,12 @@ describe('agent row chat or CLI', () => {
         detectionTarget={{ kind: 'local' }}
         hostName={null}
         renderPermissions={() => null}
-        local={{ settings, updateSettings: vi.fn(), saveEnvironment: vi.fn(async () => {}) }}
+        local={{
+          settings,
+          updateSettings: vi.fn(),
+          saveEnvironment: vi.fn(async () => {}),
+          savePostPasteSubmitInput: vi.fn(async () => {})
+        }}
       />
     )
     const view = render(element(), { wrapper: TooltipProvider })
@@ -298,7 +303,12 @@ describe('agent row chat or CLI', () => {
         detectionTarget={{ kind: 'local' }}
         hostName={null}
         renderPermissions={() => null}
-        local={{ settings, updateSettings: vi.fn(), saveEnvironment: vi.fn(async () => {}) }}
+        local={{
+          settings,
+          updateSettings: vi.fn(),
+          saveEnvironment: vi.fn(async () => {}),
+          savePostPasteSubmitInput: vi.fn(async () => {})
+        }}
       />,
       { wrapper: TooltipProvider }
     )
@@ -343,7 +353,12 @@ describe('agent row chat or CLI', () => {
           detectionTarget={{ kind: 'local' }}
           hostName={null}
           renderPermissions={() => null}
-          local={{ settings, updateSettings, saveEnvironment: vi.fn(async () => {}) }}
+          local={{
+            settings,
+            updateSettings,
+            saveEnvironment: vi.fn(async () => {}),
+            savePostPasteSubmitInput: vi.fn(async () => {})
+          }}
         />
       )
       inventory.detected = null
@@ -415,7 +430,12 @@ describe('agent row chat or CLI', () => {
         detectionTarget={{ kind: 'local' }}
         hostName={null}
         renderPermissions={() => null}
-        local={{ settings, updateSettings, saveEnvironment: vi.fn(async () => {}) }}
+        local={{
+          settings,
+          updateSettings,
+          saveEnvironment: vi.fn(async () => {}),
+          savePostPasteSubmitInput: vi.fn(async () => {})
+        }}
       />
     )
     const view = render(element(), { wrapper: TooltipProvider })
@@ -460,7 +480,12 @@ describe('agent row chat or CLI', () => {
           detectionTarget={{ kind: 'local' }}
           hostName={null}
           renderPermissions={() => null}
-          local={{ settings, updateSettings, saveEnvironment: vi.fn(async () => {}) }}
+          local={{
+            settings,
+            updateSettings,
+            saveEnvironment: vi.fn(async () => {}),
+            savePostPasteSubmitInput: vi.fn(async () => {})
+          }}
         />,
         { wrapper: TooltipProvider }
       )
