@@ -38,9 +38,10 @@ vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
 }))
 vi.mock('../../src/shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Only the host's process-table seam: a test names what the recorded owner's PID shows.
-const owners = vi.hoisted(() => ({
-  probe: null as Mock<(record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>> | null
-}))
+const owners = vi.hoisted(() => {
+  const none = <T>(): T | null => null
+  return { probe: none<Mock<(record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>>>() }
+})
 vi.mock(
   '../../src/main/runtime/agent-session/structured-agent-session-owner-probe',
   async (original) => {

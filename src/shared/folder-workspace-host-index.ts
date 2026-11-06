@@ -1,6 +1,4 @@
-/** Folder host resolution for many folders over one catalog: the same decisions as
- *  `resolveQualifiedFolderWorkspaceResult`, with rows indexed once, pins settled before any repo is
- *  read, and each group subtree's and each path's repos summarized once for every folder asking. */
+/** Batch folder host decisions with shared group and containment-prefix summaries. */
 
 import type { ExecutionHostId } from './execution-host'
 import type {
@@ -18,13 +16,59 @@ import {
   qualifyFolderWorkspaceRows,
   type FolderScopeRepos
 } from './folder-workspace-host-decision'
-import {
-  createNormalizedPathInsideOrEqualMatcher,
-  normalizeRuntimePathForComparison
-} from './cross-platform-path'
+import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import { buildProjectGroupChildIndex } from './project-groups'
 
 type Group = FolderHostCatalog['projectGroups'][number]
+type RepoPathNode = { children: Map<number, RepoPathNode>; repos: FolderScopeRepos }
+
+function indexRepoPaths(repos: readonly FolderHostRepo[]): (root: string) => FolderScopeRepos {
+  const createNode = (): RepoPathNode => ({ children: new Map(), repos: NO_FOLDER_SCOPE_REPOS })
+  const root = createNode()
+  for (const repo of repos) {
+    const rawPath = repo.path
+    const path = rawPath ? normalizeRuntimePathForComparison(rawPath) : ''
+    if (!path) {
+      continue
+    }
+    const summary = folderScopeRepo(repo)
+    let node = root
+    // An empty normalized root uses '/' as its descendant boundary.
+    if (path.charCodeAt(0) === 47) {
+      node.repos = mergeFolderScopeRepos(node.repos, summary)
+    }
+    const drive = /^[a-z]:\//i.test(path)
+    for (let i = 0; i < path.length; i++) {
+      const code = path.charCodeAt(i)
+      let child = node.children.get(code)
+      if (!child) {
+        child = createNode()
+        node.children.set(code, child)
+      }
+      node = child
+      // Exact paths and slash-boundary ancestors match; '/' and drive roots include every tail.
+      if (
+        i === path.length - 1 ||
+        path.charCodeAt(i + 1) === 47 ||
+        (i === 0 && code === 47) ||
+        (i === 2 && drive)
+      ) {
+        node.repos = mergeFolderScopeRepos(node.repos, summary)
+      }
+    }
+  }
+  return (path) => {
+    let node = root
+    for (let i = 0; i < path.length; i++) {
+      const child = node.children.get(path.charCodeAt(i))
+      if (!child) {
+        return NO_FOLDER_SCOPE_REPOS
+      }
+      node = child
+    }
+    return node.repos
+  }
+}
 
 function bucket<V>(map: Map<string, V[]>, key: string, value: V): void {
   const rows = map.get(key)
@@ -63,7 +107,6 @@ export function createFolderWorkspaceHostIndex<W extends FolderHostWorkspace>(st
     }
   }
   const subtreeRepos = new Map<string, FolderScopeRepos>()
-  const pathRepos = new Map<string, FolderScopeRepos>()
 
   // Groups reachable from each other (a parent cycle in malformed data) share one summary: one
   // iterative strongly-connected-component pass closes each component after everything it reaches,
@@ -131,28 +174,11 @@ export function createFolderWorkspaceHostIndex<W extends FolderHostWorkspace>(st
     return subtreeRepos.get(rootId)!
   }
 
-  // Keyed by the containment predicate's own comparison identity, so equivalent spellings of one
-  // directory share a scan; matchers take the raw root, as that identity is not idempotent for WSL.
-  let normalizedRepoPaths: (string | null)[] | undefined
-  const insidePath = (folderPath: string): FolderScopeRepos => {
-    const key = normalizeRuntimePathForComparison(folderPath)
-    let repos = pathRepos.get(key)
-    if (!repos) {
-      normalizedRepoPaths ??= state.repos.map(({ path }) =>
-        path ? normalizeRuntimePathForComparison(path) : null
-      )
-      const inside = createNormalizedPathInsideOrEqualMatcher(folderPath)
-      repos = NO_FOLDER_SCOPE_REPOS
-      for (const [index, repo] of state.repos.entries()) {
-        const path = normalizedRepoPaths[index]
-        if (path && inside(path)) {
-          repos = mergeFolderScopeRepos(repos, folderScopeRepo(repo))
-        }
-      }
-      pathRepos.set(key, repos)
-    }
-    return repos
-  }
+  // One current-catalog index, built only when pins/groups cannot settle a host. Normalize raw
+  // paths once: re-normalizing a WSL key would fold its case-sensitive Linux tail.
+  let pathRepos: ReturnType<typeof indexRepoPaths> | undefined
+  const insidePath = (folderPath: string): FolderScopeRepos =>
+    (pathRepos ??= indexRepoPaths(state.repos))(normalizeRuntimePathForComparison(folderPath))
 
   return (folderWorkspaceId, requiredHostId) =>
     qualifyFolderWorkspaceRows(

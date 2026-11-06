@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { resolveQualifiedFolderWorkspaceResult } from './folder-workspace-execution-host'
 import { createFolderWorkspaceHostIndex } from './folder-workspace-host-index'
+import { collectionVisits } from './collection-visits.test-fixture'
 
 const group = (
   id: string,
@@ -97,6 +98,79 @@ it('decides every folder exactly as the scalar resolver does, for any required h
       ])
     }
   }
+})
+
+it('keeps literal containment boundaries, root and host semantics for unusual saved paths', () => {
+  const paths = [
+    '/',
+    '//',
+    'C:\\',
+    '\\\\server\\share',
+    '/a',
+    '/ab',
+    '/a/.',
+    '/a/..',
+    '/a/b',
+    '/a/./b',
+    '/a/../b',
+    '/a\\b',
+    '/caf\u00e9',
+    '//wsl.localhost/Ubuntu/home/Me',
+    '//wsl.localhost/Ubuntu/home/me'
+  ]
+  const state = {
+    projectGroups: [group('empty')],
+    folderWorkspaces: paths.map((folderPath, i) => folder(`path-${i}`, 'empty', { folderPath })),
+    repos: [
+      { path: '/a/b/leaf', connectionId: 'first' },
+      { path: '/a/b/leaf', connectionId: 'second' },
+      { path: '/ab/leaf', connectionId: 'sibling' },
+      { path: '/a/./b/leaf', connectionId: 'dots' },
+      { path: '/a/../b/leaf', connectionId: 'parent' },
+      { path: '/a\\b/file', connectionId: 'backslash' },
+      { path: '/cafe\u0301/leaf', connectionId: 'unicode' },
+      { path: 'c:/root/leaf', connectionId: 'drive' },
+      { path: '\\\\server\\share\\leaf', connectionId: 'unc' },
+      { path: '\\\\wsl$\\Ubuntu\\home\\Me\\leaf', connectionId: 'wsl-upper' },
+      { path: '//wsl.localhost/ubuntu/home/me/leaf', connectionId: 'wsl-lower' },
+      { path: '' },
+      { path: '//' }
+    ]
+  }
+  for (const repos of [state.repos, state.repos.toReversed()]) {
+    const current = { ...state, repos }
+    const resolve = createFolderWorkspaceHostIndex(current)
+    for (const row of current.folderWorkspaces) {
+      expect(resolve(row.id)).toEqual(resolveQualifiedFolderWorkspaceResult(current, row.id))
+    }
+  }
+})
+
+it('shares a populated containment subtree without enumerating it for each query', () => {
+  const work: number[] = []
+  for (const n of [20, 200]) {
+    const state = {
+      projectGroups: [group('empty')],
+      folderWorkspaces: Array.from({ length: n }, (_, i) => folder(`folder-${i}`, 'empty')),
+      repos: Array.from({ length: n }, (_, i) => ({
+        path: `/work/leaf-${i}`,
+        connectionId: 'remote'
+      }))
+    }
+    const measured = collectionVisits(() => {
+      const resolve = createFolderWorkspaceHostIndex(state)
+      return state.folderWorkspaces.map((row) => resolve(row.id))
+    })
+    expect(measured.value).toEqual(
+      state.folderWorkspaces.map((row) => resolveQualifiedFolderWorkspaceResult(state, row.id))
+    )
+    // One catalog/character pass, plus one fixed folder/group decision and root walk per query.
+    const characters =
+      state.repos.reduce((sum, repo) => sum + repo.path.length, 0) + n * '/work'.length
+    expect(measured.visits + measured.lookups).toBeLessThanOrEqual(4 * (characters + 2 * n))
+    work.push(measured.visits + measured.lookups)
+  }
+  expect(work[1]).toBeLessThanOrEqual(12 * work[0])
 })
 
 it('reads each repo path once for every spelling of a directory', () => {

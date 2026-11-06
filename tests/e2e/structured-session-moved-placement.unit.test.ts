@@ -140,9 +140,9 @@ const localApply = (
   state: ReturnType<typeof makeState>
 ) =>
   frames.reduce(
-    (current, frame) => applyLocalStructuredSessionTabSnapshots(current as never, [frame]),
+    (current, frame) => applyLocalStructuredSessionTabSnapshots(current, [frame]),
     state
-  ) as ReturnType<typeof makeState>
+  )
 const shown = (state: ReturnType<typeof makeState>, workspace: string) =>
   (state.unifiedTabsByWorktree[workspace] ?? [])
     .map((tab) => (tab.contentType === 'agent-session' ? tab.entityId : tab.contentType))
@@ -316,7 +316,7 @@ it('a subscriber gets no frame before startup restores the visible chats, even a
   }).dispatchStreaming(
     { id: 'phone-subscribe', authToken: 'token', method: 'session.tabs.subscribeAll', params: {} },
     (message) => {
-      const parsed = JSON.parse(message) as { result?: (typeof messages)[number] }
+      const parsed: { result?: (typeof messages)[number] } = JSON.parse(message)
       messages.push(parsed.result ?? {})
     },
     {
@@ -370,10 +370,15 @@ it("saved reads and saves drop moved chats in one pass that keeps other hosts' t
   const [moved] = saved.unifiedTabs![rig.old]
   const groupId = saved.tabGroups![rig.old][0].id
   // An unrelated tab beside it, and another host's tab with the same session and tab ID.
-  const terminal = { ...moved, id: 'terminal-1', entityId: 'terminal-1', contentType: 'terminal' }
+  const terminal: Tab = {
+    ...moved,
+    id: 'terminal-1',
+    entityId: 'terminal-1',
+    contentType: 'terminal'
+  }
   const foreignWorkspace = 'foreign::/other'
-  const foreign = { ...moved, worktreeId: foreignWorkspace, executionHostId: 'runtime:other' }
-  const session = {
+  const foreign: Tab = { ...moved, worktreeId: foreignWorkspace, executionHostId: 'runtime:other' }
+  const session: typeof saved = {
     ...saved,
     unifiedTabs: {
       ...saved.unifiedTabs,
@@ -395,7 +400,7 @@ it("saved reads and saves drop moved chats in one pass that keeps other hosts' t
       ]
     },
     activeTabIdByWorktree: { [rig.old]: moved.id, [foreignWorkspace]: foreign.id }
-  } as typeof saved
+  }
   const once = withPlacedSavedChatTabs(session, 'local')
   expect(once.unifiedTabs![rig.old].map((tab) => tab.id)).toEqual(['terminal-1'])
   expect(once.tabGroups![rig.old]).toMatchObject([
@@ -609,8 +614,16 @@ it('an already-current reveal reads no unrelated saved workspace at any populati
     const tabs = Object.fromEntries(
       Array.from({ length: width }, (_, i) => [
         `removed-${i}::/unrelated/${i}`,
-        Array.from({ length: 10 }, (_, j) => ({
+        Array.from({ length: 10 }, (_, j): Tab => ({
+          id: `unrelated-${i}-${j}`,
+          groupId: `unrelated-${i}`,
+          worktreeId: `removed-${i}::/unrelated/${i}`,
           contentType: 'agent-session',
+          label: '',
+          customLabel: null,
+          color: null,
+          sortOrder: j,
+          createdAt: 0,
           get entityId() {
             count++
             return `unrelated-${i}-${j}`
@@ -621,7 +634,7 @@ it('an already-current reveal reads no unrelated saved workspace at any populati
     const saved = rig.profile.getWorkspaceSession('local')!
     const spy = vi
       .spyOn(rig.profile, 'getWorkspaceSession')
-      .mockReturnValue({ ...saved, unifiedTabs: { ...saved.unifiedTabs, ...tabs } } as never)
+      .mockReturnValue({ ...saved, unifiedTabs: { ...saved.unifiedTabs, ...tabs } })
     expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: true } })
     expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: true } })
     spy.mockRestore()

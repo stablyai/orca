@@ -224,14 +224,18 @@ function counted<T extends object>(row: T, reads: { count: number }): T {
 
 /** A copy of `items` that counts each element read. */
 function countedOrder(items: string[], reads: { count: number }): string[] {
-  return new Proxy(items, {
-    get: (target, key) => {
-      if (typeof key === 'string' && /^\d+$/.test(key)) {
+  const copy = [...items]
+  for (const [index, item] of items.entries()) {
+    Object.defineProperty(copy, index, {
+      configurable: true,
+      enumerable: true,
+      get: () => {
         reads.count++
+        return item
       }
-      return target[key as keyof string[]]
-    }
-  })
+    })
+  }
+  return copy
 }
 
 type PruneCase = { owner: string; executionHostId: ExecutionHostId | undefined; site: string }
@@ -375,7 +379,11 @@ it.each<PruneCase>([
           prunes.writes++
           // The pruner copies a root map once when it changes one of its entries.
           const before = useAppStore.getState()
-          const written = args[0] as Partial<typeof before>
+          // The pruner writes its copied maps directly, never through an updater.
+          if (typeof args[0] === 'function') {
+            throw new Error('Pruner must write its copied maps directly')
+          }
+          const written = args[0]
           for (const key of [
             'unifiedTabsByWorktree',
             'groupsByWorktree',
@@ -456,9 +464,14 @@ it.each<PruneCase>([
         oldKeyOrderReads: 16 + 4 * population.references,
         catalogReads: 64 + 2 * (n + 2)
       }
-      for (const [key, value] of Object.entries(budget)) {
-        ;(budgets[key] ??= []).push(value)
-        expect(counts[key as keyof typeof counts]).toBeLessThanOrEqual(value)
+      for (const key of [
+        'keysCopied',
+        'oldKeyTabReads',
+        'oldKeyOrderReads',
+        'catalogReads'
+      ] as const) {
+        ;(budgets[key] ??= []).push(budget[key])
+        expect(counts[key]).toBeLessThanOrEqual(budget[key])
       }
       vi.restoreAllMocks()
       resume = vi.spyOn(sleepingResume, 'resumeSleepingAgentSessionsForWorktree').mockReturnValue(1)

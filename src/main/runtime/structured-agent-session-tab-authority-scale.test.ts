@@ -30,10 +30,53 @@ import * as removal from '../../shared/workspace-layout/workspace-layout-removal
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 import { collectionVisits, fieldReads } from '../../shared/collection-visits.test-fixture'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
-import type { ProfileStateDomainReplacement } from '../persistence/loading-store/profile-state-authority'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+
+function treePopulation(tree: TabGroupLayoutNode | undefined): number {
+  if (!tree) {
+    return 0
+  }
+  return tree.type === 'leaf' ? 1 : 1 + treePopulation(tree.first) + treePopulation(tree.second)
+}
+
+function savedLayoutPopulation(session: Parameters<typeof layoutLoad.loadWorkspaceLayout>[1]) {
+  const groups = Object.values(session.tabGroups ?? {}).flat()
+  return {
+    workspaces: new Set([
+      ...Object.keys(session.tabsByWorktree ?? {}),
+      ...Object.keys(session.unifiedTabs ?? {}),
+      ...Object.keys(session.tabGroups ?? {}),
+      ...Object.keys(session.tabGroupLayouts ?? {}),
+      ...Object.keys(session.openFilesByWorktree ?? {}),
+      ...Object.keys(session.browserTabsByWorktree ?? {})
+    ]).size,
+    tabs: Object.values(session.unifiedTabs ?? {}).flat().length,
+    groups: groups.length,
+    order: groups.reduce((sum, group) => sum + group.tabOrder.length, 0),
+    tree: Object.values(session.tabGroupLayouts ?? {}).reduce(
+      (sum, node) => sum + treePopulation(node),
+      0
+    )
+  }
+}
+
+function modelLayoutPopulation(loaded: Parameters<typeof layoutSave.saveWorkspaceLayout>[0]) {
+  const workspaces = Object.values(loaded.layout.workspaces)
+  return {
+    workspaces: workspaces.length,
+    tabs: workspaces.reduce((sum, workspace) => sum + workspace.tabs.length, 0),
+    groups: workspaces.reduce((sum, workspace) => sum + workspace.groups.length, 0),
+    order: workspaces.reduce(
+      (sum, workspace) => sum + workspace.groups.reduce((n, group) => n + group.tabOrder.length, 0),
+      0
+    ),
+    tree: workspaces.reduce((sum, workspace) => sum + treePopulation(workspace.groupLayout), 0)
+  }
+}
+
+type LayoutPopulation = ReturnType<typeof savedLayoutPopulation>
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
 vi.mock('../claude/claude-cli-flag-prewarm', () => ({
@@ -417,26 +460,49 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
       derivingOld = false
     }
   })
-  const closePhase = { loads: 0, loadedRows: 0, serializations: 0, serializedTabs: 0 }
+  const closePhase: {
+    loads: number
+    loadedRows: number
+    serializations: number
+    serializedTabs: number
+    loadInputs: LayoutPopulation[]
+    saveInputs: LayoutPopulation[]
+  } = {
+    loads: 0,
+    loadedRows: 0,
+    serializations: 0,
+    serializedTabs: 0,
+    loadInputs: [],
+    saveInputs: []
+  }
   // Every whole-layout load and serialization (a load serializes once to normalize; an applied
   // command serializes its result), with the saved rows each was given. The serializer body
   // searches its ordered tabs once per tab (workspace-layout-save.ts:50-51), an unchanged main
   // cost: its visits are reported, not bounded here.
+  const loadInputs: LayoutPopulation[] = []
+  const legacyRowInputs: number[] = []
+  const saveInputs: LayoutPopulation[] = []
   const loads = { calls: 0, rows: 0, oldRows: 0 }
   const load = layoutLoad.loadWorkspaceLayout
   vi.spyOn(layoutLoad, 'loadWorkspaceLayout').mockImplementation((...args) => {
+    const input = savedLayoutPopulation(args[1])
+    loadInputs.push(input)
+    legacyRowInputs.push(Object.values(args[1].tabsByWorktree ?? {}).flat().length)
     loads.calls++
     loads.rows += Object.values(args[1].unifiedTabs ?? {}).flat().length
     loads.oldRows += args[1].unifiedTabs?.[OLD]?.length ?? 0
     if (closingOld || derivingOld) {
       closePhase.loads++
       closePhase.loadedRows += Object.values(args[1].unifiedTabs ?? {}).flat().length
+      closePhase.loadInputs.push(input)
     }
     return load(...args)
   })
   const serializations = { calls: 0, tabs: 0, oldTabs: 0, visits: 0 }
   const serialize = layoutSave.saveWorkspaceLayout
   vi.spyOn(layoutSave, 'saveWorkspaceLayout').mockImplementation((loaded) => {
+    const input = modelLayoutPopulation(loaded)
+    saveInputs.push(input)
     const { workspaces } = loaded.layout
     serializations.calls++
     serializations.tabs += Object.values(workspaces).reduce((sum, w) => sum + w.tabs.length, 0)
@@ -447,6 +513,7 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
         (sum, w) => sum + w.tabs.length,
         0
       )
+      closePhase.saveInputs.push(input)
     }
     const serialized = collectionVisits(() => serialize(loaded))
     serializations.visits += serialized.visits
@@ -485,20 +552,24 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
       return value
     }
   const controller = RuntimeWorkspaceSessionController.prototype
-  for (const name of ['getHostIdsForTab', 'getHostIdsForTabs'] as const) {
-    const lookup = controller[name]
-    // Absent only in the scalar build this measurement is checked against.
-    if (lookup) {
-      vi.spyOn(controller, name).mockImplementation(function (
-        this: RuntimeWorkspaceSessionController,
-        worktreeId: string,
-        tabs: never
-      ) {
-        const call = () => lookup.call(this, worktreeId, tabs)
-        return worktreeId === OLD ? counted('holders', call)() : call()
-      } as never)
-    }
-  }
+  const lookupOne = controller.getHostIdsForTab
+  vi.spyOn(controller, 'getHostIdsForTab').mockImplementation(function (
+    this: RuntimeWorkspaceSessionController,
+    worktreeId,
+    tabId
+  ) {
+    const call = () => lookupOne.call(this, worktreeId, tabId)
+    return worktreeId === OLD ? counted('holders', call)() : call()
+  })
+  const lookupMany = controller.getHostIdsForTabs
+  vi.spyOn(controller, 'getHostIdsForTabs').mockImplementation(function (
+    this: RuntimeWorkspaceSessionController,
+    worktreeId,
+    tabIds
+  ) {
+    const call = () => lookupMany.call(this, worktreeId, tabIds)
+    return worktreeId === OLD ? counted('holders', call)() : call()
+  })
   const resolve = tabLayout.chatTabCloseCommand
   vi.spyOn(tabLayout, 'chatTabCloseCommand').mockImplementation((workspace, worktreeId, closes) =>
     worktreeId === OLD
@@ -539,21 +610,25 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
   })
   const saves = vi.spyOn(rig.profile, 'setWorkspaceSession')
   let durableWrites = 0
-  for (const write of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
-    const original = ProfileStateSqliteAuthority.prototype[write] as (
-      replacements: readonly ProfileStateDomainReplacement[],
-      ...rest: never[]
-    ) => void
-    vi.spyOn(ProfileStateSqliteAuthority.prototype, write).mockImplementation(function (
-      this: ProfileStateSqliteAuthority,
-      replacements: readonly ProfileStateDomainReplacement[],
-      ...rest: never[]
-    ) {
-      durableWrites++
-      closeWrites += closingOld ? 1 : 0
-      return original.call(this, replacements, ...rest)
-    })
+  const wrote = () => {
+    durableWrites++
+    closeWrites += closingOld ? 1 : 0
   }
+  const writeDomains = ProfileStateSqliteAuthority.prototype.writeSerializedDomains
+  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'writeSerializedDomains').mockImplementation(
+    function (this: ProfileStateSqliteAuthority, replacements, automationRunsAfter) {
+      wrote()
+      return writeDomains.call(this, replacements, automationRunsAfter)
+    }
+  )
+  const writeComplete = ProfileStateSqliteAuthority.prototype.writeCompleteSerializedDomains
+  vi.spyOn(
+    ProfileStateSqliteAuthority.prototype,
+    'writeCompleteSerializedDomains'
+  ).mockImplementation(function (this: ProfileStateSqliteAuthority, replacements) {
+    wrote()
+    return writeComplete.call(this, replacements)
+  })
   let notified = 0
   let oldKeyNotices = 0
   rig.runtime.onMobileSessionTabsChanged((result) => {
@@ -619,6 +694,44 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     notified,
     oldKeyNotices,
     ...work
+  }
+  // Every supplied dimension is recorded at the actual call-through boundary; the unchanged
+  // serializer's inner searches remain a separate main cost.
+  console.log(
+    'K18_STARTUP_INPUTS',
+    JSON.stringify({ n, hints, load: loadInputs, legacyRowInputs, save: saveInputs })
+  )
+  console.log(
+    'K18_CLOSE_INPUTS',
+    JSON.stringify({ n, hints, load: closePhase.loadInputs, save: closePhase.saveInputs })
+  )
+  const partition = {
+    workspaces: n + 2,
+    tabs: hints ? 4 * n + n / 10 + 1 : 3 * n + 1,
+    groups: (hints ? 3 : 2) * n + 1,
+    order: hints ? 4 * n + n / 10 + 1 : 3 * n + 1,
+    tree: (hints ? 5 : 3) * n
+  }
+  expect(legacyRowInputs.every((rows) => rows === 0)).toBe(true)
+  for (const input of [...loadInputs, ...saveInputs]) {
+    for (const dimension of ['workspaces', 'tabs', 'groups', 'order', 'tree'] as const) {
+      expect(input[dimension], dimension).toBeLessThanOrEqual(partition[dimension])
+    }
+  }
+  for (const [inputs, passes] of [
+    [closePhase.loadInputs, 4],
+    [closePhase.saveInputs, 6]
+  ] as const) {
+    expect(inputs.length).toBeLessThanOrEqual(passes)
+    for (const dimension of ['workspaces', 'tabs', 'groups', 'order', 'tree'] as const) {
+      for (const input of inputs) {
+        expect(input[dimension], dimension).toBeLessThanOrEqual(partition[dimension])
+      }
+      expect(
+        inputs.reduce((sum, input) => sum + input[dimension], 0),
+        dimension
+      ).toBeLessThanOrEqual(inputs.length * partition[dimension])
+    }
   }
   expect(counts.buckets).toBe(result.size)
   expect(counts.carried).toBe(0)

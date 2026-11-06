@@ -17,6 +17,8 @@ import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-ide
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Project } from '../../src/shared/project-types'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../../src/main/wsl'
+import { normalizeRuntimePathForComparison } from '../../src/shared/cross-platform-path'
+import * as folderHostDecision from '../../src/shared/folder-workspace-host-decision'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
@@ -65,7 +67,15 @@ it('recovers a linked checkout after restart from its owner listing, scanning ea
     ok: true,
     worktrees: [checkout(`${root}/main`, true), checkout(`${root}/topic`)]
   })
-  const cached = vi.spyOn(rig.runtime as never, 'projectCachedWorktrees')
+  // The cached catalog projection, which this recovery must not need.
+  let cached = 0
+  const project = rig.runtime['projectCachedWorktrees'].bind(rig.runtime)
+  Object.defineProperty(rig.runtime, 'projectCachedWorktrees', {
+    value: (...args: Parameters<typeof project>) => {
+      cached++
+      return project(...args)
+    }
+  })
   expect(await reveal(rig)).toMatchObject({
     ok: true,
     result: { ok: true, workspaceId: `current::${root}/topic` }
@@ -75,7 +85,7 @@ it('recovers a linked checkout after restart from its owner listing, scanning ea
     workspaceKind: 'git-worktree'
   })
   expect(rig.runtime.scans).toEqual(['current'])
-  expect(cached).not.toHaveBeenCalled()
+  expect(cached).toBe(0)
 })
 
 it.each([
@@ -178,12 +188,12 @@ const folderRow = (id: string, extra: Partial<FolderWorkspace>): FolderWorkspace
 /** Every read of a catalog row counts, including reads inside the shared host resolver. The
  *  extra rows reach discovery only through the store's catalog reads. */
 function countCatalogReads(rig: Awaited<ReturnType<typeof retired>>) {
-  const counter = {
-    reads: 0,
-    repos: [] as Repo[],
-    folders: [] as FolderWorkspace[],
-    groups: [] as ProjectGroup[]
-  }
+  const counter: {
+    reads: number
+    repos: Repo[]
+    folders: FolderWorkspace[]
+    groups: ProjectGroup[]
+  } = { reads: 0, repos: [], folders: [], groups: [] }
   // Every read of a catalog row's own fields counts.
   const counted = <T extends object>(rows: readonly T[]): T[] =>
     rows.map((row) => {
@@ -378,6 +388,131 @@ it.each(sameDirectoryScopes)(
     expect(counts[1].admit).toBeLessThanOrEqual(12 * counts[0].admit)
   }
 )
+
+it('bounds distinct containment roots by path characters in preparation and fresh admission', async () => {
+  const parts = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
+  const path = `${root}/${parts.join('/')}`
+  const rig = await retired(path, 'folder')
+  rig.profile.addRepo(storeRepo({ id: 'current', path, kind: 'folder' }))
+  const catalog = countCatalogReads(rig)
+  const empty = () => ({ edges: 0, nodes: 0, folds: 0, comparisonCharacters: 0 })
+  let work = empty()
+  let candidates = new Set<string>()
+  let boundaries = new Set<string>()
+  const get = Map.prototype.get
+  const set = Map.prototype.set
+  vi.spyOn(Map.prototype, 'get').mockImplementation(function (this: Map<unknown, unknown>, key) {
+    if (typeof key === 'number') {
+      work.edges++
+    }
+    return get.call(this, key)
+  })
+  vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key,
+    value
+  ) {
+    if (typeof key === 'number') {
+      work.nodes++
+    }
+    return set.call(this, key, value)
+  })
+  const merge = folderHostDecision.mergeFolderScopeRepos
+  vi.spyOn(folderHostDecision, 'mergeFolderScopeRepos').mockImplementation((...args) => {
+    work.folds++
+    return merge(...args)
+  })
+  // Keep the original failing scan visible too; counting only the new index would pass on main.
+  const startsWith = String.prototype.startsWith
+  vi.spyOn(String.prototype, 'startsWith').mockImplementation(function (this: string, prefix, at) {
+    if (candidates.has(String(this)) && boundaries.has(prefix)) {
+      work.comparisonCharacters += prefix.length
+    }
+    return startsWith.call(this, prefix, at)
+  })
+  const counts: { prepare: number; admit: number }[] = []
+  for (const n of [20, 200]) {
+    const spellings = Array.from(
+      { length: n },
+      (_, mask) =>
+        `${root}/${parts.map((part, bit) => `${mask & (1 << bit) ? './' : ''}${part}`).join('/')}`
+    )
+    catalog.folders = spellings.map((folderPath, i) =>
+      folderRow(`mask-${i}`, { projectGroupId: `mask-${i}`, folderPath })
+    )
+    catalog.groups = spellings.map((_, i) => groupRow(`mask-${i}`))
+    catalog.repos = spellings.map((spelling, i) =>
+      storeRepo({
+        id: `mask-${i}`,
+        path: `${spelling}/leaf-${i}`,
+        kind: 'folder',
+        executionHostId: 'ssh:foreign'
+      })
+    )
+    const repoPaths = rig.profile
+      .getRepos()
+      .map((repo) => normalizeRuntimePathForComparison(repo.path))
+    const roots = spellings.map(normalizeRuntimePathForComparison)
+    const repoCharacters = repoPaths.reduce((sum, value) => sum + value.length, 0)
+    const queryCharacters = roots.reduce((sum, value) => sum + value.length, 0)
+    candidates = new Set(repoPaths)
+    boundaries = new Set(roots.map((value) => `${value}/`))
+    const bound = 2 * repoCharacters + queryCharacters + repoPaths.length + catalog.groups.length
+    work = empty()
+    const prepared = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+    const prepare = work
+    work = empty()
+    prepared.admit()
+    const admit = work
+    prepared.release()
+    expect(prepared.location.workspaceId).toBe(`current::${path}`)
+    for (const [phase, measured] of Object.entries({ prepare, admit })) {
+      console.log(
+        'K12_CONTAINMENT_WORK',
+        JSON.stringify({ n, phase, repoCharacters, queryCharacters, bound, measured })
+      )
+      expect(measured.edges, phase).toBeLessThanOrEqual(repoCharacters + queryCharacters)
+      expect(measured.nodes, phase).toBeLessThanOrEqual(repoCharacters)
+      expect(measured.folds, phase).toBeLessThanOrEqual(
+        repoCharacters + repoPaths.length + catalog.groups.length
+      )
+      expect(
+        measured.edges + measured.folds + measured.comparisonCharacters,
+        phase
+      ).toBeLessThanOrEqual(bound)
+    }
+    counts.push({
+      prepare: prepare.edges + prepare.folds + prepare.comparisonCharacters,
+      admit: admit.edges + admit.folds + admit.comparisonCharacters
+    })
+  }
+  expect(counts[1].prepare).toBeLessThanOrEqual(12 * counts[0].prepare)
+  expect(counts[1].admit).toBeLessThanOrEqual(12 * counts[0].admit)
+})
+
+it('rechecks a changed containment host before admitting a recovered chat', async () => {
+  const path = `${root}/one/two`
+  const spelling = `${root}/./one/two`
+  const rig = await retired(path, 'folder')
+  rig.profile.addRepo(storeRepo({ id: 'current', path, kind: 'folder' }))
+  const catalog = countCatalogReads(rig)
+  catalog.folders = [folderRow('scope', { projectGroupId: 'scope', folderPath: spelling })]
+  catalog.groups = [groupRow('scope')]
+  catalog.repos = [
+    storeRepo({
+      id: 'foreign',
+      path: `${spelling}/leaf`,
+      kind: 'folder',
+      executionHostId: 'ssh:foreign'
+    })
+  ]
+  const prepared = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+  expect(prepared.location.workspaceId).toBe(`current::${path}`)
+  catalog.repos = [{ ...catalog.repos[0]!, executionHostId: 'local' }]
+  expect(() => prepared.admit()).toThrow(StructuredWorkspaceUnavailable)
+  prepared.release()
+  expect(rig.store.getRecord(B)?.location.workspaceId).toBe(`retired::${path}`)
+})
 
 it('refuses many rival registrations at the directory without locating each one, at N and 10N', async () => {
   const rig = await retired(root, 'folder')

@@ -33,21 +33,33 @@ export function collectionVisits<T>(run: () => T): { value: T } & Tally {
   }
 }
 
+const isMethod = (value: unknown): value is Method => typeof value === 'function'
+const isIterator = (value: unknown): value is Iterator<unknown> =>
+  typeof value === 'object' && value !== null && 'next' in value && isMethod(value.next)
+
 function patchCollections(): () => void {
-  const originals: [Record<PropertyKey, Method>, PropertyKey, Method][] = []
+  const originals: [CollectionPrototype, PropertyKey, PropertyDescriptor][] = []
+  // Through descriptors: the built-in method is replaced as it was defined, and put back the same.
   const replace = (
     target: CollectionPrototype,
     key: PropertyKey,
     wrap: (original: Method) => Method
   ) => {
-    const proto = target as unknown as Record<PropertyKey, Method>
-    originals.push([proto, key, proto[key]!])
-    proto[key] = wrap(proto[key]!)
+    const descriptor = Object.getOwnPropertyDescriptor(target, key)
+    const original: unknown = descriptor?.value
+    if (!descriptor || !isMethod(original)) {
+      throw new TypeError(`collectionVisits: no built-in method ${String(key)}`)
+    }
+    originals.push([target, key, descriptor])
+    Object.defineProperty(target, key, { ...descriptor, value: wrap(original) })
   }
   const counting = (original: Method) =>
     function (this: unknown) {
-      // eslint-disable-next-line prefer-rest-params -- a rest parameter would iterate and count itself
-      const iterator = original.apply(this, arguments as never) as Iterator<unknown>
+      // `arguments`, not a rest parameter: that would iterate an array and count itself.
+      const iterator: unknown = Reflect.apply(original, this, arguments)
+      if (!isIterator(iterator)) {
+        return iterator
+      }
       return Object.assign(Object.create(iteratorPrototype), {
         next: () => {
           const step = iterator.next()
@@ -74,12 +86,15 @@ function patchCollections(): () => void {
         (original) =>
           // No spread or rest here: either would iterate an array and count itself.
           function (this: unknown, callback: unknown, thisArg: unknown) {
+            // A callback that is not one fails in the built-in itself, uncounted.
+            if (!isMethod(callback)) {
+              return original.call(this, callback, thisArg)
+            }
             return original.call(
               this,
               function (this: unknown) {
                 visit()
-                // eslint-disable-next-line prefer-rest-params -- see above
-                return (callback as Method).apply(this, arguments as never)
+                return Reflect.apply(callback, this, arguments)
               },
               thisArg
             )
@@ -94,7 +109,7 @@ function patchCollections(): () => void {
       key,
       (original) =>
         function (this: unknown[], search: unknown, from: unknown) {
-          const at = indexOf.call(this, search, from as number)
+          const at: number = Reflect.apply(indexOf, this, arguments)
           visit(at === -1 ? this.length : at + 1)
           return original.call(this, search, from)
         }
@@ -117,8 +132,8 @@ function patchCollections(): () => void {
     }
   }
   return () => {
-    for (const [proto, key, original] of originals.toReversed()) {
-      proto[key] = original
+    for (const [proto, key, descriptor] of originals.toReversed()) {
+      Object.defineProperty(proto, key, descriptor)
     }
   }
 }
@@ -165,7 +180,7 @@ export function fieldReads() {
       return 0
     }
     const children = node.type === 'split' ? [node.first, node.second] : []
-    watch(node as unknown as Fields)
+    watch(node)
     return 1 + children.reduce((sum, child) => sum + watchTree(child), 0)
   }
   return {

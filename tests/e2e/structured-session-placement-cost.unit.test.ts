@@ -98,13 +98,14 @@ it.each([20, 200])(
     rig.runtime.onMobileSessionTabsChanged((result) => {
       delivered.notifications++
       delivered.elements +=
-        result.tabs.length + result.tabGroups.reduce((sum, group) => sum + group.tabOrder.length, 0)
+        result.tabs.length +
+        result.tabGroups!.reduce((sum, group) => sum + group.tabOrder.length, 0)
       delivered.bytes += JSON.stringify(result).length
     })
     // The window's own frame, its chat order split across groups of ten.
     const frame = (version: number) => {
       const whole = windowFrame(rig.old, version, [notes], listed)
-      const order = whole.tabGroups[0]!.tabOrder
+      const order = whole.tabGroups![0]!.tabOrder
       return {
         ...whole,
         tabGroups: Array.from({ length: Math.ceil(order.length / 10) }, (_, i) => ({
@@ -120,14 +121,15 @@ it.each([20, 200])(
     // group's order once per chat (mobile-session-tab-merge.ts:209). Both read N² entries for N
     // chats in one workspace, so this graph as a whole is not linear. What is bounded instead is
     // how often their callers run and how much input they get: a fixed number of passes per phase.
-    const inherited = {
+    const unmeasured = () => ({
       titleVisits: 0,
       chatOrderVisits: 0,
       projections: 0,
       projectedTabs: 0,
       chatOrderMerges: 0,
       chatOrderInput: 0
-    }
+    })
+    const inherited = unmeasured()
     const title = rig.runtime['structuredConversationTabName'].bind(rig.runtime)
     Object.defineProperty(rig.runtime, 'structuredConversationTabName', {
       value: (workspaceId: string, sessionId: string) => {
@@ -169,9 +171,7 @@ it.each([20, 200])(
       identities.mockClear()
       rows.mockClear()
       Object.assign(delivered, { notifications: 0, elements: 0, bytes: 0 })
-      for (const key of Object.keys(inherited) as (keyof typeof inherited)[]) {
-        inherited[key] = 0
-      }
+      Object.assign(inherited, unmeasured())
       const records = recordQueries(rig.store)
       const synced = collectionVisits(run)
       const published = collectionVisits(() =>
@@ -258,18 +258,25 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
   const patches = vi.spyOn(rig.profile, 'patchWorkspaceSession')
   // What reaches the profile database through flush, and the writes it announces.
   const written = { domains: 0, bytes: 0, notified: 0 }
-  for (const name of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
-    const write = ProfileStateSqliteAuthority.prototype[name]
-    vi.spyOn(ProfileStateSqliteAuthority.prototype, name).mockImplementation(function (
-      this: ProfileStateSqliteAuthority,
-      replacements: readonly ProfileStateDomainReplacement[],
-      ...rest: never[]
-    ) {
-      written.domains += replacements.length
-      written.bytes += replacements.reduce((sum, entry) => sum + (entry.payload?.length ?? 0), 0)
-      return write.call(this, replacements, ...rest)
-    })
+  const wrote = (replacements: readonly ProfileStateDomainReplacement[]) => {
+    written.domains += replacements.length
+    written.bytes += replacements.reduce((sum, entry) => sum + (entry.payload?.length ?? 0), 0)
   }
+  const writeDomains = ProfileStateSqliteAuthority.prototype.writeSerializedDomains
+  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'writeSerializedDomains').mockImplementation(
+    function (this: ProfileStateSqliteAuthority, replacements, automationRunsAfter) {
+      wrote(replacements)
+      return writeDomains.call(this, replacements, automationRunsAfter)
+    }
+  )
+  const writeComplete = ProfileStateSqliteAuthority.prototype.writeCompleteSerializedDomains
+  vi.spyOn(
+    ProfileStateSqliteAuthority.prototype,
+    'writeCompleteSerializedDomains'
+  ).mockImplementation(function (this: ProfileStateSqliteAuthority, replacements) {
+    wrote(replacements)
+    return writeComplete.call(this, replacements)
+  })
   rig.profile.onStateWritten(() => written.notified++)
   const placements = vi.spyOn(placement, 'structuredSessionPlacementAllowed')
   // The pure filter the handlers run, on its real input: the owner-map keys and tree-node fields
@@ -339,7 +346,7 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
                     ...moved!,
                     worktreeId: workspace,
                     groupId: `${workspace}-b`,
-                    executionHostId: 'runtime:other'
+                    executionHostId: 'runtime:other' as const
                   }
                 ]
               : []),
@@ -441,7 +448,7 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
         ['e', 'editor', moved!.executionHostId]
       ])
       const [, b, c] = groupsOf(workspace)
-      expect(placed.tabGroups[workspace]).toEqual(
+      expect(placed.tabGroups![workspace]).toEqual(
         twin(workspace) ? groupsOf(workspace) : [{ ...b, tabOrder: ['t'], recentTabIds: ['t'] }, c]
       )
       expect(placed.tabGroupLayouts?.[workspace]).toEqual(
@@ -455,24 +462,25 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
     // other host's rows, are its input's own objects.
     const { input: unfiltered, output: kept } = filtered.at(-1)!
     for (const workspace of unaffected) {
-      expect(kept.unifiedTabs[workspace]).toBe(unfiltered.unifiedTabs[workspace])
+      expect(kept.unifiedTabs![workspace]).toBe(unfiltered.unifiedTabs![workspace])
       expect(kept.tabGroups?.[workspace]).toBe(unfiltered.tabGroups?.[workspace])
       expect(kept.tabGroupLayouts?.[workspace]).toBe(unfiltered.tabGroupLayouts?.[workspace])
     }
     for (const workspace of workspaces.filter(twin)) {
       const foreign = (state: WorkspaceSessionState) =>
-        state.unifiedTabs[workspace]?.find((tab) => tab.executionHostId === 'runtime:other')
+        state.unifiedTabs![workspace]?.find((tab) => tab.executionHostId === 'runtime:other')
       expect(foreign(kept)).toBe(foreign(unfiltered))
     }
     // After the store, the saved values match.
     for (const workspace of unaffected) {
-      expect(placed.unifiedTabs[workspace]).toEqual(session.unifiedTabs[workspace])
-      expect(placed.tabGroups[workspace]).toEqual(session.tabGroups[workspace])
+      expect(placed.unifiedTabs![workspace]).toEqual(session.unifiedTabs![workspace])
+      expect(placed.tabGroups![workspace]).toEqual(session.tabGroups![workspace])
       expect(placed.tabGroupLayouts?.[workspace]).toEqual(session.tabGroupLayouts?.[workspace])
     }
-    const read = (await phase('get', () =>
-      handlers.get('session:get')!({}, 'local')
-    )) as WorkspaceSessionState
+    const read = await phase('get', () => handlers.get('session:get')!({}, 'local'))
+    if (!isWorkspaceSession(read)) {
+      throw new Error('session:get returned no workspace session')
+    }
     expect(read.unifiedTabs).toEqual(placed.unifiedTabs)
     await phase('patch', () =>
       handlers.get('session:patch')!({}, { unifiedTabs: session.unifiedTabs }, 'local')
@@ -562,20 +570,29 @@ it.each([20, 200])(
     const add = (key: string, count: number) => (work[key] = (work[key] ?? 0) + count)
     // Catalog rows read, while the reveal prepares and while its receipt admits the destination.
     let stage: 'prepare' | 'admission' = 'prepare'
-    for (const name of ['getRepos', 'getFolderWorkspaces', 'getProjectGroups'] as const) {
-      const read = rig.profile[name].bind(rig.profile) as () => unknown[]
-      vi.spyOn(rig.profile, name).mockImplementation(
-        (() =>
-          new Proxy(read(), {
-            get: (rows, key) => {
-              if (typeof key === 'string' && /^\d+$/.test(key)) {
-                add(`${stage}CatalogRows`, 1)
-              }
-              return rows[key as keyof typeof rows]
+    // Each read returns a copy whose rows count as they are read.
+    const counted =
+      <Row>(read: () => Row[]) =>
+      () => {
+        const rows = [...read()]
+        rows.forEach((row, index) =>
+          Object.defineProperty(rows, index, {
+            configurable: true,
+            enumerable: true,
+            get: () => {
+              add(`${stage}CatalogRows`, 1)
+              return row
             }
-          })) as never
-      )
-    }
+          })
+        )
+        return rows
+      }
+    const repos = counted(rig.profile.getRepos.bind(rig.profile))
+    const folders = counted(rig.profile.getFolderWorkspaces.bind(rig.profile))
+    const groups = counted(rig.profile.getProjectGroups.bind(rig.profile))
+    vi.spyOn(rig.profile, 'getRepos').mockImplementation(repos)
+    vi.spyOn(rig.profile, 'getFolderWorkspaces').mockImplementation(folders)
+    vi.spyOn(rig.profile, 'getProjectGroups').mockImplementation(groups)
     const rebind = rig.store.rebindWorkspace.bind(rig.store)
     let removal: ReturnType<typeof acquireWatcherRemovalGate> | undefined
     let overtake = true
@@ -599,19 +616,20 @@ it.each([20, 200])(
       }
     )
     // The receipt's own collection work: draft copy, runtime attribution and the row diff.
-    for (const [module, name, key] of [
-      [storeDraft, 'draftAgentSessionStoreState', 'draftCopy'],
-      [attribution, 'attributeAgentSessionRuntime', 'attribution'],
-      [storeDraft, 'agentSessionStoreDraftRowWrites', 'diff']
-    ] as const) {
-      const original = (module as Record<string, (...args: never[]) => unknown>)[name]!
-      vi.spyOn(module as never, name as never).mockImplementation(((...args: never[]) => {
-        const counted = collectionVisits(() => original(...args))
-        add(`${key}Visits`, counted.visits)
-        add(`${key}Lookups`, counted.lookups)
-        return counted.value
-      }) as never)
-    }
+    const measured =
+      <Args extends unknown[], Result>(key: string, run: (...args: Args) => Result) =>
+      (...args: Args) => {
+        const visited = collectionVisits(() => run(...args))
+        add(`${key}Visits`, visited.visits)
+        add(`${key}Lookups`, visited.lookups)
+        return visited.value
+      }
+    const draftCopy = measured('draftCopy', storeDraft.draftAgentSessionStoreState)
+    const attributed = measured('attribution', attribution.attributeAgentSessionRuntime)
+    const diff = measured('diff', storeDraft.agentSessionStoreDraftRowWrites)
+    vi.spyOn(storeDraft, 'draftAgentSessionStoreState').mockImplementation(draftCopy)
+    vi.spyOn(attribution, 'attributeAgentSessionRuntime').mockImplementation(attributed)
+    vi.spyOn(storeDraft, 'agentSessionStoreDraftRowWrites').mockImplementation(diff)
     const writes = vi.spyOn(recordRows, 'writeAgentSessionStoreRows')
     // Journal statements as executed, with their bindings.
     const prepare = rig.host.deps.journalDatabase.db.prepare.bind(rig.host.deps.journalDatabase.db)
@@ -731,3 +749,6 @@ it.each([20, 200])(
     }
   }
 )
+
+const isWorkspaceSession = (value: unknown): value is WorkspaceSessionState =>
+  typeof value === 'object' && value !== null && 'unifiedTabs' in value && 'tabGroups' in value

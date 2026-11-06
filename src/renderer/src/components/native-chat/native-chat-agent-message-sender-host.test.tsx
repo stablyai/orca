@@ -19,19 +19,22 @@ import {
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
-const transport = vi.hoisted(() => ({
-  bridge: vi.fn(),
-  subscribe: vi.fn(),
-  focusRenderer: vi.fn(() => false),
-  subscriptions: new Map<string, (event: AgentSessionStatusEvent) => void>(),
-  unsupported: false,
-  olderLookup: false,
-  /** Holds server-1's repo catalog reply until released, as a cold or reconnecting window sees it. */
-  catalog: null as Promise<void> | null,
-  catalogFails: false,
-  /** Where the host says the chat is before a reveal places it. */
-  locatedAt: null as string | null
-}))
+const transport = vi.hoisted(() => {
+  const none = <T,>(): T | null => null
+  return {
+    bridge: vi.fn(),
+    subscribe: vi.fn(),
+    focusRenderer: vi.fn(() => false),
+    subscriptions: new Map<string, (event: AgentSessionStatusEvent) => void>(),
+    unsupported: false,
+    olderLookup: false,
+    /** Holds server-1's repo catalog reply until released, as a cold or reconnecting window sees it. */
+    catalog: none<Promise<void>>(),
+    catalogFails: false,
+    /** Where the host says the chat is before a reveal places it. */
+    locatedAt: none<string>()
+  }
+})
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   ...moduleFactories.structuredAgentSessionClient(),
   subscribeStructuredAgentSessionStatus: transport.subscribe

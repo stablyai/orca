@@ -86,12 +86,21 @@ export async function retired(
 }
 
 // Only the host's window availability seam; no app or window is launched.
-export const attachWindow = (rig: AuthorityRig) =>
-  vi.spyOn(rig.runtime, 'getAvailableAuthoritativeWindow' as never).mockReturnValue({
+export const attachWindow = (rig: AuthorityRig) => {
+  const window = {
     id: 1,
     isDestroyed: () => false,
     webContents: { isDestroyed: () => false, send: vi.fn() }
-  } as never)
+  }
+  Object.defineProperty(rig.runtime, 'getAvailableAuthoritativeWindow', {
+    configurable: true,
+    writable: true,
+    value: () => window
+  })
+  return {
+    mockRestore: () => Reflect.deleteProperty(rig.runtime, 'getAvailableAuthoritativeWindow')
+  }
+}
 
 // A window's own frame for a workspace: its non-chat rows, and its chats only as group order.
 export const windowFrame = (
@@ -143,8 +152,18 @@ export const listAll = async (rig: AuthorityRig) => {
     }
   )
   expect(response).toMatchObject({ ok: true })
-  return (response as { result: { snapshots: RuntimeMobileSessionTabsResult[] } }).result.snapshots
+  if (!response.ok || !listedSnapshots(response.result)) {
+    throw new Error('session.tabs.listAll returned no snapshots')
+  }
+  return response.result.snapshots
 }
+const listedSnapshots = (
+  result: unknown
+): result is { snapshots: RuntimeMobileSessionTabsResult[] } =>
+  typeof result === 'object' &&
+  result !== null &&
+  'snapshots' in result &&
+  Array.isArray(result.snapshots)
 // The window's graph has published once, so inventory reads wait only on chat restoration.
 export const graphPublished = (rig: AuthorityRig) => {
   rig.runtime['graphStatus'] = 'ready'
@@ -153,40 +172,48 @@ export const graphPublished = (rig: AuthorityRig) => {
 export const ids = (frame: RuntimeMobileSessionTabsResult | undefined) =>
   (frame?.tabs ?? []).map((tab) => (tab.type === 'agent-session' ? tab.sessionId : tab.id)).sort()
 
-type Method = (...args: unknown[]) => unknown
 /** The record store's own record and unreadable-row maps, as their query bodies use them: keys
  *  looked up, and rows enumerated. Restore before the store's next write replaces them. */
 export function recordQueries(store: AgentSessionRecordStore) {
   const counts = { lookups: 0, enumerated: 0 }
   const state = store['state']
   const maps: Map<string, unknown>[] = [state.records, state.unreadableRecords]
+  const lookup =
+    <Args extends unknown[], Result>(query: (...args: Args) => Result) =>
+    (...args: Args) => {
+      counts.lookups++
+      return query(...args)
+    }
+  const enumerate = (iterate: () => Iterator<unknown>) => () => {
+    const rows = iterate()
+    return Object.assign(Object.create(Object.getPrototypeOf(rows)), {
+      next: () => {
+        const step = rows.next()
+        counts.enumerated += step.done ? 0 : 1
+        return step
+      }
+    })
+  }
+  const queries: PropertyKey[] = ['get', 'has', Symbol.iterator, 'entries', 'values', 'keys']
   for (const map of maps) {
-    const own = map as unknown as Record<PropertyKey, Method>
-    for (const key of ['get', 'has']) {
-      const query = own[key]!
-      own[key] = (id) => {
-        counts.lookups++
-        return query.call(map, id)
-      }
-    }
-    for (const key of [Symbol.iterator, 'entries', 'values', 'keys']) {
-      const iterate = own[key]!
-      own[key] = () => {
-        const rows = iterate.call(map) as IterableIterator<unknown>
-        return Object.assign(Object.create(Object.getPrototypeOf(rows)), {
-          next: () => {
-            const step = rows.next()
-            counts.enumerated += step.done ? 0 : 1
-            return step
-          }
-        })
-      }
-    }
+    const own = (key: PropertyKey, value: unknown) =>
+      Object.defineProperty(map, key, {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value
+      })
+    own('get', lookup(map.get.bind(map)))
+    own('has', lookup(map.has.bind(map)))
+    own(Symbol.iterator, enumerate(map[Symbol.iterator].bind(map)))
+    own('entries', enumerate(map.entries.bind(map)))
+    own('values', enumerate(map.values.bind(map)))
+    own('keys', enumerate(map.keys.bind(map)))
   }
   const restore = () => {
     for (const map of maps) {
-      for (const key of ['get', 'has', Symbol.iterator, 'entries', 'values', 'keys']) {
-        delete (map as unknown as Record<PropertyKey, Method>)[key]
+      for (const key of queries) {
+        Reflect.deleteProperty(map, key)
       }
     }
   }

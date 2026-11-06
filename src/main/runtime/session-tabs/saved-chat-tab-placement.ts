@@ -31,14 +31,14 @@ export function withPlacedSavedChatTabPatch(
   }
   const merged: WorkspaceSessionState = { ...stored, ...patch }
   const placed = withPlacedSavedChatTabs(merged, hostId)
-  return placed === merged
-    ? patch
-    : {
-        ...patch,
-        ...Object.fromEntries(
-          Object.entries(placed).filter(
-            ([key, value]) => value !== merged[key as keyof WorkspaceSessionState]
-          )
-        )
-      }
+  if (placed === merged) {
+    return patch
+  }
+  const before = new Map<string, unknown>(Object.entries(merged))
+  return {
+    ...patch,
+    ...Object.fromEntries(
+      Object.entries(placed).filter(([key, value]) => value !== before.get(key))
+    )
+  }
 }
