@@ -137,7 +137,14 @@ describe('mobileStructuredSendDelivery', () => {
     ['agent_session_operation_expired', 'Operation expired'],
     ['agent_session_operation_conflict', 'Operation conflict']
   ] as const)('reports the current %s refusal', (code, message) => {
-    expect(mobileStructuredSendDelivery({ status: 'refused', code, message })).toEqual({
+    expect(
+      mobileStructuredSendDelivery({
+        status: 'refused',
+        code,
+        message,
+        failure: { kind: 'refused', code }
+      })
+    ).toEqual({
       outcome: 'rejected',
       error: message
     })
@@ -148,7 +155,8 @@ describe('mobileStructuredSendDelivery', () => {
       mobileStructuredSendDelivery({
         status: 'refused',
         code: 'agent_session_operation_unknown',
-        message: 'Outcome unknown'
+        message: 'Outcome unknown',
+        failure: { kind: 'refused', code: 'agent_session_operation_unknown' }
       })
     ).toEqual({ outcome: 'unknown', error: null })
   })
@@ -157,7 +165,8 @@ describe('mobileStructuredSendDelivery', () => {
     expect(
       mobileStructuredSendDelivery({
         status: 'failed',
-        message: 'Your message was not sent. Send it again.'
+        message: 'Your message was not sent. Send it again.',
+        failure: { kind: 'failed' }
       })
     ).toEqual({ outcome: 'rejected', error: 'Your message was not sent. Send it again.' })
   })

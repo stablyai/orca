@@ -635,11 +635,18 @@
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",
+      "rename": "Rename",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
       "deleteAnyway": "Delete Anyway"
+    },
+    "workspaceRenameSheet": {
+      "title": "Rename Workspace",
+      "emptyUsesBranch": "Leave empty to use the branch name.",
+      "emptyUsesFolder": "Leave empty to use the folder name.",
+      "failed": "Couldn't rename the workspace. {{reason}}"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -1087,7 +1094,7 @@
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
       "pairingTemporarilyUnavailable": "Pairing temporarily unavailable",
-      "updateDesktopHint": "Update desktop Orca and sign in to connect from anywhere",
+      "sameNetworkOnlyHint": "Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again",
       "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",
@@ -2948,7 +2955,8 @@
       "copyMessage": "Copy message",
       "copyFailed": "Copy failed",
       "clipboardRejected": "The clipboard rejected the text.",
-      "selectText": "Select text"
+      "selectText": "Select text",
+      "rewind": "Rewind to here"
     },
     "notice": {
       "stoppedManually": "Stopped manually",
@@ -3217,6 +3225,25 @@
       "attachmentsUnsupported": "Remove attachments before setting a goal.",
       "pause": "Pause",
       "resume": "Resume"
+    },
+    "rewind": {
+      "title": "Rewind to here?",
+      "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
+      "confirm": "Rewind",
+      "unsupported": "This chat can't go back to an earlier message.",
+      "historyNotPaginated": "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here.",
+      "busy": "Available once the agent is idle and nothing in this chat is waiting on you.",
+      "staleEpoch": "The conversation changed. Review the latest messages and try again.",
+      "invalidTarget": "The conversation can't go back to this message. Nothing was changed.",
+      "historyLimit": "This conversation is too long to go back in. Nothing was changed.",
+      "providerRefused": "The agent couldn't go back to this message.",
+      "proofMismatch": "The agent's history didn't match this chat. Check the conversation before continuing.",
+      "outcomeUnknown": "Orca couldn't confirm whether the conversation went back to an earlier message. It checks before your next message is sent.",
+      "refused": "Orca couldn't go back to this message. Check the conversation before continuing.",
+      "unavailable": "Wait for the chat to finish connecting.",
+      "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
+      "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
+      "pending": "Wait for the conversation to go back to the earlier message."
     }
   },
   "sourceControl": {

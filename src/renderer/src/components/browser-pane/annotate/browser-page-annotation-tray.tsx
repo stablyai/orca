@@ -1,5 +1,5 @@
 import { ImeTextarea } from '@/lib/ime-text-field'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -59,20 +59,17 @@ export function BrowserPageAnnotationTray({
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
   const editImages = useBrowserAnnotationImages(worktreeId)
-  const resetEditImages = editImages.resetImages
   const [expanded, setExpanded] = useState(true)
   const ToggleChevron = expanded ? ChevronDown : ChevronRight
 
   // Why: a delete or clear while a row is mid-edit must not leave edit state pointing at nothing.
-  useEffect(() => {
-    if (
-      editingAnnotationId &&
-      !browserAnnotations.some((annotation) => annotation.id === editingAnnotationId)
-    ) {
-      setEditingAnnotationId(null)
-      resetEditImages()
-    }
-  }, [browserAnnotations, editingAnnotationId, resetEditImages])
+  if (
+    editingAnnotationId &&
+    !browserAnnotations.some((annotation) => annotation.id === editingAnnotationId)
+  ) {
+    setEditingAnnotationId(null)
+    editImages.resetImages()
+  }
 
   const handleStartEdit = (annotation: BrowserPageAnnotation): void => {
     setEditingAnnotationId(annotation.id)

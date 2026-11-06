@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { Tab } from '../../../../../../shared/tab-types'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -10,6 +12,7 @@ export type FocusedAgentRowHighlightState = Pick<
   | 'activeWorktreeId'
   | 'activeTabType'
   | 'activeTabId'
+  | 'getActiveTab'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'agentStatusByPaneKey'
@@ -17,11 +20,27 @@ export type FocusedAgentRowHighlightState = Pick<
   | 'migrationUnsupportedByPtyId'
 >
 
-export function getFocusedAgentPaneKeyForWorktree(
+// This selector runs per row on every store update, and the pane key is a hash.
+const chatPaneKeyByTab = new WeakMap<Tab, string>()
+
+function chatPaneKey(tab: Tab): string {
+  let paneKey = chatPaneKeyByTab.get(tab)
+  if (!paneKey) {
+    paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    chatPaneKeyByTab.set(tab, paneKey)
+  }
+  return paneKey
+}
+
+function getActivePaneKeyForWorktree(
   state: FocusedAgentRowHighlightState,
   worktreeId: string
 ): string | null {
-  if (state.activeWorktreeId !== worktreeId || state.activeTabType !== 'terminal') {
+  if (state.activeTabType === 'agent-session') {
+    const activeTab = state.getActiveTab(worktreeId)
+    return activeTab?.contentType === 'agent-session' ? chatPaneKey(activeTab) : null
+  }
+  if (state.activeTabType !== 'terminal') {
     return null
   }
 
@@ -42,7 +61,22 @@ export function getFocusedAgentPaneKeyForWorktree(
     return null
   }
 
-  const activePaneKey = makePaneKey(activeTabId, activeLeafId)
+  return makePaneKey(activeTabId, activeLeafId)
+}
+
+export function getFocusedAgentPaneKeyForWorktree(
+  state: FocusedAgentRowHighlightState,
+  worktreeId: string
+): string | null {
+  if (state.activeWorktreeId !== worktreeId) {
+    return null
+  }
+
+  const activePaneKey = getActivePaneKeyForWorktree(state, worktreeId)
+  if (!activePaneKey) {
+    return null
+  }
+
   // Stale agents remain visible, so their focused rows must still highlight.
   if (state.agentStatusByPaneKey[activePaneKey]) {
     return activePaneKey

@@ -83,8 +83,11 @@ describe('Codex file-change approval context', () => {
       options: expect.arrayContaining([{ id: 'accept', label: 'Allow' }])
     })
     announce({ ...started, item: { ...started.item, status: 'completed' } }, 'item/completed')
-    approve(requested, 'after-completion')
-    expect(rows.findLast((row) => row.kind === 'approval')).toMatchObject({ detail: null })
+    approve({ ...requested, grantRoot: '/outside' }, 'after-completion')
+    expect(rows.findLast((row) => row.kind === 'approval')).toMatchObject({
+      detail: null,
+      description: 'Write access: /outside'
+    })
     translator.dispose()
   })
 

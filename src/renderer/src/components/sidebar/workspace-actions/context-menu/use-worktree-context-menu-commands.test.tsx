@@ -57,7 +57,7 @@ function runNewChildWorktree(args: {
       sleepableWorktrees: [],
       subtreeSleepableWorktrees: [],
       updateWorktreeMeta: state.updateWorktreeMeta,
-      validParentWorktreeId: null,
+      validParent: null,
       statusesForWorktree: () => []
     })
   )

@@ -229,7 +229,8 @@
       "clipboardRejected": "A área de transferência rejeitou o texto.",
       "copyFailed": "Falha ao copiar",
       "copyMessage": "Copiar mensagem",
-      "selectText": "Selecionar texto"
+      "selectText": "Selecionar texto",
+      "rewind": "Voltar até aqui"
     },
     "nativeChatImageViewer": {
       "closeImage": "Fechar imagem",
@@ -633,6 +634,25 @@
       "attachmentsUnsupported": "Remova os anexos antes de definir um objetivo.",
       "pause": "Pausar",
       "resume": "Retomar"
+    },
+    "rewind": {
+      "title": "Voltar até aqui?",
+      "confirmation": "Descartar esta mensagem e tudo depois dela? A mensagem volta ao campo de texto para você editar e enviar novamente. As alterações nos arquivos em disco são mantidas.",
+      "confirm": "Voltar",
+      "unsupported": "Este chat não permite voltar a uma mensagem anterior.",
+      "historyNotPaginated": "Este chat antigo do Codex não permite voltar a uma mensagem anterior. Inicie um novo chat para usar Voltar até aqui.",
+      "busy": "Disponível quando o agente estiver ocioso e não houver nada neste chat aguardando sua resposta.",
+      "staleEpoch": "A conversa mudou. Confira as mensagens mais recentes e tente novamente.",
+      "invalidTarget": "Não é possível voltar a esta mensagem na conversa. Nada foi alterado.",
+      "historyLimit": "Esta conversa é longa demais para voltar a uma mensagem anterior. Nada foi alterado.",
+      "providerRefused": "O agente não conseguiu voltar a esta mensagem.",
+      "proofMismatch": "O histórico do agente não corresponde a este chat. Confira a conversa antes de continuar.",
+      "outcomeUnknown": "O Orca não conseguiu confirmar se a conversa voltou a uma mensagem anterior. Ele verifica antes de enviar sua próxima mensagem.",
+      "refused": "O Orca não conseguiu voltar a esta mensagem. Confira a conversa antes de continuar.",
+      "unavailable": "Aguarde o término da conexão do chat.",
+      "outcomeUnknownReturned": "O Orca não conseguiu confirmar se a conversa voltou a esta mensagem. Sua mensagem está de volta no campo de texto, e o Orca verifica a conversa antes de enviar sua próxima mensagem.",
+      "timeout": "O chat não foi atualizado depois de voltar a esta mensagem. Abra novamente para ver a versão mais recente.",
+      "pending": "Aguarde a conversa voltar à mensagem anterior."
     }
   },
   "common": {
@@ -838,8 +858,8 @@
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "repairHint": "Toque para parear novamente com seu desktop",
+      "sameNetworkOnlyHint": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
-      "updateDesktopHint": "Atualize o Orca no desktop e entre na sua conta para se conectar de qualquer lugar",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade"
     },
     "hostDiagnosticsLink": {

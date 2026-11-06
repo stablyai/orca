@@ -25,6 +25,7 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ X: 'X' }))
 vi.mock('../../../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
+vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog: () => null }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
