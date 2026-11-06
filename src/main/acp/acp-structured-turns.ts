@@ -51,8 +51,8 @@ export class AcpStructuredTurns {
   private ended = false
   private stopAt: number | null = null
   // Steers still preparing their controls; they hold their place like queued steers.
-  private reservedSteers = 0
-  // Counts Stops: finish() clears stopAt before a waiting steer can see it.
+  private preparingSteers = 0
+  // Counts Stops: finish() clears stopAt before a preparing steer can see it.
   private withdrawals = 0
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {}
@@ -80,7 +80,11 @@ export class AcpStructuredTurns {
   }
 
   get holdsSteers(): boolean {
-    return this.steers.length > 0
+    return this.steers.length > 0 || this.preparingSteers > 0
+  }
+
+  get withdrawalEpoch(): number {
+    return this.withdrawals
   }
 
   get stopped(): boolean {
@@ -133,20 +137,17 @@ export class AcpStructuredTurns {
     })
   }
 
-  /** A steer whose controls must run as a prompt first: answers ahead of it are cancelled as they
-   *  start, as for any newer steer, and it waits for idle before preparing. */
-  async reserveSteer(signal?: AbortSignal): Promise<'stopped' | 'ended' | null> {
-    const withdrawals = this.withdrawals
-    this.reservedSteers += 1
-    try {
-      this.cancelForSteer()
-      await this.whenIdle(signal)
-    } finally {
-      this.reservedSteers -= 1
-    }
-    // A Stop or teardown while it waited withdraws it like any held steer: nothing more is sent.
-    const stopped = this.withdrawals !== withdrawals
-    return this.ended ? 'ended' : stopped ? 'stopped' : null
+  /** A steer whose controls must run as a prompt first holds its place until released: Stop
+   *  reaches it, and answers ahead of it are cancelled as they start, as for any newer steer. */
+  holdSteer(): () => void {
+    this.preparingSteers += 1
+    this.cancelForSteer()
+    return () => void this.preparingSteers--
+  }
+
+  /** A Stop or teardown since `epoch` withdraws a preparing steer like any held steer. */
+  withdrawnSince(epoch: number): 'stopped' | 'ended' | null {
+    return this.ended ? 'ended' : this.withdrawals === epoch ? null : 'stopped'
   }
 
   dispatch(send: Send): void {
@@ -242,7 +243,7 @@ export class AcpStructuredTurns {
       ? { promptId, requestId: promptId }
       : undefined
     const answered = this.deps.connection.prompt(send.prompt, meta)
-    if (this.steers.length > 0 || this.reservedSteers > 0) {
+    if (this.steers.length > 0 || this.preparingSteers > 0) {
       this.cancelForSteer()
     }
     answered.then(

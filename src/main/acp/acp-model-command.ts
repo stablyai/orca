@@ -27,10 +27,16 @@ export class AcpModelCommandRefusedError extends Error {
   }
 }
 
-export async function applyAcpModelCommand(
-  session: Pick<AcpStructuredSession, 'spec' | 'connection' | 'options' | 'turns'>,
+type AcpModelCommandSession = Pick<
+  AcpStructuredSession,
+  'spec' | 'connection' | 'options' | 'turns'
+>
+
+async function applyAcpModelCommand(
+  session: AcpModelCommandSession,
   value: string,
-  bound: AcpOptionWriteBound
+  bound: AcpOptionWriteBound,
+  throwIfWithdrawn: () => void
 ): Promise<void> {
   const command = session.spec.dialect.modelCommand
   if (!command) {
@@ -38,11 +44,9 @@ export async function applyAcpModelCommand(
   }
   // The command is a prompt, so a steer still interrupts the running answer before it is sent.
   if (session.turns.running) {
-    const withdrawn = await session.turns.reserveSteer(bound.signal)
-    if (withdrawn) {
-      throw acpWithdrawnSteer(acpAgentName(session.spec.agent), withdrawn === 'ended')
-    }
+    await session.turns.whenIdle(bound.signal)
   }
+  throwIfWithdrawn()
   const { options } = session
   await boundAcpOptionWrite(options, { ...bound, key: 'model', value }, async () => {
     options.commandReply = ''
@@ -83,13 +87,55 @@ export function acpOptionWriteBound(
   }
 }
 
-export function acpModelCommandFor(
-  session: Parameters<typeof applyAcpModelCommand>[0],
-  bound: AcpOptionWriteBound
-): ((value: string) => Promise<void>) | undefined {
-  return session.spec.dialect.modelCommand
-    ? (value) => applyAcpModelCommand(session, value, bound)
-    : undefined
+type AcpModelFallback = ReturnType<typeof acpModelFallback>
+
+/** A send that falls back to the agent's model command is a held steer from then until it is
+ *  admitted: a Stop or teardown since its option writes began withdraws it, unsent. Sends that never
+ *  fall back keep their usual Stop rules. */
+export async function withAcpModelFallback<T>(
+  session: AcpModelCommandSession,
+  bound: AcpOptionWriteBound,
+  prepare: (fallback: AcpModelFallback) => Promise<T>
+): Promise<T> {
+  const fallback = acpModelFallback(session, bound)
+  try {
+    return await prepare(fallback)
+  } finally {
+    fallback.release()
+  }
+}
+
+function acpModelFallback(session: AcpModelCommandSession, bound: AcpOptionWriteBound) {
+  const epoch = session.turns.withdrawalEpoch
+  let release: (() => void) | null = null
+  const throwIfWithdrawn = (): void => {
+    const withdrawn = session.turns.withdrawnSince(epoch)
+    if (withdrawn) {
+      throw acpWithdrawnSteer(acpAgentName(session.spec.agent), withdrawn === 'ended')
+    }
+  }
+  const done = (): void => {
+    release?.()
+    release = null
+  }
+  return {
+    command: session.spec.dialect.modelCommand
+      ? async (value: string): Promise<void> => {
+          release ??= session.turns.holdSteer()
+          await applyAcpModelCommand(session, value, bound, throwIfWithdrawn)
+        }
+      : undefined,
+    /** Checks in the admission step itself, which may wait before committing. */
+    admitting: (commit: () => void) => (): void => {
+      if (release) {
+        throwIfWithdrawn()
+      }
+      // Admitted, it is an ordinary steer; still held, it would cancel itself as it starts.
+      done()
+      commit()
+    },
+    release: done
+  }
 }
 
 /** True when the event is the hidden model command's output, which the chat must not show. */
@@ -126,7 +172,7 @@ export function acpNoModelSelected(
   })
 }
 
-/** A role steer a Stop or teardown reached while it waited: it never reached the agent. */
+/** A role steer a Stop or teardown reached while it prepared: it never reached the agent. */
 export function acpWithdrawnSteer(agentName: string, ended: boolean): Error {
   return new AgentSessionOptionRejectedError(
     `${agentName} stopped before this message was sent`,

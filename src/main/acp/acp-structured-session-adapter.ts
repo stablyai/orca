@@ -30,7 +30,7 @@ import {
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from './acp-structured-options'
 import { writeAcpSessionOption } from './acp-session-option-write'
-import { acpModelCommandFor, acpOptionWriteBound } from './acp-model-command'
+import { acpOptionWriteBound, withAcpModelFallback } from './acp-model-command'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import * as childState from './acp-structured-child'
 import { AcpStructuredChildren } from './acp-structured-child-lifecycle'
@@ -195,30 +195,33 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     const { sessionId, fence, signal } = input
     signal?.throwIfAborted()
     input.onInputPreparation?.()
-    const optionsApplied = await applyAcpMessageOptions(
-      session,
-      input.executionOptions,
-      (key, value) => this.setOption({ sessionId, fence, key, value, signal }),
-      () =>
-        this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
-      signal,
-      acpModelCommandFor(session, this.writeBound(session, signal))
-    )
-    if (!optionsApplied) {
-      return rejectedAcpDispatch(session)
-    }
-    input.signal?.throwIfAborted()
-    await input.beforeDispatch?.()
-    input.signal?.throwIfAborted()
-    await admitStructuredAgentSessionInput(input.admitFreshInput, () =>
-      session.turns.dispatch({
-        clientMessageId: input.clientMessageId,
-        prompt,
-        requestedAt: input.requestedAt ?? this.now()
-      })
-    )
-    // Admission precedes provider confirmation of the send.
-    return { state: 'admitted' }
+    return withAcpModelFallback(session, this.writeBound(session, signal), async (fallback) => {
+      const optionsApplied = await applyAcpMessageOptions(
+        session,
+        input.executionOptions,
+        (key, value) => this.setOption({ sessionId, fence, key, value, signal }),
+        () =>
+          this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
+        signal,
+        fallback.command
+      )
+      if (!optionsApplied) {
+        return rejectedAcpDispatch(session)
+      }
+      input.signal?.throwIfAborted()
+      await input.beforeDispatch?.()
+      input.signal?.throwIfAborted()
+      const commit = fallback.admitting(() =>
+        session.turns.dispatch({
+          clientMessageId: input.clientMessageId,
+          prompt,
+          requestedAt: input.requestedAt ?? this.now()
+        })
+      )
+      await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
+      // Admission precedes provider confirmation of the send.
+      return { state: 'admitted' }
+    })
   }
 
   compact: NonNullable<SessionAdapter['compact']> = async (input) =>
@@ -263,11 +266,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session.options.reported()
   }
 
-  private writeBound(session: AcpStructuredSession, signal?: AbortSignal) {
-    return acpOptionWriteBound(this.deps, session, signal, (error) =>
-      this.children.connectionLost(session, error)
-    )
-  }
+  private writeBound = (session: AcpStructuredSession, signal?: AbortSignal) =>
+    acpOptionWriteBound(this.deps, session, signal, (e) => this.children.connectionLost(session, e))
 
   canSetOptionWhileIdle = (input: SetOptionInput): boolean =>
     childState.canSetAcpOptionWhileIdle(this.children.sessions.get(input.sessionId), input)

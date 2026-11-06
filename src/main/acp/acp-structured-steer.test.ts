@@ -10,6 +10,7 @@ import {
   envelope
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionAdmitFreshInput } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import { awaitAcpTurnEnd } from './acp-structured-stop'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
@@ -54,6 +55,73 @@ function answersCancels(agent: AcpScriptedAgent): void {
       agent.reply(running, { stopReason: 'cancelled' })
     }
   })
+}
+
+// OMP: the model option refuses a role, and its own /model resolves it (builtin-modes.ts).
+async function openRoleRig(hold: { holdOption?: boolean; holdCommand?: boolean } = {}) {
+  const spec = { ...GROK, dialect: { ...GROK.dialect, modelCommand: OMP_ACP_DIALECT.modelCommand } }
+  const held = { option: () => {}, command: () => {} }
+  const rig = await openAcpAdapterRig({
+    spec,
+    script: (agent) => {
+      agent.on('session/set_config_option', (frame) => {
+        const refuse = () =>
+          agent.fail(frame, -32603, 'Internal error', { details: 'Unknown ACP model: @worker_be' })
+        if (hold.holdOption) {
+          held.option = refuse
+        } else {
+          refuse()
+        }
+      })
+      agent.on('session/prompt', (frame) => {
+        if (!JSON.stringify(frame.params).includes('/model @worker_be')) {
+          return
+        }
+        const answer = () => {
+          agent.notify('session/update', {
+            sessionId: PROVIDER_SESSION,
+            update: {
+              sessionUpdate: 'agent_message_chunk',
+              content: { type: 'text', text: 'Model set to grok-4.6.' }
+            }
+          })
+          agent.reply(frame, { stopReason: 'end_turn' })
+        }
+        if (hold.holdCommand) {
+          held.command = answer
+        } else {
+          answer()
+        }
+      })
+    }
+  })
+  await rig.acquire()
+  return { rig, release: { option: () => held.option(), command: () => held.command() } }
+}
+
+type AdapterRig = Awaited<ReturnType<typeof openAcpAdapterRig>>
+
+function sendRole(
+  rig: AdapterRig,
+  clientMessageId: string,
+  admitFreshInput?: StructuredAgentSessionAdmitFreshInput
+) {
+  return rig.adapter.dispatch({
+    sessionId: ADAPTER_SESSION,
+    clientMessageId,
+    body: message('hello'),
+    fence: 1,
+    executionOptions: { model: '@worker_be' },
+    ...(admitFreshInput ? { admitFreshInput } : {})
+  })
+}
+
+function promptsSent(rig: AdapterRig): string[] {
+  return rig
+    .sent('session/prompt')
+    .map((frame) =>
+      JSON.stringify(frame.params).includes('/model @worker_be') ? 'command' : promptIdOf(frame)
+    )
 }
 
 describe('permission changes with already admitted ACP input', () => {
@@ -199,104 +267,74 @@ describe('a send while a Grok prompt runs', () => {
   })
 
   it('runs a role steer the model option refuses in its place: the steer ahead is cancelled first', async () => {
-    // OMP: the model option refuses a role, and its own /model resolves it (builtin-modes.ts).
-    const spec = {
-      ...GROK,
-      dialect: { ...GROK.dialect, modelCommand: OMP_ACP_DIALECT.modelCommand }
-    }
-    const rig = await openAcpAdapterRig({
-      spec,
-      script: (agent) => {
-        agent.on('session/set_config_option', (frame) =>
-          agent.fail(frame, -32603, 'Internal error', { details: 'Unknown ACP model: @worker_be' })
-        )
-        agent.on('session/prompt', (frame) => {
-          if (JSON.stringify(frame.params).includes('/model @worker_be')) {
-            agent.notify('session/update', {
-              sessionId: PROVIDER_SESSION,
-              update: {
-                sessionUpdate: 'agent_message_chunk',
-                content: { type: 'text', text: 'Model set to grok-4.6.' }
-              }
-            })
-            agent.reply(frame, { stopReason: 'end_turn' })
-          }
-        })
-      }
-    })
-    await rig.acquire()
+    const { rig } = await openRoleRig()
     await sendHello(rig, 'first')
     await rig.frame('session/prompt')
     await rig.settle()
     await sendHello(rig, 'steer-1')
-    const role = rig.adapter.dispatch({
-      sessionId: ADAPTER_SESSION,
-      clientMessageId: 'steer-2',
-      body: message('hello'),
-      fence: 1,
-      executionOptions: { model: '@worker_be' }
-    })
+    const role = sendRole(rig, 'steer-2')
     await rig.settle()
     answersCancels(rig.child().agent)
     rig.child().agent.reply(rig.sent('session/prompt')[0]!, { stopReason: 'cancelled' })
     await expect(role).resolves.toEqual({ state: 'admitted' })
     await rig.frame('session/prompt', 3)
-    const sent = rig
-      .sent('session/prompt')
-      .map((frame) =>
-        JSON.stringify(frame.params).includes('/model @worker_be') ? 'command' : promptIdOf(frame)
-      )
-    expect(sent).toEqual(['prompt:first', 'prompt:steer-1', 'command', 'prompt:steer-2'])
+    expect(promptsSent(rig)).toEqual([
+      'prompt:first',
+      'prompt:steer-1',
+      'command',
+      'prompt:steer-2'
+    ])
     // steer-1 started and was cancelled for the newer steer, never left to answer in full.
     expect(rig.sent('session/cancel')).toHaveLength(2)
   })
 
-  it('sends nothing more for a role steer that a Stop reaches while it waits', async () => {
-    // OMP: the model option refuses a role, and its own /model resolves it (builtin-modes.ts).
-    const spec = {
-      ...GROK,
-      dialect: { ...GROK.dialect, modelCommand: OMP_ACP_DIALECT.modelCommand }
+  // No abort signal in these: the withdrawal itself must notice the Stop.
+  it.each(['while it waits', 'while its model option is answered'] as const)(
+    'sends nothing more for a role steer that a Stop reaches %s',
+    async (when) => {
+      const { rig, release } = await openRoleRig({ holdOption: when !== 'while it waits' })
+      await sendHello(rig, 'first')
+      const first = await rig.frame('session/prompt')
+      await rig.settle()
+      const role = sendRole(rig, 'role').catch((error: unknown) => error)
+      await rig.settle()
+      await rig.adapter.cancelTurn({ sessionId: ADAPTER_SESSION, fence: 1 })
+      rig.child().agent.reply(first, { stopReason: 'cancelled' })
+      await rig.settle()
+      // Refused only after the turn ahead ended: no wait is left to notice the Stop.
+      release.option()
+      expect(await role).toMatchObject({
+        rejection: { kind: 'cancelled', neverReachedAgent: true }
+      })
+      expect(promptsSent(rig)).toEqual(['prompt:first'])
+      // A Stop covers only what it reached; the next message goes out.
+      await expect(sendHello(rig, 'later')).resolves.toEqual({ state: 'admitted' })
+      await rig.frame('session/prompt', 1)
     }
-    const rig = await openAcpAdapterRig({
-      spec,
-      script: (agent) => {
-        agent.on('session/set_config_option', (frame) =>
-          agent.fail(frame, -32603, 'Internal error', { details: 'Unknown ACP model: @worker_be' })
-        )
-        agent.on('session/prompt', (frame) => {
-          if (JSON.stringify(frame.params).includes('/model @worker_be')) {
-            agent.notify('session/update', {
-              sessionId: PROVIDER_SESSION,
-              update: {
-                sessionUpdate: 'agent_message_chunk',
-                content: { type: 'text', text: 'Model set to grok-4.6.' }
-              }
-            })
-            agent.reply(frame, { stopReason: 'end_turn' })
-          }
-        })
-      }
-    })
-    await rig.acquire()
-    await sendHello(rig, 'first')
-    const first = await rig.frame('session/prompt')
-    await rig.settle()
-    // No abort signal: the wait itself must notice the Stop.
-    const role = rig.adapter.dispatch({
-      sessionId: ADAPTER_SESSION,
-      clientMessageId: 'role',
-      body: message('hello'),
-      fence: 1,
-      executionOptions: { model: '@worker_be' }
-    })
-    await rig.settle()
-    await rig.adapter.cancelTurn({ sessionId: ADAPTER_SESSION, fence: 1 })
-    rig.child().agent.reply(first, { stopReason: 'cancelled' })
-    await expect(role).rejects.toMatchObject({
-      rejection: { kind: 'cancelled', neverReachedAgent: true }
-    })
-    expect(rig.sent('session/prompt')).toHaveLength(1)
-  })
+  )
+
+  it.each(['its model command runs', 'it waits to be admitted'] as const)(
+    'withdraws a role steer a Stop reaches while %s, with no turn running',
+    async (when) => {
+      const admitted = Promise.withResolvers<void>()
+      const { rig, release } = await openRoleRig({ holdCommand: when === 'its model command runs' })
+      const role = sendRole(rig, 'role', async (enqueue) => {
+        await admitted.promise
+        return enqueue('own', false)
+      })
+      await rig.frame('session/prompt')
+      await rig.settle()
+      await expect(
+        rig.adapter.cancelTurn({ sessionId: ADAPTER_SESSION, fence: 1 })
+      ).resolves.toEqual({ cancelled: true })
+      release.command()
+      admitted.resolve()
+      await expect(role).rejects.toMatchObject({
+        rejection: { kind: 'cancelled', neverReachedAgent: true }
+      })
+      expect(promptsSent(rig)).toEqual(['command'])
+    }
+  )
 
   it('withdraws a steer a Stop reaches before its cancel lands', async () => {
     const rig = await openAcpAdapterRig()

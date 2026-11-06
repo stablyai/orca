@@ -5,7 +5,7 @@ import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { AcpAgentError } from './acp-errors'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
-import { acpModelCommandFor, acpNoModelSelected } from './acp-model-command'
+import { acpNoModelSelected, withAcpModelFallback } from './acp-model-command'
 import { writeAcpSessionOption } from './acp-session-option-write'
 import type { AcpSessionEvent } from './acp-session-runtime'
 import { AcpStructuredOptions } from './acp-structured-options'
@@ -37,6 +37,14 @@ const config = (model: string, thinking: string): SessionConfigOption[] => [
   }
 ]
 
+// No turn runs and nothing stops, so the command never waits or withdraws.
+const idleTurns = {
+  running: false,
+  withdrawalEpoch: 0,
+  withdrawnSince: () => null,
+  holdSteer: () => () => undefined
+}
+
 const event = (update: SessionUpdate): AcpSessionEvent => ({
   kind: 'known',
   notification: { sessionId: 'omp-1', update }
@@ -54,25 +62,27 @@ function rig(updates: SessionUpdate[], version = '18.15.0') {
     }
     return { stopReason: 'end_turn' }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send path reads only spec, options, turns.running and connection.prompt/initialize, which this fake provides.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send path reads only spec, options, the idle turns and connection.prompt/initialize, which this fake provides.
   const session = {
     spec: acpLaunchSpecFor('omp')!,
     options,
-    turns: { running: false },
+    turns: idleTurns,
     connection: { prompt, initialize: async () => ({ agentInfo: { name: 'omp', version } }) }
   } as unknown as AcpStructuredSession
   const send = (model: string) =>
-    applyAcpMessageOptions(
-      session,
-      { model },
-      async () => {
-        throw new AcpAgentError(-32603, 'Internal error', {
-          details: `Unknown ACP model: ${model}`
-        })
-      },
-      () => true,
-      undefined,
-      acpModelCommandFor(session, { agent: 'omp', timeoutMs: 1_000 })
+    withAcpModelFallback(session, { agent: 'omp', timeoutMs: 1_000 }, (fallback) =>
+      applyAcpMessageOptions(
+        session,
+        { model },
+        async () => {
+          throw new AcpAgentError(-32603, 'Internal error', {
+            details: `Unknown ACP model: ${model}`
+          })
+        },
+        () => true,
+        undefined,
+        fallback.command
+      )
     )
   return { options, lane, prompt, send }
 }
@@ -137,6 +147,27 @@ describe("OMP's own model command", () => {
     expect(prompt).toHaveBeenCalledTimes(2)
   })
 
+  it('does not re-send a role the session already runs from its launch line', async () => {
+    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+    options.adoptSession({ configOptions: config('p/a', 'low') }, 'new')
+    options.adoptLaunchModel('@worker_be')
+    const setOption = vi.fn(async () => undefined)
+    const command = vi.fn(async () => undefined)
+    await expect(
+      applyAcpMessageOptions(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with the effort write accepted, the send path reads only session.options.
+        { options } as unknown as AcpStructuredSession,
+        { model: '@worker_be', effort: 'medium' },
+        setOption,
+        () => true,
+        undefined,
+        command
+      )
+    ).resolves.toBe(true)
+    expect(setOption.mock.calls).toEqual([['effort', 'medium']])
+    expect(command).not.toHaveBeenCalled()
+  })
+
   it('retires launch-line proof on a native model change, but keeps ordinary control proof', async () => {
     const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
     options.adoptSession({ configOptions: config('p/a', 'high') }, 'new')
@@ -174,19 +205,22 @@ describe("OMP's own model command", () => {
         options.adoptConfigOptions(config('p/b', 'low'))
         return { stopReason: 'end_turn' }
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command reads only spec, options, turns.running and connection.prompt, which this fake provides.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command reads only spec, options, the idle turns and connection.prompt, which this fake provides.
       const session = {
         spec: acpLaunchSpecFor('omp')!,
         options,
-        turns: { running: false },
+        turns: idleTurns,
         connection: { prompt }
       } as unknown as AcpStructuredSession
-      const pending = acpModelCommandFor(session, {
+      const bound = {
         agent: 'omp',
         timeoutMs: ending === 'timed out' ? 1 : 1_000,
         signal: aborted.signal,
         onUncertain: retired
-      })!('@worker_be')
+      }
+      const pending = withAcpModelFallback(session, bound, (fallback) =>
+        fallback.command!('@worker_be')
+      )
       if (ending === 'aborted') {
         aborted.abort()
       }
