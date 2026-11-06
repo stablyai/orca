@@ -275,59 +275,66 @@ export function AntigravityChatSignInRow(props: {
   const { line, alert, copy, copyLabel, url } = signIn
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-none">
-            {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
-          </p>
-          {props.description ? (
-            <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
-          ) : null}
-          {/* Reserve line height so the host’s answer cannot shift layout. */}
-          <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
-            {line}
-            {line && alert ? ' ' : null}
-            {alert && (
-              <span role="alert" className="text-destructive">
-                {alert}
-              </span>
+      <AntigravityChatAuthForm
+        owner={props.owner}
+        disabled={props.disabled || signIn.ownFlow}
+        onSignIn={signIn.start}
+      >
+        {(auth) => (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium leading-none">
+                {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
+              </p>
+              {props.description ? (
+                <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
+              ) : null}
+              {/* Reserve line height so the host’s answer cannot shift layout. */}
+              <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
+                {line}
+                {line && alert ? ' ' : null}
+                {alert && (
+                  <span role="alert" className="text-destructive">
+                    {alert}
+                  </span>
+                )}
+              </p>
+            </div>
+            {signIn.ownFlow ? (
+              <div className="flex shrink-0 items-center gap-2">
+                {url && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label={copyLabel}
+                        onClick={() => void copy.copyText()}
+                      >
+                        {copy.status === 'copied' ? <Check /> : <Copy />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{copyLabel}</TooltipContent>
+                  </Tooltip>
+                )}
+                <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
+                  {translate('accounts.antigravity.chatCancel', 'Cancel')}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="xs"
+                // Account switching uses secondary styling once signed in.
+                variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
+                disabled={signIn.signInDisabled || auth.disabled}
+                onClick={auth.start}
+              >
+                {signIn.actionLabel}
+              </Button>
             )}
-          </p>
-        </div>
-        {signIn.ownFlow ? (
-          <div className="flex shrink-0 items-center gap-2">
-            {url && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={copyLabel}
-                    onClick={() => void copy.copyText()}
-                  >
-                    {copy.status === 'copied' ? <Check /> : <Copy />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{copyLabel}</TooltipContent>
-              </Tooltip>
-            )}
-            <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
-              {translate('accounts.antigravity.chatCancel', 'Cancel')}
-            </Button>
           </div>
-        ) : (
-          <Button
-            size="xs"
-            // Account switching uses secondary styling once signed in.
-            variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
-            disabled={signIn.signInDisabled}
-            onClick={signIn.start}
-          >
-            {signIn.actionLabel}
-          </Button>
         )}
-      </div>
-      <AntigravityChatAuthForm owner={props.owner} disabled={props.disabled || signIn.ownFlow} />
+      </AntigravityChatAuthForm>
       {url && <PastedAddressForm pending={signIn.pending} send={signIn.send} />}
     </div>
   )

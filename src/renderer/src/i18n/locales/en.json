@@ -22188,7 +22188,8 @@
       "gcpLocation": "Google Cloud location",
       "applyAuth": "Apply account settings",
       "projectPlaceholder": "my-project-id",
-      "locationPlaceholder": "us-central1"
+      "locationPlaceholder": "us-central1",
+      "authHelp": "Changes stop running Antigravity chats. Sign in again to use a different account."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
