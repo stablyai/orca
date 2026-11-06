@@ -4,7 +4,7 @@ import {
 } from '../transport/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
-// Also the floor between change-driven reads: notices arrive per agent step, like Home's.
+// Also the floor between change-driven reads, which arrive per agent step (Home throttles the same).
 const WORKTREE_REFRESH_MS = 3000
 
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
@@ -39,6 +39,7 @@ export function startHostWorktreeRefresh({
   let stale = false
   let eventStreamReady = false
   // A buried or backgrounded page reads nothing on change notices; the foreground refresh catches up.
+  let worktreesOwed = false
   let reposOwed = false
   let viewSettingsOwed = false
   let lastWorktreeReadAt = 0
@@ -50,7 +51,11 @@ export function startHostWorktreeRefresh({
     void fetchWorktrees(options)
   }
   const refreshWorktreesOnChange = (): void => {
-    if (hidden() || trailingChangeRefresh) {
+    if (hidden()) {
+      worktreesOwed = true
+      return
+    }
+    if (trailingChangeRefresh) {
       return
     }
     const wait = lastWorktreeReadAt + WORKTREE_REFRESH_MS - Date.now()
@@ -85,14 +90,19 @@ export function startHostWorktreeRefresh({
       return
     }
     sidebarFeed?.refresh()
-    // Queued: a read still in flight was sent before the notices this page skipped.
-    readWorktrees({ allowDuringModal: true, queueIfInFlight: true })
+    if (trailingChangeRefresh) {
+      clearTimeout(trailingChangeRefresh)
+      trailingChangeRefresh = null
+    }
+    // Queued after skipped notices: a read still in flight was sent before them.
+    readWorktrees({ allowDuringModal: true, ...(worktreesOwed ? { queueIfInFlight: true } : {}) })
     void fetchRepoMetadata(
       reposOwed ? { force: true, queueIfInFlight: true } : { queueIfInFlight: true }
     )
     if (viewSettingsOwed) {
       void syncViewSettings({ resend: true })
     }
+    worktreesOwed = false
     reposOwed = false
     viewSettingsOwed = false
   }
@@ -108,7 +118,7 @@ export function startHostWorktreeRefresh({
         if (appState.currentState !== 'active') {
           return
         }
-        readWorktrees()
+        void fetchWorktrees()
         // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
       }, WORKTREE_REFRESH_MS)
@@ -123,7 +133,9 @@ export function startHostWorktreeRefresh({
       eventStreamReady = true
       if (replayedAfterReconnect) {
         // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
-        if (!hidden()) {
+        if (hidden()) {
+          worktreesOwed = true
+        } else {
           readWorktrees()
         }
         refreshReposOnChange()

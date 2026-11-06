@@ -95,7 +95,7 @@ describe('startHostWorktreeRefresh', () => {
     appState.currentState = 'active'
     appState.listener?.('active')
 
-    expect(fetchWorktrees).toHaveBeenCalledWith({ allowDuringModal: true, queueIfInFlight: true })
+    expect(fetchWorktrees).toHaveBeenCalledWith({ allowDuringModal: true })
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ queueIfInFlight: true })
   })
 
