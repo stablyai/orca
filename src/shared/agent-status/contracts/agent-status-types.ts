@@ -125,6 +125,9 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** The launch owner's last word on the running invocation: an Orca launch it admitted (true) or
+   *  none (false). Absent until an owner speaks, and from older hosts. */
+  launchAttested?: boolean
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */

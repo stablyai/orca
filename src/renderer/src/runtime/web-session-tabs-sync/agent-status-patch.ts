@@ -123,8 +123,14 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
+    // The host owns the launch fact whichever writer wins presentation.
     const accepted =
-      nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
+      nextEntry === entry
+        ? entry
+        : {
+            ...withHostProgramStatus(nextEntry, entry.programStatus),
+            ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {})
+          }
     const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,

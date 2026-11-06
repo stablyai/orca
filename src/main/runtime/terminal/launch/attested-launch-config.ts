@@ -26,3 +26,11 @@ export function daemonLaunchNoteOf(pty: PtyLaunchFacts): DaemonLaunchNote | null
     ? { launchToken: pty.launchToken, launchConfig: pty.launchConfig }
     : null
 }
+
+/** The owner's fact for a frame's PTY incarnation, so a paired client never keeps a retired launch's note. */
+export function frameLaunchAttested(
+  pty: PtyLaunchFacts | null | undefined,
+  agent: string | null | undefined
+): { launchAttested?: boolean } {
+  return pty ? { launchAttested: attestedLaunchConfig(pty, agent) !== undefined } : {}
+}

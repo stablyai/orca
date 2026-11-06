@@ -31,6 +31,7 @@ import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pan
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
+import { ownerLaunchAttested, recordNoteForInvocation } from './agent-status-launch-config'
 import {
   canReuseStatusProviderSession,
   statusRetainsResumableIdentity
@@ -194,18 +195,17 @@ export function buildAgentStatusLiveEntry(
     { agentType: identity.agentType, state: payload.state },
     providerSession
   )
-  // Only the launch owner's statement, or this launch's own registry entry, changes the note: a typed
-  // resume never ran it. An OSC, display or restored status says nothing, so the pane keeps its note.
-  const keptRecord =
-    metadata?.launchConfig === undefined ? state.sleepingAgentSessionsByPaneKey[paneKey] : undefined
+  // The launch owner's word (local main's note-or-null, or a paired host's frame fact) decides
+  // whether the pane's note still belongs to the running invocation; an OSC update says nothing.
+  const launchAttested = ownerLaunchAttested(metadata?.launchConfig, existing, identity.agentType)
   const launchConfigSource =
     metadata?.launchConfig ??
     matchedRegistryLaunchConfig ??
-    (keptRecord?.agent === identity.agentType &&
-    providerSession &&
-    agentProviderSessionsEqual(identity.agentType, keptRecord.providerSession, providerSession)
-      ? keptRecord.launchConfig
-      : undefined)
+    recordNoteForInvocation(state.sleepingAgentSessionsByPaneKey[paneKey], {
+      agentType: identity.agentType,
+      providerSession,
+      launchAttested
+    })
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
@@ -255,6 +255,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),

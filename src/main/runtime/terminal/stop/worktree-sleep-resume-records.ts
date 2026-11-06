@@ -11,11 +11,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import { attestedLaunchConfig, type PtyLaunchFacts } from '../launch/attested-launch-config'
 
-function attestedLaunchConfigField(launch: PtyLaunchFacts | undefined, agent: string) {
-  const launchConfig = attestedLaunchConfig(launch, agent)
-  return launchConfig ? { launchConfig } : {}
-}
-
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
   string,
@@ -71,6 +66,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         retiredPaneKeys.push(paneKey)
         continue
       }
+      const launchConfig = attestedLaunchConfig(launch, agent)
       records.push({
         paneKey,
         tabId,
@@ -86,7 +82,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         restoreOnTabOpenOnly: true,
         // Why: the SSH host boundary keeps the id off another machine; a WSL relay tag is local transport.
         connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
-        ...attestedLaunchConfigField(launch, agent)
+        ...(launchConfig ? { launchConfig } : {})
       })
     }
     capture.set(ptyId, { retiredPaneKeys, records })

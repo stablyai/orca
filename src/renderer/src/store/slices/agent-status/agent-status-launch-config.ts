@@ -131,15 +131,34 @@ export function getLaunchConfigForEntry(
   if (registryLaunchConfig) {
     return registryLaunchConfig
   }
-  const sleepingRecord = state.sleepingAgentSessionsByPaneKey[entry.paneKey]
-  return sleepingRecord?.launchConfig &&
-    sleepingRecord.agent === entry.agentType &&
-    entry.providerSession &&
-    agentProviderSessionsEqual(
-      entry.agentType,
-      sleepingRecord.providerSession,
-      entry.providerSession
-    )
-    ? sleepingRecord.launchConfig
+  return recordNoteForInvocation(state.sleepingAgentSessionsByPaneKey[entry.paneKey], entry)
+}
+
+/** A pane's saved note belongs to the running invocation only on its launch owner's word. With no
+ *  owner fact (an older host), the same conversation keeps it, as before. */
+export function recordNoteForInvocation(
+  record: AppState['sleepingAgentSessionsByPaneKey'][string] | undefined,
+  invocation: Pick<AgentStatusEntry, 'agentType' | 'providerSession' | 'launchAttested'>
+): SleepingAgentLaunchConfig | undefined {
+  if (!record?.launchConfig || record.agent !== invocation.agentType) {
+    return undefined
+  }
+  const { launchAttested, providerSession } = invocation
+  return (launchAttested ??
+    (!!providerSession &&
+      agentProviderSessionsEqual(invocation.agentType, record.providerSession, providerSession)))
+    ? record.launchConfig
     : undefined
+}
+
+/** A statement (note or null) replaces the owner's fact; anything else keeps the same agent's. */
+export function ownerLaunchAttested(
+  statement: SleepingAgentLaunchConfig | null | undefined,
+  existing: AgentStatusEntry | undefined,
+  agentType: AgentType
+): boolean | undefined {
+  if (statement !== undefined) {
+    return statement !== null
+  }
+  return existing?.agentType === agentType ? existing.launchAttested : undefined
 }
