@@ -38,6 +38,7 @@ import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { assertZcodeTerminalLaunchAvailable } from '../../../zcode/terminal-launch-admission'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
 
 /** No launch command could be built for a requested `startupAgent`. */
@@ -122,6 +123,21 @@ export async function resolveAgentTerminalCreateOptions(
     (plannedAgent
       ? resolveAgentLaunchRuntime(store, workspace, opts.shellOverride, plannedAgent)
       : undefined)
+  if (
+    plannedAgent === 'zcode' &&
+    runtime &&
+    !workspace.connectionId &&
+    !resolveWslSessionContext({
+      cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+      shellOverride: runtime.pty.shellOverride,
+      terminalWindowsWslDistro: runtime.pty.terminalWindowsWslDistro
+    })
+  ) {
+    await assertZcodeTerminalLaunchAvailable({
+      commandSettings: store.getSettings(),
+      pathEnv: process.env.PATH ?? process.env.Path
+    })
+  }
   const launch =
     plannedAgent && runtime
       ? await buildRuntimeAgentTerminalStartupOptions(

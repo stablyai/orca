@@ -42,6 +42,12 @@ export type PreflightRuntimeContext = {
   projectRuntime?: ProjectExecutionRuntimeResolution
 }
 
+export type ZcodeSetupInvocation = {
+  command: string
+  args: string[]
+  env: Record<string, string>
+}
+
 export type PreflightApi = {
   check: (
     args?: PreflightRuntimeContext & { force?: boolean; wakeWslDistro?: boolean }
@@ -52,9 +58,13 @@ export type PreflightApi = {
   ) => Promise<string[]>
   /** A WSL distro a background check was refused for is running now; re-ask. Desktop only. */
   onWslDistroRunning?: (callback: (distro: string) => void) => () => void
-  /** Cached in main for the process lifetime. */
-  zcodeInteractiveCapability: () => Promise<ZCodeInteractiveCapability>
-  /** `wakeWslDistro`: a user act that may start a stopped WSL distro; background refreshes omit it. */
+  zcodeInteractiveCapability: (args?: {
+    commandOverride?: string
+  }) => Promise<ZCodeInteractiveCapability>
+  zcodeSetupInvocation: (args: {
+    commandOverride?: string
+    cliArgs: string[]
+  }) => Promise<ZcodeSetupInvocation>
   refreshAgents: (
     args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
   ) => Promise<RefreshAgentsResult>

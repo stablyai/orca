@@ -15,7 +15,10 @@ const {
   isCommandOnLocalPathMock,
   listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
-  mergePersistedWindowsPathMock
+  mergePersistedWindowsPathMock,
+  zcodeCapabilityMock,
+  zcodeTerminalAdmissionMock,
+  resolveZcodeCliInvocationMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
@@ -30,7 +33,10 @@ const {
   isCommandOnLocalPathMock: vi.fn(),
   listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
-  mergePersistedWindowsPathMock: vi.fn()
+  mergePersistedWindowsPathMock: vi.fn(),
+  zcodeCapabilityMock: vi.fn(),
+  zcodeTerminalAdmissionMock: vi.fn(),
+  resolveZcodeCliInvocationMock: vi.fn()
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
@@ -99,7 +105,22 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { detectInstalledAgents } from '../preflight/agent-detection'
+vi.mock('../zcode/interactive-capability', () => ({
+  readZCodeInteractiveCapability: zcodeCapabilityMock
+}))
+
+vi.mock('../zcode/terminal-launch-admission', () => ({
+  readZcodeTerminalLaunchAdmission: zcodeTerminalAdmissionMock
+}))
+
+vi.mock('../zcode/zcode-cli-invocation', () => ({
+  resolveZcodeCliInvocation: resolveZcodeCliInvocationMock
+}))
+
+import {
+  detectInstalledAgents,
+  detectInstalledAgentsWithShellPathHydration
+} from '../preflight/agent-detection'
 import { registerPreflightHandlers } from './preflight'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
@@ -110,6 +131,24 @@ describe('preflight', () => {
 
   beforeEach(() => {
     runWslProcessMock.mockReset()
+    zcodeCapabilityMock.mockReset().mockResolvedValue('interactive')
+    zcodeTerminalAdmissionMock.mockReset().mockResolvedValue({
+      status: 'available',
+      invocation: {
+        command: '/usr/local/bin/zcode',
+        prefixArgs: [],
+        envOverlay: {},
+        identity: 'zcode',
+        source: 'standalone'
+      }
+    })
+    resolveZcodeCliInvocationMock.mockReset().mockReturnValue({
+      command: '/usr/local/bin/zcode',
+      prefixArgs: [],
+      envOverlay: {},
+      identity: 'zcode',
+      source: 'standalone'
+    })
     resetPreflightMocks(
       {
         handleMock,
@@ -246,6 +285,193 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('filters a desktop-only ZCode bundle from the terminal agent inventory', async () => {
+    isCommandOnLocalPathMock.mockImplementation((command: string) => command === 'zcode')
+    zcodeTerminalAdmissionMock.mockResolvedValue({
+      status: 'desktop-only',
+      invocation: {
+        command: '/opt/ZCode/zcode',
+        prefixArgs: ['/opt/ZCode/resources/glm/zcode.cjs'],
+        envOverlay: { ELECTRON_RUN_AS_NODE: '1' },
+        identity: 'desktop',
+        source: 'desktop-bundle'
+      }
+    })
+
+    await expect(detectInstalledAgents()).resolves.not.toContain('zcode')
+    expect(zcodeTerminalAdmissionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('filters ZCode when the standalone TUI probe is inconclusive', async () => {
+    isCommandOnLocalPathMock.mockImplementation((command: string) => command === 'zcode')
+    zcodeTerminalAdmissionMock.mockResolvedValue({
+      status: 'unverified',
+      invocation: {
+        command: '/usr/local/bin/zcode',
+        prefixArgs: [],
+        envOverlay: {},
+        identity: 'standalone',
+        source: 'standalone'
+      }
+    })
+
+    await expect(detectInstalledAgents()).resolves.not.toContain('zcode')
+  })
+
+  it('registers agent detection through the shared launch config commands', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'openclaude') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/openclaude\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      if (String(args[0]) === 'cursor-agent') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/cursor-agent\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error('not found')
+    })
+
+    registerPreflightHandlers()
+
+    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
+  })
+
+  it('hydrates shell PATH before user-facing agent detection', async () => {
+    const originalPath = process.env.PATH
+    process.env.PATH = '/usr/bin'
+    hydrateShellPathMock.mockResolvedValueOnce({
+      segments: ['/home/test/.local/bin'],
+      ok: true,
+      failureReason: 'none'
+    })
+    mergePathSegmentsMock.mockImplementationOnce((segments: string[]) => {
+      process.env.PATH = [...segments, '/usr/bin'].join(':')
+      return segments
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/home/test/.local/bin/codex\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error('not found')
+    })
+
+    try {
+      await expect(detectInstalledAgentsWithShellPathHydration()).resolves.toEqual(['codex'])
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH
+      } else {
+        process.env.PATH = originalPath
+      }
+    }
+    expect(hydrateShellPathMock).toHaveBeenCalledWith()
+    expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/home/test/.local/bin'])
+  })
+
+  it('does not run host shell hydration for WSL agent detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+      if (script.includes("'claude'")) {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(
+      detectInstalledAgentsWithShellPathHydration({ wslDistro: 'Ubuntu' })
+    ).resolves.toEqual(['claude'])
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not report Claude Agent Teams from WSL agent detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+      expect(script).not.toContain("'orca'")
+      expect(script).not.toContain("'orca-dev'")
+      expect(script).not.toContain("'orca-ide'")
+      if (script.includes("'claude'")) {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+  })
+
+  it('detects Mistral Vibe from the installed vibe executable', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'vibe') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/home/test/.local/bin/vibe\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+  })
+
+  it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
+        return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
   })
 
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
