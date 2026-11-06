@@ -265,3 +265,32 @@ it('retires an unreachable correction after native range clamping without attach
   await painted()
   expect(viewport.scrollTop).toBe(140)
 })
+
+it('preserves user navigation through a rubber-band excursion without writing against the bounce', async () => {
+  const lower = connect()
+  await painted()
+  userScroll(0)
+  await painted()
+  viewport.scrollTop = -20
+  viewport.dispatchEvent(new Event('scroll'))
+  lower.layoutChanged()
+  await painted()
+  expect(viewport.scrollTop).toBe(-20)
+  viewport.scrollTop = 15
+  viewport.dispatchEvent(new Event('scroll'))
+  viewport.dispatchEvent(new Event('scrollend'))
+  await painted()
+  expect(viewport.scrollTop).toBe(15)
+  lower.layoutChanged()
+  await painted()
+  expect(viewport.scrollTop).toBe(15)
+  userScroll(250)
+  await painted()
+  viewport.scrollTop = 270
+  viewport.dispatchEvent(new Event('scroll'))
+  viewport.scrollTop = 230
+  viewport.dispatchEvent(new Event('scroll'))
+  viewport.dispatchEvent(new Event('scrollend'))
+  await painted()
+  expect(viewport.scrollTop).toBe(230)
+})

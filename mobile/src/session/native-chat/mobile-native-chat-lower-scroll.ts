@@ -89,7 +89,7 @@ export function connectMobileNativeChatLowerScroll(
       return
     }
     observeOuterMovement()
-    if (gesture.active() || settling) {
+    if (gesture.active() || settling || viewport.scrollTop < 0 || viewport.scrollTop > maximum()) {
       return
     }
     onGeometry(viewport.clientHeight, externalAllowance(root))
@@ -174,8 +174,8 @@ export function connectMobileNativeChatLowerScroll(
   const observeOuterMovement = () => {
     const position = viewport.scrollTop
     const limit = maximum()
-    const bouncing = lastScroll < 0 || lastScroll > lastMaximum || position < 0 || position > limit
-    const delta = bouncing ? 0 : position - Math.min(lastScroll, limit)
+    const previous = limit < lastMaximum ? Math.min(lastScroll, limit) : lastScroll
+    const delta = position - previous
     lastScroll = position
     lastMaximum = limit
     if (Math.abs(delta) < 0.5) {
