@@ -5,10 +5,10 @@ import { attachPRWatchSource } from '../../github/pr-watch/pr-watch-seams'
 import { PRWatchService } from '../../github/pr-watch/pr-watch-service'
 import { readPRChatActionRecords, readPROwnerChat } from '../../github/pr-watch/pr-watch-tables'
 import type { PRWatchServiceDeps, PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
-import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
 
 export type PRWatchRuntimeDeps = {

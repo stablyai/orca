@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
@@ -17,8 +17,8 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -30,10 +30,10 @@ import { commitStructuredAgentSessionCreate } from './structured-agent-session-c
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 
 export const WORKTREE = `id:${HOST_TEST_LOCATION.workspaceId}`
 export const SOURCE_TAB = `structured-agent-session-${HOST_TEST_SESSION}`

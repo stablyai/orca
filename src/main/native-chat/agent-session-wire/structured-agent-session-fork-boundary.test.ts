@@ -1,13 +1,17 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { forkSession, type SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
-import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
+import { prepareLegacyTranscriptImport } from '../agent-session-journal/history-import/journal-legacy-import'
 import capture from '../../claude/__fixtures__/claude-plugin-recovery.json'
 import { expect, it } from 'vitest'
 import { claudeConversationForkBoundary } from '../../claude/claude-conversation-fork-boundary'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { fixture, appendItems, item } from './agent-session-history-contract-test-fixture'
+import {
+  fixture,
+  appendItems,
+  item
+} from './publication/history/testing/agent-session-history-contract-test-fixture'
 import { structuredAgentSessionForkBoundary } from './structured-agent-session-fork-boundary'
 
 it('allows the last inherited response without a new turn and rejects responses removed by rewind', async () => {

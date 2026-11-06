@@ -8,7 +8,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { deliverPendingPullRequestEvents } from './pr-event-delivery'
 import { insertPRCheckEvent, readOldestPRPendingDelivery } from './pr-check-event-tables'

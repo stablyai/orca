@@ -13,6 +13,7 @@ import {
   type DeferredSplitPaneHandoffHandle
 } from './deferred-split-pane-handoff'
 import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
+import { clearTerminalFontSizeOverride } from './terminal-font-size-overrides'
 import { e2eConfig } from '@/lib/e2e-config'
 import { useAppStore } from '@/store'
 
@@ -114,6 +115,9 @@ export function cleanupTerminalPaneMount(args: {
   if (!tabStillExists) {
     // Cleanup also covers transports removed by a racing close.
     discardDeferredSplitPaneHandoffsForTab(tabId)
+    for (const pane of manager.getPanes()) {
+      clearTerminalFontSizeOverride(pane.leafId)
+    }
   }
   for (const binding of panePtyBindingsRef.current.values()) {
     binding.dispose()

@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
-import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
 import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assembly'

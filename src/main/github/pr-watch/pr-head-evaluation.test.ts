@@ -6,9 +6,9 @@ import type { PRInfo } from '../../../shared/github/pull-request-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
-import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import { endPRWatchState, readPRPendingHeads } from './pr-check-event-tables'
 import {
   activeSavedPRWatches,

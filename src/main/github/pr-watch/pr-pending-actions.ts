@@ -2,7 +2,7 @@
 // between the call and its verification loses nothing and nothing older is ever replayed.
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type Database from '../../sqlite/sync-database'
 import type { GitPushUpdate } from './git-push-update-lines'
 import {

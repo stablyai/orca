@@ -1,5 +1,5 @@
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { evaluatePRCheckOccurrence } from './pr-check-occurrence'
 import {
   deletePRPendingHead,

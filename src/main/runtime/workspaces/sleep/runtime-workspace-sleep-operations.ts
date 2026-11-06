@@ -5,7 +5,11 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
 } from '../../../../shared/workspace-sleep'
-import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import {
+  WorkspaceSleepCoordinator,
+  type RecipeVmOpening,
+  type RecipeVmState
+} from './workspace-sleep-runtime'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -66,6 +70,21 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
   /** Opening a workspace wakes its recipe VM, if this host holds one; resolves with the VM's record. */
   wakeWorkspaceVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
     return this.workspaceSleep.wakeVm(worktreeId)
+  }
+
+  /** Where this workspace's recipe VM stands for a client about to reach its server. */
+  workspaceVmState(worktreeId: string, recordSuspended: boolean): RecipeVmState {
+    return this.workspaceSleep.vmState(worktreeId, recordSuspended)
+  }
+
+  /** Holds a client's open of this workspace until its recipe VM is up, or a later Sleep wins. */
+  holdWorkspaceVmOpen(
+    worktreeId: string,
+    recordSuspended: boolean,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<RecipeVmOpening> {
+    return this.workspaceSleep.holdOpen(worktreeId, recordSuspended, timeoutMs, signal)
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */

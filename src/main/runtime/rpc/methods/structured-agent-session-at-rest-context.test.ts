@@ -10,9 +10,13 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
-import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { REST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import {
+  hostTestMessage,
+  HOST_TEST_SESSION as SESSION
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
 import * as fileOperations from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
 

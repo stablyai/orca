@@ -1,6 +1,6 @@
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { schedulePRWatchRead } from '../pr-refresh-coordinator'
 import { prWatchQueueKey, type PRWatchJob } from '../pr-refresh-watch-jobs'
 import { deletePRPendingHead, readPRPendingHeads } from './pr-check-event-tables'

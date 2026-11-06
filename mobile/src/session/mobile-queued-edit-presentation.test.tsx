@@ -59,7 +59,7 @@ vi.mock('../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
 }))
 
 const { queuedEditHost } = await vi.importActual<QueuedEditHostFixtureModule>(
-  '../../../src/main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+  '../../../src/main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
 )
 const { AcpStructuredOptions } = await vi.importActual<AcpCommandOptionsFixtureModule>(
   '../../../src/main/acp/acp-structured-options'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
+import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import {
   finishedShellCall,

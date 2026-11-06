@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   PULL_REQUEST_EVENT_PRESENTATION,
@@ -6,7 +6,7 @@ import {
   pullRequestEventText
 } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type Database from '../../sqlite/sync-database'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import {
   markPRDeliveryDelivered,

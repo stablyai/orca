@@ -12,7 +12,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { settlePRPendingObligations } from './pr-head-evaluation'
 import type { PRPendingActionResumeDeps } from './pr-pending-action-types'

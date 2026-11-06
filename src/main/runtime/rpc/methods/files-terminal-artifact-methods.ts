@@ -42,6 +42,13 @@ export const FILE_TERMINAL_ARTIFACT_METHODS = [
     }
   }),
   defineMethod({
+    name: 'files.statTerminalArtifact',
+    permission: 'workspace',
+    params: TerminalArtifactFile,
+    handler: async (params, { runtime, clientId }) =>
+      runtime.statTerminalArtifact(params.worktree, params.grantId, params.absolutePath, clientId)
+  }),
+  defineMethod({
     name: 'files.readTerminalArtifactChunk',
     permission: 'workspace',
     params: TerminalArtifactFileChunk,

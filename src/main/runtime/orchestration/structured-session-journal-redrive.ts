@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 

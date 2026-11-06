@@ -5291,6 +5291,12 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "antigravity": {
+            "unknownAccount": "Google account",
+            "accounts": "Saved Antigravity Accounts",
+            "readAgo": "Read {{time}}",
+            "notRead": "Usage unknown: not read yet"
           }
         }
       },
@@ -20652,6 +20658,13 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
+      "composerWorkspace": {
+        "copyFailed": "Failed to copy",
+        "copyIdentity": "Copy {{value0}}",
+        "folder": "Folder",
+        "mainCheckout": "Main checkout",
+        "worktree": "Worktree"
+      },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
       "fork": {
         "action": "Fork from this response",
@@ -22257,7 +22270,9 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
-      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account."
+      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
+      "lastReading": "{{reading}} · Read {{time}}",
+      "noReading": "Usage unknown: not read yet"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

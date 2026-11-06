@@ -1,10 +1,10 @@
 import { sessionCrewChanges } from '../../runtime/orchestration/crew/crew-changes'
 import { FORK_MARKER_ITEM_ID } from './agent-session-fork-marker'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { Subscriber } from './structured-agent-session-subscribers'
-import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
-import { subscriberHistoryReader } from './agent-session-bounded-frames'
-import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import type { Subscriber } from './publication/subscribers/agent-session-subscribe-input'
+import type { SubscriberDeliveryPort } from './publication/subscribers/agent-session-subscriber-catch-up'
+import { subscriberHistoryReader } from './publication/history/agent-session-bounded-frames'
+import { emptyAgentSessionBatch } from './publication/subscribers/agent-session-empty-batch'
 
 export function watchForkSourceNames(refresh: (sources?: readonly string[]) => void): () => void {
   return sessionCrewChanges.subscribe((change) => {

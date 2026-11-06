@@ -4,7 +4,7 @@ import {
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { compareAppVersions } from '../../shared/app-version'
 import { AcpAgentError } from './acp-errors'
 import { AcpModelCommandRefusedError } from './acp-model-command'

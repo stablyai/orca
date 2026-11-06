@@ -7,7 +7,7 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session/agent-session-wire'
 import { AGENT_SESSION_TURN_ITEM_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
+import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscribe-input'
 import {
   call,
   clearStructuredHostStub,

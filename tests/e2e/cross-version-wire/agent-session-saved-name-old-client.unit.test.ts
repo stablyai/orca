@@ -7,7 +7,7 @@ import { listResult } from '../../../src/main/ai-vault/structured-session-owners
 import {
   HOST_TEST_SESSION,
   HOST_TEST_LOCATION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import {
   WORKTREE,
   createChat,
