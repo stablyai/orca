@@ -249,7 +249,8 @@ it('keeps crew as the only observer for title, settings and mirrored-name source
     }
   }
   const runtime = new CrewNameRuntime(store)
-  const { OrchestrationDb } = await import('../../src/main/runtime/orchestration/db')
+  const { OrchestrationDb } =
+    await import('../../src/main/runtime/orchestration/db/orchestration-db')
   const { subscribeCrew } = await import('../../src/main/runtime/orchestration/crew/crew-stream')
   const db = new OrchestrationDb(':memory:')
   runtime.setOrchestrationDb(db)

@@ -1,6 +1,6 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
   isEquivalentPaneKey,

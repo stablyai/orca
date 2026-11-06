@@ -134,7 +134,8 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/schema/migrate-v39.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate.ts': 'orchestration',
   'src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts': 'orchestration',
-  'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
+  'src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts':
+    'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
     'test-fixture',

@@ -12,7 +12,7 @@ import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { closeStructuredAgentSessionChild } from '../../../agent-session/structured-agent-session-close'
 import { restoreJournal } from '../../../../native-chat/agent-session-journal/replay/journal-open'
 import { OrcaRuntimeRpcServer } from '../../../rpc/server/runtime-rpc'
-import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,

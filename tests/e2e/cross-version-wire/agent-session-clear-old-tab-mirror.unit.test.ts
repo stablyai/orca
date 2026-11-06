@@ -9,7 +9,7 @@ import {
   createChat,
   clear,
   snapshot
-} from '../../../src/main/runtime/rpc/methods/structured-chat-tab-table.test-fixture'
+} from '../../../src/main/runtime/rpc/methods/session-tabs/structured-chat-tab-table.test-fixture'
 
 describe('historical clients after a clear', () => {
   it.each(['v1.4.222', 'b6b4d68cd844c921c7c5191cef72d5adafc0dafa'])(
