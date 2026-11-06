@@ -16,4 +16,17 @@ describe('shouldRunConversationKnowledgeAutoIndex', () => {
       shouldRunConversationKnowledgeAutoIndex(now, now, CONVERSATION_KNOWLEDGE_FORMAT_VERSION - 1)
     ).toBe(true)
   })
+
+  it('runs immediately when the selected knowledge language changes', () => {
+    const now = Date.now()
+    expect(
+      shouldRunConversationKnowledgeAutoIndex(
+        now,
+        now,
+        CONVERSATION_KNOWLEDGE_FORMAT_VERSION,
+        'en',
+        'zh'
+      )
+    ).toBe(true)
+  })
 })

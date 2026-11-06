@@ -186,6 +186,35 @@ describe('ConversationKnowledgeService', () => {
     expect(enrich).toHaveBeenCalledOnce()
   })
 
+  it('reindexes an item generated in a different language', async () => {
+    const existing = knowledgeItem('one')
+    const enrich = vi.fn().mockResolvedValue({
+      summary: '已更新',
+      topics: [],
+      conclusions: [],
+      entities: [],
+      searchTerms: [],
+      handoff: [],
+      agent: 'codex',
+      model: 'gpt-5'
+    })
+    const service = new ConversationKnowledgeService({
+      listSessions: vi.fn().mockResolvedValue([session('one')]),
+      readSession: vi.fn().mockResolvedValue(readableHistory()),
+      enrich,
+      store: {
+        list: vi.fn().mockResolvedValue([existing]),
+        upsert: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined)
+      }
+    })
+
+    await service.startIndex({ generatorAgent: 'codex', generatorModel: 'gpt-5', language: 'zh' })
+    await vi.waitFor(() => expect(service.getIndexStatus().state).toBe('idle'))
+
+    expect(enrich).toHaveBeenCalledWith(expect.objectContaining({ language: 'zh' }))
+  })
+
   it('does not index the internal sessions created by knowledge generation', async () => {
     const enrich = vi.fn().mockResolvedValue({
       summary: 'Summary',
@@ -455,6 +484,7 @@ function knowledgeItem(sessionId: string): ConversationKnowledgeItem {
     generator: {
       agent: 'codex' as const,
       model: 'gpt-5',
+      language: 'en',
       generatedAt: '2026-09-01T10:01:00.000Z',
       formatVersion: CONVERSATION_KNOWLEDGE_FORMAT_VERSION
     }

@@ -614,6 +614,9 @@
     "taskSearchLoading": "正在搜索任务…",
     "taskSearchFailed": "部分任务源无法搜索",
     "taskSearchRetry": "重试",
+    "searchScope": "搜索范围",
+    "allResults": "全部",
+    "knowledgeResults": "知识",
     "goToWebsite": "转到 {{value0}}",
     "websiteBadge": "网站",
     "openWebsiteInNewTab": "在新的浏览器选项卡中打开"
@@ -22776,5 +22779,154 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 发行版 {{distro}} 已停止，因此 Orca 没有启动此终端。请启动该发行版后重试。",
     "terminalUnverifiable": "Orca 无法确认 WSL 发行版 {{distro}} 是否正在运行，因此没有启动此终端。请启动该发行版后重试。"
+  },
+  "conversationKnowledge": {
+    "empty": {
+      "generated": "尚未生成知识。",
+      "search": "没有匹配的摘要或相关节点。",
+      "selection": "选择主题或摘要节点以查看其详细信息和来源。"
+    },
+    "graph": "对话知识图谱",
+    "nodeType": {
+      "project": "项目",
+      "workspace": "工作区",
+      "digest": "对话摘要",
+      "concept": "概念",
+      "candidate": "知识候选项",
+      "statement": "有来源支持的陈述",
+      "note": "知识笔记"
+    },
+    "relation": {
+      "belongsTo": "属于",
+      "occurredIn": "发生于",
+      "about": "关于",
+      "mentions": "提及",
+      "contains": "包含",
+      "records": "记录",
+      "organizes": "归纳为",
+      "supports": "支持"
+    },
+    "detail": {
+      "handoffUserConfirmed": "用户确认",
+      "handoffVerified": "已验证",
+      "handoffInferred": "推断",
+      "handoffProposal": "提议",
+      "handoffSuperseded": "已被替代",
+      "handoffConflicted": "存在冲突",
+      "handoffExpired": "已过期",
+      "handoffActive": "有效",
+      "generatedBy": "由 {{agent}} · {{model}} 生成",
+      "created": "创建时间",
+      "modified": "最后修改时间",
+      "summary": "摘要",
+      "conclusions": "关键结论",
+      "topics": "主题",
+      "entities": "实体",
+      "source": "来源",
+      "openSessionHistory": "打开智能体会话历史",
+      "handoff": "智能体交接信息",
+      "handoffIncluded": "已包含在智能体上下文中",
+      "handoffExcluded": "未包含在智能体上下文中",
+      "resize": "调整详细信息面板大小"
+    },
+    "map": {
+      "empty": "尚无可显示在地图中的概念。",
+      "cluster": "概念簇",
+      "relationships": "概念关系",
+      "zoomOut": "缩小",
+      "fit": "适应地图",
+      "zoomIn": "放大",
+      "evidenceCount": "{{count}} 条有来源支持",
+      "verifiedCount": "{{count}} 条已验证"
+    },
+    "claimResults": "匹配的陈述",
+    "conceptOverview": {
+      "eyebrow": "概念概览",
+      "description": "在 {{count}} 个对话摘要中出现。这不是已验证的知识笔记。",
+      "sourceBacked": "有来源支持的陈述",
+      "noSourceBacked": "尚无有来源支持的陈述关联到此概念。",
+      "digests": "对话摘要",
+      "noDigests": "尚无对话摘要关联到此概念。",
+      "sourceSessions": "源会话",
+      "noSourceSessions": "尚无源会话关联到此概念。"
+    },
+    "graphMode": {
+      "ariaLabel": "图谱视图",
+      "map": "地图",
+      "graph": "图谱"
+    },
+    "stop": "停止生成",
+    "generateUpdates": "生成更新",
+    "generationOptions": "更多生成选项",
+    "regenerateAll": "重新生成全部",
+    "regenerateAllDescription": "替换所有已生成的知识条目。",
+    "status": {
+      "panelLabel": "生成进度",
+      "indexing": "正在建立索引",
+      "indexed": "已建立索引",
+      "ready": "可以生成",
+      "progressCount": "{{completed}} / {{total}}",
+      "currentSession": "智能体正在处理：{{title}}",
+      "waitingForAgent": "正在等待下一个智能体任务。",
+      "readyDescription": "生成更新以索引新的或已更改的对话。",
+      "completed": "已完成",
+      "active": "进行中",
+      "queued": "已排队",
+      "failed": "失败",
+      "canceled": "已停止"
+    },
+    "note": {
+      "eyebrow": "知识笔记",
+      "verified": "已验证",
+      "supported": "有依据支持",
+      "evidence": "支持证据"
+    },
+    "error": {
+      "load": "无法加载已生成的知识。",
+      "start": "无法开始建立知识索引。",
+      "stop": "无法停止建立知识索引。"
+    },
+    "name": "对话知识",
+    "description": "从智能体历史中由 AI 生成的主题、结论和关系。",
+    "items": {
+      "count": "显示 {{visible}} / {{total}} 个条目",
+      "empty": "没有知识条目"
+    },
+    "scope": {
+      "ariaLabel": "知识图谱范围",
+      "all": "全部",
+      "project": "按项目"
+    },
+    "search": {
+      "ariaLabel": "搜索对话知识",
+      "placeholder": "搜索陈述、摘要或节点"
+    },
+    "configurationRequired": "请在“设置 → 实验性功能 → 对话知识”中选择已启用的摘要智能体和模型。",
+    "relations": {
+      "empty": "尚无有来源支持的陈述或关系。重新生成知识以提取它们。",
+      "title": "有来源支持的陈述和关系",
+      "clearFocus": "显示全部",
+      "structuredClaim": "结构化声明",
+      "sourceBackedStatement": "有来源支持的陈述"
+    },
+    "settings": {
+      "description": "提供图谱和详细信息工作区，用于浏览生成的主题、结论、项目、工作树和源会话。",
+      "toggle": "切换对话知识",
+      "summaryAgent": "摘要智能体",
+      "chooseAgent": "选择已启用的智能体",
+      "agentHelp": "仅显示已检测到、已启用且支持后台生成的智能体。",
+      "summaryModel": "摘要模型",
+      "searchDescription": "从智能体会话历史构建可搜索的知识层。",
+      "keyword": {
+        "conversation": "对话",
+        "history": "历史",
+        "knowledge": "知识",
+        "summary": "摘要",
+        "graph": "图谱"
+      }
+    },
+    "enrichment": "AI 知识提炼",
+    "enrichmentCopy": "每天检查一次新的或已更改的会话，并将其转化为摘要、主题、结论和图谱关系。",
+    "enrichmentToggle": "切换 AI 知识提炼"
   }
 }

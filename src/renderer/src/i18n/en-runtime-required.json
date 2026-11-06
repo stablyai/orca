@@ -1938,10 +1938,6 @@
       }
     }
   },
-  "conversationKnowledge": {
-    "generateAll": "Generate all",
-    "regenerateAll": "Regenerate all"
-  },
   "dashboard": {
     "sidebar": {
       "closeActivity": "Turn off activity view",

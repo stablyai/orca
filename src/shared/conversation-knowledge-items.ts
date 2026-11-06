@@ -3,7 +3,12 @@ import type { ExecutionHostId } from './execution-host'
 import type { TuiAgent } from './tui-agent'
 import { reconcileConversationKnowledgeConflicts } from './conversation-knowledge-conflicts'
 
-export const CONVERSATION_KNOWLEDGE_FORMAT_VERSION = 5
+export const CONVERSATION_KNOWLEDGE_FORMAT_VERSION = 6
+
+export function normalizeConversationKnowledgeLanguage(language: string | undefined): string {
+  const normalized = language?.trim().toLowerCase()
+  return normalized || 'en'
+}
 
 export type ConversationKnowledgeItem = {
   id: string
@@ -29,6 +34,7 @@ export type ConversationKnowledgeItem = {
   generator: {
     agent: TuiAgent
     model: string
+    language?: string
     generatedAt: string
     formatVersion?: number
   }
@@ -127,12 +133,14 @@ export function isConversationKnowledgeItemFresh(
     sourceUpdatedAt: string | null
     generatorAgent: TuiAgent
     generatorModel: string
+    language?: string
   }
 ): boolean {
   return (
     item.source.updatedAt === expected.sourceUpdatedAt &&
     item.generator.agent === expected.generatorAgent &&
     item.generator.model === expected.generatorModel &&
+    item.generator.language === normalizeConversationKnowledgeLanguage(expected.language) &&
     item.generator.formatVersion === CONVERSATION_KNOWLEDGE_FORMAT_VERSION
   )
 }

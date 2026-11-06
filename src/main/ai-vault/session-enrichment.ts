@@ -164,6 +164,14 @@ export function selectConversationSummaryMessages<
 
 function summaryLanguage(language: string | undefined): string {
   const normalized = language?.trim().toLowerCase() ?? ''
+  if (
+    normalized.startsWith('zh-hant') ||
+    normalized.startsWith('zh-tw') ||
+    normalized.startsWith('zh-hk') ||
+    normalized.startsWith('zh-mo')
+  ) {
+    return 'Traditional Chinese'
+  }
   if (normalized.startsWith('zh')) {
     return 'Simplified Chinese'
   }

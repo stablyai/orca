@@ -15,7 +15,7 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree, useAllWorktrees } from '@/store/selectors'
 import { buildConversationKnowledgeGraph } from '../../../../shared/conversation-knowledge-graph'
 import { getCommitMessageAgentSpec } from '../../../../shared/commit-message-agent-spec'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import {
   conversationKnowledgeItemsInGraph,
   scopeConversationKnowledgeGraphToProject,
@@ -86,7 +86,7 @@ export default function ConversationKnowledgePanel({
     [generatorAgent, settings?.conversationKnowledgeEnrichmentModel]
   )
   const scopePaths = undefined
-  const summaryLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language
+  const summaryLanguage = getIntlLocale()
   const fullGraph = useMemo(
     () => buildConversationKnowledgeGraph({ repos, worktrees, items }),
     [items, repos, worktrees]

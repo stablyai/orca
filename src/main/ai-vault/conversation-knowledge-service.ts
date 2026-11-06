@@ -43,6 +43,14 @@ export type GenerateConversationKnowledgeArgs = {
   generatorModel?: string | null
   language?: string
 }
+function indexConfigKey(args: ConversationKnowledgeIndexCheckpoint['config']): string {
+  return JSON.stringify({
+    generatorAgent: args.generatorAgent,
+    generatorModel: resolveConversationKnowledgeModel(args.generatorAgent, args.generatorModel),
+    scopePaths: args.scopePaths ?? [],
+    language: args.language ?? 'en'
+  })
+}
 export class ConversationKnowledgeService {
   private indexStatus = idleIndexStatus()
   private indexPromise: Promise<void> | null = null
@@ -84,12 +92,7 @@ export class ConversationKnowledgeService {
     preserveExisting?: boolean
   }): Promise<ConversationKnowledgeIndexStatus> {
     await this.restorePromise
-    const configKey = JSON.stringify({
-      generatorAgent: args.generatorAgent,
-      generatorModel: resolveConversationKnowledgeModel(args.generatorAgent, args.generatorModel),
-      scopePaths: args.scopePaths ?? [],
-      language: args.language ?? 'en'
-    })
+    const configKey = indexConfigKey(args)
     const [sessions, storedItems] = await Promise.all([
       this.dependencies.listSessions(),
       this.dependencies.store.list()
@@ -140,7 +143,8 @@ export class ConversationKnowledgeService {
             generatorModel: resolveConversationKnowledgeModel(
               args.generatorAgent,
               args.generatorModel
-            )
+            ),
+            language: args.language
           }))
       )
     })
@@ -266,15 +270,7 @@ export class ConversationKnowledgeService {
       completed: checkpoint.completed,
       failed: checkpoint.failed
     }
-    this.indexConfig = JSON.stringify({
-      generatorAgent: checkpoint.config.generatorAgent,
-      generatorModel: resolveConversationKnowledgeModel(
-        checkpoint.config.generatorAgent,
-        checkpoint.config.generatorModel
-      ),
-      scopePaths: checkpoint.config.scopePaths ?? [],
-      language: checkpoint.config.language ?? 'en'
-    })
+    this.indexConfig = indexConfigKey(checkpoint.config)
     this.pendingSessions = sessions
     this.indexPromise = this.runIndex(sessions, checkpoint.config).finally(() => {
       this.indexStatus = { ...this.indexStatus, state: 'idle' }

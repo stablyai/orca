@@ -2,6 +2,7 @@ import type { AiVaultHistoryReadResult } from '../../shared/ai-vault-history-typ
 import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import {
   CONVERSATION_KNOWLEDGE_FORMAT_VERSION,
+  normalizeConversationKnowledgeLanguage,
   type ConversationKnowledgeItem
 } from '../../shared/conversation-knowledge-items'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -65,6 +66,7 @@ export async function generateConversationKnowledgeFromSession(input: {
     generator: {
       agent: input.args.generatorAgent,
       model: enrichment.model,
+      language: normalizeConversationKnowledgeLanguage(input.args.language),
       generatedAt: new Date().toISOString(),
       formatVersion: CONVERSATION_KNOWLEDGE_FORMAT_VERSION
     }
