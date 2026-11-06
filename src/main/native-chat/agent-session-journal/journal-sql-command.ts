@@ -16,6 +16,7 @@ import {
 } from './journal-outcome-format'
 import { persistJournalOutcomeTransition } from './journal-outcome-table'
 import { assertJournalFence } from './journal-write-guards'
+import { journalContextCursor, projectJournalRows } from './journal-context-cursor'
 import {
   isJournalOutputRevision,
   isJournalStreamedTextRevision
@@ -91,15 +92,16 @@ export class JournalSqlCommand {
         )
         advanceJournalOutcomeSource(this.db, state.sessionId, state.epoch, state.lastSequence)
       }
+      const projected = projectJournalRows(state, rows)
       const effects = (rows.length === 0 ? [] : (command.effects ?? [])).map((effect) =>
-        applyJournalWriterEffect(this.db, this.stateDirectory, effect, rows)
+        applyJournalWriterEffect(this.db, this.stateDirectory, effect, projected)
       )
       this.db
         .prepare(`UPDATE journal_proj_meta SET through_seq=?
         WHERE session_id=? AND owner_token=?`)
         .run(state.lastSequence, state.sessionId, command.target.ownerToken)
       return {
-        cursor: { epoch: state.epoch, sequence: state.lastSequence },
+        cursor: journalContextCursor(state),
         inputChanged,
         ...changes.finish(scope, state),
         inputKeys: [...inputKeys.changes],

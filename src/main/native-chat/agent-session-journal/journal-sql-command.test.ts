@@ -1,8 +1,8 @@
 import { seedJournalSqlCommands } from './journal-sql-command.test-fixture'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { ensureJournalOutcomeTables } from './journal-outcome-format'
-import { persistJournalOutcomeRows } from './journal-outcome-table'
+import { advanceJournalOutcomeSource, ensureJournalOutcomeTables } from './journal-outcome-format'
+import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './journal-outcome-table'
 import { createJournalReducerState } from './journal-reducer'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
@@ -46,7 +46,20 @@ function fixture() {
 }
 
 it('assigns revisions after preceding successes and rolls back failed command projections and receipts', () => {
-  const { db, engine, batch } = fixture()
+  const { db, engine, batch, initial, source } = fixture()
+  // A logical context boundary retains the physical epoch for ownership and log lookup.
+  persistJournalOutcomeTransition(
+    db,
+    new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch').transition(),
+    source,
+    [{ ...initial, seq: 2 }],
+    100,
+    false,
+    (state) => journalInputOrder(state).cards.ensure(state)
+  )
+  advanceJournalOutcomeSource(db, 'session', 'epoch', 2)
+  db.prepare('UPDATE journal_proj_meta SET through_seq=2').run()
+  const contextEpoch = 'context-v1:2cb86f27aabffce457946e9c46bd5d771895f95d6379dee0866d667e0ecb7adc'
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('session', '{}')
   const receipt: CommandReceipt = {
     operationId: 'send',
@@ -75,10 +88,13 @@ it('assigns revisions after preceding successes and rolls back failed command pr
   )
   expect(results.outcomes.map((result) => result.committed)).toEqual([true, false, true, false])
   const committed = results.outcomes.flatMap((result) => (result.committed ? [result.value] : []))
-  expect(committed.map((result) => result.cursor.sequence)).toEqual([2, 3])
+  expect(committed.map((result) => result.cursor)).toEqual([
+    { epoch: contextEpoch, sequence: 3 },
+    { epoch: contextEpoch, sequence: 4 }
+  ])
   expect(committed.map((result) => result.items)).toEqual([
-    [{ itemId, deleted: false, revision: 1, sequence: 2, sequenceIndex: 0 }],
-    [{ itemId, deleted: false, revision: 2, sequence: 2, sequenceIndex: 0 }]
+    [{ itemId, deleted: false, revision: 1, sequence: 3, sequenceIndex: 0 }],
+    [{ itemId, deleted: false, revision: 2, sequence: 3, sequenceIndex: 0 }]
   ])
   const loaded = new JournalSqlReducer(new JournalSqlScope(db, 'session', 'projection'), 'epoch')
   expect(loaded.state.items.get(itemId)?.body).toEqual({
@@ -86,11 +102,11 @@ it('assigns revisions after preceding successes and rolls back failed command pr
     role: 'assistant',
     blocks: [{ type: 'text', text: 'second' }]
   })
-  expect(db.prepare('SELECT through_seq FROM journal_proj_meta').get()?.through_seq).toBe(3)
-  expect(db.prepare('SELECT MAX(seq) AS seq FROM journal_outcomes').get()?.seq).toBe(3)
+  expect(db.prepare('SELECT through_seq FROM journal_proj_meta').get()?.through_seq).toBe(4)
+  expect(db.prepare('SELECT MAX(seq) AS seq FROM journal_outcomes').get()?.seq).toBe(4)
   expect(readCommandReceipt(db, { kind: 'global' }, 'send')).toMatchObject({
     verdict: 'readable',
-    receipt: { result: { kind: 'journal-row', epoch: 'epoch', sequence: 2 } }
+    receipt: { result: { kind: 'journal-row', epoch: contextEpoch, sequence: 3 } }
   })
 })
 
