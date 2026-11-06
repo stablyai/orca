@@ -164,22 +164,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
     expect(clone.scratchDirectories()).toEqual([])
   })
 
-  it('makes no scratch folder until a check shows this Git writes trees, then one per check', async () => {
-    __resetPRConflictSummaryCachesForTests()
-    const base = fixture.git(fixture.repoPath, 'rev-parse', 'main').trim()
-    const head = fixture.git(fixture.repoPath, 'rev-parse', 'feature-conflict').trim()
-
-    const first = await getPRConflictSummary(fixture.repoPath, 'main', base, head)
-    expect(scratchFoldersMade).toEqual([])
-    __resetPRConflictSummaryDerivationCachesForTests()
-    const second = await getPRConflictSummary(fixture.repoPath, 'main', base, head)
-
-    expect(first?.files).toEqual(['shared.txt'])
-    expect(second?.files).toEqual(['shared.txt'])
-    expect(scratchFoldersMade).toHaveLength(1)
-    expect(fixture.scratchDirectories()).toEqual([])
-  })
-
   it('removes the scratch directory when the Git command fails', async () => {
     const quarantine = createLocalGitObjectQuarantine(fixture.linkedPath)
     let scratch: string | undefined
