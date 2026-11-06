@@ -1,6 +1,11 @@
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-types'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/work-item-target'
+import { hasReachedAppVersion } from '../../../src/shared/app-version'
+import {
+  GITHUB_EXACT_OPERATION_UNSUPPORTED,
+  matchesGitHubWorkItemTarget,
+  type GitHubWorkItemTarget
+} from '../../../src/shared/github/work-item-target'
 import {
   captureGitHubInvocation,
   GITHUB_DESKTOP_UPDATE_REQUIRED,
@@ -9,10 +14,14 @@ import {
   githubOperationResponse
 } from '../transport/github-target-invocation'
 import { openRpcRequestBudget } from '../transport/rpc-request-budget'
+import { readGitHubWorkItemByNumber } from './mobile-task-source-search-operations'
 import {
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
 } from '../../../src/shared/task-source-runtime-capabilities'
+
+// Before this release an unaddressed issue write ignored the issue source its own number lookup honors.
+const ISSUE_WRITE_FOLLOWS_LOOKUP_VERSION = '1.4.221'
 
 export async function withGitHubTargetOperation<T>(args: {
   client: RpcClient
@@ -21,6 +30,8 @@ export async function withGitHubTargetOperation<T>(args: {
   read?: boolean
   /** An addressed details read's intent: false for an ordinary load, true for the user's explicit Refresh. */
   canonical?: boolean
+  /** A write's item, which a server without exact targets may still update unaddressed once its own lookup proves it. */
+  issueTarget?: GitHubWorkItemTarget
   send: (
     client: RpcClient,
     exact: { ownerRepo?: GitHubOwnerRepo; canonical?: boolean },
@@ -70,8 +81,13 @@ export async function withGitHubTargetOperation<T>(args: {
     )
     const canonicalOnly =
       !explicitIntent && capabilities.includes(GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY)
-    const sendOwner = canonicalOnly ? args.canonical === true : supports && source !== null
-    if ((!supports || !source) && !args.read) {
+    const exact = supports && source !== null
+    const sendOwner = canonicalOnly ? args.canonical === true : exact
+    if (
+      !exact &&
+      !args.read &&
+      !(await serverFollowsIssueLookup(client, status, args.params.repo, args.issueTarget, options))
+    ) {
       // Name the build to update: the relaying desktop when only it lacks the check, else the executing server.
       throw new Error(
         serverSupports && source && !relaySupports
@@ -101,6 +117,29 @@ export async function withGitHubTargetOperation<T>(args: {
   } finally {
     invocation.retire()
   }
+}
+
+// Without ownerRepo a server writes to the issue its own number lookup finds, so a lookup landing on the target proves it.
+async function serverFollowsIssueLookup(
+  client: RpcClient,
+  status: Record<string, unknown>,
+  repo: string,
+  target: GitHubWorkItemTarget | undefined,
+  options: () => SendRequestOptions
+): Promise<boolean> {
+  if (
+    target?.type !== 'issue' ||
+    typeof status.appVersion !== 'string' ||
+    !hasReachedAppVersion(status.appVersion, ISSUE_WRITE_FOLLOWS_LOOKUP_VERSION)
+  ) {
+    return false
+  }
+  const item = await readGitHubWorkItemByNumber(
+    client,
+    { repo, number: target.number, type: 'issue' },
+    options()
+  )
+  return matchesGitHubWorkItemTarget(item, target)
 }
 
 async function invocationStatus(client: RpcClient, options: SendRequestOptions) {

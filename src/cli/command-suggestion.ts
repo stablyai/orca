@@ -1,5 +1,6 @@
 import { specPaths, type CommandSpec } from './command-spec'
 import { levenshtein } from '../shared/edit-distance'
+import { isTerminalHandle } from '../shared/terminal-handle-prefix'
 
 const SUGGESTION_THRESHOLD = 3
 const MAX_SUGGESTIONS = 3
@@ -88,8 +89,27 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
   return rankByDistance(scored)
 }
 
+// A positional terminal handle lands in the command path; point at the flag form instead.
+function terminalFlagSuggestion(specs: CommandSpec[], commandPath: string[]): string[] {
+  const handleIndex = commandPath.findIndex(isTerminalHandle)
+  if (handleIndex < 1) {
+    return []
+  }
+  const parent = commandPath.slice(0, handleIndex).join(' ')
+  const spec = specs.find(
+    (candidate) =>
+      !candidate.hidden && specPaths(candidate).some((path) => path.join(' ') === parent)
+  )
+  return spec?.allowedFlags.includes('terminal') && spec.identityFlagRoles?.terminal !== 'caller'
+    ? [`${parent} --terminal <handle>`]
+    : []
+}
+
 export function unknownCommandData(specs: CommandSpec[], commandPath: string[]): CommandErrorData {
-  const suggestions = suggestCommands(specs, commandPath)
+  const suggestions = [
+    ...terminalFlagSuggestion(specs, commandPath),
+    ...suggestCommands(specs, commandPath)
+  ].slice(0, MAX_SUGGESTIONS)
   const nextSteps = suggestions.length
     ? [`Did you mean: ${suggestions.map((path) => `orca ${path}`).join(', ')}`]
     : []

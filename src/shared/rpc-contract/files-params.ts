@@ -93,7 +93,7 @@ export const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-const FileChunkRange = {
+export const FileChunkRange = {
   offset: z.number().int().nonnegative(),
   length: z
     .number()

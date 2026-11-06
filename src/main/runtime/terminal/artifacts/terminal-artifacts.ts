@@ -2,6 +2,7 @@ import { constants } from 'node:fs/promises'
 import { RuntimeTerminalFileGrants, type RuntimeTerminalFileGrantHost } from './file-grants'
 import type {
   RuntimeFilePreviewResult,
+  RuntimeFileReadChunkResult,
   RuntimeFileReadResult,
   RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
@@ -9,7 +10,8 @@ import { canonicalPathForArtifactComparison, truncateMobileFilePreview } from '.
 import {
   openLocalTerminalArtifactGrant,
   readLocalTerminalArtifactFileFromHandle,
-  readLocalTerminalArtifactPreviewFromHandle
+  readLocalTerminalArtifactPreviewFromHandle,
+  readLocalTerminalArtifactRangeFromHandle
 } from './local-artifact-read'
 import { statLocalTerminalArtifact } from './artifact-stat'
 import { assertPreviewWithinTransportBudget } from '../../files/file-preview-budget'
@@ -30,7 +32,8 @@ export class RuntimeTerminalArtifacts {
   }): Promise<RuntimeTerminalPathResolution> {
     // Why: the grant binds the canonical path so later reads cannot be redirected through a symlink.
     const canonicalPath = await canonicalPathForArtifactComparison(args.absolutePath)
-    const { stats, contentDigest, binary } = await statLocalTerminalArtifact(canonicalPath)
+    const { stats, contentDigest, contentBlocks, binary } =
+      await statLocalTerminalArtifact(canonicalPath)
     const isDirectory = stats.isDirectory()
     const grant = isDirectory
       ? null
@@ -39,7 +42,8 @@ export class RuntimeTerminalArtifacts {
           absolutePath: canonicalPath,
           clientId: args.clientId,
           stats,
-          contentDigest
+          contentDigest,
+          contentBlocks
         })
     return {
       worktree: args.worktreeId,
@@ -117,6 +121,30 @@ export class RuntimeTerminalArtifacts {
       )
       this.grants.refreshTerminalFileGrant(grant)
       return assertPreviewWithinTransportBudget(preview, maxContentBytes)
+    } finally {
+      await handle.close()
+    }
+  }
+
+  async readTerminalArtifactChunk(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    offset: number,
+    length: number,
+    clientId?: string
+  ): Promise<RuntimeFileReadChunkResult> {
+    const { grant } = await this.grants.requireTerminalFileGrant(
+      worktreeSelector,
+      grantId,
+      absolutePath,
+      clientId
+    )
+    const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+    try {
+      const chunk = await readLocalTerminalArtifactRangeFromHandle(handle, grant, offset, length)
+      this.grants.refreshTerminalFileGrant(grant)
+      return chunk
     } finally {
       await handle.close()
     }

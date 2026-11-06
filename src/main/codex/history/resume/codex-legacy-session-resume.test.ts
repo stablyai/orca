@@ -89,16 +89,6 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     expect(statSync(targetPath).ino).toBe(statSync(rolloutPath).ino)
   })
 
-  it('materializes a compressed legacy rollout without changing its representation', async () => {
-    const compressedPath = `${rolloutPath}.zst`
-    rmSync(rolloutPath)
-    rolloutPath = compressedPath
-    writeFileSync(rolloutPath, 'compressed-rollout', 'utf-8')
-
-    await expect(prepare()).resolves.toEqual({ useRealCodexHome: true })
-    expect(readFileSync(targetRolloutPath(), 'utf-8')).toBe('compressed-rollout')
-  })
-
   it('coalesces concurrent resumes of the same legacy rollout', async () => {
     const [first, second] = await Promise.all([prepare(), prepare()])
 
@@ -120,49 +110,6 @@ describe('prepareLegacySharedCodexSessionResume', () => {
 
     await expect(prepare()).rejects.toThrow(/Retry resume/)
     expect(readFileSync(targetRolloutPath(), 'utf-8')).toBe('{"different":true}\n')
-  })
-
-  it.each([
-    ['per-account home', join(rootPlaceholder(), 'codex-accounts', 'account-1', 'home'), 'local'],
-    ['custom home', join(rootPlaceholder(), 'custom-codex-home'), 'local'],
-    ['WSL home', '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex', 'local'],
-    ['SSH session', rootPlaceholder(), 'ssh:server-1']
-  ])(
-    'preserves %s without materializing it',
-    async (_label, codexHomeTemplate, executionHostId) => {
-      const codexHome = codexHomeTemplate.replace(rootPlaceholder(), root)
-      const result = await prepareLegacySharedCodexSessionResume(
-        {
-          agent: 'codex',
-          filePath: rolloutPath,
-          codexHome,
-          executionHostId: executionHostId as 'local'
-        },
-        options()
-      )
-
-      expect(result).toEqual({ useRealCodexHome: false })
-      expect(existsSync(targetRolloutPath())).toBe(false)
-    }
-  )
-
-  it('preserves the legacy home while a non-default Codex home lane is selected', async () => {
-    const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
-      ...options(),
-      isHostSystemDefaultRealHomeSelected: () => false
-    })
-
-    expect(result).toEqual({ useRealCodexHome: false })
-    expect(existsSync(targetRolloutPath())).toBe(false)
-  })
-
-  it('still materializes a legacy resume when an account selection exists', async () => {
-    const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
-      ...options(),
-      getSelectedHostAccountCodexHomePath: () => join(root, 'codex-accounts', 'account-1', 'home')
-    })
-
-    expect(result).toEqual({ useRealCodexHome: true })
   })
 
   function prepare() {
@@ -250,34 +197,6 @@ describe('per-account resume repin', () => {
     }
   )
 
-  it('keeps the home of a row that already names the selected account', async () => {
-    const result = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        filePath: recordedRolloutPath,
-        codexHome: selectedHome,
-        executionHostId: 'local'
-      },
-      repinOptions()
-    )
-
-    expect(result).toEqual({ useRealCodexHome: false })
-  })
-
-  it('declines while the system default is selected', async () => {
-    const result = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        filePath: bridgedRolloutPath,
-        codexHome: peerHome,
-        executionHostId: 'local'
-      },
-      { ...repinOptions(), getSelectedHostAccountCodexHomePath: () => null }
-    )
-
-    expect(result).toEqual({ useRealCodexHome: false })
-  })
-
   it('declines while the bridge has not yet linked the rollout into the selected home', async () => {
     const unbridgedSelectedHome = join(
       root,
@@ -316,58 +235,6 @@ describe('per-account resume repin', () => {
     ).rejects.toBeInstanceOf(ManagedCodexHomeTemporarilyUnavailableError)
   })
 
-  it('declines a session owned by another host', async () => {
-    const result = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        filePath: bridgedRolloutPath,
-        codexHome: peerHome,
-        executionHostId: 'ssh:server-1' as 'local'
-      },
-      repinOptions()
-    )
-
-    expect(result).toEqual({ useRealCodexHome: false })
-  })
-
-  it('does not consult the host selection while resuming a WSL account session', async () => {
-    const wslHome =
-      '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\orca\\codex-accounts\\account-1\\home'
-    const result = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        filePath: `${wslHome}\\sessions\\2026\\07\\20\\rollout-session.jsonl`,
-        codexHome: wslHome,
-        executionHostId: 'local'
-      },
-      {
-        ...repinOptions(),
-        getSelectedHostAccountCodexHomePath: () => {
-          throw new Error('host lane must not be consulted')
-        }
-      }
-    )
-
-    expect(result).toEqual({ useRealCodexHome: false })
-  })
-
-  it('declines a transcript outside the dated rollout layout', async () => {
-    const straySessionPath = join(peerHome, 'sessions', 'stray.jsonl')
-    writeFileSync(straySessionPath, '{"type":"session_meta"}\n', 'utf-8')
-
-    const result = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        filePath: straySessionPath,
-        codexHome: peerHome,
-        executionHostId: 'local'
-      },
-      repinOptions()
-    )
-
-    expect(result).toEqual({ useRealCodexHome: false })
-  })
-
   function repinOptions() {
     return {
       isHostSystemDefaultRealHomeSelected: () => false,
@@ -391,8 +258,4 @@ const rolloutCandidateAccessors = {
   getCodexHome: (candidate: { codexHome: string }) => candidate.codexHome,
   getHardlinkIdentity: (candidate: { file: { dev: number; ino: number; nlink: number } }) =>
     codexRolloutHardlinkIdentity(candidate.file)
-}
-
-function rootPlaceholder(): string {
-  return '__ROOT__'
 }

@@ -156,6 +156,7 @@ export function buildDefaultSettings(args: {
     nativeChatLinkPreviews: true,
     nativeChatOpenedPullRequests: true,
     nativeChatScrollToLatestOnSend: true,
+    nativeChatTurnDiffSummary: true,
     nativeChatInheritShellEnvironment: true,
     nativeChatShellEnvironmentVariables: [],
     nativeChatSessionOptions: {},

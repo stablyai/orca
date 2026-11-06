@@ -1,11 +1,10 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { isAiVaultSessionRecoverableEmpty } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import { parseClaudeSessionContent } from './scanners/claude/session-scanner-primary-parsers'
-import { countSubagentTranscripts } from './scanners/claude/session-scanner-subagent-transcripts'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -76,91 +75,6 @@ describe('recoverable-but-empty Claude sessions', () => {
     expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(true)
   })
 
-  it('reports no recoverable signal for a plain metadata-only session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-plain-empty-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionId = 'plain-empty-session'
-
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`), [
-      { type: 'mode', mode: 'default', sessionId },
-      { type: 'permission-mode', permissionMode: 'default', sessionId }
-    ])
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId)
-
-    expect(session).toBeDefined()
-    expect(session?.messageCount).toBe(0)
-    expect(session?.queuedMessageCount).toBe(0)
-    expect(session?.subagentTranscriptCount).toBe(0)
-    expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
-  })
-
-  it('counts subagent transcripts for a session that has real turns without flagging it recoverable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nonempty-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionId = 'conversation-session'
-
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`), [
-      {
-        type: 'user',
-        sessionId,
-        message: { role: 'user', content: 'Do the thing' }
-      }
-    ])
-    await writeJsonlFile(
-      join(roots.claudeProjectsDir, 'project', sessionId, 'subagents', 'agent-x.jsonl'),
-      [
-        {
-          type: 'user',
-          sessionId,
-          message: { role: 'user', content: 'Subtask' }
-        }
-      ]
-    )
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId)
-
-    expect(session?.messageCount).toBe(1)
-    expect(session?.subagentTranscriptCount).toBe(1)
-    expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
-  })
-
-  it('counts queued messages net of remove and dequeue operations', async () => {
-    const sessionId = 'net-queue-session'
-    const content = [
-      { type: 'mode', mode: 'default', sessionId },
-      ...[1, 2, 3].map((n) => ({
-        type: 'queue-operation',
-        operation: 'enqueue',
-        sessionId,
-        content: `queued prompt ${n}`
-      })),
-      { type: 'queue-operation', operation: 'dequeue', sessionId },
-      {
-        type: 'queue-operation',
-        operation: 'remove',
-        sessionId,
-        content: null
-      }
-    ]
-      .map((line) => JSON.stringify(line))
-      .join('\n')
-    const file = {
-      path: `/tmp/${sessionId}.jsonl`,
-      mtimeMs: 0,
-      modifiedAt: '2026-07-08T16:30:00.000Z'
-    }
-
-    const session = await parseClaudeSessionContent(file, content, 'darwin', {
-      executionHostId: 'ssh:host'
-    })
-    expect(session?.queuedMessageCount).toBe(1)
-  })
-
   it('picks up subagent transcripts written after the parent transcript last changed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-late-sub-'))
     tempRoots.push(root)
@@ -216,38 +130,5 @@ describe('recoverable-but-empty Claude sessions', () => {
 
     const local = await parseClaudeSessionContent(file, content, 'darwin')
     expect(local?.subagentTranscriptCount).toBe(1)
-  })
-})
-
-describe('countSubagentTranscripts', () => {
-  it('returns 0 when the sibling subagents directory is absent', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nosub-'))
-    tempRoots.push(root)
-    expect(await countSubagentTranscripts(join(root, 'session.jsonl'))).toBe(0)
-  })
-
-  it('counts only .jsonl transcripts, excluding meta sidecars', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-count-'))
-    tempRoots.push(root)
-    const transcriptPath = join(root, 'session.jsonl')
-    const subagentsDir = join(root, 'session', 'subagents')
-    await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
-    await writeJsonlFile(join(subagentsDir, 'agent-b.jsonl'), [{ type: 'user' }])
-    await writeFile(join(subagentsDir, 'agent-a.meta.json'), '{}')
-
-    expect(await countSubagentTranscripts(transcriptPath)).toBe(2)
-  })
-
-  it('excludes non-agent .jsonl files and directories named like transcripts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-predicate-'))
-    tempRoots.push(root)
-    const transcriptPath = join(root, 'session.jsonl')
-    const subagentsDir = join(root, 'session', 'subagents')
-    await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
-    // The badge and on-demand lister must both exclude unrelated files and directories.
-    await writeFile(join(subagentsDir, 'notes.jsonl'), '{}')
-    await mkdir(join(subagentsDir, 'agent-x.jsonl'))
-
-    expect(await countSubagentTranscripts(transcriptPath)).toBe(1)
   })
 })

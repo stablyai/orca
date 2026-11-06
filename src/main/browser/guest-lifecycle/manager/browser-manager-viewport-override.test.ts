@@ -53,6 +53,12 @@ vi.mock('../../identity/browser-process-user-agent', () => ({
   })
 }))
 
+vi.mock('../../identity/browser-tab-identity', async (importOriginal) =>
+  (
+    await import('./browser-manager-desktop-ua-metadata-test-fixture')
+  ).withPinnedDesktopUserAgentMetadata(await importOriginal<object>())
+)
+
 import { browserManager } from '../../browser-manager'
 import { googleAuthUserAgent } from '../../identity/browser-google-auth-ua'
 import {
@@ -60,6 +66,7 @@ import {
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from './browser-manager-test-harness'
+import { pinnedDesktopUserAgentMetadata as desktopMetadata } from './browser-manager-desktop-ua-metadata-test-fixture'
 import {
   createViewportGuestFactory,
   flushViewportOps,
@@ -166,7 +173,8 @@ describe('browserManager', () => {
       })
       await flushViewportOps()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
+        userAgent: googleAuthUserAgent(),
+        userAgentMetadata: desktopMetadata
       })
 
       let releaseMetrics = (): void => {}

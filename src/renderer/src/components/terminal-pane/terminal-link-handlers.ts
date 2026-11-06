@@ -120,7 +120,8 @@ export function createFilePathLinkProvider(
             worktreeId,
             worktreePath,
             runtimeEnvironmentId,
-            wslDistro: deps.wslDistro
+            wslDistro: deps.wslDistro,
+            homeOnHost: true
           })
           if (!target) {
             return null

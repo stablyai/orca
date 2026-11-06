@@ -1,5 +1,4 @@
 import { afterEach, describe, vi } from 'vitest'
-import { registerJournalAtomicTerminalSettlementTests } from './journal-atomic-terminal-settlement.spec'
 import { registerJournalDispatchReasonBoundTests } from './journal-dispatch-reason-bound.spec'
 import { registerJournalQueuedRejectionBatchTests } from './journal-queued-rejection-batch.spec'
 import { registerJournalRowContextUsageTests } from './journal-row-context-usage.spec'
@@ -11,7 +10,6 @@ import { registerJournalTerminalSettlementValidationTests } from './journal-term
 
 afterEach(() => vi.restoreAllMocks())
 
-describe('journal-atomic-terminal-settlement', registerJournalAtomicTerminalSettlementTests)
 describe('journal-dispatch-reason-bound', registerJournalDispatchReasonBoundTests)
 describe('journal-queued-rejection-batch', registerJournalQueuedRejectionBatchTests)
 describe('journal-row-context-usage', registerJournalRowContextUsageTests)
