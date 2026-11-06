@@ -570,10 +570,10 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
-  it('normalizes a non-native draft through a real host compiler and delivers to the returned pane once', async () => {
+  it('normalizes a non-native draft through the shared host startup contract and delivers to the returned pane once', async () => {
     const original = runtimeCall.getMockImplementation()!
-    const { buildExecutionHostAgentStartupPlan } =
-      await import('../../../../main/opencode/opencode-model-startup-plan')
+    const { buildAgentDraftLaunchPlan, buildAgentStartupPlan } =
+      await import('../../../../shared/agent-launch/startup/tui-agent-startup')
     const { resolveAgentStartupPlanInputs } =
       await import('../../../../shared/agent-launch/startup/agent-startup-plan-inputs')
     let statusAnswered = false
@@ -588,24 +588,24 @@ describe('createRemoteRuntimePtyTransport', () => {
         const response = await original(args)
         if (args.method === 'terminal.createAgentSession') {
           const params = args.params!
-          const plan = await buildExecutionHostAgentStartupPlan({
-            inputs: resolveAgentStartupPlanInputs({
-              agent: 'codex',
-              settings: {},
-              agentArgs: '',
-              sessionOptions: {
-                model: 'gpt-host-pick',
-                effort: 'high',
-                permissionMode: 'full-access'
-              },
-              platform: 'linux',
-              shell: 'posix',
-              isRemote: false
-            }),
-            cwd: '/host/wt',
-            prompt: String(params.prompt ?? ''),
-            promptDelivery: params.promptDelivery === 'draft' ? 'draft' : 'auto-submit'
+          const inputs = resolveAgentStartupPlanInputs({
+            agent: 'codex',
+            settings: {},
+            agentArgs: '',
+            sessionOptions: {
+              model: 'gpt-host-pick',
+              effort: 'high',
+              permissionMode: 'full-access'
+            },
+            platform: 'linux',
+            shell: 'posix',
+            isRemote: false
           })
+          const prompt = String(params.prompt ?? '')
+          const plan =
+            params.promptDelivery === 'draft'
+              ? buildAgentDraftLaunchPlan({ ...inputs, draft: prompt })
+              : buildAgentStartupPlan({ ...inputs, prompt, allowEmptyPromptLaunch: true })
           if (!plan) {
             return {
               ok: false,

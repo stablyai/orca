@@ -156,7 +156,7 @@
 2 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
 1 src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts
 1 src/renderer/src/components/tab-bar/windows-shell-menu-visibility.ts
-3 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
+2 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
 1 src/renderer/src/components/task-page/jira/task-page-jira-status-order.ts
 2 src/renderer/src/components/task-page/jira/IssueAssigneeField.tsx
 1 src/renderer/src/components/task-page/linear/Filters.tsx
@@ -182,14 +182,14 @@
 1 src/renderer/src/components/terminal-pane/use-terminal-pane-mount-lifecycle.ts
 1 src/renderer/src/components/terminal/terminal-tab-actions.ts
 4 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
-2 src/renderer/src/components/terminal/terminal-tab-create.ts
+1 src/renderer/src/components/terminal/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
 4 src/renderer/src/components/task-page/jira/use-task-page-jira-creation-metadata.ts
 4 src/renderer/src/components/task-page/jira/use-task-page-jira-issue-creation.ts
 1 src/renderer/src/components/task-page/jira/use-task-page-jira-list-effects.ts
 2 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
 2 src/renderer/src/components/task-page/use-task-page-store-bindings.ts
-5 src/renderer/src/components/use-terminal-create-actions.ts
+4 src/renderer/src/components/use-terminal-create-actions.ts
 3 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-controller.ts
 1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-create-action.ts
 2 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-filter.ts
@@ -222,9 +222,6 @@
 6 src/renderer/src/lib/http-link-destinations.ts
 1 src/renderer/src/lib/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/http-link-routing.ts
-1 src/renderer/src/lib/launch-agent-in-new-tab.ts
-1 src/renderer/src/lib/launch-agent-web-host-tab.ts
-1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/linear-issue-write.ts
 1 src/renderer/src/lib/local-preflight-context.ts
@@ -236,7 +233,6 @@
 1 src/renderer/src/lib/terminal-close-route.ts
 4 src/renderer/src/lib/terminal-worktree-route.ts # resolveTerminalPtyOwner: teardown, close and PTY identity read spawn's attribution (round 3 F8), which retired the deprecated resolver's readers
 3 src/renderer/src/lib/unread-badge-count-selector.ts
-1 src/renderer/src/lib/web-runtime-worktree-terminal-after-wake.ts
 2 src/renderer/src/lib/workspace-browser-tab-open.ts
 1 src/renderer/src/lib/worktree-activation.ts
 1 src/renderer/src/lib/worktree-jump-navigation.ts
@@ -250,18 +246,14 @@
 12 src/renderer/src/runtime/runtime-linear-project-client.ts
 5 src/renderer/src/runtime/use-runtime-session-mirror-environment-key.ts
 2 src/renderer/src/runtime/web-runtime-browser-creation.ts
-1 src/renderer/src/runtime/web-runtime-initial-terminal-bootstrap-dispatch.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
-1 src/renderer/src/runtime/web-runtime-terminal-create-operation.ts
-1 src/renderer/src/runtime/web-runtime-terminal-creation.ts
 1 src/renderer/src/runtime/web-runtime-worktree-activation.ts
-1 src/renderer/src/runtime/web-session-tabs-sync/active-session-subscription.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/global-session-subscription.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions.ts
-3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
+2 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
 1 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
-9 src/renderer/src/store/index.ts
+8 src/renderer/src/store/index.ts
 2 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts
 2 src/renderer/src/store/repos/repo-add-actions.ts
@@ -327,7 +319,6 @@
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-actions.ts
 3 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-host-merge.ts
 3 src/renderer/src/store/slices/worktrees/session/worktree-terminal-reference.ts
-1 src/renderer/src/store/terminals/terminal-active-workspace-creation.ts
 1 src/renderer/src/store/terminals/terminal-tab-appearance.ts
 1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts
 1 src/renderer/src/web/preload-api/web-app-api.ts

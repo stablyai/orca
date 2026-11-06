@@ -101,6 +101,32 @@ describe('web-runtime-session terminal workspace routing', () => {
     resetTerminalCreateEnvironment()
   })
 
+  it('creates an existing workspace terminal on its owner when another server is focused', async () => {
+    Object.assign(mocks.getState(), {
+      settings: { activeRuntimeEnvironmentId: 'other-server' },
+      activeWorktreeId: 'other-repo::/other',
+      repos: [{ id: 'repo', executionHostId: RUNTIME_EXECUTION_HOST_ID }]
+    })
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'create',
+      ok: true,
+      result: { tab: { id: 'host-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
+    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+    const outcome = await createWebRuntimeSessionTerminal({
+      worktreeId: WORKTREE_ID,
+      activate: false,
+      selectWorktree: false
+    })
+
+    expect(outcome).toEqual({ status: 'created' })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: ENVIRONMENT_ID, method: 'session.tabs.createTerminal' })
+    )
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+  })
+
   it('hands the workspace host selection back when the host never accepted the create', async () => {
     const selection: MutableSelection = {
       activeWorktreeId: WORKTREE_ID,

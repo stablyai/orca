@@ -91,6 +91,7 @@ it('retains a null-plan recovery payload and serializes concurrent after-wake at
       sessionOptions: { model: 'opus', effort: 'high' },
       prompt: 'ship it',
       promptDelivery: 'draft',
+      environmentId: 'host',
       activate: false,
       selectWorktree: false
     })
@@ -137,6 +138,7 @@ it('gives a background decline one delivery owner with original picks and cancel
       sessionOptions: { model: 'opus', effort: 'high' },
       prompt: 'held message',
       promptDelivery: 'draft',
+      environmentId: 'host',
       activate: false,
       selectWorktree: false
     })

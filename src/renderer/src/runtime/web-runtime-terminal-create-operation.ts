@@ -6,6 +6,7 @@ import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 import {
   createAgentSessionCreateOperation,
@@ -14,7 +15,6 @@ import {
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import {
   forgetWebSessionTerminalPlacement,
@@ -51,10 +51,11 @@ import { agentSessionCreateRequest } from './agent-session-create-request'
 export async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
-  const environmentId = resolveWebRuntimeSessionEnvironmentId(
-    args.environmentId,
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId
-  )
+  const environmentId = (
+    args.environmentId === undefined
+      ? runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), args.worktreeId)
+      : args.environmentId
+  )?.trim()
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return {
       outcome: {
