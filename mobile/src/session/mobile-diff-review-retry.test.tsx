@@ -43,8 +43,10 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 let tree: ReactTestRenderer | null = null
+let queries = documentQueryClient()
 
 afterEach(() => {
   act(() => tree?.unmount())
@@ -98,7 +100,8 @@ function ReviewWhileUnreachable({
 
 async function render(onReconnect: ((hostId: string) => void) | null): Promise<ReactTestRenderer> {
   await act(async () => {
-    tree = create(createElement(ReviewWhileUnreachable, { onReconnect }))
+    queries = documentQueryClient()
+    tree = create(queries.wrap(createElement(ReviewWhileUnreachable, { onReconnect })))
     await Promise.resolve()
   })
   if (tree === null) {
@@ -140,7 +143,13 @@ describe('the review Retry while the host is unreachable', () => {
     const client = createFakeRpcClient()
     await act(async () => {
       rendered.update(
-        createElement(ReviewWhileUnreachable, { onReconnect: null, client, connState: 'connected' })
+        queries.wrap(
+          createElement(ReviewWhileUnreachable, {
+            onReconnect: null,
+            client,
+            connState: 'connected'
+          })
+        )
       )
     })
     expect(loadSnapshot).toHaveBeenCalledTimes(1)
