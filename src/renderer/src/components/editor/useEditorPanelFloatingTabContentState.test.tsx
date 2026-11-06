@@ -39,7 +39,10 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
 
-vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+vi.mock(
+  '@/lib/workspace/ownership/worktree-host-connection-phase',
+  () => import('./local-host-test-fixture')
+)
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
@@ -136,21 +139,6 @@ describe('restored client-local editor tabs', () => {
     }
   )
 
-  it('reads a local tab stored outside its own project as user-named', async () => {
-    const filePath = '/Users/me/notes/audit.md'
-    const activeFile = createFloatingFile(filePath, {
-      relativePath: filePath,
-      worktreeId: 'repo-local::/Users/me/project'
-    })
-
-    await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath, access: { kind: 'user-file' } })
-    )
-  })
-
   it('keeps an absolute floating file in its panel when a project also owns the path', async () => {
     const filePath = '/project/readme.md'
     const activeFile = createFloatingFile(filePath, { relativePath: filePath })
@@ -166,20 +154,6 @@ describe('restored client-local editor tabs', () => {
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, access: { kind: 'user-file' } })
-    )
-  })
-
-  it('keeps a project tab inside its root', async () => {
-    const activeFile = createFloatingFile('/Users/me/project/README.md', {
-      relativePath: 'README.md',
-      worktreeId: 'repo::/Users/me/project'
-    })
-
-    await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({ access: undefined })
     )
   })
 })

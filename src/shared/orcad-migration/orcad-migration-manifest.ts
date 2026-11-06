@@ -75,6 +75,11 @@ export type OrcadMigrationDormantRetirementNamespace = {
   registry: RetiredNameRegistry
 }
 
+export type OrcadMigrationAutomationRunHistoryRef = {
+  sha256: string
+  byteLength: number
+}
+
 export type OrcadMigrationDormantStatePayload = {
   version: 1
   worktreeMeta: OrcadMigrationDormantWorktreeMeta[]
@@ -86,7 +91,10 @@ export type OrcadMigrationDormantStatePayload = {
   workspaceSession?: WorkspaceSessionState
   terminalScrollbackSnapshots?: OrcadMigrationTerminalScrollbackSnapshot[]
   automations?: Automation[]
+  /** Inline runs, as older desktops send them; never alongside `automationRunHistory`. */
   automationRuns?: AutomationRun[]
+  /** Digest of the runs sent as an `automation-run-history` blob, so history never bounds the manifest. */
+  automationRunHistory?: OrcadMigrationAutomationRunHistoryRef
   /** Client-owned durable intent projected to the destination authority. */
   clientState?: OrcadMigrationClientStatePayload
 }

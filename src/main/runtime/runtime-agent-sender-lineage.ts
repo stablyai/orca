@@ -1,5 +1,5 @@
-import type { DispatchContextRow } from './orchestration/types'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import type { DispatchContextRow } from './orchestration/db/orchestration-records'
+import type { WorkerTerminalResourceRow } from './orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   resolveWorkerLineageFacts,
   type WorkerLineageFacts
@@ -100,6 +100,10 @@ export class AgentSenderLineageGraph {
 
   row(id: string): DispatchContextRow | undefined {
     return this.nodes.get(id)?.row
+  }
+
+  resource(id: string): WorkerTerminalResourceRow | undefined {
+    return this.nodes.get(id)?.resource
   }
 
   resolve(id: string): Lineage {

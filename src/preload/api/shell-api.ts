@@ -29,5 +29,4 @@ export type ShellApi = {
   pickRepoIconImage: () => Promise<RepoIconPickResult>
   pickAudio: () => Promise<string | null>
   pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
-  copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
 }

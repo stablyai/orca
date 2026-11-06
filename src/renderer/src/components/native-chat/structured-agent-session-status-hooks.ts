@@ -1,36 +1,60 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import {
+  getStructuredAgentSessionStatusFeed,
+  type StructuredAgentSessionStatusFeedOwner
+} from '@/runtime/structured-agent-session-status-feed'
 import { structuredAgentSessionOptionStamp } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
+import { runtimePermissionReport } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
 
-export function useStructuredAgentSessionStatusSummary(
+/** The host feed plus a subscription that wakes only for this chat's updates. */
+function useSessionFeed(
   sessionId: string,
   target: RuntimeClientTarget
-): { summary: AgentSessionStatusSummary | null; observation: 'live' | 'unverifiable' } {
+): {
+  feed: StructuredAgentSessionStatusFeedOwner
+  subscribe: (listener: () => void) => () => void
+} {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
-  const summary = useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSnapshot().get(sessionId) ?? null,
-    () => null
+  const subscribe = useCallback(
+    (listener: () => void) => feed.subscribeSession(sessionId, listener),
+    [feed, sessionId]
+  )
+  return { feed, subscribe }
+}
+
+/** Option state reads only the permission answer and observation, so other summary fields never re-render the chat. */
+export function useStructuredAgentSessionPermissionStatus(
+  sessionId: string,
+  target: RuntimeClientTarget,
+  fence: number | null
+): {
+  permissionReport: ReturnType<typeof runtimePermissionReport>
+  observation: 'live' | 'unverifiable'
+} {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  const permissionReport = useSyncExternalStore(
+    subscribe,
+    () => runtimePermissionReport(feed.getSnapshot().get(sessionId), fence),
+    () => runtimePermissionReport(undefined, fence)
   )
   const observation = useSyncExternalStore(
-    feed.subscribe,
+    subscribe,
     () => feed.getSessionObservation(sessionId),
     () => 'unverifiable' as const
   )
-  return { summary, observation }
+  return { permissionReport, observation }
 }
 
 export function useStructuredAgentSessionOptionStamp(
   sessionId: string,
   target: RuntimeClientTarget
 ): string {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
   return useSyncExternalStore(
-    feed.subscribe,
+    subscribe,
     () => structuredAgentSessionOptionStamp(feed.getSnapshot().get(sessionId)),
     () => ''
   )
@@ -41,10 +65,9 @@ export function useStructuredAgentSessionHostExecutionPhase(
   sessionId: string,
   target: RuntimeClientTarget
 ): NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
   return useSyncExternalStore(
-    feed.subscribe,
+    subscribe,
     () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
     () => null
   )
@@ -55,10 +78,9 @@ export function useStructuredAgentSessionHostStopping(
   sessionId: string,
   target: RuntimeClientTarget
 ): boolean {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
   return useSyncExternalStore(
-    feed.subscribe,
+    subscribe,
     () => feed.getSnapshot().get(sessionId)?.stopping === true,
     () => false
   )
@@ -84,10 +106,9 @@ export function useStructuredAgentSessionRewindBlockedReason(
   sessionId: string,
   target: RuntimeClientTarget
 ): NonNullable<AgentSessionStatusSummary['rewindBlockedReason']> | null {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
   return useSyncExternalStore(
-    feed.subscribe,
+    subscribe,
     () => feed.getSnapshot().get(sessionId)?.rewindBlockedReason ?? null,
     () => null
   )

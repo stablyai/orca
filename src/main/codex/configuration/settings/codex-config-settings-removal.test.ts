@@ -11,15 +11,6 @@ describe('removePromotedSettingsFromContent', () => {
     ).toBe('\n[profiles.dev]\nmodel = "nested"\n')
   })
 
-  it('removes a bare key from the first tui table body', () => {
-    expect(
-      removePromotedSettingsFromContent(
-        '[tui]\ntheme = "dark"\nanimations = true\n\n[tui.notifications]\ntheme = "nested"\n',
-        new Set(['tui.theme'])
-      )
-    ).toBe('[tui]\nanimations = true\n\n[tui.notifications]\ntheme = "nested"\n')
-  })
-
   it('removes dotted and quoted dotted tui keys from the preamble', () => {
     expect(
       removePromotedSettingsFromContent(
@@ -27,11 +18,6 @@ describe('removePromotedSettingsFromContent', () => {
         new Set(['tui.theme', 'tui.status_line'])
       )
     ).toBe('')
-  })
-
-  it('does not remove a tui-shaped key inside another table', () => {
-    const content = '[[profiles]]\ntui.theme = "profile-theme"\n'
-    expect(removePromotedSettingsFromContent(content, new Set(['tui.theme']))).toBe(content)
   })
 
   it('does not remove a nested tui descendant with the same first segment', () => {

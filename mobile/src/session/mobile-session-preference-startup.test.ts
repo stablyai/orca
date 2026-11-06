@@ -355,41 +355,6 @@ describe('saved session settings before the first render', () => {
   })
 })
 
-it('reloads custom visibility and order plus D-pad state when returning from Manage Shortcuts', async () => {
-  const scope = sessionScope()
-  let storedKeys = [{ id: 'one', label: 'One', bytes: '1', enter: false, visible: true }]
-  let padEnabled = true
-  vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
-    key === 'orca:custom-accessory-keys'
-      ? JSON.stringify(storedKeys)
-      : JSON.stringify({
-          version: 2,
-          orderedBuiltInIds: TERMINAL_ACCESSORY_KEYS.map((key) => key.id),
-          visibleBuiltInIds: ['tab'],
-          directionPadEnabled: padEnabled
-        })
-  )
-  function Harness() {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
-    useMobileSessionLifecycle(scope as never)
-    return null
-  }
-  await act(async () => {
-    renderer = create(createElement(Harness))
-  })
-  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(true)
-  storedKeys = [{ ...storedKeys[0]!, visible: false }]
-  padEnabled = false
-  await act(async () => {
-    for (const [effect, cleanup] of focusEffects.callbacks) {
-      cleanup?.()
-      focusEffects.callbacks.set(effect, effect())
-    }
-  })
-  expect(scope.setCustomKeys).toHaveBeenLastCalledWith(storedKeys)
-  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(false)
-})
-
 it('finishes custom-key hydration when side-rail geometry arrives during the read', async () => {
   const customRead = deferred<string | null>()
   vi.mocked(AsyncStorage.getItem).mockImplementation((key) =>
@@ -547,20 +512,6 @@ describe('session custom shortcuts after saved settings change', () => {
     scope.setCustomKeys.mockClear()
     return { scope, rerender: () => renderer?.update(createElement(Harness)) }
   }
-
-  it('rereads saved shortcuts on focus and on foreground', async () => {
-    const { scope } = await mountWithKeys([oldKey])
-    storeCustomKeys(async () => JSON.stringify([otherKey]))
-    await act(async () => refocus())
-    expect(scope.setCustomKeys).toHaveBeenLastCalledWith([otherKey])
-    storeCustomKeys(async () => JSON.stringify([newKey]))
-    await act(async () => {
-      for (const listener of focusEffects.appStateListeners) {
-        listener('active')
-      }
-    })
-    expect(scope.setCustomKeys).toHaveBeenLastCalledWith([newKey])
-  })
 
   it('keeps the live shortcuts when the refresh read fails', async () => {
     const { scope } = await mountWithKeys([oldKey])

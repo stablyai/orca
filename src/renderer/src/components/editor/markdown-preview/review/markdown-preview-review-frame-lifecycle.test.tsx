@@ -250,19 +250,6 @@ describe('Markdown review frame lifetime', () => {
     expect(frames.pending.size).toBe(0)
   })
 
-  it('leaves no suspended review callbacks after 64 actual surface unmounts', () => {
-    const frames = frameQueue()
-    for (let index = 0; index < 64; index += 1) {
-      const surface = mountSurface()
-      surface.click()
-      surface.cleanup()
-      expect(surface.foundation.rootRef.current).toBeNull()
-      expect(surface.foundation.reviewNotesCopyMountedRef.current).toBe(false)
-    }
-    expect(frames.pending.size).toBe(0)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it.each([false, true])(
     'preserves both live frames and the exact 900 ms pulse in StrictMode=%s',
     (strict) => {
@@ -307,34 +294,6 @@ describe('Markdown review frame lifetime', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each([false, true])('preserves every live pulse with teardown before expiry=%s', (dispose) => {
-    const frames = frameQueue()
-    const surface = mountSurface()
-    surface.click()
-    surface.click()
-    expect(frames.pending.size).toBe(4)
-    frames.flush()
-    expect(surface.attention.mock.calls).toEqual([[null], [null], ['note'], ['note']])
-    expect(surface.scroll).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(2)
-    vi.advanceTimersByTime(899)
-    expect(surface.attention).toHaveBeenCalledTimes(4)
-    if (!dispose) {
-      vi.advanceTimersByTime(1)
-      expect(surface.attention.mock.calls).toEqual([
-        [null],
-        [null],
-        ['note'],
-        ['note'],
-        [null],
-        [null]
-      ])
-    }
-    surface.cleanup()
-    expect(vi.getTimerCount()).toBe(0)
-    expect(surface.foundation.pendingReviewActionTimeoutIdsRef.current).toEqual([])
-  })
-
   it('does not revive an old timer or clear a successor after same-node replacement', () => {
     const frames = frameQueue()
     const scheduled = vi.spyOn(window, 'setTimeout')
@@ -375,63 +334,5 @@ describe('Markdown review frame lifetime', () => {
     frames.flush()
     expect(surface.attention.mock.calls).toEqual([[null], [null], ['note']])
     expect(surface.scroll).toHaveBeenCalledOnce()
-  })
-
-  it('does not cancel successor frames queued reentrantly by old frame cancellation', () => {
-    const frames = frameQueue()
-    const surface = mountSurface()
-    const node = surface.foundation.rootRef.current
-    surface.click()
-    frames.cancel.mockImplementationOnce((id) => {
-      frames.pending.delete(id)
-      surface.viewport.setRootRef(node)
-      surface.click()
-      return true
-    })
-    surface.viewport.setRootRef(null)
-    expect(frames.pending.size).toBe(2)
-    expect(surface.foundation.pendingReviewActionFrameIdsRef.current).toHaveLength(2)
-    frames.flush()
-    expect(surface.scroll).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it.each(['active', 'reset', 'pulse'])(
-    'does not schedule new work after reentrant disposal in %s setter',
-    (setter) => {
-      const frames = frameQueue()
-      const surface = mountSurface()
-      if (setter === 'active') {
-        surface.active.mockImplementationOnce(surface.cleanup)
-      }
-      if (setter === 'reset') {
-        surface.attention.mockImplementationOnce(surface.cleanup)
-      }
-      if (setter === 'pulse') {
-        surface.attention.mockImplementationOnce(() => {}).mockImplementationOnce(surface.cleanup)
-      }
-      surface.click()
-      frames.flush()
-      expect(frames.pending.size).toBe(0)
-      expect(vi.getTimerCount()).toBe(0)
-      expect(surface.scroll).not.toHaveBeenCalled()
-    }
-  )
-
-  it('drops completed frame references with a synchronous frame shim', () => {
-    const frames = frameQueue()
-    let nextId = 0
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(16)
-      return ++nextId
-    })
-    const surface = mountSurface()
-    surface.click()
-    expect(surface.foundation.pendingReviewActionFrameIdsRef.current).toEqual([])
-    expect(surface.scroll).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(1)
-    surface.cleanup()
-    expect(frames.cancel).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

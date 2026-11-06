@@ -5,13 +5,16 @@ import {
   type MutableRefObject,
   type SetStateAction
 } from 'react'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  activateAndRevealWorkspace,
+  activateAndRevealWorktree
+} from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { getAllWorktreesFromState } from '../../store/selectors'
-import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'

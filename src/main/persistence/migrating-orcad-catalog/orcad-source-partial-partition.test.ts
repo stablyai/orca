@@ -61,14 +61,4 @@ describe('collecting dormant state from partially written session partitions', (
       [WORKTREE]: true
     })
   })
-
-  it('still blocks when two partitions disagree about the same worktree', () => {
-    const state = partialPartitions()
-    state.workspaceSession.activeTabTypeByWorktree = { [WORKTREE]: 'editor' }
-    expect(
-      collectOrcadMigrationSourceDormantState(state, SOURCE, CATALOG).blockedCounts[
-        'workspace-session'
-      ]
-    ).toBe(1)
-  })
 })

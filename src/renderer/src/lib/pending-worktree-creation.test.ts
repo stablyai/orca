@@ -4,7 +4,7 @@ import {
   findPendingWorktreeCreationId,
   type PendingWorktreeCreation,
   type WorktreeCreationRequest
-} from './pending-worktree-creation'
+} from './workspace/creation/pending-worktree-creation'
 
 function request(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
   return {

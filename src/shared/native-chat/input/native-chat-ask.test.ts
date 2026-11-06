@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  isPendingNativeChatUserMessage,
+  nativeChatAnswerOperationPending
+} from './native-chat-ask-answer'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../agent-session/requests/structured-agent-session-send-evidence'
 import recordedQuestion from './fixtures/codex-weekend-question.json'
 import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
 import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionOptimisticMessage } from '../../agent-session/view/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -578,7 +584,7 @@ describe('async questions', () => {
     expect(result.answerPending).toBeUndefined()
   })
 
-  it('leaves questions available for positionless composer previews, including revised existing rows', () => {
+  it('leaves questions available for unacknowledged composer previews, including revised existing rows', () => {
     const first = {
       ...message('first', [asyncCall('first', 'A?')]),
       journalPosition: { sequence: 1, index: 0 }
@@ -588,7 +594,7 @@ describe('async questions', () => {
       journalPosition: { sequence: 2, index: 0 }
     }
     const preview = userRow('preview', {
-      deliveryState: 'pending',
+      deliveryState: 'unknown',
       queuedMessageId: 'queue',
       blocks: [{ type: 'text', text: '> A?\n\nYes' }]
     })
@@ -596,8 +602,11 @@ describe('async questions', () => {
     expect(scan.contributors.map((row) => row.sourceRowId)).toEqual(['first', 'revised'])
     expect(scan.answerPending).toBeUndefined()
     expect(
-      scanPendingAsks([first, revised, { ...preview, journalPosition: { sequence: 3, index: 0 } }])
-        .contributors
+      scanPendingAsks([
+        first,
+        revised,
+        { ...preview, deliveryState: 'pending', journalPosition: { sequence: 3, index: 0 } }
+      ]).contributors
     ).toEqual([])
   })
 
@@ -746,4 +755,54 @@ describe('async questions', () => {
     expect(longQuestions.serializedBytes).toBeGreaterThan(2 * small.serializedBytes)
     expect(longQuestions.serializedBytes).toBeLessThanOrEqual(10 * small.serializedBytes + 16)
   })
+})
+
+it('separates real operation and host evidence from echo placement', () => {
+  const echo: StructuredAgentSessionOptimisticMessage = {
+    clientMessageId: 'answer',
+    queuedAt: 1,
+    body: { kind: 'message', role: 'user', blocks: [] }
+  }
+  const operation = { clientMessageId: 'answer', inFlight: true }
+  const project = (entry = echo) => projectStructuredAgentSessionMessages([], [entry], [])
+  const positioned = { ...echo, afterSequence: 2 }
+  for (const entry of [echo, positioned]) {
+    const rows = project(entry)
+    expect(rows[0]?.deliveryState).toBe('unknown')
+    expect(nativeChatAnswerOperationPending(operation, rows)).toBe(true)
+    expect(nativeChatAnswerOperationPending({ ...operation, inFlight: false }, rows)).toBe(false)
+    expect(isDeliveredNativeChatUserMessage(rows[0]!)).toBe(false)
+  }
+  const missing = {
+    clientMessageId: 'answer',
+    fence: 1,
+    payloadFingerprint: 'answer',
+    dispatchState: 'unknown',
+    reason: STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING,
+    providerItemId: null,
+    submittedAt: 1,
+    resolvedAt: null
+  } as const
+  const rows = projectStructuredAgentSessionMessages([], [positioned], [missing])
+  expect(rows[0]?.deliveryState).toBe('unknown')
+  expect(nativeChatAnswerOperationPending(operation, rows, [missing])).toBe(true)
+  const pending = { ...missing, dispatchState: 'pending', reason: null } as const
+  expect(nativeChatAnswerOperationPending({ ...operation, inFlight: false }, [], [pending])).toBe(
+    true
+  )
+  const acknowledged = projectStructuredAgentSessionMessages(
+    [],
+    [{ ...echo, phase: 'recorded' }],
+    [missing]
+  )
+  expect(acknowledged[0]?.deliveryState).toBe('pending')
+  expect(isPendingNativeChatUserMessage(acknowledged[0]!)).toBe(true)
+  expect(
+    nativeChatAnswerOperationPending({ ...operation, inFlight: false }, acknowledged, [missing])
+  ).toBe(true)
+  expect(
+    nativeChatAnswerOperationPending(operation, acknowledged, [
+      { ...pending, dispatchState: 'unknown' }
+    ])
+  ).toBe(false)
 })

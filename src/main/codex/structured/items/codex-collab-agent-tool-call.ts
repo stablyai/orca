@@ -1,11 +1,10 @@
-// Schema 0.155/live default mode reports helpers through collab calls without subAgentActivity.
-// Spawn receivers can first appear at completion, even on failure; prompts supply missing labels.
-// agentsStates holds caller snapshots; child turn frames determine execution state.
-
 import { codexCollabToolRowName } from '../../../../shared/codex-collab-agent-tools'
 import { collapsedToolInputPrefix } from '../../../../shared/native-chat/tools/native-chat-tool-preview-prefix'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+// Schema 0.155/live default mode reports helpers through collab calls without subAgentActivity.
+// Spawn receivers can first appear at completion, even on failure; prompts supply missing labels.
+// agentsStates holds caller snapshots; child turn frames determine execution state.
 
 export const CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE = 'collabAgentToolCall'
 
@@ -25,7 +24,7 @@ export type CodexCollabAgentToolCall = {
   states: { threadId: string; status: string | null; message: string | null }[]
 }
 
-function readReceiverThreadIds(item: CodexThreadItem | undefined): string[] {
+export function readReceiverThreadIds(item: CodexThreadItem | undefined): string[] {
   return Array.isArray(item?.receiverThreadIds)
     ? item.receiverThreadIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
     : []
@@ -44,15 +43,7 @@ export function readCodexCollabAgentToolCall(
     ...new Set([...readReceiverThreadIds(started), ...readReceiverThreadIds(item)])
   ]
   const snapshots = readRecord(item.agentsStates)
-  const states = receiverThreadIds.flatMap((threadId) => {
-    if (!Object.hasOwn(snapshots, threadId)) {
-      return []
-    }
-    const snapshot = readRecord(snapshots[threadId])
-    return [
-      { threadId, status: readString(snapshot, 'status'), message: readString(snapshot, 'message') }
-    ]
-  })
+  const states = readCodexCollabStates(item, receiverThreadIds)
   return {
     id: item.id,
     tool,
@@ -64,6 +55,22 @@ export function readCodexCollabAgentToolCall(
     prompt: readString(item, 'prompt'),
     states
   }
+}
+
+export function readCodexCollabStates(
+  item: CodexThreadItem,
+  receiverThreadIds = Object.keys(readRecord(item.agentsStates))
+): CodexCollabAgentToolCall['states'] {
+  const snapshots = readRecord(item.agentsStates)
+  return receiverThreadIds.flatMap((threadId) => {
+    if (!Object.hasOwn(snapshots, threadId)) {
+      return []
+    }
+    const snapshot = readRecord(snapshots[threadId])
+    return [
+      { threadId, status: readString(snapshot, 'status'), message: readString(snapshot, 'message') }
+    ]
+  })
 }
 
 export function codexCollabHelperLabel(prompt: string | null): string | null {

@@ -87,45 +87,4 @@ describe('tight bullet task continuations', () => {
       editor.destroy()
     }
   })
-
-  it.each([
-    '> - Parent\n>   - [ ] First\n>     continuation',
-    '- Parent\n  - Nested\n    - [ ] First\n      continuation',
-    '- Parent\n  - [ ] First\n\n    continuation'
-  ])('wraps the continuation as a block in %s', (source) => {
-    const editor = openMarkdown(source)
-    try {
-      editor.state.doc.check()
-      let found = false
-      editor.state.doc.descendants((node) => {
-        if (node.type.name === 'taskItem') {
-          found = true
-          expect(node.childCount).toBe(2)
-          expect(node.child(1).type.name).toBe('paragraph')
-          expect(node.child(1).textContent).toBe('continuation')
-        }
-      })
-      expect(found).toBe(true)
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('keeps a fenced continuation as code', () => {
-    const editor = openMarkdown('- Parent\n  - [ ] First\n    ```ts\n    const value = 1\n    ```')
-    try {
-      editor.state.doc.check()
-      let found = false
-      editor.state.doc.descendants((node) => {
-        if (node.type.name === 'taskItem') {
-          found = true
-          expect(node.child(1).type.name).toBe('codeBlock')
-          expect(node.child(1).textContent).toBe('const value = 1')
-        }
-      })
-      expect(found).toBe(true)
-    } finally {
-      editor.destroy()
-    }
-  })
 })

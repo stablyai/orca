@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { SkillInstallProviderId } from './skill-install-providers'
+import { isSkillInstallProviderId, type SkillInstallProviderId } from './skill-install-providers'
 
 // Frozen per capability version: a client renders a value it does not know as "Needs attention".
 export const BUNDLED_SKILL_OP_KINDS = Object.freeze([
@@ -164,3 +164,17 @@ export const BundledSkillAutoUpdateRequestSchema = z.strictObject({
     .max(64)
 })
 export type BundledSkillAutoUpdateRequest = z.infer<typeof BundledSkillAutoUpdateRequestSchema>
+// Desktop IPC may target a chat provider without a CLI on PATH; the remote v1 schema stays frozen.
+export const LocalBundledSkillPlanRequestSchema = BundledSkillPlanRequestSchema.extend({
+  agent: z
+    .custom<SkillInstallProviderId>(
+      (value) => typeof value === 'string' && isSkillInstallProviderId(value)
+    )
+    .optional()
+})
+export type LocalBundledSkillPlanRequest = z.infer<typeof LocalBundledSkillPlanRequestSchema>
+
+export const LocalBundledSkillExecuteRequestSchema = BundledSkillExecuteRequestSchema.extend({
+  request: LocalBundledSkillPlanRequestSchema
+})
+export type LocalBundledSkillExecuteRequest = z.infer<typeof LocalBundledSkillExecuteRequestSchema>

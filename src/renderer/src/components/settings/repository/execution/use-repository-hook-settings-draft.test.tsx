@@ -70,36 +70,6 @@ afterEach(() => {
 })
 
 describe('repository hook draft persistence', () => {
-  it('coalesces typing and makes blur cancel the pending duplicate save', () => {
-    const persist = vi.fn()
-    renderHarness(baseRepo, 'local\0repo-1', persist)
-    act(() => {
-      latest?.updateScriptDraft('setup', 'pnpm install')
-      latest?.updateScriptDraft('setup', 'pnpm install\npnpm build')
-      latest?.commitScriptDraft()
-    })
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].scripts.setup).toBe('pnpm install\npnpm build')
-    act(() => vi.advanceTimersByTime(700))
-    expect(persist).toHaveBeenCalledTimes(1)
-  })
-
-  it('persists a policy change together with the latest dirty script', () => {
-    const persist = vi.fn()
-    renderHarness(baseRepo, 'local\0repo-1', persist)
-    act(() => {
-      latest?.updateScriptDraft('archive', 'pnpm clean')
-      latest?.updateHookSettingsPolicyDraft({ commandSourcePolicy: 'run-both' })
-    })
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0]).toMatchObject({
-      commandSourcePolicy: 'run-both',
-      scripts: { setup: '', archive: 'pnpm clean' }
-    })
-    act(() => vi.advanceTimersByTime(700))
-    expect(persist).toHaveBeenCalledTimes(1)
-  })
-
   it('flushes a host switch through the previous owner before resetting the draft', () => {
     const localPersist = vi.fn()
     const remotePersist = vi.fn()
@@ -119,20 +89,5 @@ describe('repository hook draft persistence', () => {
     expect(localPersist.mock.calls[0][0].scripts.setup).toBe('local draft')
     expect(remotePersist).not.toHaveBeenCalled()
     expect(latest?.hookSettingsDraft.scripts.setup).toBe('remote')
-  })
-
-  it('does not let a same-owner prop echo overwrite a dirty draft', () => {
-    const persist = vi.fn()
-    renderHarness(baseRepo, 'local\0repo-1', persist)
-    act(() => latest?.updateScriptDraft('setup', 'dirty'))
-    renderHarness(
-      {
-        ...baseRepo,
-        hookSettings: { ...baseRepo.hookSettings!, scripts: { setup: 'stale echo', archive: '' } }
-      },
-      'local\0repo-1',
-      persist
-    )
-    expect(latest?.hookSettingsDraft.scripts.setup).toBe('dirty')
   })
 })

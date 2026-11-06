@@ -1,4 +1,4 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
@@ -8,8 +8,11 @@ import { claimDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
-import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import {
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../coordinator/dispatch/task-dispatch-refusal'
+import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
 
 export function createDispatchContext(

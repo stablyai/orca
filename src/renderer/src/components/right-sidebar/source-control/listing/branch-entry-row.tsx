@@ -15,7 +15,7 @@ import {
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX
 } from './row-layout'
-import { STATUS_COLORS } from '../../status-display'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 
 export function BranchEntryRow({

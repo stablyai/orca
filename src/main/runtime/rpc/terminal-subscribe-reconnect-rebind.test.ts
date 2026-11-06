@@ -4,7 +4,7 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame

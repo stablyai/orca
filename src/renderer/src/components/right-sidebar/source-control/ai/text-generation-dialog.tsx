@@ -26,7 +26,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-export { buildCommitMessageGenerationParams } from './text-generation-params'
+import './text-generation-params'
 
 type SourceControlTextGenerationBaseDialogProps = {
   open: boolean

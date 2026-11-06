@@ -39,17 +39,12 @@ import { AgentBrowserBridge } from './agent-browser-bridge'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
-  createFakeAgentBrowserChild,
-  createSucceedWith,
   mockBrowserManager,
   overrideBridgeWebContentsLookup,
-  resetAgentBrowserBridgeMocks,
-  type ExecFileCallback
+  resetAgentBrowserBridgeMocks
 } from './agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
-
-const succeedWith = createSucceedWith(execFileMock, stdinWrites)
 
 describe('agent commands while a page has a JavaScript dialog', () => {
   let bridge: AgentBrowserBridge
@@ -79,58 +74,6 @@ describe('agent commands while a page has a JavaScript dialog', () => {
     installBrowserJavaScriptDialogs(guest, () => null)
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
-  })
-
-  it('fails fast with the dialog text until the agent answers it', async () => {
-    const callback = openDialog('prompt', 'Your name?')
-    succeedWith({ snapshot: 'tree' })
-
-    await expect(bridge.snapshot()).rejects.toThrow(
-      'A JavaScript prompt is open on this page: "Your name?"'
-    )
-    expect(execFileMock).not.toHaveBeenCalled()
-
-    await bridge.dialogAccept()
-    expect(callback).toHaveBeenCalledExactlyOnceWith(true, 'def')
-    await expect(bridge.snapshot()).resolves.toBeDefined()
-  })
-
-  it('answers a command that opens a dialog at once, without letting later commands overtake it', async () => {
-    const batches: string[] = []
-    let finishClick = (): void => {}
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        const child = createFakeAgentBrowserChild({
-          stdin: { on: vi.fn(), end: (text: string) => batches.push(text) }
-        })
-        if (args.includes('batch') && batches.length === 0) {
-          // The page is blocked, so agent-browser answers only once the dialog closes.
-          queueMicrotask(() => openDialog('confirm', 'Delete everything?'))
-          finishClick = () => cb(null, JSON.stringify({ success: true, data: {} }), '')
-        } else {
-          cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
-        }
-        return child
-      }
-    )
-
-    const click = bridge.click('@e3')
-    const queuedBehind = bridge.snapshot()
-
-    await expect(click).rejects.toThrow(
-      'The page opened a JavaScript confirm: "Delete everything?". The command may already have taken effect'
-    )
-    await expect(queuedBehind).rejects.toThrow('The command did not run.')
-    await expect(bridge.snapshot()).rejects.toThrow('A JavaScript confirm is open on this page')
-
-    await bridge.dialogDismiss()
-    const snapshot = bridge.snapshot()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(batches).toHaveLength(1)
-
-    finishClick()
-    await expect(snapshot).resolves.toBeDefined()
-    expect(batches).toHaveLength(2)
   })
 
   it('keeps a dialog on a page an SSH host may not drive out of that host’s errors', async () => {

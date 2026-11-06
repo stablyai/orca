@@ -18,9 +18,14 @@ export type AgentSessionAcceptedInputSources = Partial<
 export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
+  accountUsage?: true
+  /** Fresh host observation; absent means an older host or unknown conversation. */
+  sessionNeverStarted?: boolean
   /** Saved conversation on this execution host, resolved from the record's own account store. */
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport
+  /** Whether this chat's agent copies its conversation natively; absent means unknown, never unsupported. */
+  forkSupport?: 'unknown' | 'supported' | 'unsupported'
   conversationCommands?: readonly AgentSessionConversationCommand[]
   /** `/compact` takes instructions here; an older host omits this and refuses the field. */
   compactInstructions?: boolean

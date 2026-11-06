@@ -6,8 +6,8 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { ConfirmationDialogContext } from './confirmation-dialog-context'
 import { UntitledFileRenameDialog } from './editor/UntitledFileRenameDialog'
 import { QuickCommandsPane } from './settings/quick-commands/QuickCommandsPane'
-import { useWorkspaceKanbanColumnResize } from './sidebar/use-workspace-kanban-column-resize'
-import { useAddRepoCloneFlow } from './sidebar/useAddRepoCloneFlow'
+import { useWorkspaceKanbanColumnResize } from './sidebar/workspace-board/viewport/use-workspace-kanban-column-resize'
+import { useAddRepoCloneFlow } from './sidebar/project-admission/dialog/useAddRepoCloneFlow'
 
 beforeEach(() => {
   vi.useFakeTimers()

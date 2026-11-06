@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalWait } from '../../../../../../shared/runtime-types'
-import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/worker-terminal-release-reconciliation'
+import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 export function registerWorkerReleaseOwnershipGuardTests(): void {

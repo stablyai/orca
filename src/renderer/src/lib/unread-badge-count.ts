@@ -3,7 +3,7 @@ import {
   filterProjectGroupsForVisibleHosts
 } from '../../../shared/sidebar-list/host-filtering'
 import { getRenderableFolderWorkspaces } from '../../../shared/sidebar-list/folder-workspace-lanes'
-import { worktreeMatchesVisibleHost } from '@/components/sidebar/visible-worktree-host-scope'
+import { worktreeMatchesVisibleHost } from '@/components/sidebar/worktree-list/listing/visible-worktree-host-scope'
 import {
   filterFolderWorkspacesFromOtherDevices,
   isWorkspaceOwnedBySomeoneElse

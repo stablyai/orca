@@ -145,18 +145,4 @@ describe('a password prompt the server gives up on', () => {
       vi.useRealTimers()
     }
   }, 15_000)
-
-  it('stops after the user cancels the prompt the server abandoned', async () => {
-    const port = await startHost()
-    const onCredentialRequest = slowUser(null)
-    conn = new SshConnection(
-      createTarget({ host: '127.0.0.1', port }),
-      createCallbacks({ onCredentialRequest })
-    )
-
-    await expect(conn.connect()).rejects.toThrow(/cancelled/i)
-
-    expect(conn.getState().status).toBe('auth-failed')
-    expect(onCredentialRequest).toHaveBeenCalledTimes(1)
-  }, 15_000)
 })

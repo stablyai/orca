@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +25,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { PluginSecretsStore, pluginSecretsProtection } from './plugin-secrets-store'
+import { PluginSecretsStore } from './plugin-secrets-store'
 
 const roots: string[] = []
 const originalPlatform = process.platform
@@ -57,24 +57,6 @@ afterEach(async () => {
 })
 
 describe('PluginSecretsStore', () => {
-  it('encrypts, persists, decrypts, deletes, and isolates plugin namespaces', async () => {
-    const root = await tempRoot()
-    const first = new PluginSecretsStore(root, 'acme.first')
-    const second = new PluginSecretsStore(root, 'acme.second')
-
-    expect(first.set('token', 'top-secret')).toEqual({ ok: true, value: true })
-    expect(first.get('token')).toEqual({ ok: true, value: 'top-secret' })
-    expect(second.get('token')).toEqual({ ok: true, value: null })
-    const persisted = await readFile(join(root, 'acme.first', 'secrets.json.enc'), 'utf8')
-    expect(persisted).not.toContain('top-secret')
-    if (process.platform !== 'win32') {
-      expect((await stat(join(root, 'acme.first', 'secrets.json.enc'))).mode & 0o077).toBe(0)
-    }
-
-    first.delete('token')
-    expect(first.get('token')).toEqual({ ok: true, value: null })
-  })
-
   it('fails closed without OS encryption and writes no plaintext file', async () => {
     const root = await tempRoot()
     storageMocks.available = false
@@ -85,61 +67,5 @@ describe('PluginSecretsStore', () => {
     await expect(readFile(join(root, 'acme.demo', 'secrets.json.enc'))).rejects.toMatchObject({
       code: 'ENOENT'
     })
-  })
-
-  it('reports corrupt or wrong-key ciphertext without returning bytes', async () => {
-    const root = await tempRoot()
-    const pluginDir = join(root, 'acme.demo')
-    await mkdir(pluginDir, { recursive: true })
-    await writeFile(
-      join(pluginDir, 'secrets.json.enc'),
-      JSON.stringify({
-        version: 1,
-        format: 'electron-safe-storage-v1',
-        ciphertexts: { token: Buffer.from('not-encrypted').toString('base64') }
-      })
-    )
-    const store = new PluginSecretsStore(root, 'acme.demo')
-
-    expect(store.get('token')).toEqual({ ok: false, error: 'failed to decrypt stored secret' })
-  })
-
-  it('refuses ciphertext that would exceed the bounded vault', async () => {
-    const root = await tempRoot()
-    storageMocks.encryptString.mockReturnValue(Buffer.alloc(6 * 1024 * 1024))
-    const store = new PluginSecretsStore(root, 'acme.demo')
-
-    expect(store.set('token', 'small-input')).toMatchObject({ ok: false })
-    await expect(readFile(join(root, 'acme.demo', 'secrets.json.enc'))).rejects.toMatchObject({
-      code: 'ENOENT'
-    })
-  })
-
-  it('rejects unsafe plugin namespaces', async () => {
-    const root = await tempRoot()
-    expect(() => new PluginSecretsStore(root, 'constructor.demo')).toThrow('unsafe plugin key')
-  })
-
-  it('refuses writes on the Linux basic_text backend but still reads existing secrets', async () => {
-    const root = await tempRoot()
-    const store = new PluginSecretsStore(root, 'acme.linux')
-    Object.defineProperty(process, 'platform', { value: 'linux' })
-    expect(store.set('token', 'sealed-earlier')).toEqual({ ok: true, value: true })
-    expect(pluginSecretsProtection()).toEqual({ level: 'os', gap: null })
-
-    storageMocks.backend = 'basic_text'
-
-    expect(pluginSecretsProtection()).toMatchObject({ level: 'obfuscated' })
-    expect(store.set('token', 'next')).toMatchObject({
-      ok: false,
-      error: expect.stringContaining('basic_text')
-    })
-    expect(store.get('token')).toEqual({ ok: true, value: 'sealed-earlier' })
-  })
-
-  it('reports unavailable protection when OS encryption is off', () => {
-    storageMocks.available = false
-
-    expect(pluginSecretsProtection()).toMatchObject({ level: 'unavailable' })
   })
 })

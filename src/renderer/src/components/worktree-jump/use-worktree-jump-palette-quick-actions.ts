@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
+import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
 import {
   getComposerEligibleRepos,

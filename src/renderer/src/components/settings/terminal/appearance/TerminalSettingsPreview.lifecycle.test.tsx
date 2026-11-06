@@ -96,8 +96,8 @@ vi.mock('@xterm/xterm', () => ({
   }
 }))
 
-vi.mock('@xterm/addon-ligatures', () => ({
-  LigaturesAddon: class LigaturesAddon {
+vi.mock('@/lib/pane-manager/terminal-ligatures-addon', () => ({
+  TerminalLigaturesAddon: class TerminalLigaturesAddon {
     dispose: Mock
 
     constructor() {
@@ -123,7 +123,7 @@ vi.mock('@/lib/monospace-font-family', () => ({
   buildFontFamily: (font: string) => `built:${font}`
 }))
 
-vi.mock('@/components/terminal-pane/terminal-appearance', () => ({
+vi.mock('@/components/terminal-pane/appearance/terminal-appearance', () => ({
   composeActiveTerminalTheme: () => ({ background: '#111111', foreground: '#eeeeee' })
 }))
 

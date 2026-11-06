@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import { normalizeAbsolutePathForComparison } from '@/components/right-sidebar/file-explorer-paths'
+import { normalizeRuntimePathForComparison as normalizeAbsolutePathForComparison } from '../../../../../shared/cross-platform-path'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 type PausedFile = Pick<OpenFile, 'filePath' | 'runtimeEnvironmentId'>

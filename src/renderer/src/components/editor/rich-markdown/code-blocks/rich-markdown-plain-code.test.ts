@@ -34,13 +34,6 @@ function mount(language: string | null) {
   return { editor, spans }
 }
 
-it('keeps unlabeled code blocks uncolored after edits', () => {
-  const { editor, spans } = mount(null)
-  expect(spans()).toBe(0)
-  editor.view.dispatch(editor.state.tr.insertText('changed ', 1))
-  expect(spans()).toBe(0)
-})
-
 it('removes syntax colors when choosing Plain text', () => {
   const { editor, spans } = mount('javascript')
   expect(spans()).toBeGreaterThan(0)

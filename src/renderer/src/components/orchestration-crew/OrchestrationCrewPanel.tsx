@@ -3,8 +3,8 @@ import { PanelRight, PanelRightClose, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import StatusIndicator from '@/components/sidebar/StatusIndicator'
-import { formatStateCount } from '@/components/sidebar/worktree-card-agent-summary'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
+import { formatStateCount } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
 import type { WorktreeStatus } from '@/lib/worktree-status'
 import type {
   OrchestrationCrewRow,

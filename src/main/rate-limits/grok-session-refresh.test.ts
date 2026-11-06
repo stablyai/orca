@@ -2,8 +2,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
-import { hostShellEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
+import { hostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import { readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
 import type * as GrokAuthModule from './grok-auth'
 import {
@@ -13,8 +13,10 @@ import {
 } from './grok-session-refresh'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
-vi.mock('../ipc/command-path-resolver', () => ({ resolveCommandOnLocalPath: vi.fn() }))
-vi.mock('../runtime/structured-agent-shell-environment', () => ({ hostShellEnvironment: vi.fn() }))
+vi.mock('../ipc/command-path/command-path-resolver', () => ({ resolveCommandOnLocalPath: vi.fn() }))
+vi.mock('../runtime/agent-session/environment/structured-agent-shell-environment', () => ({
+  hostShellEnvironment: vi.fn()
+}))
 vi.mock('./grok-auth', async (importOriginal) => ({
   ...(await importOriginal<typeof GrokAuthModule>()),
   readGrokAuthSession: vi.fn()

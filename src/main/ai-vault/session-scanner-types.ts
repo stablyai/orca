@@ -27,6 +27,8 @@ export type AiVaultScanOptions = {
   geminiSessionsDir?: string
   antigravityBrainDir?: string
   antigravityAppHome?: string
+  /** Orca's managed Antigravity chat transcripts; resolved by the host process. */
+  antigravityChatBrainDir?: string
   includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string

@@ -6,7 +6,7 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import {
   buildFoldedImageReplayWrites,
   resolvePositiveTerminalDimensions
-} from '../terminal-snapshot-replay-paint'
+} from '../snapshots/terminal-snapshot-replay-paint'
 
 import {
   CURSOR_SHOW_SEQUENCE,
@@ -178,8 +178,6 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!isCurrentPayload()) {
         continue
       }
-      // Rebuild WebGL after replay parses so an atlas attached to an empty buffer gains current glyphs.
-      session.manager.rebuildPaneWebgl(session.pane.id)
       appliedCurrentPayload = true
     }
     return appliedCurrentPayload

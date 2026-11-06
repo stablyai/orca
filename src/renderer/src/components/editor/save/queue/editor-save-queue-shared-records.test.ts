@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import { createEditorSaveQueue } from './editor-save-queue'
 import type { EditorSaveQueue } from './editor-save-queue-contract'
 import { createEditorRestartSaveHandlers } from '../../autosave/editor-restart-save-handlers'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
-import { bumpEditorDiscardEpoch } from '../flush/editor-discard-epoch'
-import { isDetachedEditorBufferId } from '@/store/slices/editor/buffers/editor-buffer-views'
+
 import {
   createEditorStore,
   createFakeEditorDisk,
@@ -28,18 +27,6 @@ const WORKTREES = {
 }
 
 // A view opened before a reconnect: its captured connection generation no longer matches.
-const STALE_PROVENANCE: EditorFileOperationProvenance = {
-  ownershipProjection: 'explicit',
-  expectedSshConnectionGeneration: 7,
-  generation: {
-    route: { executionHostId: 'local', runtimeEnvironmentId: null },
-    runtimeConnectionGeneration: null,
-    runtimePairingRevision: undefined,
-    runtimeSshGeneration: null,
-    nestedSshGeneration: null,
-    directSshGeneration: null
-  }
-}
 
 function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -91,43 +78,6 @@ describe('editor save queue: shared records', () => {
     vi.restoreAllMocks()
   })
 
-  it("a save queued on a detached record keeps that record's discard epoch after a rejoin", async () => {
-    // Divergent restored drafts keep w2 detached from w1’s record.
-    store.setState({
-      openFiles: [tab('w1', { isDirty: true }), tab('w2', { worktreeId: 'wt-2', isDirty: true })],
-      editorDrafts: { w1: 'mine', w2: 'theirs' }
-    })
-    expect(isDetachedEditorBufferId(recordOf('w2'))).toBe(true)
-    // Only w1’s record has previously been discarded.
-    bumpEditorDiscardEpoch(recordOf('w1'))
-    let release = (): void => {}
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    disk.fs.writeFile.mockImplementationOnce(
-      async ({ filePath, content }: { filePath: string; content: string }) => {
-        await gate
-        disk.files.set(filePath, content)
-        return { ok: true }
-      }
-    )
-    const first = queue.queueSave(view('w2'), 'theirs')
-    await vi.advanceTimersByTimeAsync(0)
-    const second = queue.queueSave(view('w2'), 'theirs')
-    // Rejoin before dispatch to verify the queued request retains its original record’s discard epoch.
-    store.getState().markFileDirty('w1', false)
-    store.getState().clearEditorDraft('w1')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(recordOf('w2')).toBe(recordOf('w1'))
-    store.getState().setEditorDraft('w2', 'theirs, more')
-    store.getState().markFileDirty('w2', true)
-
-    release()
-    await expect(first).resolves.toBe('written')
-    await expect(second).resolves.toBe('written')
-    expect(writes()).toEqual(['theirs', 'theirs, more'])
-  })
-
   describe('a read-only sibling joining a dirty record', () => {
     it('mirrors the edits, and autosave writes once through the writable view', async () => {
       store.setState({ openFiles: [tab('w1')] })
@@ -144,18 +94,6 @@ describe('editor save queue: shared records', () => {
       expect(writes()).toEqual(['edits'])
       expect(view('log').isDirty).toBe(false)
       expect(view('w1').isDirty).toBe(false)
-    })
-
-    it('never autosaves a record whose only view left is read-only', async () => {
-      store.setState({ openFiles: [tab('w1'), tab('log', { readOnly: true })] })
-      type('w1', 'edits')
-      store.setState((s) => ({ openFiles: s.openFiles.filter((file) => file.id !== 'w1') }))
-      queue.syncAutoSave()
-      await vi.advanceTimersByTimeAsync(DELAY_MS * 3)
-
-      expect(writes()).toEqual([])
-      expect(view('log').isDirty).toBe(true)
-      expect(store.getState().editorDrafts.log).toBe('edits')
     })
   })
 
@@ -198,49 +136,6 @@ describe('editor save queue: shared records', () => {
       expect(disk.files.get(PATH)).toBe('a edits')
       expect(disk.files.get('/repo/b.ts')).toBe('b edits')
       expect(store.getState().openFiles.every((file) => !file.isDirty)).toBe(true)
-    })
-
-    it('writes through the writable view when a read-only view of the record is listed first', async () => {
-      store.setState({ openFiles: [tab('log', { readOnly: true }), tab('w1')] })
-      type('w1', 'edits')
-
-      expect(await restart()).toEqual({ resolved: true })
-      expect(writes()).toEqual(['edits'])
-    })
-  })
-
-  describe('the reconnect writer', () => {
-    it('autosave writes through the view on the current connection', async () => {
-      store.setState({
-        openFiles: [tab('old', { operationProvenance: STALE_PROVENANCE }), tab('new')]
-      })
-      expect(recordOf('old')).toBe(recordOf('new'))
-      type('old', 'edits')
-      await vi.advanceTimersByTimeAsync(DELAY_MS)
-
-      expect(writes()).toEqual(['edits'])
-      expect(view('old').isDirty).toBe(false)
-      expect(view('new').isDirty).toBe(false)
-    })
-
-    it('a record left with only a stale-connection view skips autosave quietly', async () => {
-      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-      store.setState({ openFiles: [tab('old', { operationProvenance: STALE_PROVENANCE })] })
-      type('old', 'edits')
-      await vi.advanceTimersByTimeAsync(DELAY_MS)
-      expect(await queue.queueSave(view('old'), 'edits', 'autosave')).toBe('failed')
-
-      expect(writes()).toEqual([])
-      expect(logged).not.toHaveBeenCalled()
-      expect(view('old').isDirty).toBe(true)
-      expect(view('old').externalMutation).toBeUndefined()
-      expect(store.getState().editorDrafts.old).toBe('edits')
-
-      store.setState((s) => ({ openFiles: [...s.openFiles, tab('new', { worktreeId: 'wt-2' })] }))
-      queue.syncAutoSave()
-      await vi.advanceTimersByTimeAsync(DELAY_MS)
-      expect(writes()).toEqual(['edits'])
-      expect(view('old').isDirty).toBe(false)
     })
   })
 

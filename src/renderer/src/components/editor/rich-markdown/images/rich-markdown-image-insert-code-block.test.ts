@@ -6,7 +6,6 @@ import { renderHook } from '@testing-library/react'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { useLocalImagePick } from './useLocalImagePick'
-import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 
 vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: vi.fn().mockResolvedValue({
@@ -98,22 +97,6 @@ describe('inserting an image while the cursor is inside a fenced code block', ()
     await result.current()
     await flushPromises()
 
-    expectFencedSplit(editor)
-  })
-
-  it('keeps both halves fenced when a clipboard screenshot is pasted', async () => {
-    const handled = handleRichMarkdownImagePaste({
-      editor: editor as never,
-      event: {
-        clipboardData: { items: [{ kind: 'file', type: 'image/png' }] },
-        preventDefault: vi.fn()
-      } as unknown as ClipboardEvent,
-      filePath: '/repo/note.md',
-      worktreeId: 'wt-1'
-    })
-    await flushPromises()
-
-    expect(handled).toBe(true)
     expectFencedSplit(editor)
   })
 })

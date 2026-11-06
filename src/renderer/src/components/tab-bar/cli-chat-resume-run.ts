@@ -8,8 +8,8 @@ import {
 } from './cli-chat-resume-close-admission'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import {
   StructuredAgentSessionCreateSourceFailedError,
   type StructuredAgentSessionCreateGate
@@ -27,7 +27,7 @@ import {
   reportCliChatResumeFailureInChat,
   reportCliChatResumeTerminalChanged
 } from './cli-chat-resume-feedback'
-import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
+import { adoptingAgentOnHost } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-launch'
 
 const pending = new Map<string, { controller: AbortController; source: CliChatResumeSource }>()
 const listeners = new Set<() => void>()

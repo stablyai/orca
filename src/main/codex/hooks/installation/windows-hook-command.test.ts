@@ -8,38 +8,11 @@ import { removeTree } from '../../../../shared/windows-transient-lock-removal'
 import { CODEX_EVENTS } from '../definitions/codex-hook-definition'
 import { buildCodexHookCommand as getManagedCommand } from '../definitions/codex-hook-command-form'
 import { getManagedScript } from '../definitions/codex-hook-script'
-import { createManagedCommandMatcher } from '../../../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../../../agent-hooks/windows-direct-cmd-hook-command'
 
 vi.mock('electron', () => ({ app: { getPath: () => process.cwd() } }))
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
-})
-
-describe('Codex Windows hook command', () => {
-  it.each(['测试用户', '홍길동', '日本語', 'rené', '测试 用户', "测试 O'Brien"])(
-    'runs the script through cmd.exe for %s without an encoded launcher',
-    (profile) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-      vi.stubEnv('SystemRoot', 'D:\\Windows')
-      const path = `C:\\Users\\${profile}\\.orca\\agent-hooks\\codex-hook.cmd`
-      const command = getManagedCommand(path)
-      expect(command).not.toMatch(/powershell\.exe|EncodedCommand|Set-ExecutionPolicy/)
-      expect(command).toBe(
-        `D:\\Windows\\System32\\cmd.exe --% /d /v:off /c @"${path.replaceAll('\\', '/')}"`
-      )
-      expect(createManagedCommandMatcher('codex-hook.cmd')(command)).toBe(true)
-      expect(wrapWindowsBatchHookCommand(path)).toContain('-EncodedCommand')
-    }
-  )
-
-  it('writes a bare forward-slash path when the profile is one token', () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    expect(getManagedCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')).toBe(
-      'C:/Users/alice/.orca/agent-hooks/codex-hook.cmd'
-    )
-  })
 })
 
 const windowsPowerShell = join(

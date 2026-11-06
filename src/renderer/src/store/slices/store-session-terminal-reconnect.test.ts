@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
-import { computeVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import '@/components/sidebar/worktree-list/listing/visible-worktrees'
+import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 
@@ -17,7 +18,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Mock pty-transport's eager buffer registration
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn().mockReturnValue({ flush: () => '', dispose: () => {} }),
   ensurePtyDispatcher: vi.fn()
 }))

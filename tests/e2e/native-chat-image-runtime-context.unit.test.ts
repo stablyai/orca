@@ -18,7 +18,7 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../../src/renderer/src/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '../../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/native-chat-file-link'
 import {
   resolveNativeChatSkillDiscoveryContext,

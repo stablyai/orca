@@ -13,15 +13,15 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '../components/sidebar/worktree-agent-row-selectors'
+} from '../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../components/sidebar/worktree-card-status-inputs'
+} from '../components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Mock singleton import; this harness drives createTestStore like sibling mirror suites.
 vi.mock('../store', () => ({

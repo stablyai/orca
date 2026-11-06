@@ -10,12 +10,14 @@ import {
   reconcileHostWorktreeRemovals
 } from '../../hooks/ipc-events/background-worktree-removal-bridge'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import '../../components/sidebar/worktree-delete-error-display'
+import '../../components/sidebar/workspace-actions/deletion/worktree-delete-error-display'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))

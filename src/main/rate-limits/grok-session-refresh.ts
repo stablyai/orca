@@ -92,10 +92,11 @@ async function runGrokSessionsList(signal?: AbortSignal): Promise<void> {
 }
 
 async function prepareGrokSessionsList() {
-  const { hostShellEnvironment } = await import('../runtime/structured-agent-shell-environment')
+  const { hostShellEnvironment } =
+    await import('../runtime/agent-session/environment/structured-agent-shell-environment')
   // Pin the same normalized auth home as the reader, including its default.
   const env = { ...(await hostShellEnvironment()), GROK_HOME: getGrokHome() }
-  const { resolveCommandOnLocalPath } = await import('../ipc/command-path-resolver')
+  const { resolveCommandOnLocalPath } = await import('../ipc/command-path/command-path-resolver')
   const program = await resolveCommandOnLocalPath('grok', { env })
   if (!program) {
     return null

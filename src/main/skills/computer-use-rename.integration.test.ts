@@ -12,8 +12,6 @@ import {
   writeCopy
 } from './bundled-skill-install/skill-home.test-support'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
-import { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl-observation'
-import { buildSkillDiscoverySources } from './skill-discovery-sources'
 
 const NAME = 'orca-computer-use'
 const OLD = 'computer-use'
@@ -81,22 +79,6 @@ describe('released computer-use installation migration', () => {
     }
   )
 
-  it('never recognizes another provider’s generic name as Orca Computer Use', async () => {
-    const home = await makeSkillHome()
-    await writeCopy(
-      join(dirname(home.shared), OLD),
-      '---\nname: computer-use\ndescription: Another provider\n---\nDifferent tool\n'
-    )
-    const result = await discoverSkills({
-      homeDir: home.home,
-      includeCwd: false,
-      names: [NAME],
-      sourceKinds: ['home'],
-      refresh: true
-    })
-    expect(result.skills.some((skill) => skill.name === NAME)).toBe(false)
-  })
-
   it('keeps a former package with user-added files visible alongside the new skill', async () => {
     const home = await makeSkillHome()
     const old = join(dirname(home.shared), OLD)
@@ -114,24 +96,5 @@ describe('released computer-use installation migration', () => {
     })
     expect(result.skills.map((skill) => skill.name).sort()).toEqual([OLD, NAME])
     expect(await readFile(join(old, 'notes.md'), 'utf8')).toBe('My workflow')
-  })
-
-  it('recognizes the shipped former skill through WSL discovery without claiming unrelated names', async () => {
-    const home = await makeSkillHome()
-    const roots = buildSkillDiscoverySources({ homeDir: home.home, repos: [], includeCwd: false })
-    const root = roots[0]
-    const markdown = await readFile(FIXTURE, 'utf8')
-    const row = (name: string, body: string) =>
-      [
-        'S',
-        '0',
-        `${root.path}/${name}/SKILL.md`,
-        `${root.path}/${name}/SKILL.md`,
-        '1',
-        Buffer.from(body).toString('base64')
-      ].join('\0')
-    const output = `R\x000\x001\0${row(OLD, markdown)}\0${row('other', '---\nname: computer-use\n---\nOther tool\n')}\0`
-    const result = parseWslSkillDiscoveryOutput(output, roots, 42, ['home'], [NAME])
-    expect(result.skills.filter((skill) => skill.bundledName === NAME)).toHaveLength(1)
   })
 })

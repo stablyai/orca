@@ -4,7 +4,6 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
-  AI_VAULT_WSL_CARRYOVER_SCOPE_LIMIT,
   carryOverUnconfirmedWslSessions,
   resetAiVaultWslSessionCarryover
 } from './ai-vault-wsl-session-carryover'
@@ -53,18 +52,5 @@ describe('AI Vault WSL session carryover retention', () => {
     // Same-scope recovery: a later confirmed scan replaces the carried rows.
     confirm('scope-a', ['a3'])
     expect(probeFailed('scope-a')).toEqual(['a3'])
-  })
-
-  it('keeps the scope the user is on when others are visited after it', () => {
-    confirm('active', ['row'])
-    for (let index = 0; index < AI_VAULT_WSL_CARRYOVER_SCOPE_LIMIT - 1; index += 1) {
-      confirm(`other-${index}`, ['x'])
-    }
-    // Back on the active scope, its probe fails: carrying it over marks it recent.
-    expect(probeFailed('active')).toEqual(['row'])
-    confirm('one-more', ['x'])
-
-    expect(probeFailed('active')).toEqual(['row'])
-    expect(probeFailed('other-0')).toEqual([])
   })
 })

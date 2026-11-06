@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import * as sessionOrigin from '../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { buildMirroredAgentStatusPatch } from './web-session-tabs-sync/agent-status-patch'

@@ -16,19 +16,19 @@ import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
-import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
+import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/activity/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
+import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
+import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import WorktreeCardAgents from '@/components/sidebar/WorktreeCardAgents'
+import WorktreeCardAgents from '@/components/sidebar/workspace-card/activity/WorktreeCardAgents'
 import { i18n, translate } from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({ info: vi.fn(), transport: vi.fn(), owner: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: mocks.info } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn(),
   activateAndRevealWorkspace: vi.fn()
 }))
@@ -45,7 +45,7 @@ vi.mock('@/store', async () => {
   const { create } = await import('zustand')
   return { useAppStore: create(() => ({})) }
 })
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRuntimeOwner>()),
   resolveOwnerOrLocal: mocks.owner
 }))
@@ -63,7 +63,7 @@ vi.mock('@/components/sidebar/comment-markdown-lazy', () => ({
   preloadCommentMarkdown: () => {},
   CommentMarkdownAsync: () => null
 }))
-vi.mock('@/components/sidebar/CacheTimer', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
@@ -227,7 +227,7 @@ async function click(index: number) {
 }
 
 const actualOwner = await vi.importActual<typeof WorktreeRuntimeOwner>(
-  '@/lib/worktree-runtime-owner'
+  '@/lib/workspace/ownership/worktree-runtime-owner'
 )
 
 beforeEach(async () => {

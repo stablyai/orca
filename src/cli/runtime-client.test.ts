@@ -613,4 +613,33 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       code: 'invalid_runtime_response'
     })
   })
+
+  it.each(['x'.repeat(1024 * 1024), 'é'.repeat(512 * 1024)])(
+    'refuses oversized serialized requests before sending any bytes',
+    async (body) => {
+      const userDataPath = makeRuntimeClientFixture()
+      const endpoint = join(userDataPath, 'runtime.sock')
+      const received = vi.fn()
+      const server = createServer((socket) => {
+        sockets.add(socket)
+        socket.once('close', () => sockets.delete(socket))
+        socket.on('data', received)
+      })
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+      writeMetadata(userDataPath, endpoint)
+
+      // A write-then-reject can settle before the server emits data.
+      const serverClosed = new Promise<void>((resolve) =>
+        server.once('connection', (socket) => socket.once('close', () => resolve()))
+      )
+      const client = new RuntimeClient(userDataPath, 1000)
+      await expect(client.call('status.get', { body })).rejects.toMatchObject({
+        code: 'invalid_argument',
+        data: { effectsApplied: false, requestSent: false }
+      })
+      await serverClosed
+      expect(received).not.toHaveBeenCalled()
+    }
+  )
 })

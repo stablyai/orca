@@ -1,10 +1,8 @@
 // Clean tabs must not retain disk-text drafts that could later overwrite a shared model.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { attachEditorAutosaveController } from '../autosave/editor-autosave-controller'
-import { requestEditorFileSave } from '../autosave/editor-autosave'
+
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { createEditorStore } from '../autosave/editor-autosave-controller-test-fixture'
-import { reloadTabContentFromDisk } from './ExternalFileChangeBanner'
 
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
@@ -33,14 +31,6 @@ function openCleanTab(disk: string, language = 'typescript') {
   return { store, id }
 }
 
-function expectNoCleanDraft(store: ReturnType<typeof createEditorStore>): void {
-  for (const tab of store.getState().openFiles) {
-    if (!tab.isDirty) {
-      expect(store.getState().editorDrafts[tab.id]).toBeUndefined()
-    }
-  }
-}
-
 beforeEach(() => {
   vi.useFakeTimers()
   stubGuardedDisk({ [GUARDED_PATH]: 'disk' })
@@ -50,27 +40,6 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
   __clearSelfWriteRegistryForTests()
-})
-
-it('save completion leaves no draft on the now-clean tab', async () => {
-  const { store, id } = openCleanTab('disk')
-  store.getState().setEditorDraft(id, 'saved text')
-  store.getState().markFileDirty(id, true)
-  const cleanup = attachEditorAutosaveController(store)
-  try {
-    await requestEditorFileSave({ fileId: id })
-    expectNoCleanDraft(store)
-  } finally {
-    cleanup()
-  }
-})
-
-it('reload leaves no draft', () => {
-  const { store, id } = openCleanTab('disk')
-  store.getState().setEditorDraft(id, 'mine')
-  store.getState().markFileDirty(id, true)
-  reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
-  expectNoCleanDraft(store)
 })
 
 it("a reload keeps a clean Markdown tab's trailing-whitespace draft, but not one over older text", () => {

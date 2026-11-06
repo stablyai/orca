@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
-import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
+import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control/panel/source-control-fix-split-button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useCheckRunDetailsFixWithAI } from '../actions/check-run-details-fix-with-ai'
 import { formatCheckRunOutputForClipboard } from '../actions/check-run-clipboard-text'
@@ -13,7 +13,7 @@ import { CheckRunJobs } from './CheckRunJobs'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {

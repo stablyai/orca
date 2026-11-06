@@ -1,7 +1,7 @@
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import type { AppState } from '@/store/types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getTabIdToWorktreeId } from '../sidebar/worktree-agent-row-selectors'
+import { getTabIdToWorktreeId } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { useAppStore } from '../../store'
 
 /**

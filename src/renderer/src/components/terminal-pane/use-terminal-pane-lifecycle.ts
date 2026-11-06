@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
-import { applyTerminalAppearance } from './terminal-appearance'
+import { applyTerminalAppearance } from './appearance/terminal-appearance'
 import { useThemeBackgroundStore } from '@/store/theme-background'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import {
@@ -102,7 +102,6 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       manager,
       currentSettings,
       systemPrefersDarkRef.current,
-      deps.paneFontSizesRef.current,
       deps.paneTransportsRef.current,
       deps.effectiveMacOptionAsAltRef.current,
       deps.paneMode2031Ref.current,
@@ -115,7 +114,6 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,
     deps.settingsRef,
-    deps.paneFontSizesRef,
     deps.paneTransportsRef,
     deps.effectiveMacOptionAsAltRef,
     deps.paneMode2031Ref,

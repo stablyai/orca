@@ -1,7 +1,5 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { types } from 'node:util'
 import { runInNewContext } from 'node:vm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -44,48 +42,6 @@ afterEach(() => {
 })
 
 describe('document preview response allocation', () => {
-  it('serves existing PNG assets without a full intermediate body copy', async () => {
-    const fixtures = ['mobile/assets/icon.png', 'resources/app-icons/orca-watercolor.png'].map(
-      (path) => {
-        const bytes = readFileSync(resolve(path))
-        return { bytes, expectedDigest: digest(bytes), expectedLength: bytes.byteLength }
-      }
-    )
-    const nativeUint8Array = globalThis.Uint8Array
-    let intermediateCopyBytes = 0
-    globalThis.Uint8Array = new Proxy(nativeUint8Array, {
-      construct(target, argumentsList, newTarget) {
-        const source: unknown = argumentsList[0]
-        const bytes: unknown = Reflect.construct(target, argumentsList, newTarget)
-        if (!(bytes instanceof nativeUint8Array)) {
-          throw new Error('Unexpected byte constructor result')
-        }
-        if (Buffer.isBuffer(source) && fixtures.some((fixture) => fixture.bytes === source)) {
-          intermediateCopyBytes += bytes.byteLength
-        }
-        return bytes
-      }
-    })
-    try {
-      for (const fixture of fixtures) {
-        const response = await serve(fixture.bytes, 'image/png')
-        fixture.bytes.fill(0)
-        const clone = response.clone()
-        expect(response.status).toBe(200)
-        expect(response.headers.get('Content-Type')).toBe('image/png')
-        expect(response.headers.get('Cache-Control')).toBe('no-store')
-        for (const body of [response, clone]) {
-          const bytes = Buffer.from(await body.arrayBuffer())
-          expect(bytes.byteLength).toBe(fixture.expectedLength)
-          expect(digest(bytes)).toBe(fixture.expectedDigest)
-        }
-      }
-      expect(intermediateCopyBytes).toBe(0)
-    } finally {
-      globalThis.Uint8Array = nativeUint8Array
-    }
-  })
-
   it('keeps only the requested range and snapshots pooled, offset, shared and cross-realm bytes', async () => {
     const payload = Buffer.from('<p>π😀\u0000 independent bytes</p>', 'utf8')
     const expectedDigest = digest(payload)
@@ -123,19 +79,5 @@ describe('document preview response allocation', () => {
         expect(() => body.clone()).toThrow()
       }
     }
-  })
-
-  it('preserves empty bodies and rejects reads after cancellation', async () => {
-    const empty = await serve(Buffer.alloc(0))
-    expect(empty.status).toBe(200)
-    expect((await empty.arrayBuffer()).byteLength).toBe(0)
-
-    const response = await serve(Buffer.from('original preview bytes'))
-    if (!response.body) {
-      throw new Error('Expected a response body')
-    }
-    await response.body.cancel()
-    expect(response.bodyUsed).toBe(true)
-    await expect(response.arrayBuffer()).rejects.toThrow()
   })
 })

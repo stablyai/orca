@@ -1,5 +1,5 @@
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AcpStructuredSession } from './acp-structured-session'
 
@@ -9,10 +9,16 @@ function acpTurnInFlight(session: AcpStoppableSession): boolean {
   return session.turns.running || session.lane.openTurnId !== null
 }
 
+/** Stop reaches a running turn, held steers, or requests from the agent's own work. */
+export function acpStopHasWork(session: AcpStoppableSession): boolean {
+  return acpTurnInFlight(session) || session.turns.holdsSteers || session.prompts.size > 0
+}
+
 /** Do not await the cancel write; grace expiry must still close an unresponsive child. */
 export function interruptAcpTurn(session: AcpStoppableSession): void {
   session.turns.stop(Date.now())
-  if (!acpTurnInFlight(session)) {
+  // An open request means the agent's own work is waiting on the person.
+  if (!acpTurnInFlight(session) && session.prompts.size === 0) {
     return
   }
   session.prompts.withdrawAll()

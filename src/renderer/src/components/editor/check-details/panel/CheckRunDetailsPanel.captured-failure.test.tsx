@@ -10,7 +10,7 @@ import { readingCheck, readingDetails } from '../reading/check-details-reading-f
 import {
   capturedCheckLogExcerpt,
   capturedCheckLogFailure
-} from '../../../right-sidebar/check-job-log-captured-fixture'
+} from '../../../right-sidebar/checks-panel/logs/check-job-log-captured-fixture'
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
@@ -20,7 +20,7 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('@/components/sidebar/CommentMarkdown', () => ({
   default: ({ content }: { content: string }) => content
 }))
-vi.mock('@/components/right-sidebar/source-control-fix-split-button', () => ({
+vi.mock('@/components/right-sidebar/source-control/panel/source-control-fix-split-button', () => ({
   SourceControlFixSplitButton: () => null
 }))
 vi.mock('../actions/check-run-details-fix-with-ai', () => ({

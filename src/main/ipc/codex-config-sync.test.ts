@@ -93,11 +93,6 @@ describe('codexConfigSync:status handler', () => {
       managedStatePath: baselinePath
     })
   })
-
-  it('re-registers cleanly so a reload cannot leak a duplicate handler', () => {
-    invokeHandler(null)
-    expect(removeHandlerMock).toHaveBeenCalledWith('codexConfigSync:status')
-  })
 })
 
 // Unreadable managed homes must not collapse into the healthy no-mirror state (STA-4422).

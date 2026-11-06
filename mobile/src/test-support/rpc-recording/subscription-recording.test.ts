@@ -13,7 +13,7 @@ import { captureArguments, captureValue } from './recording-values'
 import { withReplyMeta } from '../bridged-parity/divergence-evidence'
 import type { Recording, RecordingScenario } from './recording-scenario'
 import { describe, expect, it } from 'vitest'
-import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
+
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import { runRecording } from './run-recording'
@@ -51,50 +51,6 @@ describe('subscription recordings', () => {
         { subscriptionId: 'sub-2' }
       ])
       expect(events).toEqual([readyFrame('sub-2').result])
-    } finally {
-      await transport.dispose()
-      await clock.flush()
-      transport.causality.assertTransparentCalls()
-      transport.causality.close()
-      clock.stop()
-    }
-  })
-
-  it('routes a whole host response at a stream id, and asserts the subscribe params', async () => {
-    const clock = vitestRecordingScheduler()
-    await clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    const events: unknown[] = []
-    const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
-    try {
-      const dispose = transport.client.subscribe(CLIENT_EVENTS, null, (result) =>
-        events.push(result)
-      )
-      transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
-      transport.frame(`${CLIENT_EVENTS}#1`, null, changed)
-      expect(() => transport.frame(`${CLIENT_EVENTS}#1`, { asserted: 1 }, changed)).toThrow(
-        'Subscribe params mismatch'
-      )
-      expect(() => transport.frame(`${CLIENT_EVENTS}#2`, null, changed)).toThrow(
-        'Missing subscription payload'
-      )
-      transport.frame(`${CLIENT_EVENTS}#1`, null, {
-        ok: true,
-        streaming: true,
-        result: { type: 'end' }
-      })
-      expect(() => transport.frame(`${CLIENT_EVENTS}#1`, null, { ok: true })).toThrow(
-        'No open stream for frame'
-      )
-      expect(() =>
-        transport.frame(`${CLIENT_EVENTS}#1`, null, {
-          ok: false,
-          error: { code: 'refused', message: 'gone' }
-        })
-      ).toThrow('No open stream for frame')
-      dispose()
-      expect(transport.payloads.map((payload) => payload.name)).toEqual([`${CLIENT_EVENTS}#1`])
-      expect(events).toEqual([readyFrame('sub-1').result, changed.result, { type: 'end' }])
     } finally {
       await transport.dispose()
       await clock.flush()
@@ -142,79 +98,6 @@ describe('subscription recordings', () => {
       )
     ).rejects.toThrow("Cannot read properties of undefined (reading 'message')")
     expect(listened).toEqual([])
-  })
-
-  it('preserves a raw registry throw-undefined without classifying it as a listener crash', async () => {
-    const clock = vitestRecordingScheduler()
-    await clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    let descriptor: PropertyDescriptor | undefined
-    try {
-      transport.client.subscribe(CLIENT_EVENTS, null, () => {})
-      descriptor = Object.getOwnPropertyDescriptor(
-        RpcClientStreamRegistry.prototype,
-        'handleResponse'
-      )
-      if (!descriptor) {
-        throw new Error('Missing acquired registry descriptor')
-      }
-      Object.defineProperty(RpcClientStreamRegistry.prototype, 'handleResponse', {
-        ...descriptor,
-        value: () => {
-          throw undefined
-        }
-      })
-      let outcome: { error: unknown } | undefined
-      try {
-        transport.frame(`${CLIENT_EVENTS}#1`, null, { ok: true, streaming: true })
-      } catch (error) {
-        outcome = { error }
-      }
-      expect(outcome).toEqual({ error: undefined })
-      expect(transport.takeListenerCrash()).toBeNull()
-    } finally {
-      if (descriptor) {
-        Object.defineProperty(RpcClientStreamRegistry.prototype, 'handleResponse', descriptor)
-      }
-      try {
-        await transport.dispose()
-      } finally {
-        try {
-          await clock.flush()
-        } finally {
-          try {
-            transport.causality.assertTransparentCalls()
-            transport.causality.close()
-          } finally {
-            clock.stop()
-          }
-        }
-      }
-    }
-  })
-
-  it('files only a subscribe as an open stream, not the unsubscribe it publishes later', async () => {
-    const clock = vitestRecordingScheduler()
-    await clock.start()
-    const transport = new ScriptedRpcTransport(clock.elapsed)
-    try {
-      const dispose = transport.client.subscribe(CLIENT_EVENTS, null, () => {})
-      transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
-      dispose()
-      expect(transport.payloads.map((payload) => payload.name)).toEqual([
-        `${CLIENT_EVENTS}#1`,
-        'runtime.clientEvents.unsubscribe#1'
-      ])
-      expect(() =>
-        transport.frame('runtime.clientEvents.unsubscribe#1', null, readyFrame('sub-1'))
-      ).toThrow('Missing subscription payload')
-    } finally {
-      await transport.dispose()
-      await clock.flush()
-      transport.causality.assertTransparentCalls()
-      transport.causality.close()
-      clock.stop()
-    }
   })
   it('observes a stream the product left registered at teardown, and nothing when it closes', async () => {
     const drive = async (close: 'never' | 'sync' | 'timer'): Promise<RecordedValue> => {

@@ -1,15 +1,14 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
-import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
+import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
+import type { SearchableBrowserPage } from '@/lib/browser/palette/browser-palette-search'
 import {
   buildSearchableSimulatorTabs,
   type SearchableSimulatorTab
 } from '@/lib/simulator-palette-search'
-import {
-  buildSearchableWorkspaceTabs,
-  type SearchableWorkspaceTab
-} from '@/lib/workspace-tab-palette-search'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries as buildSearchableWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
@@ -18,6 +17,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -202,7 +202,8 @@ export function buildOpenTabSearchBrowserPages(
 
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
-  agentState: OpenTabSearchAgentState
+  agentState: OpenTabSearchAgentState,
+  chatNames: StructuredChatTabNames
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
 
@@ -226,7 +227,8 @@ export function buildOpenTabSearchEntries(
       activeFileId: state.activeFileId,
       activeFileIdByWorktree: state.activeFileIdByWorktree,
       activeTabTypeByWorktree: state.activeTabTypeByWorktree,
-      generatedTitlesEnabled: state.generatedTitlesEnabled
+      generatedTitlesEnabled: state.generatedTitlesEnabled,
+      chatNames
     }),
     browserPages: buildOpenTabSearchBrowserPages(state, scope),
     simulatorTabs: buildSearchableSimulatorTabs({

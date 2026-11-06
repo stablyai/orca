@@ -1,4 +1,4 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,9 +7,9 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
@@ -19,15 +19,17 @@ import {
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tab-mutation-methods'
+import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tabs/session-tab-mutation-methods'
 
 function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)

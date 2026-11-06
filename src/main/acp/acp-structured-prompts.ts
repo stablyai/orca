@@ -1,10 +1,11 @@
 // Claim requests through journal commit before replying so competing clients cannot answer twice.
 
 import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpRpcError } from './acp-errors'
 import type { AcpRequestContext } from './acp-json-rpc-peer'
@@ -27,10 +28,8 @@ export class AcpStructuredPrompts {
 
   constructor(
     private readonly lane: () => AcpStructuredLane | null,
-    /** Allows interactive requests for the current turn. */
-    private readonly admits: () => boolean,
-    /** Allows content from requests that settled immediately. */
-    private readonly shows: () => boolean
+    /** Allows interactive requests and content from requests that settled immediately. */
+    private readonly admits: () => boolean
   ) {}
 
   get size(): number {
@@ -44,13 +43,13 @@ export class AcpStructuredPrompts {
     }
     const translated = lane.translator.request(method, params, context.id)
     if (translated.settled) {
-      if (this.shows()) {
+      if (this.admits()) {
         lane.apply(translated.events)
       }
       return Promise.resolve(translated.settled.reply)
     }
-    if (translated.presentation && !this.admits()) {
-      // Reply cancelled without opening a card when the turn can no longer ask.
+    if (translated.presentation && (!this.admits() || context.signal.aborted)) {
+      // Reply cancelled without opening a card when nobody can answer.
       return Promise.resolve(translated.presentation.reply(null))
     }
     lane.apply(translated.events)
@@ -117,6 +116,8 @@ export class AcpStructuredPrompts {
       throw error
     }
     entry.settle(reply)
+    // Release the timeline's hold; withdrawal keeps the committed answer.
+    this.lane()?.apply([{ type: 'request.withdrawn', request: entry.key }])
     if (entry.permission && entry.signal.aborted) {
       // Protocol cancellation already replied while the permission answer was being saved.
       throw new Error(`the agent stopped waiting for the answer to ${input.itemId}`)

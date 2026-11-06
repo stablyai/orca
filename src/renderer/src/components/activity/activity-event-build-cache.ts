@@ -1,4 +1,4 @@
-import { entryWithRuntimeOrchestration } from '../sidebar/worktree-agent-row-orchestration'
+import { entryWithRuntimeOrchestration } from '../sidebar/workspace-card/activity/worktree-agent-row-orchestration'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,

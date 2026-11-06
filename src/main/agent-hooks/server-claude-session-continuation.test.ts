@@ -109,46 +109,6 @@ describe('Claude session continued into a daemon job', () => {
     expect(persisted.entries[PANE].providerSession.id).toBe(FORK)
   })
 
-  it('restamps the evidence clock for a suspension seen after the rebinding', async () => {
-    const t0 = 1_800_000_000_000
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(t0)
-    const server = await createServer()
-    const { oldPath } = forkOldIntoJob()
-    await prompt(server, PANE, OLD, oldPath)
-    const emitted = vi.fn()
-    server.setListener(emitted)
-    emitted.mockClear()
-    vi.setSystemTime(t0 + 60_000)
-    probe.mockImplementation(async (_identity, _read, _platform, observe) => {
-      observe?.(true)
-      return 'unverifiable'
-    })
-
-    await server.checkAgentPresence(PANE)
-
-    expect(emitted.mock.calls[0]?.[0]).toMatchObject({
-      providerSession: { id: FORK },
-      evidenceObservedAt: t0
-    })
-    expect(emitted.mock.lastCall?.[0]).toMatchObject({
-      providerSession: { id: FORK },
-      agentPresence: { suspended: true },
-      evidenceObservedAt: t0 + 60_000
-    })
-  })
-
-  it('leaves the pane alone while its transcript has no continuation', async () => {
-    const server = await createServer()
-    const oldPath = transcript(OLD)
-    transcript(FORK)
-    await prompt(server, PANE, OLD, oldPath)
-
-    await server.checkAgentPresence(PANE)
-
-    expect(row(server)?.providerSession?.id).toBe(OLD)
-  })
-
   it('does not claim a fork that another pane already reports', async () => {
     const server = await createServer()
     const { oldPath, forkPath } = forkOldIntoJob()

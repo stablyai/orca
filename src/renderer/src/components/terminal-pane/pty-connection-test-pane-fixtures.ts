@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { ITerminalOptions } from '@xterm/xterm'
-import type { PtyReplayDataMeta, PtyTransport } from './pty-transport-types'
+import type { PtyReplayDataMeta, PtyTransport } from './pty-transport/pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -251,7 +251,6 @@ export type MockPaneSummary = { id: number; leafId: string }
 export type MockPaneManager = {
   setPaneGpuRendering: Mock
   markPaneHasComplexScriptOutput: Mock
-  rebuildPaneWebgl: Mock
   hasWebglRenderer: Mock<() => boolean>
   getPanes: Mock<() => MockPaneSummary[]>
   closePane: Mock
@@ -273,7 +272,6 @@ export function createManager(
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),

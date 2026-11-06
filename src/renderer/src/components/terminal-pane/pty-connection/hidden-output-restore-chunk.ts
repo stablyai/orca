@@ -1,4 +1,4 @@
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 
 import { HIDDEN_OUTPUT_RESTORE_PENDING_CHARS } from './hidden-output-restore-limits'
 
@@ -122,8 +122,8 @@ export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): vo
     if (typeof meta?.rawLength === 'number') {
       pending.rawLength = meta.rawLength
     }
-    if (meta?.gapEscapeState) {
-      pending.gapEscapeState = meta.gapEscapeState
+    if (meta?.midEscape) {
+      pending.midEscape = meta.midEscape
     }
     session.hiddenOutputRestorePendingChunks.push(pending)
     session.hiddenOutputRestorePendingChars += data.length

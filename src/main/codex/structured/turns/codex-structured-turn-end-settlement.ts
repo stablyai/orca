@@ -1,5 +1,4 @@
 import {
-  agentSessionFailureFact,
   providerDiagnostic,
   type ProviderDiagnostic,
   type SubmissionRejectionFact
@@ -8,9 +7,8 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+
 import type { CodexTurnEnd } from './codex-structured-dispatch-echo'
-import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { readCodexJournalRecord } from '../journal/codex-structured-journal-translation-values'
 import {
@@ -21,6 +19,7 @@ import {
 } from '../../app-server/codex-structured-thread-facts'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { codexAuthenticationFailure } from '../session-lifecycle/codex-authentication-failure'
+// Turn ends release execution holds; only a user-message receipt confirms delivery.
 
 export function codexDispatchRejection(
   failure: SubmissionRejectionFact,
@@ -35,12 +34,6 @@ export function codexDispatchRejection(
     }
   )
 }
-
-export type CodexTurnEndSettlement = {
-  clientMessageId: string
-  state: 'rejected'
-  answeredInTurn?: AgentJournalAnsweredTurnIdentity
-} & AgentJournalDispatchRejection
 
 function errorDetail(params: unknown): ProviderDiagnostic | undefined {
   const message = readCodexTurnErrorMessage(params)
@@ -92,28 +85,7 @@ export function readCodexTurnEnd(method: string, params: unknown): CodexTurnEnd 
   return { status: 'completed' }
 }
 
-/** Settle unechoed sends only at turn end, after any failed-turn input persistence. */
-export function codexTurnEndRejection(
-  end: CodexTurnEnd,
-  account?: CodexSession['account']
-): AgentJournalDispatchRejection | null {
-  // Interrupt clears pending steers and can abort initial-input persistence after 100 ms.
-  if (end.status === 'interrupted') {
-    return agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
-  }
-  if (end.status === 'failed') {
-    return codexDispatchRejection(
-      agentSessionFailureFact(end.notSignedIn ? 'notSignedIn' : 'providerRejected', {
-        ...(end.detail ? { detail: end.detail } : {}),
-        ...(account ? { account } : {})
-      })
-    )
-  }
-  // Successful completion cannot disprove delivery; missing echoes await journal recovery.
-  return null
-}
-
-/** Record opening before idle status can arrive ahead of turn completion. */
+/** Records a turn Codex opened, ahead of the frames that may report the thread idle before it ends. */
 export function noteCodexTurnOpened(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
   method: string,
@@ -127,8 +99,7 @@ export function noteCodexTurnOpened(
 
 export function settleCodexSendsInEndedTurn(
   session: Pick<CodexSession, 'threadId' | 'dispatchEchoes' | 'account'>,
-  frame: { sessionId: string; method: string; params: unknown },
-  settle: (settlement: CodexTurnEndSettlement) => void
+  frame: { sessionId: string; method: string; params: unknown }
 ): void {
   const turnId = readCodexTurnId(frame.params)
   const end = turnId
@@ -142,31 +113,5 @@ export function settleCodexSendsInEndedTurn(
   ) {
     return
   }
-  const rejection = codexTurnEndRejection(end, session.account)
-  for (const { clientMessageId, via } of session.dispatchEchoes.endTurn(
-    session.threadId,
-    turnId,
-    end
-  )) {
-    if (rejection) {
-      settle({
-        clientMessageId,
-        state: 'rejected',
-        ...codexAnsweredTurn(session, frame.sessionId, turnId, via),
-        ...rejection
-      })
-    }
-  }
-}
-
-/** Unopened turns have no journal record to reference in settlement. */
-export function codexAnsweredTurn(
-  session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
-  sessionId: string,
-  turnId: string,
-  via: AgentJournalAnsweredTurnIdentity['via']
-): { answeredInTurn?: AgentJournalAnsweredTurnIdentity } {
-  return session.dispatchEchoes.hasOpened(session.threadId, turnId)
-    ? { answeredInTurn: { turn: codexTurnLifecycleIdentity(sessionId, turnId), via } }
-    : {}
+  session.dispatchEchoes.endTurn(session.threadId, turnId, end)
 }

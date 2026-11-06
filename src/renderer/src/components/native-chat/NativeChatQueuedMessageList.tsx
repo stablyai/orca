@@ -15,7 +15,7 @@ import type {
 } from './use-structured-agent-session-queued-messages'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
+import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 import {
   headSteerableQueuedMessageCard,

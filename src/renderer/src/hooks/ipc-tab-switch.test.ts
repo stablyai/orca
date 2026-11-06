@@ -24,7 +24,7 @@ import {
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
 
-type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'agent-session'
 
 type MockGroup = {
   id: string
@@ -210,6 +210,55 @@ describe('handleSwitchTerminalTab', () => {
 
     expect(handleSwitchTerminalTab(1)).toBe(true)
     expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+  })
+
+  it('keeps chats in visible order while still reaching a terminal without its unified row', () => {
+    const store = makeStore('agent-session', {
+      tabsByWorktree: { 'wt-1': [{ id: 'term-1' }, { id: 'term-2' }] },
+      groupsByWorktree: {
+        'wt-1': [
+          { id: 'group-1', activeTabId: 'chat-tab', tabOrder: ['tab-1', 'chat-tab'] },
+          { id: 'group-2', activeTabId: 'other-chat', tabOrder: ['other-chat'] }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          { id: 'tab-1', entityId: 'term-1', groupId: 'group-1', contentType: 'terminal' },
+          { id: 'chat-tab', entityId: 'chat', groupId: 'group-1', contentType: 'agent-session' },
+          { id: 'other-chat', entityId: 'other', groupId: 'group-2', contentType: 'agent-session' }
+        ]
+      }
+    })
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-1' },
+      { type: 'agent-session', id: 'chat', tabId: 'chat-tab' }
+    ])
+    store.setActiveTab.mockImplementation((id: string) => {
+      store.activeTabId = id
+    })
+    store.setActiveTabType.mockImplementation((type: ActiveTabType) => {
+      store.activeTabType = type
+    })
+    store.activateTab.mockImplementation((tabId: string) => {
+      store.groupsByWorktree['wt-1'][0].activeTabId = tabId
+    })
+    for (const [direction, expectedId, expectedType] of [
+      [1, 'term-2', 'terminal'],
+      [1, 'term-1', 'terminal'],
+      [1, 'chat-tab', 'agent-session'],
+      [-1, 'term-1', 'terminal'],
+      [-1, 'term-2', 'terminal'],
+      [-1, 'chat-tab', 'agent-session']
+    ] as const) {
+      expect(handleSwitchTerminalTab(direction)).toBe(true)
+      if (expectedType === 'agent-session') {
+        expect(store.activateTab).toHaveBeenLastCalledWith(expectedId)
+      } else {
+        expect(store.setActiveTab).toHaveBeenLastCalledWith(expectedId)
+      }
+      expect(store.activeTabType).toBe(expectedType)
+    }
   })
 
   it('keeps a genuine one-terminal split group a no-op', () => {

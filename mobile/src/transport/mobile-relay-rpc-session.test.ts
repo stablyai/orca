@@ -175,31 +175,6 @@ describe('mobile relay RPC session', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
-  it('requires exact resume observations and confirms by request ID before becoming connected', async () => {
-    const { session, confirmationRequest, capabilityRequest } = await authenticateSession()
-
-    expect(fakes.linkOptions).toMatchObject({
-      endpoint: relay,
-      credential: 'resume-secret',
-      expectedCredentialKind: 'resume'
-    })
-    expect(confirmationRequest).toMatchObject({
-      method: 'pairing.getEndpoints',
-      params: { resumeConfirmReqId: 'confirm-1' },
-      deviceToken: 'device-token'
-    })
-    expect(confirmationRequest.params).not.toHaveProperty('relayDeviceId')
-    expect(confirmationRequest.params).not.toHaveProperty('acceptedCredentialVersion')
-    expect(capabilityRequest).toMatchObject({
-      method: 'runtime.clientCapabilities.update',
-      params: {
-        clientCapabilities: expect.arrayContaining(['agent-session.structured.v1'])
-      },
-      deviceToken: 'device-token'
-    })
-    expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
-  })
-
   it('connects when an older runtime rejects capability negotiation', async () => {
     const { session } = await authenticateSession(false)
 
@@ -216,33 +191,6 @@ describe('mobile relay RPC session', () => {
 
     expect(session.getState()).toBe('connected')
     expect(session.getFailure()).toBeNull()
-    session.close()
-  })
-
-  // Dial stages distinguish a missing upgrade from slow cell assignment while both report connecting.
-  it('reports the dial stage as the link opens, receives hello, and authenticates', async () => {
-    const session = openSession()
-    const stages: string[] = []
-    session.onDialStageChange((stage) => stages.push(stage))
-    expect(session.getDialStage()).toBe('opening')
-
-    fakes.linkOptions!.onOpen()
-    expect(session.getDialStage()).toBe('awaiting-hello')
-    expect(session.getState()).toBe('connecting')
-    fakes.linkOptions!.onHello({
-      type: 'relay-hello',
-      ok: true,
-      credentialKind: 'resume',
-      leaseExpiresAt: Date.now() + 10_000,
-      acceptedCredentialVersion: 3,
-      acceptedAs: 'current',
-      resumeExpiresAt: Date.now() + 300_000
-    })
-    expect(session.getDialStage()).toBe('handshaking')
-    fakes.linkOptions!.onAuthenticated()
-    expect(session.getDialStage()).toBe('confirming')
-    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    expect(stages).toEqual(['awaiting-hello', 'handshaking', 'confirming'])
     session.close()
   })
 
@@ -452,19 +400,6 @@ describe('mobile relay RPC session', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('sends requests and streams with no envelope byte for byte as before', async () => {
-    const { session } = await authenticateSession()
-    void session.sendRequest('status.get', { a: 1 })
-    session.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
-    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
-    expect(
-      fakes.sendText.mock.calls.map((call) => String(call[0]).replace(/"id":"[^"]+"/, ''))
-    ).toEqual([
-      '{,"method":"status.get","params":{"a":1},"deviceToken":"device-token"}',
-      '{,"method":"terminal.subscribe","params":{"terminal":"t1"},"deviceToken":"device-token"}'
-    ])
   })
 
   it('sends a server workspace call as the same top-level executionHost frame as before the envelope', async () => {

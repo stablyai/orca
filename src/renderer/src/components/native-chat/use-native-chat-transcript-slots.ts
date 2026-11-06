@@ -6,9 +6,9 @@ import {
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import {
   buildNativeChatTranscriptSlots,
-  type NativeChatTranscriptSlot,
-  type NativeChatTranscriptSlotsInput
+  type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
+import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
@@ -26,6 +26,7 @@ export function useNativeChatTranscriptSlots({
     receipts,
     turnStatuses,
     turnDiffs,
+    openedPullRequests,
     expandedTurnKeys,
     isWorking,
     lifecycleWorking,
@@ -74,6 +75,7 @@ export function useNativeChatTranscriptSlots({
         receipts,
         turnStatuses,
         turnDiffs,
+        openedPullRequests,
         expandedTurnKeys,
         isWorking,
         lifecycleWorking,
@@ -88,6 +90,7 @@ export function useNativeChatTranscriptSlots({
       liveReasoningId,
       liveTurnKey,
       messages,
+      openedPullRequests,
       receipts,
       subagentChoices,
       subagentSections,

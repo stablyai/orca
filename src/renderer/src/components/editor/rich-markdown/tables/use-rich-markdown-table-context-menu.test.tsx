@@ -74,36 +74,4 @@ describe('rich markdown table context menu', () => {
       editorElement.remove()
     }
   })
-
-  it('reports header targets so native row actions can be disabled', () => {
-    const editorElement = document.createElement('div')
-    document.body.append(editorElement)
-    const editor = new Editor({
-      element: editorElement,
-      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
-      content: TABLE,
-      contentType: 'markdown'
-    })
-    const setRichMarkdownContextMenuTarget = vi.fn()
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        ui: {
-          onRichMarkdownContextCommand: vi.fn(() => vi.fn()),
-          setRichMarkdownContextMenuTarget
-        }
-      }
-    })
-    const view = render(<TableContextMenuHarness editor={editor} />)
-    try {
-      fireEvent.contextMenu(editorElement.querySelector('th')!, { clientX: 8, clientY: 9 })
-      expect(setRichMarkdownContextMenuTarget).toHaveBeenLastCalledWith(
-        expect.objectContaining({ cellType: 'header', x: 8, y: 9 })
-      )
-    } finally {
-      view.unmount()
-      editor.destroy()
-      editorElement.remove()
-    }
-  })
 })

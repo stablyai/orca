@@ -23,7 +23,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './platform/terminal-windows-search'
 import { TerminalMacKeyboardSection } from './platform/TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 type TerminalAdvancedSectionProps = {
   hostScope?: SettingsHostScope

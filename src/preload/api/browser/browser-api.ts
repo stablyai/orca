@@ -208,6 +208,8 @@ export type BrowserApi = {
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
+  /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
+  onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
   onSessionProfilesChanged: (callback: () => void) => () => void
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */

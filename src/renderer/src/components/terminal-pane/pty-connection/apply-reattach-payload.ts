@@ -14,7 +14,7 @@ import {
   readProposedTerminalCols,
   resolvePositiveTerminalDimensions,
   shouldSkipAltFrameForWidthMismatch
-} from '../terminal-snapshot-replay-paint'
+} from '../snapshots/terminal-snapshot-replay-paint'
 
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
 import { ackPaintedColdRestore } from './painted-cold-restore-ack'
@@ -115,6 +115,9 @@ export function createReattachPayloadHandlers(
         restoredSnapshotPaintsPrintableContent({ data: daemonSnapshotReplay })
       )
       session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
+      if (typeof ctx.connectResult.snapshotSeq === 'number') {
+        session.streamPosition.anchor(ctx.ptyId, ctx.connectResult.snapshotSeq)
+      }
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.
@@ -182,6 +185,9 @@ export function createReattachPayloadHandlers(
           restoredSnapshotPaintsPrintableContent(modelSnapshot)
         )
         session.recordRendererOrderedSeq(modelSnapshot)
+        if (typeof modelSnapshot.seq === 'number') {
+          session.streamPosition.anchor(ctx.ptyId, modelSnapshot.seq)
+        }
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult?.coldRestore) {
           ackPaintedColdRestore(session, ctx.ptyId)

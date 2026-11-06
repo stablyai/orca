@@ -13,8 +13,8 @@ import {
 import {
   canUseParentPrChecksGitHubPRCacheEntry,
   getParentPrChecksGitHubPRCacheEntry
-} from '../right-sidebar/parent-pr-checks-github-pr-cache'
-import { canUseParentPrChecksHostedReviewCacheEntry } from '../right-sidebar/parent-pr-checks-hosted-review-cache'
+} from '../right-sidebar/hosted-review/folder-checks/parent-pr-checks-github-pr-cache'
+import { canUseParentPrChecksHostedReviewCacheEntry } from '../right-sidebar/hosted-review/folder-checks/parent-pr-checks-hosted-review-cache'
 
 export type DashboardCardContextState = Partial<
   Pick<AppState, 'hostedReviewCache' | 'prCache' | 'settings' | 'workspaceStatuses'>

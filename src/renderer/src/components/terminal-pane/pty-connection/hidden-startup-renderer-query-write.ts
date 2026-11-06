@@ -7,11 +7,11 @@ import {
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
 } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 import {
   DEFAULT_DA1_RESPONSE,
   sendTerminalOscColorQueryReplies
-} from '../terminal-capability-replies'
+} from '../emulation/terminal-capability-replies'
 
 import { recordHiddenRendererSkip } from './e2e-terminal-pty-harness'
 
@@ -111,11 +111,14 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
   }
 
   // Why: discarding flood bytes must not swallow terminal queries (a lost DSR/CPR hangs the program); the snapshot repaint owns the content, so synthesize replies via the immediate input path, not xterm replay.
-  session.salvageRendererQueriesFromDiscardedRestoreData = function (data: string): void {
-    if (!data || !data.includes('\x1b')) {
-      return
+  session.salvageRendererQueriesFromDiscardedRestoreData = function (
+    data: string,
+    pending = ''
+  ): string {
+    if (!data || (!pending && !data.includes('\x1b'))) {
+      return pending
     }
-    const extracted = extractHiddenStartupRendererQueryData(data, '')
+    const extracted = extractHiddenStartupRendererQueryData(data, pending)
     if (extracted.oscColorQueryData && session.shouldAnswerPaneOscColorQueries()) {
       sendTerminalOscColorQueryReplies(
         extracted.oscColorQueryData,
@@ -143,6 +146,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
       // Best-effort for rarer queries (DECRQM, DA2, XTVERSION): replay into xterm so its handlers answer when no replay is active.
       session.writePtyOutputToXterm(unansweredQueryData, true, { hiddenStartupRendererQuery: true })
     }
+    return extracted.pending
   }
 
   function splitCsiSequences(queryData: string): string[] {
