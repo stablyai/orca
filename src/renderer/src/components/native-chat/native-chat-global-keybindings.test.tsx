@@ -159,6 +159,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
@@ -229,6 +230,17 @@ it.each(['win32', 'linux'] as const)(
   }
 )
 
+it('uses logical Latin keys for macOS Control editing ownership on remapped layouts', () => {
+  fixture.state.keybindings = { 'sidebar.sleepingWorkspaces.toggle': ['Ctrl+Q'] }
+  const { paragraph, rerender } = mount()
+  press(paragraph, 'q', 'KeyA', { ctrlKey: true })
+  expect(fixture.state.showSleepingWorkspaces).toBe(true)
+  fixture.state.keybindings = { 'sidebar.sleepingWorkspaces.toggle': ['Ctrl+A'] }
+  rerender()
+  expect(press(paragraph, 'a', 'KeyQ', { ctrlKey: true }).defaultPrevented).toBe(false)
+  expect(fixture.state.showSleepingWorkspaces).toBe(true)
+})
+
 it('still dispatches physical dead-key shortcuts outside a text field', () => {
   fixture.state.keybindings = { 'sidebar.sleepingWorkspaces.toggle': ['Mod+Shift+BracketRight'] }
   mount()
@@ -295,7 +307,10 @@ it('protects ordinary fields, shortcut recorders, floating panels and composing 
 })
 
 it('carries native default deletion through the IPC bridge and preserves composition and text-producing overrides', () => {
-  const { editor } = mount()
+  vi.stubGlobal('process', { ...process, platform: 'linux' })
+  fixture.platform = 'linux'
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Linux')
+  const { editor, paragraph, rerender } = mount()
   const row = document.createElement('div')
   row.dataset.worktreeId = 'wt-1'
   row.dataset.worktreeHostIdentity = 'local|wt-1'
@@ -385,6 +400,27 @@ it('carries native default deletion through the IPC bridge and preserves composi
   expect(dispatch({ ...input, key: 'Enter', code: 'Enter', shift: false })).not.toHaveBeenCalled()
   fixture.state.keybindings = { 'workspace.delete': ['Mod+A'] }
   expect(dispatch({ ...input, key: 'a', code: 'KeyQ', shift: false })).not.toHaveBeenCalled()
+  expect(fixture.deleteWorktree).not.toHaveBeenCalled()
+  fixture.state.keybindings = { 'workspace.delete': ['Ctrl+Shift+Q'] }
+  expect(dispatch({ ...input, key: 'Q', code: 'KeyA' })).toHaveBeenCalledOnce()
+  expect(fixture.deleteWorktree).toHaveBeenCalledExactlyOnceWith('wt-1', {
+    expectedInstanceId: 'instance',
+    expectedHostId: 'local'
+  })
+  fixture.deleteWorktree.mockClear()
+  rerender()
+  expect(press(paragraph, 'Q', 'KeyA', { ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(
+    true
+  )
+  expect(fixture.deleteWorktree).toHaveBeenCalledExactlyOnceWith('wt-1', {
+    expectedInstanceId: 'instance',
+    expectedHostId: 'local'
+  })
+  fixture.deleteWorktree.mockClear()
+  fixture.state.keybindings = { 'workspace.delete': ['Ctrl+Z'] }
+  rerender()
+  expect(dispatch({ ...input, key: 'я', code: 'KeyZ', shift: false })).not.toHaveBeenCalled()
+  expect(press(paragraph, 'я', 'KeyZ', { ctrlKey: true }).defaultPrevented).toBe(false)
   expect(fixture.deleteWorktree).not.toHaveBeenCalled()
   fixture.state.keybindings = {}
   expect(dispatch(input)).toHaveBeenCalled()

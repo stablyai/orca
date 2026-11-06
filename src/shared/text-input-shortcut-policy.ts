@@ -1,5 +1,6 @@
 import {
   hasModifier,
+  isLatinShortcutKey,
   keybindingMatchesAction,
   keybindingRunsInTextField,
   type KeybindingActionId,
@@ -36,6 +37,7 @@ export function nativeChatPromptClaimsShortcut(
   const control = hasModifier(input, 'control')
   const key = input.key?.toLowerCase()
   const physicalLetter = input.code?.match(/^Key([A-Z])$/)?.[1]?.toLowerCase()
+  const editingLetter = key && isLatinShortcutKey(key) ? key : (physicalLetter ?? key)
   // Electron has no AltGraph flag; a produced character differing from its physical key is text.
   if (
     (platform === 'darwin' && alt && !meta && !control && input.key?.length === 1) ||
@@ -82,11 +84,7 @@ export function nativeChatPromptClaimsShortcut(
   const editingLetters = hasModifier(input, 'shift')
     ? ['a', 'c', 'v', 'x', 'z']
     : ['a', 'c', 'v', 'x', 'z', 'y']
-  if (
-    primary &&
-    !alt &&
-    [key, physicalLetter].some((letter) => letter && editingLetters.includes(letter))
-  ) {
+  if (primary && !alt && editingLetter && editingLetters.includes(editingLetter)) {
     return true
   }
   if (primary && alt && (key === '0' || input.code === 'Digit0')) {
@@ -96,9 +94,6 @@ export function nativeChatPromptClaimsShortcut(
     return key === 'insert'
   }
   return Boolean(
-    control &&
-    !meta &&
-    !alt &&
-    [key, physicalLetter].some((letter) => letter && 'abdefhknoptvy'.includes(letter))
+    control && !meta && !alt && editingLetter && 'abdefhknoptvy'.includes(editingLetter)
   )
 }
