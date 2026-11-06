@@ -12,12 +12,15 @@ export function getProjectPromptTemplateOwner(
   setups: readonly Pick<ProjectHostSetup, 'projectId' | 'hostId'>[],
   repos: readonly Repo[]
 ): ExecutionHostId | undefined {
-  const hostIds = [
-    ...setups.filter((setup) => setup.projectId === project.id).map((setup) => setup.hostId),
-    ...repos
-      .filter((repo) => project.sourceRepoIds.includes(repo.id) || repo.id === project.id)
-      .map(getRepoExecutionHostId)
-  ]
+  const projectHostIds = setups
+    .filter((setup) => setup.projectId === project.id)
+    .map((setup) => setup.hostId)
+  const hostIds =
+    projectHostIds.length > 0
+      ? projectHostIds
+      : repos
+          .filter((repo) => project.sourceRepoIds.includes(repo.id) || repo.id === project.id)
+          .map(getRepoExecutionHostId)
   let owner: ExecutionHostId | undefined
   for (const hostId of hostIds) {
     const host = parseExecutionHostId(hostId)
