@@ -229,7 +229,7 @@ function StructuredAgentSessionOwnedAttention({
         })
     }
     settleRelayedPrompt.current = settle
-    const stopListening = status.subscribe(settle)
+    const stopListening = status.subscribeSession(tab.entityId, settle)
     const release = status.activate()
     return () => {
       stopListening()

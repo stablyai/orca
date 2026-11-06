@@ -11,18 +11,22 @@ export const styles = themedStyleSheet(() => ({
   },
   paragraph: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textPrimary
   },
   heading: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
     fontWeight: '700',
     color: colors.textPrimary
   },
   headingLarge: {
-    fontSize: 15,
-    lineHeight: 21
+    fontSize: 16,
+    lineHeight: 23
+  },
+  headingTitle: {
+    fontSize: 18,
+    lineHeight: 25
   },
   bold: {
     fontWeight: '700',
@@ -43,6 +47,8 @@ export const styles = themedStyleSheet(() => ({
     fontSize: 12,
     color: colors.textPrimary,
     backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
     borderRadius: radii.mark,
     paddingHorizontal: 4
   },
@@ -78,7 +84,7 @@ export const styles = themedStyleSheet(() => ({
   },
   quoteText: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textSecondary
   },
   codeBlock: {
@@ -195,8 +201,8 @@ export const styles = themedStyleSheet(() => ({
     borderRightWidth: 1,
     borderBottomWidth: 1,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     fontSize: 12,
     lineHeight: 17,
     color: colors.textPrimary,
@@ -209,7 +215,7 @@ export const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   list: {
-    gap: spacing.xs
+    gap: spacing.sm
   },
   listItem: {
     flexDirection: 'row',
@@ -220,7 +226,7 @@ export const styles = themedStyleSheet(() => ({
     // A floor, not a width: "10." would wrap inside a fixed 22.
     minWidth: 22,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textSecondary,
     fontFamily: typography.monoFamily
   },
@@ -232,7 +238,7 @@ export const styles = themedStyleSheet(() => ({
   taskMarker: { minWidth: 22, justifyContent: 'center' },
   listText: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textPrimary
   },
   footnoteReference: {

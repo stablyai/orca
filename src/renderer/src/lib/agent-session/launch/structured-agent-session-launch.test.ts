@@ -44,12 +44,14 @@ describe('startStructuredAgentLaunch', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
     expect(mocks.createIntent).toHaveBeenNthCalledWith(
       2,
       worktreeId,
       'codex',
+      undefined,
       undefined,
       undefined,
       undefined,

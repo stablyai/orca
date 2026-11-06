@@ -38,8 +38,10 @@ function deps(overrides: Partial<WorkspaceSleepDeps> = {}) {
       log.push(`chats ${worktreeId}`)
       return { stoppedSessionIds: [`chat-${worktreeId}`] }
     },
-    suspendVm: async (worktreeId) => {
-      log.push(`vm ${worktreeId}`)
+    suspendVm: async (worktreeId, wanted) => {
+      if (wanted()) {
+        log.push(`vm ${worktreeId}`)
+      }
     },
     ownRecords: () => [],
     watchReopen: () => () => false,
