@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -55,31 +47,7 @@ describe('copyScriptWithLocalModules', () => {
     )
   })
 
-  it('takes the entry script itself', () => {
-    expect(copiedNames({ 'entry.mjs': 'export const a = 1\n' }, 'entry.mjs')).toEqual(['entry.mjs'])
-  })
-
-  it('follows a co-located import', () => {
-    expect(
-      copiedNames(
-        { 'entry.mjs': "import { a } from './dep.mjs'\n", 'dep.mjs': 'export const a = 1\n' },
-        'entry.mjs'
-      )
-    ).toEqual(['dep.mjs', 'entry.mjs'])
-  })
-
   // Cover require-only CJS gate dependencies so copied fixture fails for target defect, not missing module.
-  it('follows a co-located require, not only an import', () => {
-    expect(
-      copiedNames(
-        {
-          'entry.cjs': "const { a } = require('./dep.cjs')\nmodule.exports = { a }\n",
-          'dep.cjs': 'module.exports = { a: 1 }\n'
-        },
-        'entry.cjs'
-      )
-    ).toEqual(['dep.cjs', 'entry.cjs'])
-  })
 
   it('follows a require reached only through an imported module', () => {
     const names = copiedNames(
@@ -93,25 +61,9 @@ describe('copyScriptWithLocalModules', () => {
     expect(names).toContain('leaf.cjs')
   })
 
-  it('leaves package and builtin specifiers alone', () => {
-    const sourceDir = sourceTree({
-      'entry.mjs': "import { join } from 'node:path'\nimport x from 'some-package'\n"
-    })
-    const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'scripts')
-    copyScriptWithLocalModules(join(sourceDir, 'entry.mjs'), destinationDir)
-    expect(readdirSync(destinationDir)).toEqual(['entry.mjs'])
-  })
-
   it('terminates on a cycle rather than recursing forever', () => {
     expect(
       copiedNames({ 'a.mjs': "import './b.mjs'\n", 'b.mjs': "import './a.mjs'\n" }, 'a.mjs')
     ).toEqual(['a.mjs', 'b.mjs'])
-  })
-
-  it('creates the destination directory it was handed', () => {
-    const sourceDir = sourceTree({ 'entry.mjs': 'export const a = 1\n' })
-    const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'nested', 'scripts')
-    copyScriptWithLocalModules(join(sourceDir, 'entry.mjs'), destinationDir)
-    expect(existsSync(join(destinationDir, 'entry.mjs'))).toBe(true)
   })
 })

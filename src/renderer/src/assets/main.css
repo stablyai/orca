@@ -700,6 +700,11 @@ body[data-modal-overlay-open]
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
   --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
   --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
+  --chat-link: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) 70%,
+    var(--chat-source-foreground)
+  );
 }
 
 @layer base {
@@ -3598,7 +3603,7 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
 /* Why: tours need a distinct item surface without highlighting the underlying target. */
 .orca-contextual-tour-panel {
   --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
-  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 26%, var(--border));
   background: var(--contextual-tour-panel-surface);
   border-color: var(--contextual-tour-panel-border);
   box-shadow:
@@ -3607,8 +3612,8 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
 }
 
 .dark .orca-contextual-tour-panel {
-  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 10%, var(--popover));
-  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 16%, var(--border));
+  --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 17%, var(--popover));
+  --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 32%, var(--border));
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);

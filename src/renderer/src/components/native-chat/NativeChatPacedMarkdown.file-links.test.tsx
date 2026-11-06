@@ -1,12 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { FileLinkExists } from '@/components/sidebar/comment-markdown-native-chat-file-links'
+import type { FileLinkExists } from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
-import {
-  NativeChatFileLinkExistenceContext,
-  type NativeChatFileLinkExistence
-} from './native-chat-file-link-existence'
+import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
+import type { NativeChatFileLinkExistence } from '../../../../shared/native-chat/native-chat-file-link-existence'
 import {
   NativeChatReplyRevealsContext,
   type NativeChatReplyReveals

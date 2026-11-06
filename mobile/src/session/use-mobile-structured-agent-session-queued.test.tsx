@@ -10,7 +10,8 @@ import type { StructuredAgentSessionHostSupport } from './mobile-structured-agen
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileNativeChatSessionLane } from './native-chat/use-mobile-native-chat-session-lane'
 import { useHostClient } from '../transport/host-client-hooks'
-import { useWorkspaceClient, WorkspaceServerContext } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import type { RpcClientContextValue } from '../transport/rpc-client-context-contract'
 

@@ -15,7 +15,7 @@ import type {
   NativeChatDiffTarget
 } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
-import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
+import { nativeChatRowOffersRewind } from '../../../../shared/native-chat/native-chat-rewind-eligibility'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */

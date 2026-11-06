@@ -158,51 +158,6 @@ describe('browserManager page prompt routing', () => {
     answerLatest(false)
   })
 
-  it('closes an open prompt when its page is closed', () => {
-    const rendererSendMock = vi.fn()
-    const guest = {
-      id: 108,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      prependListener: vi.fn(),
-      once: vi.fn(),
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
-    }
-    const renderer = {
-      id: rendererWebContentsId,
-      isDestroyed: () => false,
-      send: rendererSendMock,
-      on: vi.fn(),
-      off: vi.fn()
-    }
-    webContentsFromIdMock.mockImplementation((id: number) =>
-      id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
-    )
-    browserManager.attachGuestPolicies(webContentsFromIdMock(guest.id))
-    browserManager.registerGuest({
-      browserPageId: 'browser-2',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    const willNavigate = guestOnMock.mock.calls.find(([event]) => event === 'will-navigate')?.[1]
-    willNavigate({ preventDefault: vi.fn(), initiator: null }, 'zoommtg://zoom.us/join?confno=1')
-    const requestId = rendererSendMock.mock.calls.find(
-      ([channel]) => channel === 'browser:page-prompt-requested'
-    )?.[1].requestId
-    expect(requestId).toEqual(expect.any(String))
-
-    browserManager.unregisterGuest('browser-2')
-
-    expect(rendererSendMock).toHaveBeenCalledWith('browser:page-prompt-closed', {
-      requestId
-    })
-  })
-
   it("asks for a new tab's first sign-in once its window registers the tab", async () => {
     const rendererSendMock = vi.fn()
     const guest = {

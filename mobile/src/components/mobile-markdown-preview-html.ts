@@ -176,7 +176,8 @@ function normalizeAnchorTags(value: string): string {
 function normalizeInlineHtml(value: string): string {
   const imagesNormalized = value
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(imageTagPattern, (tag) => attrValue(tag, 'alt') || 'image')
+    // An image without alt text is decoration (badges, icons): it draws no word.
+    .replace(imageTagPattern, (tag) => attrValue(tag, 'alt'))
 
   let next = normalizeAnchorTags(imagesNormalized)
   next = replaceMobileMarkdownPairedMarkupTags(next, ['strong', 'b'], (_name, inner) => {

@@ -4,6 +4,7 @@ import {
   MobileWebBundleRouteSchema
 } from '../../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 import { resolveMobileWebPageRoutes } from './build-mobile-web-app-bundle.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { routePathnameFromKey } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 
 // Test declared screens separately from bundle mechanics so route inventory can grow without coupling builder test size.
@@ -61,6 +62,16 @@ describe('the page routes the manifest declares', () => {
    * The wide iPad's host-area session is granted every served route's list, so its in-page hops
    * stay in the page. Bounded by what one route can be granted, so that grant never outgrows one route's.
    */
+
+  // The phone refuses the whole manifest over one bad route, which takes every page down.
+  it('declares only routes the manifest schema accepts', () => {
+    for (const route of MOBILE_WEB_PAGE_ROUTES) {
+      expect(
+        MobileWebBundleRouteSchema.safeParse(route).error?.issues ?? [],
+        route.pathname
+      ).toEqual([])
+    }
+  })
 
   it('holds the optional lane to the manifest grammar and its own ceiling', () => {
     // Released shells read each list against the ceiling on its own, so the writer bounds each the same way.
