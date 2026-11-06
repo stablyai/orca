@@ -20,6 +20,7 @@ export type HostAgentLaunchArgs = {
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
   cwd?: string
+  trustWorktreeId?: string
   /** The launch's session options; the host decodes booleans sent as strings by catalog kind. */
   sessionOptions?: Record<string, SessionOptionValue>
   launchSource?: LaunchSource
@@ -71,6 +72,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     ...(args.viewMode ? { viewMode: args.viewMode } : {}),
     // Queued before the pane mounts, as "+" queues its command: its first spawn carries the launch.
     pendingStartup: {
+      ...(args.trustWorktreeId ? { trustWorktreeId: args.trustWorktreeId } : {}),
       command: '',
       launchAgent: args.agent,
       agentLaunch: {

@@ -218,6 +218,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
     agent,
     worktreeId: inPlace ?? activeWorktreeId,
+    ...(inPlace && inPlace !== activeWorktreeId ? { trustWorktreeId: activeWorktreeId } : {}),
     groupId:
       placementWorkspaceId && !inPlace
         ? (liveStore.activeGroupIdByWorktree[activeWorktreeId] ?? activeWorktreeId)

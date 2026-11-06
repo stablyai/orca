@@ -138,6 +138,7 @@ describe('runSourceControlAgentActionStart', () => {
           worktreeId: 'folder:feature',
           groupId: 'folder-group',
           initialCwd: '/folder/repo',
+          trustWorktreeId: 'child',
           selectedExecutionHostId: 'ssh:box',
           requestedSurface: 'terminal',
           agentArgs: '--model gpt-5'
@@ -189,6 +190,7 @@ describe('runSourceControlAgentActionStart', () => {
       })
     )
     expect(mocks.launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('initialCwd')
+    expect(mocks.launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('trustWorktreeId')
     expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
     expect(mocks.toastSuccess).toHaveBeenCalledOnce()

@@ -20,6 +20,27 @@ import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui
 afterEach(() => vi.restoreAllMocks())
 
 describe('launchAgentInNewTab', () => {
+  it('carries section trust ownership only in the transient pending startup', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      requestId: 'section-trust-test',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      requestedSurface: 'terminal',
+      initialCwd: '/outside/section',
+      trustWorktreeId: 'repo::/outside/section',
+      prompt: 'Resolve conflicts',
+      promptDelivery: 'auto-submit'
+    })
+    expect(queuedStartups()[0]).toMatchObject({
+      trustWorktreeId: 'repo::/outside/section',
+      launchAgent: 'claude'
+    })
+    expect(mockCreateTab.mock.calls[0][0]).toBe('wt-1')
+    expect(mockCreateTab.mock.calls[0][3]).not.toHaveProperty('trustWorktreeId')
+    expect(mockCreateTab.mock.calls[0][3]?.startupCwd).toBe('/outside/section')
+  })
+
   it.each(['terminal', 'declined-without-callback'] as const)(
     'keeps canonical saved source and deliberate effort through actual %s startup',
     async (route) => {

@@ -1,6 +1,4 @@
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { resolveTerminalWorkspacePath } from '../../../shared/shell/launch/terminal-startup-cwd'
 import {
@@ -25,6 +23,8 @@ export function applyAgentWorkspaceTrustToSpawn(
     launchAgent: unknown
     /** Placement workspace id; its root may differ from the agent’s starting folder. */
     worktreeId: string | undefined
+    /** Section root to pre-trust for this launch; never part of the terminal identity. */
+    trustWorktreeId?: string
     /** The resolved folder the agent starts in; floating terminals have only this. */
     cwd: string | undefined
     store: { getFolderWorkspace: (id: string) => { folderPath: string } | undefined } | undefined
@@ -43,18 +43,12 @@ export function applyAgentWorkspaceTrustToSpawn(
     return null
   }
   const workspaceRoot = resolveTerminalWorkspacePath(
-    args.worktreeId,
+    args.trustWorktreeId ?? args.worktreeId,
     (folderWorkspaceId) => args.store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
   )
-  const cwd =
-    args.wslDistro && args.cwd && /^\/(?!\/)/.test(args.cwd)
-      ? toWindowsWslPath(args.cwd, args.wslDistro)
-      : args.cwd
   const workspacePath = AGENT_TRUST_KEYED_BY_START_FOLDER[preset]
     ? args.cwd || workspaceRoot
-    : cwd && workspaceRoot && !isPathInsideOrEqual(workspaceRoot, cwd)
-      ? cwd
-      : workspaceRoot
+    : workspaceRoot
   if (!workspacePath) {
     return null
   }

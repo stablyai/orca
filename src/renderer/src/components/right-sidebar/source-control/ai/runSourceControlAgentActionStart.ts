@@ -236,6 +236,7 @@ export async function runSourceControlAgentActionStart({
       ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
       agent: selectedAgent,
       worktreeId: inPlace ?? worktreeId,
+      ...(inPlace && inPlace !== worktreeId ? { trustWorktreeId: worktreeId } : {}),
       groupId:
         placementWorkspaceId && !inPlace
           ? (store.activeGroupIdByWorktree[worktreeId] ?? worktreeId)

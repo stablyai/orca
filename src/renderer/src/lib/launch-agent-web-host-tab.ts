@@ -39,6 +39,7 @@ export async function launchAgentInWebHostTab(args: {
   environmentId: string | null
   groupId?: string
   cwd?: string | null
+  trustWorktreeId?: string
   buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string
@@ -115,6 +116,7 @@ export async function launchAgentInWebHostTab(args: {
     launch = {
       worktreeId,
       environmentId,
+      ...(args.trustWorktreeId ? { trustWorktreeId: args.trustWorktreeId } : {}),
       targetGroupId: groupId,
       activate: args.activate !== false,
       ...(args.activate === false ? { selectWorktree: false } : {}),

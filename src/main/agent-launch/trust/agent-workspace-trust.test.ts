@@ -1,6 +1,15 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ClaudeFolderTrustFile from '../../claude/claude-folder-trust-file'
 
@@ -16,6 +25,16 @@ const mocks = vi.hoisted(() => ({
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
+
+// The host filesystem uses Windows path resolution for WSL UNC identities.
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodePath>()
+  return {
+    ...actual,
+    resolve: (...paths: string[]) =>
+      paths[0]?.startsWith('\\\\wsl.') ? actual.win32.resolve(...paths) : actual.resolve(...paths)
+  }
+})
 
 vi.mock('./agent-trust-presets', () => ({
   markCodexProjectTrusted: mocks.codex,
@@ -125,33 +144,101 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('trusts a section start outside its folder workspace and retains root trust for a start inside', async () => {
+  it('trusts the explicit section owner and preserves ordinary root trust for outside starts', async () => {
     const workspaceRoot = join(root, 'folder')
     const outsideCwd = join(root, 'attached-worktree')
-    const insideCwd = join(workspaceRoot, 'src')
-    mkdirSync(outsideCwd, { recursive: true })
-    mkdirSync(insideCwd, { recursive: true })
+    mkdirSync(workspaceRoot)
+    mkdirSync(outsideCwd)
     const config = join(root, '.claude.json')
     writeFileSync(config, '{}')
-    for (const cwd of [outsideCwd, insideCwd]) {
+    const spawn = {
+      ...local,
+      env: { CLAUDE_CONFIG_DIR: root },
+      launchAgent: 'claude',
+      worktreeId: 'folder:section-parent',
+      cwd: outsideCwd,
+      store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+      isFreshLaunch: true,
+      settings: {},
+      spawnOptions: {}
+    }
+    await applyAgentWorkspaceTrustToSpawn(spawn)
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
+    })
+    await applyAgentWorkspaceTrustToSpawn({
+      ...spawn,
+      trustWorktreeId: `repo::${outsideCwd}`
+    })
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: {
+        [workspaceRoot]: { hasTrustDialogAccepted: true },
+        [outsideCwd]: { hasTrustDialogAccepted: true }
+      }
+    })
+  })
+
+  it('trusts a section root through a contained junction without granting the placement root', async () => {
+    const workspaceRoot = join(root, 'folder')
+    const outside = join(root, 'attached-worktree')
+    mkdirSync(workspaceRoot)
+    mkdirSync(outside)
+    const linked = join(workspaceRoot, 'linked-child')
+    symlinkSync(outside, linked, 'junction')
+    const config = join(root, '.claude.json')
+    writeFileSync(config, '{}')
+    await applyAgentWorkspaceTrustToSpawn({
+      ...local,
+      env: { CLAUDE_CONFIG_DIR: root },
+      launchAgent: 'claude',
+      worktreeId: 'folder:section-parent',
+      trustWorktreeId: `repo::${linked}`,
+      cwd: linked,
+      store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+      isFreshLaunch: true,
+      settings: {},
+      spawnOptions: {}
+    })
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+      projects: {
+        [linked]: { hasTrustDialogAccepted: true },
+        [outside]: { hasTrustDialogAccepted: true }
+      }
+    })
+  })
+
+  it('writes the mounted-drive section root in the prepared WSL Claude config', async () => {
+    const config = join(root, '.claude.json')
+    writeFileSync(config, '{}')
+    rememberWslHome('Ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\u')
+    try {
       await applyAgentWorkspaceTrustToSpawn({
         ...local,
-        env: { CLAUDE_CONFIG_DIR: root },
         launchAgent: 'claude',
         worktreeId: 'folder:section-parent',
-        cwd,
-        store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+        trustWorktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\mnt\\c\\repos\\child',
+        cwd: '/mnt/c/repos/child',
+        store: {
+          getFolderWorkspace: () => ({ folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\folder' })
+        },
+        claudeAuth: {
+          runtime: 'wsl',
+          configDir: root,
+          wslLinuxConfigDir: '/home/u/.claude',
+          envPatch: { CLAUDE_CONFIG_DIR: '/home/u/.claude' },
+          provenance: 'test'
+        },
+        wslDistro: 'Ubuntu',
         isFreshLaunch: true,
         settings: {},
         spawnOptions: {}
       })
+      expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
+        projects: { '/mnt/c/repos/child': { hasTrustDialogAccepted: true } }
+      })
+    } finally {
+      clearWslHomeCache()
     }
-    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
-      projects: {
-        [outsideCwd]: { hasTrustDialogAccepted: true },
-        [workspaceRoot]: { hasTrustDialogAccepted: true }
-      }
-    })
   })
 
   it('grants in the config file the final spawn env names', async () => {

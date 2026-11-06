@@ -119,6 +119,7 @@ describe('AI operation recovery composer', () => {
         worktreeId: 'folder:feature',
         groupId: 'folder-group',
         initialCwd: '/folder/repo',
+        trustWorktreeId: 'repo1::/tmp/wt',
         selectedExecutionHostId: 'local',
         requestedSurface: 'terminal'
       })
@@ -162,6 +163,7 @@ describe('AI operation recovery composer', () => {
       })
     )
     expect(launchAgent.mock.calls[0]?.[0]).not.toHaveProperty('initialCwd')
+    expect(launchAgent.mock.calls[0]?.[0]).not.toHaveProperty('trustWorktreeId')
     expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
     expect(toast.success).toHaveBeenCalledOnce()
     expect(navigate).not.toHaveBeenCalled()

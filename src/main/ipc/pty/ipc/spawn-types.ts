@@ -38,6 +38,7 @@ export type PtySpawnIpcArgs = {
   resumeOrigin?: unknown
   launchToken?: unknown
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string

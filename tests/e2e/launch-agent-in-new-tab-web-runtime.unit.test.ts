@@ -17,9 +17,10 @@ import '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { composeAgentLaunchProfile } from '../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
+import { CreateAgentSessionParams } from '../../src/shared/rpc-contract/agent-session-params'
 
 describe('launchAgentInNewTab paired web runtime', () => {
-  it.each(['deadline', 'edited', 'authoritative', 'old'] as const)(
+  it.each(['deadline', 'edited', 'authoritative', 'old', 'no-trust', 'old-client'] as const)(
     'delivers the actual %s operation once with the correct model owner and final result',
     async (route) => {
       vi.useFakeTimers()
@@ -27,7 +28,9 @@ describe('launchAgentInNewTab paired web runtime', () => {
         mocks.actualOperation = true
         mocks.capability.mockImplementation(
           async (_environmentId, capability) =>
-            route !== 'old' && capability !== 'agent-session.create-options.v1'
+            route !== 'old' &&
+            capability !== 'agent-session.create-options.v1' &&
+            !(route === 'no-trust' && capability === 'agent-session.trust-worktree.v1')
         )
         store.runtimeStatusByEnvironmentId.get('web-runtime')!.status.capabilities =
           route === 'old' ? [] : [AGENT_LAUNCH_CHOICES_CAPABILITY]
@@ -88,7 +91,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
           })
         const dispatch = vi.fn(async (request) => {
           if (request.method === 'terminal.createAgentSession') {
-            return { ok: true, result: await host.createAgentSession(request.params) }
+            return {
+              ok: true,
+              result: await host.createAgentSession(CreateAgentSessionParams.parse(request.params))
+            }
           }
           if (request.method === 'session.tabs.createTerminal') {
             await prepared(request.params)
@@ -110,6 +116,8 @@ describe('launchAgentInNewTab paired web runtime', () => {
           groupId: 'group-1',
           activate: false,
           agentArgs: '--verbose',
+          initialCwd: '/host-child',
+          ...(route !== 'old-client' ? { trustWorktreeId: 'repo::/host-child' } : {}),
           ...(route === 'edited' ? { sessionOptions: { effort: 'high' } } : {})
         })
         await vi.advanceTimersByTimeAsync(route === 'deadline' ? 3_000 : 0)
@@ -133,6 +141,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
           })
           expect(creates()[0][0].params).not.toHaveProperty('launchPreferences')
           expect(spawn).toHaveBeenCalledTimes(1)
+          expect(spawn.mock.calls[0]?.[1]).toMatchObject({ cwd: '/host-child' })
+          if (route === 'no-trust' || route === 'old-client') {
+            expect(creates()[0][0].params).not.toHaveProperty('trustWorktreeId')
+            expect(spawn.mock.calls[0]?.[1]).not.toHaveProperty('trustWorktreeId')
+          } else {
+            expect(creates()[0][0].params.trustWorktreeId).toBe('repo::/host-child')
+            expect(spawn.mock.calls[0]?.[1]?.trustWorktreeId).toBe('repo::/host-child')
+          }
           const plan = await compiled.mock.results[0].value
           expect(plan).toMatchObject({
             command: expect.stringContaining("'opus'"),
@@ -166,6 +182,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
             env: { KEEP: 'host' },
             launchConfig: { agentArgs: '--verbose' }
           })
+          expect(creates()[0][0].params).not.toHaveProperty('trustWorktreeId')
           expect(spawn).not.toHaveBeenCalled()
         }
         if (route === 'deadline') {
