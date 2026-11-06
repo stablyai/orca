@@ -8,11 +8,23 @@ import type {
 
 // The same movement the Duo rail allows before a touch stops counting as a press.
 const PRESS_MOVE_SLOP = 8
+// On the page a tap's press is the click after touchend; hold the row until then, or this long.
+const RELEASE_SETTLE_MS = 300
+
+/** A web click with no pointer behind it: VoiceOver, Switch Control or a keyboard. */
+export function isAccessibilityClick(event: GestureResponderEvent): boolean {
+  return event.type === 'click' && 'detail' in event.nativeEvent && event.nativeEvent.detail === 0
+}
+
+/** A web click from a finger or mouse; one that never pressed its key landed on a key that moved. */
+function isPointerClick(event: GestureResponderEvent): boolean {
+  return event.type === 'click' && !isAccessibilityClick(event)
+}
 
 /**
  * Touch rules for the terminal key row: a key fires on release only if the row neither scrolled
- * nor moved under the finger since it went down, and `shown` holds still while a finger is down.
- * A new `shown` scrolls the row back to its start.
+ * nor moved under the finger since it went down, and `shown` holds still from touch-down until that
+ * touch's press has landed. A new `shown` scrolls the row back to its start.
  */
 export function useTerminalKeyRowTouch<T>({
   scrollRef,
@@ -27,6 +39,8 @@ export function useTerminalKeyRowTouch<T>({
 }) {
   const [shown, setShown] = useState(latest)
   const touchRef = useRef({ down: false, x: 0, y: 0 })
+  const holdingRef = useRef(false)
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pressRevisionRef = useRef(0)
   const armedRef = useRef(new Map<string, number>())
   const scrollXRef = useRef(0)
@@ -40,7 +54,7 @@ export function useTerminalKeyRowTouch<T>({
   useEffect(() => {
     latestRef.current = latest
     sameShownRef.current = sameShown
-    if (!touchRef.current.down) {
+    if (!holdingRef.current) {
       show()
     }
   }, [latest, sameShown, show])
@@ -58,11 +72,24 @@ export function useTerminalKeyRowTouch<T>({
     cancelAccessoryRepeat()
   }, [cancelAccessoryRepeat])
 
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = null
+    }
+  }, [])
+  useEffect(() => clearSettleTimer, [clearSettleTimer])
+  const settle = useCallback(() => {
+    clearSettleTimer()
+    if (!touchRef.current.down) {
+      holdingRef.current = false
+      show()
+    }
+  }, [clearSettleTimer, show])
   const released = useCallback(() => {
     touchRef.current.down = false
-    // Let the release's own press land on the key it started on before the row changes.
-    setTimeout(show, 0)
-  }, [show])
+    settleTimerRef.current ??= setTimeout(settle, RELEASE_SETTLE_MS)
+  }, [settle])
 
   return {
     shown,
@@ -70,6 +97,8 @@ export function useTerminalKeyRowTouch<T>({
       onTouchStart: (event: GestureResponderEvent) => {
         const { pageX, pageY } = event.nativeEvent
         touchRef.current = { down: true, x: pageX, y: pageY }
+        holdingRef.current = true
+        clearSettleTimer()
       },
       onTouchMove: (event: GestureResponderEvent) => {
         const { pageX, pageY } = event.nativeEvent
@@ -99,14 +128,14 @@ export function useTerminalKeyRowTouch<T>({
     },
     /** Whether a key armed by a touch still counts, for a hold that starts before release. */
     stillArmed: (id: string): boolean => armedRef.current.get(id) === pressRevisionRef.current,
-    /** Runs a key's action on release unless the row scrolled or moved since it was armed. */
-    fire: (id: string, action: () => void): void => {
+    /** Runs a key's action on release unless the row moved since it was armed, then lets the row change. */
+    fire: (id: string, event: GestureResponderEvent, action: () => void): void => {
       const armedAt = armedRef.current.get(id)
       armedRef.current.delete(id)
-      // An accessibility click has no touch to arm it.
-      if (armedAt === undefined || armedAt === pressRevisionRef.current) {
+      if (armedAt === undefined ? !isPointerClick(event) : armedAt === pressRevisionRef.current) {
         action()
       }
+      settle()
     }
   }
 }

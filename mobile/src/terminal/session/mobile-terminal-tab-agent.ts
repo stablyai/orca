@@ -141,7 +141,7 @@ export function sameSmartKeySet(a: AgentSmartKeySet | null, b: AgentSmartKeySet 
     a === b ||
     (a !== null &&
       b !== null &&
-      a.agent === b.agent &&
+      a.agentId === b.agentId &&
       a.state === b.state &&
       a.keys.map((key) => key.id).join() === b.keys.map((key) => key.id).join())
   )
