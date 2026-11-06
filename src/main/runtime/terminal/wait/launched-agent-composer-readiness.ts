@@ -69,9 +69,18 @@ function readinessFailure(
   ) {
     return error
   }
-  return classifyTerminalCreationFailure(error, {
+  const failure = classifyTerminalCreationFailure(error, {
     id: ptyId,
     incarnationId: creation.incarnationId
+  })
+  const output = runtime.readRecentTerminalOutput?.(ptyId)
+  if (!(failure instanceof Error) || !output) {
+    return failure
+  }
+  const diagnostic = new Error(`${failure.message}\nLast launch output:\n${output}`)
+  return Object.defineProperties(diagnostic, {
+    ...Object.getOwnPropertyDescriptors(failure),
+    ...Object.getOwnPropertyDescriptors(diagnostic)
   })
 }
 

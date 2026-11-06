@@ -65,6 +65,7 @@ export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
   }
 
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
+  lastExitOutput?: string
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
   readonly worktreeId: string

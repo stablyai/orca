@@ -16,6 +16,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { retainLaunchedAgentExitOutput } from '../wait/launched-agent-exit-output'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   protected abstract pruneDisconnectedPtyRecords(): void
@@ -181,6 +182,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.mobileDisplayModes.delete(ptyId)
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
+      retainLaunchedAgentExitOutput(pty, this.recentPtyOutputById.get(ptyId))
       this.recentPtyOutputById.delete(ptyId)
       this.launchComposerReadyByPtyId.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
@@ -325,11 +327,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
 
   private notifyPtyExitListeners(ptyId: string): void {
     const listeners = this.ptyExitListenersByPtyId.get(ptyId)
-    if (!listeners) {
-      return
-    }
     this.ptyExitListenersByPtyId.delete(ptyId)
-    for (const listener of listeners) {
+    for (const listener of listeners ?? []) {
       try {
         listener()
       } catch {

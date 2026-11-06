@@ -1,17 +1,9 @@
 import { FOREGROUND_COMMAND_READS } from '../../../../shared/foreground-command-settle'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
-import { terminalSafe } from '../../../../shared/terminal/output/terminal-safe-text'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { applyTerminalLineControls } from '../output/tail/terminal-tail-line-controls'
+import { readLaunchedAgentExitOutput } from './launched-agent-exit-output'
 
-const COMMAND_STARTED_MARK = '\x1b]133;C'
-const COMMAND_FINISHED_MARK = '\x1b]133;D'
-const LAUNCH_OUTPUT_MAX_CHARS = 2_000
-// What zsh prints before each prompt so it starts on a clean line: its end-of-line mark, and a redraw that erases
-// the last line for a terminal that would keep it. Its mark is reverse video and the redraw ends right at the finish.
-// eslint-disable-next-line no-control-regex -- the mark's escapes and the redraw's returns are what identify them.
-const ZSH_PROMPT_SP = /\x1b\[7m[%#]\x1b\[27m| *\r *\r$/g
 // The finish fires before the prompt draws, whose commands (a git status, starship) lead the group until it has.
 const SHELL_RETURN_READ_DELAYS_MS = [
   FOREGROUND_COMMAND_READS.settleMs,
@@ -23,26 +15,8 @@ export type LaunchedAgentExitRuntime = Pick<
   'readLaunchedAgentForeground' | 'subscribeToTerminalData' | 'readRecentTerminalOutput'
 >
 
-/** What the launch command printed, from the shell's last finished command in the pane's recent bytes. */
-function readLaunchCommandOutput(recentOutput: string): string {
-  const finished = recentOutput.lastIndexOf(COMMAND_FINISHED_MARK)
-  if (finished === -1) {
-    return ''
-  }
-  // A launch that printed past the buffer's limit has lost its start, not the end that names the error.
-  const started = Math.max(0, recentOutput.lastIndexOf(COMMAND_STARTED_MARK, finished))
-  return recentOutput
-    .slice(started, finished)
-    .replace(ZSH_PROMPT_SP, '')
-    .split(/\r*\n/)
-    .map((line) => terminalSafe(applyTerminalLineControls(line).text).trim())
-    .filter(Boolean)
-    .join('\n')
-    .slice(-LAUNCH_OUTPUT_MAX_CHARS)
-}
-
 function launchedAgentExitError(recentOutput: string | undefined): Error {
-  const output = readLaunchCommandOutput(recentOutput ?? '')
+  const output = readLaunchedAgentExitOutput(recentOutput ?? '')
   return new Error(
     output
       ? `The agent's launch command exited before the agent was ready. Its output:\n${output}`
