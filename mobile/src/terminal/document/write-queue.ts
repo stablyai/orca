@@ -132,7 +132,8 @@ function nextWriteSlice(scope: TerminalDocumentScope) {
     typeof following === 'string' &&
     slice.length + following.length <= TERMINAL_WRITE_SLICE_UNITS
   ) {
-    slice += nextQueuedWrite(scope)
+    slice += following
+    nextQueuedWrite(scope)
     following = scope.writeQueue[scope.writeQueueHead]
   }
   return slice
