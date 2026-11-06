@@ -31,7 +31,7 @@ import {
   queuedMessageCardSteers,
   queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
@@ -54,6 +54,9 @@ export function queuedMessageCardCaption(
   switch (card.hold) {
     case 'returned': {
       const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      if (notice === null) {
+        return null
+      }
       return notice === 'withdrawn'
         ? translate(
             'components.native-chat.queuedMessages.withdrawnHold',
@@ -192,7 +195,12 @@ export function NativeChatQueuedMessageCard({
       style={drag?.rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
-      className="group/queued relative px-2.5 py-1.5"
+      className={cn(
+        'group/queued relative px-2.5 py-1.5',
+        // Lit while the chat's composer shows Steer queued: the card that press would send.
+        showsSteerShortcut &&
+          '[[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-accent'
+      )}
     >
       {drag?.insertion ? (
         <span

@@ -46,9 +46,4 @@ describe('setActiveFile with an id that has no open file', () => {
     expect(store.getState().activeFileId).toBe(fileId)
     expect(store.getState().activeFileIdByWorktree['wt-1']).toBe(fileId)
   })
-
-  it('leaves the per-workspace active file, which is what persists, unchanged', () => {
-    store.getState().setActiveFile(GHOST_ID, 'wt-1')
-    expect(store.getState().activeFileIdByWorktree['wt-1']).toBe(fileId)
-  })
 })

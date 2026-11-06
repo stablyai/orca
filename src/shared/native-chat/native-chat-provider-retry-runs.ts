@@ -2,7 +2,7 @@
 
 import { agentJournalItemSubagentId } from '../agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat-types'
-import { isNativeChatContextClear } from '../agent-session-context-clear'
+import { isNativeChatContextClear } from '../agent-session/agent-session-context-clear'
 
 function isProviderRetryRow(message: NativeChatMessage): boolean {
   const block = message.blocks.length === 1 ? message.blocks[0] : undefined

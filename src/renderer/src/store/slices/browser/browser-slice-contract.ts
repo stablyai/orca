@@ -16,8 +16,8 @@ import type {
   BrowserViewportPresetId,
   BrowserWorkspace
 } from '../../../../../shared/browser-workspace-types'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
 import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
 import type {
   BrowserPageConversionLeg,
@@ -47,6 +47,8 @@ export type CreateBrowserTabOptions = {
   split?: TabSplitTarget
   /** Client-local unified tab id of the source; the new tab lands right after it when still live. */
   afterTabId?: string
+  /** Shows the tab in its pane without making it the active pane or browser surface. */
+  showInGroup?: boolean
   /** Verified execution host for the new wrapper; unset keeps createUnifiedTab's active-workspace fallback. */
   executionHostId?: ExecutionHostId
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.

@@ -33,6 +33,19 @@ describe('scrcpyVideoRegistry', () => {
     expect(scrcpyVideoRegistry.has('dev')).toBe(false)
   })
 
+  it('tells live and late subscribers that the session ended', () => {
+    scrcpyVideoRegistry.register('ended', () => {})
+    const live: ScrcpyVideoEvent['type'][] = []
+    scrcpyVideoRegistry.subscribe('ended', (event) => live.push(event.type))
+
+    scrcpyVideoRegistry.stop('ended')
+    expect(live).toEqual(['end'])
+
+    const late: ScrcpyVideoEvent['type'][] = []
+    scrcpyVideoRegistry.subscribe('ended', (event) => late.push(event.type))
+    expect(late).toEqual(['end'])
+  })
+
   it('routes control only to the live session registered for the device', () => {
     const control = { videoSize: () => null, sendControl: () => true }
     scrcpyVideoRegistry.attachControl('ctl', control)

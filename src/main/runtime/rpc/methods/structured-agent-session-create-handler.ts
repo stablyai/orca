@@ -1,9 +1,9 @@
 import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { agentSessionFingerprintConflict } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import type { RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -20,6 +20,7 @@ import {
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { projectReceiptDeviceAttach } from './structured-agent-session-receipt-devices'
 import {
   structuredAgentSessionClosedBeforeCreate,
   structuredAgentSessionClosedBeforeCreateRefusal
@@ -52,7 +53,7 @@ export async function attachClientSuppliedLocation(
   ctx: RpcContext
 ): Promise<unknown> {
   const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
-  return host.attach(callerFor(ctx), attachParams)
+  return projectReceiptDeviceAttach(await host.attach(callerFor(ctx), attachParams), ctx)
 }
 
 export async function handleStructuredAgentSessionCreate(
@@ -66,6 +67,22 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
+  if ('worktree' in params && params.forkFrom) {
+    await ensureHostInstalled(ctx, params.agent)
+    return requireHost(ctx, params.agent).serializeCreateIntent(
+      callerFor(ctx).callerKey,
+      params.envelope,
+      () => resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+    )
+  }
+  return resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+}
+
+async function resolveAndCommitStructuredAgentSessionCreate(
+  params: z.infer<typeof CreateParams>,
+  ctx: RpcContext,
+  capture?: (surface: StructuredSessionSurface) => void
+) {
   // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {
@@ -88,11 +105,13 @@ export async function handleStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+        ...(params.forkFrom ? { forkFrom: params.forkFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(
+          params.forkFrom ||
           params.firstMessage ||
           ctx.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
         )
@@ -100,7 +119,7 @@ export async function handleStructuredAgentSessionCreate(
     }
     const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
     return { host, attachParams, tab: null }
-  })
+  }, params.agent)
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
@@ -111,15 +130,18 @@ export async function handleStructuredAgentSessionCreate(
   ) {
     return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
   }
-  return commitStructuredAgentSessionCreate({
-    runtime: ctx.runtime,
-    caller: callerFor(ctx),
-    prepared,
-    activate: true,
-    placedByWindow: ctx.caller?.kind === 'desktop',
-    ...(capture ? { capture } : {}),
-    ...('tabPlacement' in params && params.tabPlacement
-      ? { tabPlacement: params.tabPlacement }
-      : {})
-  })
+  return projectReceiptDeviceAttach(
+    await commitStructuredAgentSessionCreate({
+      runtime: ctx.runtime,
+      caller: callerFor(ctx),
+      prepared,
+      activate: true,
+      placedByWindow: ctx.caller?.kind === 'desktop',
+      ...(capture ? { capture } : {}),
+      ...('tabPlacement' in params && params.tabPlacement
+        ? { tabPlacement: params.tabPlacement }
+        : {})
+    }),
+    ctx
+  )
 }

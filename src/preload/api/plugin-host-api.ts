@@ -1,4 +1,5 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
+import type { EditorSaveHookDecision } from '../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
 import type {
   PluginAutoUpdateState,
@@ -26,6 +27,10 @@ import type {
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
+import type {
+  PluginViewReply,
+  PluginViewRequest
+} from '../../shared/plugins/view/plugin-view-protocol'
 import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import type {
   PluginCatalogGitSource,
@@ -42,6 +47,9 @@ export type {
   PluginHostStatus
 } from '../../shared/plugins/plugin-list-entry'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type { PluginStatusBarOverrides } from '../../shared/plugins/contributions/plugin-status-bar-state'
+import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
+import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
 
 export type PluginHostLogLine = {
   ts: number
@@ -172,6 +180,8 @@ export type PluginsApi = {
     pluginKey: string
     commandId: string
     args?: unknown
+    /** Refused unless the worker can start it within this many ms; older hosts ignore it. */
+    timeoutMs?: number
   }) => Promise<unknown>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
@@ -181,6 +191,21 @@ export type PluginsApi = {
   }) => Promise<PluginHostCallOutcome>
   /** A components panel's persisted atoms (desktop only); see plugin-panel-state.ts. */
   panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
+  /** One open panel's pushes (`PluginPanelPush`, unvalidated); desktop only. Returns unsubscribe. */
+  subscribePanelPush?: (sessionToken: string, listener: (push: unknown) => void) => () => void
+  /** The settings a plugin declares and their current values; null when it declares none. */
+  getSettings?: (args: { pluginKey: string }) => Promise<PluginDeclaredSettingsSnapshot | null>
+  /** The person's edit; `null` restores the default. */
+  setSetting?: (args: {
+    pluginKey: string
+    key: string
+    value: PluginJsonValue
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
+  /** An image file inside a components panel's plugin, or null; see plugin-panel-image.ts. */
+  panelImage?: (args: {
+    sessionToken: string
+    path: string
+  }) => Promise<{ contentType: string; bytes: Uint8Array } | null>
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
@@ -227,6 +252,9 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** `orca plugin open` / `shot`: main asks this window to show a plugin view. Desktop only. */
+  onViewRequest?: (callback: (request: PluginViewRequest) => void) => () => void
+  answerViewRequest?: (reply: PluginViewReply) => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
   /** Held updates not yet told to the user, each returned once per version; never approves. */
@@ -236,6 +264,16 @@ export type PluginsApi = {
   onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
+  /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
+  statusBarState?: () => Promise<PluginStatusBarOverrides>
+  /** Runs plugins' `editor.save.before` on a buffer about to be saved. Older hosts lack it. */
+  editorSaveHook?: (event: {
+    workspaceId: string | null
+    path: string
+    languageId?: string
+    text: string
+  }) => Promise<EditorSaveHookDecision>
+  onStatusBarChanged?: (callback: (overrides: PluginStatusBarOverrides) => void) => () => void
 }
 
 export type PluginAutoUpdateEvent = {

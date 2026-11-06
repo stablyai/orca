@@ -10,7 +10,7 @@ import {
 import {
   ClaudeDispatchContentError,
   readClaudeImage
-} from '../claude/claude-structured-dispatch-content'
+} from '../claude/structured/claude-structured-dispatch-content'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_IMAGE_COUNT = 20

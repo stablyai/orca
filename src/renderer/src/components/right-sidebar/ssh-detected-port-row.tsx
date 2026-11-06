@@ -1,5 +1,5 @@
 import React from 'react'
-import { advertisedBrowserUrlForDetectedPort } from '@/lib/workspace-port-urls'
+import { advertisedBrowserUrlForDetectedPort } from '@/lib/workspace-ports/workspace-port-urls'
 import type { EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 

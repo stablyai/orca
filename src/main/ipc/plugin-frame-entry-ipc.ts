@@ -1,7 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginService } from '../plugins/plugin-service'
 import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/plugin-panel-owner-lifecycle'
 import { preparePluginFrameGuest } from '../plugins/panels/plugin-frame-guest-sessions'

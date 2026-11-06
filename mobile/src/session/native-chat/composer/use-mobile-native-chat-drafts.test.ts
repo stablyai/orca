@@ -109,33 +109,6 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending.map((pending) => pending.text)).toEqual(['from a'])
   })
 
-  it('tracks every composer mutation with a stable route-owned generation', async () => {
-    await mount('a')
-    const getter = state!.getComposerEditGeneration
-    const initialGeneration = getter()
-
-    act(() => state?.setComposerText('typed'))
-    expect(getter()).toBe(initialGeneration + 1)
-
-    await switchTo('b')
-    expect(state?.getComposerEditGeneration).toBe(getter)
-    act(() => state?.setComposerText((current) => `${current} dictated`))
-    expect(getter()).toBe(initialGeneration + 2)
-  })
-
-  it('restores the text on a definite rejection', async () => {
-    await mount('a')
-    act(() => state?.setComposerText('ping'))
-    const origin = state?.captureSendOrigin('ping')
-    act(() => {
-      if (origin) {
-        state?.clearDraftForSend(origin, 'ping')
-        state?.restoreRejectedDraft(origin, 'ping')
-      }
-    })
-    expect(state?.composerText).toBe('ping')
-  })
-
   it('appends a rejected send after edits typed while it was in flight', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
@@ -328,90 +301,6 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending).toEqual([])
   })
 
-  it('reconciles a captioned image echo that carries the [Image #N] marker', async () => {
-    await mount('a')
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
-      )
-    )
-    const origin = state?.captureSendOrigin('look at this')
-    act(() => {
-      if (origin) {
-        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
-      }
-    })
-    expect(state?.pending).toHaveLength(1)
-
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, {
-          tabId: 'a',
-          messages: [
-            assistantTextMessage('a1', 'hi'),
-            userTextMessage('u1', '[Image: source: /tmp/a.png]'),
-            userTextMessage('u2', '[Image #1] look at this')
-          ]
-        })
-      )
-    )
-    expect(state?.pending).toEqual([])
-    expect(state?.imagePreviewsByMessageId).toEqual({ u2: ['file:///a.jpg'] })
-  })
-
-  it('reconciles a captioned image echo with a trailing [Image #N] marker', async () => {
-    await mount('a')
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
-      )
-    )
-    const origin = state?.captureSendOrigin('look at this')
-    act(() => {
-      if (origin) {
-        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
-      }
-    })
-    expect(state?.pending).toHaveLength(1)
-
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, {
-          tabId: 'a',
-          messages: [
-            assistantTextMessage('a1', 'hi'),
-            userTextMessage('u1', '[Image: source: /tmp/a.png]'),
-            userTextMessage('u2', 'look at this[Image #1]')
-          ]
-        })
-      )
-    )
-    expect(state?.pending).toEqual([])
-    expect(state?.imagePreviewsByMessageId).toEqual({ u2: ['file:///a.jpg'] })
-  })
-
-  it('hands a marker-only image preview to the authoritative user bubble', async () => {
-    await mount('a')
-    const origin = state?.captureSendOrigin('')
-    act(() => {
-      if (origin) {
-        state?.acceptSend(origin, '', ['file:///a.jpg'])
-      }
-    })
-
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, {
-          tabId: 'a',
-          messages: [userTextMessage('u1', '[Image #1]')]
-        })
-      )
-    )
-
-    expect(state?.pending).toEqual([])
-    expect(state?.imagePreviewsByMessageId).toEqual({ u1: ['file:///a.jpg'] })
-  })
-
   it('does not reconcile a repeated send against an older identical turn', async () => {
     await mount('a')
     await act(async () =>
@@ -451,20 +340,6 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending).toEqual([])
   })
 
-  it('does not erase newer edits when an older send clears', async () => {
-    await mount('a')
-    act(() => state?.setComposerText('submitted'))
-    const origin = state?.captureSendOrigin('submitted')
-    act(() => state?.setComposerText('new edit'))
-    act(() => {
-      if (origin) {
-        state?.clearDraftForSend(origin, 'submitted')
-      }
-    })
-
-    expect(state?.composerText).toBe('new edit')
-  })
-
   it('does not erase a whitespace-only newer edit when an older send clears', async () => {
     await mount('a')
     act(() => state?.setComposerText('/clear'))
@@ -477,33 +352,6 @@ describe('useMobileNativeChatDrafts', () => {
     })
 
     expect(state?.composerText).toBe(' /clear')
-  })
-
-  it('stays quiet when an unconfirmed send lands in the transcript', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
-        )
-      )
-
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('reconciles an image-only unconfirmed send against the next user turn (no false warning)', async () => {

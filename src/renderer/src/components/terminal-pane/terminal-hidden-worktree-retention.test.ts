@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { TERMINAL_WORKTREE_PARK_DELAY_MS } from './terminal-hidden-view-parking'
 import {
   clearTerminalProviderSnapshotCapabilities,

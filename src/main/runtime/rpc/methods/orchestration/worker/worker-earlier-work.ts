@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { DispatchContextRow } from '../../../../orchestration/types'
 
 const EARLIER_WORK_CLIP = 2_000

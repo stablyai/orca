@@ -2,13 +2,13 @@ import { mkdtemp, rm, writeFile, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests,
   type TranscriptSessionIdentity
-} from '../ai-vault/session-transcript-consumers'
-import { requestWholeTranscriptRead } from '../ai-vault/session-transcript-reader'
+} from '../ai-vault/transcripts/session-transcript-consumers'
+import { requestWholeTranscriptRead } from '../ai-vault/transcripts/session-transcript-reader'
 import SyncDatabase from '../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { SessionSearchStore } from './session-search-store'

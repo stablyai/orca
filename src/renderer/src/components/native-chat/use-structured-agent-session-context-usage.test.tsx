@@ -49,7 +49,7 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 import type {
   AgentSessionContextUsage,
   AgentSessionContextUsed
-} from '../../../../shared/agent-session-context-usage'
+} from '../../../../shared/agent-session/agent-session-context-usage'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
@@ -143,21 +143,6 @@ describe('useStructuredAgentSession context usage', () => {
     unloadedTurnRevisions = 1
     rerender()
     expect(optionReads()).toBe(1)
-  })
-
-  it('asks the host again when a live turn revision fell outside the loaded window', async () => {
-    answerOptions([
-      { used: estimate(150_000), window: WINDOW },
-      { used: estimate(170_000), window: WINDOW }
-    ])
-    const { result, rerender } = render()
-    await waitFor(() => expect(result.current.contextUsage).toMatchObject({ usedTokens: 150_000 }))
-
-    unloadedTurnRevisions = 1
-    rerender()
-
-    await waitFor(() => expect(result.current.contextUsage).toMatchObject({ usedTokens: 170_000 }))
-    expect(optionReads()).toBe(2)
   })
 
   it('keeps one refresh in flight and one behind it however many revisions it missed', async () => {

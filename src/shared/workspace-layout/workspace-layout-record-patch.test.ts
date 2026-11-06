@@ -10,7 +10,7 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { WORKSPACE_LAYOUT_PROFILES } from './workspace-layout-profile.test-fixture'
 import { patchStoredSession } from './workspace-layout-record-patch'
 import { saveWorkspaceLayout } from './workspace-layout-save'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 const CONTEXT = {
   mintId: () => 'minted-id',

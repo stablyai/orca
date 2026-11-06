@@ -1,4 +1,4 @@
-import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { maybeQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'

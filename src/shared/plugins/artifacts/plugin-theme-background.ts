@@ -47,7 +47,7 @@ export const pluginThemeBackgroundSchema = z
   .strictObject(backgroundFields)
   .meta(
     pluginFieldDoc(
-      'One image painted under translucent terminals (Background Opacity below 1). Static; never blurred.',
+      'One image painted under translucent terminals and chats (Background Opacity below 1). Static; never blurred.',
       NEXT
     )
   )

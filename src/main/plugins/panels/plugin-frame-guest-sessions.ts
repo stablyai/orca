@@ -14,7 +14,7 @@ import {
 import type { PluginFrameGuest } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginFrameSurface } from '../../../shared/plugins/frames/plugin-panel-shell'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import { pluginDevRevision } from '../plugin-dev-revision'
+import { pluginFrameContentRevision } from '../plugin-dev-revision'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import { createPluginFrameRequestHandler } from './plugin-frame-protocol'
 import { pluginFrameAttachKey } from './plugin-frame-request-policy'
@@ -24,6 +24,7 @@ import {
   installPluginFrameGuestPolicies
 } from './plugin-frame-guest-policies'
 import { setPluginFrameGuestHooks } from './plugin-frame-guest-registry'
+import { installPluginFrameGuestDiagnostics } from './plugin-frame-guest-diagnostics'
 import { currentPluginFrameThemeSnapshot } from './plugin-frame-theme-snapshot'
 
 /**
@@ -183,14 +184,9 @@ function contributionUrl(
     : pluginFrameUrl(frameKey, panel.entry)
 }
 
-/** Part of the guest URL, so an update or a dev edit (even asset-only) remounts the guest, and
- *  nothing else does. Dev trees change in place: the dev watcher counts their edits. */
-function contentRevision(plugin: ValidDiscoveredPlugin): string {
-  return plugin.contentHash ? plugin.contentHash.slice(0, 16) : pluginDevRevision(plugin.rootDir)
-}
-
+// Part of the guest URL, so an update or a dev edit remounts the guest, and nothing else does.
 function withRevision(url: string, plugin: ValidDiscoveredPlugin): string {
-  const revision = contentRevision(plugin)
+  const revision = pluginFrameContentRevision(plugin)
   return `${url}${url.includes('?') ? '&' : '?'}rev=${encodeURIComponent(revision)}`
 }
 
@@ -215,7 +211,11 @@ export async function preparePluginFrameGuest(
     console.warn(`[plugins] isolated frame session for ${pluginKey} is unavailable:`, error)
     return null
   }
-  return { partition: pluginFramePartition(frameKey), url }
+  return {
+    partition: pluginFramePartition(frameKey),
+    url,
+    ...(plugin.isDev ? { dev: true as const } : {})
+  }
 }
 
 function admitAttach(partition: string, src: string): boolean {
@@ -231,6 +231,10 @@ function attachGuest(guest: WebContents, host: WebContents): boolean {
     return false
   }
   installPluginFrameGuestPolicies(guest, frameKey, host, () => source?.getKeybindings?.())
+  const pluginKey = pluginKeyByFrameKey.get(frameKey)
+  if (pluginKey) {
+    installPluginFrameGuestDiagnostics(guest, frameKey, pluginKey)
+  }
   return true
 }
 

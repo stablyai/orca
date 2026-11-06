@@ -25,7 +25,7 @@ import {
   structuredAgentSessionHandoverOrigin
 } from './structured-agent-session-command-turn'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
-import { withStoppedHistory } from '../../../shared/agent-session-stopped-history'
+import { withStoppedHistory } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import {
   markStructuredAgentSessionInputUnadmitted,
   beginStructuredAgentSessionHandover,
@@ -160,11 +160,16 @@ export async function beginSubmissionHandover(
                 clientMessageId,
                 released,
                 true,
-                attempt?.signal
+                attempt?.signal,
+                error.reason === 'auto' ? 'auto' : undefined
               )
-              const next = await ctx.continueInput(attempt?.signal, async (fence) => {
-                await prepareFresh(fence)
-              })
+              const next = await ctx.continueInput(
+                attempt?.signal,
+                async (fence) => {
+                  await prepareFresh(fence)
+                },
+                error.reason
+              )
               if (next.kind === 'failed') {
                 unwritten = true
                 ctx.fence = next.fence
@@ -239,7 +244,10 @@ async function dispatchSafely(
       ...(executionOptions ? { executionOptions } : {}),
       ...(signal ? { signal } : {}),
       ...(admitFreshInput
-        ? { admitFreshInput: (enqueue) => admitFreshInput(enqueue, signal, prepare) }
+        ? {
+            admitFreshInput: (enqueue, _signal, kind) =>
+              admitFreshInput(enqueue, signal, prepare, kind)
+          }
         : {}),
       isCurrent,
       fence: ctx.fence,

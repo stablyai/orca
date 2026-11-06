@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { SourceControlAiSettings } from '../../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { translate } from '@/i18n/i18n'

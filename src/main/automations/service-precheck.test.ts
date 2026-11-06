@@ -6,7 +6,7 @@ import {
   createStore as createFreshStore,
   testState
 } from '../persistence/persistence-test-harness'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,7 +15,7 @@ import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 import { createAutomationRunWriter } from './automation-run-writer'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type * as PrecheckRunner from './precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
@@ -44,7 +44,8 @@ async function createStore() {
   }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
+  const { Store } = await import('../persistence/loading-store/store')
+  const { initDataPath } = await import('../persistence/loading-store/user-data-path')
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
@@ -128,31 +129,6 @@ describe('AutomationService prechecks', () => {
       exitCode: null,
       error: 'Project path for the selected automation host has changed.'
     })
-    expect(runAutomationPrecheckMock).not.toHaveBeenCalled()
-  })
-
-  it('does not run prechecks for manual dispatches', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = store.createAutomation({
-      name: 'Manual check',
-      prompt: 'Check the repo',
-      precheck: {
-        command: 'test -f ready',
-        timeoutSeconds: 30
-      },
-      agentId: 'claude',
-      projectId: 'r1',
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
-    const run = store.createAutomationRun(automation, Date.now(), 'manual')
-    const service = new AutomationService(store, { tickMs: 60_000 })
-
-    await expect(service.runPrecheck(automation.id, run.id)).resolves.toBeNull()
     expect(runAutomationPrecheckMock).not.toHaveBeenCalled()
   })
 

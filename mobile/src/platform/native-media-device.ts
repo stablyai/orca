@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
-import { File as FsFile, Paths } from 'expo-file-system'
+import { Directory, File as FsFile, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import type { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
 import type { NativeMediaDeps } from './native-media'
@@ -13,6 +13,18 @@ export function ownsStagedMediaUri(uri: string): boolean {
 
 function stagedMediaFile(extension: string): FsFile {
   return new FsFile(Paths.cache, `orca-media-${Date.now()}-${Math.random()}.${extension}`)
+}
+
+// Another app may still read the last file handed to it, so a folder's earlier contents are cleared only when the next one starts.
+// Each start gets its own subfolder so an aborted run's cleanup cannot delete its replacement.
+export function freshCacheFolder(name: string): Directory {
+  const root = new Directory(Paths.cache, name)
+  if (root.exists) {
+    root.delete()
+  }
+  const folder = new Directory(root, `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  folder.create({ intermediates: true })
+  return folder
 }
 
 export function discardUnreturnedMediaFile(file: FsFile): void {
@@ -51,7 +63,10 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
         base64: false,
         allowsMultipleSelection: multiple,
         ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
-        quality: 1
+        quality: 1,
+        // iOS otherwise hands back HEIC as-is, which agents can't read; Compatible gives JPEG.
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
       }),
     // DocumentPicker has no selection cap; enforce remaining room again before staging and minting.
     launchFiles: ({ multiple }) =>

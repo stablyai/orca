@@ -1,6 +1,6 @@
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 /** Old structured projections persisted their desktop id as if a terminal could resume it. */
 export function isStructuredAgentSyntheticSleepingRecord(

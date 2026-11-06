@@ -12,7 +12,7 @@ import {
   hostTestOperationId
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/structured-agent-session-reducer'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/use-native-chat-rewind'
 
 const toastError = vi.hoisted(() => vi.fn())

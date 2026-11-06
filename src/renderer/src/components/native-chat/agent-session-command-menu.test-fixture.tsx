@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react'
-import type { CommandMenuRendererFixtureModule } from '../../../../shared/agent-session-command-menu.test-fixture-contract'
+import type { CommandMenuRendererFixtureModule } from '../../../../shared/agent-session/agent-session-command-menu.test-fixture-contract'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 import { useStructuredAgentSessionCommandMenu } from './structured-agent-session-command-refresh'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'

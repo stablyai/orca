@@ -11,7 +11,7 @@ import {
 import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt
-} from './claude-structured-dispatch'
+} from './structured/claude-structured-dispatch'
 import { readClaudeFrameString } from './structured/claude-structured-init-proof'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type { ClaudeSession, ClaudeStartedSend } from './structured/claude-structured-session-state'

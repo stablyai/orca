@@ -1,21 +1,9 @@
 /** Pure gate facts for session-turn nudges; busy input steers or queues while the orchestration DB retains mail ownership. */
 
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
-import {
-  activeStructuredAgentSessionTurnId,
-  projectStructuredAgentSessionStatus
-} from '../../../shared/structured-agent-session-projection'
-
-/** Every reason retains the pointer; none of them consume mail. */
-export type StructuredPointerRetainReason =
-  | 'session-not-attached'
-  | 'turn-unsettled'
-  | 'dispatch-rejected'
-  | 'dispatch-unknown'
-
-/** The dispatch states both provider adapters converge on. */
-export type StructuredDispatchState = 'accepted' | 'rejected' | 'unknown'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { projectStructuredAgentSessionStatus } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Read both facts from the full reduced timeline so downstream callers cannot infer idle from a page. */
 export type StructuredSessionGateFacts = {
@@ -38,15 +26,4 @@ export function structuredSessionGateFacts(
       ) !== null,
     awaitingHuman: projectStructuredAgentSessionStatus(items, [], undefined, scope) === 'attention'
   }
-}
-
-/** Only accepted consumes mail; unknown cannot distinguish a dead provider from delayed acknowledgment. */
-export function structuredDispatchDelivered(state: StructuredDispatchState): state is 'accepted' {
-  return state === 'accepted'
-}
-
-export function retainReasonForDispatch(
-  state: Exclude<StructuredDispatchState, 'accepted'>
-): StructuredPointerRetainReason {
-  return state === 'rejected' ? 'dispatch-rejected' : 'dispatch-unknown'
 }

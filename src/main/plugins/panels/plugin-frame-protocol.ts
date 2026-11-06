@@ -1,5 +1,9 @@
 import { stat } from 'node:fs/promises'
 import {
+  PLUGIN_FRAME_ASSET_MAX_BYTES,
+  PLUGIN_FRAME_CHECKED_MAX_BYTES
+} from '../../../shared/plugins/frames/plugin-frame-entry-limits'
+import {
   parsePluginFrameUrl,
   PLUGIN_DECLARATIVE_HOST_FILE,
   PLUGIN_DECLARATIVE_RUNTIME_FILE
@@ -10,6 +14,7 @@ import {
   type PluginFrameSurface
 } from '../../../shared/plugins/frames/plugin-panel-shell'
 import type { PluginFrameTheme } from '../../../shared/plugins/frames/plugin-frame-bridge'
+import { isPluginSourceModulePath } from '../../../shared/plugins/frames/plugin-frame-source-modules'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import {
   readContainedPluginArtifactBytes,
@@ -26,17 +31,25 @@ import {
   busy,
   HTML_CONTENT_TYPE,
   isCheckedPluginFrameType,
+  JAVASCRIPT_CONTENT_TYPE,
   notFound,
   pluginFrameContentType,
   streamedResponse
 } from './plugin-frame-responses'
+import {
+  createPluginSourceModuleCompiler,
+  PLUGIN_SOURCE_MODULE_MAX_BYTES,
+  type PluginSourceModuleCompiler
+} from './plugin-frame-module-transform'
+import {
+  pluginFileExistsIn,
+  pluginSourceModuleDocumentBody,
+  PLUGIN_SOURCE_MODULE_QUERY
+} from './plugin-frame-source-serving'
 
 export { pluginFrameContentType } from './plugin-frame-responses'
 
-/** Streamed assets (images, fonts, media); the whole plugin tree is capped at 50 MiB anyway. */
-export const PLUGIN_FRAME_ASSET_MAX_BYTES = 32 * 1024 * 1024
-/** Documents, scripts and WASM are read whole to check their digest, so they get a lower cap. */
-export const PLUGIN_FRAME_CHECKED_MAX_BYTES = 16 * 1024 * 1024
+export { PLUGIN_FRAME_ASSET_MAX_BYTES, PLUGIN_FRAME_CHECKED_MAX_BYTES }
 /** Concurrent requests one guest session may hold open; more get 503 until some finish. */
 export const PLUGIN_FRAME_MAX_IN_FLIGHT = 32
 
@@ -51,7 +64,11 @@ export type PluginFrameProtocolDependencies = {
   currentTheme?: () => PluginFrameTheme | null
   /** Bytes of resources/plugins/declarative/orca-runtime.mjs, the guest `orca` module. */
   readDeclarativeRuntime?: () => Promise<Uint8Array>
+  /** Transpiles `.ts/.tsx/.mts/.jsx`; shared across sessions so its cache is too. */
+  compileSourceModule?: PluginSourceModuleCompiler
 }
+
+const defaultSourceModuleCompiler = createPluginSourceModuleCompiler()
 
 // Why: on these file systems `Editor.HTML` serves the same file as the declared `editor.html`.
 const CASE_INSENSITIVE_PATHS = process.platform === 'darwin' || process.platform === 'win32'
@@ -106,8 +123,16 @@ export function createPluginFrameRequestHandler(
       return body ? bufferedResponse(request, body.contentType, body.bytes) : notFound()
     }
     const relativePath = target.segments.join('/')
-    const isDocument = isDeclaredFrameEntry(plugin, relativePath)
-    const contentType = isDocument ? HTML_CONTENT_TYPE : pluginFrameContentType(relativePath)
+    const isSourceModule = isPluginSourceModulePath(relativePath)
+    // Why a query, not request headers: guest navigations reach the handler without sec-fetch-*.
+    const isDocument =
+      isDeclaredFrameEntry(plugin, relativePath) &&
+      (!isSourceModule || !new URL(request.url).searchParams.has(PLUGIN_SOURCE_MODULE_QUERY))
+    const contentType = isDocument
+      ? HTML_CONTENT_TYPE
+      : isSourceModule
+        ? JAVASCRIPT_CONTENT_TYPE
+        : pluginFrameContentType(relativePath)
     try {
       // Why: a navigation re-verifies like a panel entry; a fetch of an .html file is an asset
       // and rides the last check, so it cannot force a whole-tree re-hash per request.
@@ -124,16 +149,29 @@ export function createPluginFrameRequestHandler(
       const bytes = await readContainedPluginArtifactBytes(
         plugin.rootDir,
         relativePath,
-        PLUGIN_FRAME_CHECKED_MAX_BYTES
+        isSourceModule && !isDocument
+          ? PLUGIN_SOURCE_MODULE_MAX_BYTES
+          : PLUGIN_FRAME_CHECKED_MAX_BYTES
       )
       // Why per file: the tree check ran before this read; these must be the bytes it covered.
       if (!matchesVerifiedDigest(digests, relativePath, bytes)) {
         throw new Error('changed since the plugin tree was verified')
       }
+      if (isSourceModule && !isDocument) {
+        const compile = dependencies.compileSourceModule ?? defaultSourceModuleCompiler
+        const code = await compile({
+          relativePath,
+          bytes,
+          exists: pluginFileExistsIn(plugin.rootDir, digests)
+        })
+        return bufferedResponse(request, contentType, Buffer.from(code, 'utf8'))
+      }
       const body = contentType.startsWith('text/html')
         ? Buffer.from(
             buildPluginGuestShellHtml(
-              bytes.toString('utf8'),
+              isSourceModule
+                ? pluginSourceModuleDocumentBody(relativePath)
+                : bytes.toString('utf8'),
               documentSurface(plugin, relativePath),
               {
                 theme: dependencies.currentTheme?.()

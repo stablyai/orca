@@ -1,7 +1,8 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   refuse,
@@ -10,7 +11,7 @@ import {
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { journalOpenRefusalError } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
@@ -31,7 +32,6 @@ import {
 import { performSend } from './structured-agent-session-turns'
 import { observedReceipt } from './structured-agent-session-operation-settlement'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
-import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { openingMessageOptions } from './structured-agent-session-execution-options'
 
@@ -168,6 +168,9 @@ async function foundConversation(
         : refusal
     }
   }
+  if (!replayed) {
+    await prepareForkFounding(params, request, prepared.items)
+  }
   const existing = context.sessions.get(sessionId)
   const opened = existing
     ? { session: existing }
@@ -194,6 +197,7 @@ async function foundConversation(
         prepared.items,
         { uncommittedCreate: true }
       )
+      await params.fork?.revalidate()
       const first = options.firstMessage
       if (first) {
         const sent = await performSend(
@@ -266,7 +270,7 @@ async function foundConversation(
       value: {
         sessionId,
         fence,
-        page: readAgentSessionHydrationPage(session.journal, fence),
+        page: readForkHydration(session.journal, fence, store),
         unconfirmedClientMessageIds: [],
         ...(firstMessage ? { firstMessage } : {}),
         ...(tabId ? { tabId } : {})

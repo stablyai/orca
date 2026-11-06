@@ -1,5 +1,5 @@
 // Restore the last checkpointed cwd after Sleep instead of silently reopening at the worktree root.
-import type { ColdRestoreDetection } from '../../daemon/history-reader'
+import type { ColdRestoreDetection } from '../../daemon/history/restoration/terminal-history-cold-restore-info'
 import { wslUncPathToLinux } from '../../../shared/wsl-paths'
 
 export type WslMoveRestoreHint = { paneKey: string; cwd: string }

@@ -10,17 +10,19 @@ import {
   useMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { prepareQueuedMessageEditText } from '../../../src/shared/queued-message-edit-command'
-import { colors } from '../theme/mobile-theme'
+import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
+import { MobileAgentMessageSenders } from './native-chat/transcript/MobileAgentMessageSenders'
+import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileQueuedMessageComposer({
   editor,
-  attribution
+  from
 }: {
   editor: MobileQueuedMessageInlineEditor
-  attribution: string | null
+  from: AgentMessageSource | undefined
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -54,9 +56,11 @@ export function MobileQueuedMessageComposer({
   }, [])
   const agent = context?.agent ?? 'codex'
   const reported = context?.structured?.catalog.reported
+  // As on desktop, a host-set goal is an action, not text a queued message can hold.
+  const hostSetsGoals = context?.structured?.threadGoal?.changes === 'host'
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported),
-    [agent, reported]
+    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals),
+    [agent, reported, hostSetsGoals]
   )
   const refuseCommand = (text: string): boolean => {
     if (acceptsText(text)) {
@@ -72,17 +76,12 @@ export function MobileQueuedMessageComposer({
   }
   return (
     <View testID="queued-card-editor">
-      <Text style={{ color: colors.textMuted }}>
-        {attribution
-          ? t(
-              'session.queuedMessageComposer.editingAttributed',
-              'Editing message · {{attribution}}',
-              {
-                attribution
-              }
-            )
-          : t('session.queuedMessageComposer.editing', 'Editing message')}
-      </Text>
+      <View style={styles.editorHeading}>
+        <Text style={styles.caption}>
+          {t('session.queuedMessageComposer.editing', 'Editing message')}
+        </Text>
+        {from ? <MobileAgentMessageSenders queued from={from} /> : null}
+      </View>
       <MobileNativeChatComposer
         inputRef={inputRef}
         draftScopeKey={editor.scopeKey}
@@ -103,6 +102,9 @@ export function MobileQueuedMessageComposer({
                 ...context.structured,
                 files: files.files,
                 onAttachFiles: () => void files.attachFiles(),
+                onAttachPastedText: context.structured.onAttachPastedText
+                  ? (files.attachPastedText ?? undefined)
+                  : undefined,
                 onRemoveFile: (id) => files.removeFiles([id])
               }
             : null
@@ -126,6 +128,7 @@ export function MobileQueuedMessageComposer({
               }
             : undefined
         }
+        onPasteImages={editor.imagesCapable ? (paste) => void images.attachImage(paste) : undefined}
         isAttaching={images.isAttaching}
         onMicPress={context?.onMicPress}
         micActive={context?.micActive}

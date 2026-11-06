@@ -5,15 +5,15 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ChatUiLaunchTipAudience } from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
-import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
+import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
@@ -276,9 +276,12 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
-        this.cohorts.migrateTabSwitchKeybindings(
-          this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
-          fileExistedOnLoad
+        this.cohorts.keepResumeOnRestartOffForExistingProfiles(
+          this.cohorts.migrateTabSwitchKeybindings(
+            this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+            fileExistedOnLoad
+          ),
+          parsed
         ),
         parsed,
         audience

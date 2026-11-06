@@ -4,7 +4,7 @@ import type {
   AgentJournalTurnItem
 } from '../../agent-session/journal/agent-session-journal-types'
 import { reduceNativeChatTurnTiming, selectNativeChatTurnStatuses } from './native-chat-turn-status'
-import { selectStructuredAgentSettledTurns } from '../../structured-agent-session-turn-timing'
+import { selectStructuredAgentSettledTurns } from '../../agent-session/view/structured-agent-session-turn-timing'
 
 function userItem(itemId: string): AgentJournalRenderItem {
   return {

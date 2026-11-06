@@ -3,11 +3,13 @@ import { useMemo, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-theme'
+import { resolveEditorFontStack } from '@/lib/editor-typography'
+import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { isTerminalBackgroundLight } from '../../../../shared/terminal-themes/terminal-title-contrast'
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
@@ -53,6 +55,9 @@ export function selectNativeChatAppearanceSettings(
     terminalColorOverridesLight: settings?.terminalColorOverridesLight,
     pluginAppThemeDark: settings?.pluginAppThemeDark,
     pluginAppThemeLight: settings?.pluginAppThemeLight,
+    editorFontFamily: settings?.nativeChatAppearance?.matchTerminalInterface
+      ? undefined
+      : settings?.editorFontFamily,
     terminalFontFamily: settings?.terminalFontFamily,
     terminalFontSize: settings?.nativeChatAppearance?.matchTerminalInterface
       ? settings.terminalFontSize
@@ -103,8 +108,9 @@ function applyTerminalChatColors(
       '--secondary': 'var(--muted)',
       '--secondary-foreground': 'var(--chat-foreground-strong)',
       '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
-      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble yields too.
+      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble and link color yield too.
       '--chat-user-message': 'initial',
+      '--text-link': 'initial',
       '--chat-source-background': background,
       '--chat-source-foreground': foreground,
       '--chat-source-muted-foreground':
@@ -147,6 +153,7 @@ export function nativeChatAppearanceStyle(
     maxWidthPx
   )
   const font = buildFontFamily(settings?.terminalFontFamily ?? '')
+  const codeFont = matching ? font : resolveEditorFontStack(settings)
   const style: NativeChatAppearanceStyle = {
     '--chat-font-size': `${fontSize}px`,
     '--chat-ui-font-size': `${uiFontSize}px`,
@@ -159,7 +166,7 @@ export function nativeChatAppearanceStyle(
       Math.floor((((96 * columnWidthPx) / 736) * 14) / fontSize)
     ),
     '--chat-estimated-spacing-scale': uiFontSize / 14,
-    '--chat-code-font-family': font,
+    '--chat-code-font-family': codeFont,
     ...(appearance.fontFamily
       ? { '--chat-font-family': buildAppFontFamily(appearance.fontFamily) }
       : {})

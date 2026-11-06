@@ -1,4 +1,4 @@
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { SshRepoReadoption, SshTarget } from '../../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'

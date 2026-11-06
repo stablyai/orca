@@ -1,10 +1,10 @@
 // Accept into conversations without provider ownership; delivery starts children after acceptance.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
 import {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyMobileWorkspaceLineage,
+  getMobileWorkspaceLineageChildren,
   getMobileWorkspaceLineageGroupKey
 } from './mobile-workspace-lineage'
 import {
@@ -70,20 +71,26 @@ describe('applyMobileWorkspaceLineage', () => {
         plan
           .render(collapsed)
           .flatMap((section) => section.data)
-          .map((row) => row.worktreeId)
+          .map((item) => item.row.worktreeId)
       ).toEqual(duplicate ? ['parent', 'parent'] : ['parent'])
-      expect(plan.render(collapsed)[0]?.data[0]).toMatchObject({
+      expect(plan.render(collapsed)[0]?.data[0]?.view).toMatchObject({
         lineageChildCount: 1,
         lineageCollapsed: true
       })
       const sections = plan.render(new Set())
       expect(sections).toHaveLength(duplicate ? 2 : 1)
       for (const section of sections) {
-        expect(section.data.map((row) => row.worktreeId)).toEqual(['parent', 'child', 'grandchild'])
-        expect(section.data.map((row) => row.lineageDepth)).toEqual([0, 1, 2])
-        expect(section.data.map((row) => row.showProjectName)).toEqual([false, true, false])
+        expect(section.data.map((item) => item.row.worktreeId)).toEqual([
+          'parent',
+          'child',
+          'grandchild'
+        ])
+        expect(section.data.map((item) => item.view.lineageDepth)).toEqual([0, 1, 2])
+        expect(section.data.map((item) => item.view.showProjectName)).toEqual([false, true, false])
       }
-      const keys = sections.flatMap((section) => section.data.map((row) => row.sectionListKey))
+      const keys = sections.flatMap((section) =>
+        section.data.map((item) => item.view.sectionListKey)
+      )
       expect(new Set(keys).size).toBe(keys.length)
       const filtered = buildSections(
         [parent, child, { ...grandchild, repoId: 'repo-3' }],
@@ -96,7 +103,7 @@ describe('applyMobileWorkspaceLineage', () => {
       expect(
         filtered.map((section) => [
           section.key,
-          section.data.map((row) => [row.worktreeId, row.lineageDepth])
+          section.data.map((item) => [item.row.worktreeId, item.view.lineageDepth])
         ])
       ).toEqual([
         ['pinned', [['parent', 0]]],
@@ -117,8 +124,8 @@ describe('applyMobileWorkspaceLineage', () => {
 
     const rows = applyMobileWorkspaceLineage([child, parent])
 
-    expect(rows.map((row) => row.worktreeId)).toEqual(['child', 'parent'])
-    expect(rows.map((row) => row.lineageDepth)).toEqual([0, 0])
+    expect(rows.map((item) => item.row.worktreeId)).toEqual(['child', 'parent'])
+    expect(rows.map((item) => item.view.lineageDepth)).toEqual([0, 0])
   })
 
   it('keeps rows visible when lineage is cyclic', () => {
@@ -127,7 +134,7 @@ describe('applyMobileWorkspaceLineage', () => {
 
     const rows = applyMobileWorkspaceLineage([first, second])
 
-    expect(rows.map((row) => row.worktreeId).sort()).toEqual(['first', 'second'])
+    expect(rows.map((item) => item.row.worktreeId).sort()).toEqual(['first', 'second'])
   })
 
   it('keeps same-id rows on different hosts visible', () => {
@@ -136,6 +143,48 @@ describe('applyMobileWorkspaceLineage', () => {
 
     const rows = applyMobileWorkspaceLineage([local, remote])
 
-    expect(rows.map((row) => row.hostId)).toEqual(['local', 'ssh:builder'])
+    expect(rows.map((item) => item.row.hostId)).toEqual(['local', 'ssh:builder'])
+  })
+})
+
+describe('getMobileWorkspaceLineageChildren across machines', () => {
+  const parent = worktree({ worktreeId: 'mac::/src/fix', worktreeInstanceId: 'parent-instance' })
+  const child = worktree({
+    worktreeId: 'srv::/work/fix-tests',
+    hostId: 'runtime:env-1',
+    worktreeInstanceId: 'child-instance',
+    crossStoreParent: {
+      childWorkspaceKey: 'worktree:srv::/work/fix-tests',
+      childInstanceId: 'child-instance',
+      parent: {
+        installationId: 'mac-install',
+        workspaceKey: 'worktree:mac::/src/fix',
+        instanceId: 'parent-instance'
+      },
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+  })
+  const server = { hostId: 'runtime:env-1' as const, installationId: 'srv-install' }
+
+  it("nests a relayed server row under the desktop's own parent", () => {
+    const children = getMobileWorkspaceLineageChildren([parent, child], {
+      ownInstallationId: 'mac-install',
+      servers: [server]
+    })
+    expect([...children].map(([key, rows]) => [key, rows.map((row) => row.worktreeId)])).toEqual([
+      ['|mac::/src/fix', ['srv::/work/fix-tests']]
+    ])
+  })
+
+  it('keeps a parent ambiguous when the repo filter hides its twin', () => {
+    const twin = { ...parent, worktreeId: 'mac-copy::/src/fix', repoId: 'repo-2' }
+    const children = getMobileWorkspaceLineageChildren(
+      [parent, twin, child],
+      { ownInstallationId: 'mac-install', servers: [server] },
+      ['repo-1']
+    )
+    expect(children.size).toBe(0)
   })
 })

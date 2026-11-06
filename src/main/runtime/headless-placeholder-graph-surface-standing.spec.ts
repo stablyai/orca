@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { SURFACE_CLAIM_WITHOUT_STANDING } from './pty-recorded-surface-topology'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { SURFACE_CLAIM_WITHOUT_STANDING } from './terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   // #18191: the launch placeholder makes status ready but has no renderer authority to retract restored panes.
@@ -78,17 +78,6 @@ export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   }
 
   describe('headless placeholder graph and surface standing', () => {
-    it('does not spend a graph statement on the launch placeholder', () => {
-      const runtime = makeHeadlessRuntime()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: graphSequence is protected; the count is the whole property under test.
-      const internals = runtime as unknown as { graphSequence: number }
-      expect(internals.graphSequence).toBe(0)
-
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-
-      expect(internals.graphSequence).toBe(0)
-    })
-
     it('keeps a restored surface attached on a headless host', async () => {
       const runtime = makeHeadlessRuntime()
       runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })

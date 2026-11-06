@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
-import { drainAgentHookSpoolAsync } from '../shared/agent-hook-spool'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
+import { drainAgentHookSpoolAsync } from '../shared/agent-hook-listener/transport/agent-hook-spool'
 import { createHookListenerState } from '../shared/agent-hook-listener/listener-state'
 import {
   bindOpenCodeSession,

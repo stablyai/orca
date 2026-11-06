@@ -30,7 +30,7 @@ import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
 import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
@@ -77,15 +77,14 @@ export function SmartWorkspaceSourceDrawer({
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const inputRef = useRef<TextInput>(null)
-  // Read latest availability without reactive dependency so recreated object reseeds only on open.
-  const availabilityRef = useRef(availability)
-  availabilityRef.current = availability
-
-  useEffect(() => {
+  // Reseed only on open so a recreated availability object cannot reset the picked mode.
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
-      setMode(resolveDefaultSmartMode(availabilityRef.current))
+      setMode(resolveDefaultSmartMode(availability))
     }
-  }, [visible])
+  }
 
   // Focus after opening interactions settle; docked field shares composer.name with form.
   useEffect(() => {

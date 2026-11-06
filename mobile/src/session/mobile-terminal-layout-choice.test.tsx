@@ -1,4 +1,4 @@
-import { createElement, useLayoutEffect, useRef, useState } from 'react'
+import { createElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -28,7 +28,7 @@ vi.mock('lucide-react-native', () => ({
   Edit3: 'Icon',
   Trash2: 'Icon'
 }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: unknown }) =>
     visible ? children : null
 }))
@@ -45,7 +45,10 @@ vi.mock('expo-router', async () => {
 vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTaps: () => null }))
 vi.mock('../navigation/workspace-execution-host', () => ({ useWorkspaceExecutionHost: () => ({}) }))
 vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
-vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
+vi.mock('./native-chat/MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
+vi.mock('./MobileNativeChatForkProvider', () => ({
+  MobileNativeChatForkProvider: ({ children }: { children: ReactNode }) => children
+}))
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))
@@ -64,6 +67,8 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { TerminalPaneView } from './TerminalPaneView'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { resolveTerminalPaneHandles } from './mobile-terminal-pane-layout'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
@@ -268,7 +273,6 @@ it('keeps C paired with A after replacing B and focusing A by its first terminal
       activeSessionTabTypeRef: useRef(null),
       switchSessionTabRef: useRef(null),
       setActiveSessionTabId: vi.fn(),
-      defaultTerminalHandlesToLiveInput: vi.fn(),
       subscribeToTerminal: vi.fn(),
       unsubscribeTerminal: vi.fn(),
       handleTerminalTap: focus

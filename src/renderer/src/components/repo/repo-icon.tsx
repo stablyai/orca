@@ -152,7 +152,8 @@ export function RepoIconGlyph({
         <img
           src={imageSrc}
           alt=""
-          className={cn('size-full object-contain', iconClassName)}
+          // Keep in step with MobileRepoIcon's radii.mark.
+          className={cn('size-full rounded-[4px] object-contain', iconClassName)}
           draggable={false}
           onError={() => setFailedImageSrc(imageSrc)}
         />

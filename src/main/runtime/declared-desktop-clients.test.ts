@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DeviceEntry } from './device-entry'
+import type { DeviceEntry } from './rpc/server/pairing/device-entry'
 import {
   DECLARED_CLIENT_RECONNECT_GRACE_MS,
   DeclaredDesktopClients

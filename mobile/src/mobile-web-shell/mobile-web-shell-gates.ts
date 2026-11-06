@@ -1,7 +1,7 @@
 import {
   evaluateMobileWebBundleCompat,
   type MobileWebBundleCompatManifest
-} from '../transport/mobile-web-bundle-compat'
+} from '../transport/web-bundle/mobile-web-bundle-compat'
 import type {
   MobileWebShellBlockedVerdict,
   MobileWebShellGates,

@@ -1,5 +1,5 @@
-import { tuiAgentArgsBypassPermissions } from '../../../../shared/tui-agent-launch-defaults'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import { tuiAgentArgsBypassPermissions } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 const STARTUP_SHELLS: readonly AgentStartupShell[] = ['posix', 'powershell', 'cmd']
 

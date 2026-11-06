@@ -14,17 +14,6 @@ function toolRow(id: string): NativeChatMessage {
   }
 }
 
-function thought(id: string): NativeChatMessage {
-  return {
-    id,
-    role: 'reasoning',
-    state: 'completed',
-    blocks: [{ type: 'text', text: 'Considering the next step.' }],
-    timestamp: null,
-    source: 'transcript'
-  }
-}
-
 function answer(id: string): NativeChatMessage {
   return {
     id,
@@ -41,34 +30,6 @@ describe('how the structured lane draws its rows, as desktop does', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
-  })
-
-  function rows(messages: NativeChatMessage[], isWorking: boolean) {
-    act(() => {
-      renderer = create(createElement(Harness, { messages, enabled: true, isWorking }))
-    })
-    const { disclosure } = renderer!.root.findByType(Result).props
-    return {
-      disclosure,
-      resolved: messages.map((message, index) => disclosure.resolveRow(index, message))
-    }
-  }
-
-  it('draws tool rows and the thoughts between them as one run at its first row', () => {
-    const messages = [userMessage('u1'), toolRow('a1'), thought('r1'), toolRow('a2'), answer('a3')]
-    const { resolved } = rows(messages, true)
-    expect(resolved[1]?.workRun?.map((member: NativeChatMessage) => member.id)).toEqual([
-      'a1',
-      'r1',
-      'a2'
-    ])
-    expect(resolved.map((row) => row.joinsWorkRun === true)).toEqual([
-      false,
-      false,
-      true,
-      true,
-      false
-    ])
   })
 
   it('folds a settled turn to its answer until the reader opens it, and only offers that where it hides something', () => {

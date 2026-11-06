@@ -15,7 +15,7 @@ import { agentSessionFailureSentence } from './agent-session/failures/agent-sess
 import { agentSessionFailureStatedByRow } from './agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionWriteNoticeSentence } from './agent-session/failures/agent-session-write-notice-copy'
 import { structuredAgentSessionCommandHostRefusalCause } from './agent-session/failures/structured-agent-session-command-refusal-cause'
-import type { StructuredAgentSessionCommandRefusalCause } from './structured-agent-session-composer'
+import type { StructuredAgentSessionCommandRefusalCause } from './agent-session/view/structured-agent-session-composer'
 
 /** Ahead leaves command text untouched behind an unanswered local send; other holds return an explicit refusal. */
 export type StructuredConversationCommandHold =

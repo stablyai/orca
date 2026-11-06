@@ -1,7 +1,7 @@
 import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
 import type { FileLinkTarget } from './terminal-file-link-target'
 import { HostFileRefusal } from './host-file-refusal'
-import { resolveHostWorkspaceFile } from './terminal-host-workspace-file'
+import { isHostWorkspaceRoot, resolveHostWorkspaceFile } from './terminal-host-workspace-file'
 import {
   readTerminalPathExistence,
   writeTerminalPathExistence,
@@ -31,10 +31,12 @@ export async function hostFileLinkTargetExists(
   const probe = startTerminalPathExistsProbe()
   let exists: boolean
   try {
-    exists =
-      (await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, {
-        terminalHandle
-      })) !== null
+    const resolved = await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, {
+      existenceOnly: true,
+      terminalHandle
+    })
+    // Why: a folder link opens only by switching to the workspace it names.
+    exists = target.hostWorkspaceRootOnly ? isHostWorkspaceRoot(resolved) : resolved !== null
   } catch (error) {
     if (!(error instanceof HostFileRefusal)) {
       throw error

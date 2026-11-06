@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import {
   ORCAD_MACHINE_CLAIM_FILENAME,

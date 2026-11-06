@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindParams,
   type AgentSessionRewindReason
-} from '../../../shared/agent-session-rewind'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import {
   refuse,
   type AgentSessionWireRefusal
@@ -35,7 +35,7 @@ export function rewindRefusal(reason: AgentSessionRewindReason): {
 
 /** Refuse pre-/clear targets or moved epochs before starting an agent. */
 export function rewindRefusalBehindClear(
-  journal: Pick<AgentSessionJournal, 'context' | 'cursor' | 'snapshot'> | undefined,
+  journal: Pick<AgentSessionJournal, 'context' | 'cursor' | 'itemsRead'> | undefined,
   target: Pick<AgentSessionRewindParams, 'itemId' | 'expectedEpoch'>
 ): ReturnType<typeof rewindRefusal> | null {
   const floor = journal?.context.floor()
@@ -45,6 +45,6 @@ export function rewindRefusalBehindClear(
   if (journal.cursor().epoch !== target.expectedEpoch) {
     return rewindRefusal('stale-epoch')
   }
-  const item = journal.snapshot().items.find((entry) => entry.itemId === target.itemId)
+  const item = journal.itemsRead().items.find((entry) => entry.itemId === target.itemId)
   return !item || item.sequence <= floor.sequence ? rewindRefusal('invalid-target') : null
 }

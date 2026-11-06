@@ -1,4 +1,4 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
+import { readForkMarker, withForkMarker } from './agent-session-fork-marker'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
@@ -14,11 +14,11 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+} from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,
   attachJournal,
@@ -28,7 +28,7 @@ import {
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord
@@ -81,7 +81,6 @@ export type AttachFlowInput = {
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
-  launchAccountRecipe?: (record: AgentSessionRecord) => Promise<ClaudeAccountRecipe | undefined>
   launchPermissionMode?: (
     record: AgentSessionRecord
   ) => Promise<AgentChatPermissionChoice | undefined>
@@ -268,7 +267,7 @@ export async function performAttach(
         record: acquired,
         openConversation: input.openConversation
       })
-      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
+      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, { store })
       await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
       return journal
     })
@@ -288,6 +287,9 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
+  const view = attached.journal.publicRead()
+  const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
+  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
   return {
     ok: true,
     replayed,
@@ -296,10 +298,17 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      page: withPublishedWork(
-        readAgentSessionHydrationPage(attached.journal, fence),
-        heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-      ),
+      get page() {
+        return (page ??= withPublishedWork(
+          readAgentSessionHydrationPage(
+            attached.journal,
+            fence,
+            withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId)),
+            view.currentSnapshot()
+          ),
+          work
+        ))
+      },
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

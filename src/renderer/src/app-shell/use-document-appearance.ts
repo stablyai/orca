@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
 import { applyMarkdownCodeFontFamily } from '@/lib/markdown-code-font'
+import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { applyThemeBackground } from '../lib/theme-background'
@@ -26,7 +27,7 @@ import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
-import { useMediaQuery } from '@/hooks/use-media-query'
+import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 
 /** The Match Terminal app theme while the requested mode's slot selects it, else null. */
@@ -82,12 +83,13 @@ export function useDocumentAppearance(): void {
   const ready = matchTerminal || pluginThemesLoaded
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
+  useSplitDividerSetting()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
   const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
   const editorFontFamily = useAppStore((s) => s.settings?.editorFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
-  const reduceEffects = useMediaQuery('(prefers-reduced-transparency: reduce)')
-  const terminalTranslucent = useAppStore((s) => (s.settings?.terminalBackgroundOpacity ?? 1) < 1)
+  const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
+  const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
   // a background this build cannot paint; it must drop to no image, never reach CSS.
   const registeredBackground = pluginTheme?.background
@@ -117,13 +119,16 @@ export function useDocumentAppearance(): void {
     }
   }, [appTheme, ready, theme, dark])
 
-  // Why gated: the image only shows through translucent terminals, so otherwise it would cost decode
-  // and switch terminals to transparent rendering for nothing.
+  // Why gated: the image only shows through translucent terminals and chats, so otherwise it would
+  // cost decode and switch terminals to transparent rendering for nothing.
   useEffect(() => {
     if (pluginThemesLoaded) {
-      applyThemeBackground(terminalTranslucent && !reduceEffects ? themeBackground : null)
+      applyThemeBackground(
+        surfaceOpacity < 1 && !reduceEffects ? themeBackground : null,
+        surfaceOpacity
+      )
     }
-  }, [pluginThemesLoaded, terminalTranslucent, reduceEffects, themeBackground])
+  }, [pluginThemesLoaded, surfaceOpacity, reduceEffects, themeBackground])
 
   // Why after the paint above: a followed editor reads the colors it just painted. Built-in
   // choices resolve before the plugin list loads; a plugin choice follows the app until then.

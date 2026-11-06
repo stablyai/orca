@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -68,7 +68,7 @@ export function endStructuredAgentSessionReleasedChild(
   const session = context.sessions.get(sessionId)
   const child = session?.child
   if (child) {
-    context.runtimeState.startupAttempts.childEnded(sessionId, child)
+    context.runtimeState.startupAttempts.childEnded(sessionId, child, { byOrca: true })
   }
   if (
     !session ||

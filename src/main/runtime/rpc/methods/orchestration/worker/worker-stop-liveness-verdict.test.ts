@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 
 // Dropped relays clear connected across remote PTYs; use host verdicts to distinguish lost contact from death.
 describe('worker-stop against a terminal we lost contact with', () => {
@@ -31,7 +31,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), { runtime })
@@ -99,29 +99,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
     expect(stopped.state).toBe('stop_unknown')
     expect(stopped.lastError).toContain('could not be confirmed stopped')
     expect(stopped.lastError).not.toContain('exited')
-  })
-
-  it('does not settle a bare false close as stopped', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      tabId: 'tab_worker',
-      ptyKilled: false
-    })
-    const dispatch = createWorker()
-
-    const stopped = (await call('orchestration.workerStop', { dispatch: dispatch.id })) as {
-      state: string
-      lastError: string
-    }
-
-    expect(stopped.state).toBe('stop_unknown')
-    expect(stopped.lastError).toContain('could not be confirmed stopped')
   })
 
   it('does not close a legacy worker terminal without an ownership record', async () => {

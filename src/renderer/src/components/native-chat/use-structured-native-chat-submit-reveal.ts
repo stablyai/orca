@@ -18,11 +18,12 @@ export function useStructuredNativeChatSubmitReveal(
 ): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
   revealLatest: () => void
+  captureRevealLatest: () => () => void
   retryLaunch: () => void
   respond: StructuredController['respond']
   queuedMessages: StructuredAgentSessionQueuedMessagesController
 } {
-  const { messageListRef, revealLatest } = useNativeChatRevealLatest()
+  const { messageListRef, revealLatest, captureRevealLatest } = useNativeChatRevealLatest()
   const { respond, queuedMessages, capturePresentation } = controller
   const revealingRetryLaunch = useCallback(() => {
     if (startsHeld) {
@@ -42,9 +43,10 @@ export function useStructuredNativeChatSubmitReveal(
     // Resume can be refused or find nothing paused, so it reveals only once the host lifts it.
     const revealing = (lift: () => Promise<boolean>) => async (): Promise<boolean> => {
       const isCurrent = capturePresentation()
+      const reveal = captureRevealLatest()
       const resumed = await lift()
       if (resumed && isCurrent()) {
-        revealLatest()
+        reveal()
       }
       return resumed
     }
@@ -53,9 +55,10 @@ export function useStructuredNativeChatSubmitReveal(
         ...queuedMessages,
         steer: async () => undefined,
         resume: async () => false,
-        steerHead: () => false
+        steerHead: undefined
       }
     }
+    const { steerHead } = queuedMessages
     return {
       ...queuedMessages,
       steer: (messageId) => {
@@ -63,18 +66,21 @@ export function useStructuredNativeChatSubmitReveal(
         return queuedMessages.steer(messageId)
       },
       resume: revealing(queuedMessages.resume),
-      steerHead: () => {
-        const steered = queuedMessages.steerHead()
-        if (steered) {
-          revealLatest()
-        }
-        return steered
-      }
+      steerHead:
+        steerHead &&
+        (() => {
+          const steered = steerHead()
+          if (steered) {
+            revealLatest()
+          }
+          return steered
+        })
     }
-  }, [capturePresentation, queuedMessages, revealLatest, startsHeld])
+  }, [capturePresentation, captureRevealLatest, queuedMessages, revealLatest, startsHeld])
   return {
     messageListRef,
     revealLatest,
+    captureRevealLatest,
     retryLaunch: revealingRetryLaunch,
     respond: revealingRespond,
     queuedMessages: revealingQueue

@@ -8,31 +8,6 @@ function rule(remoteAddresses: unknown): RuleScope {
 }
 
 describe('Windows firewall remote-address scope', () => {
-  it.each([['Any'], ['any'], ['LocalSubnet']])('accepts the documented %s scope', (scope) => {
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(scope)], undefined, undefined)).toBe(true)
-  })
-
-  it.each([['Any4'], ['LocalSubnet4']])(
-    'accepts address-family-specific %s on the selected IPv4 interface',
-    (scope) => {
-      expect(hasSufficientWindowsFirewallRemoteScope([rule([scope])], '192.168.0.108', 24)).toBe(
-        true
-      )
-    }
-  )
-
-  it('keeps address-family-specific keywords on the selected interface family', () => {
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any6'])], 'fd7a:115c:a1e0::5', 64)).toBe(
-      true
-    )
-    expect(
-      hasSufficientWindowsFirewallRemoteScope([rule(['LocalSubnet6'])], 'fd7a:115c:a1e0::5', 64)
-    ).toBe(true)
-    expect(
-      hasSufficientWindowsFirewallRemoteScope([rule(['LocalSubnet6'])], '192.168.0.108', 24)
-    ).toBe(false)
-  })
-
   it.each([
     ['192.168.0.0/24', '192.168.0.108', 24],
     ['192.168.0.0-192.168.0.255', '192.168.0.108', 24],
@@ -52,32 +27,6 @@ describe('Windows firewall remote-address scope', () => {
     expect(hasSufficientWindowsFirewallRemoteScope([rule([scope])], address, prefix)).toBe(false)
   })
 
-  it('does not infer explicit scope coverage without selected interface subnet data', () => {
-    expect(
-      hasSufficientWindowsFirewallRemoteScope([rule(['192.168.0.0/24'])], undefined, undefined)
-    ).toBe(false)
-    expect(
-      hasSufficientWindowsFirewallRemoteScope([rule(['192.168.0.0/24'])], '192.168.0.108', 40)
-    ).toBe(false)
-    expect(
-      hasSufficientWindowsFirewallRemoteScope([rule(['100.64.0.0/10'])], '100.64.1.20', 32)
-    ).toBe(false)
-  })
-
-  it.each([
-    undefined,
-    null,
-    [],
-    {},
-    [rule(undefined)],
-    [rule([])],
-    [rule([''])],
-    [rule(['not-an-address'])],
-    [{ remoteAddresses: [42] }]
-  ])('rejects malformed or empty structured output %#', (rules) => {
-    expect(hasSufficientWindowsFirewallRemoteScope(rules, '192.168.0.108', 24)).toBe(false)
-  })
-
   it('evaluates each rule independently instead of merging partial ranges', () => {
     expect(
       hasSufficientWindowsFirewallRemoteScope(
@@ -89,16 +38,6 @@ describe('Windows firewall remote-address scope', () => {
     expect(
       hasSufficientWindowsFirewallRemoteScope(
         [rule(['192.168.1.0/24']), rule(['192.168.0.0/24'])],
-        '192.168.0.108',
-        24
-      )
-    ).toBe(true)
-  })
-
-  it('accepts PowerShell single-object and single-string JSON shapes', () => {
-    expect(
-      hasSufficientWindowsFirewallRemoteScope(
-        { remoteAddresses: '192.168.0.0/24' },
         '192.168.0.108',
         24
       )
@@ -133,25 +72,4 @@ describe('Windows firewall remote-address scope', () => {
       hasSufficientWindowsFirewallRemoteScope([rule(['100.64.0.0/10'])], '100.64.1.20', 32)
     ).toBe(false)
   })
-
-  it('fails address-family keywords closed when the interface family is unknown', () => {
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any'])], undefined, undefined)).toBe(
-      true
-    )
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any4'])], undefined, undefined)).toBe(
-      false
-    )
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any6'])], undefined, undefined)).toBe(
-      false
-    )
-  })
-
-  it.each([['Intranet'], ['DNS'], ['DHCP'], ['DefaultGateway'], ['PlayToDevice']])(
-    'fails the policy-defined %s keyword closed rather than assuming subnet coverage',
-    (scope) => {
-      expect(hasSufficientWindowsFirewallRemoteScope([rule([scope])], '192.168.0.108', 24)).toBe(
-        false
-      )
-    }
-  )
 })

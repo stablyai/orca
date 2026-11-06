@@ -5,8 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import {
   MOBILE_DIFF_REVIEW_GIT_MUTATIONS,
-  reviewGitBulkUnstage,
-  reviewGitStageRun
+  reviewGitBulkUnstage
 } from './mobile-diff-review-git-operations'
 import { getUnstageablePaths } from '../source-control/mobile-git-status'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -17,23 +16,22 @@ type GitActionsInput = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  queue: MobileDiffReviewQueueItem[]
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
   loadReviewData: () => Promise<void>
 }
 
 export function useMobileDiffReviewGitActions(input: GitActionsInput) {
-  const { client, connState, worktreeId, queue, setActionError, setBusyAction, loadReviewData } =
-    input
+  const { client, connState, worktreeId, setActionError, setBusyAction, loadReviewData } = input
 
   const runGitMutation = useCallback(
-    async (method: GitMutationMethod, item: MobileDiffReviewQueueItem) => {
+    // Resolves whether the mutation landed, so callers can move on only after it did.
+    async (method: GitMutationMethod, item: MobileDiffReviewQueueItem): Promise<boolean> => {
       if (!client || connState !== 'connected') {
         setActionError(
           translate('session.useDiffReviewGitActions.waitingForDesktop', 'Waiting for desktop...')
         )
-        return
+        return false
       }
       setBusyAction(`${method}:${item.filePath}`)
       setActionError(null)
@@ -67,6 +65,7 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
         }
         triggerSuccess()
         await loadReviewData()
+        return true
       } catch (err) {
         triggerError()
         setActionError(
@@ -77,6 +76,7 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
                 'Source control action failed'
               )
         )
+        return false
       } finally {
         setBusyAction(null)
       }
@@ -84,63 +84,5 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
     [client, connState, loadReviewData, setActionError, setBusyAction, worktreeId]
   )
 
-  const stageReviewedFiles = useCallback(async () => {
-    if (!client || connState !== 'connected') {
-      setActionError(
-        translate('session.useDiffReviewGitActions.waitingForDesktop', 'Waiting for desktop...')
-      )
-      return
-    }
-    const files = queue.filter(
-      (item) => item.scope === 'unstaged' && item.isReviewed && item.canStage
-    )
-    if (files.length === 0) {
-      return
-    }
-    setBusyAction('stage-reviewed')
-    setActionError(null)
-    let staged = 0
-    let failed = 0
-    for (const item of files) {
-      const response = reviewGitStageRun.interpret(
-        await reviewGitStageRun.request(client, {
-          worktree: `id:${worktreeId}`,
-          filePath: item.filePath
-        })
-      )
-      if (response.accepted) {
-        staged += 1
-      } else {
-        failed += 1
-      }
-    }
-    setBusyAction(null)
-    triggerSuccess()
-    const count = staged
-    setActionError(
-      failed > 0
-        ? translate(
-            'session.useDiffReviewGitActions.stageResults',
-            '{{staged}} staged, {{failed}} failed',
-            {
-              staged,
-              failed
-            }
-          )
-        : count === 1
-          ? translate(
-              'session.useDiffReviewGitActions.reviewedFilesStaged_one',
-              '{{count}} reviewed file staged',
-              { count }
-            )
-          : translate(
-              'session.useDiffReviewGitActions.reviewedFilesStaged_other',
-              '{{count}} reviewed files staged',
-              { count }
-            )
-    )
-    await loadReviewData()
-  }, [client, connState, loadReviewData, queue, setActionError, setBusyAction, worktreeId])
-
-  return { runGitMutation, stageReviewedFiles }
+  return { runGitMutation }
 }

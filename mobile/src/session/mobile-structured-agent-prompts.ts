@@ -2,8 +2,8 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/j
 import {
   agentSessionPromptQuestions,
   type AgentSessionQuestionAnswer
-} from '../../../src/shared/agent-session-question-answer'
-import { chatApprovalFromJournal } from '../../../src/shared/native-chat-interactive-prompt'
+} from '../../../src/shared/agent-session/agent-session-question-answer'
+import { chatApprovalFromJournal } from '../../../src/shared/native-chat/input/native-chat-interactive-prompt'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 

@@ -6,7 +6,8 @@ import {
   pluginPathFieldDoc,
   pluginFieldDoc,
   PLUGIN_PANEL_UI_SINCE,
-  PLUGIN_SCHEMA_SINCE_V1
+  PLUGIN_SCHEMA_SINCE_V1,
+  PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_PANEL_LIMIT = 64
@@ -94,7 +95,7 @@ export function canonicalPluginPanelIcon(name: string): PluginPanelIconName | nu
  *  component tree Orca draws with its own controls. */
 export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
 export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
-const COMPONENTS_PANEL_ENTRY = /\.m?js$/i
+const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
 export const pluginPanelContributionSchema = z
   .object({
@@ -123,7 +124,7 @@ export const pluginPanelContributionSchema = z
       }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. It is trusted code: install panels you trust.',
+        `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,
         PLUGIN_SCHEMA_SINCE_V1,
         ['dist/panel.html']
       )
@@ -142,7 +143,7 @@ export const pluginPanelContributionSchema = z
   .strict()
   .refine((panel) => panel.ui !== 'components' || COMPONENTS_PANEL_ENTRY.test(panel.entry), {
     path: ['entry'],
-    message: 'a components panel entry must be a .js or .mjs module'
+    message: 'a components panel entry must be a .js, .mjs, .ts, .tsx, .mts or .jsx module'
   })
   .meta({
     id: 'PanelContribution',

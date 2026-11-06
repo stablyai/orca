@@ -10,17 +10,17 @@ const { listRepoWorktreesMock, pruneLineageMock, pruneMetadataMock, registerWork
     registerWorktreeRootsMock: vi.fn()
   }))
 
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: registerWorktreeRootsMock
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: pruneLineageMock
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -34,7 +34,7 @@ const {
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
 const { invalidateLocalWorktreeMetadataPruneInputs } =
-  await import('../../../local-worktree-metadata-prune-gate')
+  await import('../../../workspaces/catalog/local-worktree-metadata-prune-gate')
 
 const repo = { id: 'repo-1', path: '/repos/one', displayName: 'one' } as Repo
 

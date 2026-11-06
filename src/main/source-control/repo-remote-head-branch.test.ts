@@ -4,7 +4,10 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 
 import { bumpScopeGeneration, hostedReviewRepoScope } from './hosted-review-scope-generations'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'

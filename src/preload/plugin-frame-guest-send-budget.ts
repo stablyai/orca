@@ -1,7 +1,7 @@
 /**
  * Isolated-world budget for what a guest may send to the host. Why written out: the sandboxed
- * preload can't import shared chunks; plugin-frame-guest.test.ts pins these numbers to the host's
- * lanes. Sizes are measured like the host measures them (UTF-8 strings, buffer bytes), so a
+ * preload can't import shared chunks. Sizes are measured like the host measures them
+ * (UTF-8 strings, buffer bytes), so a
  * message this admits is one the host can admit too.
  */
 export const PRELOAD_PLUGIN_FRAME_LANES = {
@@ -13,7 +13,7 @@ export const PRELOAD_PLUGIN_FRAME_LANES = {
   edit: { method: 'editor.applyEdit', maxBytes: 64 * 1024 * 1024 + 4096 },
   /** A components panel's tree and persisted state: the host's render lane and its walk caps. */
   render: {
-    events: ['ui.render', 'ui.persist'],
+    events: ['ui.render', 'ui.persist', 'ui.retain'],
     maxBytes: 640 * 1024,
     maxNodes: 5000 * 8 + 1024,
     maxDepth: 64 * 2 + 24

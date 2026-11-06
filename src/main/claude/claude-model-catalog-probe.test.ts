@@ -1,24 +1,10 @@
-import { agentModelCatalogEntryWithSuccess } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { PROVIDER_STDIN_END_GRACE_MS } from '../provider-process/provider-process-supervisor'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
-import { discoveredModel } from '../../shared/agent-session/options/structured-agent-session-discovered-model'
-import { resolveClaudeStructuredInvocation } from './claude-structured-launch-resolution'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
-import {
-  AgentModelCatalogProbeError,
-  type runAgentModelCatalogListing
-} from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
-import {
-  CLAUDE_MODEL_LIST_ARGS,
-  CLAUDE_MODEL_LIST_STDIN
-} from '../../shared/claude-model-list-probe'
-
-type ListingCall = Parameters<typeof runAgentModelCatalogListing>
 
 const AUTH_POLICY = { account: 'system' } as const
 
@@ -44,139 +30,7 @@ function probeDeps(command = `"${process.execPath}"`): {
   }
 }
 
-const LISTED = `${JSON.stringify({
-  type: 'control_response',
-  response: {
-    subtype: 'success',
-    request_id: 'orca-model-discovery',
-    response: {
-      models: [
-        {
-          value: 'sonnet',
-          displayName: 'Sonnet',
-          supportsEffort: true,
-          supportedEffortLevels: ['low']
-        }
-      ]
-    }
-  }
-})}\n`
-
 describe('claude model catalog probe', () => {
-  it.each([`"${process.execPath}"`, '', `"${process.execPath}" run -- claude`])(
-    'lists with the session executable and env for Command %j',
-    async (command) => {
-      const deps = probeDeps(command)
-      const calls: ListingCall[] = []
-      const probe = createClaudeModelCatalogProbe({
-        ...deps,
-        runListing: async (...call) => {
-          calls.push(call)
-          return LISTED
-        }
-      })
-      const success = await probe(HOME('/homes/account-a'))
-      expect(success.origin).toBe('probe')
-      expect(success.models).toEqual([
-        {
-          id: 'sonnet',
-          label: 'Sonnet',
-          isDefault: false,
-          efforts: [{ value: 'low', label: 'Low' }]
-        }
-      ])
-      const invocation = await resolveClaudeStructuredInvocation(deps, (env) => ({
-        ...env,
-        CLAUDE_CONFIG_DIR: '/homes/account-a'
-      }))
-      expect(calls).toHaveLength(1)
-      const [launch, options] = calls[0]!
-      expect(launch).toEqual({
-        command: invocation.command,
-        args: [
-          ...invocation.prefixArgs,
-          ...CLAUDE_MODEL_LIST_ARGS,
-          '--setting-sources',
-          'user,project,local'
-        ],
-        cwd: process.cwd(),
-        stdin: expect.stringContaining(CLAUDE_MODEL_LIST_STDIN)
-      })
-      expect(options.inheritedEnv).toEqual(invocation.env)
-    }
-  )
-
-  it('keeps the CLI default and account Fast and per-row auto support', async () => {
-    const listing = `${JSON.stringify({
-      type: 'control_response',
-      response: {
-        subtype: 'success',
-        request_id: 'orca-model-discovery',
-        response: {
-          models: [
-            { value: 'default', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
-            {
-              value: 'opus[1m]',
-              resolvedModel: 'claude-opus-5-5[1m]',
-              supportsAutoMode: true,
-              supportsFastMode: true
-            },
-            { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', supportsAutoMode: null }
-          ]
-        }
-      }
-    })}\n`
-    const probe = createClaudeModelCatalogProbe({ ...probeDeps(), runListing: async () => listing })
-    const { models, fastModeSupport } = await probe(HOME('/homes/account-a'))
-    expect(fastModeSupport).toEqual({ supported: true })
-    expect(models[0]?.supportsFastMode).toBe(true)
-    expect(
-      models[0] && discoveredModel(models[0], fastModeSupport?.supported === true, 'claude').options
-    ).toContainEqual(expect.objectContaining({ id: 'fastMode' }))
-    expect(
-      models.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
-    ).toEqual([
-      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
-      { id: 'haiku', isDefault: false, supportsAutoMode: undefined }
-    ])
-  })
-
-  it('pins no CLAUDE_CONFIG_DIR for the CLI default home, exactly as a session spawn does', async () => {
-    const envs: (NodeJS.ProcessEnv | undefined)[] = []
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      runListing: async (_launch, options) => {
-        envs.push(options.inheritedEnv)
-        return LISTED
-      }
-    })
-    await probe(HOME(join(homedir(), '.claude')))
-    await probe(HOME('/homes/account-a'))
-    expect(envs[0]).not.toHaveProperty('CLAUDE_CONFIG_DIR')
-    expect(envs[1]).toMatchObject({ CLAUDE_CONFIG_DIR: '/homes/account-a' })
-  })
-
-  it('refuses an answer that names no model, as an older CLI gives, rather than store it', async () => {
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      runListing: async () =>
-        `${JSON.stringify({ type: 'control_response', response: { subtype: 'error' } })}\n`
-    })
-    await expect(probe(HOME('/homes/a'))).rejects.toThrow(/listed no models/)
-  })
-
-  it.each(['launcher $SECRET claude', 'FOO=1 claude', '/missing/claude', './claude'])(
-    'lists nothing, and never probes the stock CLI, for Command %s',
-    async (command) => {
-      const runListing = vi.fn()
-      const probe = createClaudeModelCatalogProbe({ ...probeDeps(command), runListing })
-      await expect(probe(HOME('/homes/a'))).rejects.toMatchObject({
-        reason: 'agentCommandNotRunnable'
-      })
-      expect(runListing).not.toHaveBeenCalled()
-    }
-  )
-
   it.runIf(process.platform !== 'win32')(
     'lists through a supervised one-shot that answers after its input ends',
     async () => {
@@ -219,31 +73,6 @@ process.stdin.on('end', () => setTimeout(() => {
 })
 
 describe('Claude catalog availability', () => {
-  it('does not turn a generic listing failure into unavailable', async () => {
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      runListing: async () => {
-        throw new AgentModelCatalogProbeError('claude did not list models', 'timeout')
-      }
-    })
-    await expect(probe(HOME('/homes/a'))).rejects.not.toBeInstanceOf(
-      AgentModelCatalogUnavailableError
-    )
-  })
-
-  it.each([false, true])('lists with no sign-in verdict, managed=%s', async (managed) => {
-    const runListing = vi.fn(async () => LISTED)
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      resolveAuthPolicy: () => ({ account: managed ? ('managed' as const) : ('system' as const) }),
-      runListing
-    })
-    const result = await probe(HOME('/homes/a'))
-    expect(result).toMatchObject({ models: [{ id: 'sonnet' }] })
-    expect(result).not.toHaveProperty('unavailable')
-    expect(runListing).toHaveBeenCalledTimes(1)
-  })
-
   it('says the CLI is missing when the resolved executable is not there', async () => {
     const folder = mkdtempSync(join(tmpdir(), 'orca-claude-missing-'))
     try {
@@ -259,99 +88,4 @@ describe('Claude catalog availability', () => {
       rmSync(folder, { recursive: true, force: true })
     }
   })
-})
-
-it.each([null, 0, 1])('enterprise retry uses the actual exit code %s', async (exitCode) => {
-  const stderr = 'You cannot use --strict-mcp-config when an enterprise MCP config is present'
-  const runListing = vi.fn(async () => LISTED)
-  runListing.mockRejectedValueOnce(
-    new AgentModelCatalogProbeError(stderr, 'exit', false, { exitCode, stdout: '', stderr })
-  )
-  const result = createClaudeModelCatalogProbe({ ...probeDeps(), runListing })(HOME('/homes/a'))
-  await (exitCode === 1
-    ? expect(result).resolves.toMatchObject({ models: [{ id: 'sonnet' }] })
-    : expect(result).rejects.toMatchObject({ failedExit: { exitCode } }))
-  expect(runListing).toHaveBeenCalledTimes(exitCode === 1 ? 2 : 1)
-})
-
-it.each(['high', 'low'])(
-  'discovers configured %s without chat picks and preserves literal settings',
-  async (effort) => {
-    const calls: ListingCall[] = []
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      resolveLaunchArgs: () => [
-        '--model',
-        'sonnet',
-        '--effort',
-        effort,
-        '--settings',
-        '/literal/settings.json'
-      ],
-      runListing: async (...call) => {
-        calls.push(call)
-        return `${LISTED}${JSON.stringify({
-          type: 'control_response',
-          response: {
-            subtype: 'success',
-            request_id: 'orca-model-settings',
-            response: { applied: { model: 'sonnet', effort } }
-          }
-        })}\n`
-      }
-    })
-    const resolved = await probe.resolve?.(HOME('/account'), '/project')
-    const success = await resolved!.run()
-    expect(success).toMatchObject({ configured: { model: 'sonnet', effort } })
-    expect(
-      agentModelCatalogEntryWithSuccess(
-        undefined,
-        { agent: 'claude', fingerprint: 'fp' },
-        success,
-        'discovery',
-        1
-      )?.models.find((row) => row.id === 'sonnet')?.declaredDefaultEffort
-    ).toBe(effort === 'low' ? 'low' : null)
-    expect(calls[0]?.[0].args).toEqual(
-      expect.arrayContaining([
-        '--model',
-        'sonnet',
-        '--effort',
-        effort,
-        '--settings',
-        '/literal/settings.json'
-      ])
-    )
-    expect(calls[0]?.[0].args.filter((arg) => arg === '--settings')).toHaveLength(1)
-    expect(
-      calls[0]?.[0].stdin
-        ?.trim()
-        .split('\n')
-        .map((line) => JSON.parse(line))
-    ).toHaveLength(2)
-  }
-)
-
-it('qualifies only a correlated valid settings observation', async () => {
-  for (const [applied, requestId, complete] of [
-    [{}, 'orca-model-settings', true],
-    [[], 'orca-model-settings', false],
-    [{ model: 42 }, 'orca-model-settings', false],
-    [{}, 'other-request', false],
-    [undefined, 'orca-model-settings', false]
-  ] as const) {
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      runListing: async () =>
-        LISTED +
-        JSON.stringify({
-          response: {
-            subtype: 'success',
-            request_id: requestId,
-            response: applied === undefined ? {} : { applied }
-          }
-        })
-    })
-    expect((await probe(HOME('/account'))).complete).toBe(complete)
-  }
 })

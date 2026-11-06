@@ -2,6 +2,7 @@ import {
   planManagedOrcadAutoUpdate,
   type ManagedOrcadAutoUpdateSkip
 } from './orcad-managed-update-decision'
+import { OrcadCrashLoopError } from './orcad-managed-crash-loop'
 import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
 import {
   OrcadArtifactsUnavailableError,
@@ -95,6 +96,10 @@ export function autoUpdateManagedOrcadEnvironment(
         ? { outcome: 'deferred', code: result.code, reason: result.reason }
         : { outcome: 'failed', reason: result.reason }
     } catch (error) {
+      // The host already runs this build; the brake's reason shows on its server status instead.
+      if (error instanceof OrcadCrashLoopError) {
+        return { outcome: 'skipped', reason: 'current' }
+      }
       return { outcome: 'failed', reason: error instanceof Error ? error.message : String(error) }
     }
   })

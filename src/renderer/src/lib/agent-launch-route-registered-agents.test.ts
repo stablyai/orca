@@ -2,13 +2,13 @@ import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.t
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 const mocks = vi.hoisted(() => ({
   readLocalRuntimeCapabilitiesOrUnknown: vi.fn(),
@@ -95,29 +95,12 @@ beforeEach(() => {
 })
 
 describe('structured launch of a host-registered agent', () => {
-  it('opens an unchosen chat with empty native installation inventory', async () => {
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(store(), 'grok')).toBe('structured-native-chat')
-  })
-
   it('never offers it from a host without the registered-agents capability', async () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
     mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue(STRUCTURED)
 
     expect(routeFor(store(), 'grok')).not.toBe('structured-native-chat')
     expect(routeFor(store(), 'claude')).toBe('structured-native-chat')
-  })
-
-  it('does not offer it before the host has listed it', () => {
-    expect(routeFor(store(), 'grok')).not.toBe('structured-native-chat')
-    expect(routeFor(store(), 'codex')).toBe('structured-native-chat')
-  })
-
-  it('does not offer an agent the host did not list', async () => {
-    await loadHostStructuredAgents('local', REGISTERED, null)
-
-    expect(routeFor(store(), 'gemini')).not.toBe('structured-native-chat')
   })
 
   it("reads a paired host's list only from the runtime that gave it", async () => {

@@ -1,6 +1,7 @@
 /** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
+  notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -8,7 +9,7 @@ import { resolveNotificationTabOwner } from '@/attention/notification-subject-ow
 import type {
   AgentSessionPromptAttention,
   AgentSessionTurnCompletion
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import {
   agentSessionAttentionKey,
   agentSessionAttentionNews,
@@ -16,14 +17,16 @@ import {
   structuredAttentionOrigin,
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
-} from '../../../../shared/agent-session-attention'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/agent-session-attention'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { isCoordinatorOnlyChatNews } from '../../../../shared/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
@@ -80,7 +83,10 @@ function dispatchStructuredAttention(
       // A prompt earns unread like a settled turn, as the hook lane's blocked row does.
       settlesTurn: true,
       // Host journal edges prove fresh activity even without a rendered transcript; still require current tab ownership.
-      hasFreshActivityEvidence: true
+      hasFreshActivityEvidence: true,
+      coordinatorOnlyNews: isCoordinatorOnlyChatNews(edge, news.agentState, () =>
+        canonicalOrchestrationForRow(state, paneKey)
+      )
     },
     createStructuredAttentionSurface(state)
   )
@@ -113,6 +119,7 @@ function dispatchStructuredAttention(
           // A local session's host is this app's own main, which already pushed its phones.
           ...(subscriptionTarget?.kind === 'local' ? { mobileDeliveredByHost: true } : {}),
           worktreeId: request.workspaceId,
+          workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),

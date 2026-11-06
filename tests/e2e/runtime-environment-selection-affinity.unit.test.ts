@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as environmentStore from '../../src/shared/runtime-environment-store'
+import * as environmentStore from '../../src/shared/remote-runtime/host-store/runtime-environment-store'
 import {
   RUNTIME_PROTOCOL_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION

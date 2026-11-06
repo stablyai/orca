@@ -3,7 +3,7 @@ import {
   type AgentSessionConversationCommandResult
 } from '../agent-session-conversation-command'
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
-import type { StructuredAgentSessionCommandRefusalCause } from '../../structured-agent-session-composer'
+import type { StructuredAgentSessionCommandRefusalCause } from '../view/structured-agent-session-composer'
 
 /** Host refusal reasons that map to visible chat conditions. */
 const CAUSE_OF_HOST_REFUSAL: Partial<Record<string, StructuredAgentSessionCommandRefusalCause>> = {

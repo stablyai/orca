@@ -1,8 +1,10 @@
+import type { PRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
+import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../types'
 import { matchesRepoCacheEviction, type RepoCacheEviction } from './cache-identity'
 
@@ -29,7 +31,7 @@ export type InflightComments = {
   postedComments: PRComment[]
 }
 export type InflightWorkItems = {
-  promise: Promise<readonly GitHubWorkItem[]>
+  promise: Promise<readonly GitHubWorkItem[] | undefined>
   requestId: number
   force: boolean
   noCache: boolean
@@ -51,7 +53,15 @@ export const inflightProjectViewRequests = new Map<string, InflightProjectView>(
 export const prRequestGenerations = new Map<string, number>()
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
-  AppState['hostedReviewCache'][string] | undefined
+  {
+    entry: AppState['hostedReviewCache'][string] | undefined
+    checkContract?: PRCheckContract
+    expiresAt: number
+  }
+>()
+export const prRefreshStartedLinkedReviewScopes = new Map<
+  string,
+  { sequence: number; scope: LinkedReviewClearScope; expiresAt: number }
 >()
 
 let providerRequestSequence = 0
@@ -81,6 +91,7 @@ export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
 
 export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
   prRefreshStartedHostedReviewEntries.clear()
+  prRefreshStartedLinkedReviewScopes.clear()
 }
 
 const PROVIDER_REQUEST_CONCURRENCY = 8

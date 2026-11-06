@@ -9,7 +9,7 @@ import {
   type AgentDotState
 } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
@@ -18,15 +18,18 @@ import { programStatusAttentionLine } from '../../../../shared/program-status/pr
 import { agentRowToolInput, showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
-import { agentNoUpdateLabel, formatCompactDuration } from '../../../../shared/agent-row-decay-state'
+import {
+  agentNoUpdateLabel,
+  formatCompactDuration
+} from '../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
-} from '../../../../shared/agent-main-agent-verdict'
+} from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
 import {

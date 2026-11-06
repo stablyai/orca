@@ -1,5 +1,6 @@
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../session-tabs/structured-workspace-authority'
+import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../shared/open-structured-agent-session'
 // Republish an existing host-owned record's tab for history entries holding only session id; unpublished tabs disappear on sync.
 // Unlike ensure, read workspace/provider from host state so callers cannot redirect publication.
 
@@ -147,7 +148,14 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
             message:
               error.reason === 'removed'
                 ? 'This workspace is no longer available.'
-                : 'The structured agent session is not available yet. Retry in a moment.'
+                : 'The structured agent session is not available yet. Retry in a moment.',
+            ...(error.reason === 'removed' && !effects && error.workspaceKind
+              ? {
+                  details: {
+                    workspaceKind: error.workspaceKind
+                  } satisfies StructuredSessionWorkspaceRemovedDetails
+                }
+              : {})
           }
         }
       } finally {

@@ -1,15 +1,17 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
-} from '../../../src/shared/structured-agent-session-create'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionForkSource
+} from '../../../src/shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -19,10 +21,8 @@ import {
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
-type StructuredCreateSupport = {
-  supported?: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
-}
+// Partial: the reply is read before it is checked.
+type StructuredCreateSupport = Partial<StructuredAgentCreateSupportReply>
 
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
 const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
@@ -39,12 +39,16 @@ export type MobileStructuredAgentLaunchResult =
 
 function createParamsFor(
   agent: AgentSessionHandleProvider,
-  worktree: string
+  worktree: string,
+  forkFrom: StructuredAgentSessionForkSource | undefined,
+  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
+    ...(forkFrom ? { forkFrom } : {}),
+    ...(tabPlacement ? { tabPlacement } : {}),
     randomUuid: randomV4Uuid
   })
 }
@@ -80,7 +84,11 @@ function classifyCreateRefusal(
 export async function createMobileStructuredAgentSession(
   client: RpcClient,
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AgentSessionHandleProvider,
+  /** Sent only to a host advertising forks. */
+  forkFrom?: StructuredAgentSessionForkSource,
+  /** Sent only to a host advertising create placement; the replay keeps it. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -121,7 +129,7 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree)
+  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   try {

@@ -1,4 +1,4 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission

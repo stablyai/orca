@@ -3,28 +3,29 @@ import {
   structuredSessionSelectionController
 } from '@/lib/structured-agent-session-selection-controller'
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
-import { projectRuntimePermission } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
-import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
+import { applyRuntimePermissionReport } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
+import { useStructuredAgentSessionPermissionStatus } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
-import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-model-catalog-ownership'
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { StructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionReportsAtFence } from '../../../../shared/agent-session/options/structured-agent-session-runtime-reports'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-create-capabilities'
+} from '../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   useStructuredAgentSessionHostCapability,
   useStructuredAgentSessionOwnPermissionState,
   structuredAgentSessionHostKey
 } from '@/runtime/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/structured-agent-session-options-read-owner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-read-owner'
 
 export { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
@@ -64,7 +65,11 @@ export function useStructuredAgentSessionOptionState(args: {
     target,
     worktree
   } = args
-  const { summary, observation } = useStructuredAgentSessionStatusSummary(sessionId, target)
+  const { permissionReport, observation } = useStructuredAgentSessionPermissionStatus(
+    sessionId,
+    target,
+    fence
+  )
   const [reader] = useState(() =>
     createStructuredAgentSessionOptionsReadOwner(
       firstFrameOptionState(agent, target, {
@@ -90,6 +95,8 @@ export function useStructuredAgentSessionOptionState(args: {
         ? {
             sessionId: acceptedSupport.sessionId,
             commands: acceptedSupport.result.conversationCommands ?? [],
+            compactInstructions: acceptedSupport.result.compactInstructions === true,
+            accountUsage: acceptedSupport.result.accountUsage,
             threadGoal: acceptedSupport.result.threadGoal,
             reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,
             contextUsage: acceptedSupport.result.contextUsage,
@@ -99,6 +106,7 @@ export function useStructuredAgentSessionOptionState(args: {
               supported: false as const,
               reason: 'unsupported' as const
             },
+            forkSupport: acceptedSupport.result.forkSupport,
             fence: acceptedSupport.fence
           }
         : null,
@@ -208,14 +216,19 @@ export function useStructuredAgentSessionOptionState(args: {
       seed: Readonly<Record<string, string>> | undefined,
       explicit?: Readonly<Record<string, string>>
     ) => ({
-      ...projectRuntimePermission(
-        structuredAgentSessionOptionView(state, seed, controller.overlay(), explicit),
-        summary,
-        fence
+      ...applyRuntimePermissionReport(
+        structuredAgentSessionOptionView(
+          // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
+          structuredAgentSessionReportsAtFence(state, reader.supportFor(owner)?.fence, fence),
+          seed,
+          controller.overlay(),
+          explicit
+        ),
+        permissionReport
       ),
       permissionOwnSupported
     }),
-    [controller, summary, fence, permissionOwnSupported]
+    [reader, owner, controller, permissionReport, fence, permissionOwnSupported]
   )
   const takesSendOptions = useStructuredAgentSessionHostCapability(
     target,

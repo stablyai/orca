@@ -1,4 +1,4 @@
-import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
+import { evaluateMobileWebBundleCompat } from '../transport/web-bundle/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
   MobileWebShellGates,

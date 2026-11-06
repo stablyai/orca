@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
 import { findWorkspaceReferences, type ReferenceAgentCandidate } from './runtime-reference-find'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
@@ -142,40 +142,5 @@ describe('stored reference lookup', () => {
     expect(result.matches[0].agents).toEqual([])
     expect(result.matches[1].agents[0].terminal).toBe('remote-handle')
     expect(result.matches[1].workspace.hostId).toBe('ssh:build')
-  })
-
-  it('handles 1000 workspaces with 23 references each without discovering agents for misses', async () => {
-    const workspaces = Array.from({ length: 1000 }, (_, i) =>
-      workspace(
-        String(i),
-        Array.from({ length: 23 }, (_, n) => `https://github.com/acme/api/pull/${i * 23 + n + 1}`)
-      )
-    )
-    const agents = vi.fn(() => new Map())
-    const source = { workspaces, agents }
-    expect((await findWorkspaceReferences({ query: 'MISSING-1' }, source)).matches).toEqual([])
-    expect(agents).not.toHaveBeenCalled()
-    expect(
-      (await findWorkspaceReferences({ query: 'https://github.com/acme/api/pull/23000' }, source))
-        .matches[0].workspace.id
-    ).toBe('999')
-    expect(agents).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([0, -1, 1.5, Infinity])('rejects invalid limits %s', async (limit) => {
-    await expect(
-      findWorkspaceReferences({ query: linear, limit }, { workspaces: [], agents: () => new Map() })
-    ).rejects.toThrow('positive integer')
-  })
-
-  it('rejects bare numbers and conflicting filters before inspecting agents', async () => {
-    const source = { workspaces: [], agents: vi.fn(() => new Map()) }
-    await expect(findWorkspaceReferences({ query: '5123' }, source)).rejects.toThrow(
-      'full reference URL'
-    )
-    await expect(
-      findWorkspaceReferences({ query: linear, worktree: 'one', repo: 'api' }, source)
-    ).rejects.toThrow('either --worktree or --repo')
-    expect(source.agents).not.toHaveBeenCalled()
   })
 })

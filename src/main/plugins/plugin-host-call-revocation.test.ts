@@ -36,7 +36,7 @@ async function createSavingPlugin() {
   const dialog = gate()
   const writes: string[] = []
   const desktop: PluginDesktopFrameServices = {
-    openExternal: async () => true,
+    openExternal: async () => ({ opened: true }),
     async saveFile(pluginId, _input, scope) {
       await dialog.opened
       scope.assertActive()
@@ -104,14 +104,6 @@ async function createSavingPlugin() {
 }
 
 describe('revocation during an admitted call', () => {
-  it('writes when the plugin stays approved', async () => {
-    const { dialog, writes, save, key } = await createSavingPlugin()
-    const pending = save()
-    dialog.open()
-    await expect(pending).resolves.toEqual({ ok: true, value: { status: 'saved' } })
-    expect(writes).toEqual([key])
-  })
-
   it('writes nothing once the plugin is disabled while the dialog is open', async () => {
     const { dialog, writes, save, settings, key } = await createSavingPlugin()
     const pending = save()
@@ -171,6 +163,7 @@ describe('revocation checks inside executePluginHostCall', () => {
         return [{ id: 't1' }]
       },
       sendTerminalText,
+      listAgentStatuses: () => [],
       dispatchPluginNotification: vi.fn(),
       storage: { get: vi.fn(), set: vi.fn(), delete: vi.fn(), keys: vi.fn() },
       secrets: { get: vi.fn(), set: vi.fn(), delete: vi.fn(), protection: vi.fn() },

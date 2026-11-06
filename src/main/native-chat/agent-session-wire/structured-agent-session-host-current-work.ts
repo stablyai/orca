@@ -1,12 +1,11 @@
-// Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
-
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkJournal
 } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+// Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
 export type StructuredAgentSessionCurrentWorkHost = {
   store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
@@ -49,4 +48,21 @@ export function heldStructuredAgentSessionCurrentWork(
     ...(ended ? { ended } : {}),
     revision: session?.operationalRevision ?? 0
   })
+}
+
+/** Attempt-end observation uses current ownership independently of provider startup presentation. */
+export function bindStructuredAgentSessionInputWork(
+  store: StructuredAgentSessionCurrentWorkHost['store'],
+  sessionId: string,
+  session:
+    | Pick<
+        StructuredAgentSessionHostSession,
+        'journal' | 'child' | 'lastEndedChild' | 'operationalRevision'
+      >
+    | undefined
+): void {
+  if (session) {
+    session.journal.queuedMessages.inputWork = () =>
+      heldStructuredAgentSessionCurrentWork(store, sessionId, session.journal, session)
+  }
 }

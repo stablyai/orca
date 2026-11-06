@@ -6,16 +6,14 @@ import { afterEach, beforeEach } from 'vitest'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
-import { replaceJournalEpoch } from './journal-epoch-replacement'
-import type { JournalLoad } from './journal-open'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import * as attachmentReferences from '../agent-session-attachments/agent-session-attachment-references'
@@ -58,24 +56,6 @@ export function createFixture() {
 
   function item(ordinal: number): AgentJournalItemIdentity {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
-  }
-
-  function replace(input: {
-    items: Parameters<typeof replaceJournalEpoch>[0]['items']
-    onPublished?: (loaded: JournalLoad) => void
-  }): void {
-    replaceJournalEpoch({
-      database,
-      identity: IDENTITY,
-      reason: 'legacy_import',
-      fence: 1,
-      items: input.items,
-      queuePause: { lifted: false, liveStop: null, reopened: false },
-      queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
-      now,
-      mintEpoch: () => `epoch-${clock}`,
-      onPublished: input.onPublished ?? (() => undefined)
-    })
   }
 
   beforeEach(async () => {
@@ -149,7 +129,6 @@ export function createFixture() {
     journals,
     legacyInputs,
     now,
-    replace,
     get root() {
       return root
     },

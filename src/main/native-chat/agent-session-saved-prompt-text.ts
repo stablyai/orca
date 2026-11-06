@@ -7,10 +7,10 @@ import { agentJournalLinkageFields } from '../../shared/agent-session/journal/ag
 import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
-} from '../../shared/agent-session-question-answer'
+} from '../../shared/agent-session/agent-session-question-answer'
 import { nativeChatReceiptAnswers } from '../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 function questionInterpretation(body: AgentJournalQuestionItem): string[] {
   if (body.resolution.state !== 'resolved') {

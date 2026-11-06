@@ -21,16 +21,14 @@ import type {
   PluginInstallSource,
   PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
-import {
-  validateDeclaredPluginArtifacts,
-  validatePluginInstallContent,
-  type PluginArtifactValidationResult
-} from '../plugin-artifact-validation'
+import { validatePluginInstallTree } from '../plugin-artifact-validation'
 import { renamePluginFileWithWindowsRetry } from './plugin-atomic-file-write'
 import { hashPluginTree } from '../plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from '../plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
+import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
+import { readPluginLockfile } from './plugin-install-lockfile-store'
 
 export type PluginInstallResult =
   | {
@@ -52,14 +50,6 @@ export type PluginInstallInspection =
       consentFingerprint: string
     }
   | { ok: false; error: string }
-
-async function validatePluginInstallTree(
-  rootDir: string,
-  manifest: PluginManifest
-): Promise<PluginArtifactValidationResult> {
-  const declared = await validateDeclaredPluginArtifacts(rootDir, manifest)
-  return declared.ok ? validatePluginInstallContent(rootDir, manifest) : declared
-}
 
 async function readInstallManifest(
   rootDir: string,
@@ -175,6 +165,20 @@ export async function installStagedPluginTree(input: {
   if (trustError) {
     return { ok: false, error: trustError }
   }
+  // Why: marketplace installs check this before checkout; a direct source learns its key only here.
+  if (input.source.kind === 'git' || input.source.kind === 'local-path') {
+    const installed = (await readPluginLockfile(input.pluginsDir)).plugins[
+      sourceInspection.pluginKey
+    ]
+    const takeoverError = pluginCatalogTakeoverError(
+      sourceInspection.pluginKey,
+      installed?.source,
+      null
+    )
+    if (takeoverError) {
+      return { ok: false, error: takeoverError }
+    }
+  }
   const blockedReason = input.blockedPluginReason?.(sourceInspection.pluginKey)
   if (blockedReason) {
     return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
@@ -272,7 +276,10 @@ export async function installStagedPluginTree(input: {
     resolvedCommit: input.resolvedCommit,
     contentHash: sourceInspection.contentHash,
     consentFingerprint,
-    installedAt: Date.now()
+    // Why kept on update: install order decides which plugin replaces a built-in action.
+    installedAt:
+      (await readPluginLockfile(input.pluginsDir).catch(() => null))?.plugins[pluginKey]
+        ?.installedAt ?? Date.now()
   }
   try {
     await publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry })

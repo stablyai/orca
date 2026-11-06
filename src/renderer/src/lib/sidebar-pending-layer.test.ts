@@ -8,7 +8,7 @@ import {
   makeFolderWorkspace,
   makeRepo,
   makeWorktree
-} from '@/components/worktree-jump-palette-test-fixtures'
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import type { DesktopSidebarFeed } from './desktop-sidebar-feed'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))

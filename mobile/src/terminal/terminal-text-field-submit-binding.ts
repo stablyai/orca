@@ -5,7 +5,8 @@ import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input
 export function bindTerminalTextFieldSubmit(
   _node: TextInput | null,
   _onSubmit: () => void,
-  _onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
+  _onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean,
+  _onCompositionEnd?: (text: string) => void
 ): () => void {
   return () => {}
 }

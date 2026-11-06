@@ -6,7 +6,7 @@ import {
   AgentSessionRefusalError,
   agentSessionRefusalFromReference
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import {
   createNewerOrcaChats,
   createStructuredAgentSessionRestartCandidateReaders

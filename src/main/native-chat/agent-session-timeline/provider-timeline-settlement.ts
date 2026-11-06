@@ -8,11 +8,11 @@ import {
   type AgentJournalItemBody,
   type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { lostLiveWorkJournalBody } from '../agent-session-journal/journal-subagent-liveness'
 import {
@@ -72,10 +72,14 @@ export type ProviderTimelineSettlementEnding = {
 export function providerTimelineSettlement(
   journal: StructuredAgentSessionTransitionJournal,
   scope: ProviderTimelineSettlementScope,
-  ending?: ProviderTimelineSettlementEnding
+  ending?: ProviderTimelineSettlementEnding,
+  keep?: ReadonlySet<string>
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
   journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
+    if (keep?.has(itemId)) {
+      return
+    }
     const turnScope = attribution.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
     const historical = scope === 'session' && journal.item(itemId)
     if (historical && isHistoricalProviderTimelineItem(historical, (key) => journal.item(key))) {

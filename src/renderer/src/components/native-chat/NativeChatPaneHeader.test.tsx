@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import * as historyRequest from '../right-sidebar/ai-vault-panel-session-list-request'
+import * as historyRequest from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 
 const mocks = vi.hoisted(() => ({ launch: vi.fn(), resume: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
@@ -56,12 +58,12 @@ function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
   return source
 }
 
-it('offers the terminal header action order and targets Resume and Close at the displayed chat', () => {
+it('offers chat actions without a duplicate close button and targets Resume at the displayed chat', () => {
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
-    'Split Chat Right',
-    'Close tab'
+    'Split Terminal Right',
+    'Chat settings'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
   act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
@@ -80,9 +82,14 @@ it('offers the terminal header action order and targets Resume and Close at the 
       agent: 'codex'
     })
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Close tab' }))
-  expect(mocks.close).toHaveBeenCalledExactlyOnceWith({
-    type: 'close',
-    target: { kind: 'tab', worktreeId: source.worktreeId, tabId: source.id }
-  })
+})
+
+it('renders the translated terminal split label', async () => {
+  try {
+    await i18n.changeLanguage(await loadRendererUiLanguage('de'))
+    renderHeader()
+    expect(screen.getByRole('button', { name: 'Terminal nach rechts teilen' })).toBeTruthy()
+  } finally {
+    await i18n.changeLanguage('en')
+  }
 })

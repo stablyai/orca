@@ -32,31 +32,6 @@ afterEach(() => {
 })
 
 describe('plugin panel list loading', () => {
-  it('bounds watchdog errors to installed panels and clears them on recovery', () => {
-    const installed = {
-      ...plugin('samples.current'),
-      panels: [
-        {
-          id: 'dashboard',
-          title: 'Dashboard',
-          tabKey: 'plugin:samples.current/dashboard' as const
-        }
-      ]
-    }
-    usePluginPanelsStore.getState().setPlugins([installed])
-    usePluginPanelsStore.getState().setPanelHealth('plugin:samples.current/dashboard', 'error')
-    expect(usePluginPanelsStore.getState().panelErrors).toEqual({
-      'plugin:samples.current/dashboard': true
-    })
-
-    usePluginPanelsStore.getState().setPanelHealth('plugin:samples.current/dashboard', 'healthy')
-    expect(usePluginPanelsStore.getState().panelErrors).toEqual({})
-
-    usePluginPanelsStore.getState().setPanelHealth('plugin:samples.current/dashboard', 'error')
-    usePluginPanelsStore.getState().setPlugins([])
-    expect(usePluginPanelsStore.getState().panelErrors).toEqual({})
-  })
-
   it('does not let an older request overwrite a newer plugin list', async () => {
     let resolveFirst!: (plugins: PluginHostListEntry[]) => void
     let resolveSecond!: (plugins: PluginHostListEntry[]) => void

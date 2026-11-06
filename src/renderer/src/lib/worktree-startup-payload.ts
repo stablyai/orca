@@ -1,10 +1,10 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { EventProps } from '../../../shared/telemetry-events'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`

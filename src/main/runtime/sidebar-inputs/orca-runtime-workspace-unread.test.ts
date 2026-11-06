@@ -26,9 +26,9 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../runtime-store-partial-fixture'
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

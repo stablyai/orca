@@ -1,96 +1,139 @@
-import { useLayoutEffect, useState, type RefObject } from 'react'
-import {
-  Animated,
-  Easing,
-  Platform,
-  ScrollView,
-  Text,
-  View,
-  type LayoutRectangle
-} from 'react-native'
-import { DetailCardFocusBoundary, commitDetailCardExit } from './detail-card-host'
+import type { ReactNode, RefObject } from 'react'
+import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { DetailCardFocusBoundary, DetailCardLayer } from './detail-card-host'
+import type { AnchoredDetailCardState } from './use-anchored-detail-card'
+import { useDetailCardMotion } from './use-detail-card-motion'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-export type DetailCardAnchor = {
-  trigger: LayoutRectangle
-  top: number
-  origin: { x: number; y: number }
-}
+/** Below a trigger by the card's leading/top edges, or above it by its trailing/bottom edges. */
+export type DetailCardPlacement =
+  | { side: 'below'; left: number; top: number }
+  | { side: 'above'; right: number; bottom: number }
+
+export type DetailCardAnchor = DetailCardPlacement & { origin: { x: number; y: number } }
 
 const CARD_WIDTH = 256
 const EDGE_INSET = spacing.sm
 const TRANSITION_MS = 150
 const SLIDE_FROM = -6
 
+type DetailCardContent = {
+  title: string
+  titleTrailing?: string
+  detail?: string | null
+  children?: ReactNode
+  footer?: ReactNode
+}
+
+/** The full-screen layer an anchored card measures from and draws in, with the card while it shows. */
+export function AnchoredDetailCardLayer({
+  card,
+  obscured,
+  layerRef,
+  ...content
+}: DetailCardContent & {
+  card: AnchoredDetailCardState
+  obscured: boolean
+  /** Replaces the hook's layer ref, for a caller that also needs the node. */
+  layerRef?: (view: View | null) => void
+}): React.JSX.Element {
+  const reducedMotion = useReducedMotionEnabled()
+  return (
+    <DetailCardLayer>
+      <View
+        ref={layerRef ?? card.layerRef}
+        collapsable={false}
+        pointerEvents="box-none"
+        onLayout={card.onLayout}
+        style={layerStyle}
+      >
+        {card.visual ? (
+          <AnchoredDetailCard
+            {...card.visual}
+            {...content}
+            reducedMotion={reducedMotion}
+            bounds={card.bounds}
+            layerHeight={card.layerHeight}
+            contentRef={card.contentRef}
+            boundaryRefs={card.boundaryRefs}
+            active={card.active}
+            obscured={obscured}
+            onSettled={card.onSettled}
+          />
+        ) : null}
+      </View>
+    </DetailCardLayer>
+  )
+}
+
+const layerStyle = { ...StyleSheet.absoluteFillObject, zIndex: 1000 }
+
 /** Only the current motion may release the retained exit presentation. */
-export function AnchoredDetailCard({
+function AnchoredDetailCard({
   anchor,
   target,
   motion,
   bounds,
+  layerHeight,
   contentRef,
   boundaryRefs,
   active,
   obscured,
+  reducedMotion,
   onSettled,
   title,
+  titleTrailing,
   detail,
+  children,
   footer
 }: {
   anchor: DetailCardAnchor
   target: 0 | 1
   motion: number
   bounds: { left: number; top: number; right: number; bottom: number }
+  layerHeight: number
   contentRef: RefObject<View | null>
   boundaryRefs: RefObject<unknown[]>
   active: boolean
   obscured: boolean
+  reducedMotion: boolean | null
   onSettled: (motion: number) => void
-  title: string
-  detail?: string | null
-  footer?: React.ReactNode
-}): React.JSX.Element {
+} & DetailCardContent): React.JSX.Element {
   useMobileColorScheme()
   // Unknown counts as reduced, so the card never slides before the setting is read.
-  const slide = useReducedMotionEnabled() === false
-  const [progress] = useState(() => new Animated.Value(0))
-  useLayoutEffect(() => {
-    let disposed = false
-    progress.stopAnimation((value) => {
-      if (disposed) {
-        return
-      }
-      if (target === 0 && value === 0) {
-        onSettled(motion)
-        return
-      }
-      Animated.timing(progress, {
-        toValue: target,
-        duration: TRANSITION_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web'
-      }).start(({ finished }) => {
-        if (!disposed && finished && target === 0) {
-          commitDetailCardExit(() => onSettled(motion))
-        }
-      })
-    })
-    return () => {
-      disposed = true
-      progress.stopAnimation()
-    }
-  }, [motion, target, progress, onSettled])
+  const slide = reducedMotion === false
+  const motionStyle = useDetailCardMotion({
+    contentRef,
+    motion,
+    target,
+    slide,
+    offset: anchor.side === 'below' ? SLIDE_FROM : -SLIDE_FROM,
+    duration: TRANSITION_MS,
+    onSettled
+  })
 
   const width = Math.max(0, Math.min(CARD_WIDTH, bounds.right - bounds.left - EDGE_INSET * 2))
-  const left = Math.min(
-    Math.max(anchor.trigger.x, bounds.left + EDGE_INSET),
-    bounds.right - EDGE_INSET - width
-  )
-  const top = Math.max(anchor.top, bounds.top)
-  const maxHeight = Math.max(0, bounds.bottom - top - EDGE_INSET)
+  const minLeft = bounds.left + EDGE_INSET
+  const maxLeft = bounds.right - EDGE_INSET - width
+  let placement: { left: number; top?: number; bottom?: number; maxHeight: number }
+  if (anchor.side === 'below') {
+    const top = Math.max(anchor.top, bounds.top)
+    placement = {
+      left: Math.min(Math.max(anchor.left, minLeft), maxLeft),
+      top,
+      maxHeight: Math.max(0, bounds.bottom - top - EDGE_INSET)
+    }
+  } else {
+    const bottom = Math.min(anchor.bottom, bounds.bottom)
+    placement = {
+      left: Math.min(Math.max(anchor.right - width, minLeft), maxLeft),
+      bottom: layerHeight - bottom,
+      maxHeight: Math.max(0, bottom - bounds.top - EDGE_INSET)
+    }
+  }
   return (
     <>
       <DetailCardFocusBoundary refs={boundaryRefs} index={2} active={active} />
@@ -107,33 +150,29 @@ export function AnchoredDetailCard({
           styles.card,
           {
             display: obscured ? 'none' : 'flex',
-            left,
-            top,
-            width,
-            maxHeight,
-            opacity: progress,
-            transform: slide
-              ? [
-                  {
-                    translateY: progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [SLIDE_FROM, 0]
-                    })
-                  }
-                ]
-              : []
-          }
+            ...placement,
+            width
+          },
+          motionStyle
         ]}
       >
         <ScrollView contentContainerStyle={styles.content} tabIndex={active ? 0 : -1}>
-          <Text style={styles.title} selectable>
-            {title}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} selectable>
+              {title}
+            </Text>
+            {titleTrailing ? (
+              <Text style={styles.titleTrailing} selectable>
+                {titleTrailing}
+              </Text>
+            ) : null}
+          </View>
           {detail ? (
             <Text style={styles.detail} selectable>
               {detail}
             </Text>
           ) : null}
+          {children}
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </ScrollView>
       </Animated.View>
@@ -156,10 +195,24 @@ const styles = themedStyleSheet(() => ({
     elevation: 8
   },
   content: { padding: spacing.md },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.md
+  },
   title: {
+    flexShrink: 1,
+    // Lets a long unbroken workspace name wrap inside the row instead of overflowing it.
+    minWidth: 0,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  titleTrailing: {
+    color: colors.textMuted,
+    fontSize: typography.bodySize,
+    fontVariant: ['tabular-nums']
   },
   detail: {
     color: colors.textSecondary,

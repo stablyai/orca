@@ -1,5 +1,3 @@
-// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
-
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
@@ -8,14 +6,14 @@ import {
   type SubmissionRejectionKind
 } from './agent-session-failure'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import { cliMissingSentence, notSignedInSentence } from '../../agent-session-availability-sentences'
+import { cliMissingSentence, notSignedInSentence } from '../agent-session-availability-sentences'
 import {
   agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../view/agent-session-goal-control-copy'
 import { START_REFUSAL_RESUMABLE } from './agent-session-start-refusal-resumable'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import {
@@ -25,7 +23,7 @@ import {
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from '../../sentence-joining'
-import { quotingPersonDetail } from '../../agent-session-failure-quoted-detail'
+import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from '../agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -33,6 +31,7 @@ import {
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
 } from '../requests/structured-agent-session-dispatch-rejection'
+// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 declare const failureSentence: unique symbol
 
@@ -154,6 +153,8 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
 const FAILURE_SENTENCES = {
   providerStartFailed: (context, _fact, _surface, say) =>
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
+  savedConversationMissing: (context, _fact, _surface, say) =>
+    joinSentences([say('savedConversationMissing', agent(say, context)), say('startNewChat')]),
   startFailed: couldNot('couldNotStart'),
   notSignedIn: (context, fact, surface, say) => notSignedInSentence(context, fact, say, surface),
   cliMissing: (context, _fact, _surface, say) => cliMissingSentence(context, say),
@@ -195,8 +196,13 @@ const FAILURE_SENTENCES = {
     ),
   restartFailed: couldNot('couldNotRestart'),
   claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
-  modelUnavailable: (context, fact, _surface, say) =>
-    say('modelUnavailable', { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }),
+  modelUnavailable: (context, fact, _surface, say) => {
+    const words = { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }
+    return fact.agentUpdate
+      ? say('modelUnavailableUpdate', { ...words, minimumVersion: fact.agentUpdate })
+      : say('modelUnavailable', words)
+  },
+  modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
       say,
@@ -205,6 +211,11 @@ const FAILURE_SENTENCES = {
       fact.detail,
       agent(say, context)
     ),
+  pluginInputRequired: (context, fact, _surface, say) =>
+    say('pluginInputRequired', {
+      ...agent(say, context),
+      plugin: fact.detail?.text ?? 'unnamed'
+    }),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
       ? attachmentProblemSentence(say, context, fact.attachment)
@@ -216,6 +227,7 @@ const FAILURE_SENTENCES = {
   writeFailed: (_context, _fact, _surface, say) => say('writeFailed'),
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
   chatClosed: (_context, _fact, _surface, say) => say('chatClosed'),
+  unconfirmed: (_context, _fact, _surface, say) => say('unconfirmed'),
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),

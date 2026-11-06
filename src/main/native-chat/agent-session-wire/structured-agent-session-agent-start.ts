@@ -16,7 +16,7 @@ import {
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
@@ -25,7 +25,7 @@ import {
   registerStructuredAgentSessionStart,
   structuredAgentSessionStartStillQueued
 } from './structured-agent-session-start-attempts'
-import { retryableStructuredAgentSessionAcquisition } from './structured-agent-session-start-retry'
+import { retryableAgentSessionAcquisition } from './structured-agent-session-start-failure'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {
@@ -227,7 +227,7 @@ function withDiagnostic(
     ...(aborted ? { aborted: true as const } : {}),
     ...(expired ? { expired: true as const } : {}),
     ...(argumentProblem ? { argumentProblem } : {}),
-    retry: retryableStructuredAgentSessionAcquisition(error)
+    retry: retryableAgentSessionAcquisition(error)
   }
 }
 

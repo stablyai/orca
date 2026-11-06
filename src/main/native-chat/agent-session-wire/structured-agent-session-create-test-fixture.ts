@@ -1,12 +1,12 @@
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import {
   hostTestAttachParams,
   hostTestOperationId,
   HOST_TEST_SESSION
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export const CREATE_TEST_CALLER = { callerKey: 'client-1' }

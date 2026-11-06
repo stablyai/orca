@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
-import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
-import PreservedBranchBatchReviewModal from './components/sidebar/PreservedBranchBatchReviewModal'
+import DeleteWorktreeDialog from './components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog'
+import PreservedBranchBatchReviewModal from './components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal'
 import WorkspaceSpacePage from './components/workspace-space/WorkspaceSpacePage'
 import {
   isSpaceWindowState,
@@ -19,6 +19,7 @@ import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
@@ -27,6 +28,7 @@ function SpaceWindowRoot(): React.JSX.Element {
   const { t } = useTranslation()
   const settings = useAppStore((state) => state.settings)
   const activeModal = useAppStore((state) => state.activeModal)
+  useReduceVisualEffects(settings?.reduceVisualEffects)
 
   useEffect(() => {
     const api = window.api.workspaceSpace

@@ -46,6 +46,7 @@ type EmulatorDeviceFrameProps = {
   isActive: boolean
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
+  onStreamLost?: () => void
 }
 
 const MAX_GESTURE_SAMPLES = 32,
@@ -72,7 +73,8 @@ export function EmulatorDeviceFrame({
   visualOrientation,
   isActive,
   onTap,
-  onGesture
+  onGesture,
+  onStreamLost
 }: EmulatorDeviceFrameProps) {
   const { paneRef, paneSize } = useEmulatorPaneSize()
   const pointerSamplesRef = useRef<PointerSample[] | null>(null)
@@ -83,10 +85,16 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
+  const [prevStream, setPrevStream] = useState({ previewUrl, streamKey })
+  if (prevStream.previewUrl !== previewUrl || prevStream.streamKey !== streamKey) {
+    setPrevStream({ previewUrl, streamKey })
+    setStreamError(false)
+    setStreamSize(null)
+  }
   const canInteract = isLive && !loading && !streamError
   const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
-  const { cancelKeyboardFrames, reportedOrientation, sendKeyboardFrames, sendTouch } =
-    useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const controlStream = useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const { reportedOrientation, sendTouch } = controlStream
   const visualStreamGeometry = useMemo(
     () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
     [reportedOrientation, streamSize, visualOrientation]
@@ -94,16 +102,7 @@ export function EmulatorDeviceFrame({
   // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
   const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
-    useEmulatorScreenKeyboard({
-      cancelKeyboardFrames,
-      canInteract,
-      sendKeyboardFrames
-    })
-
-  useEffect(() => {
-    setStreamError(false)
-    setStreamSize(null)
-  }, [previewUrl, streamKey])
+    useEmulatorScreenKeyboard({ ...controlStream, canInteract })
 
   const mapEventToScreenPoint = useCallback(
     (event: ScreenCoordinateEvent): EmulatorScreenPoint | null =>
@@ -348,7 +347,8 @@ export function EmulatorDeviceFrame({
 
   const handleStreamError = useCallback(() => {
     setStreamError(true)
-  }, [])
+    onStreamLost?.()
+  }, [onStreamLost])
 
   // Park inactive tabs and hidden windows to avoid frame IPC/decode churn, including over SSH, without detaching sessions.
   const windowVisibleForStream = useEmulatorStreamWindowVisible()

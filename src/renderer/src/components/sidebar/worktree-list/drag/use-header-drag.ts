@@ -15,12 +15,12 @@ import type { RenderRow } from '../listing/render-row'
 import {
   getProjectGroupHeaderSectionEndByGroupId,
   getRepoHeaderSectionEndByRepoId
-} from '../../worktree-header-section-boundaries'
-import { useHostHeaderDrag } from '../../host-header-drag'
-import { useRepoHeaderDrag } from '../../project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-drop'
-import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
-import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
+} from '../viewport/worktree-header-section-boundaries'
+import { useHostHeaderDrag } from './host-header-drag'
+import { useRepoHeaderDrag } from './project-header-drag'
+import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import { useProjectGroupHeaderDrag } from './project-group-header-drag'
+import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
 
 const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos

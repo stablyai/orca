@@ -1,7 +1,7 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import {
-  BottomDrawer,
   View,
   TaskProviderLogo,
   colors,

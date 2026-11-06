@@ -10,8 +10,8 @@ import {
   View,
   useWindowDimensions
 } from 'react-native'
-import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer-constants'
-import { bottomDrawerStyles } from '../components/bottom-drawer-styles'
+import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer/bottom-drawer-constants'
+import { bottomDrawerStyles } from '../components/bottom-drawer/bottom-drawer-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'

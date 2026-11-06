@@ -2,21 +2,31 @@ import type { AppState } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   pairedServerRowOfWorktree,
   type PairedServerHostFacts,
   type PairedServerWorkspaceRow
 } from '../../../../shared/sidebar-list/paired-server-rows'
-import { describePairedServerHosts } from '../../../../shared/paired-server-hosts'
+import { describePairedServerHosts } from '../../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { lineageStoreKeyOfRow } from '../../../../shared/worktree/cross-store-lineage-resolution'
+import { validCrossStoreLineage } from '../../../../shared/worktree/cross-store-lineage-records'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(
-  state: Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces' | 'repos' | 'worktreeLineageById'>,
+  state: Pick<
+    AppState,
+    | 'worktreesByRepo'
+    | 'folderWorkspaces'
+    | 'repos'
+    | 'worktreeLineageById'
+    | 'crossStoreLineageByStoreKey'
+  >,
   hostIds: ReadonlySet<string>
 ): Map<string, PairedServerWorkspaceRow> {
   const rows = new Map<string, PairedServerWorkspaceRow>()
@@ -38,11 +48,17 @@ export function readWindowPairedServerRows(
     if (!worktree.hostId || !hostIds.has(worktree.hostId)) {
       return
     }
+    const storeKey = lineageStoreKeyOfRow(worktree)
     const row = pairedServerRowOfWorktree(
       worktree,
       kind,
       repoById.get(worktree.repoId),
-      checkedLineageByKey.get(getWorktreeHostIdentity(worktree))
+      checkedLineageByKey.get(getWorktreeHostIdentity(worktree)),
+      storeKey === undefined
+        ? undefined
+        : validCrossStoreLineage(state.crossStoreLineageByStoreKey[storeKey])[
+            worktreeWorkspaceKey(worktree.id)
+          ]
     )
     rows.set(row.key, row)
   }
@@ -75,9 +91,20 @@ export function readWindowPairedServerHosts(
     hostLabelOverrides: getHostDisplayLabelOverrides(state.settings)
   })
   return new Map(
-    hosts.flatMap(({ hostId, label, health, compatibility, pairedDeviceId }) =>
+    hosts.flatMap(({ hostId, label, health, compatibility, pairedDeviceId, installationId }) =>
       hostIds.has(hostId)
-        ? [[hostId, { label, health, compatibility, pairedDeviceId }] as const]
+        ? [
+            [
+              hostId,
+              {
+                label,
+                health,
+                compatibility,
+                pairedDeviceId,
+                ...(installationId ? { installationId } : {})
+              }
+            ] as const
+          ]
         : []
     )
   )

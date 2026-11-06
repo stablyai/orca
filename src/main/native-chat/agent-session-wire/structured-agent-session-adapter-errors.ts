@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 
 export class AgentSessionAcquisitionRefusal extends Error {

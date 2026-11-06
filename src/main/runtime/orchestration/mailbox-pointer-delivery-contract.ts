@@ -4,7 +4,7 @@ import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxOwner, OrchestrationMailboxTerminal } from './mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import type { OrchestrationCliCommand } from './cli-command'
-import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export type OrchestrationMailboxPointerMessage = {
   id: string

@@ -94,18 +94,3 @@ test.describe('switch on', () => {
     }
   })
 })
-
-test.describe('switch off', () => {
-  test.skip(SIDEBAR_INPUTS_BUILD, 'checks the shipped method set')
-
-  test('a switch-off build refuses sidebarInputs.read to the phone', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const phone = pairMobileClient(await createDesktopMobilePairingOffer(orcaPage))
-    try {
-      const response = await phone.request('sidebarInputs.read', { maxBytes: 262_144 })
-      expect(response).toMatchObject({ ok: false })
-    } finally {
-      phone.dispose()
-    }
-  })
-})

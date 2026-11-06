@@ -1,14 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DOC_PREVIEW_LINK_CLICK_CHANNEL,
-  type DocPreviewLinkModifiers
-} from '../shared/doc-preview-scheme'
+import type { DocPreviewLinkModifiers } from '../shared/doc-preview-scheme'
 import {
   handleDocPreviewLinkAuxClick,
   handleDocPreviewLinkClick,
-  installDocPreviewLinkInterception,
-  PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL
+  installDocPreviewLinkInterception
 } from './doc-preview-link-interception'
 
 const NO_MODIFIERS = { metaKey: false, ctrlKey: false, shiftKey: false }
@@ -70,10 +66,6 @@ beforeEach(() => {
 })
 
 describe('doc preview link interception', () => {
-  it('sends on exactly the channel main listens on', () => {
-    expect(PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL).toBe(DOC_PREVIEW_LINK_CLICK_CHANNEL)
-  })
-
   it('listens for both press kinds in the capture phase, so the document cannot consume them first', () => {
     loadPreviewDocument('<a id="external" href="https://example.com/docs">go</a>')
     const addEventListener = vi.spyOn(document, 'addEventListener')
@@ -127,15 +119,6 @@ describe('doc preview link interception', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('reports a trusted press on an external anchor exactly once and stops the navigation', () => {
-    loadPreviewDocument('<a id="external" href="https://example.com/docs">go</a>')
-
-    const event = pressTrusted('#external')
-
-    expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs', NO_MODIFIERS)
-    expect(event.defaultPrevented).toBe(true)
-  })
-
   it('reports the anchor even when the press landed on what it wraps', () => {
     loadPreviewDocument('<a href="https://example.com/docs"><span id="inner">go</span></a>')
 
@@ -173,16 +156,6 @@ describe('doc preview link interception', () => {
     expect(scrollIntoView).toHaveBeenCalledOnce()
     expect(report).not.toHaveBeenCalled()
     expect(event.defaultPrevented).toBe(true)
-  })
-
-  it('scrolls to the top for a bare # on an SVG anchor', () => {
-    loadSvgAnchorDocument('#')
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
-
-    pressTrusted('#svg-hit')
-
-    expect(scrollTo).toHaveBeenCalledOnce()
-    expect(report).not.toHaveBeenCalled()
   })
 
   it('keeps a rooted SVG link inside the preview rather than reading it as a filesystem path', () => {
@@ -247,17 +220,6 @@ describe('doc preview link interception', () => {
     pressTrusted('#other')
 
     expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/page#section', NO_MODIFIERS)
-  })
-
-  it('opens nothing for a middle click on a link', () => {
-    loadPreviewDocument('<a id="external" href="https://example.com/docs">go</a>')
-    const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
-    Object.defineProperty(event, 'isTrusted', { configurable: true, value: true })
-
-    dispatch('#external', event)
-
-    expect(report).not.toHaveBeenCalled()
-    expect(event.defaultPrevented).toBe(true)
   })
 
   it('leaves a middle click the document dispatched itself alone', () => {

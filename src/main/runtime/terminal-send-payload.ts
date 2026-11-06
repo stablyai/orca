@@ -1,7 +1,7 @@
 import {
   isTerminalInputTooLargeWithYield,
   TERMINAL_INPUT_TOO_LARGE_ERROR
-} from '../../shared/terminal-input'
+} from '../../shared/terminal/input/terminal-input'
 
 export function buildTerminalSendPayload(action: {
   text?: string

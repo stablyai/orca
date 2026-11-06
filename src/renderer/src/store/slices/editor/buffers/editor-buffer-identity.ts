@@ -1,6 +1,6 @@
 import type { OpenFile } from '../types/open-file'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
+import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'

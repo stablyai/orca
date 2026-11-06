@@ -91,9 +91,10 @@ async function confirmScriptContent(
   scriptKind: HookScriptKind,
   scriptContent: string,
   hostId?: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  signal?: AbortSignal
 ): Promise<'run' | 'skip'> {
-  if (isCancelled()) {
+  if (isCancelled() || signal?.aborted) {
     return 'skip'
   }
   if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId) || !scriptContent) {
@@ -101,7 +102,7 @@ async function confirmScriptContent(
   }
 
   const contentHash = await hashOrcaHookScript(scriptContent)
-  if (isCancelled()) {
+  if (isCancelled() || signal?.aborted) {
     return 'skip'
   }
   const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
@@ -120,8 +121,18 @@ async function confirmScriptContent(
         return
       }
       settled = true
+      signal?.removeEventListener('abort', cancel)
       resolve(decision)
     }
+    const cancel = (): void => {
+      // Eviction settles first, so an abort can only close this prompt.
+      if (settled) {
+        return
+      }
+      settle('skip')
+      state.closeModal()
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
     state.openModal('confirm-orca-yaml-hooks', {
       repoId,
       repoName,
@@ -146,6 +157,11 @@ function getIssueCommandTrustContent(result: IssueCommandReadResult): string {
   return ''
 }
 
+// A committed .orca/issue-command came from the repo, so it needs the same trust as orca.yaml.
+function isUserOwnedIssueCommand(result: IssueCommandReadResult): boolean {
+  return result.source === 'local' && result.localUntracked === true
+}
+
 async function confirmIssueCommandReadResult(
   state: AppState,
   repoId: string,
@@ -156,7 +172,7 @@ async function confirmIssueCommandReadResult(
   if (isCancelled()) {
     return 'skip'
   }
-  if (result.source === 'local') {
+  if (isUserOwnedIssueCommand(result)) {
     return 'run'
   }
   if (result.status === 'error') {
@@ -224,10 +240,11 @@ export async function ensureHooksConfirmed(
   scriptKind: HookScriptKind,
   hostId?: ExecutionHostId,
   runtimeOwnerEnvironmentId?: string | null,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  signal?: AbortSignal
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
-    if (isCancelled()) {
+    if (isCancelled() || signal?.aborted) {
       return 'skip'
     }
     const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
@@ -238,23 +255,23 @@ export async function ensureHooksConfirmed(
     let scriptContent = ''
     try {
       if (scriptKind === 'issueCommand') {
-        // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
+        // Repo-provided commands need trust; untracked user overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
         // A launch is a user act: it may start the repo's stopped WSL distro.
         const result = await readRuntimeIssueCommand(
           hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           { wakeWslDistro: true }
         )
-        if (result.source === 'local') {
+        if (isUserOwnedIssueCommand(result)) {
           return 'run'
         }
         if (result.status === 'error') {
           return 'skip'
         }
-        if (result.source !== 'shared') {
+        if (result.source === 'none') {
           return 'run'
         }
-        scriptContent = (result.sharedContent ?? '').trim()
+        scriptContent = getIssueCommandTrustContent(result)
       } else {
         const repo = findHookRepo(state, repoId, hostId)
         const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
@@ -287,6 +304,14 @@ export async function ensureHooksConfirmed(
       return 'skip'
     }
 
-    return confirmScriptContent(state, repoId, scriptKind, scriptContent, hostId, isCancelled)
+    return confirmScriptContent(
+      state,
+      repoId,
+      scriptKind,
+      scriptContent,
+      hostId,
+      isCancelled,
+      signal
+    )
   })
 }

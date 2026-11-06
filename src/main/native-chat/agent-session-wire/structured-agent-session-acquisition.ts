@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
@@ -45,7 +45,6 @@ export async function acquireOwner(
       throw new AgentSessionPreSpawnError(error)
     }
     const permissionMode = await input.launchPermissionMode?.(record)
-    const accountRecipe = await input.launchAccountRecipe?.(record)
     try {
       await input.assertNoTerminalWriter?.(record)
     } catch (error) {
@@ -65,7 +64,6 @@ export async function acquireOwner(
       // Retry the existing reservation instead of spawning a second child.
       spawnToken,
       ...(permissionMode ? { permissionMode } : {}),
-      ...(accountRecipe ? { accountRecipe } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
       ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
       ...(input.startupOptions ? { startupOptions: input.startupOptions } : {}),

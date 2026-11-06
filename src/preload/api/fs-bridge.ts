@@ -16,7 +16,7 @@ import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import type { SearchResult } from '../../shared/code-search-types'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import type {

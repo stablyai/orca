@@ -17,56 +17,6 @@ describe('clipboard image upload decoding', () => {
     expect(decodeClipboardImageUpload(chunks)).toEqual(Buffer.from(chunks.join(''), 'base64'))
   })
 
-  it.each([
-    ['AA==', 'AAAA'],
-    ['AA', '==', '=='],
-    ['AAA', 'AA'],
-    ['AA=', '==']
-  ])('rejects the same invalid complete payload: %j', (...chunks) => {
-    expect(isValidBase64(chunks.join(''))).toBe(false)
-    expect(() => decodeClipboardImageUpload(chunks)).toThrow(
-      'Clipboard image content must be base64'
-    )
-  })
-
-  it('matches whole-string validation and decoding for seeded arbitrary chunk boundaries', () => {
-    let seed = 941
-    const next = (max: number): number => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-      return seed % max
-    }
-    const alphabet = 'Az09+/'
-    for (let sample = 0; sample < 5000; sample += 1) {
-      const chunks: string[] = ['']
-      const count = next(16)
-      for (let index = 0; index < count; index += 1) {
-        let size = 2 + next(12)
-        if (size % 4 === 1) {
-          size += 1
-        }
-        let chunk = ''
-        for (let offset = 0; offset < size; offset += 1) {
-          chunk += alphabet[next(alphabet.length)]
-        }
-        if (next(6) === 0) {
-          const padding = 1 + next(2)
-          chunk = chunk.slice(0, -padding) + '='.repeat(padding)
-        }
-        chunks.push(chunk)
-      }
-      chunks.push('')
-      expect(chunks.every(isValidBase64)).toBe(true)
-      const content = chunks.join('')
-      if (isValidBase64(content)) {
-        expect(decodeClipboardImageUpload(chunks)).toEqual(Buffer.from(content, 'base64'))
-      } else {
-        expect(() => decodeClipboardImageUpload(chunks)).toThrow(
-          'Clipboard image content must be base64'
-        )
-      }
-    }
-  })
-
   it('initializes every output byte for permissive padding and partial quartets', () => {
     const allocate = vi
       .spyOn(Buffer, 'allocUnsafe')

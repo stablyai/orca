@@ -6,12 +6,12 @@ import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseAgentStatusPaneIdentity } from '../../../shared/agent-status-worktree-attribution'
+import { parseAgentStatusPaneIdentity } from '../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../shared/structured-agent-session-projection'
-import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status-types'
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
+import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,

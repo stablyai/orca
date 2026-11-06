@@ -1,13 +1,13 @@
-import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type { AgentJournalThreadGoal } from '../journal/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import type { AgentSessionContextUsage } from '../../agent-session-context-usage'
-import type { AgentSessionRewindSupport } from '../../agent-session-rewind'
+import type { AgentSessionContextUsage } from '../agent-session-context-usage'
+import type { AgentSessionRewindSupport } from '../lifecycle/agent-session-rewind'
 import type {
   AgentSessionFastModeState,
   AgentSessionFastModeSupport,
   AgentSessionModelOption
-} from '../../agent-session-wire'
+} from '../agent-session-wire'
 
 export type AgentSessionAcceptedInputSources = Partial<
   Record<'model' | 'effort' | 'fastMode' | 'serviceTier', 'saved' | 'seeded' | 'policy'>
@@ -18,10 +18,17 @@ export type AgentSessionAcceptedInputSources = Partial<
 export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
+  accountUsage?: true
+  /** Fresh host observation; absent means an older host or unknown conversation. */
+  sessionNeverStarted?: boolean
   /** Saved conversation on this execution host, resolved from the record's own account store. */
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport
+  /** Whether this chat's agent copies its conversation natively; absent means unknown, never unsupported. */
+  forkSupport?: 'unknown' | 'supported' | 'unsupported'
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** `/compact` takes instructions here; an older host omits this and refuses the field. */
+  compactInstructions?: boolean
   /** Offer goal controls only with threadGoal support; current spans the whole journal, including unloaded pages. */
   threadGoal?: { current: AgentJournalThreadGoal | null; contextFloor?: AgentJournalCursor }
   /** Journal goal changed only by the agent's /goal; separate from threadGoal so older clients never offer host controls. */
@@ -42,6 +49,8 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
+    /** Current child reports this model for display; it is never a next-turn selection. */
+    reportedModel?: string
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */
     reportedEffort?: string

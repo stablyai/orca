@@ -32,12 +32,12 @@ export type PluginDeclarativeEmit = (
   options?: PluginDeclarativeEmitOptions
 ) => void
 
-function sendValue(emit: PluginDeclarativeEmit) {
-  return (callback: string, value: string | boolean, edit: number): void =>
+export function sendValue(emit: PluginDeclarativeEmit) {
+  return (callback: string, value: PluginDeclarativeEventArg, edit: number): void =>
     emit(callback, [value], { edit })
 }
 
-function LabelledField({
+export function LabelledField({
   id,
   label,
   hidden,
@@ -69,6 +69,7 @@ export function PluginDeclarativeInput({
     defaultValue: props.defaultValue,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -111,6 +112,7 @@ export function PluginDeclarativeSwitch({
     defaultValue: props.defaultChecked,
     fallback: false,
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -140,6 +142,7 @@ export function PluginDeclarativeSelect({
     defaultValue: props.defaultValue,
     fallback: '',
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })

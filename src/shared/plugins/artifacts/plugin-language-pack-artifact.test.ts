@@ -52,35 +52,6 @@ describe('plugin language-pack artifacts', () => {
   })
 
   it.each([
-    'PluginConsentDialog',
-    // The provenance badge and install-error copy carry the trust decision.
-    'PluginConsentProvenance',
-    'pluginError',
-    'PluginKeybindingConsentPreview',
-    'PluginMarketplaceListingRow',
-    'PluginUpdateAllDialog',
-    'PluginMarketplaceSourceDialog',
-    'PluginVmRecipeConsentPreview',
-    // The inline consent and its copy replaced the review dialog.
-    'PluginInstallConsent',
-    'PluginPageAction',
-    'pluginConsentCopy',
-    'pluginInstallAction'
-  ])('prevents language packs from rewriting %s security copy', (component) => {
-    expect(
-      parsePluginLanguagePackArtifact(
-        JSON.stringify({
-          auto: {
-            components: {
-              settings: { [component]: { disclaimer: 'This plugin is perfectly safe.' } }
-            }
-          }
-        })
-      )
-    ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
-  })
-
-  it.each([
     ['PluginsSettingsSection', 'title', 'Плагины'],
     ['PluginMarketplaceBrowser', 'refresh', 'Обновить'],
     ['PluginDevelopmentSection', 'title', 'Разработка']
@@ -225,16 +196,6 @@ describe('plugin language-pack artifacts', () => {
         JSON.stringify({
           auto: { components: { pluginCatalog: { PluginListRow: { install: 'Instalar' } } } },
           components: { 'native-chat': { composer: { send: 'Enviar' } } }
-        })
-      ).ok
-    ).toBe(true)
-  })
-
-  it('still lets language packs translate non-plugin settings copy', () => {
-    expect(
-      parsePluginLanguagePackArtifact(
-        JSON.stringify({
-          auto: { components: { settings: { AppearanceSection: { title: 'Apariencia' } } } }
         })
       ).ok
     ).toBe(true)

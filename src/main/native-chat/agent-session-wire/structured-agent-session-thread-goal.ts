@@ -6,9 +6,9 @@ import type { AgentSessionRefusalReason } from '../../../shared/agent-session/fa
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalThreadGoal } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
@@ -101,7 +101,7 @@ export async function performThreadGoalChange(
         )
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
-          return agentSessionAttachmentExpiredRefusal()
+          return agentSessionAttachmentExpiredRefusal(error)
         }
         throw error
       }

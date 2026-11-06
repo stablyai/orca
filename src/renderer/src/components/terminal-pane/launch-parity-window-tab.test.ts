@@ -2,7 +2,11 @@ import type * as React from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { createManager, createPane } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -88,7 +92,9 @@ async function openTab(c: WindowLaunchCase) {
   const modules = await load(c.client)
   await installTerminalTestGlobals()
   Object.assign(window.api.platform, { get: () => ({ platform: c.client, osRelease: '10' }) })
-  const store = modules.createStore()
+  const store = modules.createStore(
+    (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+  )
   holder.store = store
   store.setState(
     launchWorkspaceState(c.workspace, { ...getDefaultSettings('/home/alice'), ...c.settings })
@@ -187,6 +193,10 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     ...managerOptions.terminalOptions?.(pane.id)
   }
   pane.terminal.options.vtExtensions = { kittyKeyboard: vtExtensions?.kittyKeyboard === true }
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  bindPaneAgentTitleMocks(paneArgs[2], agentTitleMocks)
+
   modules.pane.connectPanePty(...paneArgs)
   await flushAsyncTicks(20)
   const [request] = spawn.mock.calls[0] ?? []
