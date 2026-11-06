@@ -17,7 +17,7 @@ import {
   type IssueCopyTarget
 } from './issue-copy-target-messages'
 import type { JiraIssueWorkspaceAction } from './jira-issue-workspace-content'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function useJiraIssueWorkspaceActions({
   displayed,

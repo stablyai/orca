@@ -11,15 +11,22 @@ type PaneWslDistroState = Parameters<typeof getLocalProjectExecutionRuntimeConte
 export function resolvePaneWslDistro(
   state: PaneWslDistroState,
   worktreeId: string,
-  worktreePath: string
+  worktreePath: string,
+  resolvedTarget?: Parameters<typeof getLocalProjectExecutionRuntimeContext>[4]
 ): string | null {
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, undefined, {
-    wslAvailable: capabilities?.wslAvailable,
-    availableWslDistros: capabilities?.wslDistros ?? null
-  })
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    state,
+    worktreeId,
+    undefined,
+    {
+      wslAvailable: capabilities?.wslAvailable,
+      availableWslDistros: capabilities?.wslDistros ?? null
+    },
+    resolvedTarget
+  )
   if (projectRuntime?.status === 'resolved') {
     return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : null
   }

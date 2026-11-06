@@ -3,7 +3,7 @@ import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-reac
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from '../../checks-panel/presentation/check-presentation'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 function hostedReviewStateClass(review: HostedReviewInfo): string {
   if (review.state === 'merged') {

@@ -10,7 +10,7 @@ import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pair
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../rpc/server/runtime-rpc'
-import { ALL_RPC_METHODS } from '../../rpc/methods/index'
+import { ALL_RPC_METHODS } from '../../rpc/methods/rpc-method-registry'
 
 const resources: (() => Promise<void> | void)[] = []
 

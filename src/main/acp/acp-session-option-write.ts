@@ -2,19 +2,34 @@ import { abortSignalReason } from '../../shared/abort-signal-reason'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpOptionWrite, AcpStructuredOptions } from './acp-structured-options'
 
-/** Only the current, still-awaited write may establish reusable option proof. */
+export type AcpOptionWriteBound = {
+  agent: string
+  timeoutMs: number
+  signal?: AbortSignal
+  onUncertain?: (error: Error) => void
+}
+
 export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  bound: {
-    agent: string
-    timeoutMs: number
-    signal?: AbortSignal
-    key: string
-    value: string
-    onUncertain?: (error: Error) => void
-  }
+  bound: AcpOptionWriteBound & { key: string; value: string }
+): Promise<void> {
+  return boundAcpOptionWrite(options, bound, () =>
+    write.method === 'config'
+      ? connection
+          .setConfigOption(write.configId, write.value)
+          .then((result) => () => options.adoptConfigOptions(result.configOptions))
+      : connection.setModel(write.modelId).then(() => () => options.adoptModel(write.modelId))
+  )
+}
+
+/** Only the current, still-awaited write may establish reusable option proof. */
+export function boundAcpOptionWrite(
+  options: AcpStructuredOptions,
+  bound: AcpOptionWriteBound & { key: string; value: string },
+  /** Resolves to the proof's adoption; a returned model marks selector proof. */
+  send: () => Promise<() => string | void>
 ): Promise<void> {
   const { agent, timeoutMs, signal } = bound
   if (signal?.aborted) {
@@ -22,24 +37,16 @@ export function writeAcpSessionOption(
   }
   const revision = ++options.writeRevision
   options.invalidateInput(bound.key)
-  const adopt = (apply: () => void): void => {
+  options.writing += 1
+  let completed = false
+  const applied = send().then((apply) => {
+    completed = true
     if (options.writeRevision !== revision) {
       throw new Error(`${agent} option write was superseded`)
     }
-    apply()
-    options.appliedInput.set(bound.key, write.method === 'config' ? write.value : write.modelId)
-  }
-  let completed = false
-  const applied =
-    write.method === 'config'
-      ? connection.setConfigOption(write.configId, write.value).then((result) => {
-          completed = true
-          adopt(() => options.adoptConfigOptions(result.configOptions))
-        })
-      : connection.setModel(write.modelId).then(() => {
-          completed = true
-          adopt(() => options.adoptModel(write.modelId))
-        })
+    const resolved = apply()
+    options.adoptOwnWrite(bound.key, bound.value, resolved ?? undefined)
+  })
   void applied.catch(() => {
     completed = true
   })
@@ -64,9 +71,15 @@ export function writeAcpSessionOption(
       () => fail(new Error(`${agent} did not answer an option write within ${timeoutMs}ms`)),
       timeoutMs
     )
+    let settled = false
     const settle = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
+      options.writing -= 1
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     applied.then(() => {

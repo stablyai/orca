@@ -43,11 +43,13 @@ type Published = {
 }
 const published = vi.hoisted(() => new Map<string, Published>())
 vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
-vi.mock('@/lib/github-work-item-workspace-attachment', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: () => null,
   findGithubIssueWorkspaceAttachment: () => null
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
 vi.mock('@/components/pull-request-page/page/header', () => ({ PullRequestPageHeader: () => null }))
 vi.mock('../open-dialog/github-item-dialog-pr-header', () => ({
   GitHubItemDialogPRHeader: () => null

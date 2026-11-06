@@ -1,4 +1,4 @@
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../workspace/ownership/worktree-runtime-owner'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'

@@ -7,11 +7,11 @@ import {
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
 } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 import {
   DEFAULT_DA1_RESPONSE,
   sendTerminalOscColorQueryReplies
-} from '../terminal-capability-replies'
+} from '../emulation/terminal-capability-replies'
 
 import { recordHiddenRendererSkip } from './e2e-terminal-pty-harness'
 

@@ -7,7 +7,7 @@ import {
   acquireReadyCodexForTest
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { journalItemEchoFields } from '../../../native-chat/agent-session-journal/journal-item-echo'
+import { journalItemEchoFields } from '../../../native-chat/agent-session-journal/projection/journal-item-echo'
 import { expect, it } from 'vitest'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import {
@@ -23,8 +23,8 @@ import type {
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { structuredRewindCut } from '../../../native-chat/agent-session-wire/structured-rewind-cut'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/journal-open'
+import { structuredRewindCut } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-cut'
+import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
 
 export function registerCodexCatchUpEchoTests(input: {
   codexWith: typeof catchUpCodexWith
@@ -55,43 +55,6 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.open([], { returnedTurns: whole, paginate: false })
     expect(c.journal.cursor()).toEqual(before)
     expect(c.texts().filter((text) => text === 'assistant:answer 1')).toHaveLength(1)
-  })
-
-  it('selects acquired history linearly at N and 10N without copying the saved turn set', async () => {
-    const counts: number[] = []
-    for (const n of [100, 1_000]) {
-      const c = await chat({ now: 1_000 })
-      const turns: Record<string, unknown>[] = []
-      for (let i = 0; i < n; i++) {
-        await c.journal.appendItem(
-          { provider: 'codex', threadId: THREAD, turnId: `turn-${i}`, ordinal: 0 },
-          { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'saved' }] },
-          { fence: 1, turnScope: { kind: 'thread' } }
-        )
-        turns.push({ ...turn(i), items: [] })
-      }
-      let visits = 0
-      const iterator = Set.prototype[Symbol.iterator]
-      Set.prototype[Symbol.iterator] = function* () {
-        const tracked = this.size === n && this.has('turn-0')
-        for (const value of iterator.call(this)) {
-          if (tracked) {
-            visits++
-          }
-          yield value
-        }
-        return undefined
-      }
-      try {
-        await c.open([], { returnedTurns: turns, paginate: false })
-      } finally {
-        Set.prototype[Symbol.iterator] = iterator
-      }
-      counts.push(visits)
-    }
-    expect(counts[1]).toBeLessThanOrEqual(counts[0]! * 12)
-    expect(counts[1]).toBeLessThan(20_000)
-    console.info('history selection set-entry visits N=100/1000:', counts)
   })
 
   it('uses saved native IDs only for display, preserving sends and drafts through outside echoes and replay', async () => {

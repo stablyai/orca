@@ -5,8 +5,8 @@ import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
-import type { RunRow } from '../../../../orchestration/types'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,

@@ -16,7 +16,11 @@ function stem(path: string): string {
 }
 
 export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileIdLayout> = {
-  claude: { fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl` },
+  claude: {
+    fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl`,
+    // Transcripts sit in project buckets; `<id>/` folders below hold only subagent and tool output.
+    directoryPredicate: (_name, depth) => depth === 0
+  },
   codex: {
     fileMatchesId: (path, id) => {
       const name = stem(path)

@@ -2,7 +2,7 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/fol
 import { findAutomationRepo } from '../../../shared/automation-repo-target'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import type {
   Automation,
   AutomationDispatchResult,

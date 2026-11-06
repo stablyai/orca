@@ -1,6 +1,6 @@
 // Use main’s real command model for paired editor handover, including idempotent reopen and taken-ID refusal; publish frame before reply.
 
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type {
   LayoutApplyReply,

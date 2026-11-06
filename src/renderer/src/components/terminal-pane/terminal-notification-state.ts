@@ -9,11 +9,13 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-e
 import { getActiveWorkspaceExecutionHostId } from '@/lib/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
+  findIndexedProjectGroupOwner
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import {
   findIndexedRepoOwnerForHost,
-  getCatalogOwnerHostId,
   resolveIndexedRepoOwner
-} from '@/lib/worktree-runtime-owner-index'
+} from '@/lib/workspace/ownership/repo-owner-index'
+import { getCatalogOwnerHostId } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'

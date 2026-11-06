@@ -1,5 +1,5 @@
-import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/journal-input-observations'
-import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/journal-history-origin'
+import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/input-order/journal-input-observations'
+import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'
 

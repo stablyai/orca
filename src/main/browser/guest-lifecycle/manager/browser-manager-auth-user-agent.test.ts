@@ -52,6 +52,12 @@ vi.mock('../../identity/browser-process-user-agent', () => ({
   })
 }))
 
+vi.mock('../../identity/browser-tab-identity', async (importOriginal) =>
+  (
+    await import('./browser-manager-desktop-ua-metadata-test-fixture')
+  ).withPinnedDesktopUserAgentMetadata(await importOriginal<object>())
+)
+
 import { browserManager } from '../../browser-manager'
 import { googleAuthUserAgent } from '../../identity/browser-google-auth-ua'
 import {
@@ -60,6 +66,7 @@ import {
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from './browser-manager-test-harness'
+import { pinnedDesktopUserAgentMetadata as desktopMetadata } from './browser-manager-desktop-ua-metadata-test-fixture'
 
 const {
   guestOffMock,
@@ -156,7 +163,8 @@ describe('browserManager', () => {
 
     expect(guest.setUserAgent).not.toHaveBeenCalled()
     expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
+      userAgent: googleAuthUserAgent(),
+      userAgentMetadata: desktopMetadata
     })
 
     // Detaching clears Chromium's CDP overrides and invalidates the confirmed identity.
@@ -169,7 +177,8 @@ describe('browserManager', () => {
       true
     )
     expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
+      userAgent: googleAuthUserAgent(),
+      userAgentMetadata: desktopMetadata
     })
 
     // getUserAgent omits the CDP override; clear it on exit to restore UA and client hints.
@@ -209,7 +218,8 @@ describe('browserManager', () => {
       true
     )
     expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-      userAgent: googleAuthUserAgent()
+      userAgent: googleAuthUserAgent(),
+      userAgentMetadata: desktopMetadata
     })
     releaseHeldUserAgentOverride()
     await olderHeldWrite

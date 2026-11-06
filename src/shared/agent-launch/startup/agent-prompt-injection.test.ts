@@ -5,6 +5,7 @@ import {
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
+  isCompleteAgentPromptDraft,
   isHeldAgentPromptDraft,
   iterateAgentPromptPasteChunks
 } from './agent-prompt-injection'
@@ -49,6 +50,23 @@ describe('agent prompt injection bytes', () => {
       expect(Buffer.byteLength(chunk, 'utf8')).toBeLessThanOrEqual(31)
       expect(Buffer.from(chunk, 'utf8').toString('utf8')).toBe(chunk)
     }
+  })
+})
+
+describe('isCompleteAgentPromptDraft', () => {
+  it.each([
+    ['the whole prompt', 'first line\r\nsecond line', 'first line\nsecond line', true],
+    ['a prefix of it', 'first line\nsecond line', 'first line', false],
+    [
+      'the prompt with a newline moved, as a wrap shows it',
+      'first line\nsecond line',
+      'first line second\nline',
+      false
+    ],
+    ['the prompt with its spacing edited', 'a  b', 'a b', false],
+    ['a prompt whose trailing newline may not render', 'first line\n', 'first line', false]
+  ])('%s', (_case, prompt, draft, complete) => {
+    expect(isCompleteAgentPromptDraft(draft, prompt)).toBe(complete)
   })
 })
 

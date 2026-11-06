@@ -7,7 +7,7 @@ import {
   OrcadTerminalCensusParamsSchema
 } from '../../shared/orcad-terminal-census'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { ORCAD_TERMINAL_CENSUS_METHODS } from './rpc/methods/orcad-terminal-census'
+import { ORCAD_TERMINAL_CENSUS_METHODS } from './rpc/methods/orcad/orcad-terminal-census'
 import { TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE } from './terminal/stop/terminal-update-admission'
 
 const { collect, listLiveDaemonPtyIds } = vi.hoisted(() => ({

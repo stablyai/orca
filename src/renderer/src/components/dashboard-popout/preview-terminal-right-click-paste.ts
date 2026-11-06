@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { copyTerminalSelection } from '@/components/terminal-pane/terminal-selection-copy'
+import { copyTerminalSelection } from '@/components/terminal-pane/clipboard/terminal-selection-copy'
 import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 import {
   claimTerminalRightClickPasteMouseDown,

@@ -10,7 +10,6 @@ import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
 } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
@@ -29,7 +28,10 @@ import {
 } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
-import { useStructuredAgentSessionStop } from './use-structured-agent-session-stop'
+import {
+  stopStructuredAgentSessionBackgroundTask,
+  useStructuredAgentSessionStop
+} from './use-structured-agent-session-stop'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 import { useStructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
@@ -60,7 +62,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     readCurrent,
     loadingOlder,
     olderHistoryGeneration,
+    initialHistoryAutoLoad,
     loadOlder,
+    retainHistory,
+    trimHistory,
     mutate,
     write,
     admit,
@@ -95,6 +100,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     reportedThreadGoal,
     contextUsage: usageSupport,
     rewind: rewindSupport,
+    forkSupport,
     sessionSupport
   } = useStructuredAgentSessionOptions({
     agent,
@@ -245,6 +251,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       send: commandWrite
     }),
     journalItems: transcriptItems,
+    /** The host's latest `/clear`, which may sit past the loaded rows. */
+    contextFloor,
+    /** The options read's word on whether this chat's agent forks; absent until it answers. */
+    forkSupport: transportEnabled ? forkSupport : undefined,
     /** The host's newest turn record, which places a live turn whose record is not loaded. */
     latestTurn: transportState.latestTurn,
     /** The host's prompts still waiting on the person and its working answer. */
@@ -260,7 +270,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     railOutline: transportEnabled ? railOutline : null,
     loadingOlder: transportEnabled && loadingOlder,
     olderHistoryGeneration,
+    initialHistoryAutoLoad,
     loadOlder,
+    retainHistory,
+    trimHistory,
     prompts,
     pending,
     /** A send is out, or a /clear holds sends; the chat takes none until it settles. */
@@ -294,11 +307,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
-      mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
-        turnId: 'background-tasks',
-        scope: 'background-tasks',
-        ...(taskId ? { taskId } : {})
-      }),
+      stopStructuredAgentSessionBackgroundTask(mutate, taskId),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
       respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,

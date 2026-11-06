@@ -15,7 +15,7 @@ import {
 } from '../../src/renderer/src/components/agent/use-agent-launch-picker-inventory'
 import type { AgentPickerEntry } from '../../src/shared/agent-launch/picker/agent-launch-picker'
 import * as acquisitions from '../../src/renderer/src/components/agent/agent-launch-picker-acquisition'
-import * as routes from '@/lib/agent-launch-route-input'
+import * as routes from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import * as profile from '../../src/shared/agent-launch/choices/agent-launch-profile'
 import * as composition from '../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'

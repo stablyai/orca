@@ -11,7 +11,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
 const activateAndRevealWorktree = vi.fn()
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activateAndRevealWorktree(...args)
 }))
 

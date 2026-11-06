@@ -21,6 +21,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     markdownDocs,
     fileDocs,
     terminalUnsubsRef,
+    subscribingHandlesRef,
     terminalDiagnosticsRef,
     activeHandleRef,
     visibleTerminalHandlesRef,
@@ -107,6 +108,14 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       }
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
+          if (
+            tab.id === activeSessionTabId &&
+            tab.terminal === activeHandleRef.current &&
+            (terminalUnsubsRef.current.has(tab.terminal) ||
+              subscribingHandlesRef.current.has(tab.terminal))
+          ) {
+            return
+          }
           switchTab(tab.terminal)
           return
         }

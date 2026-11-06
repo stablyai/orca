@@ -13,6 +13,10 @@ import type {
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { WorktreeStartupDraftPaste } from '../startup/runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -81,6 +85,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupExtraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into the startup agent once it starts. */
   startupSuppressUpdatePrompt?: boolean
+  /** Main-internal: the startup terminal's tab title, such as an automation run's. */
+  startupTitle?: string
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string
@@ -104,6 +110,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
     parentWorkspaceOrigin?: 'manual'
     envParentWorkspace?: string
     parentWorktree?: string
+    crossStoreParent?: CrossStoreParentRef
+    crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string
     cwdParentAmbiguous?: true
     noParent?: boolean

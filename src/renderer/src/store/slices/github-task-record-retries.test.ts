@@ -8,7 +8,7 @@ import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slic
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 
 const lookup = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: lookup
 }))
 const repo: Repo = {

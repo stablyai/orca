@@ -4,12 +4,8 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../share
 import {
   buildXtermConptyOptions,
   parseWindowsBuildNumber,
-  windowsPtyForOwnerBackend
+  windowsPtyForOwnerMachine
 } from '../../../../shared/xterm-conpty-options'
-import {
-  resolvePtyOwnerBackend,
-  type PtyOwnerBackend
-} from '../../../../shared/terminal/pty/lifecycle/pty-owner-backend'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string
@@ -17,6 +13,8 @@ export type WindowsPtyCompatibilityContext = {
   connectionId: string | null | undefined
   cwd?: string | null
   shellOverride?: string | null
+  /** OS of the SSH target or paired server that owns a non-local pane's PTY. */
+  remoteOwnerPlatform?: NodeJS.Platform | null
 }
 
 function isWindowsUserAgent(userAgent: string | undefined): boolean {
@@ -32,28 +30,33 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
 }
 
 /**
- * xterm's ConPTY model for every pane this Windows machine's daemon owns, WSL shells included: the
- * same owner-backend rule as the daemon's and main's emulators. Native-only workarounds (cursor,
- * CJK, keyboard) stay behind `isLocalNativeWindowsConpty`. executionHostId excludes serve/runtime
- * panes that look local to raw connectionId/cwd heuristics.
+ * A pane whose PTY this client's own machine runs. An undefined connectionId means the owner is
+ * still unresolved (e.g. a rowless pane), not local, matching `isLocalNativeWindowsPty`.
+ */
+export function isLocalPtyOwner(owner: {
+  executionHostId: ExecutionHostId
+  connectionId: string | null | undefined
+}): boolean {
+  return owner.executionHostId === LOCAL_EXECUTION_HOST_ID && owner.connectionId === null
+}
+
+/**
+ * xterm's ConPTY model for every pane a Windows machine owns, this one or a remote one, WSL shells
+ * included: the same owner-backend rule as the daemon's and main's emulators. Native-only
+ * workarounds (cursor, CJK, keyboard) stay behind `isLocalNativeWindowsConpty`. executionHostId
+ * excludes serve/runtime panes that look local to raw connectionId/cwd heuristics.
  */
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
 ): Partial<ITerminalOptions> {
-  const windowsPty = windowsPtyForOwnerBackend(localPaneOwnerBackend(context), context.osRelease)
+  const windowsPty = isLocalPtyOwner(context)
+    ? windowsPtyForOwnerMachine(
+        isWindowsUserAgent(context.userAgent) ? 'win32' : null,
+        context.osRelease
+      )
+    : // This client's OS release says nothing about the remote's ConPTY build.
+      windowsPtyForOwnerMachine(context.remoteOwnerPlatform)
   return windowsPty ? { windowsPty } : {}
-}
-
-function localPaneOwnerBackend(
-  context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
-): PtyOwnerBackend | undefined {
-  if (context.executionHostId !== LOCAL_EXECUTION_HOST_ID || context.connectionId !== null) {
-    return undefined
-  }
-  return resolvePtyOwnerBackend({
-    platform: isWindowsUserAgent(context.userAgent) ? 'win32' : 'linux',
-    shellPath: context.shellOverride ?? undefined
-  })
 }
 
 /** Reuse ConPTY options after dashboard preview has already resolved local native-Windows ownership. */

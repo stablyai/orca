@@ -32,6 +32,7 @@ import { RuntimeTerminalDriverController } from './runtime-terminal-driver-contr
 import { RuntimeEdgeCommandController } from '../../runtime-edge-command-controller'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 
 import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
 import { RemoteDesktopTerminalFloor } from '../../remote-desktop-terminal-floor'
@@ -84,6 +85,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     session: WorkspaceSessionState
   ): void
   declare protected readonly accounts: RuntimeAccountController
+  declare protected readonly getPairedDeviceNameFn: (pairedDeviceId: string) => string | null
   abstract retireRuntimeOwnedBrowserSessionTab(worktreeId: string, browserPageId: string): boolean
   protected abstract resolveEmulatorWorkspaceId(selector: string): Promise<string>
   protected abstract resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string>
@@ -188,6 +190,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveBrowserWorkspace: (selector) =>
         resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector),
       getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this),
+      getBrowserHostRequestRegistry: () => getBrowserHostRequestRegistry(this),
+      getPairedDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),
       getRuntimeBrowserPageRegistry: () => getRuntimeBrowserPageRegistry(this),
       resolveBrowserNetworkExecutionHost: (worktree) =>
         this.resolveBrowserNetworkExecutionHostForWorktree(worktree),
@@ -230,7 +234,14 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       resolveEmulatorCleanupWorkspaceId: (selector) =>
         this.resolveEmulatorCleanupWorkspaceId(selector),
       getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
-      getSettings: () => this.requireStore().getSettings()
+      getSettings: () => this.requireStore().getSettings(),
+      updateEmulatorSettings: (updates) => {
+        const store = this.requireStore()
+        if (!store.updateSettings) {
+          throw new Error('This host cannot save emulator preferences.')
+        }
+        store.updateSettings(updates, { notifyListeners: true })
+      }
     }
   })
 

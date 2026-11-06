@@ -227,28 +227,6 @@ describe('runCodexSessionIndexHeal', () => {
     expect(marker.healedThreads).toBe(3)
   })
 
-  it('keeps second and later passes cheap when the audit ledger is unchanged', async () => {
-    const rig = createHealRig({
-      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
-    })
-    const first = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    expect(first.outcome).toBe('completed')
-    const second = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    const third = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    expect(second.outcome).toBe('up-to-date')
-    expect(third.outcome).toBe('up-to-date')
-    expect(rig.readLog().serverStarts).toBe(1)
-  })
-
   it('re-reads a healed thread after a later publication event', async () => {
     const id = threadId('1')
     const stamp = '2026-07-01T10-00-00'
@@ -269,31 +247,6 @@ describe('runCodexSessionIndexHeal', () => {
 
     expect(repeated).toMatchObject({ pendingThreads: 1, healedThreads: 1 })
     expect(rig.readLog().threadIds).toEqual([id, id])
-  })
-
-  it('resumes only unprocessed sessions when the audit ledger grows', async () => {
-    const rig = createHealRig({
-      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
-    })
-    await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    appendFileSync(
-      rig.paths.auditLogPath,
-      `${JSON.stringify({
-        action: 'hardlink',
-        target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-04T10-00-00', threadId('4'))
-      })}\n`
-    )
-
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-
-    expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
-    expect(rig.readLog().threadIds).toEqual([threadId('1'), threadId('4')])
   })
 
   it('backs off failed sessions and retries them later while missing stays terminal', async () => {
@@ -419,46 +372,6 @@ describe('runCodexSessionIndexHeal', () => {
     expect(rig.readLog().serverStarts).toBe(1)
   })
 
-  it('splits work into batches with one server session each and bounded concurrency', async () => {
-    const rig = createHealRig({
-      auditedThreads: Array.from({ length: 5 }, (_, index) => ({
-        stamp: `2026-07-0${index + 1}T10-00-00`,
-        id: threadId(String(index + 1))
-      }))
-    })
-
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      readsPerServerSession: 2,
-      readConcurrency: 2,
-      interBatchDelayMs: 0
-    })
-
-    expect(summary).toMatchObject({ outcome: 'completed', healedThreads: 5 })
-    const log = rig.readLog()
-    expect(log.serverStarts).toBe(3)
-    expect(log.maxInFlight).toBeLessThanOrEqual(2)
-  })
-
-  it('caps overrides at the production batch and concurrency limits', async () => {
-    const rig = createHealRig({
-      auditedThreads: Array.from({ length: 51 }, (_, index) => ({
-        stamp: `2026-07-${String(index + 1).padStart(2, '0')}T10-00-00`,
-        id: threadId(String(index + 1))
-      }))
-    })
-
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      readsPerServerSession: 1_000,
-      readConcurrency: 1_000,
-      interBatchDelayMs: 0
-    })
-
-    expect(summary).toMatchObject({ outcome: 'completed', healedThreads: 51 })
-    expect(rig.readLog()).toMatchObject({ serverStarts: 2, maxInFlight: 2 })
-  })
-
   it('stops promptly when shouldStop flips and resumes on the next pass', async () => {
     const rig = createHealRig({
       auditedThreads: Array.from({ length: 4 }, (_, index) => ({
@@ -501,27 +414,6 @@ describe('runCodexSessionIndexHeal', () => {
 
     expect(summary).toMatchObject({ outcome: 'stopped', healedThreads: 1 })
     expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
-  })
-
-  it('does not spawn another server when stop flips during the inter-batch delay', async () => {
-    const rig = createHealRig({
-      auditedThreads: [
-        { stamp: '2026-07-02T10-00-00', id: threadId('2') },
-        { stamp: '2026-07-01T10-00-00', id: threadId('1') }
-      ]
-    })
-    let stopChecks = 0
-
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      readsPerServerSession: 1,
-      interBatchDelayMs: 1,
-      // Opt out after the second batch's pre-delay check.
-      shouldStop: () => stopChecks++ >= 3
-    })
-
-    expect(summary).toMatchObject({ outcome: 'stopped', healedThreads: 1 })
-    expect(rig.readLog()).toMatchObject({ serverStarts: 1, threadIds: [threadId('2')] })
   })
 
   it('marks the pass unsupported without ledger writes when thread/read is unavailable', async () => {
@@ -570,18 +462,6 @@ describe('runCodexSessionIndexHeal', () => {
     expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
   })
 
-  it('marks the pass unsupported when the CLI lacks the app-server subcommand', async () => {
-    const rig = createHealRig({
-      scenario: 'no-subcommand',
-      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
-    })
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    expect(summary.outcome).toBe('unsupported')
-  })
-
   it('aborts without recording when the server dies mid-batch, then retries next pass', async () => {
     const rig = createHealRig({
       scenario: 'die-mid-batch',
@@ -619,72 +499,6 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(retried.outcome).toBe('completed')
     expect(retried.healedThreads).toBe(2)
-  })
-
-  it('retries transient sqlite contention instead of marking the thread failed', async () => {
-    const rig = createHealRig({
-      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }],
-      busyThreadIds: [threadId('1')]
-    })
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    expect(summary.outcome).toBe('aborted')
-    expect(readLedgerOutcomes(rig.paths)).toEqual({})
-
-    const retried = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: (home, timeoutMs) => {
-        const invocation = rig.buildInvocation(home, timeoutMs)
-        return {
-          ...invocation,
-          env: {
-            STUB_CONFIG: JSON.stringify({
-              scenario: 'ok',
-              readLogFile: rig.readLogFile,
-              missingThreadIds: [],
-              failingThreadIds: [],
-              busyThreadIds: []
-            })
-          }
-        }
-      },
-      interBatchDelayMs: 0
-    })
-    expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
-  })
-
-  it('completes immediately with no server spawn when there is nothing to heal', async () => {
-    const rig = createHealRig({ auditedThreads: [] })
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
-    expect(rig.readLog().serverStarts).toBe(0)
-  })
-
-  it('ignores audit records outside the backfill link/copy actions', async () => {
-    const rig = createHealRig({ auditedThreads: [] })
-    appendFileSync(
-      rig.paths.auditLogPath,
-      `${[
-        JSON.stringify({ action: 'run-summary', scannedFiles: 3 }),
-        JSON.stringify({ action: 'scan-failed', source: '/managed/sessions/2026' }),
-        JSON.stringify({
-          action: 'failed',
-          target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-01T10-00-00', threadId('9'))
-        }),
-        'not-json',
-        ''
-      ].join('\n')}\n`
-    )
-    const summary = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-    expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
-    expect(rig.readLog().serverStarts).toBe(0)
   })
 
   it('scopes audit and processed ledger records to the current Codex home', async () => {

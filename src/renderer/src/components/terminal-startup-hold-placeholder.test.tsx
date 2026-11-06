@@ -27,7 +27,7 @@ vi.mock('../store', async () => {
 vi.mock('./native-chat/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: () => {}
 }))
-vi.mock('./terminal-pane/use-terminal-tab-cold-parking', () => ({
+vi.mock('./terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking', () => ({
   useTerminalTabColdParking: () => new Set()
 }))
 vi.mock('./terminal-pane/TerminalOverlaySlot', () => ({

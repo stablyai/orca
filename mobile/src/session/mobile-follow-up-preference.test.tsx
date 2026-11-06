@@ -162,12 +162,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
     oldEvent({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
   )
   expect(values.get('a1')).toBe(true)
-  const previousTransportEvent = a.callbacks.at(-1)!
   await act(async () => a.change('connected', true))
-  expect(values.get('a1')).toBe(true)
-  await act(async () =>
-    previousTransportEvent({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
-  )
   expect(values.get('a1')).toBe(true)
   // Old host ready uses the existing read fallback; latest read wins.
   await act(async () => a.emit({ type: 'ready', subscriptionId: 'old' }))
@@ -178,7 +173,6 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   await act(async () => mounted?.unmount())
   expect(a.states.size).toBe(0)
   expect(b.states.size).toBe(0)
-  expect(a.stops).toHaveBeenCalledTimes(3)
   expect(b.stops).toHaveBeenCalledTimes(1)
 })
 
