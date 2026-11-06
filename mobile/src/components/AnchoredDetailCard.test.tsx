@@ -71,7 +71,7 @@ function render(open: boolean) {
 }
 function transform() {
   const view = renderer!.root.findByProps({ role: 'dialog' })
-  return view.props.style[1].transform
+  return Object.assign({}, ...view.props.style).transform
 }
 
 it('uses the resolved OS preference on the first visual mount and after reopening', async () => {

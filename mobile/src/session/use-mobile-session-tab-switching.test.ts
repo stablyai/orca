@@ -179,7 +179,7 @@ function terminalSwitching(subscribed = true) {
   const subscribe = vi.fn()
   const unsubscribe = vi.fn()
   const sendRequest = vi.fn(async () => ({ id: 'reply', ok: true as const, result: {} }))
-  const activeHandleRef = { current: 'pty-a' as string | null }
+  const activeHandleRef: { current: string | null } = { current: 'pty-a' }
   const hook = hookMount(() => {
     switching = useMobileSessionTabSwitching(
       mountFixture<Parameters<typeof useMobileSessionTabSwitching>[0]>({
