@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import {
   resolveTabTitleAfterPaneClose,
@@ -15,6 +15,7 @@ import {
   discardDeferredSplitPaneHandoffForKey
 } from './deferred-split-pane-handoff'
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
+import { clearTerminalFontSizeOverride } from './terminal-font-size-overrides'
 
 export function createTerminalPaneClosedHandler(
   context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
@@ -31,7 +32,6 @@ export function createTerminalPaneClosedHandler(
       paneCwdRef,
       paneTransportsRef,
       panePtyBindingsRef,
-      paneFontSizesRef,
       replayingPanesRef,
       clearRuntimePaneTitle,
       syncPanePtyLayoutBinding,
@@ -134,7 +134,9 @@ export function createTerminalPaneClosedHandler(
       paneTransportsRef.current.delete(paneId)
     }
     clearRuntimePaneTitle(tabId, paneId)
-    paneFontSizesRef.current.delete(paneId)
+    if (leafId && closedPane?.reason === 'close') {
+      clearTerminalFontSizeOverride(leafId)
+    }
     replayingPanesRef.current.delete(paneId)
     refs.restoredViewportBlankingPanesRef.current.delete(paneId)
     setPaneTitles((current) => {

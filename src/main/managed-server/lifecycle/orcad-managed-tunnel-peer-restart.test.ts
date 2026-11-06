@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -125,18 +126,6 @@ describe("a managed tunnel follows another desktop's restart of the server", () 
     const environment = createEnvironment()
     await state.manager.ensure(environment)
     state.host.boundPort = 7_001
-
-    await expect(state.manager.verifyServing(environment)).resolves.toMatchObject({
-      state: 'unverifiable'
-    })
-    expect([...state.forwardedTo.values()]).toEqual([6_768])
-  })
-
-  it('keeps the tunnel when the host still names the forwarded port', async () => {
-    const state = setup()
-    const environment = createEnvironment()
-    await state.manager.ensure(environment)
-    state.ensureServing.mockResolvedValueOnce({ state: 'unverifiable', detail: 'not answering' })
 
     await expect(state.manager.verifyServing(environment)).resolves.toMatchObject({
       state: 'unverifiable'

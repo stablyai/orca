@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 /** Index once per snapshot to avoid rematerializing rows for every pane. */
 export function indexAgentStatusRowsByPaneKey(

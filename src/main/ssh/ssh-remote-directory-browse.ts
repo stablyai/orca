@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import type { SshConnectionManager } from './connection/ssh-connection-manager'
 import type { SshExecOptions } from './connection/ssh-exec-options'
 import { powerShellCommand } from './ssh-remote-powershell'

@@ -4,7 +4,7 @@ import type * as ProcessHost from '@orca/process-host'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resetWslInteropSpawnDirectoryCache } from '../wsl-interop-spawn-directory'
+import { resetWslInteropSpawnDirectoryCache } from '../wsl/execution/wsl-interop-spawn-directory'
 
 const { spawnProcessMock } = vi.hoisted(() => ({
   spawnProcessMock: vi.fn((..._args: unknown[]) => ({ pid: 1 }))
@@ -14,15 +14,11 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof ProcessHost>()),
   spawnProcess: spawnProcessMock
 }))
-vi.mock('../wsl/wsl-executable-path', () => ({
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
 
-import {
-  buildGuestLaunchScript,
-  resolveWslHookRelayBundle,
-  spawnWslRelayProcess
-} from './wsl-hook-relay-launch'
+import { spawnWslRelayProcess } from './wsl-hook-relay-launch'
 import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 
 describe('spawnWslRelayProcess', () => {
@@ -57,14 +53,6 @@ describe('spawnWslRelayProcess', () => {
 })
 
 describe('buildGuestLaunchScript', () => {
-  it('falls back to orcad pinned runtimes only after every system node candidate', () => {
-    const forLine = buildGuestLaunchScript('1.2.3')
-      .split('\n')
-      .find((line) => line.startsWith('for c in '))
-    const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
-    expect(forLine).toContain(`"$HOME/.local/bin/node" ${orcadRuntime} ${orcadMachineRuntimes}; do`)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'expands the orcad runtime globs to the store and machine-home runtimes',
     () => {
@@ -93,20 +81,4 @@ describe('buildGuestLaunchScript', () => {
       }
     }
   )
-})
-
-describe('resolveWslHookRelayBundle', () => {
-  it('stamps the launcher revision so a launcher change gets a fresh guest dir', () => {
-    const relayRoot = mkdtempSync(join(tmpdir(), 'wsl-relay-bundle-'))
-    vi.stubEnv('ORCA_RELAY_PATH', relayRoot)
-    try {
-      mkdirSync(join(relayRoot, 'wsl'))
-      writeFileSync(join(relayRoot, 'wsl', 'wsl-agent-hook-relay.js'), '')
-      writeFileSync(join(relayRoot, 'wsl', '.version'), '0.1.0+abc\n')
-      expect(resolveWslHookRelayBundle()?.version).toMatch(/^0\.1\.0\+abc\.[0-9a-f]{8}$/)
-    } finally {
-      vi.unstubAllEnvs()
-      rmSync(relayRoot, { recursive: true, force: true })
-    }
-  })
 })

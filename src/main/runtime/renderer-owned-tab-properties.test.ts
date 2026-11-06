@@ -1,4 +1,4 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,25 +6,27 @@ import { join } from 'node:path'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+} from './agent-session/structured-agent-session-runtime'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tab-mutation-methods'
@@ -219,7 +221,7 @@ it('refuses a combined native chat edit before saving its name, while accepting 
     expect(notifier.renameTerminal).not.toHaveBeenCalled()
   } finally {
     await stopStructuredAgentSessionRuntime()
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   }
 })

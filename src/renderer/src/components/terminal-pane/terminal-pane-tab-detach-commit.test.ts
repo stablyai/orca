@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../../shared/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-leaf-move'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
 import {
   createStore,

@@ -1,15 +1,16 @@
-import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
-import { resolveSpawn } from './spawn-resolution'
+import {
+  spawn as nodeSpawn,
+  spawnSync as nodeSpawnSync,
+  type ChildProcess
+} from 'node:child_process'
+import { resolveSpawn, type ResolvedSpawn } from './spawn-resolution'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
 
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
-import { runProcessSync as runSynchronousProcess } from './run-process-sync'
 
-// Keep the CommonJS export writable for process instrumentation.
-export const runProcessSync = runSynchronousProcess
 export { WindowsCmdLineBreakError } from './windows-command-line'
 
 import type {
@@ -64,8 +65,6 @@ export function runProcess(
     const stderr = createOutputSink(maxOutputBytes, outputCapture)
     let timedOut = false
     let settled = false
-    let stopping = false
-    let terminationUnverified = false
     let barrierStopping = false
     let barrierAttemptComplete = false
     let barrierTerminationVerified = false
@@ -84,30 +83,16 @@ export function runProcess(
       clearTimeout(graceTimer)
       clearTimeout(barrierDeadlineTimer)
       spec.signal?.removeEventListener('abort', onAbort)
-      const openOutput = [child.stdout, child.stderr].some(
-        (stream) => stream && !stream.readableEnded && !stream.destroyed
-      )
-      terminationUnverified = Boolean(
-        stopping && (openOutput || (spec.terminationBarrier && !barrierTerminationVerified))
-      )
-      child.stdout?.off('data', onStdout)
-      child.stderr?.off('data', onStderr)
-      for (const stream of [child.stdin, child.stdout, child.stderr]) {
-        stream?.destroy()
-      }
-      // A fallback releases our wait, not proof that the child or escaped descendants exited.
-      child.unref()
       act()
     }
 
-    const onStdout = (chunk: Buffer | string): void => {
+    child.stdout?.on('data', (chunk: Buffer | string) => {
       stdout.write(chunk)
-      spec.onStdout?.(chunk)
       if (spec.killOnOutputLimit && stdout.truncated()) {
         stopAndSettle()
       }
-    }
-    const onStderr = (chunk: Buffer | string): void => {
+    })
+    child.stderr?.on('data', (chunk: Buffer | string) => {
       stderr.write(chunk)
       spec.onStderr?.(chunk)
       if (spec.killOnOutputLimit && stderr.truncated()) {
@@ -116,9 +101,7 @@ export function runProcess(
       if (typeof spec.terminationBarrier === 'object') {
         spec.terminationBarrier.observeStderr?.(chunk)
       }
-    }
-    child.stdout?.on('data', onStdout)
-    child.stderr?.on('data', onStderr)
+    })
     // Stream errors (including stdin EPIPE) are otherwise uncaught; the exit still reaches callers.
     for (const stream of [child.stdin, child.stdout, child.stderr]) {
       stream?.on('error', () => {})
@@ -147,7 +130,6 @@ export function runProcess(
           stderr: spec.captureStderrAsBytes ? '' : stderr.text(),
           ...(spec.captureStderrAsBytes ? { stderrBytes: stderr.buffer() } : {}),
           timedOut,
-          ...(terminationUnverified ? { terminationUnverified: true } : {}),
           outputTruncated: stdout.truncated() || stderr.truncated()
         })
       )
@@ -175,9 +157,6 @@ export function runProcess(
     }
 
     const resolveBarrierIfSafe = (): void => {
-      if (settled) {
-        return
-      }
       const rootExit = deferredClose ?? deferredExit
       if (barrierTerminationVerified || (rootExitedBeforeBarrier && rootExit)) {
         settleBarrierOutcome()
@@ -193,10 +172,6 @@ export function runProcess(
 
     // Barrier callers wait for termination evidence, bounded by a final deadline.
     const stopAndSettle = (): void => {
-      if (settled) {
-        return
-      }
-      stopping = true
       if (spec.terminationBarrier) {
         barrierStopping = true
         initialBarrierTermination ??= signalBarrierTree()
@@ -319,5 +294,48 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
     child.kill(signal)
   } catch {
     /* already gone */
+  }
+}
+
+/** Prefer runProcess; reserve blocking execution for synchronous entry points and teardown. */
+export function runProcessSync(spec: ProcessSpec): ProcessResult {
+  const resolved = resolveSpawn(spec, process.platform)
+  // spawnSync blocks until exit; report that duration even if it throws.
+  const spawnStartedAt = hasSpawnObserver() ? performance.now() : null
+  try {
+    return runResolvedProcessSync(spec, resolved)
+  } finally {
+    if (spawnStartedAt !== null) {
+      notifySpawnObserver(resolved.file, resolved.args, performance.now() - spawnStartedAt)
+    }
+  }
+}
+
+function runResolvedProcessSync(spec: ProcessSpec, resolved: ResolvedSpawn): ProcessResult {
+  const result = nodeSpawnSync(resolved.file, [...resolved.args], {
+    ...resolved.options,
+    input: spec.input,
+    timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
+    maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+    // Keep raw output without applying the nonexistent 'buffer' encoding to string stdin.
+    encoding: null
+  })
+  const timedOut = result.error
+    ? 'code' in result.error && result.error.code === 'ETIMEDOUT'
+    : false
+  if (result.error && !timedOut) {
+    throw result.error
+  }
+  return {
+    code: result.status,
+    signal: result.signal,
+    stdout: spec.captureStdoutAsBytes ? '' : (result.stdout?.toString('utf8') ?? ''),
+    ...(spec.captureStdoutAsBytes ? { stdoutBytes: result.stdout ?? Buffer.alloc(0) } : {}),
+    stderr: spec.captureStderrAsBytes ? '' : (result.stderr?.toString('utf8') ?? ''),
+    ...(spec.captureStderrAsBytes ? { stderrBytes: result.stderr ?? Buffer.alloc(0) } : {}),
+    // ENOBUFS is rethrown above, so truncated output never reaches this result.
+    outputTruncated: false,
+    // SIGTERM can be deliberate; only ETIMEDOUT proves a timeout.
+    timedOut
   }
 }

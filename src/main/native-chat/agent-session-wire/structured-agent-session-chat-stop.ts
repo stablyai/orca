@@ -1,11 +1,16 @@
 // Atomically accept Stop/withdrawals/receipt before acting on the captured target.
 // Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
+import {
+  cancelAgentSessionUsageLimitContinue,
+  type UsageLimitContinueIdentity
+} from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -20,7 +25,7 @@ import {
   openForWrite,
   structuredAgentSessionFailureWordsContext
 } from './structured-agent-session-send-preparation'
-import { acceptChatStop, acceptStopTarget } from './structured-agent-session-stop-acceptance'
+import { acceptCapturedChatStop } from './structured-agent-session-stop-acceptance'
 import {
   noteStructuredAgentSessionStopUnconfirmed,
   writeStructuredAgentSessionStopNote
@@ -33,6 +38,7 @@ import {
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 import {
   isStructuredAgentSessionCommandTurnId,
   structuredAgentSessionStopNoteIdentity,
@@ -68,6 +74,7 @@ export function mutateWithChatStop<TValue>(
         stopChild: () => Promise<void>
       }
     | undefined
+  let withdrawnCut: UsageLimitContinueIdentity | undefined
   let reached = params.stoppedPrePrompt === true
   const named = turnId !== undefined ? { turnId } : {}
   const logChildEnd = (error: unknown) =>
@@ -77,47 +84,6 @@ export function mutateWithChatStop<TValue>(
       operationId: envelope.clientOperationId,
       error
     })
-  // Failed durable acceptance must leave the agent running.
-  const accept = async (
-    ctx: AgentSessionTurnContext,
-    target: ChatStopTarget
-  ): Promise<TurnOutcome<{ settled: boolean; turnId: string | null }>> => {
-    if (!target.marks) {
-      const accepted = await acceptStopTarget(ctx)
-      return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
-    }
-    const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
-    const handed = ctx.journal
-      .submissions()
-      .some(
-        (entry) =>
-          entry.fence === ctx.fence &&
-          (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
-          (entry.dispatchState === 'pending' ||
-            (entry.dispatchState === 'unknown' && !entry.recovered)) &&
-          (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
-      )
-    const accepted = await acceptChatStop(ctx, {
-      event: {
-        reason: 'user-stop',
-        caller: caller.callerKey,
-        ...(target.eventTurnId !== null ? { turnId: target.eventTurnId } : {})
-      },
-      fence: ctx.fence
-    })
-    return accepted.ok
-      ? {
-          ok: true,
-          value: {
-            settled:
-              (accepted.value.withdrawn?.length ?? (target.queued ? 1 : 0)) > 0 ||
-              handed ||
-              params.stoppedSend === true,
-            turnId: accepted.value.turnId
-          }
-        }
-      : accepted
-  }
   const act = async (
     ctx: AgentSessionTurnContext,
     target: ChatStopTarget,
@@ -132,26 +98,28 @@ export function mutateWithChatStop<TValue>(
     const { child } = target
     const feedbackId = `child:${child.fence}:${child.generation ?? 'unknown'}`
     let stopOutcome = child.close?.stopOutcome
+    const observeClose: AgentSessionCloseObserver = (evidence) => {
+      if (stopOutcome && evidence) {
+        stopOutcome.root = evidence.root === 'exited' ? 'exited' : stopOutcome.root
+        stopOutcome.workload = evidence.workload === 'exited' ? 'exited' : stopOutcome.workload
+        if (evidence.deathEvidenceKind) {
+          stopOutcome.deathEvidenceKind = evidence.deathEvidenceKind
+        }
+      }
+    }
     const stopChild = async () => {
-      if (context.sessions.get(sessionId)?.child === child) {
-        try {
+      try {
+        if (context.sessions.get(sessionId)?.child === child) {
           await context.stopAgent(sessionId, {
             recorded: 'user-stop',
-            observeClose: (evidence) => {
-              if (stopOutcome) {
-                if (evidence?.root === 'exited') {
-                  stopOutcome.root = 'exited'
-                }
-                if (evidence?.workload === 'exited') {
-                  stopOutcome.workload = 'exited'
-                }
-              }
-            }
+            observeClose
           })
-        } finally {
-          if (child.close) {
-            child.close.stopOutcome ??= stopOutcome
-          }
+        }
+      } finally {
+        const observed = child.exitObservation?.().close
+        observeClose({ ...observed?.processExit, deathEvidenceKind: observed?.deathEvidenceKind })
+        if (child.close) {
+          child.close.stopOutcome ??= stopOutcome
         }
       }
     }
@@ -213,6 +181,10 @@ export function mutateWithChatStop<TValue>(
     )
   }
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
+    // Capture once on the lane; the acceptance receipt owns the exact-cut withdrawal.
+    if (turnId === undefined) {
+      withdrawnCut = latestUsageLimitContinueIdentity(ctx.journal.statusRead())
+    }
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)
     const target = captureChatStopTarget(ctx, {
@@ -220,7 +192,8 @@ export function mutateWithChatStop<TValue>(
       ...named,
       endsSession: true,
       stoppedPrePrompt: reached || operations.length > 0 || flight !== undefined,
-      stoppedSend: params.stoppedSend
+      stoppedSend: params.stoppedSend,
+      withdrawsContinue: withdrawnCut !== undefined
     })
     if (!target) {
       return { ok: true, value: { ...named, cancelled: false } }
@@ -229,7 +202,12 @@ export function mutateWithChatStop<TValue>(
       target.turnId !== null &&
       isStructuredAgentSessionCommandTurnId(target.turnId) &&
       structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
-    const accepted = await accept(ctx, target)
+    const accepted = await acceptCapturedChatStop(
+      ctx,
+      target,
+      caller.callerKey,
+      params.stoppedSend === true || withdrawnCut !== undefined
+    )
     if (!accepted.ok) {
       return accepted
     }
@@ -286,6 +264,8 @@ export function mutateWithChatStop<TValue>(
     envelope,
     {
       ...plan,
+      acceptanceRecord: (record) =>
+        withdrawnCut ? cancelAgentSessionUsageLimitContinue(record, withdrawnCut) : record,
       run: (ctx) =>
         run(ctx, async () => ({ outcome: await stop(ctx), endsSession: windDown !== undefined }))
     },

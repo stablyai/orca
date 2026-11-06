@@ -1,4 +1,5 @@
-import type { GitHubPRFile, GitHubPRFileViewedState } from '../../shared/github/pull-request-types'
+import type { GitHubPRFile } from '../../shared/github/pull-request-types'
+import type { PRFileViewedStatesResult } from './pull-request-detail-context'
 import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 import type { LocalGitExecOptions } from './gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
@@ -6,21 +7,6 @@ import { getPRReviewCommentLineNumbersFromPatch } from './pr-review-comment-line
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 const MAX_PR_FILES = 300
-
-const PR_FILE_VIEWED_STATES_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
-      id
-      files(first: 100, after: $after) {
-        pageInfo { hasNextPage endCursor }
-        nodes {
-          path
-          viewerViewedState
-        }
-      }
-    }
-  }
-}`
 
 type RESTPRFile = {
   filename: string
@@ -30,11 +16,6 @@ type RESTPRFile = {
   deletions: number
   changes: number
   patch?: string
-}
-
-export type PRFileViewedStatesResult = {
-  pullRequestId: string
-  viewedStates: Map<string, GitHubPRFileViewedState>
 }
 
 function mapFileStatus(raw: string): GitHubPRFile['status'] {
@@ -150,87 +131,6 @@ export async function getPRFiles(
   } catch {
     return null
   }
-}
-
-export async function getPRFileViewedStates(
-  repoPath: string,
-  prNumber: number,
-  repository: GitHubApiRepository | null,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<PRFileViewedStatesResult | null> {
-  if (!repository) {
-    return null
-  }
-  const ghOptions = {
-    ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
-    ...githubHostExecOptions(repository)
-  }
-  if (repositoryRateLimitGuard(repository, 'graphql', ghOptions).blocked) {
-    return null
-  }
-  const viewedStates = new Map<string, GitHubPRFileViewedState>()
-  let pullRequestId: string | null = null
-  let after: string | null = null
-
-  try {
-    for (let fetched = 0; fetched < MAX_PR_FILES; fetched += 100) {
-      const args = [
-        'api',
-        'graphql',
-        '-f',
-        `query=${PR_FILE_VIEWED_STATES_QUERY}`,
-        '-f',
-        `owner=${repository.owner}`,
-        '-f',
-        `repo=${repository.repo}`,
-        '-F',
-        `number=${prNumber}`
-      ]
-      if (after) {
-        args.push('-f', `after=${after}`)
-      }
-      noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
-      const { stdout } = await ghExecFileAsync(args, ghOptions)
-      const parsed = JSON.parse(stdout) as {
-        data?: {
-          repository?: {
-            pullRequest?: {
-              id?: string
-              files?: {
-                pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
-                nodes?: {
-                  path?: string | null
-                  viewerViewedState?: GitHubPRFileViewedState | null
-                }[]
-              }
-            } | null
-          } | null
-        }
-        errors?: { message?: string }[]
-      }
-      if (parsed.errors && parsed.errors.length > 0) {
-        return null
-      }
-      const pullRequest = parsed.data?.repository?.pullRequest
-      if (!pullRequest?.id) {
-        return null
-      }
-      pullRequestId = pullRequest.id
-      for (const file of pullRequest.files?.nodes ?? []) {
-        if (file.path && file.viewerViewedState) {
-          viewedStates.set(file.path, file.viewerViewedState)
-        }
-      }
-      if (!pullRequest.files?.pageInfo?.hasNextPage || !pullRequest.files.pageInfo.endCursor) {
-        break
-      }
-      after = pullRequest.files.pageInfo.endCursor
-    }
-  } catch {
-    return null
-  }
-  return pullRequestId ? { pullRequestId, viewedStates } : null
 }
 
 export function mergePRFileViewedStates(

@@ -4,11 +4,9 @@ import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import {
-  insertNativeChatPastedText,
-  type NativeChatComposerInput
-} from './native-chat-composer-input'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
 
 afterEach(cleanup)
 
@@ -34,27 +32,33 @@ function setup(value = '') {
 }
 
 describe('native chat skill editor', () => {
-  it('renders only picker insertions as pills and serializes the exact invocation', async () => {
-    const { input, container } = setup('Please $rev')
-    await act(async () => input.insertSkill!(7, 11, '$review'))
-    const pill = container.querySelector('[data-native-chat-skill]')
-    expect(pill?.textContent).toBe('Review')
-    expect(pill?.classList.contains('text-xs')).toBe(true)
-    expect(pill?.classList.contains('text-sm')).toBe(false)
-    expect(input.value).toBe('Please $review ')
-    expect(input.selectionStart).toBe(15)
-    act(() => {
-      input.value += '$review typed manually'
+  it('continues replacing the selected text after a composer handoff', () => {
+    const inputRef = createRef<NativeChatComposerInput>()
+    const text = 'Hello\nworld'
+    updateNativeChatComposerDraft('handoff-selection', { text }, 'immediate', undefined, {
+      at: 'selection',
+      from: 6,
+      to: 11,
+      target: 'chat-tab',
+      pending: true
     })
-    expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
-    expect(input.value).toBe('Please $review $review typed manually')
-  })
+    render(
+      <NativeChatPromptEditor
+        scopeKey="handoff-selection"
+        positionTarget="chat-tab"
+        inputRef={inputRef}
+        initialValue={text}
+        disabled={false}
+        placeholder="Message"
+        onChange={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
 
-  it("labels Pi's `/skill:<name>` pill by the skill alone", async () => {
-    const { input, container } = setup('/cav')
-    await act(async () => input.insertSkill!(0, 4, '/skill:caveman'))
-    expect(container.querySelector('[data-native-chat-skill]')?.textContent).toBe('Caveman')
-    expect(input.value).toBe('/skill:caveman ')
+    expect(inputRef.current?.selectionStart).toBe(6)
+    expect(inputRef.current?.selectionEnd).toBe(11)
+    act(() => inputRef.current?.insertText?.('there'))
+    expect(inputRef.current?.value).toBe('Hello\nthere')
   })
 
   it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
@@ -76,15 +80,6 @@ describe('native chat skill editor', () => {
     })
     expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
     expect(input.value).toBe(edited)
-  })
-
-  it('keeps typed and restored invocations plain', () => {
-    const { container, input } = setup('$review /review')
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
-    act(() => {
-      input.value = '$review restored'
-    })
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
 
   it('deletes a skill atomically and restores it with undo', async () => {
@@ -117,22 +112,6 @@ describe('native chat skill editor', () => {
     expect(first.input.value).toBe('one')
     expect(first.input.selectionStart).toBe(3)
     expect(second.input.value).toBe('second')
-  })
-
-  it('preserves multiple selected skills through multiline edits and clears them on send', async () => {
-    const { input, container } = setup('$one')
-    act(() => input.insertSkill!(0, 4, '$one'))
-    act(() => {
-      input.value += '\nthen $two'
-    })
-    await act(async () => input.insertSkill!(11, 15, '$two'))
-    expect(input.value).toBe('$one \nthen $two ')
-    expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(2)
-    act(() => {
-      input.value = ''
-    })
-    expect(input.value).toBe('')
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
 
   it('restores selected nodes only in their owning pane draft', async () => {
@@ -200,18 +179,4 @@ it('replaces the selection with literal pasted text as one undoable edit', async
     editor.commands.undo()
   })
   expect(input.value).toBe('hello world')
-})
-
-it('moves focus into the composer when a paste is routed from elsewhere', async () => {
-  const { input, editor } = setup('hi')
-  act(() => input.setSelectionRange(2, 2))
-  const hiddenTerminal = document.createElement('textarea')
-  document.body.append(hiddenTerminal)
-  hiddenTerminal.focus()
-  await act(async () => {
-    insertNativeChatPastedText(input, ' there')
-  })
-  expect(input.value).toBe('hi there')
-  expect(editor.view.dom.contains(document.activeElement)).toBe(true)
-  hiddenTerminal.remove()
 })

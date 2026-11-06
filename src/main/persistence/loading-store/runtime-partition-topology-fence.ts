@@ -1,7 +1,7 @@
 // Runtime partitions mirror a paired server, so main's per-repo topology fence must not outlive the
 // race it guards: the window never echoes revisions, and a permanent fence froze its membership.
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { StoreRuntimeState } from './store-runtime-state'
 

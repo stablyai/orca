@@ -54,7 +54,6 @@ async function dispatch(
     task: db.getTask(taskId)!,
     targetHandle: 'term_a',
     nestedWorkerMaxDepth: Number.MAX_SAFE_INTEGER,
-    heartbeatIntervalMinutes: 5,
     baseDrift: null,
     coordinatorHandle: 'coord',
     worktree: undefined,

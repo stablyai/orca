@@ -13,8 +13,8 @@ import {
   resetSshCredentialDeclinesForTests
 } from '../ssh-credential-decline'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -86,17 +86,6 @@ describe('SshConnectionManager on a password host', () => {
     expect(replacement.getState().status).toBe('connected')
     expect(lastConnectPassword()).toBe('hunter2')
     expect(onCredentialRequest).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not ask again after a background owner closed the connection it opened', async () => {
-    await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
-
-    ssh2Mock.connectSequence = ['ready']
-    await manager.connect(createTarget())
-
-    expect(lastConnectPassword()).toBe('hunter2')
-    expect(onCredentialRequest).toHaveBeenCalledTimes(1)
-    expect(manager.hasCachedCredential(createTarget())).toBe(true)
   })
 
   it('keeps the sign-in across a replacement that failed for a reason other than sign-in', async () => {

@@ -2,13 +2,16 @@ import { useCallback, useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from '../../../../shared/agent-session-journal-types'
-import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session-thread-goal'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND,
+  agentSessionThreadGoalReport
+} from '../../../../shared/agent-session/agent-session-thread-goal-report'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../shared/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {
@@ -19,8 +22,6 @@ export type StructuredAgentSessionThreadGoal = {
   /** Resolves false when the change was refused or not sent; the error surfaces separately. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
-
-const CLEAR_GOAL_COMMAND = '/goal clear'
 
 /** Null unless the host advertises goal changes or goal reports for this session. */
 export function useStructuredAgentSessionThreadGoal(args: {
@@ -34,22 +35,15 @@ export function useStructuredAgentSessionThreadGoal(args: {
 }): StructuredAgentSessionThreadGoal | null {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
   const [pendingCount, setPendingCount] = useState(0)
-  const report = support ?? reported
-  // Loaded rows reach the live head and outrank older whole-journal goal evidence.
-  const floor =
-    report?.contextFloor && (!journalEpoch || report.contextFloor.epoch === journalEpoch)
-      ? report.contextFloor.sequence
-      : 0
-  const loaded = useMemo(
-    () => currentAgentSessionThreadGoal(journalItems, floor),
-    [journalItems, floor]
+  const report = useMemo(
+    () => agentSessionThreadGoalReport({ journalItems, support, reported, journalEpoch }),
+    [journalItems, support, reported, journalEpoch]
   )
-  const goal = loaded === undefined ? (report?.current ?? null) : loaded
   const hostChanges = support !== undefined
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {
       if (!hostChanges) {
-        return next.kind === 'clear' && send(CLEAR_GOAL_COMMAND) !== false
+        return next.kind === 'clear' && send(AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND) !== false
       }
       setPendingCount((count) => count + 1)
       try {
@@ -65,8 +59,8 @@ export function useStructuredAgentSessionThreadGoal(args: {
     },
     [hostChanges, mutate, send]
   )
-  if (report === undefined || (!hostChanges && goal === null)) {
+  if (report === null) {
     return null
   }
-  return { goal, pending: pendingCount > 0, hostChanges, change }
+  return { goal: report.goal, pending: pendingCount > 0, hostChanges, change }
 }

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { requireGitStageWorktreeScopeReceipt } from '../../../src/shared/git-stage-worktree-scope'
+import { requireGitStageWorktreeScopeReceipt } from '../../../src/shared/git/paths/git-stage-worktree-scope'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
 type Params = {

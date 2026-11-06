@@ -2,7 +2,10 @@
 // what it pushes, and which writes the row writer may skip.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
-import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID } from '../orca-runtime-test-fixtures.spec'
+import {
+  HEADLESS_LEAF_ID,
+  TEST_WORKTREE_ID
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime
@@ -67,19 +70,6 @@ describe('held session.tabs rows across layout commits (switch on)', () => {
     const { runtime } = await closedFirstTab()
 
     expect(heldStrip(runtime)).toEqual(MOVED_STRIP)
-  })
-
-  it('after it, a write that changes no row pushes nothing', async () => {
-    const { runtime, store, setSession } = await closedFirstTab()
-    let pushes = 0
-    runtime.onMobileSessionTabsChanged(() => {
-      pushes += 1
-    })
-
-    setSession(store.getSession())
-    await vi.runAllTimersAsync()
-
-    expect(pushes).toBe(0)
   })
 
   it("another workspace's commits push nothing for a workspace with a kept row", async () => {
@@ -159,4 +149,49 @@ describe('held session.tabs rows across layout commits (switch on)', () => {
 
     expect(ptyOf()).toBe('pty-new')
   })
+})
+
+it('carries pending navigation through actual main-owned storage and later materialization', async () => {
+  const { runtime } = surfaceRuntime()
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+  const before = held(runtime)!
+  const pending = 'agent-session:pending-storage'
+  const input = {
+    ...before,
+    activeTabId: null,
+    activeTabType: null,
+    tabGroups: before.tabGroups!.map((group) =>
+      group.id === before.activeGroupId
+        ? { ...group, activeTabId: pending, tabOrder: [...group.tabOrder, pending] }
+        : group
+    ),
+    tabs: before.tabs.map((tab) => ({ ...tab, isActive: false }))
+  }
+  const waiting = runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, input)
+  expect(waiting.tabGroups?.find((group) => group.id === waiting.activeGroupId)?.activeTabId).toBe(
+    'agent-session:pending-storage'
+  )
+  expect(waiting.activeTabId).toBeNull()
+  expect(waiting.tabs.filter((tab) => tab.isActive)).toEqual([])
+  const again = runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, waiting)
+  expect(again.tabGroups).toEqual(waiting.tabGroups)
+  const restored = runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, {
+    ...again,
+    tabs: [
+      ...again.tabs,
+      {
+        id: 'agent-session:pending-storage',
+        type: 'agent-session',
+        sessionId: 'pending-storage',
+        agent: 'codex',
+        title: 'Pending chat',
+        isActive: false
+      }
+    ]
+  })
+  expect(restored.activeTabId).toBe('agent-session:pending-storage')
+  expect(restored.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual([
+    'agent-session:pending-storage'
+  ])
 })

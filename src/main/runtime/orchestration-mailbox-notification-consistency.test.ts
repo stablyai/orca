@@ -32,7 +32,6 @@ import {
   WORKTREE_ID
 } from './orchestration-mailbox-notification-test-harness'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 
@@ -57,7 +56,7 @@ describe('orchestration notification mailbox consistency', () => {
     const first = createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     const staleDirectMessage = insertDirectRunMessage(db, runA.id, 'Run A completion')
-    const runB = createBoundRun(db, 'Run B')
+    const runB = createBoundRun(db, 'Run B', { rebind: true })
 
     await driveToLiveIdle(first.runtime)
     const checked = await checkBoundMailbox(first.runtime)
@@ -114,7 +113,7 @@ describe('orchestration notification mailbox consistency', () => {
     const oldDb = new OrchestrationDb(dbPath)
     const runA = createBoundRun(oldDb, 'Persisted Run A')
     const message = insertDirectRunMessage(oldDb, runA.id, 'Persisted Run A completion')
-    createBoundRun(oldDb, 'Persisted Run B')
+    createBoundRun(oldDb, 'Persisted Run B', { rebind: true })
     sqliteFor(oldDb)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(TERMINAL_HANDLE, message.id)
@@ -158,7 +157,7 @@ describe('orchestration notification mailbox consistency', () => {
     const messages = Array.from({ length: 151 }, (_, index) =>
       insertDirectRunMessage(db, runA.id, `Backlog message ${index}`)
     )
-    createBoundRun(db, 'Backlog Run B')
+    createBoundRun(db, 'Backlog Run B', { rebind: true })
     const placeholders = messages.map(() => '?').join(',')
     sqliteFor(db)
       .prepare(`UPDATE messages SET to_handle = ? WHERE id IN (${placeholders})`)
@@ -300,7 +299,7 @@ describe('orchestration notification mailbox consistency', () => {
     await driveToLiveIdle(first.runtime)
     expect(pointerCount(first.write)).toBe(1)
 
-    const runB = createBoundRun(firstDb, 'Run B')
+    const runB = createBoundRun(firstDb, 'Run B', { rebind: true })
     await vi.advanceTimersByTimeAsync(500)
     expect(first.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     expect(firstDb.getMessageById(message.id)?.delivered_at).toBeNull()
@@ -693,27 +692,6 @@ describe('orchestration notification mailbox consistency', () => {
     }
   )
 
-  it('releases staged pointer state when an explicit check owns the batch', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Explicit-check Run')
-    insertDirectRunMessage(db, run.id, 'Checked before Enter')
-
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
-    const checked = await checkBoundMailbox(harness.runtime)
-    expect(checked).toMatchObject({ runId: run.id, count: 1 })
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
-    const redrive = vi.spyOn(harness.runtime, 'deliverPendingMessagesForHandle')
-    harness.runtime.onPtyExit(PTY_ID, 0)
-    await Promise.resolve()
-    expect(redrive).not.toHaveBeenCalled()
-    db.close()
-  })
-
   it('routes same-Run direct mail through the bound check and acknowledgment path', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
@@ -762,14 +740,15 @@ describe('orchestration notification mailbox consistency', () => {
     )
     expect(db.getMessageById(messages[0]!.id)).toMatchObject({
       to_handle: `run:${run.id}`,
-      read: 0,
+      read: 1,
       delivered_at: expect.any(String)
     })
     expect(db.getMessageById(messages[50]!.id)?.delivered_at).toBeNull()
 
     const acknowledged = await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
     expect(acknowledged.acknowledged).toBe(checked.deliveryId)
-    expect(acknowledged.messages).toEqual([expect.objectContaining({ id: messages[50]!.id })])
+    const next = await checkBoundMailbox(harness.runtime)
+    expect(next.messages).toEqual([expect.objectContaining({ id: messages[50]!.id })])
     expect(db.getMessageById(messages[0]!.id)?.read).toBe(1)
     db.close()
   })
@@ -837,47 +816,25 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('points newer Run mail behind an unacked Delivery once, naming the Delivery', async () => {
+  it('points newer Run mail with the normal text when the coordinator never acked', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Outstanding Delivery Run')
+    const run = createBoundRun(db, 'Never-acked Run')
     const insert = (subject: string) =>
       db.insertMessage({ from: 'term_worker', to: `run:${run.id}`, subject, runId: run.id })
     const firstMessage = insert('First status')
     const firstDelivery = await checkBoundMailbox(harness.runtime)
+    expect(firstDelivery.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
     const newerMessage = insert('Newer status')
 
-    const enters = () => harness.write.mock.calls.filter(([, payload]) => payload === '\r').length
     await driveToLiveIdle(harness.runtime)
     const pointers = harness.write.mock.calls.filter(([, payload]) => isMailboxPointer(payload))
     expect(pointers).toHaveLength(1)
-    expect(String(pointers[0]![1])).toContain(
-      `after delivery ${firstDelivery.deliveryId}, which you have not acknowledged. If you no longer have it, run \`${localOrchestrationCliCommand()} orchestration check --run ${run.id}\` to see it again; once it is handled, run \`${localOrchestrationCliCommand()} orchestration check --run ${run.id} --ack ${firstDelivery.deliveryId}\``
-    )
+    expect(String(pointers[0]![1])).toContain('You have 1 orchestration message.')
+    expect(String(pointers[0]![1])).not.toContain('acknowledged')
 
-    // A turn that starts inside the Enter delay keeps the reminder until it ends.
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 3)
-    await harness.runtime.serializeMainTerminalBuffer(PTY_ID)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(enters()).toBe(0)
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 4)
-    await harness.runtime.serializeMainTerminalBuffer(PTY_ID)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(enters()).toBe(1)
-    expect(db.getMessageById(newerMessage.id)?.delivered_at).toEqual(expect.any(String))
-
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 5)
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 6)
-    await harness.runtime.serializeMainTerminalBuffer(PTY_ID)
-    await vi.advanceTimersByTimeAsync(500)
-    expect(pointerCount(harness.write)).toBe(1)
-    expect(enters()).toBe(1)
-
-    const replayed = await checkBoundMailbox(harness.runtime)
-    expect(replayed.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
-    expect(replayed.deliveryId).toBe(firstDelivery.deliveryId)
-    const next = await checkBoundMailbox(harness.runtime, { ack: firstDelivery.deliveryId! })
+    const next = await checkBoundMailbox(harness.runtime)
     expect(next.messages).toEqual([expect.objectContaining({ id: newerMessage.id })])
     expect(next.deliveryId).not.toBe(firstDelivery.deliveryId)
     db.close()

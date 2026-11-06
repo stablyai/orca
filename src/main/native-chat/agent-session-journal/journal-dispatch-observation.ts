@@ -1,7 +1,5 @@
-import type {
-  AgentJournalDispatchState,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+import type { JournalInputOrder } from './journal-input-order'
+import type { AgentJournalDispatchState } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type AgentJournalDispatchObservation = {
   state: AgentJournalDispatchState
@@ -10,19 +8,10 @@ export type AgentJournalDispatchObservation = {
 
 export function latestJournalDispatchObservation(
   journal: {
-    submissions: () => readonly AgentJournalSubmission[]
+    inputOrder: Pick<JournalInputOrder, 'latestSubmission'>
   },
   fence: number
 ): AgentJournalDispatchObservation | null {
-  const latest = journal
-    .submissions()
-    .reduce<AgentJournalSubmission | null>(
-      (current, submission) =>
-        submission.fence === fence &&
-        (current === null || submission.submittedAt >= current.submittedAt)
-          ? submission
-          : current,
-      null
-    )
+  const latest = journal.inputOrder.latestSubmission(fence)
   return latest ? { state: latest.dispatchState, recovered: latest.recovered === true } : null
 }

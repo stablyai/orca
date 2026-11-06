@@ -1,6 +1,10 @@
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
-import { OrcaRuntimeService, listWorktrees } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
   TEST_FOLDER_PROJECT_GROUP_ID,
@@ -18,7 +22,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('resolves files through a source-visible linked-checkout worktree', async () => {
@@ -456,26 +460,20 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     const workerHandle = runtime.preAllocateHandleForPty('pty-1')
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: vi.fn((handle: string) =>
-        handle === workerHandle
-          ? {
-              id: 'ctx-1',
-              task_id: 'task-1',
-              assignee_handle: workerHandle,
-              status: 'dispatched'
-            }
-          : undefined
-      ),
-      getLatestDispatchForTerminal: vi.fn(() => undefined),
-      getTask: vi.fn(() => ({
-        id: 'task-1',
-        task_title: 'Dispatch prompt work',
-        display_name: 'Review dispatch prompts and make worker labels distinct',
-        spec: 'Review dispatch prompts\n\nand make worker labels distinct'
-      })),
-      getActiveCoordinatorRun: vi.fn(() => undefined)
-    } as never)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    const run = orchestrationDb.createRun({
+      objective: 'Hook summary projection',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const task = orchestrationDb.createTask({
+      runId: run.id,
+      taskTitle: 'Dispatch prompt work',
+      displayName: 'Review dispatch prompts and make worker labels distinct',
+      spec: 'Review dispatch prompts\n\nand make worker labels distinct'
+    })
+    createRootDispatch(orchestrationDb, task.id, workerHandle, paneKey)
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [

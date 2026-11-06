@@ -1,6 +1,9 @@
 // Jcode accepts `event = ["a", "b"]`; edit elements in place so user layout and comments survive.
 import type { Edit } from 'jsonc-parser'
-import { parseTomlStringValue, type ParsedTomlString } from '../codex/config-toml-line-scan'
+import {
+  parseTomlStringValue,
+  type ParsedTomlString
+} from '../codex/configuration/toml/config-toml-line-scan'
 
 type HookCommandElement = ParsedTomlString & { comma: number | null }
 

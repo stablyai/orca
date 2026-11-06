@@ -11,7 +11,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
 
 describe('terminal multiplex RPC', () => {
@@ -214,7 +214,7 @@ describe('terminal multiplex RPC', () => {
             enter: false,
             interrupt: false
           },
-          { inputKind: 'driving' }
+          { inputKind: 'driving', inputSource: 'desktop' }
         )
       )
       const sentAfterSuccessfulClaim = vi.mocked(runtime.sendTerminal).mock.calls.length
@@ -260,7 +260,7 @@ describe('terminal multiplex RPC', () => {
             enter: false,
             interrupt: false
           },
-          { inputKind: 'driving' }
+          { inputKind: 'driving', inputSource: 'desktop' }
         )
       )
 

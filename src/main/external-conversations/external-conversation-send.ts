@@ -2,10 +2,10 @@ import type { ConnectorAgent } from '../../shared/external-conversation-link'
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime
-} from '../runtime/launched-agent-write-guard'
+} from '../runtime/terminal/wait/launched-agent-write-guard'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { sendAgentTurn } from '../runtime/orchestration/send-agent-turn'
-import type { AgentPromptExpectedBinding } from '../runtime/runtime-terminal-contracts'
+import type { AgentPromptExpectedBinding } from '../runtime/terminal/input/agent-prompt-write-options'
 import { refusalOf } from './external-conversation-chain'
 import { refused, type Delivery } from './external-conversation-types'
 

@@ -1,7 +1,8 @@
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import type { OrcaRuntimeService, RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
@@ -12,7 +13,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   SET_OUTPUT_PAUSED_OPCODE,
   makeRequest,
@@ -312,6 +313,7 @@ describe('terminal multiplex RPC', () => {
         { text: 'x', enter: false, interrupt: false },
         {
           inputKind: 'driving',
+          inputSource: 'mobile',
           reserveWrite: expect.any(Function),
           afterWrite: expect.any(Function)
         }

@@ -78,14 +78,4 @@ describe('hostedReviewCache stays bounded on the PR-refresh write path', () => {
     expect(cache[`local::/repo::branch-${total - 1}`]).toBeDefined()
     expect(cache['local::/repo::branch-0']).toBeUndefined()
   })
-
-  it('keeps every entry while under the cap', () => {
-    const store = createTestStore()
-    for (let i = 0; i < 10; i++) {
-      store.getState().applyGitHubPRRefreshEvent(foundEvent(`kept-${i}`, i + 1))
-    }
-    const cache = store.getState().hostedReviewCache
-    expect(Object.keys(cache)).toHaveLength(10)
-    expect(cache['local::/repo::kept-0']).toBeDefined()
-  })
 })

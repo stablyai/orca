@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import type { RecognizedAgentProcess } from '../../../../../shared/agent-process-recognition'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import type { RecognizedAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

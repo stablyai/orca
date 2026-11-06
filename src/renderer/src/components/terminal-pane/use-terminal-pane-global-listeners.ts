@@ -37,7 +37,6 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     managerRef,
     paneCount,
     paneCwdRef,
-    paneFontSizesRef,
     paneKittyKeyboardModesRef,
     panePtyBindingsRef,
     paneTransportsRef,
@@ -52,12 +51,13 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     settings,
     settingsRef,
     shouldMeasureHiddenStartup,
+    warmRendererWhileHidden,
     tabId,
     toggleExpandPane,
     worktreeId
   } = controller
 
-  useTerminalFontZoom({ isActive, containerRef, managerRef, paneFontSizesRef, settingsRef })
+  useTerminalFontZoom({ isActive, containerRef, managerRef, settingsRef })
   useTerminalKeyboardShortcuts({
     tabId,
     worktreeId,
@@ -96,6 +96,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     isChatViewMode: effectiveChatViewMode,
     isWorktreeActive,
     isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
+    warmRendererWhileHidden: warmRendererWhileHidden === true,
     paneCount,
     managerRef,
     containerRef,

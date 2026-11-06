@@ -3,6 +3,7 @@ import type { OrcadActivationRecord } from '../managed-server/activation/orcad-a
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import {
   assessOrcadLiveDaemonCrossing,
+  describeDaemonProtocols,
   type OrcadDaemonProtocolFacts
 } from './orcad-daemon-protocol-crossing'
 
@@ -31,6 +32,8 @@ export function planOrcadUpdate(input: {
   candidateVersion: string
   census: OrcadTerminalCensus
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
+  /** Daemon generations the candidate found alive on the host; consulted only when the census cannot name them. */
+  hostDaemonProtocols?: readonly number[]
   force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
@@ -53,20 +56,24 @@ export function planOrcadUpdate(input: {
         'then update.'
     }
   }
-  const crossing = assessOrcadLiveDaemonCrossing(input.census, input.candidateDaemonProtocol)
+  const crossing = assessOrcadLiveDaemonCrossing(
+    input.census,
+    input.candidateDaemonProtocol,
+    input.hostDaemonProtocols
+  )
   // Force can accept mixed builds, never unreachable terminals.
-  if (crossing === 'strands-live-terminals') {
+  if (crossing.state === 'strands-live-terminals') {
     return {
       action: 'defer',
       code: 'orcad_update_strands_live_terminals',
       reason:
-        `The live terminal daemon speaks protocol ${String(input.census.daemonProtocolVersion)}, ` +
+        `A terminal daemon on this host speaks ${describeDaemonProtocols(crossing.unattachable)}, ` +
         `which orcad ${input.candidateVersion} cannot attach to. Restarting now would leave ` +
-        'every running terminal unreachable. Update when no terminals are running.'
+        'any terminals it runs unreachable. Update when no terminals are running.'
     }
   }
   const { liveSessions } = input.census
-  if (input.force && crossing === 'unverifiable') {
+  if (input.force && crossing.state === 'unverifiable') {
     return {
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable',
@@ -209,7 +216,7 @@ export function assessOrcadRollback(input: {
     }
   }
   const crossing = assessOrcadLiveDaemonCrossing(input.census, input.targetDaemonProtocol)
-  if (crossing === 'unverifiable') {
+  if (crossing.state === 'unverifiable') {
     return {
       safety: 'unsafe',
       code: 'orcad_rollback_daemon_protocol_unverifiable',
@@ -218,13 +225,13 @@ export function assessOrcadRollback(input: {
         `${target} would reach the terminals still running. Retry when the daemon answers.`
     }
   }
-  if (crossing === 'strands-live-terminals') {
+  if (crossing.state === 'strands-live-terminals') {
     return {
       safety: 'unsafe',
       code: 'orcad_rollback_strands_live_terminals',
       reason:
-        `The live terminal daemon speaks protocol ${String(input.census.daemonProtocolVersion)}, ` +
-        `which ${target} does not list. Rolling back now would leave every running terminal ` +
+        `A terminal daemon on this host speaks ${describeDaemonProtocols(crossing.unattachable)}, ` +
+        `which ${target} does not list. Rolling back now would leave any terminals it runs ` +
         'unreachable. Roll back when no terminals are running, or deploy forward.'
     }
   }

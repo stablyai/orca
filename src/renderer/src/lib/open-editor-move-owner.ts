@@ -4,7 +4,7 @@ import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/exec
 import {
   getFileExplorerOperationOwnerFromState,
   type FileExplorerOwnerState
-} from '@/components/right-sidebar/file-explorer-operation-owner'
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { resolveOwner } from './resolve-owner'
 
 /** Track server owner (null for this app) and nested SSH owner (null for server-local, undefined for unknown). */
@@ -38,8 +38,9 @@ function openFileOwner(
     'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId' | 'worktreeId'
   >
 ): FileOwner {
-  const captured = file.operationProvenance?.generation.route
-  const capturedHost = parseExecutionHostId(captured?.executionHostId)
+  const generation = file.operationProvenance?.generation
+  const captured = generation?.route
+  const capturedHost = parseExecutionHostId(generation?.authority?.at ?? captured?.executionHostId)
   const runtimeEnvironmentId =
     file.runtimeEnvironmentId !== undefined
       ? file.runtimeEnvironmentId?.trim() || null
@@ -51,9 +52,11 @@ function openFileOwner(
     sshHostId:
       capturedHost?.kind === 'ssh'
         ? capturedHost.id
-        : file.externalSshTargetId
-          ? toSshExecutionHostId(file.externalSshTargetId)
-          : undefined
+        : generation?.authority
+          ? null
+          : file.externalSshTargetId
+            ? toSshExecutionHostId(file.externalSshTargetId)
+            : undefined
   }
 }
 

@@ -1,11 +1,14 @@
+import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
+import { automationLaunchInputs } from '../../../../shared/automation-launch-setup-source'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   hasExtraAgentArgs,
   parseExtraAgentArgs
-} from '../../../../shared/automation-extra-agent-args'
+} from '../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-copy'
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'
 
@@ -43,25 +46,54 @@ export function getAgentLabel(agentId: string): string {
 
 /** The field's error, or null when the draft's extras can be saved. */
 export function getDraftExtraAgentArgsError(
-  draft: Pick<AutomationDraft, 'agentId' | 'extraAgentArgs'>
+  draft: Pick<AutomationDraft, 'agentId' | 'extraAgentArgs' | 'surface'>
 ): string | null {
-  if (!hasExtraAgentArgs(draft.extraAgentArgs)) {
+  if (draft.surface === 'chat' || !hasExtraAgentArgs(draft.extraAgentArgs)) {
     return null
   }
   const parsed = parseExtraAgentArgs({
     agent: draft.agentId,
     extraAgentArgs: draft.extraAgentArgs
   })
-  return parsed.ok ? null : parsed.error
+  return parsed.ok ? null : extraAgentArgsErrorText(parsed)
 }
 
 /** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */
 export function draftExtraAgentArgsNeedFreshSession(
-  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'reuseSession' | 'workspaceMode'>
+  draft: Pick<
+    AutomationDraft,
+    | 'agentId'
+    | 'extraAgentArgs'
+    | 'reuseSession'
+    | 'workspaceMode'
+    | 'surface'
+    | 'launchPreferences'
+    | 'agentArgs'
+  >
 ): boolean {
-  return (
-    hasExtraAgentArgs(draft.extraAgentArgs) &&
-    draft.workspaceMode === 'existing' &&
-    draft.reuseSession
-  )
+  const views = automationLaunchInputs(draft.agentId, draft)
+  const choices = draft.surface === 'chat' ? views.chatSessionOptions : views.sessionOptions
+  const consumed =
+    Object.keys(choices ?? {}).length > 0 ||
+    (draft.surface !== 'chat' &&
+      (draft.agentArgs !== undefined || hasExtraAgentArgs(draft.extraAgentArgs)))
+  return consumed && draft.workspaceMode === 'existing' && draft.reuseSession
+}
+
+export function buildDraftSchedule(
+  draft: AutomationDraft,
+  time: { hour: number; minute: number }
+): { rrule: string; missedRunGraceMinutes: number } {
+  const rrule =
+    draft.preset === 'custom'
+      ? draft.customSchedule.trim()
+      : buildAutomationRrule({
+          preset: draft.preset,
+          hour: time.hour,
+          minute: time.minute,
+          dayOfWeek: Number(draft.dayOfWeek)
+        })
+  const rawGrace = Number(draft.missedRunGraceMinutes)
+  const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
+  return { rrule, missedRunGraceMinutes }
 }

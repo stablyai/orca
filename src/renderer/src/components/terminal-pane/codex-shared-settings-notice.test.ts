@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mountHook,
@@ -9,10 +10,13 @@ import {
 } from './codex-notice-test-harness'
 import { useCodexSharedSettingsNotice } from './codex-shared-settings-notice'
 
-const { toastInfoMock } = vi.hoisted(() => ({ toastInfoMock: vi.fn() }))
-
-vi.mock('sonner', () => ({ toast: { info: toastInfoMock } }))
 vi.mock('@/store', () => import('./codex-notice-test-harness'))
+
+let notice: ReturnType<typeof useCodexSharedSettingsNotice> | null = null
+function useNoticeProbe(): void {
+  notice = useCodexSharedSettingsNotice()
+}
+const isVisible = (): boolean => notice?.visible === true
 
 const codexTab = { 'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }] }
 
@@ -35,7 +39,7 @@ const isSeen = (): unknown => noticeTestStore.getState().codexSharedSettingsNoti
 
 describe('useCodexSharedSettingsNotice', () => {
   beforeEach(() => {
-    toastInfoMock.mockReset()
+    notice = null
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
     resetStore()
   })
@@ -46,44 +50,48 @@ describe('useCodexSharedSettingsNotice', () => {
   })
 
   it('shows once on Windows when a Codex terminal appears, and marks it seen', async () => {
-    await mountHook(useCodexSharedSettingsNotice)
-    expect(toastInfoMock).not.toHaveBeenCalled()
+    await mountHook(useNoticeProbe)
+    expect(isVisible()).toBe(false)
 
     await setNoticeState({ tabsByWorktree: codexTab })
     await setNoticeState({ agentStatusByPaneKey: { 'tab-1:leaf': { agentType: 'codex' } } })
 
-    expect(toastInfoMock).toHaveBeenCalledTimes(1)
-    expect(toastInfoMock).toHaveBeenCalledWith('Codex in Orca now uses ~/.codex', {
-      id: 'codex-shared-settings-notice',
-      description:
-        'Codex may ask again to trust folders or approve commands. Re-add any MCP servers you added only in Orca.',
-      duration: Infinity
-    })
+    expect(isVisible()).toBe(true)
+    expect(isSeen()).toBe(true)
+  })
+
+  it('hides for good once dismissed', async () => {
+    resetStore({ tabsByWorktree: codexTab })
+    await mountHook(useNoticeProbe)
+    expect(isVisible()).toBe(true)
+
+    await act(async () => notice?.dismiss())
+    expect(isVisible()).toBe(false)
     expect(isSeen()).toBe(true)
   })
 
   it('stays quiet off Windows', async () => {
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
     resetStore({ tabsByWorktree: codexTab })
-    await mountHook(useCodexSharedSettingsNotice)
-    expect(toastInfoMock).not.toHaveBeenCalled()
+    await mountHook(useNoticeProbe)
+    expect(isVisible()).toBe(false)
     expect(isSeen()).toBe(false)
   })
 
   it('stays quiet in a paired web client window', async () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     resetStore({ tabsByWorktree: codexTab })
-    await mountHook(useCodexSharedSettingsNotice)
-    expect(toastInfoMock).not.toHaveBeenCalled()
+    await mountHook(useNoticeProbe)
+    expect(isVisible()).toBe(false)
   })
 
   it('shows once the persisted seen flag loads after mount', async () => {
     // Why seen: true: the store's default until persisted UI arrives.
     resetStore({ codexSharedSettingsNoticeSeen: true, tabsByWorktree: codexTab })
-    await mountHook(useCodexSharedSettingsNotice)
-    expect(toastInfoMock).not.toHaveBeenCalled()
+    await mountHook(useNoticeProbe)
+    expect(isVisible()).toBe(false)
 
     await setNoticeState({ codexSharedSettingsNoticeSeen: false })
-    expect(toastInfoMock).toHaveBeenCalledTimes(1)
+    expect(isVisible()).toBe(true)
   })
 })

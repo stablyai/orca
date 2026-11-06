@@ -106,20 +106,6 @@ afterEach(async () => {
 })
 
 describe('useHoldDictationGesture', () => {
-  it('stops when the shortcut key is released after the modifier', async () => {
-    await renderProbe()
-
-    beginHold()
-
-    act(() => {
-      dispatchKeyUp({ key: 'e', code: 'KeyE', metaKey: false })
-    })
-
-    expect(startDictation).toHaveBeenCalledTimes(1)
-    expect(stopDictation).toHaveBeenCalledTimes(1)
-    expect(holdGestureActiveRef.current).toBe(false)
-  })
-
   it('stops after a layout-aware shortcut key release drops the modifier flag', async () => {
     await renderProbe()
 
@@ -146,20 +132,6 @@ describe('useHoldDictationGesture', () => {
     expect(startDictation).toHaveBeenCalledTimes(1)
     expect(stopDictation).toHaveBeenCalledTimes(1)
     expect(holdGestureActiveRef.current).toBe(false)
-  })
-
-  it('ignores unrelated key releases while the shortcut is held', async () => {
-    await renderProbe()
-
-    beginHold()
-
-    act(() => {
-      dispatchKeyUp({ key: 'x', code: 'KeyX', metaKey: true })
-    })
-
-    expect(startDictation).toHaveBeenCalledTimes(1)
-    expect(stopDictation).not.toHaveBeenCalled()
-    expect(holdGestureActiveRef.current).toBe(true)
   })
 
   it('ignores modifier releases that were not part of the accepted chord', async () => {

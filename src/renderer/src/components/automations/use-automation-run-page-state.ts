@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -7,12 +7,7 @@ import {
   getAutomationListedTargetFromHostId
 } from './automation-host-client'
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-filter'
-import { useAppStore } from '@/store'
-import {
-  getAutomationRunOwnerEnvironmentId,
-  resolveAutomationRunTerminalTarget
-} from './automation-run-open-target'
-import { canRerunAutomationRun, getAutomationRunViewState } from './automation-run-view-state'
+import { canRerunAutomationRun } from './automation-run-view-state'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
@@ -26,23 +21,42 @@ export function useAutomationRunPageState({
   list,
   setup
 }: {
-  store: AutomationsPageStoreState
-  local: AutomationsPageLocalState
+  store: Pick<
+    AutomationsPageStoreState,
+    | 'pendingAutomationRunNavigation'
+    | 'setPendingAutomationRunNavigation'
+    | 'runtimeEnvironments'
+    | 'selectedId'
+    | 'setSelectedId'
+  >
+  local: Pick<
+    AutomationsPageLocalState,
+    | 'isLoading'
+    | 'automationHostTargetKey'
+    | 'automations'
+    | 'setSelectedAutomationRunPageId'
+    | 'setActivePaneTab'
+    | 'rerunRunIdsInFlight'
+    | 'selectedExternalKey'
+    | 'selectExternalKey'
+    | 'pageView'
+    | 'setPageView'
+    | 'setRunPageOrigin'
+    | 'isDetailOpen'
+    | 'setIsDetailOpen'
+  >
   list: AutomationsPageListState
-  setup: AutomationsPageSetupState
+  setup: Pick<
+    AutomationsPageSetupState,
+    'selectedRuns' | 'selectedRunsReady' | 'selectedRunsNotice' | 'selectedAutomationRunPage'
+  >
 }) {
   const {
-    worktreeMap,
-    repoForRow,
-    worktreeForRow,
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
     runtimeEnvironments,
     selectedId,
-    setSelectedId,
-    unifiedTabsByWorktree,
-    terminalLayoutsByTabId,
-    ptyIdsByTabId
+    setSelectedId
   } = store
   const {
     isLoading,
@@ -70,7 +84,11 @@ export function useAutomationRunPageState({
   const { selectedRuns, selectedRunsReady, selectedRunsNotice, selectedAutomationRunPage } = setup
 
   useEffect(() => {
-    if (!isDetailOpen || pendingAutomationRunNavigation) {
+    if (
+      !isDetailOpen ||
+      pendingAutomationRunNavigation ||
+      (pageView === 'run' && selectedAutomationRunPage)
+    ) {
       return
     }
     const hasSelectedLocal = selectedRow?.key
@@ -87,6 +105,8 @@ export function useAutomationRunPageState({
     setActivePaneTab('overview')
   }, [
     isDetailOpen,
+    pageView,
+    selectedAutomationRunPage,
     externalAutomationEntries,
     visibleRows,
     pendingAutomationRunNavigation,
@@ -220,58 +240,16 @@ export function useAutomationRunPageState({
     setSelectedId
   ])
 
-  const activeTerminalTabIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const tabs of Object.values(unifiedTabsByWorktree)) {
-      for (const tab of tabs) {
-        if (tab.contentType === 'terminal') {
-          ids.add(tab.entityId)
-        }
-      }
-    }
-    return ids
-  }, [unifiedTabsByWorktree])
-  const selectedAutomationRunPageWorktree = selectedAutomationRunPage?.workspaceId
-    ? selectedRow
-      ? (worktreeForRow(
-          selectedRow,
-          repoForRow(selectedRow),
-          selectedAutomationRunPage.workspaceId
-        ) ?? null)
-      : (worktreeMap.get(selectedAutomationRunPage.workspaceId) ?? null)
+  const selectedRunTarget = selectedAutomationRunPage
+    ? list.runTargetFor(selectedAutomationRunPage)
     : null
   const selectedAutomationRunPageWorkspaceDisplay = selectedAutomationRunPage
     ? getAutomationRunWorkspaceDisplay({
         run: selectedAutomationRunPage,
-        worktree: selectedAutomationRunPageWorktree
+        worktree: selectedRunTarget?.worktree ?? null
       })
     : null
-  const selectedAutomationRunPageOwnerEnvironmentId = useAppStore((state) =>
-    selectedAutomationRunPageWorktree
-      ? getAutomationRunOwnerEnvironmentId(
-          state,
-          selectedAutomationRunPage?.workspaceId,
-          selectedAutomationRunPageWorktree.hostId
-        )
-      : null
-  )
-  const selectedAutomationRunPageViewState = selectedAutomationRunPage
-    ? getAutomationRunViewState({
-        run: selectedAutomationRunPage,
-        workspaceExists: Boolean(selectedAutomationRunPageWorktree),
-        terminalTargetExists:
-          resolveAutomationRunTerminalTarget(
-            selectedAutomationRunPage,
-            {
-              hasTerminalTab: (tabId) => activeTerminalTabIds.has(tabId),
-              terminalLayoutsByTabId,
-              ptyIdsByTabId
-            },
-            selectedAutomationRunPageOwnerEnvironmentId
-          ) !== null,
-        terminalOnPairedServer: selectedAutomationRunPageOwnerEnvironmentId !== null
-      })
-    : null
+  const selectedAutomationRunPageViewState = selectedRunTarget?.viewState ?? null
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })

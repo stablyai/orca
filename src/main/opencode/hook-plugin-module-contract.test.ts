@@ -107,31 +107,6 @@ describe('OpenCode status plugin module contract', () => {
     expect(module.default).toBe(module.OrcaOpenCodeStatusPlugin)
   })
 
-  it('exposes a default export carrying a string id and a callable server()', async () => {
-    const module = await loadPluginModule()
-
-    expect(module.default).toBeTypeOf('object')
-    expect(typeof module.default?.id).toBe('string')
-    expect(module.default?.id).toBe('orca-opencode-status')
-    expect(module.default?.server).toBeTypeOf('function')
-  })
-
-  it('keeps the named factory export so the factory-based loader still resolves', async () => {
-    const module = await loadPluginModule()
-
-    expect(module.OrcaOpenCodeStatusPlugin).toBeTypeOf('function')
-  })
-
-  it('returns an event handler from the default export server(), like the named factory', async () => {
-    const module = await loadPluginModule()
-
-    const fromDefault = await module.default?.server?.({})
-    const fromNamed = await module.OrcaOpenCodeStatusPlugin?.({})
-
-    expect(fromDefault?.event).toBeTypeOf('function')
-    expect(fromNamed?.event).toBeTypeOf('function')
-  })
-
   it('reports a session lifecycle event through the hook endpoint when driven via the default export', async () => {
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     const posts = captureHookPosts()

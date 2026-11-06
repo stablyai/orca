@@ -25,6 +25,8 @@ export function mergeDetectedWorktreesForHost(
     current.source === refreshed.source &&
     current.unavailableReason === refreshed.unavailableReason &&
     current.failureKind === refreshed.failureKind &&
+    current.wslDistroStopped?.distro === refreshed.wslDistroStopped?.distro &&
+    current.wslDistroStopped?.state === refreshed.wslDistroStopped?.state &&
     current.worktrees === worktrees
   ) {
     return current

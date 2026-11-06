@@ -6,7 +6,9 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     worktreeSelector: string,
     tabId: string
   ): Promise<RuntimeMobileSessionTabCloseResult> {
-    const snapshot = await this.listMobileSessionTabs(worktreeSelector)
+    const snapshot = await this.listMobileSessionTabs(worktreeSelector, undefined, {
+      includeAgentSenders: false
+    })
     const tabExists = snapshot.tabs.some(
       (candidate) =>
         candidate.id === tabId ||

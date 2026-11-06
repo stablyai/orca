@@ -6,32 +6,38 @@ import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 vi.mock('./worktree-activation', () => ({ activateAndRevealWorkspace: () => true }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => undefined) }))
 
 import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activation'
+import {
+  getClientHostedBrowserRowSelection,
+  selectClientHostedBrowserRow
+} from './pane-manager/client-hosted-browser-row-state'
 
 const initialState = useAppStore.getInitialState()
 afterEach(() => useAppStore.setState(initialState, true))
 
+const worktree: Worktree = {
+  id: 'wt',
+  repoId: 'repo',
+  path: '/workspace',
+  head: '',
+  branch: 'main',
+  isBare: false,
+  isMainWorktree: true,
+  displayName: 'Workspace',
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 0
+}
+
 it('keeps the selected diff active when an editor for the same file shares its group', () => {
-  const worktree: Worktree = {
-    id: 'wt',
-    repoId: 'repo',
-    path: '/workspace',
-    head: '',
-    branch: 'main',
-    isBare: false,
-    isMainWorktree: true,
-    displayName: 'Workspace',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0
-  }
   const editor: Tab = {
     id: 'editor',
     entityId: 'file',
@@ -82,41 +88,15 @@ it('keeps the selected diff active when an editor for the same file shares its g
   expect(useAppStore.getState().activeFileId).toBe('file')
 })
 
-function makeWorktree(overrides: Partial<Worktree> & Pick<Worktree, 'id'>): Worktree {
-  return {
-    repoId: 'repo',
-    path: '/workspace',
-    head: '',
-    branch: 'main',
-    isBare: false,
-    isMainWorktree: true,
-    displayName: 'Workspace',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
-  }
-}
-
-const COLLIDING_WORKTREES = {
-  local: [makeWorktree({ id: 'wt' })],
-  remote: [makeWorktree({ id: 'wt', repoId: 'repo-remote', hostId: 'ssh:remote' })]
-}
-
-it('refuses a hostless tab for a remote target whose worktree ID also exists locally', () => {
-  const terminal: Tab = {
-    id: 'unified-terminal',
-    entityId: 'terminal',
+it('shows the selected chat even when a paired-device page placeholder covered it', () => {
+  const chat: Tab = {
+    id: 'chat',
+    entityId: 'session',
     groupId: 'group',
     worktreeId: 'wt',
-    contentType: 'terminal',
-    label: 'Terminal',
+    contentType: 'agent-session',
+    agentSessionAgent: 'claude',
+    label: 'Claude',
     customLabel: null,
     color: null,
     sortOrder: 0,
@@ -125,88 +105,32 @@ it('refuses a hostless tab for a remote target whose worktree ID also exists loc
   useAppStore.setState(
     {
       ...initialState,
-      worktreesByRepo: COLLIDING_WORKTREES,
+      worktreesByRepo: { repo: [worktree] },
+      activeWorktreeId: 'wt',
       groupsByWorktree: {
-        wt: [
-          {
-            id: 'group',
-            worktreeId: 'wt',
-            activeTabId: 'unified-terminal',
-            tabOrder: ['unified-terminal']
-          }
-        ]
+        wt: [{ id: 'group', worktreeId: 'wt', activeTabId: 'chat', tabOrder: ['chat'] }]
       },
       activeGroupIdByWorktree: { wt: 'group' },
-      unifiedTabsByWorktree: { wt: [terminal] }
+      unifiedTabsByWorktree: { wt: [chat] }
     },
     true
   )
-
-  expect(
-    activateWorkspaceTabPaletteResult({
-      worktreeId: 'wt',
-      groupId: 'group',
-      tabId: 'unified-terminal',
-      entityId: 'terminal',
-      contentType: 'terminal',
-      executionHostId: 'ssh:remote'
-    })
-  ).toEqual({ status: 'failed', reason: 'missing-tab' })
-})
-
-it('refuses a hostless backing file for a remote target whose worktree ID also exists locally', () => {
-  const editor: Tab = {
-    id: 'unified-editor',
-    entityId: 'file',
-    groupId: 'group',
+  selectClientHostedBrowserRow({
     worktreeId: 'wt',
-    contentType: 'editor',
-    executionHostId: 'ssh:remote',
-    label: 'app.ts',
-    customLabel: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 0
-  }
-  useAppStore.setState(
-    {
-      ...initialState,
-      worktreesByRepo: COLLIDING_WORKTREES,
-      groupsByWorktree: {
-        wt: [
-          {
-            id: 'group',
-            worktreeId: 'wt',
-            activeTabId: 'unified-editor',
-            tabOrder: ['unified-editor']
-          }
-        ]
-      },
-      activeGroupIdByWorktree: { wt: 'group' },
-      unifiedTabsByWorktree: { wt: [editor] },
-      openFiles: [
-        {
-          id: 'file',
-          worktreeId: 'wt',
-          filePath: '/workspace/app.ts',
-          relativePath: 'app.ts',
-          language: 'typescript',
-          isDirty: false,
-          mode: 'edit'
-        }
-      ]
-    },
-    true
-  )
+    browserPageId: 'page-on-phone',
+    groupId: 'group',
+    groupActiveTabIdAtSelection: 'chat'
+  })
 
   expect(
     activateWorkspaceTabPaletteResult({
       worktreeId: 'wt',
       groupId: 'group',
-      tabId: 'unified-editor',
-      entityId: 'file',
-      contentType: 'editor',
-      executionHostId: 'ssh:remote'
+      tabId: 'chat',
+      entityId: 'session',
+      contentType: 'agent-session'
     })
-  ).toEqual({ status: 'failed', reason: 'missing-file' })
+  ).toEqual({ status: 'activated' })
+  expect(getClientHostedBrowserRowSelection()).toBeNull()
+  expect(useAppStore.getState().activeTabType).toBe('agent-session')
 })

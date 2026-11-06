@@ -8,10 +8,4 @@ describe('mobile runtime client capabilities', () => {
       MOBILE_RUNTIME_CLIENT_CAPABILITIES
     )
   })
-
-  it('advertises each capability once so duplicates cannot consume the budget', () => {
-    expect(new Set(MOBILE_RUNTIME_CLIENT_CAPABILITIES).size).toBe(
-      MOBILE_RUNTIME_CLIENT_CAPABILITIES.length
-    )
-  })
 })

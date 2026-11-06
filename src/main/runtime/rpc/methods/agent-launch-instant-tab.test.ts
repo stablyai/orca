@@ -1,5 +1,6 @@
 /** Drive the RPC handler and durable ledger to prove early tab publication precedes admission and spawn uses that pane. */
 
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,24 +9,24 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
-import { classifyAgentLaunchReplayRefusal } from '../../../../shared/agent-launch-replay-refusal'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { classifyAgentLaunchReplayRefusal } from '../../../../shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { mapRuntimeError } from '../errors'
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../../../shared/agent-launch-tab-publication'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests,
   resolveAgentLaunchPaneVerdict
 } from '../../../agent-launch/agent-launch-pane-attachment'
-import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
 import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
 import {
@@ -116,6 +117,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
   resetAgentLaunchPanesForTests()
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -824,7 +826,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
   })
 
   describe('the view the tab opens in', () => {
-    const TERMINAL_VIEW = { experimentalNativeChat: false }
+    const TERMINAL_VIEW = {}
 
     it('keeps a terminal launch in the same view for the shown tab and spawn', async () => {
       const runtime = hostWithWindow({ settings: TERMINAL_VIEW })
@@ -845,7 +847,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
     })
 
     it('publishes a terminal fallback in terminal view while Chat UI is on', async () => {
-      const runtime = hostWithWindow({ settings: { experimentalNativeChat: true } })
+      const runtime = hostWithWindow({ settings: STRUCTURED_PREFERENCE })
 
       await replayLaunch(runtime, { agent: 'gemini' }, CLI)
 

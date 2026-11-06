@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
@@ -7,7 +8,7 @@ import { worktreeSummaryRead } from './mobile-worktree-metadata-operations'
 import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef
-} from '../../../src/shared/source-control-base-ref-resolution'
+} from '../../../src/shared/source-control/decisions/source-control-base-ref-resolution'
 
 // The branch compare also honours desktop's compare-against-upstream setting.
 export type MobileBranchCompareTarget = {
@@ -87,6 +88,11 @@ async function readDefaultBaseRef(
   try {
     return repoDefaultBaseRefRead.interpret(defaultReply)
   } catch (error) {
-    throw new Error(refusedRpcMessageOrFallback(error, 'Unable to resolve branch base'))
+    throw new Error(
+      refusedRpcMessageOrFallback(
+        error,
+        translate('sourceControl.branchBaseRef.resolveFailed', 'Unable to resolve branch base')
+      )
+    )
   }
 }

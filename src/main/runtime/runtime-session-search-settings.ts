@@ -1,4 +1,4 @@
-import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RuntimeStore } from './runtime-store-contract'
 

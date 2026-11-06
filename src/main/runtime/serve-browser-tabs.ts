@@ -3,7 +3,7 @@
 import type { BrowserBackend } from '../browser/browser-backend'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { BrowserTabInfo } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type {
   LayoutApplyOutcome,
@@ -122,6 +122,12 @@ export class ServeBrowserTabs {
         ? this.activeIn(worktreeId)
         : undefined
     return found ? this.restore(found) : false
+  }
+
+  /** Whether a saved tab could register once a window mounts it; every worktree's when none is named. */
+  hasStartable(worktreeId: string | undefined): boolean {
+    const worktreeIds = worktreeId ? [worktreeId] : this.deps.savedWorktreeIds()
+    return [...worktreeIds].some((id) => this.startableIn(id).length > 0)
   }
 
   /** The tab a window shows for a worktree with no page running: the recorded one, else the first. */

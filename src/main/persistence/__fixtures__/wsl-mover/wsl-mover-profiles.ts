@@ -32,7 +32,10 @@ export function wslMoverProfileScope(
     repoIds: new Set(name === 'mixed-windows-wsl' ? ['repo-a'] : repoIds),
     folderWorkspaceIds: new Set(name === 'folders-and-automations' ? ['folder-1'] : []),
     ownerHostId: 'local',
-    hostAliases: side === 'source' ? ['local'] : ['local', `runtime:wsl:${WSL_MOVER_DISTRO}`]
+    hostAliases:
+      side === 'source'
+        ? ['local']
+        : ['local', `runtime:wsl:${WSL_MOVER_DISTRO}`, `wsl:${WSL_MOVER_DISTRO}`]
   }
 }
 

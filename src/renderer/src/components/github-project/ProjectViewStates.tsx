@@ -9,6 +9,7 @@ import { projectViewErrorMessage } from './project-view-error-copy'
 import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
@@ -122,7 +123,7 @@ function ProjectViewTab({
             type="button"
             size="xs"
             variant="outline"
-            onClick={() => void window.api.shell.openUrl(ORCA_FEATURE_REQUEST_URL)}
+            onClick={(event) => openAppHttpLink(ORCA_FEATURE_REQUEST_URL, { event })}
           >
             {translate(
               'auto.components.github.project.ProjectViewWrapper.4d2a77a119',

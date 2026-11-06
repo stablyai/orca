@@ -1,5 +1,5 @@
 import { ORCAD_LAUNCHER_FILENAME } from '../../../shared/orcad-artifacts'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_BUILD_HASH_MARKER as BUILD_HASH_MARKER } from '../host-state/orcad-windows-host-script'

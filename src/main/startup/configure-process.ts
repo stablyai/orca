@@ -1,11 +1,12 @@
 import { app } from 'electron'
+import { guardExternalOpensInE2E } from './e2e-external-open-guard'
 import { quitProcess } from './process-quit-request'
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
-import { getMainE2EConfig } from '../e2e-config'
+import { getMainE2EConfig } from './testing/e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
@@ -198,6 +199,7 @@ export function configureDevUserDataPath(isDev: boolean): void {
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
+    guardExternalOpensInE2E()
     return
   }
 

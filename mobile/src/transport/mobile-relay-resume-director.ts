@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { parseRetryAfterHeaderMs } from '../../../src/shared/retry-after-header'
 import { MOBILE_RELAY_RETRY_AFTER_MAX_MS } from './mobile-relay-retry-delays'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const MAX_RESPONSE_BYTES = 16 * 1024
 

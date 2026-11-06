@@ -8,10 +8,12 @@ import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
-  AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
+  AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+} from '../../shared/agent-status/contracts/agent-status-types'
+import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_TYPE_MAX_LENGTH
-} from '../../shared/agent-status-types'
+} from '../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isDashboardLaunchOptions } from './dashboard-agent-launch-validation'
 import {
   admitDashboardWorkspaces,
@@ -233,6 +235,10 @@ function isDashboardCard(value: unknown): boolean {
     DASHBOARD_BUCKETS.has(card.bucket) &&
     typeof card.dotState === 'string' &&
     DASHBOARD_DOT_STATES.has(card.dotState) &&
+    (card.verdict === undefined ||
+      card.verdict === 'interrupted' ||
+      card.verdict === 'failed' ||
+      card.verdict === 'unconfirmed') &&
     (card.workingMode === undefined ||
       (card.dotState === 'working' && card.workingMode === 'monitoring')) &&
     isBoundedString(card.task, AGENT_STATUS_MAX_FIELD_LENGTH, true) &&

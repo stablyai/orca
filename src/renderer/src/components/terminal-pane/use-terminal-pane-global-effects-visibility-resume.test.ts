@@ -197,13 +197,12 @@ describe('useTerminalPaneGlobalEffects', () => {
       'fit-reveal',
       'intent:terminal-a',
       'intent:terminal-b',
-      'reveal-repaint'
+      'reveal-present'
     ])
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
-    expect(order.slice(-3)).toEqual(['reveal-repaint', 'reset-atlas', 'refresh'])
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
+    // A healthy shared atlas is not cleared on an ordinary worktree reveal.
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -572,67 +571,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
-  })
-
-  it('enforces scroll intent after hidden layout changes the viewport', () => {
-    const terminalA = { name: 'terminal-a' }
-    const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllPanes: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null),
-      setActivePane: vi.fn()
-    }
-    const initialState = { marker: 'initial' }
-    const preHideState = { marker: 'before-hide' }
-    const corruptedHiddenState = { marker: 'hidden-corrupted' }
-    let nextCapturedState = initialState
-    mocks.captureScrollState.mockImplementation(() => nextCapturedState)
-
-    const baseArgs = {
-      tabId: 'tab-1',
-      managerRef: { current: manager as never },
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map() },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      paneCount: 1,
-      isSyncFitEnabled: true,
-      toggleExpandPane: vi.fn()
-    }
-
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: true,
-      isVisible: true
-    })
-
-    nextCapturedState = preHideState
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: false,
-      isVisible: false
-    })
-
-    nextCapturedState = corruptedHiddenState
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: true,
-      isVisible: true
-    })
-
-    expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
-    expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
-    expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
-    expect(mocks.enforceTerminalCurrentScrollIntent).toHaveBeenLastCalledWith(terminalA)
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealPresent).toHaveBeenCalled()
   })
 })

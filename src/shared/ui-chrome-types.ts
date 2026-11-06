@@ -12,6 +12,8 @@ export type OpenInApplication = {
 export type SourceControlViewMode = 'list' | 'tree'
 export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
 
+// Why 'match-terminal' stays: it mirrors the app theme slots for older Orca (syncLegacyMatchTerminalSidebar);
+// this version's sidebar treats it as 'default'.
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
 /** Strategy for the prefix prepended to worktree branch names. */

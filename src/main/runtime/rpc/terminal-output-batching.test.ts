@@ -12,7 +12,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
@@ -349,6 +349,7 @@ describe('terminal output batching', () => {
         { text: 'ls\r', enter: false, interrupt: false },
         {
           inputKind: 'driving',
+          inputSource: 'mobile',
           reserveWrite: expect.any(Function),
           afterWrite: expect.any(Function)
         }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserClientPageRendererReply,
   BrowserClientPageRendererRequest
-} from '../shared/browser-client-page-renderer-protocol'
+} from '../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
 
 type Listener = (event: unknown, request: unknown) => void

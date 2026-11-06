@@ -78,6 +78,11 @@ describe('legacy coordinator fence jurisdiction', () => {
       coordinatorPaneKey: CURRENT_COORDINATOR_PANE
     })
     expect(elsewhere.id).not.toBe(harness.adoptedRunId)
+    harness.db.bindRun({
+      runId: elsewhere.id,
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
     expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBeNull()
 
     const fenced = await harness.dispatcher.dispatch(

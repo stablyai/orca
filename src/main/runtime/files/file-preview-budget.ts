@@ -1,3 +1,4 @@
+import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../shared/file-preview-kind'
 import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
@@ -42,14 +43,5 @@ export const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = previewableBinaryByteLimit(
   REMOTE_RPC_MAX_CONTENT_BYTES
 )
 
-export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
-}
+// One table with local reads and git blobs, so every host previews the same files.
+export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES = IMAGE_AND_PDF_PREVIEW_MIME_TYPES

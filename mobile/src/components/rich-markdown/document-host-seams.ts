@@ -38,6 +38,8 @@ export type RichMarkdownEditorHostSeams = {
   promptForUrl: (kind: RichMarkdownUrlPromptKind) => Promise<string | null>
   /** `keyboard-inset`: the covered height and its changes, or null when the page measures it. */
   keyboardInsetSource: () => RichMarkdownKeyboardInsetReader | null
+  /** `editor-content`: a displayable source for a workspace image path. */
+  loadImageSource: (path: string) => Promise<string>
   /** `editor-content`: cancels the pending input timer. */
   clearTimer: (handle: number | null) => void
   /** `editor-selection`: the live selection this document's caret lives in. */
@@ -53,7 +55,12 @@ export type RichMarkdownEditorHost = Pick<
   RichMarkdownEditorHostSeams,
   'postToHost' | 'promptForUrl' | 'keyboardInsetSource'
 > &
-  Partial<Pick<RichMarkdownEditorHostSeams, 'clearTimer' | 'getSelection' | 'getDocument' | 'root'>>
+  Partial<
+    Pick<
+      RichMarkdownEditorHostSeams,
+      'clearTimer' | 'getSelection' | 'getDocument' | 'root' | 'loadImageSource'
+    >
+  >
 
 // Export command prompt kind so page modal asks correct URL question.
 export const RICH_MARKDOWN_URL_PROMPT_LABELS: Record<RichMarkdownUrlPromptKind, string> = {
@@ -63,6 +70,11 @@ export const RICH_MARKDOWN_URL_PROMPT_LABELS: Record<RichMarkdownUrlPromptKind, 
 
 export function clearWindowTimer(handle: number | null) {
   window.clearTimeout(handle ?? undefined)
+}
+
+/** A page with no workspace loads no workspace images. */
+export function noWorkspaceImage(): Promise<string> {
+  return Promise.reject(new Error('No workspace'))
 }
 
 export function windowSelection() {

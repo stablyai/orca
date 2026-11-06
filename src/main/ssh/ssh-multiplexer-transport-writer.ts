@@ -1,6 +1,9 @@
 import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../shared/relay-frame-decoder'
 import { SshMultiplexerWriterLaneScheduler } from './ssh-multiplexer-writer-lane-scheduler'
-import type { WriteAmbiguityReason, WriteRefusalReason } from '../../shared/pty-write-settlement'
+import type {
+  WriteAmbiguityReason,
+  WriteRefusalReason
+} from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export type MultiplexerTransportWriteResult = { ok: true } | { ok: false; error: Error }
 

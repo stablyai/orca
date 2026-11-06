@@ -18,7 +18,10 @@ import { cancelGenerateCommitMessageLocal } from './commit-message-text-generati
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { killSourceControlAgentProcess } from './source-control-local-process'
 import { generateCommitMessage } from './source-control-text-generation-requests'
-import type { SpawnedSourceControlAgentProcess } from './source-control-text-generation-types'
+import type {
+  SpawnSourceControlAgent,
+  SpawnedSourceControlAgentProcess
+} from './source-control-text-generation-types'
 
 const { terminateTreeMock } = vi.hoisted(() => ({
   terminateTreeMock: vi.fn(async () => true)
@@ -82,6 +85,22 @@ function asSpawned(child: FakeSupervisor): SpawnedSourceControlAgentProcess {
   return child as unknown as SpawnedSourceControlAgentProcess
 }
 
+function withPolicyProbes(spawn: SpawnSourceControlAgent): SpawnSourceControlAgent {
+  return (input) => {
+    if (!input.args.includes('mcp')) {
+      return spawn(input)
+    }
+    const child = createMockDiscoveryChild()
+    child.stdin.end.mockImplementation(() =>
+      queueMicrotask(() => {
+        child.stdout.emit('data', Buffer.from('[]'))
+        child.emit('close', 0)
+      })
+    )
+    return child
+  }
+}
+
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -117,7 +136,8 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
 
     await vi.advanceTimersByTimeAsync(1)
     expect(terminateTreeMock).toHaveBeenCalledWith(child, {
-      site: 'source-control-text-generation'
+      site: 'source-control-text-generation',
+      supervised: true
     })
     await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
     await stopped
@@ -146,10 +166,12 @@ describe('a supervised agent one-shot that runs out of time', () => {
         context: { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
         params: { agentId: 'codex', model: 'gpt-5.5' },
         target: { kind: 'local', cwd, env: { CODEX_HOME: '/codex/timeout-home' } },
-        spawnAgent
+        spawnAgent: withPolicyProbes(spawnAgent)
       })
 
     const first = request('/repo/first')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(spawnAgent).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     await expect(first).resolves.toMatchObject({
       success: false,
@@ -201,7 +223,7 @@ describe('context-owned one-shot settlement', () => {
           context: { firstPrompt: 'Explain migrations' },
           params: { agentId: 'codex', model: 'selected-model' },
           target: { kind: 'local', cwd: '/owned', env: { CODEX_HOME: `/isolated/${route}` } },
-          spawnAgent: () => child,
+          spawnAgent: withPolicyProbes(() => child),
           shouldExecute: () => true
         }).then((result) => {
           settled = true
@@ -245,7 +267,7 @@ describe('context-owned one-shot settlement', () => {
     }
   )
 
-  it.each(['claude', 'opencode', 'custom'] as const)(
+  it.each(['claude', 'custom'] as const)(
     'preserves applicable %s plans and skips stale fallback',
     async (agentId) => {
       for (const currentAfterClose of [true, false]) {
@@ -257,8 +279,9 @@ describe('context-owned one-shot settlement', () => {
           context: { firstPrompt: 'Explain migrations' },
           params: {
             agentId,
-            model: agentId === 'opencode' ? 'vendor/model' : 'selected-model',
+            model: 'selected-model',
             thinkingLevel: 'high',
+            commandInputTemplate: '{firstPrompt}',
             customAgentCommand: 'chosen-agent --model selected-model',
             agentCommandOverride: agentId === 'custom' ? undefined : `${agentId} --user-option`
           },
@@ -276,7 +299,7 @@ describe('context-owned one-shot settlement', () => {
           Buffer.from(
             agentId === 'claude'
               ? 'You cannot use --strict-mcp-config when an enterprise MCP config is present'
-              : 'Unrecognized flag: --variant in command opencode run'
+              : 'Command failed'
           )
         )
         first.emit('exit', 1)
@@ -289,23 +312,13 @@ describe('context-owned one-shot settlement', () => {
           const before = spawnAgent.mock.calls[0]![0]
           const after = spawnAgent.mock.calls[1]![0]
           expect(after).toMatchObject({ binary: before.binary, cwd: before.cwd, env: before.env })
-          if (agentId === 'claude') {
-            expect(before.args).toContain('--strict-mcp-config')
-            expect(after.args).not.toContain('--strict-mcp-config')
-            expect(after.args).toContain('selected-model')
-          } else {
-            expect(before.args).toContain('--variant')
-            expect(after.args).not.toContain('--variant')
-            expect(after.args).toContain('vendor/model#high')
-          }
-          second.stdout.emit(
-            'data',
-            Buffer.from(
-              agentId === 'opencode'
-                ? JSON.stringify({ type: 'text', part: { id: 'answer', text: 'Migration guide' } })
-                : 'Migration guide'
-            )
+          expect(before.args).toContain('--strict-mcp-config')
+          expect(after.args).not.toContain('--strict-mcp-config')
+          expect(after.args).toContain('selected-model')
+          expect(second.stdin.end).toHaveBeenCalledWith(
+            'Explain migrations\n\nThis is a naming-only task. Do not edit files, run commands, use tools, or perform the first request.'
           )
+          second.stdout.emit('data', Buffer.from('Migration guide'))
           second.emit('close', 0)
           await expect(request).resolves.toMatchObject({ success: true, name: 'Migration guide' })
         } else {
@@ -447,7 +460,8 @@ describe.runIf(process.platform !== 'win32')(
         const slowStop = join(folder, 'slow-stop.cjs')
         writeFileSync(
           slowStop,
-          `process.stdin.resume()
+          `if (process.argv.includes('mcp')) { console.log('[]'); process.exit(0) }
+process.stdin.resume()
 process.on('SIGTERM', () => setTimeout(() => {
   require('node:fs').writeFileSync(${JSON.stringify(stoppedFile)}, 'stopped')
   process.exit(0)
@@ -460,11 +474,11 @@ require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)
         const answers = join(folder, 'answers.cjs')
         writeFileSync(
           answers,
-          "process.stdin.resume().on('end', () => console.log('Update README'))\n"
+          "process.stdin.resume().on('end', () => console.log(process.argv.includes('mcp') ? '[]' : 'Update README'))\n"
         )
         const firstAliveAtSecondSpawn: boolean[] = []
         const spawnAgent = vi.fn((input: Parameters<typeof spawnSourceControlAgent>[0]) => {
-          if (pids.length > 0) {
+          if (pids.length > 0 && !input.args.includes('mcp')) {
             firstAliveAtSecondSpawn.push(isAlive(pids[0]!))
           }
           return spawnSourceControlAgent(input)
@@ -569,7 +583,7 @@ setInterval(() => {}, 60000)
         )
         const floodAliveAtSecondSpawn: boolean[] = []
         const spawnAgent = vi.fn((input: Parameters<typeof spawnSourceControlAgent>[0]) => {
-          if (pids.length > 0) {
+          if (pids.length > 0 && !input.args.includes('mcp')) {
             floodAliveAtSecondSpawn.push(isAlive(pids[0]!))
           }
           return spawnSourceControlAgent(input)

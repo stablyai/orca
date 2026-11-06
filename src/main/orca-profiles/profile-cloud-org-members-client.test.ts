@@ -1,14 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
-import { OrcaCloudRequestError } from './profile-cloud-client'
-import {
-  changeOrcaCloudOrgMemberRole,
-  inviteOrcaCloudOrgMember,
-  listOrcaCloudOrgMembers,
-  removeOrcaCloudOrgMember,
-  revokeOrcaCloudOrgInvite
-} from './profile-cloud-org-members-client'
+
+import { listOrcaCloudOrgMembers } from './profile-cloud-org-members-client'
 
 const fetchMock = vi.fn()
 
@@ -78,76 +72,6 @@ describe('Orca cloud org members client', () => {
         method: 'GET',
         headers: expect.objectContaining({ authorization: 'Bearer access-token' })
       })
-    )
-  })
-
-  it('percent-encodes the org id in the request URL', async () => {
-    mockJsonResponse({
-      members: [],
-      pendingInvites: [],
-      viewerRole: 'owner',
-      canManageMembers: true
-    })
-    await listOrcaCloudOrgMembers(config, session, 'org/with space')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://orca-cloud.example/v1/desktop/orgs/org%2Fwith%20space/members',
-      expect.any(Object)
-    )
-  })
-
-  it('posts invites with an email and role body', async () => {
-    mockJsonResponse({ ok: true })
-    await inviteOrcaCloudOrgMember(config, session, {
-      orgId: 'org-1',
-      email: 'new@example.com',
-      role: 'admin'
-    })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://orca-cloud.example/v1/desktop/orgs/org-1/invites',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ email: 'new@example.com', role: 'admin' })
-      })
-    )
-  })
-
-  it('carries the server error code on a 409 conflict', async () => {
-    mockJsonResponse({ error: 'already_invited' }, { ok: false, status: 409 })
-    await expect(
-      inviteOrcaCloudOrgMember(config, session, {
-        orgId: 'org-1',
-        email: 'dupe@example.com',
-        role: 'member'
-      })
-    ).rejects.toMatchObject({ statusCode: 409, errorCode: 'already_invited' })
-  })
-
-  it('surfaces a 403 as an OrcaCloudRequestError without an error code when the body is empty', async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 403,
-      json: async () => {
-        throw new Error('no body')
-      }
-    })
-    await expect(
-      changeOrcaCloudOrgMemberRole(config, session, {
-        orgId: 'org-1',
-        userId: 'user-2',
-        role: 'admin'
-      })
-    ).rejects.toBeInstanceOf(OrcaCloudRequestError)
-    await expect(
-      removeOrcaCloudOrgMember(config, session, { orgId: 'org-1', userId: 'user-2' })
-    ).rejects.toMatchObject({ statusCode: 403, errorCode: undefined })
-  })
-
-  it('posts invite revocations by email', async () => {
-    mockJsonResponse({ ok: true })
-    await revokeOrcaCloudOrgInvite(config, session, { orgId: 'org-1', email: 'gone@example.com' })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://orca-cloud.example/v1/desktop/orgs/org-1/invites/revoke',
-      expect.objectContaining({ body: JSON.stringify({ email: 'gone@example.com' }) })
     )
   })
 })

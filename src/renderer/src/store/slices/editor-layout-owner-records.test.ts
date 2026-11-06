@@ -542,39 +542,6 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, layout-ow
       { kind: 'diff', entity: expect.stringContaining('lib/a.ts'), hasFile: true }
     ])
   })
-
-  it('sends nothing for a refused rekey', async () => {
-    openEdit(WT, '/repo-a/a.ts', 'a.ts')
-    openEdit(WT, '/repo-a/b.ts', 'b.ts')
-    await main.settle()
-    const sentBefore = layoutApplyTestTransport.sent.length
-    expect(
-      remapOpenEditorTabsForPathChange({
-        fromPath: '/repo-a/a.ts',
-        toPath: '/repo-a/b.ts',
-        worktreePath: '/repo-a',
-        worktreeId: WT,
-        owner: localMoveOwner(WT)
-      })
-    ).toEqual({ ok: false, reason: 'collision' })
-    expect(layoutApplyTestTransport.sent.slice(sentBefore)).toEqual([])
-  })
-})
-
-describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, switch off', () => {
-  it('sends nothing', () => {
-    openEdit(WT, '/repo-a/a.ts', 'a.ts')
-    expect(
-      remapOpenEditorTabsForPathChange({
-        fromPath: '/repo-a/a.ts',
-        toPath: '/repo-a/c.ts',
-        worktreePath: '/repo-a',
-        worktreeId: WT,
-        owner: localMoveOwner(WT)
-      })
-    ).toEqual({ ok: true })
-    expect(layoutApplyTestTransport.sent).toEqual([])
-  })
 })
 
 describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(

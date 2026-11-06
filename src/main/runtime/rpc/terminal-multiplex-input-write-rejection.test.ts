@@ -11,7 +11,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   WRITE_UNAVAILABLE_OPCODE,
   makeRequest,
@@ -335,7 +335,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 
@@ -415,7 +415,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 

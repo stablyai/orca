@@ -13,6 +13,7 @@ import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state
 import { translate } from '@/i18n/i18n'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { assignUniqueListKeys } from './details-list-keys'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function CheckDetailsPanel({
   check,
@@ -229,7 +230,7 @@ export function CheckDetailsPanel({
                 variant="ghost"
                 size="xs"
                 className="h-7 gap-1 px-2 text-[11px]"
-                onClick={() => window.api.shell.openUrl(openUrl)}
+                onClick={(event) => openAppHttpLink(openUrl, { event })}
               >
                 {translate('auto.components.PullRequestPage.1b14d0a69c', 'Open in GitHub')}
                 <ExternalLink className="size-3" />

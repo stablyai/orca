@@ -185,8 +185,14 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
   } | null>(null)
 
   const loadHookCheckForRepo = useCallback(
-    (targetRepoId: string): Promise<HookCheckResult> => {
-      const key = JSON.stringify([selectedRepoExecutionHostId ?? 'local', targetRepoId])
+    (targetRepoId: string, options?: { background?: boolean }): Promise<HookCheckResult> => {
+      const background = options?.background === true
+      // A submit must not reuse the open-time check's stopped-distro refusal.
+      const key = JSON.stringify([
+        selectedRepoExecutionHostId ?? 'local',
+        targetRepoId,
+        ...(background ? ['background'] : [])
+      ])
       const existing = hookCheckRef.current
       if (existing?.key === key) {
         return existing.promise
@@ -194,7 +200,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
       // Evict rejected checks so transient errors can retry; inspect only the repo’s known host.
       const promise: Promise<HookCheckResult> = (
         selectedRepoExecutionHostId
-          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId)
+          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId, { background })
           : Promise.reject(new Error('The project host is unknown.'))
       ).catch((error: unknown) => {
         if (hookCheckRef.current?.promise === promise) {

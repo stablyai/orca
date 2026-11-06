@@ -167,6 +167,11 @@ export function createNativeMediaVerbServer(
     // DocumentPicker ignores room; enforce count before staging any bytes.
     function withinRoom(assets: readonly PickedAsset[]): readonly PickedAsset[] {
       if (assets.length > room) {
+        for (const asset of assets) {
+          if (deps.ownsStagedUri(asset.uri)) {
+            discardQuietly(asset.uri)
+          }
+        }
         throw new BridgeNativeVerbRefusedError(
           'native_media_handle_cap',
           `that pick answered ${assets.length} items and this page has room for ${room}`

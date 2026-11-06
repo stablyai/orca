@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type {
   Project,
@@ -18,20 +18,26 @@ import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/fold
 import { ProjectHostPersistenceOperations } from '../tracking-repos/project-host-operations'
 
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import type { MetadataLineageOperations } from './metadata-lineage-operations'
+
 import {
+  type RepoLifecycleOperations,
   hydrateRepo,
   updateRepoBackedProjectHostSetup,
   updateIndependentProjectHostSetup,
   pruneMobileClientTabSelections
 } from './repo-lifecycle-operations'
-import { scheduleSave } from './write-scheduling'
-import { removeWorkspaceLineageForFolderParent } from './metadata-lineage-operations'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
+import {
+  type MetadataLineageOperations,
+  removeWorkspaceLineageForRemovedFolder
+} from './metadata-lineage-operations'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  applyWslMoveRetainedMarks,
+  type WslMoveRetainedMark
+} from '../moving-wsl-projects/wsl-move-retained-marks'
 
 type ProjectCollectionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -168,6 +174,16 @@ export class ProjectCollectionOperations {
   moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
     return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order)
   }
+
+  /** The WSL mover's retention pass only; returns how many rows changed. */
+  setWslMoveRetainedMarks(marks: readonly WslMoveRetainedMark[]): number {
+    const { runtime, scheduling } = this[projectCollectionOperationsContext]
+    const changed = applyWslMoveRetainedMarks(runtime.state, marks)
+    if (changed > 0) {
+      scheduleSave(scheduling)
+    }
+    return changed
+  }
 }
 
 export function getProjectHostOperations(
@@ -206,8 +222,8 @@ export function getProjectGroupOperations(
     new ProjectGroupPersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),
@@ -227,8 +243,8 @@ export function getFolderWorkspaceOperations(
     new FolderWorkspacePersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),

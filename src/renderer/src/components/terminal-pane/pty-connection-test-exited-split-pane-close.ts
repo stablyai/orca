@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { LEAF_1, LEAF_2, type MockPaneManager } from './pty-connection-test-pane-fixtures'
 
 /** Main-owned exits wait for its leaf-removal frame without sending another close; dynamic imports share the test’s reset module graph. */

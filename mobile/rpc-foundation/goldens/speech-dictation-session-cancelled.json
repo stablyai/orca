@@ -4,40 +4,6 @@
   "family": "speech.dictation-session",
   "namedDeltas": [],
   "values": {
-    "422e902e66a5": {
-      "name": "speech.dictation.cancel#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.cancel"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "cancelled": true
-          }
-        }
-      }
-    },
     "6b76435b6f3e": {
       "error": {
         "$rpc": "null"
@@ -50,7 +16,7 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
     },
-    "aca401ac072e": {
+    "bd004568e24c": {
       "name": "speech.dictation.start#1",
       "ordinal": 1,
       "args": [
@@ -67,7 +33,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 30000
           }
         }
       ],
@@ -96,6 +62,40 @@
       "name": "speech.dictation.cancel#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
+    },
+    "ed7a0ff994cd": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "mobile-dictation-1767225600000-8ig2henseon"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "cancelled": true
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -104,7 +104,7 @@
       {
         "id": "cancelled",
         "observation": {
-          "sender": ["aca401ac072e", "422e902e66a5"],
+          "sender": ["bd004568e24c", "ed7a0ff994cd"],
           "payloads": ["859d310e63d6", "ebdac948a90d"],
           "settlements": {
             "mount": "eb79a9b3682a",

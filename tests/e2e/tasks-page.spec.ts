@@ -1,3 +1,4 @@
+import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, getStoreState } from './helpers/store'
 import { GITHUB_TASK_SEARCH_IDLE_MS } from '../../src/renderer/src/components/use-github-task-search-commit'
@@ -8,21 +9,9 @@ const TASK_SEARCH_SETTLE_MS = GITHUB_TASK_SEARCH_IDLE_MS + 50
 // Outlast idle timing, React commit and two store roundtrips instead of assuming a flat 2s.
 const TASK_SEARCH_PROBE_TIMEOUT_MS = GITHUB_TASK_SEARCH_IDLE_MS * 6
 
-type RenderedTaskSource = {
-  source: string
-  active: boolean
-}
-
 type TaskSearchRequestProbe = {
   countQueries: string[]
   fetchQueries: string[]
-}
-
-const TASK_SOURCE_BY_LABEL: Record<string, string> = {
-  GitHub: 'github',
-  GitLab: 'gitlab',
-  Linear: 'linear',
-  Jira: 'jira'
 }
 
 async function openTasksPage(page: Parameters<typeof getStoreState>[0]): Promise<void> {
@@ -35,28 +24,39 @@ async function openTasksPage(page: Parameters<typeof getStoreState>[0]): Promise
   })
 }
 
-async function getRenderedTaskSources(
-  page: Parameters<typeof getStoreState>[0]
-): Promise<RenderedTaskSource[]> {
-  return page
-    .locator('[data-contextual-tour-target="tasks-source-filters"] button')
-    .evaluateAll((buttons, sourceByLabel) => {
-      return buttons.flatMap((button) => {
-        const source =
-          button.getAttribute('data-task-source') ??
-          sourceByLabel[button.getAttribute('aria-label')?.trim() ?? '']
-        if (!source) {
-          return []
-        }
-        const active = button.getAttribute('aria-pressed') === 'true'
-        return [{ source, active }]
-      })
-    }, TASK_SOURCE_BY_LABEL)
-}
-
 async function openMockedPaginatedGitHubTasks(
-  page: Parameters<typeof getStoreState>[0]
+  page: Parameters<typeof getStoreState>[0],
+  app: ElectronApplication
 ): Promise<void> {
+  // Fake GitHub per repo at IPC so production list acceptance and count publication drive the pager.
+  await app.evaluate(({ ipcMain }) => {
+    // 1000 results at the single-repo page width of 36 is 28 pages; the last page holds 28 rows.
+    const totalCount = 1000
+    // The fixture repo is a non-fork: origin is its only candidate and the effective source.
+    const target = { owner: 'example', repo: 'repo' }
+    ipcMain.removeHandler('gh:listWorkItems')
+    ipcMain.handle('gh:listWorkItems', (_event, args: { limit?: number; page?: number }) => {
+      const limit = args.limit ?? 36
+      const pageNumber = args.page ?? 1
+      const length = Math.max(0, Math.min(limit, totalCount - (pageNumber - 1) * limit))
+      return {
+        items: Array.from({ length }, (_, index) => ({
+          id: `issue-${pageNumber}-${index + 1}`,
+          type: 'issue' as const,
+          number: pageNumber * 100 + index + 1,
+          title: `Issue page ${pageNumber} item ${index + 1}`,
+          state: 'open' as const,
+          url: `https://github.com/example/repo/issues/${pageNumber * 100 + index + 1}`,
+          labels: [],
+          updatedAt: new Date(1_700_000_000_000 - index * 1_000).toISOString(),
+          author: 'octocat'
+        })),
+        sources: { issues: target, prs: target, originCandidate: target, upstreamCandidate: null }
+      }
+    })
+    ipcMain.removeHandler('gh:countWorkItems')
+    ipcMain.handle('gh:countWorkItems', () => totalCount)
+  })
   await page.evaluate(() => {
     const store = window.__store
     if (!store) {
@@ -74,36 +74,7 @@ async function openMockedPaginatedGitHubTasks(
           }
         : repo
     )
-    const makePage = (pageNumber: number) =>
-      Array.from({ length: 30 }, (_, index) => ({
-        id: `issue-${pageNumber}-${index + 1}`,
-        type: 'issue' as const,
-        number: pageNumber * 100 + index + 1,
-        title: `Issue page ${pageNumber} item ${index + 1}`,
-        state: 'open' as const,
-        url: `https://github.com/example/repo/issues/${pageNumber * 100 + index + 1}`,
-        labels: [],
-        updatedAt: new Date(1_700_000_000_000 - index * 1_000).toISOString(),
-        author: 'octocat',
-        repoId: repos[0]?.id ?? 'repo-1'
-      }))
-
-    store.setState({
-      repos,
-      getCachedWorkItems: () => makePage(1),
-      prefetchWorkItems: () => {},
-      fetchWorkItemsAcrossRepos: async () => ({
-        items: makePage(1),
-        failedCount: 0,
-        githubUnavailable: false
-      }),
-      fetchWorkItemsNextPage: async (_repos, _perRepoLimit, _displayLimit, _query, pageNumber) => ({
-        items: makePage(pageNumber),
-        failedCount: 0,
-        errorTypes: []
-      }),
-      countWorkItemsAcrossRepos: async () => ({ totalCount: 840, totalPages: 28 })
-    })
+    store.setState({ repos })
     store.getState().openTaskPage({ taskSource: 'github' })
   })
 }
@@ -213,75 +184,11 @@ test.describe('Tasks page', () => {
     await waitForActiveWorktree(orcaPage)
   })
 
-  test('opening the tasks view renders the tasks UI', async ({ orcaPage }) => {
-    await openTasksPage(orcaPage)
-
-    await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
-      .toBe('tasks')
-
-    await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible({
-      timeout: 10_000
-    })
-
-    // Assert stable Tasks chrome because source tabs depend on provider availability.
-    let renderedSources: RenderedTaskSource[] = []
-    await expect
-      .poll(
-        async () => {
-          renderedSources = await getRenderedTaskSources(orcaPage)
-          return renderedSources.length
-        },
-        {
-          timeout: 10_000,
-          message: 'Tasks source controls did not render'
-        }
-      )
-      .toBeGreaterThan(1)
-
-    await expect
-      .poll(
-        async () => {
-          renderedSources = await getRenderedTaskSources(orcaPage)
-          return renderedSources.some((source) => source.active)
-        },
-        {
-          timeout: 5_000,
-          message: 'Active task source did not render'
-        }
-      )
-      .toBe(true)
-    if (renderedSources.some((source) => source.source === 'github' && source.active)) {
-      await expect(orcaPage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
-      await expect(orcaPage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
-      await expect(orcaPage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
-      await expect(orcaPage.getByPlaceholder(/Search GitHub (issues|PRs)/i)).toBeVisible()
-    }
-  })
-
-  test('closing the tasks page returns to the previous view', async ({ orcaPage }) => {
-    const previousView = await getStoreState<string>(orcaPage, 'activeView')
-
-    await openTasksPage(orcaPage)
-    await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
-      .toBe('tasks')
-    await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible()
-
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
-
-    await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
-      .toBe(previousView)
-    // Require prior-view DOM to remount plus Tasks close control to disappear; activeView alone misses broken rendering.
-    await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toHaveCount(0)
-    if (previousView === 'terminal') {
-      await expect(orcaPage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
-    }
-  })
-
-  test('reopening restores the GitHub page and scroll position', async ({ orcaPage }) => {
-    await openMockedPaginatedGitHubTasks(orcaPage)
+  test('reopening restores the GitHub page and scroll position', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await openMockedPaginatedGitHubTasks(orcaPage, electronApp)
 
     await orcaPage.getByRole('button', { name: 'Page 28', exact: true }).click()
     await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()

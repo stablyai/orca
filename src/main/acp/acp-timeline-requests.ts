@@ -1,16 +1,14 @@
 import { z } from 'zod'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
+import {
+  pendingAcpResolution,
+  type AcpDialect,
+  type AcpRequestPresentation
+} from './acp-dialects/acp-dialect'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import { AcpRpcError } from './acp-errors'
+import { ACP_FORM_ELICITATION_METHOD, acpFormElicitationPresentation } from './acp-form-elicitation'
 import { readAcpPermissionRequest } from './acp-permission-requests'
-
-export const pendingAcpResolution = {
-  state: 'pending',
-  selectedOptionId: null,
-  resolvedBy: null,
-  resolvedAt: null
-} as const
 
 export function acpPermissionPresentation(
   params: unknown,
@@ -76,8 +74,7 @@ export function translateAcpRequest(
   }
   const tool = requestToolSchema.safeParse(params)
   const callId = tool.success ? (tool.data.toolCall?.toolCallId ?? tool.data.toolCallId) : undefined
-  const turn = callId ? options.tools.turn(callId) : undefined
-  const join = { thread: options.sessionId, ...(turn === undefined ? {} : { turn }) }
+  const join = { thread: options.sessionId, ...(callId ? options.tools.join(callId) : {}) }
   const settlement =
     method === 'session/request_permission'
       ? undefined
@@ -105,7 +102,8 @@ export function translateAcpRequest(
   }
   const presentation =
     options.dialect.request?.(method, params) ??
-    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined)
+    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined) ??
+    (method === ACP_FORM_ELICITATION_METHOD ? acpFormElicitationPresentation(params) : undefined)
   if (!presentation) {
     // OpenCode 1.x repeats completed writes through unadvertised client methods; omit their rows.
     if (UNADVERTISED_CLIENT_METHOD.test(method)) {
@@ -122,7 +120,9 @@ export function translateAcpRequest(
         type: 'request.open',
         request: `${method}:${JSON.stringify(id)}`,
         body: presentation.body,
-        join
+        join,
+        // The live exchange ends only by answer or withdrawal, not with the turn that shows it.
+        outlivesTurn: true
       }
     ]
   }

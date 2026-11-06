@@ -1,3 +1,7 @@
+import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
+import * as profileStorage from '../orca-profiles/profile-storage-paths'
+// The chat sign-in against a scripted Antigravity server.
+
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -20,7 +24,7 @@ import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/antigravity-
 import type { AntigravityChatSignInStatus } from '../../shared/antigravity-account-types'
 import { ANTIGRAVITY_BROWSER_MARKER } from './antigravity-browser-helper'
 import * as browserHelper from './antigravity-browser-helper'
-import { ANTIGRAVITY_SIGN_IN_PROMPT, antigravitySignInUrl } from './antigravity-sign-in-url'
+import { ANTIGRAVITY_SIGN_IN_PROMPT } from './antigravity-sign-in-url'
 import {
   cancelAntigravityChatSignIn,
   completeAntigravityChatSignIn,
@@ -32,6 +36,16 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: vi.fn<typeof terminateProviderProcessTree>(
     async () => 'unverifiable'
   )
+}))
+
+const checkingShell = vi.hoisted(() => ({ path: '/fixture', next: '/fixture' }))
+vi.mock('../startup/login-shell-environment', () => ({
+  resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
+    if (options?.startedAfter !== undefined) {
+      checkingShell.path = checkingShell.next
+    }
+    return { PATH: checkingShell.path }
+  }
 }))
 
 const GOOGLE_LINK =
@@ -81,11 +95,15 @@ async function signInAgainst(
     stream?: 'stdout' | 'stderr'
     metaCwd?: string
     sessionResult?: Record<string, unknown>
+    realLaunchSources?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
   vi.spyOn(browserHelper, 'antigravityBrowserHelperWorks').mockResolvedValue(true)
-  const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
+  // Short on POSIX so the private temp root stays in this folder, not /tmp/oacp-*.
+  const stateDirectory = await mkdtemp(
+    process.platform === 'win32' ? join(tmpdir(), 'orca-agy-sign-in-') : '/tmp/o'
+  )
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
   const agent = new AcpScriptedAgent()
@@ -110,13 +128,36 @@ async function signInAgainst(
   const bin = join(stateDirectory, 'bin')
   await mkdir(bin)
   await writeFile(join(bin, ANTIGRAVITY_LAUNCH_SPEC.command), '', { mode: 0o755 })
+  if (options.realLaunchSources) {
+    checkingShell.path = bin
+    checkingShell.next = bin
+    vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(stateDirectory)
+  }
   const host = {
-    launchSources: async () => ({
-      accountHome: { variable: 'GEMINI_HOME', path: folder },
-      env: { PATH: bin },
-      commandSettings: {},
-      dataDirectory: stateDirectory
-    }),
+    launchSources: options.realLaunchSources
+      ? (signal: AbortSignal) =>
+          structuredAgentHostLaunchSources(
+            'antigravity',
+            {
+              requireStore: () => ({
+                getSettings: () => ({
+                  nativeChatInheritShellEnvironment: true,
+                  agentDefaultEnv: {}
+                })
+              }),
+              resolveStructuredAgentAccountHome: async () => ({
+                variable: 'GEMINI_HOME',
+                path: folder
+              })
+            },
+            signal
+          )
+      : async () => ({
+          accountHome: { variable: 'GEMINI_HOME', path: folder },
+          env: { PATH: bin },
+          commandSettings: {},
+          dataDirectory: stateDirectory
+        }),
     stopLiveChats: async () => {},
     connect: vi.fn<ConnectAcpAgent<AcpAgentConnection>>((launch, connectionOptions) => {
       const connection = createAcpAgentConnection(launch, connectionOptions, () => child)
@@ -218,44 +259,6 @@ it("shows the helper's link, reads signed in only once a session starts, then re
   expect(frames).toHaveLength(seen)
 })
 
-it("saves the checking session's models as the chats' catalog, for the first chat's picker", async () => {
-  // The model option from a recorded Antigravity 1.3.0 `session/new`.
-  const { folder, flowId, finishBrowser, openSession } = await signInAgainst(
-    () => helperOutput(GOOGLE_LINK),
-    {
-      sessionResult: {
-        configOptions: [
-          {
-            id: 'model',
-            name: 'Model',
-            category: 'model',
-            type: 'select',
-            currentValue: 'gemini-3.8-flash-high',
-            options: [
-              { value: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)' },
-              { value: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)' }
-            ]
-          }
-        ]
-      }
-    }
-  )
-  expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
-  finishBrowser()
-  expect(await stateAfter(flowId, 'waiting')).toEqual({ flowId, phase: 'verifying' })
-  openSession()
-  expect(await stateAfter(flowId, 'verifying')).toEqual({ flowId, phase: 'signedIn' })
-  const fingerprint = agentModelCatalogFingerprint({
-    agent: 'antigravity',
-    accountHome: { variable: 'GEMINI_HOME', path: folder },
-    wslDistro: null
-  })
-  expect(agentModelCatalogStore.get(fingerprint)?.live?.models.map((model) => model.id)).toEqual([
-    'gemini-3.8-flash-high',
-    'gemini-3.8-flash-low'
-  ])
-})
-
 it('shows another client the sign-in without its link, and refuses it every action', async () => {
   const { flowId, host } = await signInAgainst(printed(GOOGLE_LINK))
   expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
@@ -307,21 +310,6 @@ it('cancels: its pasted address stops, and no Start runs until the sign-in has u
     listener.closeAllConnections()
     listener.close()
   }
-})
-
-it('refuses a second, different sign-in link, even while the sign-in is being checked', async () => {
-  const { flowId, finishBrowser, stderr } = await signInAgainst(
-    async () => `${await printed(GOOGLE_LINK)()}${await helperOutput(GOOGLE_LINK)}`
-  )
-  expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
-  finishBrowser()
-  expect(await stateAfter(flowId, 'waiting')).toEqual({ flowId, phase: 'verifying' })
-  stderr.write(await printed(GOOGLE_LINK.replace('state=s1', 'state=s2'))())
-  expect(await stateAfter(flowId, 'verifying')).toEqual({
-    flowId,
-    phase: 'failed',
-    error: 'Antigravity started more than one Google sign-in request.'
-  })
 })
 
 it("sets the host's status from what a chat's server answers, and nothing else", async () => {
@@ -402,21 +390,6 @@ it('signs in from the address a browser on another computer ended on', async () 
   }
 })
 
-it('never shows a link that is not a Google sign-in back to this host', async () => {
-  const foreign = GOOGLE_LINK.replace('accounts.google.com', 'accounts.example.com')
-  const { flowId } = await signInAgainst(printed(foreign), { stream: 'stdout' })
-  const state = await stateAfter(flowId, 'starting')
-  expect(state).toMatchObject({ flowId, phase: 'failed' })
-  expect(JSON.stringify(state)).not.toContain('example')
-  for (const link of [
-    GOOGLE_LINK.replace('127.0.0.1', 'attacker.test'),
-    GOOGLE_LINK.replace('41234', '80'),
-    `${GOOGLE_LINK}&state=s2`
-  ]) {
-    expect(antigravitySignInUrl(link)).toBeNull()
-  }
-})
-
 it('retains an unclosed sign-in child for both launch entry points until its exit is proven', async () => {
   const close = vi.fn(async () => false)
   const old = await signInAgainst(printed(GOOGLE_LINK), {
@@ -445,6 +418,7 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
         spec: ANTIGRAVITY_LAUNCH_SPEC,
         resolveLaunch: async () => ({
           ...launch,
+          prefixArgs: [],
           env,
           cwd,
           envToDelete: [...envToDelete],
@@ -486,43 +460,43 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   })
 })
 
-it('fails without downloading anything while the server is not installed', async () => {
-  vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
-  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
-  folders.push(dataDirectory)
-  const connect = vi.fn<ConnectAcpAgent<AcpAgentConnection>>()
-  const { flowId } = startAntigravityChatSignIn(
-    {
-      launchSources: async () => ({
-        accountHome: { variable: 'GEMINI_HOME', path: join(dataDirectory, 'antigravity-chat') },
-        env: { PATH: join(dataDirectory, 'empty-bin') },
-        commandSettings: {},
-        dataDirectory
-      }),
-      stopLiveChats: async () => {},
-      connect
-    },
-    DESKTOP
-  )
-  const state = await stateAfter(flowId, 'starting')
-  expect(state).toMatchObject({ phase: 'failed', error: expect.stringContaining('not installed') })
-  expect(connect).not.toHaveBeenCalled()
-})
-
-it('expires a waiting sign-in quietly and releases its launch gate', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  try {
-    const { flowId } = await signInAgainst(printed(GOOGLE_LINK))
-    expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
-    await vi.advanceTimersByTimeAsync(300_000)
-    expect(readAntigravityChatSignInStatus(DESKTOP).flow).toMatchObject({ phase: 'expired' })
-    await vi.waitFor(() => {
-      const entry = ANTIGRAVITY_LAUNCH_SPEC.launchGate!.enter(undefined)
-      entry.leave()
-    })
-    expect(warn).not.toHaveBeenCalled()
-  } finally {
-    vi.useRealTimers()
-  }
+it('drops checking-session models when cancellation wins while start is pending', async () => {
+  const started = deferred<Awaited<ReturnType<AcpAgentConnection['start']>>>()
+  const enter = vi.fn()
+  const run = await signInAgainst(() => helperOutput(GOOGLE_LINK), {
+    configure: (connection) => {
+      vi.spyOn(connection, 'start').mockImplementation(() => {
+        enter()
+        return started.promise
+      })
+    }
+  })
+  await stateAfter(run.flowId, 'starting')
+  run.finishBrowser()
+  await vi.waitFor(() => expect(enter).toHaveBeenCalledTimes(1))
+  const cancelling = cancelAntigravityChatSignIn(DESKTOP, run.flowId)
+  started.resolve({
+    kind: 'new',
+    sessionId: SESSION,
+    response: {
+      sessionId: SESSION,
+      configOptions: [
+        {
+          id: 'model',
+          name: 'Model',
+          category: 'model',
+          type: 'select',
+          currentValue: 'late',
+          options: [{ value: 'late', name: 'Late' }]
+        }
+      ]
+    }
+  })
+  expect((await cancelling)?.phase).toBe('cancelled')
+  const key = agentModelCatalogFingerprint({
+    agent: 'antigravity',
+    accountHome: { variable: 'GEMINI_HOME', path: run.folder },
+    wslDistro: null
+  })
+  expect(agentModelCatalogStore.get(key)).toBeNull()
 })

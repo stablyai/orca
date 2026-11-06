@@ -1,8 +1,8 @@
 import { UNFLUSHED_SETTLE_MS } from './transcript-watch-contract'
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { extname } from 'node:path'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
@@ -49,6 +49,9 @@ async function attemptInstall(
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
+// ID discovery probes every project bucket; a transcript still missing after a minute rarely appears soon.
+const SLOW_RESOLVE_AFTER_MS = 60_000
+const SLOW_RESOLVE_POLL_MS = 30_000
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
@@ -58,13 +61,15 @@ function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | 
 /** Return a live subscription while resolve/install retries; pending feedback must not claim settled history. */
 function subscribeViaResolvePoll(
   args: SubscribeNativeChatTranscriptArgs,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  initialRefusal: WslTranscriptFsError | null = null
 ): NativeChatTranscriptSubscription {
   let closed = false
   let installed: NativeChatTranscriptSubscription | null = null
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
-  let lastFallbackResolveAt = Date.now()
+  const subscribedAt = Date.now()
+  let lastFallbackResolveAt = subscribedAt
   const exactPath = exactTranscriptPath(args)
   const exactPathNeedsWslResolution = exactPath !== null && needsWslHostResolution(exactPath)
   // Lazily translate WSL guest paths so exact-path retries avoid the slower ID scan.
@@ -98,20 +103,37 @@ function subscribeViaResolvePoll(
     settleTimer.unref?.()
   }
 
+  function emitGateError(error: WslTranscriptFsError): void {
+    if (gateErrorEmitted || !args.onInitialSnapshot) {
+      return
+    }
+    gateErrorEmitted = true
+    settled = true
+    stopSettleTimer()
+    args.onInitialSnapshot([], false, 0, error.message)
+  }
+
+  function fallbackResolveIntervalMs(now: number): number {
+    return now - subscribedAt < SLOW_RESOLVE_AFTER_MS
+      ? FALLBACK_RESOLVE_POLL_MS
+      : SLOW_RESOLVE_POLL_MS
+  }
+
   function scheduleAttempt(): void {
     if (closed || exactPathNeedsWslResolution) {
       return
     }
-    const untilFallbackResolve = exactPath
-      ? Math.max(0, FALLBACK_RESOLVE_POLL_MS - (Date.now() - lastFallbackResolveAt))
-      : delay
-    pollTimer = setTimeout(
-      () => {
-        pollTimer = null
-        void runAttempt()
-      },
-      Math.min(delay, untilFallbackResolve)
-    )
+    const now = Date.now()
+    const interval = fallbackResolveIntervalMs(now)
+    // Without a hook or known file path every attempt is ID discovery, so it follows the discovery cadence once slow.
+    const discoversById = !exactPath && !args.filePath
+    const wait = exactPath
+      ? Math.min(delay, Math.max(0, interval - (now - lastFallbackResolveAt)))
+      : Math.max(delay, discoversById && interval === SLOW_RESOLVE_POLL_MS ? interval : 0)
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      void runAttempt()
+    }, wait)
     // Unresolved sessions must not keep headless host shutdown alive.
     pollTimer.unref?.()
     if (args.resolvePollIntervalMs === undefined) {
@@ -125,7 +147,7 @@ function subscribeViaResolvePoll(
     }
     let result: NativeChatTranscriptSubscription | null
     const now = Date.now()
-    const fallbackDue = !exactPath || now - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS
+    const fallbackDue = !exactPath || now - lastFallbackResolveAt >= fallbackResolveIntervalMs(now)
     try {
       if (exactPath && !hostReadableExactPath) {
         if (!exactPathNeedsWslResolution) {
@@ -159,11 +181,8 @@ function subscribeViaResolvePoll(
       }
       // Retry transient failures without escaping void runAttempt; show WSL refusal once while recovery continues.
       // Use instanceof: wslTranscriptFsRefusal rethrows unrelated errors and would kill this loop.
-      if (error instanceof WslTranscriptFsError && !gateErrorEmitted && args.onInitialSnapshot) {
-        gateErrorEmitted = true
-        settled = true
-        stopSettleTimer()
-        args.onInitialSnapshot([], false, 0, error.message)
+      if (error instanceof WslTranscriptFsError) {
+        emitGateError(error)
       }
       result = null
     }
@@ -181,6 +200,10 @@ function subscribeViaResolvePoll(
     scheduleAttempt()
   }
 
+  // A stopped distro shows its refusal now, not a pending transcript, while recovery continues.
+  if (initialRefusal && args.onInitialSnapshot) {
+    emitGateError(initialRefusal)
+  }
   if (exactPathNeedsWslResolution) {
     stopWslObservation = observeRunningWslDistros((runningDistros) =>
       runAttempt({ runningDistros: [...runningDistros] })
@@ -234,17 +257,18 @@ export async function subscribeNativeChatTranscript(
   }
 
   let installed: NativeChatTranscriptSubscription | null
+  let refusal: WslTranscriptFsError | null = null
   try {
     installed = await attemptInstall(args, decode, setupSignal)
   } catch (error) {
     setupSignal?.throwIfAborted()
     // Gate refusal must enter retry polling rather than fail subscription setup.
-    void wslTranscriptFsRefusal(error) // rethrows non-gate failures
+    refusal = wslTranscriptFsRefusal(error) // rethrows non-gate failures
     installed = null
   }
   if (installed) {
     return installed
   }
   setupSignal?.throwIfAborted()
-  return subscribeViaResolvePoll(args, decode)
+  return subscribeViaResolvePoll(args, decode, refusal)
 }

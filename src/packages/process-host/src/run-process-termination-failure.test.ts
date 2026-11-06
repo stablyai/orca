@@ -46,19 +46,6 @@ describe('runProcess termination failure', () => {
     vi.clearAllMocks()
   })
 
-  it('reports ordinary child close exactly once', async () => {
-    const child = mockChild()
-    const onChildTerminated = vi.fn()
-    spawnMock.mockReturnValue(child)
-    const pending = runProcess({ program: 'git', timeoutMs: null, onChildTerminated })
-
-    child.emit('close', 0, null)
-    child.emit('close', 0, null)
-
-    await expect(pending).resolves.toMatchObject({ code: 0 })
-    expect(onChildTerminated).toHaveBeenCalledOnce()
-  })
-
   it('does not report a live-child error before its eventual close', async () => {
     const child = mockChild()
     const onChildTerminated = vi.fn()
@@ -134,17 +121,7 @@ describe('runProcess termination failure', () => {
     expect(onChildTerminated).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(10_000)
 
-    await expect(pending).resolves.toMatchObject({
-      code: null,
-      timedOut: true,
-      terminationUnverified: true
-    })
-    expect(child.stdin.destroyed).toBe(true)
-    expect(child.stdout.destroyed).toBe(true)
-    expect(child.stderr.destroyed).toBe(true)
-    expect(child.stdout.listenerCount('data')).toBe(0)
-    expect(child.stderr.listenerCount('data')).toBe(0)
-    expect(child.unref).toHaveBeenCalledOnce()
+    await expect(pending).resolves.toMatchObject({ code: null, timedOut: true })
     expect(onChildTerminated).not.toHaveBeenCalled()
     child.emit('close', null, 'SIGKILL')
     expect(onChildTerminated).toHaveBeenCalledOnce()

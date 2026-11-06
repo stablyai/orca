@@ -4,7 +4,8 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { regenerateStructuredAgentSessionName } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
-import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { nativeChatNamingErrorText } from './native-chat-naming-failure-copy'
 
 const noSubscription = () => () => {}
 
@@ -41,8 +42,13 @@ export function useNativeChatNamingFailure(
     [target]
   )
   useEffect(() => feed?.activate(), [feed])
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      feed && sessionId ? feed.subscribeSession(sessionId, listener) : noSubscription(),
+    [feed, sessionId]
+  )
   const regenerating = useSyncExternalStore(
-    feed?.subscribe ?? noSubscription,
+    subscribe,
     () => (sessionId ? (feed?.getNamingActive(sessionId) ?? null) : null),
     () => null
   )
@@ -63,7 +69,7 @@ export function useNativeChatNamingFailure(
     return null
   }
   return {
-    message: failure.error.message,
+    message: nativeChatNamingErrorText(failure.error),
     canRegenerate: support === 'supported',
     regenerating: regenerating === true,
     regenerate,

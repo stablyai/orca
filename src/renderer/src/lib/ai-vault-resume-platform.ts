@@ -1,31 +1,30 @@
-import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getAiVaultResumeWorkspacePath } from '@/lib/ai-vault-resume-shell'
+import { resolveWorktreeExecutionHostPlatform } from '@/lib/execution-host-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 
-// Target the workspace host’s grammar, or Linux for agents running through SSH, paired runtime or WSL.
+export type AiVaultResumePlatformState = Parameters<typeof resolveWorktreeExecutionHostPlatform>[0]
 
+/** The OS of the host that runs the resumed agent; null when an SSH or paired host has not reported it. */
 export function getAiVaultResumePlatform(
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >,
+  state: AiVaultResumePlatformState,
   worktreeId?: string | null
-): NodeJS.Platform {
+): NodeJS.Platform | null {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
   if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
-    return 'linux'
+    if (!targetWorktreeId) {
+      return null
+    }
+    const fact = resolveWorktreeExecutionHostPlatform(
+      state,
+      targetWorktreeId,
+      getAiVaultResumeWorkspacePath(state, targetWorktreeId)
+    )
+    return fact.kind === 'known' ? fact.platform : null
   }
 
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)

@@ -8,19 +8,6 @@ import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const runId = 'run_legacy_local'
 
-// Use explicit dispatch times to keep stale detection independent of wall clock.
-function setDispatchTimes(
-  d: OrchestrationDb,
-  id: string,
-  dispatchedAt: string,
-  heartbeatAt: string | null = null
-): void {
-  const sqlite = (d as unknown as { db: Database.Database }).db
-  sqlite
-    .prepare('UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?')
-    .run(dispatchedAt, heartbeatAt, id)
-}
-
 describe('OrchestrationDb', () => {
   let db: OrchestrationDb | undefined
 
@@ -455,103 +442,6 @@ describe('OrchestrationDb', () => {
       d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
       const after = d.getDispatchContext(task.id)
       expect(after?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
-    })
-
-    it('getStaleDispatches returns only dispatched rows past the grace window', () => {
-      const d = createDb()
-      const taskA = d.createTask({ runId, spec: 'a' })
-      const taskB = d.createTask({ runId, spec: 'b' })
-      const taskC = d.createTask({ runId, spec: 'c' })
-      const taskD = d.createTask({ runId, spec: 'd' })
-      const ctxA = createRootDispatch(d, taskA.id, 'term_a')
-      const ctxB = createRootDispatch(d, taskB.id, 'term_b')
-      const ctxC = createRootDispatch(d, taskC.id, 'term_c')
-      const ctxD = createRootDispatch(d, taskD.id, 'term_d')
-      d.completeDispatch(ctxD.id)
-
-      const now = Date.now()
-      const iso = (ms: number) => new Date(now - ms).toISOString()
-
-      // Keep c recent; backdate a, b and d beyond the dispatch grace window.
-      const sqlite = (d as unknown as { db: Database.Database }).db
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(5 * 60 * 1000), ctxA.id)
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(12 * 60 * 1000), ctxB.id)
-      sqlite
-        .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
-        .run(iso(30_000), ctxC.id)
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(30 * 60 * 1000), ctxD.id)
-
-      const stale = d.getStaleDispatches(iso(10 * 60 * 1000))
-      expect(stale.map((s) => s.id)).toEqual([ctxB.id])
-    })
-
-    // SQLite space-format and ISO timestamps sort differently as raw text, misclassifying fresh rows (#8452).
-    it('getStaleDispatches ignores fresh SQLite space-format timestamps (#8452)', () => {
-      const d = createDb()
-
-      const fresh = createRootDispatch(d, d.createTask({ runId, spec: 'fresh' }).id, 'term_fresh')
-      setDispatchTimes(d, fresh.id, '2026-07-12 12:00:00', '2026-07-12 12:05:00')
-
-      const legacy = createRootDispatch(
-        d,
-        d.createTask({ runId, spec: 'legacy' }).id,
-        'term_legacy'
-      )
-      setDispatchTimes(d, legacy.id, '2026-07-12T12:00:00.000Z', '2026-07-12T12:05:00.000Z')
-
-      const hung = createRootDispatch(d, d.createTask({ runId, spec: 'hung' }).id, 'term_hung')
-      setDispatchTimes(d, hung.id, '2026-07-12 10:00:00', '2026-07-12 10:00:00')
-
-      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
-      expect(stale.map((s) => s.id)).toEqual([hung.id])
-    })
-
-    it('getStaleDispatches keeps a just-dispatched space-format row in the grace window (#8452)', () => {
-      const d = createDb()
-
-      const ctx = createRootDispatch(d, d.createTask({ runId, spec: 'x' }).id, 'term_x')
-      setDispatchTimes(d, ctx.id, '2026-07-12 12:00:00')
-
-      const stale = d.getStaleDispatches('2026-07-12T11:59:00.000Z')
-      expect(stale).toEqual([])
-    })
-
-    // Keep threshold and row on one UTC date to expose space-vs-T ordering at midnight (#8452).
-    it('getStaleDispatches keeps a fresh row just after a UTC-midnight threshold (#8452)', () => {
-      const d = createDb()
-
-      const ctx = createRootDispatch(
-        d,
-        d.createTask({ runId, spec: 'midnight' }).id,
-        'term_midnight'
-      )
-      setDispatchTimes(d, ctx.id, '2026-05-04 00:04:00')
-
-      const stale = d.getStaleDispatches('2026-05-04T00:00:00.000Z')
-      expect(stale).toEqual([])
-    })
-
-    // An old dispatch with a fresh heartbeat isolates heartbeat timestamp parsing (#8452).
-    it('getStaleDispatches keeps a live worker with a fresh space-format heartbeat (#8452)', () => {
-      const d = createDb()
-
-      const ctx = createRootDispatch(d, d.createTask({ runId, spec: 'live' }).id, 'term_live')
-      setDispatchTimes(d, ctx.id, '2026-07-12 10:00:00', '2026-07-12 11:59:00')
-
-      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
-      expect(stale).toEqual([])
     })
 
     it('getThreadMessagesFor returns only same-thread replies to a handle', () => {

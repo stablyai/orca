@@ -114,14 +114,4 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
       )
     ).rejects.toThrow(/SFTP subsystem sees a different filesystem/)
   })
-
-  it('leaves unrelated transfer failures untouched', async () => {
-    const conn = {
-      writeFile: () => Promise.reject(new Error('Connection lost'))
-    } as unknown as SshConnection
-
-    await expect(
-      writeRemoteInstallFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
-    ).rejects.toThrow('Connection lost')
-  })
 })

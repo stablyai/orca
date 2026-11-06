@@ -1,11 +1,11 @@
 // Map every disk field to one source; Loader diffs through these tables and fact-location tests mutate each source to verify ownership.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
-import type { ClosedTerminalTabTombstone } from '../closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstone } from './closed-terminal-tab-tombstones'
 import type { Tab, TabGroup } from '../tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import {
   SESSION_FIELD_OWNERS,
   type BrowserTabLiveState,
@@ -132,7 +132,8 @@ const ROW = {
   agentLaunchPane: 'unwritten',
   pendingActivationSpawn: 'unwritten',
   recovery: 'unwritten',
-  restoredFromSession: 'unwritten'
+  restoredFromSession: 'unwritten',
+  sessionTitleFromHost: 'unwritten'
 } as const satisfies Record<keyof TerminalTab, DiskFieldWritten>
 
 const ENTRY_FIELDS = {

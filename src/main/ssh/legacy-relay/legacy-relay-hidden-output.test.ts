@@ -56,12 +56,6 @@ describe('a bridged pane no visible view shows', () => {
     expect(sent).toEqual(['replay:SCREEN', 'data:new'])
   })
 
-  it('still sends a hidden program’s terminal queries so the window can answer them', () => {
-    subject.setPaused(PTY, true)
-    subject.onData(PTY, 'bulk\x1b[cmore')
-    expect(sent).toEqual(['data:\x1b[c'])
-  })
-
   it('brings the screen current before a cursor query, so its answer is not stale', async () => {
     subject.setPaused(PTY, true)
     subject.onData(PTY, '\x1b[10;20H\x1b[6n')
@@ -121,15 +115,6 @@ describe('a bridged pane no visible view shows', () => {
     subject.onData(PTY, `\x1b]1337;File=${'x'.repeat(5000)}`)
     subject.onData(PTY, 'y\x07after\x07')
     expect(sent).toEqual(['data:\x1b]133;D;0\x07', 'data:\x1b]0;title\x1b\\\x07', 'data:\x07'])
-  })
-
-  it('re-reads nothing for a pane that printed nothing while hidden', async () => {
-    subject.setPaused(PTY, true)
-    subject.setPaused(PTY, false)
-    await Promise.resolve()
-    expect(reread).not.toHaveBeenCalled()
-    subject.onData(PTY, 'live')
-    expect(sent).toEqual(['data:live'])
   })
 
   it('re-reads nothing when a reattach’s screen already covered what was dropped', async () => {

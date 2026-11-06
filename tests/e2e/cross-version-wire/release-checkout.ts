@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
+import { selectLatestStableReleaseTag } from '../../../config/scripts/release/versioning/stable-release-tags.mjs'
 import {
   populateReleaseCheckoutSource,
   resolveSharedReleaseCacheRoot
@@ -11,6 +11,8 @@ import {
   publishReleaseCheckout,
   type MaterializeReleaseCheckoutTestHooks
 } from './release-checkout-publication.ts'
+import { releaseModuleLocation } from './release-module-locations.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,
@@ -74,6 +76,24 @@ export function resolveBaselineReleaseRef(): string {
   return latest
 }
 
+/** The newest `count` stable desktop releases, newest first: the ones a downgrade can reach. */
+export function resolveRecentStableReleaseRefs(count: number): string[] {
+  let tags = git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)
+  const recent: string[] = []
+  while (recent.length < count) {
+    const latest = selectLatestStableReleaseTag(tags)
+    if (!latest) {
+      throw new Error(
+        `Cross-version harness found ${recent.length} of ${count} stable desktop release tags; ` +
+          'a shallow CI clone needs `fetch-depth: 0`.'
+      )
+    }
+    recent.push(latest)
+    tags = tags.filter((tag) => tag !== latest)
+  }
+  return recent
+}
+
 function resolveCommit(ref: string): string {
   try {
     return git(['rev-parse', `${ref}^{commit}`])
@@ -83,6 +103,10 @@ function resolveCommit(ref: string): string {
         'The ref must exist locally; a shallow CI clone needs `fetch-depth: 0`.'
     )
   }
+}
+
+export async function prepareReleaseCheckoutSnapshot(ref: string): Promise<void> {
+  await prepareReleaseSnapshotSource(REPO_ROOT, resolveCommit(ref))
 }
 
 function checkoutModulePath(root: string, rootRelativePath: string): string {
@@ -103,13 +127,16 @@ function checkoutModulePath(root: string, rootRelativePath: string): string {
 }
 
 // Pass raw absolute forward-slash paths: CI vite-node treats file:// URLs as root-relative ids (run 33049571360).
+// A module main moved loads from wherever this release defines it.
 export function importReleaseCheckoutModule(
   checkout: ReleaseCheckout,
   rootRelativePath: string,
   importModule: (specifier: string) => Promise<Record<string, unknown>> = (specifier) =>
     import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
 ): Promise<Record<string, unknown>> {
-  return importModule(checkoutModulePath(checkout.root, rootRelativePath))
+  return importModule(
+    checkoutModulePath(checkout.root, releaseModuleLocation(checkout.root, rootRelativePath))
+  )
 }
 
 /** An export a release module must define; callers name the shape they use, so a changed one fails the test. */

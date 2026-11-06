@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { useAppStore } from '../../store'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -85,6 +85,8 @@ export function useTabGroupItemProjections({
             defaultTitle: terminalTab?.defaultTitle,
             quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
             generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
+            // Why: the strip re-resolves this title; without the session title the first-prompt title wins.
+            aiVaultTitle: item.aiVaultTitle ?? terminalTab?.aiVaultTitle ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,

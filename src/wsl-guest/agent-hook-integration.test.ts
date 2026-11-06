@@ -13,8 +13,8 @@ import { RelayAgentHookServer } from './agent-hook-server'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
-} from '../shared/agent-hook-relay'
-import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../shared/agent-status-types'
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../shared/agent-status/contracts/agent-status-types'
 import { AgentHookServer } from '../main/agent-hooks/server'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 

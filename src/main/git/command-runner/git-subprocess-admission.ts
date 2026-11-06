@@ -1,10 +1,9 @@
-import {
-  GitAdmissionScheduler,
-  type GitAdmissionGrant,
-  type GitAdmissionRequest
-} from '../../../shared/git-admission-scheduler'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
+import type {
+  GitAdmissionGrant,
+  GitAdmissionRequest
+} from '../../../shared/git/admission/git-admission-state'
 import { resolveGitAdmissionTier } from './git-operation-executor'
-export * from '../../../shared/git-admission-scheduler'
 
 let scheduler = new GitAdmissionScheduler()
 

@@ -3,7 +3,7 @@ import {
   nativeChatLiveLine,
   type NativeChatLiveLine
 } from '../../../../shared/native-chat/transcript/native-chat-live-line'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import {
   buildNativeChatTranscriptSlots,
   type NativeChatTranscriptSlot,
@@ -26,6 +26,7 @@ export function useNativeChatTranscriptSlots({
     receipts,
     turnStatuses,
     turnDiffs,
+    openedPullRequests,
     expandedTurnKeys,
     isWorking,
     lifecycleWorking,
@@ -74,6 +75,7 @@ export function useNativeChatTranscriptSlots({
         receipts,
         turnStatuses,
         turnDiffs,
+        openedPullRequests,
         expandedTurnKeys,
         isWorking,
         lifecycleWorking,
@@ -88,6 +90,7 @@ export function useNativeChatTranscriptSlots({
       liveReasoningId,
       liveTurnKey,
       messages,
+      openedPullRequests,
       receipts,
       subagentChoices,
       subagentSections,

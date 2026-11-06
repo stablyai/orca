@@ -1,13 +1,11 @@
-// Derive pauses from journal state: personal Stop, cleared IDs and cards predating reopen.
+// Derive pauses from journal state: failed turns, personal Stop, clear and reopen.
 // Later accepted turns/Resume lift pauses; per-card holds still require their own action.
 
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
-export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
+export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
 
 /** Memory-only unnamed Stop binding; failedOn affects display, never cancellation ownership. */
 export type JournalStopSettle = {
@@ -35,6 +33,7 @@ export type DerivedQueuePause = {
 }
 
 type QueueCard = {
+  recovers?: string
   messageId?: string
   state: string
   holdReason: string | null
@@ -112,6 +111,7 @@ export function journalUserStopInForce(
 /** Restate clear-lift first, then active Stop/reopen marks so the lift cannot erase them. */
 export type JournalQueuePauseRestatement = {
   lifted: boolean
+  failureHeld?: boolean
   liveStop: JournalStopEvent | null
   reopened: boolean
   cleared?: { operationId: string; messageIds: string[]; lifted?: true }
@@ -124,6 +124,7 @@ export function journalQueuePauseRestatement(
 ): JournalQueuePauseRestatement {
   return {
     lifted: latestAcceptedTurnSequence > 0 || marks.resumedSequence > 0,
+    failureHeld: pauses.some((pause) => pause.reason === 'failed'),
     liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null,
     reopened: pauses.some((pause) => pause.reason === 'restarted'),
     ...(marks.cleared
@@ -141,12 +142,20 @@ export function journalQueuePauseRestatement(
   }
 }
 
+/** A steer joins the same turn, and a Resume written before the failure cannot waive it. A rebuilt
+ * failure sits at the rebuild point, so a Resume at that point was written before it too. */
+export function failedQueueTurnSequence(failedAt: number, resumedSequence: number): number {
+  return failedAt > 0 && failedAt >= resumedSequence ? failedAt : 0
+}
+
 /** Order determines which reason a card held by multiple pauses displays. */
 export function deriveQueuePauses(input: {
   /** Sequences compare only within the same epoch. */
   epoch: string
   marks: JournalQueuePauseMarks
   latestAcceptedTurnSequence: number
+  /** Where the newest turn settled as failed; zero when it has not. */
+  failedAt?: number
   cards: readonly QueueCard[]
   /** Conservative boundary when this handle could not write a reopen mark. */
   reopenFloor: AgentJournalCursor | null
@@ -156,6 +165,10 @@ export function deriveQueuePauses(input: {
   const stop = journalUserStopInForce(marks, latestAcceptedTurnSequence)
   if (stop) {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
+  }
+  const failed = failedQueueTurnSequence(input.failedAt ?? 0, marks.resumedSequence)
+  if (failed) {
+    pauses.push({ reason: 'failed', since: { epoch, sequence: failed } })
   }
   const waiting = input.cards.filter((card) => card.state === 'waiting')
   const cleared = marks.cleared
@@ -202,6 +215,9 @@ function reopenPause(input: {
 }
 
 function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
+  if (pause.reason === 'failed') {
+    return true
+  }
   if (pause.reason === 'cleared') {
     return pause.messageIds?.includes(card.messageId ?? '') ?? false
   }
@@ -226,7 +242,7 @@ export function queuePauseHolding(
   return pauses.find((pause) => queuedBefore(pause, card))
 }
 
-/** Preserve queue order: returned, paused or edited cards block later cards; per-card holds are skipped. */
+/** Returned, queue-paused or edited queue cards block later cards. */
 export function nextSendableQueuedCard<T extends QueueCard & { messageId: string }>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[],
@@ -243,7 +259,7 @@ export function nextSendableQueuedCard<T extends QueueCard & { messageId: string
   return null
 }
 
-/** Publish only pauses Resume can act on, never those hidden behind a returned card. */
+/** Returned queue cards block Resume for their suffix; own-held waiting cards do not. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
   cards: readonly QueueCard[]
@@ -260,14 +276,21 @@ export function resumableQueuePause(
   return null
 }
 
-/** Hide pauses while a later send awaits acceptance; rejection reveals them again. */
-export function queuePauseLiftOnItsWay(
+/** A turn sent after `pause` began that the agent has not answered yet: its acceptance lifts the
+ *  pause, whoever sent it, so the pause is not shown meanwhile; a refusal shows it again. A send
+ *  made before a Stop lifts nothing, so it never counts. */
+export function queuePauseLiftOnItsWay<
+  Submission extends Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>
+>(
   pause: DerivedQueuePause,
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>[]
+  submissions: readonly Submission[],
+  owesSend: (submission: Submission) => boolean = () => true
 ): boolean {
   const anchor = pause.since?.sequence ?? 0
   return submissions.some(
     (submission) =>
-      submission.dispatchState === 'pending' && (submission.acceptedSequence ?? 0) > anchor
+      submission.dispatchState === 'pending' &&
+      (submission.acceptedSequence ?? 0) > anchor &&
+      owesSend(submission)
   )
 }
