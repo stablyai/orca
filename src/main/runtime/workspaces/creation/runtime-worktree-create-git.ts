@@ -208,12 +208,15 @@ export async function getWorktreeCreateStartSuffix(
     args.repo.path,
     args.localWorktreeGitOptions
   )
-  // Branches carry the .lock rewrite, so scan by the base name a branch would get.
-  return getWorktreeCreateStartingSuffix(
-    sanitizedName,
-    existingNames.map((name) => stripBranchPrefix(name, branchPrefix)),
-    rewriteBranchLockSuffix(sanitizedName)
-  )
+  return getWorktreeCreateStartingSuffix({
+    baseName: sanitizedName,
+    // Branches carry the prefix and the .lock rewrite; folders and candidates never do.
+    branchBaseName: branchPrefix
+      ? `${branchPrefix}/${rewriteBranchLockSuffix(sanitizedName)}`
+      : rewriteBranchLockSuffix(sanitizedName),
+    existingBranchNames: existingNames,
+    existingCandidateNames: existingNames.map((name) => stripBranchPrefix(name, branchPrefix))
+  })
 }
 
 function stripBranchPrefix(name: string, branchPrefix: string | null): string {

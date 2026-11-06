@@ -23,24 +23,59 @@ describe('generated worktree create candidates', () => {
 })
 
 describe('worktree create starting suffix', () => {
+  const unprefixed = (names: readonly string[]) => ({
+    baseName: 'feature',
+    branchBaseName: 'feature',
+    existingBranchNames: names,
+    existingCandidateNames: names
+  })
+
   it('starts beyond the highest existing numeric suffix only when the base name is taken', () => {
     const existing = ['feature', ...Array.from({ length: 100 }, (_, i) => `feature-${i + 1}`)]
-    expect(getWorktreeCreateStartingSuffix('feature', existing)).toBe(101)
-    expect(getWorktreeCreateStartingSuffix('feature', [])).toBe(1)
-    expect(getWorktreeCreateStartingSuffix('feature', ['feature-50'])).toBe(1)
+    expect(getWorktreeCreateStartingSuffix(unprefixed(existing))).toBe(101)
+    expect(getWorktreeCreateStartingSuffix(unprefixed([]))).toBe(1)
+    expect(getWorktreeCreateStartingSuffix(unprefixed(['feature-50']))).toBe(1)
     expect(
-      getWorktreeCreateStartingSuffix('feature', ['feature', 'feature-foo', 'feature-2-3'])
+      getWorktreeCreateStartingSuffix(unprefixed(['feature', 'feature-foo', 'feature-2-3']))
     ).toBe(1)
   })
 
   it('finds the base under the rewritten .lock branch name', () => {
+    const names = ['foo-lock', 'foo.lock-2', 'foo.lock-3']
     expect(
-      getWorktreeCreateStartingSuffix(
-        'foo.lock',
-        ['foo-lock', 'foo.lock-2', 'foo.lock-3'],
-        'foo-lock'
-      )
+      getWorktreeCreateStartingSuffix({
+        baseName: 'foo.lock',
+        branchBaseName: 'foo-lock',
+        existingBranchNames: names,
+        existingCandidateNames: names
+      })
     ).toBe(4)
-    expect(getWorktreeCreateStartingSuffix('foo.lock', ['foo.lock-2'], 'foo-lock')).toBe(1)
+    expect(
+      getWorktreeCreateStartingSuffix({
+        baseName: 'foo.lock',
+        branchBaseName: 'foo-lock',
+        existingBranchNames: ['foo.lock-2'],
+        existingCandidateNames: ['foo.lock-2']
+      })
+    ).toBe(1)
+  })
+
+  it('gates on the prefixed branch, not on an unrelated unprefixed sibling', () => {
+    expect(
+      getWorktreeCreateStartingSuffix({
+        baseName: 'feature',
+        branchBaseName: 'alice/feature',
+        existingBranchNames: ['feature', 'feature-100'],
+        existingCandidateNames: ['feature', 'feature-100']
+      })
+    ).toBe(1)
+    expect(
+      getWorktreeCreateStartingSuffix({
+        baseName: 'feature',
+        branchBaseName: 'alice/feature',
+        existingBranchNames: ['alice/feature', 'alice/feature-100'],
+        existingCandidateNames: ['feature', 'feature-100']
+      })
+    ).toBe(101)
   })
 })

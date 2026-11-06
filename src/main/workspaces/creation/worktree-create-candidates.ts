@@ -6,19 +6,23 @@ export function getWorktreeCreateCandidate(value: string, suffix: number): strin
   return suffix === 1 ? value : `${value}-${suffix}`
 }
 
-/** Starts above the highest existing numeric suffix so probing never re-enters a range known to be taken. */
-export function getWorktreeCreateStartingSuffix(
-  baseName: string,
-  existingNames: readonly string[],
-  branchBaseName = baseName
-): number {
-  // Git rewrites a trailing .lock on the branch only, so the base can be taken under either name.
-  if (!existingNames.includes(baseName) && !existingNames.includes(branchBaseName)) {
+/**
+ * Starts above the highest existing numeric suffix so probing never re-enters a range known to be taken.
+ * The gate reads branch names (they carry the configured prefix and the .lock rewrite); the count reads
+ * candidate names, because the folder never carries the prefix and can collide with an unprefixed sibling.
+ */
+export function getWorktreeCreateStartingSuffix(args: {
+  baseName: string
+  branchBaseName: string
+  existingBranchNames: readonly string[]
+  existingCandidateNames: readonly string[]
+}): number {
+  if (!args.existingBranchNames.includes(args.branchBaseName)) {
     return 1
   }
-  const suffixPrefix = `${baseName}-`
+  const suffixPrefix = `${args.baseName}-`
   let highest = 0
-  for (const existing of existingNames) {
+  for (const existing of args.existingCandidateNames) {
     if (!existing.startsWith(suffixPrefix)) {
       continue
     }
