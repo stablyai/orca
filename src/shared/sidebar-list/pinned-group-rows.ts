@@ -1,3 +1,8 @@
+import {
+  getPinnedGroupKey,
+  getPinnedOccurrenceGroupId,
+  type PinnedGroupSettings
+} from '../pinned-groups'
 import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeExecutionHostId } from '../execution-host'
@@ -13,9 +18,10 @@ export function emitPinnedGroup(
   collapsedGroups: Set<string>,
   result: Row[],
   occurrencePlan: WorktreeOccurrencePlan<Worktree>,
-  hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
+  hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>,
+  settings: PinnedGroupSettings = {}
 ): void {
-  if (pinnedSectionWorktrees.length === 0) {
+  if (pinnedSectionWorktrees.length === 0 && !settings.pinnedGroups?.length) {
     return
   }
   const hostWorktreeCounts = new Map<ExecutionHostId, number>()
@@ -41,10 +47,49 @@ export function emitPinnedGroup(
     return
   }
 
-  appendWorktreeRows(result, repoOf, occurrencePlan, {
-    collapsedGroups,
-    groupDepth: 0,
-    sectionKey: PINNED_GROUP_KEY,
-    hostContextLabelByWorktreeIdentity
-  })
+  const occurrences = occurrencePlan.bySection.get(PINNED_GROUP_KEY) ?? []
+  const groupIdByOccurrenceKey = new Map(
+    occurrences.map((occurrence) => [
+      occurrence.key,
+      getPinnedOccurrenceGroupId(occurrence, settings)
+    ])
+  )
+  const appendGroup = (groupId: string | undefined): void => {
+    appendWorktreeRows(result, repoOf, occurrencePlan, {
+      collapsedGroups,
+      groupDepth: groupId === undefined ? 0 : 1,
+      sectionKey: PINNED_GROUP_KEY,
+      occurrenceFilter: (occurrence) => groupIdByOccurrenceKey.get(occurrence.key) === groupId,
+      hostContextLabelByWorktreeIdentity
+    })
+  }
+  appendGroup(undefined)
+  for (const group of [...(settings.pinnedGroups ?? [])].sort((a, b) => a.order - b.order)) {
+    const members = occurrences
+      .filter((occurrence) => groupIdByOccurrenceKey.get(occurrence.key) === group.id)
+      .map((occurrence) => occurrence.row)
+    const groupHostIds = new Map<ExecutionHostId, string[]>()
+    for (const worktree of members) {
+      const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
+      const ids = groupHostIds.get(hostId) ?? []
+      ids.push(worktree.id)
+      groupHostIds.set(hostId, ids)
+    }
+    const key = getPinnedGroupKey(group.id)
+    result.push({
+      type: 'header',
+      key,
+      collapseKey: key,
+      label: group.name,
+      icon: { kind: 'pinned' },
+      projectGroupDepth: 1,
+      count: members.length,
+      worktreeIds: members.map((worktree) => worktree.id),
+      hostWorktreeCounts: new Map([...groupHostIds].map(([hostId, ids]) => [hostId, ids.length])),
+      hostWorktreeIds: groupHostIds
+    })
+    if (!collapsedGroups.has(key)) {
+      appendGroup(group.id)
+    }
+  }
 }

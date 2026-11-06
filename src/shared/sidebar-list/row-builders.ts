@@ -71,6 +71,7 @@ export function appendWorktreeRows(
   plan: WorktreeOccurrencePlan<Worktree>,
   options: {
     collapsedGroups: Set<string>
+    occurrenceFilter?: (occurrence: WorktreeOccurrence<Worktree>) => boolean
     groupDepth: number
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
@@ -79,7 +80,9 @@ export function appendWorktreeRows(
     folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   }
 ): void {
-  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  const sectionOccurrences = (plan.bySection.get(options.sectionKey) ?? []).filter(
+    (occurrence) => !options.occurrenceFilter || options.occurrenceFilter(occurrence)
+  )
   const childIdsByParent = new Map<string, string[]>()
   for (const occurrence of sectionOccurrences) {
     if (occurrence.parent) {

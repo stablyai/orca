@@ -1,3 +1,5 @@
+import type { SidebarFeedCatalog } from './sidebar-feed-catalog'
+export type { SidebarFeedCatalog } from './sidebar-feed-catalog'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getWorktreeExecutionHostId,
@@ -8,8 +10,6 @@ import {
 } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import { getLogicalRepoOrderRankById } from '../project-section-order'
-import type { ProjectSectionModel } from '../project-section-grouping'
-import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import {
   filterFolderWorkspacesFromOtherDevices,
@@ -75,13 +75,6 @@ export type SidebarFeedView = {
   localHostLabel: string
   /** The desktop window's own saved host order, which it writes; a phone reads the host's. */
   workspaceHostOrder?: readonly ExecutionHostId[]
-}
-
-/** The catalog the feed does not carry: every host's repos (repo.list), groups and projects. */
-export type SidebarFeedCatalog = {
-  repos: readonly Repo[]
-  projectGroups: readonly ProjectGroup[]
-  projectGrouping: ProjectSectionModel
 }
 
 export type SidebarFeedRows = {
@@ -245,6 +238,8 @@ export function planSidebarFeedRows(
     hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
     defaultHostId,
     pinnedDisplayPolicy: view.pinnedDisplayPolicy,
+    pinnedGroups: domains.desktop?.pinnedGroups,
+    pinnedGroupByWorktreeIdentity: domains.desktop?.pinnedGroupByWorktreeIdentity,
     filterRepoIds: view.filters.filterRepoIds
   })
   return {
