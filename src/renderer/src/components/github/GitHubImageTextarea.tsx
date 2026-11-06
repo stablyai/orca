@@ -11,13 +11,13 @@ type Props = Omit<ComponentProps<typeof ImeTextarea>, 'value' | 'onChange' | 're
 }
 
 export function GitHubImageTextarea({ value, onValueChange, imageUpload, ref, ...props }: Props) {
-  const { attachDrop } = images
   const hasImageUpload = !!imageUpload
   const node = useRef<HTMLTextAreaElement | null>(null)
   const images = useGitHubTextareaImages(node, value, onValueChange, {
     ...imageUpload,
     enabled: !!imageUpload && !props.disabled
   })
+  const { attachDrop } = images
   const attach = useCallback(
     (element: HTMLTextAreaElement | null) => {
       if (hasImageUpload) {

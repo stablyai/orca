@@ -10,8 +10,20 @@ const { upload } = vi.hoisted(() => ({ upload: vi.fn() }))
 vi.mock('./github-image-upload', () => ({ captureGitHubImageUpload: () => upload }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 afterEach(cleanup)
-function Draft({ mentions = false }: { mentions?: boolean }) {
-  const [body, setBody] = useState('hello ')
+function Draft({
+  mentions = false,
+  initialBody = 'hello ',
+  onChange
+}: {
+  mentions?: boolean
+  initialBody?: string
+  onChange?: (value: string) => void
+}) {
+  const [body, setBody] = useState(initialBody)
+  const emit = (value: string) => {
+    onChange?.(value)
+    setBody(value)
+  }
   const images = useGitHubImagePending()
   const ref = useRef<HTMLTextAreaElement>(null)
   const imageUpload = {
@@ -30,7 +42,7 @@ function Draft({ mentions = false }: { mentions?: boolean }) {
       {mentions ? (
         <MentionTextarea
           value={body}
-          onValueChange={setBody}
+          onValueChange={emit}
           textareaRef={ref}
           placeholder="Draft"
           rows={3}
@@ -42,7 +54,7 @@ function Draft({ mentions = false }: { mentions?: boolean }) {
       ) : (
         <GitHubImageTextarea
           value={body}
-          onValueChange={setBody}
+          onValueChange={emit}
           imageUpload={imageUpload}
           aria-label="Draft"
         />
@@ -113,3 +125,52 @@ it('delivers a File drop through the registered owner and detaches an externally
   expect(field.value).toBe('Replacement')
   expect(view.container.querySelector('output')?.textContent).toBe('Replacement')
 })
+
+it.each([2, 20])(
+  'keeps typing independent of %i historical labels and retires them with the draft',
+  async (count) => {
+    upload.mockReset().mockResolvedValue('https://github.com/user-attachments/assets/completed')
+    const changed = vi.fn()
+    const view = render(<Draft initialBody={'text '.repeat(count * 100)} onChange={changed} />)
+    const field = view.getByRole('textbox') as HTMLTextAreaElement
+    field.setSelectionRange(field.value.length, field.value.length)
+    fireEvent.paste(field, {
+      clipboardData: {
+        files: Array.from(
+          { length: count },
+          (_, index) => new File(['png'], `history-${index}.png`, { type: 'image/png' })
+        )
+      }
+    })
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(count))
+    await waitFor(() => expect(field.value).not.toContain('Uploading'))
+    let historicalSearches = 0
+    const originalIndexOf = String.prototype.indexOf
+    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+      this: string,
+      needle: string,
+      position?: number
+    ) {
+      if (needle.startsWith('![Uploading ')) {
+        historicalSearches++
+      }
+      return originalIndexOf.call(this, needle, position)
+    })
+    changed.mockClear()
+    try {
+      fireEvent.change(field, { target: { value: `${field.value} typed` } })
+      expect(historicalSearches).toBe(0)
+      expect(changed).toHaveBeenCalledOnce()
+      expect(field.value.endsWith(' typed')).toBe(true)
+    } finally {
+      search.mockRestore()
+    }
+    fireEvent.change(field, { target: { value: `${field.value}![Uploading history-0.png…]()` } })
+    expect(field.value).not.toContain('Uploading')
+    fireEvent.click(view.getByRole('button', { name: 'Replace' }))
+    fireEvent.change(field, { target: { value: 'Replacement ![Uploading history-0.png…]()' } })
+    expect(view.container.querySelector('output')?.textContent).toBe(
+      'Replacement ![Uploading history-0.png…]()'
+    )
+  }
+)

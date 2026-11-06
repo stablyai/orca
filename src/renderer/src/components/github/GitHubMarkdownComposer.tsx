@@ -138,7 +138,7 @@ export function GitHubMarkdownComposer({
     content: encodeRawMarkdownHtmlForRichEditor(value, codec),
     contentType: 'markdown',
     editorProps: {
-      handlePaste: images.handlePaste,
+      handleDOMEvents: { paste: images.handlePaste },
       transformPastedHTML: images.transformPastedHTML,
       attributes: {
         class: cn('rich-markdown-editor github-markdown-composer-editor', minHeightClassName),

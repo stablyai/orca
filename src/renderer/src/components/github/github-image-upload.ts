@@ -39,12 +39,17 @@ export function captureGitHubImageUpload(
   }
   const call = <T>(method: string, params?: unknown) =>
     callRuntimeRpc<T>(runtime, method, params, { ...options, timeoutMs: 120_000 })
+  let supported: Promise<void> | undefined
   return async (file) => {
     assertGitHubImage(file.type, file.size)
-    const status = await call<RuntimeStatus>('status.get')
-    if (!status.capabilities?.includes(GITHUB_IMAGE_ATTACHMENT_CAPABILITY)) {
-      throw new Error('This Orca server cannot upload images yet. Update it, or use an image URL.')
-    }
+    supported ??= call<RuntimeStatus>('status.get').then((status) => {
+      if (!status.capabilities?.includes(GITHUB_IMAGE_ATTACHMENT_CAPABILITY)) {
+        throw new Error(
+          'This Orca server cannot upload images yet. Update it, or use an image URL.'
+        )
+      }
+    })
+    await supported
     const contentBase64 = await blobToBase64(file)
     const { uploadId } = await call<{ uploadId: string }>('clipboard.startImageUpload', {
       expectedBase64Length: contentBase64.length,

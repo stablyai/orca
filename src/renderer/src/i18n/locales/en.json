@@ -23616,7 +23616,8 @@
     },
     "pasteImageFile": "Paste the image as a file to attach it to GitHub.",
     "imageUploadFailed": "Could not attach image: {{message}}",
-    "imageUploadError": "GitHub could not upload this image."
+    "imageUploadError": "GitHub could not upload this image.",
+    "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",

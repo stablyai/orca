@@ -34,7 +34,7 @@ export function useGitHubImagePaste(
         group: 'inline',
         atom: true,
         addAttributes: () => ({ id: { default: null }, name: { default: '' } }),
-        renderHTML: ({ node }) => ['span', {}, `Uploading ${node.attrs.name}…`],
+        renderHTML: () => ['span'],
         renderMarkdown: () => '',
         addNodeView:
           () =>
@@ -109,15 +109,28 @@ export function useGitHubImagePaste(
     extension,
     pending: uploads.pending,
     attachDrop: events.attachDrop,
-    handlePaste: (_view: unknown, event: ClipboardEvent) => events.paste(event),
-    transformPastedHTML: (html: string) => {
-      if (!/\bsrc\s*=\s*["']?data:/i.test(html)) {
-        return html
+    handlePaste: (_view: unknown, event: ClipboardEvent) => {
+      if (!events.paste(event)) {
+        return false
       }
+      event.preventDefault()
+      return true
+    },
+    transformPastedHTML: (html: string) => {
       const document = new DOMParser().parseFromString(html, 'text/html')
-      const images = document.querySelectorAll('img[src^="data:" i]')
-      if (images.length) {
-        images.forEach((image) => image.remove())
+      let removed = false
+      for (const image of document.querySelectorAll('img[src]')) {
+        try {
+          if (new URL(image.getAttribute('src') ?? '', 'https://github.com').protocol !== 'data:') {
+            continue
+          }
+          image.remove()
+          removed = true
+        } catch {
+          // Invalid image URLs are left to the editor's normal parser.
+        }
+      }
+      if (removed) {
         toast.error(
           translate('github.pasteImageFile', 'Paste the image as a file to attach it to GitHub.')
         )

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
+import { toast } from 'sonner'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -37,6 +38,7 @@ const comment: PRComment = {
 
 beforeEach(() => {
   addIssueComment.mockReset()
+  vi.mocked(toast.error).mockClear()
   vi.stubGlobal('api', { gh: { addIssueComment } })
 })
 afterEach(() => {
@@ -179,13 +181,14 @@ describe('GitHubMarkdownComposer submission', () => {
 const imageUploads = vi.hoisted(() => ({ upload: vi.fn() }))
 vi.mock('./github-image-upload', () => ({ captureGitHubImageUpload: () => imageUploads.upload }))
 
-function ImageDraft() {
+function ImageDraft({ tabbed = false }: { tabbed?: boolean }) {
   const [value, setValue] = React.useState('')
   return (
     <GitHubMarkdownComposer
       value={value}
       onChange={setValue}
       placeholder="Image draft"
+      layout={tabbed ? 'tabbed' : 'stacked'}
       imageUploadAddress={{
         runtime: { kind: 'local' },
         target: { kind: 'repo', repo: 'repo', source: 'issue' }
@@ -267,7 +270,7 @@ it('keeps an image-only controlled draft pending and removes failed placeholders
 it('finishes against the same editor while Preview temporarily hides its DOM', async () => {
   const held = Promise.withResolvers<string>()
   imageUploads.upload.mockReset().mockReturnValue(held.promise)
-  const view = render(<ImageDraft />)
+  const view = render(<ImageDraft tabbed />)
   await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
   fireEvent.paste(getComposerEditor(view.container), {
     clipboardData: {
@@ -275,9 +278,9 @@ it('finishes against the same editor while Preview temporarily hides its DOM', a
       getData: () => ''
     }
   })
-  fireEvent.click(view.getByRole('button', { name: 'Preview' }))
+  fireEvent.click(view.getByRole('tab', { name: 'Preview' }))
   await act(async () => held.resolve('https://github.com/user-attachments/assets/preview'))
-  fireEvent.click(view.getByRole('button', { name: 'Write' }))
+  fireEvent.click(view.getByRole('tab', { name: 'Write' }))
   await waitFor(() =>
     expect(getComposerEditor(view.container).querySelector('img')?.getAttribute('src')).toBe(
       'https://github.com/user-attachments/assets/preview'
@@ -322,4 +325,49 @@ it('retains only clean surrounding text when a pending draft is closed and reope
   await act(async () => held.resolve('https://github.com/user-attachments/assets/orphan'))
   await waitFor(() => expect(getComposerEditor(view.container).textContent).toBe('Keep this text'))
   expect(getComposerEditor(view.container).querySelector('img')).toBeNull()
+})
+
+it('gives image Files precedence over the same image in clipboard HTML', async () => {
+  imageUploads.upload
+    .mockReset()
+    .mockResolvedValue('https://github.com/user-attachments/assets/mixed')
+  const view = render(<ImageDraft />)
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  fireEvent.paste(getComposerEditor(view.container), {
+    clipboardData: {
+      files: [new File(['png'], 'mixed.png', { type: 'image/png' })],
+      getData: (type: string) =>
+        type === 'text/html' ? '<p><img src="data:image/png;base64,AQID"></p>' : ''
+    }
+  })
+  await waitFor(() =>
+    expect(getComposerEditor(view.container).querySelector('img')?.getAttribute('src')).toBe(
+      'https://github.com/user-attachments/assets/mixed'
+    )
+  )
+  expect(imageUploads.upload).toHaveBeenCalledOnce()
+  expect(toast.error).not.toHaveBeenCalled()
+})
+
+it('refuses normalized data-image HTML without dropping surrounding text', async () => {
+  imageUploads.upload.mockReset()
+  const onChange = vi.fn()
+  const view = render(
+    <GitHubMarkdownComposer value="" onChange={onChange} placeholder="HTML image" />
+  )
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  fireEvent.paste(getComposerEditor(view.container), {
+    clipboardData: {
+      files: [],
+      getData: (type: string) =>
+        type === 'text/html'
+          ? '<p>before<img src=" data:image/png;base64,AQID" alt="screen">after</p>'
+          : ''
+    }
+  })
+  await waitFor(() => expect(onChange).toHaveBeenCalled())
+  expect(onChange.mock.lastCall?.[0]).toBe('beforeafter')
+  expect(getComposerEditor(view.container).querySelector('img')).toBeNull()
+  expect(toast.error).toHaveBeenCalledOnce()
+  expect(imageUploads.upload).not.toHaveBeenCalled()
 })

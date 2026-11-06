@@ -140,9 +140,14 @@ export function createFakeAgentBrowserChild<T extends object>(fields: T): EventE
 }
 
 /** The agent-browser command a spawn ran: batch commands arrive on stdin, raw CLI tokens in argv. */
-export function agentBrowserCommandOf(args: readonly string[], stdin?: string): string[] {
+export function agentBrowserCommandOf(
+  args: readonly string[],
+  stdin?: string | Uint8Array
+): string[] {
   if (stdin !== undefined && args.includes('batch')) {
-    const [command]: string[][] = JSON.parse(stdin)
+    const [command]: string[][] = JSON.parse(
+      typeof stdin === 'string' ? stdin : Buffer.from(stdin).toString('utf8')
+    )
     return command
   }
   let start = 0

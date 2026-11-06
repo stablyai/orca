@@ -33,7 +33,7 @@ export async function uploadGitHubImage(args: {
     admitted = true
     const options = { ...ghOptions, signal, idempotent: false, timeout: 120_000 }
     const { stdout } = await ghExecFileAsync(
-      ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}`],
+      ['api', '--cache', '60s', `repos/${ownerRepo.owner}/${ownerRepo.repo}`],
       options
     )
     const repository: { id?: number } = JSON.parse(stdout)

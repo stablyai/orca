@@ -205,6 +205,8 @@ export function PRCommentGroupView({
 }
 
 export function ResolvedCommentGroupsSection({
+  imageUploadAddress,
+  editImageUploadAddress,
   groups,
   botAuthorOverrides,
   replyingCommentId,
@@ -221,6 +223,8 @@ export function ResolvedCommentGroupsSection({
   onSetReaction,
   onOpenLocation
 }: {
+  imageUploadAddress?: GitHubImageIntake['address']
+  editImageUploadAddress?: GitHubImageIntake['address']
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
   replyingCommentId: number | null
@@ -260,6 +264,8 @@ export function ResolvedCommentGroupsSection({
           <AccordionContent className={presentation.resolvedSectionContent}>
             {groups.map((group) => (
               <PRCommentGroupView
+                imageUploadAddress={imageUploadAddress}
+                editImageUploadAddress={editImageUploadAddress}
                 key={getPRCommentGroupId(group)}
                 group={group}
                 botAuthorOverrides={botAuthorOverrides}

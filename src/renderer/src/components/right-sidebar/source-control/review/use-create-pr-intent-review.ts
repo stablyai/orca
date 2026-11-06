@@ -24,17 +24,10 @@ import {
   resolveCreatePrIntentReviewBase,
   shouldAttemptCreateHostedReviewForIntent,
   shouldAttemptCreateHostedReviewForIntent as shouldGenerateHostedReviewDetailsForIntent,
+  type CreatePrIntentReviewOptions,
   type CreatePrIntentRunToken
 } from './create-pr-intent-flow'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
-import type { SourceControlAi } from '../ai/use-ai'
-import type { SourceControlStoreActions } from '../listing/use-store-actions'
-import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
-import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
-import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
-import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
-import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
-import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 /** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
@@ -55,29 +48,27 @@ export function useSourceControlCreatePrIntentReview({
   setCreatePrInFlightByWorktree,
   setCreatePrIntentNoticeForWorktree,
   settings
-}: Pick<SourceControlCreateReviewComposer, 'prBase' | 'prBody'> & {
-  activeRepo: SourceControlWorktreeContext['activeRepo']
-  createHostedReview: SourceControlStoreActions['createHostedReview']
-  createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
-  createPrIntentActiveTargetConflicts: SourceControlWorktreeOperationState['createPrIntentActiveTargetConflicts']
-  createPrIntentCurrentTargetRef: SourceControlWorktreeOperationState['createPrIntentCurrentTargetRef']
-  createPrIntentRunStillOwnsWorktree: SourceControlWorktreeOperationState['createPrIntentRunStillOwnsWorktree']
-  getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
-  handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
-  hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
-  prImageUploadPendingRef?: React.RefObject<boolean>
-  resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
-  setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
-  setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
-  settings: SourceControlWorktreeContext['settings']
-}) {
+}: CreatePrIntentReviewOptions) {
   const createHostedReviewForCreatePrIntent = useCallback(
     async (
       token: CreatePrIntentRunToken,
       eligibility: HostedReviewCreationEligibility
     ): Promise<boolean> => {
+      const imagesPending = (): boolean => {
+        if (!prImageUploadPendingRef?.current) {
+          return false
+        }
+        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+          tone: 'muted',
+          message: translate(
+            'github.waitForImageUploads',
+            'Wait for images to finish uploading, then retry Create PR.'
+          )
+        })
+        return true
+      }
       if (
-        prImageUploadPendingRef?.current ||
+        imagesPending() ||
         !activeRepo ||
         !token.branch ||
         !shouldAttemptCreateHostedReviewForIntent(eligibility)
@@ -179,7 +170,7 @@ export function useSourceControlCreatePrIntentReview({
       }
 
       if (
-        prImageUploadPendingRef?.current ||
+        imagesPending() ||
         !createPrIntentRunStillOwnsWorktree(token) ||
         createPrIntentActiveTargetConflicts(token)
       ) {

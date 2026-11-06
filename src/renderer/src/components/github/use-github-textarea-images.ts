@@ -23,15 +23,22 @@ export function useGitHubTextareaImages(
   const uploads = useGitHubImageUploads(options)
   const displayed = shadow.body === value ? shadow : { body: value, display: value, markers: [] }
   useLayoutEffect(() => {
+    if (current.current.body !== value) {
+      known.current.clear()
+    }
     current.current = displayed
     changeRef.current = onChange
   })
 
   const publish = (display: string, markers: Marker[]) => {
-    let body = display
-    for (const marker of markers.toReversed()) {
-      body = body.slice(0, marker.start) + body.slice(marker.end)
+    const parts: string[] = []
+    let cursor = 0
+    for (const marker of markers) {
+      parts.push(display.slice(cursor, marker.start))
+      cursor = marker.end
     }
+    parts.push(display.slice(cursor))
+    const body = parts.join('')
     const next = { body, display, markers }
     current.current = next
     setShadow(next)
@@ -39,6 +46,16 @@ export function useGitHubTextareaImages(
   }
   const change = (next: string) => {
     const previous = current.current
+    if (next === previous.display) {
+      const caret = before.current?.start ?? textarea.current?.selectionStart ?? next.length
+      before.current = null
+      return caret
+    }
+    if (!previous.markers.length && !known.current.size) {
+      before.current = null
+      publish(next, [])
+      return textarea.current?.selectionStart ?? next.length
+    }
     let start = 0
     while (start < previous.display.length && previous.display[start] === next[start]) {
       start++
@@ -76,25 +93,27 @@ export function useGitHubTextareaImages(
           ? { ...marker, start: marker.start + delta, end: marker.end + delta }
           : marker
       )
-    // Native undo can restore a deleted label; only this editor's own labels are disposable.
-    for (const token of known.current) {
-      let index = display.indexOf(token)
-      while (index >= 0) {
-        if (
-          markers.some((marker) => marker.start === index && marker.end === index + token.length)
-        ) {
-          index = display.indexOf(token, index + token.length)
-          continue
+    // Undo can restore labels after their range disappeared; only this draft's generated labels retire.
+    const active = new Set(markers.map((marker) => marker.start))
+    const removed: { start: number; length: number }[] = []
+    display = display.replace(
+      /!\[Uploading (?:\\.|[^\\\]])*…\]\(\)/g,
+      (token: string, offset: number) => {
+        if (active.has(offset) || !known.current.has(token)) {
+          return token
         }
-        display = display.slice(0, index) + display.slice(index + token.length)
-        markers = markers.map((marker) =>
-          marker.start > index
-            ? { ...marker, start: marker.start - token.length, end: marker.end - token.length }
-            : marker
-        )
-        index = display.indexOf(token, index)
+        removed.push({ start: offset, length: token.length })
+        return ''
       }
-    }
+    )
+    let shift = 0
+    let index = 0
+    markers = markers.map((marker) => {
+      while (index < removed.length && removed[index].start < marker.start) {
+        shift += removed[index++].length
+      }
+      return { ...marker, start: marker.start - shift, end: marker.end - shift }
+    })
     publish(display, markers)
     return from + inserted.length
   }
@@ -104,7 +123,8 @@ export function useGitHubTextareaImages(
     let end = selection?.end ?? textarea.current?.selectionEnd ?? caret
     return uploads.receive(files, (file) => {
       const id = createNonSecureContextUuid()
-      const token = `![Uploading ${file.name || 'image.png'}…]()`
+      const label = (file.name || 'image.png').replace(/[\\[\]]/g, '\\$&').replace(/[\r\n]/g, ' ')
+      const token = `![Uploading ${label}…]()`
       known.current.add(token)
       const previous = current.current
       before.current = { start: caret, end }
