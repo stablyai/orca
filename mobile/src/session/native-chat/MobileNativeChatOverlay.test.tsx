@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { findByHostType } from '../../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', async () => ({
   ...(await import('../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
@@ -35,7 +36,9 @@ vi.mock('./MobileNativeChatView', () => ({
 const message = (id: string): NativeChatMessage => ({
   id,
   role: 'assistant',
-  blocks: [{ type: 'text', text: `reply ${id}` }]
+  blocks: [{ type: 'text', text: `reply ${id}` }],
+  timestamp: null,
+  source: 'transcript'
 })
 
 function overlay(showNativeChat: boolean, messages: NativeChatMessage[]) {
@@ -61,7 +64,7 @@ function overlay(showNativeChat: boolean, messages: NativeChatMessage[]) {
       isAttaching: false,
       attachImage: async () => {},
       removeAttachment: () => {},
-      sendNativeChat: () => {}
+      sendNativeChat: async () => true
     },
     onMicPress: undefined,
     micActive: false,
@@ -83,7 +86,7 @@ function overlay(showNativeChat: boolean, messages: NativeChatMessage[]) {
 }
 
 let renderer: ReactTestRenderer | null = null
-const chatView = () => renderer!.root.find((node) => node.type === 'ChatView').props
+const chatView = () => findByHostType(renderer!.root, 'ChatView').props
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
