@@ -34,7 +34,8 @@ function parseWindow(value: unknown, windowMinutes: number): RateLimitWindow | n
     return undefined
   }
   return {
-    usedPercent: value.usedPercent,
+    // Muse reports over-quota usage above 100; meters share the 0-100 contract.
+    usedPercent: Math.min(100, Math.max(0, value.usedPercent)),
     windowMinutes,
     resetsAt: isTimestampMs(value.resetsAtMs) ? value.resetsAtMs : null,
     resetDescription: null
@@ -96,8 +97,8 @@ export function parseMuseUsageStdout(stdout: string, now: number): MuseUsageRead
       provider: 'muse',
       session,
       weekly,
-      // asOfMs is when Muse minted the reading; never let a skewed clock date it in the future.
-      updatedAt: isTimestampMs(allowance.asOfMs) ? Math.min(allowance.asOfMs, now) : now,
+      // Fetch time drives refresh cadence; a cached older asOfMs must not read as stale.
+      updatedAt: now,
       planType: typeof allowance.tier === 'string' && allowance.tier ? allowance.tier : null,
       error: null,
       status: 'ok',

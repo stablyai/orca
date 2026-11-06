@@ -23,7 +23,7 @@ describe('parseMuseUsageStdout', () => {
           resetsAt: 1794182400000,
           resetDescription: null
         },
-        updatedAt: 1793948472512,
+        updatedAt: 1793948500000,
         planType: 'Muse Code Everyday Usage',
         error: null,
         status: 'ok',
