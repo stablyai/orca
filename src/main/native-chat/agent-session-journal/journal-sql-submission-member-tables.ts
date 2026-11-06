@@ -29,8 +29,8 @@ export const journalSqlSubmissionMemberTables = {
 
 export function journalSqlSubmissionMemberTable(collection: string): string | undefined {
   if (Object.hasOwn(journalSqlSubmissionMemberTables, collection)) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the named input membership families own these tables.
     return journalSqlSubmissionMemberTables[
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the named input membership families own these tables.
       collection as keyof typeof journalSqlSubmissionMemberTables
     ].table
   }

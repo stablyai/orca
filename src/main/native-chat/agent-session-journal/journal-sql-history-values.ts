@@ -90,9 +90,9 @@ export class JournalSqlHistoryValues {
       const key = JSON.stringify(row.client_message_id)
       if (!this.submissions.has(key)) {
         this.submissionOrder.set(key, Number(row.input_ordinal))
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the submissions collection owns these typed values.
         this.submissions.set(
           key,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the submissions collection owns these typed values.
           this.values.load(
             { collection: 'submissions', key, incarnation: Number(row.incarnation), path: [] },
             parseJournalSqlValue(row.payload_json, [], (json) => this.scope.parse(json))

@@ -39,6 +39,7 @@ export class JournalSqlReducer {
     })
     const state = createJournalReducerState(scope.sessionId, epoch, originalAcceptance, storage)
     this.scalars = new JournalSqlScalars(scope, 'reducer')
+    const historyOrigin: JournalReducerState['historyOrigin'] = null
     this.scalars.define(state, {
       contextBoundary: 1,
       lastSequence: 0,
@@ -46,7 +47,7 @@ export class JournalSqlReducer {
       oldestSequence: 1,
       highestFence: 0,
       latestAcceptedTurnSequence: 0,
-      historyOrigin: null as JournalReducerState['historyOrigin']
+      historyOrigin
     })
     new JournalSqlScalars(scope, 'queue').define(state.queue, { revision: 0 })
     new JournalSqlScalars(scope, 'inputs').define(state.inputs, { revision: 0 })

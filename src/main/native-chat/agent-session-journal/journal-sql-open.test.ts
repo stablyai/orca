@@ -7,12 +7,11 @@ import { JournalSqlBatch } from './journal-sql-batch'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { advanceJournalOutcomeSource } from './journal-outcome-format'
-import { JournalProjectionStaleError } from './journal-sql-meta'
+import { currentJournalSqlEpoch, JournalProjectionStaleError } from './journal-sql-meta'
 import type { JournalWriterCommand, JournalWriterOperation } from './journal-writer-command'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readJournalSessionEpoch } from './journal-row-table'
-import { currentJournalSqlEpoch } from './journal-sql-meta'
 
 const databases: Database.Database[] = []
 afterEach(() => {

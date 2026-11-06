@@ -107,15 +107,12 @@ export async function runJournalWriterOperation(
   const { queuedMessages: queue, submissionWriter } = collaborators
   switch (operation.kind) {
     case 'submission': {
-      const { consume } = operation
-      const { owed, ...selection } = consume ?? {}
-      return submissionWriter.append(
-        operation.input,
-        consume
-          ? { ...(selection as JournalSubmissionConsume), ...(owed ? { owed: session.owed } : {}) }
-          : undefined,
-        receipt
-      )
+      let consume: JournalSubmissionConsume | undefined
+      if (operation.consume) {
+        const { owed, ...selection } = operation.consume
+        consume = { ...selection, ...(owed ? { owed: session.owed } : {}) }
+      }
+      return submissionWriter.append(operation.input, consume, receipt)
     }
     case 'accept-late':
       queue.rederiveLegacyWitnesses()

@@ -20,8 +20,8 @@ export function writeJournalSqlCardMemberColumns(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the declared card families select a table.
   const table = TABLES[location.collection as keyof typeof TABLES]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: indexed cards retain their card/source pair and flags; the other families retain a card.
   const indexed =
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: indexed cards retain their card/source pair and flags; the other families retain a card.
     location.collection === 'cards.indexed' ? (value as JournalIndexedInputCard) : undefined
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the other declared card families hold a QueuedMessageRow.
   const card = indexed ? indexed.card : (value as QueuedMessageRow)

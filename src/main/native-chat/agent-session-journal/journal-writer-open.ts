@@ -46,5 +46,5 @@ function liveWorkItemKeys(session: JournalWriterSession): string[] {
     .prepare(`SELECT entry_key FROM journal_proj_items INDEXED BY journal_proj_items_live_work
     WHERE session_id=? AND epoch=? AND live_work=1 ORDER BY ordinal`)
     .all(...session.scopePrefix())
-    .map((row) => JSON.parse(String(row.entry_key)) as string)
+    .map((row) => String(JSON.parse(String(row.entry_key))))
 }

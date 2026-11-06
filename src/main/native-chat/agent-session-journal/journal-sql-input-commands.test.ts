@@ -187,12 +187,14 @@ async function both<T>(
     (error: unknown) => ({ error })
   )
   const actual = await side.run(operation, facts).then(
-    (commit) => ({ value: (commit as { value?: unknown }).value }),
+    (commit) => ({ value: commit.value }),
     (error: unknown) => ({ error })
   )
   if ('error' in expected) {
     expect(actual).toMatchObject({ error: expect.any(Error) })
-    expect((actual as { error: Error }).error.name).toBe((expected.error as Error).name)
+    const name = (result: { error?: unknown }) =>
+      result.error instanceof Error ? result.error.name : undefined
+    expect(name(actual)).toBe(name(expected))
   } else {
     expect(actual).toEqual(expected)
   }

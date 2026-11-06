@@ -184,8 +184,8 @@ export class JournalOutcomeFold {
       : admitJournalOutcome(row)
     let kept = admitted.kept
     if (this.itemAdmission && value.field === 'items' && !value.deleted) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: item admission checked this JSON graph without transforming it.
       kept = this.itemAdmission.admit(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: item admission checked this JSON graph without transforming it.
         admitted.kept as AgentJournalRenderItem,
         value,
         this.itemAdmission.generation

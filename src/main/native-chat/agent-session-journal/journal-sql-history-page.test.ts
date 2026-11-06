@@ -10,7 +10,10 @@ import {
   readAgentSessionHydrationPage
 } from '../agent-session-wire/agent-session-history-page'
 import { measureHistoryItem } from '../agent-session-wire/agent-session-history-page-bounds'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  publishTestJournalEpoch
+} from './journal-host-database-test-support'
 import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { JournalProjectionStaleError } from './journal-sql-meta'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
@@ -19,7 +22,6 @@ import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/a
 import { join } from 'node:path'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
-import { publishTestJournalEpoch } from './journal-host-database-test-support'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { restoreJournal } from './journal-open'
 import { renderJournalState } from './journal-reducer'
