@@ -114,7 +114,7 @@ it('shows an exact remote at the end of a full local and remote window instead o
   const branches = Array.from({ length: 50 }, (_, n) => `feat-${n}`)
   const local = indexLocalBranchRows({ current: null, branches }, '/repo', null)
   const refDetails = Array.from({ length: 50 }, (_, n) => ({
-    refName: `origin/${n === 49 ? 'feat' : `feat-${n}`}`,
+    refName: `origin/${n === 49 ? 'feat' : `remote-feat-${n}`}`,
     localBranchName: n === 49 ? 'feat' : `remote-feat-${n}`
   }))
   const page = branchPickerRows(
