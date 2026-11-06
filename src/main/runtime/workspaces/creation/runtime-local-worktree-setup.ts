@@ -13,7 +13,10 @@ import {
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
 } from '../../../workspace-hooks/effective-hook-config'
-import { checkCreatedWorktreeSetupTrust } from '../../../workspace-hooks/created-worktree-setup-trust'
+import {
+  checkCreatedWorktreeSetupTrust,
+  defaultTabsWithoutCommands
+} from '../../../workspace-hooks/created-worktree-setup-trust'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../runtime-store-contract'
 
@@ -58,7 +61,9 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   const runDecision = setupTrustMismatch ? 'skip' : effectiveDecision
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
-    defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, runDecision)
+    const launch = getDefaultTabsLaunch(yamlHooks, repo, runDecision)
+    // Approving the branch's commands opens the command tabs later.
+    defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
   } catch (error) {
     console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
     defaultTabs = yamlHooks?.defaultTabs

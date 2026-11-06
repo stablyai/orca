@@ -107,6 +107,10 @@ export const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+export const WorktreeRunApprovedSetup = WorktreeSelector.extend({
+  approvedSetupHash: z.string().min(1).max(128)
+})
+
 // Why optional: an older host strips the unknown field and marks its chats asleep as before.
 export const WorktreeSleepParams = WorktreeSelector.extend({
   markChatsAsleep: z.boolean().optional()

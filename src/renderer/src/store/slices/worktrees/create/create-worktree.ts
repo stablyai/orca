@@ -262,7 +262,7 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showWorktreeCreateWarningToast(result.warning)
-          reviewSetupTrustMismatch(get, repoId, creationHostId, result)
+          reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId
