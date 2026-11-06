@@ -1,5 +1,9 @@
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
+import {
+  openCodeSelectedAgent,
+  withOpenCodeTextGenerationPolicy
+} from '../../shared/opencode-generation-command'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,
@@ -30,14 +34,11 @@ export function runLocalPlanForAgent(input: {
   const wslDistro = input.plan.promptFile
     ? (wslDistroForCommand(input.target.cwd, input.target.wslDistro) ?? undefined)
     : input.target.wslDistro
+  const plan = wslDistro ? input.plan : withInheritedOpenCodeConfig(input.plan, input.target.env)
   const target = {
     ...input.target,
     wslDistro,
-    env: mergeCommandEnvironment(
-      input.target.env,
-      input.plan.env,
-      wslDistro ? 'linux' : process.platform
-    )
+    env: mergeCommandEnvironment(input.target.env, plan.env, wslDistro ? 'linux' : process.platform)
   }
   const start = (): LocalProcessExecution<InternalTextGenerationResult> => {
     if (input.shouldExecute && !input.shouldExecute()) {
@@ -47,7 +48,7 @@ export function runLocalPlanForAgent(input: {
       }
     }
     return runLocalSourceControlPlan({
-      plan: input.plan,
+      plan,
       cwd: input.target.cwd,
       env: wslDistro ? input.target.env : target.env,
       operation: input.operation,
@@ -65,7 +66,7 @@ export function runLocalPlanForAgent(input: {
     start,
     target,
     input.operation,
-    input.plan.env,
+    plan.env,
     !!input.shouldExecute
   )
 }
@@ -140,4 +141,26 @@ export function runCodexProcessWithHomeLock<T>(
       }
     }).catch(reject)
   })
+}
+
+/** Keep host-inherited OpenCode config (the planner cannot see it) unless a command override replaced it. */
+function withInheritedOpenCodeConfig(
+  plan: CommitMessagePlan,
+  env: Record<string, string | undefined> | undefined
+): CommitMessagePlan {
+  const inherited = (env ?? process.env).OPENCODE_CONFIG_CONTENT
+  const agent = openCodeSelectedAgent(plan.args)
+  if (
+    !inherited ||
+    plan.env?.OPENCODE_CONFIG_CONTENT !== withOpenCodeTextGenerationPolicy(undefined, agent)
+  ) {
+    return plan
+  }
+  return {
+    ...plan,
+    env: {
+      ...plan.env,
+      OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(inherited, agent)
+    }
+  }
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './source-control/ai/generation/commit-message-plan'
-import { openCodeVariantRetryPlan } from './opencode-generation-command'
+import {
+  openCodeVariantRetryPlan,
+  withOpenCodeTextGenerationPolicy
+} from './opencode-generation-command'
 
 const rejection = 'Unrecognized flag: --variant in command opencode run'
 describe('OpenCode generation commands', () => {
@@ -14,7 +17,7 @@ describe('OpenCode generation commands', () => {
       expect(result).toMatchObject({
         ok: true,
         plan: {
-          args: ['run', '--auto', '--agent', 'build', '--format', 'json'],
+          args: ['run', '--auto', '--standalone', '--agent', 'build', '--format', 'json'],
           stdinPayload: 'PROMPT',
           outputFormat: 'opencode-json'
         }
@@ -42,7 +45,16 @@ describe('OpenCode generation commands', () => {
       throw new Error(result.error)
     }
     expect(openCodeVariantRetryPlan(result.plan, rejection)).toMatchObject({
-      args: ['run', '--model', 'fixture/chat#high', '--agent', 'build', '--format', 'json'],
+      args: [
+        'run',
+        '--standalone',
+        '--model',
+        'fixture/chat#high',
+        '--agent',
+        'build',
+        '--format',
+        'json'
+      ],
       stdinPayload: 'PROMPT'
     })
     expect(openCodeVariantRetryPlan(result.plan, 'provider rejected the request')).toBeNull()
@@ -90,5 +102,101 @@ describe('OpenCode generation commands', () => {
         rejection
       )
     ).toBeNull()
+  })
+})
+
+describe('OpenCode text-generation tool policy', () => {
+  const permission = { '*': 'deny', read: 'allow', grep: 'allow', glob: 'allow', list: 'allow' }
+  const policy = { permission, agent: { build: { permission } } }
+
+  it.each([
+    ['replaces permissions', '{"model":"x/y","permission":{"*":"allow"}}', { model: 'x/y' }],
+    ['reads JSONC', '{ // note\n"model":"x/y",}', { model: 'x/y' }],
+    ['replaces malformed content', '{ "model":"x/y"', {}],
+    ['keeps native rules ordered before the build agent', '{"permissions":[]}', { permissions: [] }]
+  ])('%s', (_name, content, kept) => {
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({ ...kept, ...policy })
+  })
+
+  it('drops every inline build agent because agents and mode entries replace agent entries', () => {
+    const allow = { permission: { '*': 'allow' } }
+    const content = JSON.stringify({
+      agent: { build: allow, other: allow },
+      agents: { build: { model: 'x/y' }, other: allow },
+      mode: { build: { model: 'x/y' }, other: allow }
+    })
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({
+      permission,
+      agent: { other: allow, build: { model: 'x/y', permission } },
+      agents: { other: allow },
+      mode: { other: allow }
+    })
+  })
+
+  it.each([
+    ['object', { providerID: 'x', model: 'y' }, { model: 'x/y' }],
+    [
+      'object with variant',
+      { providerID: 'x', model: 'y', variant: 'v' },
+      { model: 'x/y', variant: 'v' }
+    ],
+    ['string with variant', 'x/y#v', { model: 'x/y', variant: 'v' }]
+  ])('converts a native %s model to the form the agent map honours', (_name, model, selection) => {
+    const content = JSON.stringify({ agents: { build: { model } } })
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({
+      permission,
+      agents: {},
+      agent: { build: { ...selection, permission } }
+    })
+  })
+
+  it('keeps a legacy agent variant and ignores an incomplete model object', () => {
+    const content = JSON.stringify({
+      agents: { build: { model: { providerID: 'x' } } },
+      agent: { build: { model: 'x/y', variant: 'v' } }
+    })
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content)).agent.build).toEqual({
+      model: 'x/y',
+      variant: 'v',
+      permission
+    })
+  })
+
+  it('pins the policy to the agent recipe args select, keeping only its model', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode2',
+        model: 'default',
+        agentArgs: '--agent writer',
+        agentCommandOverride: `OPENCODE_CONFIG_CONTENT='{"agent":{"writer":{"model":"x/y","permission":{"*":"allow"}}}}' opencode2`
+      },
+      'PROMPT'
+    )
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(JSON.parse(result.plan.env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({
+      permission,
+      agent: { writer: { model: 'x/y', permission } }
+    })
+  })
+
+  it('applies the policy on top of a command override', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode2',
+        model: 'default',
+        agentCommandOverride: `OPENCODE_CONFIG_CONTENT='{"model":"x/y"}' opencode2`
+      },
+      'PROMPT'
+    )
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.args.slice(0, 2)).toEqual(['run', '--standalone'])
+    expect(JSON.parse(result.plan.env?.OPENCODE_CONFIG_CONTENT ?? '')).toEqual({
+      model: 'x/y',
+      ...policy
+    })
   })
 })

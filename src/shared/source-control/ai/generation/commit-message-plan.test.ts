@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './commit-message-plan'
+import { withOpenCodeTextGenerationPolicy } from '../../../opencode-generation-command'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 
 describe('planCommitMessageGeneration', () => {
@@ -93,6 +94,7 @@ describe('planCommitMessageGeneration', () => {
         binary: 'opencode',
         args: [
           'run',
+          '--standalone',
           '--model',
           'opencode/gpt-5.4-mini',
           '--agent',
@@ -104,7 +106,10 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: 'PROMPT',
         label: 'OpenCode',
-        outputFormat: 'opencode-json'
+        outputFormat: 'opencode-json',
+        env: {
+          OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(undefined)
+        }
       }
     })
   })
@@ -126,6 +131,7 @@ describe('planCommitMessageGeneration', () => {
         args: [
           'opencode',
           'run',
+          '--standalone',
           '--model',
           'opencode/gpt-5.4-mini',
           '--agent',
@@ -135,7 +141,10 @@ describe('planCommitMessageGeneration', () => {
         ],
         stdinPayload: 'PROMPT',
         label: 'OpenCode',
-        outputFormat: 'opencode-json'
+        outputFormat: 'opencode-json',
+        env: {
+          OPENCODE_CONFIG_CONTENT: withOpenCodeTextGenerationPolicy(undefined)
+        }
       }
     })
   })
@@ -425,7 +434,16 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '--model', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'json'],
+        args: [
+          'run',
+          '--standalone',
+          '--model',
+          'opencode/gpt-5.5',
+          '--agent',
+          'build',
+          '--format',
+          'json'
+        ],
         stdinPayload: 'PROMPT'
       }
     })
@@ -440,7 +458,16 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '-m', 'opencode/gpt-5.5', '--agent', 'build', '--format', 'json']
+        args: [
+          'run',
+          '--standalone',
+          '-m',
+          'opencode/gpt-5.5',
+          '--agent',
+          'build',
+          '--format',
+          'json'
+        ]
       }
     })
   })
@@ -461,6 +488,7 @@ describe('planCommitMessageGeneration', () => {
       plan: {
         args: [
           'run',
+          '--standalone',
           '--model',
           'opencode/gpt-5.4-mini',
           '--agent',
@@ -485,6 +513,7 @@ describe('planCommitMessageGeneration', () => {
       plan: {
         args: [
           'run',
+          '--standalone',
           '--model',
           'opencode/gpt-5.4-mini',
           '--agent',
@@ -511,7 +540,16 @@ describe('planCommitMessageGeneration', () => {
     expect(result).toMatchObject({
       ok: true,
       plan: {
-        args: ['run', '--model', 'opencode/first', '--agent', 'build', '--format', 'json']
+        args: [
+          'run',
+          '--standalone',
+          '--model',
+          'opencode/first',
+          '--agent',
+          'build',
+          '--format',
+          'json'
+        ]
       }
     })
   })
@@ -551,6 +589,7 @@ describe('planCommitMessageGeneration', () => {
           '--log-level',
           'DEBUG',
           'run',
+          '--standalone',
           '--agent',
           'build',
           '--format',
@@ -580,6 +619,7 @@ describe('planCommitMessageGeneration', () => {
           '--model',
           'literal',
           'run',
+          '--standalone',
           '--model',
           'opencode/gpt-5.4-mini',
           '--agent',
@@ -606,7 +646,16 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'opencode',
-        args: ['run', '--model', 'opencode/from-recipe', '--agent', 'build', '--format', 'json']
+        args: [
+          'run',
+          '--standalone',
+          '--model',
+          'opencode/from-recipe',
+          '--agent',
+          'build',
+          '--format',
+          'json'
+        ]
       }
     })
   })

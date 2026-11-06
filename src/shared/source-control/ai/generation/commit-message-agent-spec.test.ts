@@ -629,6 +629,7 @@ describe('buildArgs (OpenCode)', () => {
 
     expect(args).toEqual([
       'run',
+      '--standalone',
       '--model',
       'opencode/deepseek-v4-flash-free',
       '--agent',
@@ -650,6 +651,7 @@ describe('buildArgs (OpenCode)', () => {
 
     expect(args).toEqual([
       'run',
+      '--standalone',
       '--model',
       'opencode/gpt-5.4-mini',
       '--agent',
@@ -683,6 +685,7 @@ describe('buildArgs (OpenCode 2)', () => {
 
     expect(args).toEqual([
       'run',
+      '--standalone',
       '--model',
       'opencode/deepseek-v4-flash-free',
       '--agent',
@@ -704,6 +707,7 @@ describe('buildArgs (OpenCode 2)', () => {
 
     expect(args).toEqual([
       'run',
+      '--standalone',
       '--model',
       'opencode/gpt-5.4-mini#high',
       '--agent',
