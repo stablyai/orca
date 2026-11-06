@@ -13,6 +13,7 @@ type FixtureOptions = {
   paired?: boolean
 }
 
+/** Matches production's document-wide phase so remounts cannot skew comparisons. */
 function anchorPhase(event: React.AnimationEvent<HTMLSpanElement>): void {
   const animation = event.currentTarget.getAnimations()[0]
   if (animation) {
@@ -20,6 +21,7 @@ function anchorPhase(event: React.AnimationEvent<HTMLSpanElement>): void {
   }
 }
 
+/** Keeps the current visual reference separate from the historical CPU baseline. */
 function Fixture({
   count,
   baseline = false,

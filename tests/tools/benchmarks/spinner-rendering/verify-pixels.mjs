@@ -41,6 +41,7 @@ async function captureRingPixels(page, time) {
   return { rings, screenshot }
 }
 
+/** Checks raster output across theme, zoom, and time without reusing production animation rules. */
 export async function verifyPixels(app, page, outputDir, waitForPhase) {
   let comparisons = 0
   const [minimumZoom, maximumZoom] = await page.evaluate(() => window.spinnerBenchmark.zoomExtremes)
