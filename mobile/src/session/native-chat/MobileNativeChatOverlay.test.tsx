@@ -83,6 +83,7 @@ function overlay(showNativeChat: boolean, messages: NativeChatMessage[]) {
 }
 
 let renderer: ReactTestRenderer | null = null
+const chatView = () => renderer!.root.find((node) => node.type === 'ChatView').props
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
@@ -93,7 +94,7 @@ it('keeps the chat view mounted and hidden while its terminal shows', () => {
   act(() => {
     renderer = create(overlay(true, rows))
   })
-  const shown = renderer!.root.findByType('ChatView' as never).props
+  const shown = chatView()
   expect(shown.ids).toEqual(['a', 'b'])
 
   // The hidden lane reads as an empty chat; nothing is drawn over the terminal.
@@ -101,7 +102,7 @@ it('keeps the chat view mounted and hidden while its terminal shows', () => {
   expect(renderer!.toJSON()).toBeNull()
 
   act(() => renderer!.update(overlay(true, [...rows, message('c')])))
-  const back = renderer!.root.findByType('ChatView' as never).props
+  const back = chatView()
   expect(back.mountId).toBe(shown.mountId)
   expect(back.ids).toEqual(['a', 'b', 'c'])
 })
