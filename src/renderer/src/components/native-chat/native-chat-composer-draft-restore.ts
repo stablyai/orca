@@ -10,9 +10,10 @@ import {
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
-  adoptStoredNativeChatDraftCustody,
   draftCustody,
-  dropEmptyNativeChatDraftCustody
+  dropEmptyNativeChatDraftCustody,
+  projectStoredNativeChatDraftCustody,
+  scopeCustody
 } from './native-chat-composer-draft-custody'
 import type {
   NativeChatComposerDraftImage,
@@ -40,7 +41,11 @@ export function installStoredNativeChatComposerDraft(
   position?: NativeChatDraftPosition
 ): boolean {
   const { handbacks: _handbacks, sourcePaths: _sourcePaths, ...content } = stored
-  adoptStoredNativeChatDraftCustody(scopeKey, stored, durable)
+  projectStoredNativeChatDraftCustody(scopeKey, stored, durable)
+  // The stored content replaces memory's, and its provenance with it.
+  if (stored.sourcePaths?.length || draftCustody.has(scopeKey)) {
+    scopeCustody(scopeKey, stored.savedAt).sourcePaths = [...(stored.sourcePaths ?? [])]
+  }
   const custody = draftCustody.get(scopeKey)
   const gone = new Set<string>()
   for (const path of custody?.sourcePaths ?? []) {

@@ -42,6 +42,7 @@ function load(): void {
         records.set(record.sessionId, record)
       }
     }
+    noteSavedRecords()
     const storedTombstones = JSON.parse(localStorage.getItem(TOMBSTONE_STORAGE_KEY) ?? '[]')
     for (const value of Array.isArray(storedTombstones) ? storedTombstones : []) {
       const tombstone = readSavedLaunchTombstone(value)
@@ -67,12 +68,28 @@ function writeRecords(): void {
   saveRecords()
 }
 
-// The records revision the saved journal last held: a launch retired only in memory is not retired.
-let savedRecordsRevision = 0
+// The launches whose saved row still holds an opening, as the journal last actually held them: a
+// launch that gave its opening up only in memory still holds it here.
+let savedOpenings = new Set<string>()
+const savedListeners = new Set<() => void>()
 
-/** Whether every launch record change so far reached the saved journal. */
-export function structuredAgentLaunchRecordsSaved(): boolean {
-  return savedRecordsRevision === recordsRevision
+/** Whether the saved journal no longer holds `sessionId`'s opening (its row was saved without it,
+ *  or is gone). */
+export function structuredAgentLaunchOpeningRetired(sessionId: string): boolean {
+  load()
+  return !savedOpenings.has(sessionId)
+}
+
+/** Called after each successful save of the launch journal; returns its removal. */
+export function subscribeStructuredAgentLaunchRecordsSaved(listener: () => void): () => void {
+  savedListeners.add(listener)
+  return () => savedListeners.delete(listener)
+}
+
+function noteSavedRecords(): void {
+  savedOpenings = new Set(
+    [...records.values()].flatMap((record) => (record.firstMessage ? [record.sessionId] : []))
+  )
 }
 
 function saveRecords(): void {
@@ -85,7 +102,10 @@ function saveRecords(): void {
     } else {
       localStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify([...records.values()]))
     }
-    savedRecordsRevision = recordsRevision
+    noteSavedRecords()
+    for (const listener of savedListeners) {
+      listener()
+    }
   } catch {
     // Recovery bookkeeping must never prevent launch.
     console.warn('[structured-agent-launch] could not persist launch state')
@@ -308,7 +328,7 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
   records.clear()
   recordsRevision += 1
-  savedRecordsRevision = recordsRevision
+  savedOpenings = new Set()
   batchSlotIndex = undefined
   tombstones.clear()
   remoteTombstoneCancelledAt.clear()

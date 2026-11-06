@@ -14,26 +14,40 @@ import {
   unconfirmed,
   reconcileRestoredImageChecks,
   type AppendBeforeLoad,
-  type DraftAppend,
-  type UnconfirmedDraftChange
+  type DraftAppend
 } from './native-chat-composer-draft-memory'
+import { withIndependentNativeChatComposerDraft } from './native-chat-composer-draft-addition'
 import {
+  journalNativeChatComposerDraftAddition,
   journalNativeChatComposerDraftChanges,
   pruneNativeChatComposerDraftJournal
 } from './native-chat-composer-draft-journal'
 import {
+  confirmNativeChatDraftCustody,
   draftCustody,
+  handbacksAtBase,
   markNativeChatDraftHandbacksDurable,
-  ownedHandbacksMissingFrom,
-  reassertNativeChatDraftHandbacks
+  projectStoredNativeChatDraftCustody
 } from './native-chat-composer-draft-custody'
+import {
+  authorizedRemovals,
+  broadcastNativeChatComposerDraft,
+  completeDeferredRemovals,
+  flushNativeChatComposerDrafts,
+  resetNativeChatComposerDraftCommitsForTests,
+  scheduleNativeChatComposerDraftFlush,
+  setNativeChatComposerDraftChannel,
+  track
+} from './native-chat-composer-draft-commit'
+export {
+  flushNativeChatComposerDrafts,
+  nativeChatComposerDraftWriteSettled,
+  nativeChatComposerDraftWritesSettled
+} from './native-chat-composer-draft-commit'
+import { noticeNativeChatDraftReceipts } from './native-chat-composer-draft-receipt-events'
 import { installStoredNativeChatComposerDraft } from './native-chat-composer-draft-restore'
 export { unavailableNativeChatComposerDraftImage } from './native-chat-composer-draft-restore'
-import {
-  journalOwedNativeChatDraftHandbacks,
-  nextStoredNativeChatComposerDraft,
-  savedForm
-} from './native-chat-composer-draft-saved-form'
+import { savedForm } from './native-chat-composer-draft-saved-form'
 export {
   currentStoredNativeChatComposerDraft,
   isKeptLocalPaste
@@ -47,105 +61,37 @@ import {
 const PERSIST_DEBOUNCE_MS = 250
 const CHANNEL_NAME = 'orca-native-chat-composer-drafts'
 
-let flushTimer: ReturnType<typeof setTimeout> | null = null
 let flushOnHideInstalled = false
-const inFlight = new Set<Promise<boolean>>()
-// Per scope, the writes not yet settled: each resolves true once committed, false when refused.
-const scopeWrites = new Map<string, Set<Promise<boolean>>>()
-let channel: BroadcastChannel | null = null
-
-function completeDeferredRemovals(destinationScope: string, savedAt: number): void {
-  let released = false
-  for (const [sourceScope, pending] of deferredRemovals) {
-    if (pending.destinationScope === destinationScope && savedAt >= pending.savedAt) {
-      deferredRemovals.delete(sourceScope)
-      released = true
-    }
-  }
-  if (released) {
-    flushNativeChatComposerDrafts()
-  }
-}
-
-function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
-  markNativeChatDraftHandbacksDurable(scopeKey, change.draft)
-  if (unconfirmed.get(scopeKey) === change) {
-    unconfirmed.delete(scopeKey)
-    if (refusedScopes.delete(scopeKey)) {
-      notifyScope(scopeKey)
-    }
-  }
-  pruneNativeChatComposerDraftJournal(scopeKey, change.at)
-  channel?.postMessage({ scopeKey })
-  completeDeferredRemovals(scopeKey, change.at)
-}
-
-function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown): void {
-  if (unconfirmed.get(scopeKey) !== change) {
-    return
-  }
-  unconfirmed.delete(scopeKey)
-  dirtyScopes.add(scopeKey)
-  if (!refusedScopes.has(scopeKey)) {
-    console.warn('[native-chat-drafts] a draft could not be saved; it is kept in memory', error)
-    refusedScopes.add(scopeKey)
-    notifyScope(scopeKey)
-  }
-  journalOwedNativeChatDraftHandbacks(scopeKey)
-}
-
-function persist(scopeKey: string): void {
-  const draft = nextStoredNativeChatComposerDraft(scopeKey)
-  const change: UnconfirmedDraftChange = { draft, at: draft?.savedAt ?? nextSavedAt() }
-  unconfirmed.set(scopeKey, change)
-  const storage = nativeChatComposerDraftStorage()
-  const written = (draft ? storage.write(scopeKey, draft) : storage.remove([scopeKey])).then(
-    () => {
-      confirm(scopeKey, change)
-      return true
-    },
-    (error: unknown) => {
-      refuse(scopeKey, change, error)
-      return false
-    }
-  )
-  track(scopeKey, written)
-}
-
-function track(scopeKey: string, written: Promise<boolean>): void {
-  inFlight.add(written)
-  const pending = scopeWrites.get(scopeKey) ?? new Set()
-  scopeWrites.set(scopeKey, pending)
-  pending.add(written)
-  void written.finally(() => {
-    inFlight.delete(written)
-    pending.delete(written)
-    if (pending.size === 0 && scopeWrites.get(scopeKey) === pending) {
-      scopeWrites.delete(scopeKey)
-    }
-  })
-}
-
-export function flushNativeChatComposerDrafts(): void {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer)
-    flushTimer = null
-  }
-  for (const scopeKey of dirtyScopes) {
-    if (deferredRemovals.has(scopeKey)) {
-      continue
-    }
-    dirtyScopes.delete(scopeKey)
-    persist(scopeKey)
-  }
-}
+let channelInstalled = false
 
 /** Storage settles asynchronously; journal unconfirmed and refused writes synchronously before the window leaves. */
 function journalUnconfirmed(): void {
   flushNativeChatComposerDrafts()
-  for (const scopeKey of journalNativeChatComposerDraftChanges(unconfirmed)) {
-    markNativeChatDraftHandbacksDurable(scopeKey, unconfirmed.get(scopeKey)?.draft)
+  // A scope whose base is unknown keeps its coalesced identified addition instead of a snapshot.
+  const whole = new Map([...unconfirmed].filter(([scopeKey]) => !journalPartialScope(scopeKey)))
+  for (const scopeKey of journalNativeChatComposerDraftChanges(whole)) {
+    markNativeChatDraftHandbacksDurable(scopeKey, whole.get(scopeKey)?.draft)
   }
+}
+
+/** Folds what was typed into a partial view into the first pending hand-back's journal entry. */
+function journalPartialScope(scopeKey: string): boolean {
+  const pending = draftCustody.get(scopeKey)?.pending ?? []
+  if (!pending.length) {
+    return false
+  }
+  const typed = records.get(scopeKey) ?? { text: '', images: [] }
+  pending.forEach((handback, index) => {
+    const contribution =
+      index === 0
+        ? withIndependentNativeChatComposerDraft(typed, handback.contribution)
+        : handback.contribution
+    journalNativeChatComposerDraftAddition(scopeKey, contribution, nextSavedAt(), {
+      handback: handback.receipt,
+      sourcePaths: handback.sourcePaths
+    })
+  })
+  return true
 }
 
 function journalWhenHidden(): void {
@@ -183,6 +129,7 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
       const base = parseStoredNativeChatComposerDraft(stored) ?? empty
       saved = savedForm({
         ...append({ ...base, ...(base.owner || !owner ? {} : { owner }) }),
+        handbacks: handbacksAtBase(scopeKey, base),
         savedAt: nextSavedAt()
       })
       return saved
@@ -190,9 +137,9 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
     .then(
       () => {
         entry.committed = true
-        markNativeChatDraftHandbacksDurable(scopeKey, saved)
+        confirmNativeChatDraftCustody(scopeKey, saved)
         pruneNativeChatComposerDraftJournal(scopeKey, appendedAt)
-        channel?.postMessage({ scopeKey })
+        broadcastNativeChatComposerDraft(scopeKey)
         completeDeferredRemovals(scopeKey, appendedAt)
         return true
       },
@@ -220,8 +167,11 @@ export function persistNativeChatComposerDraft(
   installFlushOnHide()
   if (records.has(scopeKey)) {
     deferredRemovals.delete(scopeKey)
+    authorizedRemovals.delete(scopeKey)
   }
-  if (!load.hydrated && append && !load.editedBeforeLoad.has(scopeKey)) {
+  // A scope waiting for its base composes everything onto it at its own read, appends included.
+  const partial = Boolean(draftCustody.get(scopeKey)?.pending.length)
+  if (!load.hydrated && append && !partial && !load.editedBeforeLoad.has(scopeKey)) {
     appendBeforeLoad(scopeKey, append)
     return
   }
@@ -233,7 +183,13 @@ export function persistNativeChatComposerDraft(
     flushNativeChatComposerDrafts()
     return
   }
-  flushTimer ??= setTimeout(flushNativeChatComposerDrafts, PERSIST_DEBOUNCE_MS)
+  scheduleNativeChatComposerDraftFlush(PERSIST_DEBOUNCE_MS)
+}
+
+/** An authorized deletion: the saved record goes, receipts and all, and nothing at the base survives it. */
+export function removeNativeChatComposerDraftRecord(scopeKey: string): void {
+  authorizedRemovals.add(scopeKey)
+  persistNativeChatComposerDraft(scopeKey, 'immediate')
 }
 
 /** A deletion also applies to drafts a load still in flight brings back. */
@@ -245,7 +201,8 @@ export function deleteLoadingNativeChatComposerDraftsWhere(
   }
 }
 
-// Adopt another window’s write only while this window has no unsaved local change.
+// Adopt another window’s committed write, a read of what storage holds, only while this window
+// has no unsaved local change; that change will itself commit against this record.
 function adoptForeignChange(message: unknown): void {
   const scopeKey =
     typeof message === 'object' && message !== null && 'scopeKey' in message
@@ -257,73 +214,47 @@ function adoptForeignChange(message: unknown): void {
   void nativeChatComposerDraftStorage()
     .read(scopeKey)
     .then((value) => {
-      if (hasLocalChange(scopeKey)) {
+      if (hasLocalChange(scopeKey) || draftCustody.get(scopeKey)?.pending.length) {
         return
       }
       if (isNativeChatSetupDraft(scopeKey) && value != null) {
         return
       }
       const draft = parseStoredNativeChatComposerDraft(value)
-      // A writer that never saw this window's adoption must not erase its receipt.
-      const missing = ownedHandbacksMissingFrom(scopeKey, draft)
       if (draft) {
         installStoredNativeChatComposerDraft(scopeKey, draft, draft.handbacks ?? [])
       } else {
-        draftCustody.delete(scopeKey)
+        projectStoredNativeChatDraftCustody(scopeKey, null, [])
         installNativeChatDraftRecord(scopeKey)
         reconcileRestoredImageChecks(scopeKey, [])
       }
-      if (missing.length) {
-        reassertNativeChatDraftHandbacks(scopeKey, missing, nextSavedAt())
-        dirtyScopes.add(scopeKey)
-        flushNativeChatComposerDrafts()
-      }
+      noticeNativeChatDraftReceipts(scopeKey)
       notifyScope(scopeKey)
     })
     .catch(() => {})
 }
 
 export function installNativeChatComposerDraftBroadcast(): void {
-  if (channel || typeof BroadcastChannel === 'undefined') {
+  if (channelInstalled || typeof BroadcastChannel === 'undefined') {
     return
   }
-  channel = new BroadcastChannel(CHANNEL_NAME)
+  channelInstalled = true
+  const channel = new BroadcastChannel(CHANNEL_NAME)
   channel.onmessage = (event) => adoptForeignChange(event.data)
   // Why: Node's channel (unit tests) would otherwise keep the process alive.
   if ('unref' in channel && typeof channel.unref === 'function') {
     channel.unref()
   }
-}
-
-/** Flush deferred changes and await every already-issued scope write; true requires commits, false means refusal/failure, and never treat a timeout as success. */
-export async function nativeChatComposerDraftWriteSettled(scopeKey: string): Promise<boolean> {
-  if (dirtyScopes.has(scopeKey)) {
-    flushNativeChatComposerDrafts()
-  }
-  const pending = scopeWrites.get(scopeKey)
-  return pending ? (await Promise.all(pending)).every(Boolean) : true
-}
-
-/** Settles once every write issued so far has been confirmed or refused. */
-export async function nativeChatComposerDraftWritesSettled(): Promise<void> {
-  while (inFlight.size > 0) {
-    await Promise.allSettled(inFlight)
-  }
+  setNativeChatComposerDraftChannel(channel)
 }
 
 export function resetNativeChatComposerDraftPersistenceForTests(): void {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer)
-    flushTimer = null
-  }
-  channel?.close()
-  channel = null
+  resetNativeChatComposerDraftCommitsForTests()
+  channelInstalled = false
   if (flushOnHideInstalled) {
     flushOnHideInstalled = false
     window.removeEventListener('pagehide', journalUnconfirmed)
     window.removeEventListener('beforeunload', journalUnconfirmed)
     document.removeEventListener('visibilitychange', journalWhenHidden)
   }
-  inFlight.clear()
-  scopeWrites.clear()
 }

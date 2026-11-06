@@ -94,6 +94,7 @@ describe('native-chat composer draft store', () => {
   it('replays a change storage had not confirmed when the window went away', async () => {
     const uncommitted = createMemoryNativeChatComposerDraftStorage()
     uncommitted.write = () => new Promise(() => {})
+    uncommitted.update = () => new Promise(() => {})
     const lost = await reload({ using: uncommitted })
     lost.drafts.writeNativeChatDraftCache('tab-1:pane', 'typed, then Orca quit')
     window.dispatchEvent(new Event('pagehide'))
@@ -130,10 +131,10 @@ describe('native-chat composer draft store', () => {
     const aDone = new Promise<void>((resolve) => (aCommitted = resolve))
     const aStorage = {
       ...storage,
-      write: (scopeKey: string, draft: Parameters<typeof storage.write>[1]) =>
+      update: (scopeKey: string, apply: Parameters<typeof storage.update>[1]) =>
         new Promise<void>((resolve) => {
           commitA = () => {
-            storage.drafts.set(scopeKey, draft)
+            void storage.update(scopeKey, apply)
             resolve()
             aCommitted()
           }
@@ -150,9 +151,9 @@ describe('native-chat composer draft store', () => {
         })
       },
       // IndexedDB orders B's write after A's, which was issued first.
-      write: async (scopeKey: string, draft: Parameters<typeof storage.write>[1]) => {
+      update: async (scopeKey: string, apply: Parameters<typeof storage.update>[1]) => {
         await aDone
-        storage.drafts.set(scopeKey, draft)
+        await storage.update(scopeKey, apply)
       }
     }
     const b = await reload({ using: bStorage, hydrate: false })
@@ -174,7 +175,11 @@ describe('native-chat composer draft store', () => {
 
   it('keeps text given back through a crash before storage commits it, once', async () => {
     storage.drafts.set('agent-session:s1', { text: 'typed earlier', images: [], savedAt: 1 })
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashing = {
+      ...storage,
+      write: () => new Promise<void>(() => {}),
+      update: () => new Promise<void>(() => {})
+    }
     const crashed = await reload({ using: crashing })
     // Stop gives a message back; its outbox entry is deleted right after, then Orca crashes.
     expect(crashed.drafts.appendNativeChatDraftCache('agent-session:s1', 'returned by Stop')).toBe(
@@ -195,8 +200,8 @@ describe('native-chat composer draft store', () => {
     storage.drafts.set('agent-session:s1', { text: 'typed earlier', images: [], savedAt: 1 })
     const landsUnconfirmed = {
       ...storage,
-      write: (scopeKey: string, draft: Parameters<typeof storage.write>[1]) => {
-        storage.drafts.set(scopeKey, draft)
+      update: (scopeKey: string, apply: Parameters<typeof storage.update>[1]) => {
+        void storage.update(scopeKey, apply)
         return new Promise<void>(() => {})
       }
     }
@@ -552,8 +557,8 @@ describe('native-chat composer draft store', () => {
     // Tab A's write lands, but the page goes away before it is confirmed.
     const landsUnconfirmed = {
       ...storage,
-      write: (scopeKey: string, draft: Parameters<typeof storage.write>[1]) => {
-        storage.drafts.set(scopeKey, draft)
+      update: (scopeKey: string, apply: Parameters<typeof storage.update>[1]) => {
+        void storage.update(scopeKey, apply)
         return new Promise<void>(() => {})
       }
     }

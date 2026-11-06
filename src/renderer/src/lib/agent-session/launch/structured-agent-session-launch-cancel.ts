@@ -1,4 +1,5 @@
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { endHostLaunchHandback } from './structured-agent-session-host-launch-handback'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -44,6 +45,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
       )
     }
     state.cancelled = true
+    endHostLaunchHandback(sessionId)
     forgetStructuredSessionSelection(sessionId, state.intent.target)
     state.callers.outcome = 'cancelled'
     // Tombstones remain durable authority; drop in-memory dead promises so bulk closes cannot retain them all session.

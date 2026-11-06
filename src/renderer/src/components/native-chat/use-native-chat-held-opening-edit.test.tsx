@@ -56,7 +56,11 @@ import {
   readBrowserAttachmentFile
 } from '@/lib/browser-attachment-files'
 import { leasedHostLaunchSources } from '@/lib/agent-session/launch/structured-agent-session-host-launch-sources'
-import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import {
+  getStructuredLaunchStateBySessionId,
+  resetStructuredAgentLaunchRegistryForTests
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { nativeChatDraftHasReceipt } from './native-chat-composer-draft-handback'
 import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 
 vi.mock(
@@ -519,7 +523,86 @@ it('sends a reloaded opening’s client file to its host only after uploading it
   expect(host.prepare).not.toHaveBeenCalled()
 })
 
-function savedRow(): Record<string, unknown> | undefined {
+function savedRow(sessionId = SESSION_ID): Record<string, unknown> | undefined {
   const rows: Record<string, unknown>[] = JSON.parse(localStorage.getItem(SAVED) ?? '[]')
-  return rows.find((row) => row.sessionId === SESSION_ID)
+  return rows.find((row) => row.sessionId === sessionId)
 }
+
+it.each([3, 30])(
+  'ends a returned opening’s files and receipt once its launch row is saved, %i times',
+  async (count) => {
+    const upload = await import('./native-chat-attachment-upload')
+    const refusal = vi
+      .spyOn(upload, 'uploadNativeChatSessionAttachmentPaths')
+      .mockRejectedValue(new Error('upload refused'))
+    const held: { token: string; scope: string }[] = []
+    for (let cycle = 0; cycle < count; cycle++) {
+      cleanup()
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      parkedRead = deferred<AgentLaunchReleasePhaseStatusResult>()
+      host.status.mockReset()
+      host.status.mockResolvedValueOnce(AWAITING).mockReturnValueOnce(parkedRead.promise)
+      updateNativeChatComposerDraft(
+        SOURCE_SCOPE,
+        { text: 'Also run lint', images: [] },
+        'immediate'
+      )
+      const sessionId = `codex_retired_${count}_${cycle}`
+      const destination = structuredAgentSessionDraftScopeKey(sessionId)
+      const { launch, view, scope } = await parkedPairedLaunch(sessionId)
+      const [token] = holdBrowserAttachmentFiles([
+        new File(['usable bytes'], 'held.png', { type: 'image/png' })
+      ])
+      act(() => {
+        stageNativeChatDraftFile(scope, token!)
+        updateNativeChatComposerDraft(scope, { images: [{ id: 'new', path: token! }] }, 'immediate')
+      })
+      act(() => view.result.current.openingEdit!.editSession.save())
+      await vi.waitFor(() => expect(refusal).toHaveBeenCalledTimes(cycle + 1))
+      await act(async () => {})
+      // The chat already exists on the host. Only the launch's own row cannot be saved.
+      const write = localStorage.setItem.bind(localStorage)
+      const launchRows = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+        if (key === SAVED) {
+          throw new DOMException('full', 'QuotaExceededError')
+        }
+        write(key, value)
+      })
+      parkedRead.resolve({ state: 'failed', code: 'agent_launch_session_already_exists' })
+      await launch.launchResult.catch(() => undefined)
+      await act(async () => {})
+      const receipt = { operationId: OPERATION_ID, clientMessageId: MESSAGE_ID }
+      // Back in the composer, beside A, its file usable; the launch still owes its row.
+      const back = readNativeChatComposerDraft(destination)
+      expect(back.text).toContain('Also run lint')
+      expect(back.images.map(({ path }) => path)).toContain(token)
+      expect(readBrowserAttachmentFile(token!)).not.toBeNull()
+      expect(savedRow(sessionId)?.firstMessage).toBeDefined()
+      expect(nativeChatDraftHasReceipt(destination, receipt)).toBe(true)
+      // Storage recovers and a live Retry reads the launch again: its row is saved without it.
+      launchRows.mockRestore()
+      host.status.mockReset()
+      host.status.mockResolvedValue({ state: 'unknown' })
+      expect(retryStructuredAgentSessionLaunch('workspace-1', sessionId)).toBe(true)
+      await getStructuredLaunchStateBySessionId(sessionId)?.promise.catch(() => undefined)
+      await act(async () => {})
+      expect(savedRow(sessionId)?.firstMessage).toBeUndefined()
+      expect(nativeChatDraftHasReceipt(destination, receipt)).toBe(false)
+      // The user clears what came back; nothing else needs the file.
+      act(() => updateNativeChatComposerDraft(destination, { text: '', images: [] }, 'immediate'))
+      view.unmount()
+      await act(async () => {})
+      held.push({ token: token!, scope: destination })
+    }
+    refusal.mockRestore()
+    expect(held.filter(({ token }) => readBrowserAttachmentFile(token) !== null)).toEqual([])
+    expect(held.filter(({ scope }) => hasNativeChatStagedFiles(scope))).toEqual([])
+    expect(
+      held.filter(({ scope }) =>
+        nativeChatDraftHasReceipt(scope, { operationId: OPERATION_ID, clientMessageId: MESSAGE_ID })
+      )
+    ).toEqual([])
+    expect(host.release).not.toHaveBeenCalled()
+  }
+)

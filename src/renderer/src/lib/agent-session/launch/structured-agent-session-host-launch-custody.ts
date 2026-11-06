@@ -6,11 +6,9 @@ import { returnedMessageContribution } from '@/components/native-chat/structured
 import {
   adoptIdentifiedNativeChatDraftInput,
   nativeChatDraftHasReceipt,
-  nativeChatDraftReceiptDurable,
-  retireNativeChatDraftReceipt,
-  whenNativeChatDraftReceiptSettled
+  requestNativeChatDraftReceiptCommit
 } from '@/components/native-chat/native-chat-composer-draft-handback'
-import { structuredAgentLaunchRecordsSaved } from './structured-agent-session-launch-persistence'
+import { holdHostLaunchHandback } from './structured-agent-session-host-launch-handback'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import {
@@ -73,22 +71,10 @@ export function releaseHostLaunchMessage(
       )
       settleHeldStructuredLaunchPrompts(intent.sessionId, false)
     }
-    if (!nativeChatDraftReceiptDurable(scope, receipt)) {
-      void whenNativeChatDraftReceiptSettled(scope, receipt).then((durable) => {
-        if (durable && intent.opening === opening) {
-          releaseHostLaunchMessage(intent, false)
-        }
-      })
-      return
-    }
-    delete intent.opening
-    // Its own row saved again without it, and only that row: a later reload has nothing left to
-    // give back. Until that row is saved the receipt keeps a reloaded copy from returning again.
-    notifyStructuredLaunchIntentChanged(intent)
-    if (structuredAgentLaunchRecordsSaved()) {
-      retireHostLaunchSources(intent)
-      retireNativeChatDraftReceipt(scope, receipt)
-    }
+    // The opening, its row and its files stay the launch's until the draft holds it durably; each
+    // answer (a Retry's included) asks the draft to save it again if an earlier save was refused.
+    requestNativeChatDraftReceiptCommit(scope, receipt)
+    holdHostLaunchHandback(intent.sessionId, receipt)
     return
   } else if (hasStagedStructuredLaunchPrompt(intent.sessionId)) {
     takeBackLegacyStructuredLaunchPrompts(intent.sessionId)

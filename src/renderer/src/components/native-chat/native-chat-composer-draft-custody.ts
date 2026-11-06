@@ -1,6 +1,8 @@
-// A draft's hand-back receipts and client-source provenance: kept beside its visible content, saved with it.
+// A draft's hand-back receipts and client-source provenance: a projection of the stored record
+// plus this renderer's operations on it that no committed write has carried yet.
 
 import { nativeChatTextAttachmentParts } from '../../../../shared/native-chat-text-attachment-references'
+import { withIndependentNativeChatComposerDraft } from './native-chat-composer-draft-addition'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftOwner,
@@ -8,18 +10,38 @@ import type {
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
+export type NativeChatDraftHandbackContribution = Pick<
+  NativeChatComposerDraft,
+  'text' | 'images' | 'document' | 'pastedTextFiles'
+>
+
+/** An identified hand-back whose scope's stored base has not been read yet. */
+export type PendingNativeChatDraftHandback = {
+  readonly receipt: NativeChatDraftHandbackReceipt
+  readonly contribution: NativeChatDraftHandbackContribution
+  readonly sourcePaths: readonly string[]
+}
+
 export type NativeChatDraftCustody = {
   handbacks: NativeChatDraftHandbackReceipt[]
   sourcePaths: string[]
   owner?: NativeChatComposerDraftOwner
   savedAt: number
-  /** Receipts a committed draft or written journal entry holds. */
+  /** Receipts a committed record or written journal entry holds. */
   readonly durable: Set<string>
-  /** Receipts this window adopted or moved here; a foreign write lacking one does not drop it. */
-  readonly owned: Set<string>
+  /** Adopted or moved here, not yet in a committed record: every write at the base adds them. */
+  readonly added: Set<string>
+  /** Retired here, not yet absent from a committed record: no write at the base keeps them. */
+  readonly retired: Set<string>
+  /** Identified additions this memory holds whose journal entries go once a commit carries it. */
+  readonly journaled: Set<string>
+  /** Hand-backs waiting for this scope's base; composed onto it by the one reduction below. */
+  pending: PendingNativeChatDraftHandback[]
 }
 
 export const draftCustody = new Map<string, NativeChatDraftCustody>()
+/** Scopes whose memory already holds their complete stored base; a later load must not replace it. */
+export const knownDraftBases = new Set<string>()
 
 export function handbackReceiptKey(receipt: NativeChatDraftHandbackReceipt): string {
   return JSON.stringify([receipt.operationId, receipt.clientMessageId, receipt.sessionId ?? null])
@@ -65,15 +87,34 @@ export function referencedNativeChatDraftPaths(
 export function scopeCustody(scopeKey: string, savedAt: number): NativeChatDraftCustody {
   let custody = draftCustody.get(scopeKey)
   if (!custody) {
-    custody = { handbacks: [], sourcePaths: [], savedAt, durable: new Set(), owned: new Set() }
+    custody = {
+      handbacks: [],
+      sourcePaths: [],
+      savedAt,
+      durable: new Set(),
+      added: new Set(),
+      retired: new Set(),
+      journaled: new Set(),
+      pending: []
+    }
     draftCustody.set(scopeKey, custody)
   }
   return custody
 }
 
+function isIdle(custody: NativeChatDraftCustody): boolean {
+  return (
+    !custody.handbacks.length &&
+    !custody.sourcePaths.length &&
+    !custody.retired.size &&
+    !custody.journaled.size &&
+    !custody.pending.length
+  )
+}
+
 export function dropEmptyNativeChatDraftCustody(scopeKey: string): void {
   const custody = draftCustody.get(scopeKey)
-  if (custody && custody.handbacks.length === 0 && custody.sourcePaths.length === 0) {
+  if (custody && isIdle(custody)) {
     draftCustody.delete(scopeKey)
   }
 }
@@ -84,7 +125,7 @@ export function pruneNativeChatDraftSourcePaths(
   draft: NativeChatComposerDraft | undefined
 ): void {
   const custody = draftCustody.get(scopeKey)
-  if (!custody?.sourcePaths.length) {
+  if (!custody?.sourcePaths.length || custody.pending.length) {
     return
   }
   const referenced = referencedNativeChatDraftPaths(draft)
@@ -92,7 +133,7 @@ export function pruneNativeChatDraftSourcePaths(
   dropEmptyNativeChatDraftCustody(scopeKey)
 }
 
-/** The record a write saves: content plus custody, or a metadata-only record while a receipt is owed. */
+/** The draft as memory would save it, with its custody inline. */
 export function withNativeChatDraftCustody<T extends StoredNativeChatComposerDraft>(
   record: T | undefined,
   custody: NativeChatDraftCustody | undefined
@@ -140,46 +181,98 @@ export function finishStoredNativeChatDraft(
   }
 }
 
-/** Install a stored record's custody as this window's; `durable` lists the receipts storage already proves. */
-export function adoptStoredNativeChatDraftCustody(
-  scopeKey: string,
-  stored: StoredNativeChatComposerDraft,
-  durable: readonly NativeChatDraftHandbackReceipt[]
-): void {
-  const previous = draftCustody.get(scopeKey)
-  draftCustody.delete(scopeKey)
-  if (!stored.handbacks?.length && !stored.sourcePaths?.length) {
-    return
+/** The one identified reduction, for live adoption, a scope's base read, load and replay: an
+ *  identity the base already holds changes nothing; otherwise the input joins as an independent
+ *  contribution. An exactly retired receipt is never written back. */
+export function withIdentifiedHandback(
+  base: StoredNativeChatComposerDraft,
+  handback: PendingNativeChatDraftHandback,
+  retired = false
+): StoredNativeChatComposerDraft {
+  if (hasHandbackReceipt(base.handbacks, handback.receipt)) {
+    return base
   }
-  const custody = scopeCustody(scopeKey, stored.savedAt)
-  custody.handbacks = [...(stored.handbacks ?? [])]
-  custody.sourcePaths = [...(stored.sourcePaths ?? [])]
-  custody.owner = stored.owner
-  for (const receipt of custody.handbacks) {
-    const key = handbackReceiptKey(receipt)
-    if (hasHandbackReceipt(durable, receipt) || previous?.durable.has(key)) {
-      custody.durable.add(key)
-    }
-    if (previous?.owned.has(key)) {
-      custody.owned.add(key)
-    }
+  return {
+    ...base,
+    ...withIndependentNativeChatComposerDraft(base, handback.contribution),
+    handbacks: retired
+      ? [...(base.handbacks ?? [])]
+      : withHandbackReceipts(base.handbacks, [handback.receipt]),
+    sourcePaths: [...new Set([...(base.sourcePaths ?? []), ...handback.sourcePaths])]
   }
 }
 
-/** Receipts this window still asserts that `stored` lacks: a stale writer must not erase them. */
-export function ownedHandbacksMissingFrom(
+/** Receipts a write at `stored` keeps: the stored ones it did not retire, plus its own adoptions. */
+export function handbacksAtBase(
   scopeKey: string,
   stored: StoredNativeChatComposerDraft | null
 ): NativeChatDraftHandbackReceipt[] {
   const custody = draftCustody.get(scopeKey)
-  return (custody?.handbacks ?? []).filter(
-    (receipt) =>
-      custody?.owned.has(handbackReceiptKey(receipt)) &&
-      !hasHandbackReceipt(stored?.handbacks, receipt)
+  const kept = (stored?.handbacks ?? []).filter(
+    (receipt) => !custody?.retired.has(handbackReceiptKey(receipt))
   )
+  const own = (custody?.handbacks ?? []).filter((receipt) =>
+    custody?.added.has(handbackReceiptKey(receipt))
+  )
+  return withHandbackReceipts(kept, own)
 }
 
-/** A written or committed record proves each receipt it holds that the draft still holds. */
+/** Memory follows what storage holds: its receipts, less exact local retirements, plus local adoptions. */
+export function projectStoredNativeChatDraftCustody(
+  scopeKey: string,
+  stored: StoredNativeChatComposerDraft | null,
+  proven: readonly NativeChatDraftHandbackReceipt[]
+): void {
+  const custody = scopeCustody(scopeKey, stored?.savedAt ?? 0)
+  custody.handbacks = handbacksAtBase(scopeKey, stored)
+  custody.owner ??= stored?.owner
+  const held = new Set(custody.handbacks.map(handbackReceiptKey))
+  proven.forEach((receipt) => custody.durable.add(handbackReceiptKey(receipt)))
+  for (const key of custody.durable) {
+    if (!held.has(key)) {
+      custody.durable.delete(key)
+    }
+  }
+  dropEmptyNativeChatDraftCustody(scopeKey)
+}
+
+/** Receipts memory now holds that only the journal carried: the next write at the base adds them. */
+export function claimUncommittedNativeChatDraftHandbacks(
+  scopeKey: string,
+  committed: StoredNativeChatComposerDraft | null | undefined
+): void {
+  const custody = draftCustody.get(scopeKey)
+  for (const receipt of custody?.handbacks ?? []) {
+    if (!hasHandbackReceipt(committed?.handbacks, receipt)) {
+      custody?.added.add(handbackReceiptKey(receipt))
+    }
+  }
+}
+
+/** A committed record: local adoptions it carries and retirements it omits are settled. */
+export function confirmNativeChatDraftCustody(
+  scopeKey: string,
+  written: StoredNativeChatComposerDraft | null
+): void {
+  const custody = draftCustody.get(scopeKey)
+  if (!custody) {
+    return
+  }
+  const held = new Set((written?.handbacks ?? []).map(handbackReceiptKey))
+  for (const key of held) {
+    custody.added.delete(key)
+    if (custody.handbacks.some((receipt) => handbackReceiptKey(receipt) === key)) {
+      custody.durable.add(key)
+    }
+  }
+  for (const key of custody.retired) {
+    if (!held.has(key)) {
+      custody.retired.delete(key)
+    }
+  }
+  dropEmptyNativeChatDraftCustody(scopeKey)
+}
+
 export function markNativeChatDraftHandbacksDurable(
   scopeKey: string,
   written: StoredNativeChatComposerDraft | null | undefined
@@ -199,24 +292,31 @@ export function hasUndurableNativeChatDraftHandback(scopeKey: string): boolean {
   )
 }
 
-/** A move carries exact receipts and provenance with the content; proof restarts at the destination. */
-export function moveNativeChatDraftCustody(from: string, to: string, savedAt: number): boolean {
+/** A move carries exact receipts, pending hand-backs and provenance; proof restarts at the destination. */
+export function moveNativeChatDraftCustody(
+  from: string,
+  to: string,
+  savedAt: number
+): NativeChatDraftHandbackReceipt[] {
   const source = draftCustody.get(from)
   if (!source || from === to) {
-    return false
+    return []
   }
   const destination = scopeCustody(to, savedAt)
   destination.handbacks = withHandbackReceipts(destination.handbacks, source.handbacks)
   destination.sourcePaths = [...new Set([...destination.sourcePaths, ...source.sourcePaths])]
+  destination.pending = [...destination.pending, ...source.pending]
   destination.owner ??= source.owner
   destination.savedAt = savedAt
-  source.handbacks.forEach((receipt) => {
+  for (const receipt of source.handbacks) {
     const key = handbackReceiptKey(receipt)
-    destination.owned.add(key)
+    destination.added.add(key)
+    destination.retired.delete(key)
     destination.durable.delete(key)
-  })
+  }
+  source.journaled.forEach((key) => destination.journaled.add(key))
   draftCustody.delete(from)
-  return source.handbacks.length > 0
+  return source.handbacks
 }
 
 /** Returned input brings back the provenance it left with; the install that follows keeps only named paths. */
@@ -228,16 +328,4 @@ export function restoreNativeChatDraftSourcePaths(
     const custody = scopeCustody(scopeKey, 0)
     custody.sourcePaths = [...new Set([...custody.sourcePaths, ...paths])]
   }
-}
-
-/** Re-adds receipts this window adopted that a foreign write dropped; the caller saves them again. */
-export function reassertNativeChatDraftHandbacks(
-  scopeKey: string,
-  missing: readonly NativeChatDraftHandbackReceipt[],
-  savedAt: number
-): void {
-  const custody = scopeCustody(scopeKey, savedAt)
-  custody.handbacks = withHandbackReceipts(custody.handbacks, missing)
-  missing.forEach((receipt) => custody.owned.add(handbackReceiptKey(receipt)))
-  custody.savedAt = savedAt
 }

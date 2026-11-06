@@ -35,6 +35,7 @@ import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-s
 import { refuseDraftWrites } from './structured-agent-session-host-launch.test-fixture'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { readNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { nativeChatComposerDraftStorage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import type * as recordModule from './structured-agent-session-launch-record'
 
@@ -505,12 +506,70 @@ describe('a rich opening its host never acknowledged', () => {
     const snapshot = (count: number, own?: ReturnType<typeof ours>) =>
       JSON.stringify(own ? [...others(count), own] : others(count)).length
 
+    // Test-owned envelopes of what the draft journal may hold for our returned message. The run
+    // id is a ms timestamp and `Math.random()` as written, at most 24 chars; times are ms.
+    const RUN = `${'0'.repeat(13)}-0.${'0'.repeat(22)}`
+    const AT = 1_700_000_000_000
+    const SCOPE = `agent-session:${SESSION_ID}`
+    const RECEIPT = { operationId: OPERATION_ID, clientMessageId: MESSAGE_ID }
+    const RETURNED_IMAGE = { id: `returned-${MESSAGE_ID}-1`, path: '/host/shot.png' }
+    const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
+    /** The identified return of B, applied once by its receipt. */
+    const addition = {
+      scopeKey: SCOPE,
+      at: AT,
+      run: RUN,
+      addition: { text: HELD, images: [RETURNED_IMAGE] },
+      custody: { handback: RECEIPT, sourcePaths: [] }
+    }
+    /** The whole current draft, A then B, carrying B's receipt. */
+    const current = {
+      scopeKey: SCOPE,
+      draft: {
+        text: `Also run lint\n\n${HELD}`,
+        document: {
+          type: 'doc',
+          content: [paragraph('Also run lint'), { type: 'paragraph' }, paragraph(HELD)]
+        },
+        images: [RETURNED_IMAGE],
+        savedAt: AT,
+        owner: { workspaceId: 'workspace-1', executionHostId: 'local' },
+        handbacks: [RECEIPT]
+      },
+      at: AT,
+      run: RUN
+    }
+    const journal = (entry: typeof addition | typeof current) => JSON.stringify([entry]).length
+    const DRAFT_JOURNAL = 'orca:nativeChatComposerDraftJournal:v1'
+
+    /** `countWork`, plus our own row preparations, the draft backend's commits of any kind and
+     *  the draft journal's attempted writes and removals with their chars. */
     async function countOwnWork(run: () => Promise<void>) {
-      const work = await countWork(run)
-      const own = vi
-        .mocked(structuredAgentLaunchRecordFor)
-        .mock.calls.filter(([intent]) => intent.sessionId === SESSION_ID).length
-      return { ...work, own }
+      const backend = nativeChatComposerDraftStorage()
+      const commits = (['write', 'update', 'remove'] as const).map((method) =>
+        vi.spyOn(backend, method)
+      )
+      const drafts = { draftCommits: 0, journalAttempts: 0, journalChars: 0 }
+      try {
+        const work = await countWork(async () => {
+          await run()
+          const journaled = vi
+            .mocked(localStorage.setItem)
+            .mock.calls.filter(([key]) => key === DRAFT_JOURNAL)
+          const removed = vi
+            .mocked(localStorage.removeItem)
+            .mock.calls.filter(([key]) => key === DRAFT_JOURNAL)
+          drafts.journalAttempts = journaled.length + removed.length
+          drafts.journalChars = journaled.reduce((sum, [, value]) => sum + value.length, 0)
+        })
+        drafts.draftCommits = commits.reduce((sum, spy) => sum + spy.mock.calls.length, 0)
+        const own = vi
+          .mocked(structuredAgentLaunchRecordFor)
+          .mock.calls.filter(([intent]) => intent.sessionId === SESSION_ID).length
+        return { ...work, ...drafts, own }
+      } finally {
+        commits.forEach((spy) => spy.mockRestore())
+      }
     }
 
     it.each([3, 30])('from receipt to a shown chat beside %i launches', async (count) => {
@@ -533,6 +592,8 @@ describe('a rich opening its host never acknowledged', () => {
       expect(work.savedRows).toBeLessThanOrEqual(3 * count - 1)
       const released = ours(false, false)
       expect(work.savedBytes).toBeLessThanOrEqual(2 * snapshot(count, released) + snapshot(count))
+      // The host took the message: nothing returns to the composer.
+      expect(work).toMatchObject({ draftCommits: 0, journalAttempts: 0 })
     })
 
     it.each([3, 30])(
@@ -556,6 +617,11 @@ describe('a rich opening its host never acknowledged', () => {
         expect(refused.published).toBeLessThanOrEqual(1)
         expect(refused.savedRows).toBeLessThanOrEqual(count)
         expect(refused.savedBytes).toBeLessThanOrEqual(snapshot(count, ours(true, true)))
+        // B returns to the composer once: one commit of the current draft, which refuses, and
+        // two journal attempts, the identified addition then the current draft as fallback.
+        expect(refused.draftCommits).toBeLessThanOrEqual(1)
+        expect(refused.journalAttempts).toBeLessThanOrEqual(2)
+        expect(refused.journalChars).toBeLessThanOrEqual(journal(addition) + journal(current))
 
         const reads = host.status.mock.calls.length
         host.status.mockResolvedValue({
@@ -573,20 +639,22 @@ describe('a rich opening its host never acknowledged', () => {
         })
         warn.mockRestore()
         // Its own host listing the chat re-reads the launch (pending again, message held), the
-        // read settles (saved again, message held), the return to the composer is attempted (its
-        // draft store refuses too, so the message stays in our row) and the failure shows again:
-        // at most four own steps, each one attempted write of N rows and one publication, all
-        // refused by storage so the saved row keeps the message.
+        // read settles (saved again, message held) and the failure shows again (failed, message
+        // still held: the refused draft adoption never clears our row). Three own steps, each
+        // one attempted write of N rows and one publication, all refused by storage.
         expect(listed).toMatchObject({ preparedOthers: 0 })
-        expect(listed.own).toBeLessThanOrEqual(4)
-        expect(listed.mutations).toBeLessThanOrEqual(4)
-        expect(listed.published).toBeLessThanOrEqual(4)
-        expect(listed.savedRows).toBeLessThanOrEqual(4 * count)
+        expect(listed.own).toBeLessThanOrEqual(3)
+        expect(listed.mutations).toBeLessThanOrEqual(3)
+        expect(listed.published).toBeLessThanOrEqual(3)
+        expect(listed.savedRows).toBeLessThanOrEqual(3 * count)
         expect(listed.savedBytes).toBeLessThanOrEqual(
-          2 * snapshot(count, ours(true, false)) +
-            snapshot(count, ours(false, false)) +
-            snapshot(count, ours(false, true))
+          2 * snapshot(count, ours(true, false)) + snapshot(count, ours(true, true))
         )
+        // The composer already shows B by its receipt: only the current draft is retried, once
+        // in the backend and once as journal fallback, never B again.
+        expect(listed.draftCommits).toBeLessThanOrEqual(1)
+        expect(listed.journalAttempts).toBeLessThanOrEqual(1)
+        expect(listed.journalChars).toBeLessThanOrEqual(journal(current))
         expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
       }
     )

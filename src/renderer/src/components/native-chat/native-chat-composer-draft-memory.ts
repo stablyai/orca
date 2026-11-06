@@ -34,8 +34,11 @@ export type DraftRecord = StoredNativeChatComposerDraft & { readonly unsavedText
 
 /** A write or removal handed to storage and not yet confirmed; `draft` is null for a removal. */
 export type UnconfirmedDraftChange = {
-  readonly draft: StoredNativeChatComposerDraft | null
-  readonly at: number
+  /** Memory's view when issued; once storage reads the base, what the write actually holds. */
+  draft: StoredNativeChatComposerDraft | null
+  at: number
+  /** Identified journal additions this write's content carries. */
+  journaled?: readonly string[]
 }
 
 export const records = new Map<string, DraftRecord>()
@@ -108,6 +111,7 @@ export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft
 
 export const load: LoadBookkeeping = {
   hydrated: false,
+  complete: false,
   appendSequence: 0,
   editedBeforeLoad: new Set(),
   appendsBeforeLoad: new Map(),
@@ -174,6 +178,7 @@ export function clearDraftMemoryForTests(): void {
   restoredImageChecks.clear()
   lastSavedAt = 0
   load.hydrated = false
+  load.complete = false
   load.appendSequence = 0
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()

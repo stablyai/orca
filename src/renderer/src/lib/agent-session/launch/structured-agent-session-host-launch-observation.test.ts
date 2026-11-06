@@ -24,6 +24,8 @@ import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/a
 import { resumeHostLaunchPreparation } from './structured-agent-session-host-launch-release'
 import { currentHostLaunchObserver } from './structured-agent-session-host-launch-observer'
 import { PromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
+import type * as ReceiptEvents from '@/components/native-chat/native-chat-composer-draft-receipt-events'
+import { nativeChatComposerDraftStorage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import {
   editableHostLaunchOpening,
   replaceHeldHostLaunchOpening
@@ -56,6 +58,29 @@ import {
 
 type Body = StructuredAgentSessionFirstMessage['body']
 type Prepare = HostLaunchPrepare
+
+// Removable receipt-commit subscribers the custody layer holds, counted where they are added.
+const receiptListeners = vi.hoisted(() => ({ live: 0 }))
+vi.mock('@/components/native-chat/native-chat-composer-draft-receipt-events', async (original) => {
+  const actual = await original<typeof ReceiptEvents>()
+  return {
+    ...actual,
+    addNativeChatDraftReceiptListener: (
+      ...args: Parameters<typeof actual.addNativeChatDraftReceiptListener>
+    ) => {
+      receiptListeners.live += 1
+      const stop = actual.addNativeChatDraftReceiptListener(...args)
+      let stopped = false
+      return () => {
+        if (!stopped) {
+          stopped = true
+          receiptListeners.live -= 1
+        }
+        stop()
+      }
+    }
+  }
+})
 
 const TEXT = 'fix this $audit'
 const ON_HOST = structuredAgentSessionSendBody(
@@ -501,4 +526,72 @@ describe('a plain opening given back to the composer', () => {
     expect(host.release).toHaveBeenCalledOnce()
     warn.mockRestore()
   })
+})
+
+describe('a return to the composer whose save is still on its way', () => {
+  it.each([3, 30])(
+    'observes that one save once across %i Retries, and nothing of it after Close',
+    async (count) => {
+      const scope = `agent-session:${SESSION_ID}`
+      const parent = deferred<AgentLaunchReleasePhaseStatusResult>()
+      host.status.mockResolvedValueOnce(AWAITING).mockReturnValue(parent.promise)
+      host.release.mockResolvedValue({ operationId: OPERATION_ID, state: 'running' })
+      startReleaseLaunch()
+      await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+      // The draft's save is held; its journal fallback is refused.
+      const held = Promise.withResolvers<void>()
+      const backend = nativeChatComposerDraftStorage()
+      const update = backend.update.bind(backend)
+      const blocked = vi
+        .spyOn(backend, 'update')
+        .mockImplementation((key, apply) =>
+          key === scope ? held.promise.then(() => update(key, apply)) : update(key, apply)
+        )
+      const setItem = localStorage.setItem.bind(localStorage)
+      const journal = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+        if (key === 'orca:nativeChatComposerDraftJournal:v1') {
+          throw new DOMException('full', 'QuotaExceededError')
+        }
+        setItem(key, value)
+      })
+      // Native reactions on the held save, which nothing can remove once added.
+      let reactions = 0
+      const then = held.promise.then.bind(held.promise)
+      vi.spyOn(held.promise, 'then').mockImplementation((fulfilled, rejected) => {
+        reactions += 1
+        return then(fulfilled, rejected)
+      })
+      parent.resolve({ state: 'unknown' })
+      await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+      expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+      expect(getStructuredLaunchStateBySessionId(SESSION_ID)?.intent.opening).toBeDefined()
+      const initial = reactions
+      const owners = receiptListeners.live
+      host.status.mockResolvedValue({ state: 'unknown' })
+      for (let index = 0; index < count; index++) {
+        expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+        await vi.waitFor(() =>
+          expect(getStructuredLaunchStateBySessionId(SESSION_ID)?.callers.outcome).toBe('unknown')
+        )
+      }
+      // One current input, one pending save: its observation does not grow with Retries.
+      expect(reactions - initial).toBeLessThanOrEqual(1)
+      expect(receiptListeners.live).toBeLessThanOrEqual(Math.max(owners, 1))
+      expect(blocked).toHaveBeenCalledTimes(1)
+
+      expect(cancelStructuredAgentLaunch('workspace-1', SESSION_ID)).toBe(true)
+      expect(receiptListeners.live).toBe(0)
+      const afterClose = reactions
+      // The held save may still finish; nothing of the closed launch comes back.
+      journal.mockRestore()
+      held.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(reactions).toBe(afterClose)
+      expect(receiptListeners.live).toBe(0)
+      expect(getStructuredLaunchStateBySessionId(SESSION_ID)).toBeUndefined()
+      expect(host.prepare).toHaveBeenCalledOnce()
+      expect(host.release).toHaveBeenCalledOnce()
+      blocked.mockRestore()
+    }
+  )
 })

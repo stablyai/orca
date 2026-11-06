@@ -1,37 +1,40 @@
-// An identified hand-back joins the draft once, by its receipt; its durability is proved, not assumed.
+// An identified hand-back joins the draft once, by its receipt, at the draft's actual base; its
+// durability is proved by a concrete commit or journal entry and heard through one subscription.
 
 import { currentDraftScope } from './native-chat-launch-draft-source'
-import {
-  withIndependentNativeChatComposerDraft,
-  type NativeChatComposerDraftAddition
-} from './native-chat-composer-draft-addition'
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
 import {
   dirtyScopes,
-  hasLocalChange,
   isNativeChatMemoryOnlyDraft,
   load,
   nextSavedAt,
   notifyDraftAppend,
   records,
-  resolveNativeChatComposerDraftOwner,
-  type DraftAppend
+  resolveNativeChatComposerDraftOwner
 } from './native-chat-composer-draft-memory'
+import { persistNativeChatComposerDraft } from './native-chat-composer-draft-persistence'
 import {
-  currentStoredNativeChatComposerDraft,
-  nativeChatComposerDraftWriteSettled,
-  persistNativeChatComposerDraft
-} from './native-chat-composer-draft-persistence'
+  flushNativeChatComposerDrafts,
+  hasPendingNativeChatComposerDraftWrite,
+  retireStoredNativeChatDraftReceipt
+} from './native-chat-composer-draft-commit'
 import {
   draftCustody,
   handbackReceiptKey,
   hasHandbackReceipt,
+  knownDraftBases,
   pruneNativeChatDraftSourcePaths,
   scopeCustody,
-  withHandbackReceipts
+  withHandbackReceipts,
+  withIdentifiedHandback,
+  type NativeChatDraftHandbackContribution
 } from './native-chat-composer-draft-custody'
 import {
-  readNativeChatComposerDraft,
+  addNativeChatDraftReceiptListener,
+  setNativeChatDraftReceiptReconciler
+} from './native-chat-composer-draft-receipt-events'
+import {
+  hydrateNativeChatComposerDrafts,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import type {
@@ -40,15 +43,11 @@ import type {
 } from './native-chat-composer-draft-storage'
 
 export type { NativeChatDraftHandbackReceipt } from './native-chat-composer-draft-storage'
+export type { NativeChatDraftHandbackContribution } from './native-chat-composer-draft-custody'
 
-export type NativeChatDraftHandbackContribution = Pick<
-  NativeChatComposerDraftAddition,
-  'text' | 'images' | 'document' | 'pastedTextFiles'
->
-
-/** One synchronous visible transition: merge the complete input as an independent contribution
- *  unless the draft (or, before the load, its stored record) already holds this receipt. Equal
- *  text already in the draft is the user's own and is kept beside it. */
+/** One synchronous visible transition once the scope's base is known: merge the complete input as
+ *  an independent contribution unless the draft already holds this receipt. Before that, the input
+ *  waits as one identified operation and joins at the scope's own base read. */
 export function adoptIdentifiedNativeChatDraftInput(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt,
@@ -57,53 +56,60 @@ export function adoptIdentifiedNativeChatDraftInput(
   owner?: NativeChatComposerDraftOwner
 ): { adopted: boolean } {
   const scopeKey = currentDraftScope(reference)
-  if (hasHandbackReceipt(draftCustody.get(scopeKey)?.handbacks, receipt)) {
+  const key = handbackReceiptKey(receipt)
+  const held = draftCustody.get(scopeKey)
+  if (hasHandbackReceipt(held?.handbacks, receipt) || held?.retired.has(key)) {
     return { adopted: false }
   }
   const before = records.get(scopeKey)
-  const current = readNativeChatComposerDraft(scopeKey)
   const custody = scopeCustody(scopeKey, 0)
   custody.handbacks = withHandbackReceipts(custody.handbacks, [receipt])
   custody.sourcePaths = [...new Set([...custody.sourcePaths, ...sourcePaths])]
-  custody.owned.add(handbackReceiptKey(receipt))
+  custody.added.add(key)
   custody.owner ??= owner ?? before?.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
   custody.savedAt = nextSavedAt()
-  // The stored base decides for a write before the load: its receipt means it already holds the input.
-  const append: DraftAppend = (loaded) =>
-    hasHandbackReceipt(loaded.handbacks, receipt)
-      ? loaded
-      : {
-          ...loaded,
-          ...withIndependentNativeChatComposerDraft(loaded, contribution),
-          handbacks: withHandbackReceipts(loaded.handbacks, [receipt]),
-          sourcePaths: [...new Set([...(loaded.sourcePaths ?? []), ...sourcePaths])]
-        }
-  const merged = withIndependentNativeChatComposerDraft(current, contribution)
+  const handback = { receipt, contribution, sourcePaths }
+  const journaled =
+    !isNativeChatMemoryOnlyDraft(scopeKey) &&
+    journalNativeChatComposerDraftAddition(scopeKey, contribution, custody.savedAt, {
+      handback: receipt,
+      sourcePaths: [...sourcePaths]
+    })
+  if (journaled) {
+    custody.durable.add(key)
+  }
+  if (!load.complete && !knownDraftBases.has(scopeKey)) {
+    // Whether this input was already adopted is unknown until the scope's base is read.
+    custody.pending.push(handback)
+    void hydrateNativeChatComposerDrafts()
+    persistNativeChatComposerDraft(scopeKey, 'immediate')
+    return { adopted: true }
+  }
+  if (journaled) {
+    custody.journaled.add(key)
+  }
+  const current = before ?? { text: '', images: [], savedAt: 0 }
+  const merged = withIdentifiedHandback({ ...current, handbacks: [] }, handback)
   updateNativeChatComposerDraft(
     scopeKey,
-    { ...merged, ...(owner ? { owner } : {}) },
-    'immediate',
-    append
+    {
+      text: merged.text,
+      images: merged.images,
+      document: merged.document,
+      pastedTextFiles: merged.pastedTextFiles,
+      ...(owner ? { owner } : {})
+    },
+    'immediate'
   )
   if (records.get(scopeKey) === before) {
     // Nothing visible changed, but the receipt itself is owed a write.
     pruneNativeChatDraftSourcePaths(scopeKey, before)
     if (!isNativeChatMemoryOnlyDraft(scopeKey)) {
-      persistNativeChatComposerDraft(scopeKey, 'immediate', append)
+      persistNativeChatComposerDraft(scopeKey, 'immediate')
     }
   }
   if (merged.text !== current.text) {
     notifyDraftAppend(scopeKey, contribution, current)
-  }
-  const at = currentStoredNativeChatComposerDraft(scopeKey)?.savedAt ?? custody.savedAt
-  if (
-    !isNativeChatMemoryOnlyDraft(scopeKey) &&
-    journalNativeChatComposerDraftAddition(scopeKey, contribution, at, {
-      handback: receipt,
-      sourcePaths: [...sourcePaths]
-    })
-  ) {
-    custody.durable.add(handbackReceiptKey(receipt))
   }
   return { adopted: true }
 }
@@ -127,27 +133,54 @@ export function nativeChatDraftReceiptDurable(
   )
 }
 
-/** Retry the current draft (later typing, removal or clear included) and settle with its proof. */
-export async function whenNativeChatDraftReceiptSettled(
+/** A Retry's wake for the destination: one commit attempt of the current draft when its receipt is
+ *  unproved or a refused write is still owed, and no write is already on its way. */
+export function requestNativeChatDraftReceiptCommit(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt
-): Promise<boolean> {
+): void {
   const scopeKey = currentDraftScope(reference)
-  if (!nativeChatDraftHasReceipt(scopeKey, receipt)) {
-    return false
-  }
-  if (nativeChatDraftReceiptDurable(scopeKey, receipt)) {
-    return true
-  }
-  // Before the load a whole write would replace the stored draft; its pending append is the attempt.
-  if (load.hydrated && !hasLocalChange(scopeKey)) {
+  if (
+    nativeChatDraftHasReceipt(scopeKey, receipt) &&
+    (!nativeChatDraftReceiptDurable(scopeKey, receipt) || dirtyScopes.has(scopeKey)) &&
+    !hasPendingNativeChatComposerDraftWrite(scopeKey)
+  ) {
     dirtyScopes.add(scopeKey)
+    flushNativeChatComposerDrafts()
   }
-  await nativeChatComposerDraftWriteSettled(scopeKey)
-  return nativeChatDraftReceiptDurable(scopeKey, receipt)
 }
 
-/** Only after the source's own retirement is durable and its emitters are revoked. */
+/** One removable listener for the receipt's commit results: true once it is durable (in this same
+ *  tick when it already is), false for each refused attempt. Registration asks for one attempt. */
+export function subscribeNativeChatDraftReceiptCommit(
+  reference: string,
+  receipt: NativeChatDraftHandbackReceipt,
+  listener: (durable: boolean) => void
+): () => void {
+  const scopeKey = currentDraftScope(reference)
+  let active = true
+  const remove = addNativeChatDraftReceiptListener(scopeKey, receipt, (durable) => {
+    if (active) {
+      listener(durable)
+    }
+  })
+  if (nativeChatDraftReceiptDurable(scopeKey, receipt)) {
+    queueMicrotask(() => {
+      if (active && nativeChatDraftReceiptDurable(scopeKey, receipt)) {
+        listener(true)
+      }
+    })
+  } else {
+    requestNativeChatDraftReceiptCommit(scopeKey, receipt)
+  }
+  return () => {
+    active = false
+    remove()
+  }
+}
+
+/** Only after the source's own retirement is durable and its emitters are revoked. Changes only the
+ *  receipt: the saved record's content, and anything typed here, are left as they are. */
 export function retireNativeChatDraftReceipt(
   reference: string,
   receipt: NativeChatDraftHandbackReceipt
@@ -160,12 +193,19 @@ export function retireNativeChatDraftReceipt(
   const key = handbackReceiptKey(receipt)
   custody.handbacks = custody.handbacks.filter((held) => handbackReceiptKey(held) !== key)
   custody.durable.delete(key)
-  custody.owned.delete(key)
-  // Kept even when empty so this write's time supersedes every journaled copy holding the receipt.
-  custody.savedAt = nextSavedAt()
+  custody.added.delete(key)
+  custody.retired.add(key)
   if (!isNativeChatMemoryOnlyDraft(scopeKey)) {
-    persistNativeChatComposerDraft(scopeKey, 'immediate')
+    retireStoredNativeChatDraftReceipt(scopeKey, receipt)
   }
+}
+
+/** The source obligation's reconciler: called for receipts found at load, replay, another
+ *  window's write or a move, and at registration for the receipts already known here. */
+export function registerNativeChatDraftReceiptReconciler(
+  reconciler: (scope: string, receipt: NativeChatDraftHandbackReceipt) => void
+): void {
+  setNativeChatDraftReceiptReconciler(reconciler)
 }
 
 /** Client paths the draft still names and must prepare before a Send. */

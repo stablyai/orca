@@ -7,15 +7,19 @@ import {
   nextSavedAt,
   nativeChatDraftPositions,
   notifyScope,
-  records,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import {
+  claimUncommittedNativeChatDraftHandbacks,
   draftCustody,
-  referencedNativeChatDraftPaths,
-  scopeCustody,
-  withHandbackReceipts
+  knownDraftBases,
+  projectStoredNativeChatDraftCustody
 } from './native-chat-composer-draft-custody'
+import { establishNativeChatDraftBase } from './native-chat-composer-draft-base'
+import {
+  noticeNativeChatDraftReceipts,
+  resetNativeChatDraftReceiptEventsForTests
+} from './native-chat-composer-draft-receipt-events'
 import { installStoredNativeChatComposerDraft } from './native-chat-composer-draft-restore'
 import {
   flushNativeChatComposerDrafts,
@@ -24,6 +28,7 @@ import {
 import {
   replayNativeChatComposerDraftJournal,
   snapshotNativeChatComposerDraftJournal,
+  startNativeChatComposerDraftJournalRunForTests,
   type NativeChatComposerDraftJournalSnapshot
 } from './native-chat-composer-draft-journal'
 import {
@@ -46,6 +51,8 @@ export type AppendBeforeLoad = {
 
 export type LoadBookkeeping = {
   hydrated: boolean
+  /** Every saved draft was read; `hydrated` alone may mean the load gave up. */
+  complete: boolean
   /** Sequence of the last append made before the load landed. */
   appendSequence: number
   readonly editedBeforeLoad: Set<string>
@@ -100,8 +107,16 @@ function applyLoaded(
       drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
     }
   }
-  for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
+  const committed = new Map(drafts)
+  const materialized = new Map<string, Set<string>>()
+  for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal, materialized)) {
     dirtyScopes.add(scopeKey)
+  }
+  for (const [scopeKey, custody] of draftCustody) {
+    // A hand-back that arrived first and found no saved record: the empty draft is its base.
+    if (custody.pending.length && !drafts.has(scopeKey)) {
+      drafts.set(scopeKey, null)
+    }
   }
   for (const [scopeKey, appends] of load.appendsBeforeLoad) {
     // Appended with nothing saved before: an empty draft is what the load would have read.
@@ -110,10 +125,19 @@ function applyLoaded(
     }
   }
   for (const [scopeKey, stored] of drafts) {
+    const journaled = [...(materialized.get(scopeKey) ?? [])]
+    // Its own read already gave this scope its complete base; this older snapshot must not replace it.
+    if (knownDraftBases.has(scopeKey)) {
+      continue
+    }
+    if (draftCustody.get(scopeKey)?.pending.length) {
+      establishNativeChatDraftBase(scopeKey, stored, journaled, committed.get(scopeKey))
+      dirtyScopes.add(scopeKey)
+      continue
+    }
     if (load.editedBeforeLoad.has(scopeKey)) {
-      if (stored && keepStoredCustody(scopeKey, stored)) {
-        dirtyScopes.add(scopeKey)
-      }
+      // Its pending write commits at the stored record; memory learns the receipts kept there.
+      projectStoredNativeChatDraftCustody(scopeKey, stored, stored?.handbacks ?? [])
       continue
     }
     if (!stored || load.deletionsBeforeLoad.some((matches) => matches(scopeKey, stored))) {
@@ -128,35 +152,22 @@ function applyLoaded(
       stored.handbacks ?? [],
       position ?? (changed ? undefined : { at: 'start', pending: true })
     )
-    if (changed || restaged) {
+    journaled.forEach((key) => draftCustody.get(scopeKey)?.journaled.add(key))
+    claimUncommittedNativeChatDraftHandbacks(scopeKey, committed.get(scopeKey))
+    if (changed || restaged || journaled.length) {
       dirtyScopes.add(scopeKey)
     }
     notifyScope(scopeKey)
   }
+  for (const scopeKey of draftCustody.keys()) {
+    noticeNativeChatDraftReceipts(scopeKey)
+  }
   load.hydrated = true
+  load.complete = true
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
   flushNativeChatComposerDrafts()
-}
-
-/** An edit made before the load replaces stored content, never the receipts and provenance stored with it. */
-function keepStoredCustody(scopeKey: string, stored: StoredNativeChatComposerDraft): boolean {
-  const referenced = referencedNativeChatDraftPaths(records.get(scopeKey))
-  const sourcePaths = (stored.sourcePaths ?? []).filter((path) => referenced.has(path))
-  if (!stored.handbacks?.length && !sourcePaths.length) {
-    return false
-  }
-  const custody = scopeCustody(scopeKey, nextSavedAt())
-  const before = custody.handbacks.length + custody.sourcePaths.length
-  custody.handbacks = withHandbackReceipts(custody.handbacks, stored.handbacks ?? [])
-  custody.sourcePaths = [...new Set([...custody.sourcePaths, ...sourcePaths])]
-  custody.owner ??= stored.owner
-  if (custody.handbacks.length + custody.sourcePaths.length === before) {
-    return false
-  }
-  custody.savedAt = nextSavedAt()
-  return true
 }
 
 function retryLater(error: unknown): void {
@@ -215,4 +226,7 @@ export function resetNativeChatComposerDraftLoadForTests(): void {
   hydration = null
   failedLoads = 0
   draftCustody.clear()
+  knownDraftBases.clear()
+  resetNativeChatDraftReceiptEventsForTests()
+  startNativeChatComposerDraftJournalRunForTests()
 }

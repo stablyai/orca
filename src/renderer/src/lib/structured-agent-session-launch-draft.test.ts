@@ -207,7 +207,7 @@ describe('launch draft moves', () => {
     }
   )
 
-  it('does not retire the saved source when an older destination write commits', async () => {
+  it('retires the saved source only once a destination commit holds the moved draft', async () => {
     const storage = createMemoryNativeChatComposerDraftStorage()
     setNativeChatComposerDraftStorageForTests(storage)
     await hydrateNativeChatComposerDrafts()
@@ -218,24 +218,26 @@ describe('launch draft moves', () => {
     })
     const earlier = Promise.withResolvers<void>()
     const moved = Promise.withResolvers<void>()
-    const write = storage.write
+    // Each destination commit reads what is saved and writes the draft as it is when it commits.
+    const update = storage.update
     let earlierWrite: Promise<void> | undefined
-    storage.write = (scope, draft) => {
-      const writing = (draft.text === 'Earlier destination' ? earlier.promise : moved.promise).then(
-        () => write(scope, draft)
-      )
-      if (draft.text === 'Earlier destination') {
+    storage.update = (scope, apply) => {
+      const first = scope === target && !earlierWrite
+      const writing = (first ? earlier.promise : moved.promise).then(() => update(scope, apply))
+      if (first) {
         earlierWrite = writing
       }
       return writing
     }
     updateNativeChatComposerDraft(target, { text: 'Earlier destination' }, 'immediate')
     moveStructuredAgentLaunchDraft(destination, source)
+    // Until a destination commit lands, the saved source still holds the moved text.
+    expect(storage.drafts.get(source)?.text).toBe('Move this')
 
     earlier.resolve()
     await earlierWrite
-    expect(storage.drafts.get(source)?.text).toBe('Move this')
     expect(readNativeChatComposerDraft(target).text).toBe('Earlier destination\n\nMove this')
+    expect(storage.drafts.get(target)?.text).toBe('Earlier destination\n\nMove this')
 
     moved.resolve()
     await nativeChatComposerDraftWritesSettled()

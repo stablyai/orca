@@ -11,6 +11,10 @@ import {
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
 import { draftCustody, moveNativeChatDraftCustody } from './native-chat-composer-draft-custody'
+import {
+  moveNativeChatDraftReceiptListeners,
+  noticeNativeChatDraftReceipts
+} from './native-chat-composer-draft-receipt-events'
 import { persistNativeChatComposerDraft } from './native-chat-composer-draft-persistence'
 import type {
   NativeChatComposerDraft,
@@ -42,7 +46,10 @@ export function moveNativeChatComposerDraft(
     }
   }
   // Receipts travel before the content so the destination's next write carries both.
-  const receipts = moveNativeChatDraftCustody(sourceScope, destinationScope, nextSavedAt())
+  const moved = moveNativeChatDraftCustody(sourceScope, destinationScope, nextSavedAt())
+  moveNativeChatDraftReceiptListeners(sourceScope, destinationScope, moved)
+  noticeNativeChatDraftReceipts(destinationScope, moved)
+  const receipts = moved.length > 0
   const hasContent = source.text !== '' || source.images.length > 0
   const durable =
     hasContent && appendToNativeChatComposerDraft(destinationScope, source, owner, position)

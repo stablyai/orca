@@ -8,7 +8,7 @@ import {
 } from './native-chat-composer-draft-memory'
 import {
   deleteLoadingNativeChatComposerDraftsWhere,
-  persistNativeChatComposerDraft
+  removeNativeChatComposerDraftRecord
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
 import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
@@ -33,7 +33,7 @@ export function deleteNativeChatComposerDraftsWhere(
       reconcileRestoredImageChecks(scope, [])
       notifyScope(scope)
       if (draft) {
-        persistNativeChatComposerDraft(scope, 'immediate')
+        removeNativeChatComposerDraftRecord(scope)
       }
     }
   }

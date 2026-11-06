@@ -35,6 +35,14 @@ import {
   resetHostLaunchObserversForTests
 } from './structured-agent-session-host-launch-observer'
 import { retireHostLaunchSources } from './structured-agent-session-host-launch-sources'
+import {
+  reconcileRestoredHostLaunchHandback,
+  resetHostLaunchHandbacksForTests
+} from './structured-agent-session-host-launch-handback'
+import { registerNativeChatDraftReceiptReconciler } from '@/components/native-chat/native-chat-composer-draft-handback'
+
+// Receipts a reloaded draft still holds rebuild their launch's hand-back obligation.
+registerNativeChatDraftReceiptReconciler(reconcileRestoredHostLaunchHandback)
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -72,6 +80,7 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
   resetHostLaunchObserversForTests()
+  resetHostLaunchHandbacksForTests()
   resetStructuredAgentLaunchCancellationForTests()
   resetStructuredAgentLocalLaunchCancelsForTests()
 }

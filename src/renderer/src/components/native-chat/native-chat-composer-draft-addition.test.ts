@@ -62,7 +62,11 @@ afterEach(() => {
 describe('native-chat composer draft addition', () => {
   it('gives "go" back onto "please go" after a crash before storage commits it', async () => {
     storage.drafts.set(SCOPE, { text: 'please go', images: [], savedAt: 1 })
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashing = {
+      ...storage,
+      write: () => new Promise<void>(() => {}),
+      update: () => new Promise<void>(() => {})
+    }
     const crashed = await reload({ using: crashing })
     expect(crashed.drafts.appendNativeChatDraftCache(SCOPE, 'go')).toBe(true)
     crashed.store.clearNativeChatComposerDraftsForTests()
@@ -87,7 +91,11 @@ describe('native-chat composer draft addition', () => {
 
   it('keeps an image in front of one attached after it when a crash replays it', async () => {
     storage.drafts.set(SCOPE, { text: '', images: [{ id: 'b', path: '/repo/b.png' }], savedAt: 1 })
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashing = {
+      ...storage,
+      write: () => new Promise<void>(() => {}),
+      update: () => new Promise<void>(() => {})
+    }
     const crashed = await reload({ using: crashing })
     crashed.store.appendToNativeChatComposerDraft(SCOPE, {
       images: [{ id: 'a', path: '/repo/a.png' }],
@@ -105,7 +113,11 @@ describe('native-chat composer draft addition', () => {
 
   it('keeps a second attachment of the same file when a crash replays it', async () => {
     storage.drafts.set(SCOPE, { text: '', images: [{ id: 'x', path: '/repo/a.png' }], savedAt: 1 })
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashing = {
+      ...storage,
+      write: () => new Promise<void>(() => {}),
+      update: () => new Promise<void>(() => {})
+    }
     const crashed = await reload({ using: crashing })
     crashed.store.appendToNativeChatComposerDraft(SCOPE, {
       images: [{ id: 'y', path: '/repo/a.png' }],
@@ -126,7 +138,11 @@ describe('native-chat composer draft addition', () => {
       images: [{ id: 'p', path: '', unavailableName: 'a.png' }],
       savedAt: 1
     })
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashing = {
+      ...storage,
+      write: () => new Promise<void>(() => {}),
+      update: () => new Promise<void>(() => {})
+    }
     const crashed = await reload({ using: crashing })
     crashed.store.appendToNativeChatComposerDraft(SCOPE, {
       images: [{ id: 'y', path: '/repo/a.png' }],
@@ -141,7 +157,11 @@ describe('native-chat composer draft addition', () => {
   })
 
   it('keeps a hand-back the draft already ends with when that draft was never saved', async () => {
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+    const crashing = {
+      ...storage,
+      write: () => new Promise<void>(() => {}),
+      update: () => new Promise<void>(() => {})
+    }
     const crashed = await reload({ using: crashing })
     crashed.drafts.writeNativeChatDraftCache(SCOPE, 'hello')
     expect(crashed.drafts.appendNativeChatDraftCache(SCOPE, 'hello')).toBe(true)
@@ -189,7 +209,11 @@ describe('native-chat composer draft addition', () => {
       let next: DraftModules
       if (mode === 'crash replay') {
         const crashed = await reload({
-          using: { ...storage, write: () => new Promise<void>(() => {}) }
+          using: {
+            ...storage,
+            write: () => new Promise<void>(() => {}),
+            update: () => new Promise<void>(() => {})
+          }
         })
         crashed.drafts.appendNativeChatDraftCache(SCOPE, '@/stored/file.pdf')
         crashed.store.clearNativeChatComposerDraftsForTests()

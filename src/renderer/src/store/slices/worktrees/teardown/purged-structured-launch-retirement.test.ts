@@ -477,18 +477,24 @@ describe("one removal of many hosts' copies of the same workspace id", () => {
       }),
       makeWorktree({ id: EXCLUSIVE, repoId: 'repo-1', hostId: ENV_1 })
     ]
-    // Every read of a publisher's id, wherever the purge makes it, and those inside the collector.
-    const idReads = { all: 0, inherited: 0 }
+    // Every read of a publisher's id and host, wherever the purge makes it, and those inside the
+    // collector.
+    const reads = {
+      id: { all: 0, inherited: 0 },
+      hostId: { all: 0, inherited: 0 }
+    }
     for (const publisher of publishers) {
-      const { id } = publisher
-      Object.defineProperty(publisher, 'id', {
-        enumerable: true,
-        get: () => {
-          idReads.all++
-          idReads.inherited += work.collector.depth > 0 ? 1 : 0
-          return id
-        }
-      })
+      for (const field of ['id', 'hostId'] as const) {
+        const value = publisher[field]
+        Object.defineProperty(publisher, field, {
+          enumerable: true,
+          get: () => {
+            reads[field].all++
+            reads[field].inherited += work.collector.depth > 0 ? 1 : 0
+            return value
+          }
+        })
+      }
     }
     useAppStore.setState({ worktreesByRepo: { 'repo-1': publishers } })
     const targets = [
@@ -500,9 +506,13 @@ describe("one removal of many hosts' copies of the same workspace id", () => {
     ]
     Object.assign(work.counts, { listingMatches: 0, lookups: 0, hostChecks: 0, scans: 0 })
     Object.assign(work.collector, { calls: 0, twins: 0 })
-    Object.assign(idReads, { all: 0, inherited: 0 })
     const purge = () => useAppStore.getState().purgeWorktreeTerminalState(targets)
-    const saves = countSaves(purge)
+    const saves = countSaves(() => {
+      for (const field of Object.values(reads)) {
+        Object.assign(field, { all: 0, inherited: 0 })
+      }
+      purge()
+    })
 
     expect(readStructuredAgentLaunchRecords().map(({ sessionId }) => sessionId)).toEqual([
       'kept',
@@ -550,10 +560,21 @@ describe("one removal of many hosts' copies of the same workspace id", () => {
     // Each such call reads listing ids up to its copy's row: i + 1 for the i-th same-id host
     // (from 0), N + 3 for the SSH alias and N + 5 for the proxied copy. So
     // these two passes read 2 * (N(N + 1)/2 + (N + 3) + (N + 5)) = N^2 + 5N + 16 publisher ids,
-    // and the whole public purge stays quadratic in N: a main residual, tracked by the owner.
-    expect(idReads.inherited).toBe(count * count + 5 * count + 16)
+    // and the whole public purge stays quadratic in N: a main residual, tracked in STA-14167.
+    expect(reads.id.inherited).toBe(count * count + 5 * count + 16)
     // Outside it, this PR's attribution reads each publisher's id once per listing derivation.
-    expect(idReads.all - idReads.inherited).toBeLessThanOrEqual(2 * publishers.length)
+    expect(reads.id.all - reads.id.inherited).toBeLessThanOrEqual(2 * publishers.length)
+    // Those lookups test a row's host only once its id matches: the same-id copies up to its
+    // own, then the alias's and the proxied copy's one row each, so 2 * (N(N + 1)/2 + 1 + 1).
+    expect(reads.hostId.inherited).toBe(count * (count + 1) + 4)
+    // Each listing derivation, outside it, reads hosts per row along its branch: a removed
+    // same-id runtime row 10 (3 stamp map, 3 candidate, 2 listing match, 2 attribution); the
+    // same-id survivor 6, the unstamped copy 3, the SSH alias through its runtime 6, the alias
+    // survivor 6, the proxied SSH copy whose runtime survives 4, the proxy survivor 6 and the
+    // exclusive removed runtime row 10: 10N + 41 per derivation, two derivations.
+    expect(reads.hostId.all - reads.hostId.inherited).toBeLessThanOrEqual(2 * (10 * count + 41))
+    // So every host read the purge makes is at most N^2 + 21N + 86: quadratic, as above.
+    expect(reads.hostId.all).toBeLessThanOrEqual(count * count + 21 * count + 86)
 
     // The same removal again ends and saves nothing.
     expect(countSaves(purge).mutations).toEqual([])

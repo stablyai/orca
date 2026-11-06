@@ -69,7 +69,11 @@ export function nextStoredNativeChatComposerDraft(
 
 /** Storage refused a draft owing a receipt: the journal's copy of the current draft can still prove it. */
 export function journalOwedNativeChatDraftHandbacks(scopeKey: string): void {
-  if (!hasUndurableNativeChatDraftHandback(scopeKey)) {
+  // A scope whose base is unknown is proved by its coalesced identified addition, not a snapshot.
+  if (
+    !hasUndurableNativeChatDraftHandback(scopeKey) ||
+    draftCustody.get(scopeKey)?.pending.length
+  ) {
     return
   }
   const draft = currentStoredNativeChatComposerDraft(scopeKey)

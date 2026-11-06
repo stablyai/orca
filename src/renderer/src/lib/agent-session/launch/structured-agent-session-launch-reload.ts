@@ -3,6 +3,7 @@ import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends
 } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { reconcileHostLaunchHandback } from './structured-agent-session-host-launch-handback'
 import {
   restoreStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
@@ -87,6 +88,8 @@ export function restorePersistedStructuredLaunchState(
   callers.failedAt = record.failedAt
   structuredLaunchSelectionController(state)
   setStructuredLaunchState(state)
+  // A return of its opening the draft already holds is finished with this launch's row in view.
+  reconcileHostLaunchHandback(sessionId)
   if (
     record.firstMessage &&
     record.lifecycle !== 'failed' &&
