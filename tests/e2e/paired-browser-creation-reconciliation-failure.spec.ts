@@ -35,7 +35,7 @@ type FaultWindow = Window & {
 // Drives the real create menu so the failure surfaces through handleNewBrowserTab's toast.
 async function startBrowserCreate(page: Page): Promise<void> {
   await page.evaluate(() => window.__store?.getState().setBrowserDefaultUrl('about:blank'))
-  await tabCreateMenuTrigger(page).first().click()
+  await (await tabCreateMenuTrigger(page)).click()
   const newBrowserTab = page.getByRole('menuitem', { name: /New Browser Tab/i })
   await expect(newBrowserTab).toBeVisible({ timeout: 30_000 })
   await newBrowserTab.click()

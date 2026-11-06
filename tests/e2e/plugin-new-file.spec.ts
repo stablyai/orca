@@ -115,7 +115,7 @@ test('a plugin new file is created from the + menu and opens in its editor', asy
     await writeSketchPlugin(pluginRoot)
     await enableDevPlugins(orcaPage, [pluginRoot])
 
-    await tabCreateMenuTrigger(orcaPage).click({ force: true })
+    await (await tabCreateMenuTrigger(orcaPage)).click({ force: true })
     const item = orcaPage.getByRole('menuitem', { name: 'New sketch' })
     await expect(item).toBeVisible({ timeout: 15_000 })
     await expect(item.locator('img[src^="orca-plugin-image://"]')).toBeVisible()

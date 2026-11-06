@@ -6,6 +6,9 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -30,7 +33,8 @@ import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capab
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
-  selectWorktreesByRepo
+  selectWorktreesByRepo,
+  selectWorkspaceByHostTarget
 } from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { authorityKey } from '../../../../../../shared/host-authority'
@@ -162,11 +166,23 @@ export function resolveHostCapabilities(
 function resolveProjectRuntime(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace,
-  executionHostId: string
+  executionHostId: string,
+  selectedWorkspace?: Worktree
 ): AgentLaunchRoutingInput['projectRuntime'] {
   // Remote hosts choose their own runtime; local Windows/WSL preferences cannot override paired createSupport.
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID || workspace.kind === 'floating') {
     return undefined
+  }
+  if (workspace.hostId && workspace.worktreeId) {
+    const repo =
+      selectedWorkspace &&
+      findIndexedRepoOwnerForHost(store.repos, selectedWorkspace.repoId, workspace.hostId)
+    return selectedWorkspace && repo
+      ? getLocalProjectExecutionRuntimeContext(store, workspace.worktreeId, undefined, undefined, {
+          worktree: selectedWorkspace,
+          repo
+        })
+      : undefined
   }
   return workspace.worktreeId
     ? getLocalProjectExecutionRuntimeContext(store, workspace.worktreeId)
@@ -250,6 +266,17 @@ export function buildAgentLaunchRouteInput(
     ? { ...args.workspace, hostId: args.selectedExecutionHostId }
     : args.workspace
   const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
+  const selectedWorkspace =
+    workspace.worktreeId && workspace.hostId
+      ? selectWorkspaceByHostTarget(
+          {
+            ...store,
+            worktreesByRepo: selectWorktreesByRepo(store) ?? {},
+            folderWorkspaces: selectFolderWorkspaces(store) ?? []
+          },
+          hostWorktreeTarget({ id: workspace.worktreeId, hostId: workspace.hostId })
+        )
+      : undefined
   return {
     agent,
     settings: store.settings,
@@ -264,7 +291,7 @@ export function buildAgentLaunchRouteInput(
     projectRuntime:
       workspace.executionContext?.kind === 'host'
         ? workspace.executionContext.projectRuntime
-        : resolveProjectRuntime(store, workspace, executionHostId),
+        : resolveProjectRuntime(store, workspace, executionHostId, selectedWorkspace),
     promptDelivery: args.promptDelivery,
     launchText: args.prompt,
     nativeChatTranscriptIsLocalReadable: resolveTranscriptIsLocalReadable(
@@ -277,12 +304,16 @@ export function buildAgentLaunchRouteInput(
       ? requestsCwdOutsideWorkspaceRootForWorkspace({
           workspaceId: workspace.worktreeId,
           requestedCwd: tuiCustomization?.cwd,
-          workspacePath: workspace.worktreeId
-            ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
-            : undefined,
+          workspacePath: workspace.hostId
+            ? selectedWorkspace?.path
+            : workspace.worktreeId
+              ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+              : undefined,
           resolveFolderWorkspacePath: (folderWorkspaceId) =>
-            selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
-              ?.folderPath
+            workspace.hostId
+              ? selectedWorkspace?.path
+              : selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
+                  ?.folderPath
         })
       : false,
     ...hostStructuredAgentsInput(store, executionHostId)

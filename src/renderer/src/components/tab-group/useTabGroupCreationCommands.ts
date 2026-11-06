@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { createWebRuntimeSessionBrowserTab } from '../../runtime/web-runtime-browser-creation'
@@ -47,8 +47,12 @@ export function useTabGroupCreationCommands({
     },
     newSimulatorTab: worktreeState.mobileEmulatorEnabled
       ? async () => {
-          if (getSimulatorTabForWorktree(worktreeId)) {
-            ensureSimulatorTab(worktreeId, { surfacePane: true })
+          if (getSimulatorTabForWorktree(worktreeId, LOCAL_EXECUTION_HOST_ID)) {
+            ensureSimulatorTab(worktreeId, {
+              surfacePane: true,
+              targetGroupId: groupId,
+              executionHostId: LOCAL_EXECUTION_HOST_ID
+            })
             return
           }
           await openMobileEmulatorTab(worktreeId, {

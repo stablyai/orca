@@ -1,6 +1,6 @@
 import { afterPendingWorkspaceTabs } from '@/runtime/layout-owner-pending-tabs'
 import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
-import { useState, useRef } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import type { usePluginNewFiles } from '@/store/plugin-new-files'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { workspaceRootGroupId } from '../../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -20,6 +20,7 @@ function Trigger(props: React.ComponentProps<typeof Button>): React.JSX.Element 
   return (
     <Button
       type="button"
+      data-worktree-create-trigger
       variant="ghost"
       size="icon-xs"
       className="size-5 shrink-0"
@@ -40,9 +41,18 @@ export function WorktreeCreateButton({
   executionHostId: ExecutionHostId
   disabled?: boolean
 }): React.JSX.Element {
+  const root = useRef<HTMLSpanElement>(null)
   const [groupId, setGroupId] = useState<string | null>(null)
+  const focusAfterClose = useRef(false)
+  useLayoutEffect(() => {
+    if (groupId === null && focusAfterClose.current) {
+      focusAfterClose.current = false
+      root.current?.querySelector('button')?.focus()
+    }
+  }, [groupId])
   return (
     <span
+      ref={root}
       className="shrink-0"
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
@@ -53,7 +63,8 @@ export function WorktreeCreateButton({
           worktreeId={worktreeId}
           groupId={groupId}
           executionHostId={executionHostId}
-          onClose={() => {
+          onClose={(restoreFocus) => {
+            focusAfterClose.current = restoreFocus
             setGroupId(null)
             restoreWorktreeCreateMenuSurface(worktreeId, executionHostId)
           }}
@@ -91,11 +102,15 @@ function WorktreeCreateMenu({
 }: {
   worktreeId: string
   groupId: string
-  onClose: () => void
+  onClose: (restoreFocus: boolean) => void
   executionHostId: ExecutionHostId
 }): React.JSX.Element {
+  const menuOpen = useRef(true)
+  const closeGeneration = useRef(0)
+  const keyboardDismissal = useRef(false)
   const pending = useRef(new Set<Promise<unknown>>())
   function track<Result>(action: () => Result): Result {
+    keyboardDismissal.current = false
     const result = action()
     const completion = Promise.resolve(result)
     pending.current.add(completion)
@@ -161,6 +176,9 @@ function WorktreeCreateMenu({
     onNewSimulatorTab: props.onNewSimulatorTab,
     onNewFileTab: props.onNewFileTab
   })
+  useLayoutEffect(() => {
+    menuOpen.current = controller.newTabMenuOpen
+  }, [controller.newTabMenuOpen])
   const plugins = usePluginNewFileMenuOptions(
     controller.createMenuOptions,
     controller.handleSelectCreateMenuOption,
@@ -182,9 +200,28 @@ function WorktreeCreateMenu({
           track(() => controller.launchAgentFromNewTabEntry(option))
       }}
       trigger={<Trigger />}
+      onOpenChange={(open) => {
+        menuOpen.current = open
+        if (open) {
+          closeGeneration.current++
+          keyboardDismissal.current = false
+        }
+      }}
+      onEscapeKeyDown={() => {
+        keyboardDismissal.current = true
+      }}
       onClosed={() => {
+        if (menuOpen.current) {
+          return
+        }
+        const generation = ++closeGeneration.current
+        const restoreFocus = keyboardDismissal.current
         void Promise.allSettled(pending.current).then(() =>
-          afterPendingWorkspaceTabs(worktreeId, onClose)
+          afterPendingWorkspaceTabs(worktreeId, () => {
+            if (generation === closeGeneration.current) {
+              onClose(restoreFocus)
+            }
+          })
         )
       }}
     />

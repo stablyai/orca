@@ -22,7 +22,9 @@ export function WorkspaceCreateMenu({
   runtime,
   createMenu,
   trigger,
-  onClosed
+  onClosed,
+  onOpenChange,
+  onEscapeKeyDown
 }: {
   props: TabBarProps
   onNewPluginFile?: (newFile: ReturnType<typeof usePluginNewFiles>[number]) => void
@@ -30,6 +32,8 @@ export function WorkspaceCreateMenu({
   createMenu: TabBarCreateMenuController
   trigger?: React.ReactNode
   onClosed?: () => void
+  onOpenChange?: (open: boolean) => void
+  onEscapeKeyDown?: () => void
 }): React.JSX.Element {
   const {
     worktreeId,
@@ -73,7 +77,13 @@ export function WorkspaceCreateMenu({
   return (
     <DropdownMenu
       open={newTabMenuOpen}
-      onOpenChange={setNewTabMenuOpen}
+      onOpenChange={(open) => {
+        if (open) {
+          createMenu.clearPendingNewTabMenuFocusOnUnmount(null)
+        }
+        onOpenChange?.(open)
+        setNewTabMenuOpen(open)
+      }}
       // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
       modal={false}
     >
@@ -94,6 +104,7 @@ export function WorkspaceCreateMenu({
         align="start"
         sideOffset={6}
         className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+        onEscapeKeyDown={onEscapeKeyDown}
         onCloseAutoFocus={(event) => {
           // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
           event.preventDefault()

@@ -58,7 +58,7 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
         <WorktreeCreateButton
           worktreeId={worktree.id}
           executionHostId={getWorktreeExecutionHostId(worktree, card.repo)}
-          disabled={card.isDeleting || card.isRuntimeDisconnected}
+          disabled={card.isDeleting || card.isRuntimeDisconnected || card.isSshDisconnected}
         />
       ) : null}
     </>

@@ -16,11 +16,11 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
-import '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import {
   launchOnceHostAnswered,
@@ -137,7 +137,10 @@ export function launchAgentInNewTabWithOutcome(
     return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
   const buildStartup = (
-    agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
+    agentLaunchChoices = readAgentLaunchPreferencesForWorkspace(
+      store,
+      worktreeLaunchWorkspace(worktreeId, args.selectedExecutionHostId)
+    ).agentLaunchChoices
   ) =>
     planLaunchAgentStartupPrompt({
       base: resolveAgentStartupPlanInputs({

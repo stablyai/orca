@@ -220,3 +220,27 @@ describe('launchAgentInNewTab', () => {
     expect(mockSetAgentStatus).not.toHaveBeenCalled()
   })
 })
+
+it('reads terminal defaults from the explicitly selected workspace copy', async () => {
+  const preferences =
+    await import('@/runtime/agent-launch-settings/use-host-agent-launch-preferences')
+  vi.spyOn(preferences, 'readAgentLaunchPreferencesForWorkspace').mockImplementation(
+    (_state, workspace) => ({
+      defaultTuiAgent: 'codex',
+      disabledTuiAgents: undefined,
+      agentLaunchChoices: {
+        codex: { model: workspace.hostId === 'local' ? 'local-model' : 'other-model' }
+      }
+    })
+  )
+  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  launchAgentInNewTab({
+    agent: 'codex',
+    worktreeId: 'wt-1',
+    selectedExecutionHostId: 'local',
+    requestId: 'selected-defaults',
+    launchPlatform: 'linux'
+  })
+  expect(queuedStartups()[0]?.command).toContain('local-model')
+  expect(queuedStartups()[0]?.command).not.toContain('other-model')
+})

@@ -54,7 +54,7 @@ export async function launchGoldenStubAgentFromNewTab(
   page: Page,
   menuItemName: RegExp = /^Codex(?:\s|$)/i
 ): Promise<void> {
-  await tabCreateMenuTrigger(page).click({ force: true })
+  await (await tabCreateMenuTrigger(page)).click({ force: true })
   const launchOption = page.getByRole('menuitem', { name: menuItemName }).first()
   await expect(launchOption).toBeVisible({ timeout: 15_000 })
   await launchOption.click({ force: true })

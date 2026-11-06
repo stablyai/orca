@@ -1,3 +1,5 @@
+import * as rendererPlatform from '@/lib/renderer-app-platform'
+import { makeFolderWorkspace } from './worktrees-slice-test-fixtures'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { describe, expect, it, vi } from 'vitest'
@@ -111,4 +113,66 @@ it('keeps nested SSH inventory, capability transport and quoting on the owning s
     resolveAgentLaunchExecutionContext(state, { worktreeId: id, executionHostId: 'ssh:box' })
       ?.resolvedLaunchPlatform
   ).toBe('linux')
+})
+
+it('keeps the selected local WSL runtime when a remote twin is listed first', () => {
+  const store = setup()
+  const local = makeWorktree({
+    id,
+    repoId: 'repo1',
+    hostId: 'local',
+    path: String.raw`\\wsl.localhost\Ubuntu\repo`
+  })
+  store.setState((state) => ({
+    repos: [
+      {
+        ...state.repos[0],
+        id: 'repo1',
+        path: 'C:\\repo',
+        executionHostId: 'local',
+        connectionId: null
+      }
+    ],
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          hostId: 'runtime:env-1',
+          runtimeOwnerEnvironmentId: 'env-1'
+        }),
+        local
+      ]
+    }
+  }))
+  const platform = vi.spyOn(rendererPlatform, 'getRendererAppPlatform').mockReturnValue('win32')
+  try {
+    const input = buildAgentLaunchRouteInput(store.getState(), {
+      agent: 'codex',
+      workspace: worktreeLaunchWorkspace(id, 'local')
+    })
+    expect(input.projectRuntime).toMatchObject({ runtime: { kind: 'wsl', distro: 'Ubuntu' } })
+  } finally {
+    platform.mockRestore()
+  }
+})
+
+it('compares a folder custom cwd with the selected copy root', () => {
+  const store = setup()
+  store.setState({
+    folderWorkspaces: [
+      makeFolderWorkspace({
+        id: 'notes',
+        folderPath: '/srv/remote',
+        executionHostId: 'runtime:env-1'
+      }),
+      makeFolderWorkspace({ id: 'notes', folderPath: '/srv/local', executionHostId: 'local' })
+    ]
+  })
+  const input = buildAgentLaunchRouteInput(store.getState(), {
+    agent: 'codex',
+    workspace: { kind: 'folder', worktreeId: 'folder:notes', hostId: 'local' },
+    tuiCustomization: { cwd: '/srv/remote' }
+  })
+  expect(input.startsOutsideWorkspaceRoot).toBe(true)
 })

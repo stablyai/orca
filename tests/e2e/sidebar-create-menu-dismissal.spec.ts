@@ -1,3 +1,5 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
+import { rm } from 'node:fs/promises'
 import { worktreeRow } from './worktree-row-locators'
 import { test, expect } from './helpers/orca-app'
 
@@ -24,6 +26,13 @@ test('dismissing the sidebar create menu restores an empty workspace', async ({ 
   await orcaPage.keyboard.press('Escape')
   await expect.poll(count).toBe(1)
   await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(1)
+  await expect
+    .poll(() =>
+      worktreeRow(orcaPage, worktreeId)
+        .getByRole('button', { name: 'New tab', exact: true })
+        .evaluate((node) => node === document.activeElement)
+    )
+    .toBe(true)
 })
 
 test('the sidebar terminal entry keeps its workspace when activation changes', async ({
@@ -84,7 +93,10 @@ test('the sidebar terminal entry keeps its workspace when activation changes', a
   ).toBeVisible()
 })
 
-test('an async Markdown selection does not also seed a terminal', async ({ orcaPage }) => {
+test('an async Markdown selection does not also seed a terminal', async ({
+  orcaPage,
+  registerPostElectronShutdownCleanup
+}) => {
   const worktreeId = await orcaPage.evaluate(() => {
     const state = window.__store!.getState()
     const id = state.activeWorktreeId!
@@ -121,6 +133,11 @@ test('an async Markdown selection does not also seed a terminal', async ({ orcaP
       )
     )
     .toBe(1)
+  const createdPath = await orcaPage.evaluate(
+    (id) => window.__store!.getState().openFiles.find((file) => file.worktreeId === id)!.filePath,
+    worktreeId
+  )
+  registerPostElectronShutdownCleanup(() => rm(createdPath, { force: true }))
   expect(
     await orcaPage.evaluate((id) => window.__store!.getState().tabsByWorktree[id] ?? [], worktreeId)
   ).toEqual([])
@@ -131,7 +148,8 @@ test('an async Markdown selection does not also seed a terminal', async ({ orcaP
 })
 
 test('Markdown creation keeps an empty workspace after activation changes', async ({
-  orcaPage
+  orcaPage,
+  registerPostElectronShutdownCleanup
 }) => {
   const setup = await orcaPage.evaluate(() => {
     const state = window.__store!.getState()
@@ -168,6 +186,11 @@ test('Markdown creation keeps an empty workspace after activation changes', asyn
       )
     )
     .toBe(1)
+  const createdPath = await orcaPage.evaluate(
+    (id) => window.__store!.getState().openFiles.find((file) => file.worktreeId === id)!.filePath,
+    setup.worktreeId
+  )
+  registerPostElectronShutdownCleanup(() => rm(createdPath, { force: true }))
   expect(
     await orcaPage.evaluate(
       (id) => window.__store!.getState().openFiles.filter((file) => file.worktreeId === id),
@@ -231,4 +254,69 @@ test('Browser creation keeps an empty workspace after activation changes', async
   await expect(
     orcaPage.getByRole('combobox', { name: 'Search or enter URL', exact: true })
   ).toBeVisible()
+})
+
+test('a completed terminal creation does not close a reopened sidebar menu', async ({
+  orcaPage
+}) => {
+  const setup = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    const id = state.activeWorktreeId!
+    const original = state.openNewTerminalTabInActiveWorkspace
+    window.__store!.setState({
+      openNewTerminalTabInActiveWorkspace: async (...args) => {
+        await new Promise<void>((resolve) =>
+          window.addEventListener('test-release-terminal', () => resolve(), { once: true })
+        )
+        return original(...args)
+      }
+    })
+    return { id, before: state.tabsByWorktree[id]?.length ?? 0 }
+  })
+  const trigger = () =>
+    worktreeRow(orcaPage, setup.id).getByRole('button', { name: 'New tab', exact: true })
+  await trigger().click({ force: true })
+  await orcaPage
+    .getByRole('menuitem', { name: /New Terminal/i })
+    .first()
+    .click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeHidden()
+  await trigger().click({ force: true })
+  await expect(orcaPage.getByRole('menu')).toBeVisible()
+  await orcaPage.evaluate(() => window.dispatchEvent(new Event('test-release-terminal')))
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(
+        (id) => window.__store!.getState().tabsByWorktree[id]?.length ?? 0,
+        setup.id
+      )
+    )
+    .toBe(setup.before + 1)
+  await expect(orcaPage.getByRole('menu')).toBeVisible()
+  await orcaPage.keyboard.press('Escape')
+  await expect.poll(() => trigger().evaluate((node) => node === document.activeElement)).toBe(true)
+})
+
+test('page-wide create actions target the active split group', async ({ orcaPage }) => {
+  const setup = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    const id = state.activeWorktreeId!
+    const source = state.activeGroupIdByWorktree[id] ?? state.groupsByWorktree[id][0].id
+    const group = state.createEmptySplitGroup(id, source, 'right')!
+    const tab = state.createTab(id, group, undefined, { activate: true })
+    state.focusGroup(id, group)
+    state.setActiveTab(tab.id)
+    return { source, group }
+  })
+  const source = orcaPage.locator(`[data-tab-group-strip-id="${setup.source}"]`)
+  const selected = orcaPage.locator(`[data-tab-group-strip-id="${setup.group}"]`)
+  await expect(selected.locator('[data-testid="sortable-tab"]')).toHaveCount(1)
+  const sourceCount = await source.locator('[data-testid="sortable-tab"]').count()
+  await (await tabCreateMenuTrigger(orcaPage)).click({ force: true })
+  await orcaPage
+    .getByRole('menuitem', { name: /New Terminal/i })
+    .first()
+    .click({ force: true })
+  await expect(selected.locator('[data-testid="sortable-tab"]')).toHaveCount(2)
+  await expect(source.locator('[data-testid="sortable-tab"]')).toHaveCount(sourceCount)
 })

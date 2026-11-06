@@ -240,7 +240,7 @@ test.describe('paired desktop writes to a switch-on server’s workspace land in
             )
           )
         )
-        await tabCreateMenuTrigger(desktop.page).click({ force: true })
+        await (await tabCreateMenuTrigger(desktop.page)).click({ force: true })
         await desktop.page
           .getByRole('menuitem', { name: /New Terminal/i })
           .first()

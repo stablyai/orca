@@ -20,7 +20,7 @@ test('opens a local HTML file URL with encoded characters from the new-tab menu'
   const url = pathToFileURL(filePath).href
   await waitForSessionReady(orcaPage)
   const worktreeId = await waitForActiveWorktree(orcaPage)
-  await tabCreateMenuTrigger(orcaPage).first().click()
+  await (await tabCreateMenuTrigger(orcaPage)).click()
   const input = orcaPage.getByRole('combobox', {
     name: 'Search open tabs, history, files, URLs, agents…',
     exact: true
@@ -102,7 +102,7 @@ test('opens a pasted HTML file URL from a paired host and reloads its assets', a
       },
       { root: testRepoPath, environmentId: client.environmentId }
     )
-    await tabCreateMenuTrigger(client.page).first().click()
+    await (await tabCreateMenuTrigger(client.page)).click()
     const input = client.page.getByRole('combobox', {
       name: 'Search open tabs, history, files, URLs, agents…',
       exact: true
@@ -150,7 +150,7 @@ test('opens a pasted HTML file URL from a paired host and reloads its assets', a
       { worktreeId, filePath }
     )
     await expect(client.page.locator('[data-orca-browser-address-bar]:visible')).toBeFocused()
-    await tabCreateMenuTrigger(client.page).first().click()
+    await (await tabCreateMenuTrigger(client.page)).click()
     await input.fill(pathToFileURL(filePath).href)
     await expect(client.page.getByRole('option', { name: /Open file/ })).toBeVisible()
     await input.press('Enter')

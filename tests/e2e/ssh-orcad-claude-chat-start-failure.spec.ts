@@ -51,7 +51,7 @@ test('a Claude chat that Claude refuses to start as root names the reason', asyn
         defaultTuiAgent: 'claude'
       })
     })
-    await tabCreateMenuTrigger(page).first().click()
+    await (await tabCreateMenuTrigger(page)).click()
     await page.getByText('Claude', { exact: true }).first().click({ timeout: 60_000 })
     const chat = page.locator('[data-native-chat-root="true"]')
     await expect(chat).toBeVisible({ timeout: 60_000 })
@@ -73,7 +73,7 @@ test('a Claude chat that Claude refuses to start as root names the reason', asyn
       choice: 'ask',
       agent: 'claude'
     })
-    await tabCreateMenuTrigger(page).first().click()
+    await (await tabCreateMenuTrigger(page)).click()
     await page.getByText('Claude', { exact: true }).first().click({ timeout: 60_000 })
     const next = page.locator('[data-native-chat-root="true"]').last()
     await next.getByRole('textbox').click()

@@ -109,7 +109,7 @@ export function WorktreeCardHeader({
           <WorktreeCreateButton
             worktreeId={worktree.id}
             executionHostId={getWorktreeExecutionHostId(worktree, repo)}
-            disabled={isDeleting || isRuntimeDisconnected}
+            disabled={isDeleting || isRuntimeDisconnected || card.isSshDisconnected}
           />
         ) : null}
 

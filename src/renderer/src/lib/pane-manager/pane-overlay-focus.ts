@@ -7,7 +7,9 @@ export function focusPanePreservingOverlays(
 ): void {
   if (
     typeof document !== 'undefined' &&
-    (document.activeElement?.matches('[data-worktree-sidebar][data-keyboard-navigation]') ||
+    (document.activeElement?.matches(
+      '[data-worktree-sidebar][data-keyboard-navigation], [data-worktree-create-trigger]'
+    ) ||
       getOverlayFocusOwners(pane.container).length > 0)
   ) {
     return

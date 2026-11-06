@@ -26,7 +26,7 @@ async function createTerminalTab(page: Page): Promise<string> {
   const tabsBefore = await countRenderedTabs(page)
   const activeBefore = await getActiveTabId(page)
 
-  await tabCreateMenuTrigger(page).click()
+  await (await tabCreateMenuTrigger(page)).click()
   await page
     .getByRole('menuitem', { name: /New Terminal/i })
     .first()

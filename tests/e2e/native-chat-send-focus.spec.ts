@@ -43,7 +43,7 @@ test.describe('native chat composer focus', () => {
         })
       )
       .toBe(true)
-    await tabCreateMenuTrigger(page).click()
+    await (await tabCreateMenuTrigger(page)).click()
     const menu = page.getByRole('menu', { name: 'New tab', exact: true })
     const search = menu.getByRole('combobox')
     await expect(search).toBeFocused()

@@ -144,6 +144,18 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     expect(f.pane.terminal.focus).not.toHaveBeenCalled()
   })
 
+  it('preserves the create trigger that regained focus after menu dismissal', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    const button = document.createElement('button')
+    button.setAttribute('data-worktree-create-trigger', '')
+    sidebar.append(button)
+    button.focus()
+    focus(f)
+    expect(document.activeElement).toBe(button)
+  })
+
   it('ignores a navigation marker on a list that no longer owns focus', () => {
     const f = fixture()
     const sidebar = overlay('listbox')
