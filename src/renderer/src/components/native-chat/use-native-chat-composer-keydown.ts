@@ -34,7 +34,9 @@ export type UseNativeChatComposerKeyDownArgs = {
   send: (intent?: NativeChatComposerSendIntent) => void
   /** Cmd/Ctrl+Shift+Enter steers the head queued card, whatever the composer holds. */
   steerHead?: (() => boolean) | undefined
-  /** Cmd/Ctrl+Enter's other way is a steer right now, so on an empty composer it steers the head card too. */
+  /** Empty Cmd/Ctrl+Enter steers the last queued card. */
+  steerLast?: (() => boolean) | undefined
+  /** Whether the alternate send steers rather than queues. */
   alternateSteers?: boolean
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
@@ -56,6 +58,7 @@ export function useNativeChatComposerKeyDown({
   interrupt,
   send,
   steerHead,
+  steerLast,
   alternateSteers = false,
   setActiveSuggestion,
   setDraft,
@@ -144,9 +147,7 @@ export function useNativeChatComposerKeyDown({
           // The other thing than the setting, for this one message.
           send({ alternate: true })
         } else if (alternateSteers && !event.repeat) {
-          // Nothing of its own to steer, so the head card goes; never where the chord means queue,
-          // or a second press would steer the card the first one just queued.
-          steerHead?.()
+          steerLast?.()
         }
         return
       }
@@ -193,6 +194,7 @@ export function useNativeChatComposerKeyDown({
       mentionFiles,
       send,
       steerHead,
+      steerLast,
       alternateSteers,
       setActiveSuggestion,
       setCaret,

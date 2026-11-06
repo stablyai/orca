@@ -332,7 +332,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       </NativeChatCrewFrame>
       {readFailure?.final ? null : (
         <>
-          {/* Keep queued drafts outside the transcript and above the background-task dock. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
             chatWorktreeId={ownerWorktreeId ?? null}
@@ -398,6 +397,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               {...stopControls.composer}
               unavailableHint={install.unavailableHint}
               steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
+              steerLast={stopControls.stopping ? undefined : submits.queuedMessages.steerLast}
               structuredTransport={transport}
               notices={notices}
               recallSource={{ messages: session.messages, withoutImageMarkers: true }}

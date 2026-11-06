@@ -95,6 +95,7 @@ function controller(
     remove: vi.fn(async () => {}),
     edit: vi.fn(async () => {}),
     steerHead: vi.fn(() => false),
+    steerLast: vi.fn(() => false),
     isWorking: true
   }
 }
