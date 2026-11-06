@@ -46,7 +46,7 @@ import { useNativeChatComposerError } from './use-native-chat-composer-notice'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSessionHostExecution } from './StructuredAgentSessionStatusBridge'
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
-import { NativeChatRewindContext } from './native-chat-rewind-context'
+import { NativeChatRowActionsProvider } from './NativeChatRowActionsProvider'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import {
   cancelStructuredPrompt,
@@ -292,7 +292,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           ) : viewState.kind === 'empty' ? (
             <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
           ) : (
-            <NativeChatRewindContext.Provider value={controller.rewind.surface}>
+            <NativeChatRowActionsProvider pane={props} chat={controller}>
               <NativeChatUsageLimitActionsProvider
                 recovery={controller}
                 pane={props}
@@ -326,7 +326,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   />
                 </NativeChatClaudeSignInContext.Provider>
               </NativeChatUsageLimitActionsProvider>
-            </NativeChatRewindContext.Provider>
+            </NativeChatRowActionsProvider>
           )}
         </NativeChatContextClearFade>
       </NativeChatCrewFrame>
@@ -346,8 +346,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             sessionId={props.sessionId}
             paneKey={paneKey}
             isVisible={props.isVisible}
-            backgroundTasks={controller.backgroundTasks}
-            stopBackgroundTask={controller.stopBackgroundTask}
+            tasks={controller}
+            messageListRef={submits.messageListRef}
           />
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips

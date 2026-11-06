@@ -1,3 +1,4 @@
+import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
@@ -116,6 +117,8 @@ export const ptySessionControlApi = {
   claimViewport: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:claimViewport', { id, cols, rows })
   },
+  getTerminalAttention: (ids: string[]): Promise<Record<string, RuntimeTerminalAttention>> =>
+    ipcRenderer.invoke('pty:getTerminalAttention', ids),
   reportGeometry: (id: string, cols: number, rows: number): void => {
     ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
   },
