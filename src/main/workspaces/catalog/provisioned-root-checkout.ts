@@ -42,7 +42,10 @@ export type ProvisionedRootRequest = Pick<
   | 'manualOrder'
   | 'createdWithAgent'
   | 'pendingFirstAgentMessageRename'
+  | 'comment'
 > & {
+  /** The composer's parent, resolved like a create's (`folder:<id>` or `worktree:<id>`). */
+  parentWorkspace?: string
   expectedRefHead?: string
   automationProvenance?: AutomationWorkspaceProvenance
 }
@@ -140,6 +143,7 @@ export function buildProvisionedRootMeta(
       ? { baseRef: args.compareBaseRef ?? args.baseBranch }
       : {}),
     ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
+    ...(args.comment ? { comment: args.comment } : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
       ? { pendingFirstAgentMessageRename: true }

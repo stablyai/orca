@@ -31,7 +31,7 @@ import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
-  protected abstract resolveLineageForWorktreeCreate(
+  abstract resolveLineageForWorktreeCreate(
     input?: Lineage.WorktreeLineageInput,
     childRepo?: Repo
   ): Promise<Lineage.WorktreeLineageResolution>

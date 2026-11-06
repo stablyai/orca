@@ -33,6 +33,8 @@ export type CreateWorktreeCallOptions = {
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
   /** Parent picked in the composer. Sets sidebar nesting only; ignored if it no longer exists. */
   parentWorktreeId?: string
+  /** Saved with the workspace, so a task id in it nests the workspace at creation. */
+  note?: string
   provisionedRoot?: {
     runtimeId: string
     executionHostId: ExecutionHostId
@@ -107,6 +109,7 @@ function sharedCreateFields(
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
     ...(attempt.crossStoreParent ? { crossStoreParent: attempt.crossStoreParent } : {}),
+    ...(options?.note ? { comment: options.note } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined

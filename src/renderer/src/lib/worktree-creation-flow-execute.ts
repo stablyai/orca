@@ -114,7 +114,8 @@ export async function executeWorktreeCreation(
           ...(provisionedRoot ? { provisionedRoot } : {}),
           ...(preparedRequest.parentWorktreeId
             ? { parentWorktreeId: preparedRequest.parentWorktreeId }
-            : {})
+            : {}),
+          ...(preparedRequest.note ? { note: preparedRequest.note } : {})
         }
       )
   } catch (error) {

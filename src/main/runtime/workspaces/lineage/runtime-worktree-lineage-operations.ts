@@ -16,7 +16,7 @@ import type { WorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Repo } from '../../../../shared/repo-types'
 export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
   /** `childRepo` scopes the parent to the new worktree's execution host (#12757). */
-  protected resolveLineageForWorktreeCreate(
+  resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
   ): Promise<WorktreeLineageResolution> {

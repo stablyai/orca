@@ -101,6 +101,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           ? { parentWorkspaceOrigin: 'manual' }
           : {}),
         ...(args.crossStoreParent ? { crossStoreParent: args.crossStoreParent } : {}),
+        ...(args.comment ? { comment: args.comment } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest,
