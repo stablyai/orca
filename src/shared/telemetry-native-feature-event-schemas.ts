@@ -31,7 +31,8 @@ export const nativeChatMessageSentSchema = z
     client: nativeChatClientSchema
   })
   .strict()
-// A phone opening a tab, once per phone, tab and day; agent_kind is absent for a plain shell.
+// A phone opening a chat transcript or a full terminal stream, once per phone, view, surface and
+// UTC day; agent_kind is absent for a plain shell.
 export const mobileSessionOpenedSchema = z
   .object({
     surface: nativeChatViewModeSchema,

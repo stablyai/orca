@@ -8,6 +8,7 @@ import {
 } from './terminal-subscribe-json-and-lease'
 import type { TerminalSubscriptionArgs } from './terminal-subscribe-types'
 import { registerTerminalSubscription } from './terminal-subscription-registration'
+import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
 
 export const TERMINAL_SUBSCRIBE_METHODS = [
   defineStreamingMethod({
@@ -16,7 +17,16 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
     params: TerminalSubscribe,
     handler: async (
       params,
-      { runtime, connectionId, requestId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        requestId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        clientKind,
+        pairedDeviceId
+      },
       emit
     ) => {
       const isMobile = params.client?.type === 'mobile'
@@ -104,6 +114,14 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           await runTerminalLeaseSubscription(args)
           return
         }
+        recordMobileViewOpened(
+          { clientKind, pairedDeviceId },
+          {
+            surface: 'terminal',
+            viewKey: `terminal:${ptyId}`,
+            agent: runtime.getPaneAgentForTelemetry(ptyId)
+          }
+        )
         if (!useBinaryStream) {
           await runTerminalJsonSubscription(args)
           return

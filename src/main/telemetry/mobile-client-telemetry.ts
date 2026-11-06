@@ -2,7 +2,6 @@
 
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeMobileSessionSnapshotTab } from '../../shared/runtime-mobile-session-tab-contracts'
 import { track } from './client'
 
 type ClientKind = 'mobile' | 'runtime' | undefined
@@ -16,36 +15,38 @@ function agentKind(agent: string | null | undefined) {
 export function recordMobileChatSend(
   clientKind: ClientKind,
   agent: string | null,
-  result: { ok: boolean }
+  result: { ok: true; replayed: boolean } | { ok: false }
 ): void {
-  if (clientKind !== 'mobile' || !result.ok) {
+  // A replayed mutation answers an earlier send; it is not a new message.
+  if (clientKind !== 'mobile' || !result.ok || result.replayed) {
     return
   }
   track('native_chat_message_sent', {
     agent_kind: agentKind(agent) ?? 'other',
-    runtime: 'local',
+    // The renderer classifies its own execution target; a phone's request carries no such fact.
+    runtime: 'unknown',
     client: 'mobile'
   })
 }
 
-// Reconnects and tab switches re-activate the same tab; one row per phone, tab and day is enough.
+// Reconnects, transport moves and view switches reopen the same stream; one row per phone,
+// view, surface and day is enough, and the set is dropped when the day turns.
 let openedDay = ''
 const openedToday = new Set<string>()
 
-export function recordMobileSessionOpened(args: {
-  clientKind: ClientKind
-  deviceId: string | undefined
-  worktree: string
-  tab: RuntimeMobileSessionSnapshotTab | undefined
-  paneAgent: (ptyId: string | null | undefined) => string | null
-  now?: Date
-}): void {
-  const { tab } = args
-  if (args.clientKind !== 'mobile' || !tab) {
-    return
+/** A phone opened a chat transcript or a full terminal stream: what it actually shows, which
+ *  only the phone decides. The input-only stream under a phone's chat view is not counted. */
+export function recordMobileViewOpened(
+  caller: { clientKind?: ClientKind; pairedDeviceId?: string },
+  args: {
+    surface: 'chat' | 'terminal'
+    /** Names the chat or terminal, namespaced by stream kind. */
+    viewKey: string
+    agent: string | null
+    now?: Date
   }
-  // Browser and file tabs carry no agent, so they say nothing about chat versus terminal.
-  if (tab.type !== 'agent-session' && tab.type !== 'terminal') {
+): void {
+  if (caller.clientKind !== 'mobile') {
     return
   }
   const day = (args.now ?? new Date()).toISOString().slice(0, 10)
@@ -53,17 +54,14 @@ export function recordMobileSessionOpened(args: {
     openedDay = day
     openedToday.clear()
   }
-  const key = `${args.deviceId ?? ''}\0${args.worktree}\0${tab.id}`
+  const key = `${caller.pairedDeviceId ?? ''}\0${args.surface}\0${args.viewKey}`
   if (openedToday.has(key)) {
     return
   }
   openedToday.add(key)
-  const chat = tab.type === 'agent-session' || tab.viewMode === 'chat'
-  const kind = agentKind(
-    tab.type === 'agent-session' ? tab.agent : (tab.launchAgent ?? args.paneAgent(tab.ptyId))
-  )
+  const kind = agentKind(args.agent)
   track('mobile_session_opened', {
-    surface: chat ? 'chat' : 'terminal',
+    surface: args.surface,
     ...(kind ? { agent_kind: kind } : {})
   })
 }

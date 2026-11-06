@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { eventSchemas } from '../../shared/telemetry-events'
-import type { RuntimeMobileSessionSnapshotTab } from '../../shared/runtime-mobile-session-tab-contracts'
-import { recordMobileChatSend, recordMobileSessionOpened } from './mobile-client-telemetry'
+import { recordMobileChatSend, recordMobileViewOpened } from './mobile-client-telemetry'
 
 const telemetry = vi.hoisted(() => ({ track: vi.fn() }))
 vi.mock('./client', () => telemetry)
@@ -17,69 +16,64 @@ function trackedPayloads() {
   })
 }
 
-const chatTab = {
-  type: 'agent-session',
-  id: 'tab-chat',
-  title: 'Chat',
-  sessionId: 's1',
-  agent: 'codex',
-  isActive: true
-} as RuntimeMobileSessionSnapshotTab
-
-const shellTab = {
-  type: 'terminal',
-  id: 'tab-term',
-  title: 'zsh',
-  parentTabId: 'p1',
-  leafId: 'l1',
-  ptyId: 'pty-1',
-  viewMode: 'terminal',
-  isActive: true
-} as RuntimeMobileSessionSnapshotTab
-
 describe('mobile client telemetry', () => {
-  it('counts an accepted phone send and leaves desktop sends to the renderer', () => {
-    recordMobileChatSend('mobile', 'claude', { ok: true })
+  it('counts a new phone send once and leaves desktop sends to the renderer', () => {
+    recordMobileChatSend('mobile', 'claude', { ok: true, replayed: false })
+    recordMobileChatSend('mobile', 'claude', { ok: true, replayed: true })
     recordMobileChatSend('mobile', 'claude', { ok: false })
-    recordMobileChatSend('runtime', 'claude', { ok: true })
-    recordMobileChatSend(undefined, 'claude', { ok: true })
+    recordMobileChatSend('runtime', 'claude', { ok: true, replayed: false })
+    recordMobileChatSend(undefined, 'claude', { ok: true, replayed: false })
 
     expect(trackedPayloads()).toEqual([
       [
         'native_chat_message_sent',
-        { agent_kind: 'claude-code', runtime: 'local', client: 'mobile' }
+        { agent_kind: 'claude-code', runtime: 'unknown', client: 'mobile' }
       ]
     ])
   })
 
-  it('records each phone tab once a day, with typed agents and plain shells told apart', () => {
-    const open = (tab: RuntimeMobileSessionSnapshotTab, now: string, paneAgent: string | null) =>
-      recordMobileSessionOpened({
-        clientKind: 'mobile',
-        deviceId: 'phone-1',
-        worktree: 'wt-1',
-        tab,
-        paneAgent: () => paneAgent,
-        now: new Date(now)
-      })
+  it('records each view a phone opens once a day per surface', () => {
+    const open = (
+      surface: 'chat' | 'terminal',
+      viewKey: string,
+      agent: string | null,
+      now: string,
+      deviceId = 'phone-1'
+    ) =>
+      recordMobileViewOpened(
+        { clientKind: 'mobile', pairedDeviceId: deviceId },
+        {
+          surface,
+          viewKey,
+          agent,
+          now: new Date(now)
+        }
+      )
 
-    open(chatTab, '2026-11-05T10:00:00Z', null)
-    open(chatTab, '2026-11-05T18:00:00Z', null)
-    open(shellTab, '2026-11-05T10:00:00Z', 'claude')
-    open({ ...shellTab, id: 'tab-shell' }, '2026-11-05T10:00:00Z', null)
-    open(chatTab, '2026-11-06T09:00:00Z', null)
-    recordMobileSessionOpened({
-      clientKind: 'runtime',
-      deviceId: undefined,
-      worktree: 'wt-1',
-      tab: { ...chatTab, id: 'desktop-tab' },
-      paneAgent: () => null
-    })
+    open('chat', 'agentSession:s1', 'codex', '2026-11-05T10:00:00Z')
+    // A reconnect reopens the same stream.
+    open('chat', 'agentSession:s1', 'codex', '2026-11-05T18:00:00Z')
+    // The same terminal, read as chat on this phone and as a terminal later, counts as both.
+    open('chat', 'nativeChat:claude:t1', 'claude', '2026-11-05T10:00:00Z')
+    open('terminal', 'terminal:pty-1', 'claude', '2026-11-05T10:00:00Z')
+    open('terminal', 'terminal:pty-2', null, '2026-11-05T10:00:00Z')
+    open('chat', 'agentSession:s1', 'codex', '2026-11-05T10:00:00Z', 'phone-2')
+    open('chat', 'agentSession:s1', 'codex', '2026-11-06T09:00:00Z')
+    recordMobileViewOpened(
+      { clientKind: 'runtime' },
+      {
+        surface: 'chat',
+        viewKey: 'agentSession:desktop',
+        agent: 'codex'
+      }
+    )
 
     expect(trackedPayloads()).toEqual([
       ['mobile_session_opened', { surface: 'chat', agent_kind: 'codex' }],
+      ['mobile_session_opened', { surface: 'chat', agent_kind: 'claude-code' }],
       ['mobile_session_opened', { surface: 'terminal', agent_kind: 'claude-code' }],
       ['mobile_session_opened', { surface: 'terminal' }],
+      ['mobile_session_opened', { surface: 'chat', agent_kind: 'codex' }],
       ['mobile_session_opened', { surface: 'chat', agent_kind: 'codex' }]
     ])
   })
