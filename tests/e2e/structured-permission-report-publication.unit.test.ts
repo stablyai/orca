@@ -51,6 +51,9 @@ import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agen
 import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
+// Side reads (at-rest `/` commands) spawn the CLI directly; a missing binary keeps them off a real codex.
+const MISSING_CODEX = '/nonexistent/orca-test-codex'
+
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))
 afterEach(() => {
   cleanup()
@@ -519,7 +522,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: MISSING_CODEX, prefixArgs: [] }),
       readCodexInstallation: async () => ({ version: '0.136.0' }),
       readProcessStartTime: async () => 1_700_000_000_000,
       openCodexConnection: codex.openConnection
