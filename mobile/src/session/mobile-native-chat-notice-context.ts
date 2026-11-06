@@ -9,6 +9,8 @@ export type MobileNativeChatNoticeView = {
     MobileStructuredInterruptedContinue,
     'continueAvailable' | 'offeredTurnItemId' | 'continueNow'
   >
+  /** Opens a host terminal tab in the chat's workspace running `command`. */
+  onRunInTerminal?: (command: string) => void
 }
 
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeView>({

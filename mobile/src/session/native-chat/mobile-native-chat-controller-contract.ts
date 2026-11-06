@@ -1,4 +1,5 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from '../use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
@@ -24,6 +25,7 @@ import type {
 } from './mobile-native-chat-send'
 import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from '../use-mobile-structured-queued-message-controls'
+import type { MobileStructuredThreadGoal } from '../use-mobile-structured-thread-goal'
 import type { MobileStructuredBackgroundTasks } from '../use-mobile-structured-background-tasks'
 import type { MobileStructuredInterruptedContinue } from '../use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
@@ -98,6 +100,8 @@ export type MobileNativeChatController = {
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatContextUsage: NativeChatContextUsageSummary | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
+  nativeChatThreadGoal: MobileStructuredThreadGoal | null
+  nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   nativeChatSkills: NativeChatSkillDiscoverySnapshot

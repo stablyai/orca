@@ -83,10 +83,8 @@ function ForkButton({
 }
 
 const styles = themedStyleSheet(() => ({
-  // The copy button's 24 pt box centres a 14 pt glyph; pulling the 5 pt back lines the glyph up with the tool icons.
   actions: {
-    flexDirection: 'row',
-    marginHorizontal: -5
+    flexDirection: 'row'
   },
   button: {
     width: 24,

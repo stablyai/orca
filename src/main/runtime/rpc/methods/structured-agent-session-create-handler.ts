@@ -119,7 +119,7 @@ async function resolveAndCommitStructuredAgentSessionCreate(
     }
     const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
     return { host, attachParams, tab: null }
-  })
+  }, params.agent)
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }

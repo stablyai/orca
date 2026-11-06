@@ -20,10 +20,10 @@ export function MobileNativeChatInterruptedContinueButton({
         'Continue, and the agent first checks whether its last step finished.'
       )}
       onPress={onPress}
-      style={({ pressed }) => [chatStyles.loadEarlierRetry, styles.button, pressed && pressedStyle]}
+      style={({ pressed }) => [chatStyles.retryPill, styles.button, pressed && pressedStyle]}
     >
       <Play size={14} color={colors.textSecondary} />
-      <Text style={chatStyles.loadEarlierRetryLabel}>{t('common.continue', 'Continue')}</Text>
+      <Text style={chatStyles.retryPillLabel}>{t('common.continue', 'Continue')}</Text>
     </Pressable>
   )
 }

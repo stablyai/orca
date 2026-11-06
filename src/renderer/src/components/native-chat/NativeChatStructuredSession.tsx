@@ -243,6 +243,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     agentLabel,
     // Said once: on the pane when the failure took it, else in the composer's notices.
     sessionError: viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
+    readRefusal: viewState.kind !== 'error' && readFailure ? controller.readRefusal : undefined,
     composerError: composerError ?? continuation.continueError,
     claudeSignIn,
     availability,

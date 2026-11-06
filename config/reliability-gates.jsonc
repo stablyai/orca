@@ -17664,21 +17664,20 @@
       "providers": ["wsl1", "wsl2"],
       "coveredPlatforms": ["windows"],
       "coveredProviders": ["wsl1"],
-      "coverageNotes": "Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
+      "coverageNotes": "Remove synthetic WSL participation-verifier tests. The real WSL1 receipt and partial protection remain; WSL2 is still untested. Historical scope before this audit: Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34030832614"],
       "invariant": "An agent launched into WSL runs in the guest; keyboard paste reaches exactly one owning PTY and preserves Linux content even after the default shell changes.",
       "oracle": "Run the existing real WSL launch and two paste cases three times; require nine passes and zero skipped, unexpected, or flaky results in the Playwright JSON report.",
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
-        "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs"
+        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -17691,10 +17690,6 @@
             "requires exact Linux pasted content and exactly one PTY write",
             "retains WSL paste ownership after changing the default shell"
           ]
-        },
-        {
-          "file": "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
-          "assertions": ["rejects skipped, missing, substituted and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -17730,6 +17725,7 @@
         "Collect repeated CI history before adding this experimental lane to required verification."
       ],
       "knownGaps": [
+        "Remove synthetic WSL participation-verifier tests. The real WSL1 receipt and partial protection remain; WSL2 is still untested.",
         "WSL2 is not provisioned.",
         "No SSH, folder-only workspace, packaged mixed-version, or live-service claim.",
         "The new PR lane is outside verify until reliability is established."
@@ -17748,7 +17744,7 @@
       "providers": ["paired-runtime"],
       "coveredPlatforms": ["linux"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
+      "coverageNotes": "Audit1579 removes workflow/manifest/regex/private binary-header and diagnostic metric inventories, fixture selectors, injected forwarding/platform/signature/process examples, unproven overlap and internal churn counters without equivalent replacement coverage. Retains actual Git trust/diffs; filesystem hash/ELF-region/native discovery; child CLI module repair; compiler/lock/publication/rollback and synthetic Electron install/cache ownership; executable shell quoting/exit; controlled notary/timer cleanup; local patched extractor file/AST freshness; real Chromium/WebKit CSP/sandbox/HTTPS image/referrer/link/preservation controls under parsed Android headers. Five unchanged setup-pnpm/VM request-cleanup definitions reviewed and not rerun. GitHub, installer/archive, OS metric, client, native delegate, compressor, builder and Apple boundaries injected or absent where recorded. No actual native PTY, shipped full/native app, real Actions/cache/npm signature authority, downloaded Electron archive, real objdump/linker/native CLI/AppImage, signing/NSIS/notary/upload/updater or live freeze proof. Historical scope before this audit: Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34069063016"],
       "invariant": "A paired client and host without client-hosted browser capabilities retain server-hosted browser placement across supported version skew.",
       "oracle": "Require both existing named browser placement scenarios to pass three times with one attempt, zero skips, zero failures, and no report errors.",
@@ -17756,12 +17752,9 @@
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
         "gh run view 34069063016 --log",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=2 --reporter=dot"
       ],
-      "testFiles": [
-        "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs"
-      ],
+      "testFiles": ["tests/e2e/packaged-mixed-version-browser-placement.spec.ts"],
       "assertionRefs": [
         {
           "file": "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
@@ -17769,10 +17762,6 @@
             "old client and old host lack client-host and browser-tunnel capabilities",
             "browser contents remain owned by the server and the expected snapshot marker is readable"
           ]
-        },
-        {
-          "file": "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs",
-          "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -17807,6 +17796,7 @@
         "Collect repeated scheduled history before making this required."
       ],
       "knownGaps": [
+        "Audit1579 removes workflow/manifest/regex/private binary-header and diagnostic metric inventories, fixture selectors, injected forwarding/platform/signature/process examples, unproven overlap and internal churn counters without equivalent replacement coverage. Retains actual Git trust/diffs; filesystem hash/ELF-region/native discovery; child CLI module repair; compiler/lock/publication/rollback and synthetic Electron install/cache ownership; executable shell quoting/exit; controlled notary/timer cleanup; local patched extractor file/AST freshness; real Chromium/WebKit CSP/sandbox/HTTPS image/referrer/link/preservation controls under parsed Android headers. Five unchanged setup-pnpm/VM request-cleanup definitions reviewed and not rerun. GitHub, installer/archive, OS metric, client, native delegate, compressor, builder and Apple boundaries injected or absent where recorded. No actual native PTY, shipped full/native app, real Actions/cache/npm signature authority, downloaded Electron archive, real objdump/linker/native CLI/AppImage, signing/NSIS/notary/upload/updater or live freeze proof.",
         "Linux1.4.188 only; no macOS or Windows packaged coverage.",
         "No folder workspace, SSH execution host or live-service coverage.",
         "Other released version pairs remain untested; not a required PR check."
@@ -17883,52 +17873,24 @@
       "id": "relay.control-activation-ownership",
       "title": "Closed queued controls leave persistence for the live retry",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "relay",
       "layer": "registry-unit-and-local-websocket",
       "surfaces": ["relay host control activation"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["relay"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["relay"],
-      "coverageNotes": "Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1572 removes relay predicate/threshold tables, telemetry and route/schema inventories, fake-socket forwarding and simulator-owned diagnostic paths without equivalent replacement claims. Retained production admission queues, placer/reserve-book simulations, reservation lifecycles, bounded Response streams, last-known-good flag state, poller reachability, configuration safety and ledger fences are validated with supplied clocks, network, identity, SQL and socket boundaries. No deployed cell, live Google metadata/storage, PostgreSQL, real socket handshake or authorization proof. Historical scope before this audit: Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/connections/host-session-registry.ts"
       ],
       "invariant": "A closed queued transport starts no durable activation; an already-started activation retains cleanup, and a live successor becomes the indexed control without concurrent same-host activation.",
       "oracle": "Queue a closed control before a live retry behind stalled persistence. With controlled 4s store calls, require two total activations, one release for the already-started closed control, and live readiness at 4s. Existing tests retain cleanup when closure happens during I/O.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/connections/host-session-registry.test.ts ../../../cloud/apps/relay/src/connections/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts --silent=false"
-      ],
-      "testFiles": [
-        "cloud/apps/relay/src/connections/host-session-registry.test.ts",
-        "cloud/apps/relay/src/connections/host-session-client-accept.test.ts",
-        "cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts",
-        "cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "cloud/apps/relay/src/connections/host-session-registry.test.ts",
-          "assertions": [
-            "skips a closed queued control so its live retry avoids abandoned database work",
-            "does not publish a control that closes during activation",
-            "does not rebind a control that closes during activation",
-            "fails a control waiting behind a stalled activation without breaking serialization"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-25",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/connections/host-session-registry.test.ts ../../../cloud/apps/relay/src/connections/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/connections/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/connections/relay-connection-hard-cap.blackbox.test.ts --silent=false",
-          "result": "passed",
-          "durationSeconds": 0.407,
-          "summary": "88 tests across four files passed; relay typecheck passed separately."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "Focused unit and local socket suites; p95 not established."
@@ -17946,6 +17908,7 @@
         "evidence": "Deletes abandoned persistence before it starts. No new timer, polling, queue, provider call or wire change; existing FIFO and post-I/O cleanup remain."
       },
       "knownGaps": [
+        "Audit1572 removes relay predicate/threshold tables, telemetry and route/schema inventories, fake-socket forwarding and simulator-owned diagnostic paths without equivalent replacement claims. Retained production admission queues, placer/reserve-book simulations, reservation lifecycles, bounded Response streams, last-known-good flag state, poller reachability, configuration safety and ledger fences are validated with supplied clocks, network, identity, SQL and socket boundaries. No deployed cell, live Google metadata/storage, PostgreSQL, real socket handshake or authorization proof.",
         "No real PostgreSQL contention benchmark or live remote host/physical mobile run.",
         "Windows/Linux execution and CI soak are not recorded; queue cleanup after a never-settling predecessor remains unchanged."
       ],
@@ -17958,52 +17921,22 @@
       "id": "relay.assignment-headroom-scope",
       "title": "Single-cell admission preserves capacity with bounded headroom reads",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "relay",
       "layer": "sqlite-store-integration",
       "surfaces": ["relay assignment admission", "relay migration target capacity"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["relay"],
-      "coveredPlatforms": ["macos", "linux"],
-      "coveredProviders": ["relay"],
-      "coverageNotes": "Actual assignment store and SQLite tests on macOS. No real PostgreSQL or live remote host/physical phone run. Local/daemon PTY, SSH execution ownership, WSL, folder/git workspace behavior and transport framing are unaffected. Audit1279 removes fake SQL lock-order receipts, diagnostic projections and mocked reserve callback cases from this selector. Their precise local alarms are intentionally lost; retained SQLite headroom/state checks are not claimed as equivalent replacements. The 2026-09-25 receipt is archived as historical data; the shortened selector has no fresh runtime result yet. The remaining six-file selector passed 164 cases on Linux after these removals; this fixture result is separate from the archived dated receipt and does not establish native PostgreSQL behavior. Audit1507 removes the mocked lock-counter suite from the active selector; the 2026-11-04 six-file receipt remains historical and does not validate the shortened five-file selector. Its direct mocked counter alarm is intentionally retired without replacement equivalence.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1572 removes relay predicate/threshold tables, telemetry and route/schema inventories, fake-socket forwarding and simulator-owned diagnostic paths without equivalent replacement claims. Retained production admission queues, placer/reserve-book simulations, reservation lifecycles, bounded Response streams, last-known-good flag state, poller reachability, configuration safety and ledger fences are validated with supplied clocks, network, identity, SQL and socket boundaries. No deployed cell, live Google metadata/storage, PostgreSQL, real socket handshake or authorization proof. Historical scope before this audit: Actual assignment store and SQLite tests on macOS. No real PostgreSQL or live remote host/physical phone run. Local/daemon PTY, SSH execution ownership, WSL, folder/git workspace behavior and transport framing are unaffected. Audit1279 removes fake SQL lock-order receipts, diagnostic projections and mocked reserve callback cases from this selector. Their precise local alarms are intentionally lost; retained SQLite headroom/state checks are not claimed as equivalent replacements. The 2026-09-25 receipt is archived as historical data; the shortened selector has no fresh runtime result yet. The remaining six-file selector passed 164 cases on Linux after these removals; this fixture result is separate from the archived dated receipt and does not establish native PostgreSQL behavior. Audit1507 removes the mocked lock-counter suite from the active selector; the 2026-11-04 six-file receipt remains historical and does not validate the shortened five-file selector. Its direct mocked counter alarm is intentionally retired without replacement equivalence.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/23035"],
       "invariant": "A single-cell capacity check reads only that cell while retaining snapshot freshness, incarnation, outstanding reservation and missing-limit policy; new placement retains the full fleet inventory.",
       "oracle": "With 32 capped cells, an existing active host stays on its pinned cell and reads one headroom row; new placement reads all 32. Missing, expired or prior-incarnation snapshots, capacity exhaustion and outstanding debt still refuse the active pinned host; an uncapped cell remains admissible.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --silent=false"
-      ],
-      "testFiles": [
-        "cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts",
-        "cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts",
-        "cloud/apps/relay/src/assignment/assignment-store.test.ts",
-        "cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts",
-        "cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts",
-          "assertions": [
-            "reads one cell for a sticky assignment even when the capped fleet grows",
-            "still considers the full fleet for a new placement",
-            "rejects the pinned active host with %s",
-            "preserves admission for cells without a connection limit",
-            "counts outstanding reservations at the admission boundary"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-11-05",
-          "runner": "local",
-          "platform": "linux",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 /home/neil/.local/share/mise/installs/node/24.22.0/bin/node cloud/node_modules/vitest/vitest.mjs run --config /home/neil/orca/workspaces/orca/comprehensive-test-audit-10/build/audits/audit1413-parent-runtime/validation/cloud/apps/relay/vitest.config.ts --root cloud/apps/relay src/assignment/assignment-headroom-scope.test.ts src/assignment/assignment-connection-headroom.test.ts src/assignment/assignment-store.test.ts src/assignment/assignment-isolated-cell-replacement.test.ts src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=/home/neil/orca/workspaces/orca/comprehensive-test-audit-10/build/audits/audit1507-renderer-next/runtime-batch/followup-checks/1793890005766851788/headroom.json",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/assignment/regional-rehome/regional-rehome-target-selection.test.ts --silent=false",
-          "result": "passed",
-          "durationSeconds": 2.669,
-          "summary": "163 cases passed across the shortened five-file selector using the direct relay Vitest runner on Linux. Package build hooks were not rerun. Separate dated receipts do not validate this selection or native PostgreSQL contention."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "Focused SQLite store/capacity/lock-order suites; p95 not established."
@@ -18021,6 +17954,7 @@
         "evidence": "Actual sticky path result rows 32 to 1; no new timer, polling, queue, cache or provider call. Supplemental SQLite query benchmark with 32 cells and 400 active reservations each measured median per-query 0.285ms to 0.022ms; not a production PostgreSQL latency claim."
       },
       "knownGaps": [
+        "Audit1572 removes relay predicate/threshold tables, telemetry and route/schema inventories, fake-socket forwarding and simulator-owned diagnostic paths without equivalent replacement claims. Retained production admission queues, placer/reserve-book simulations, reservation lifecycles, bounded Response streams, last-known-good flag state, poller reachability, configuration safety and ledger fences are validated with supplied clocks, network, identity, SQL and socket boundaries. No deployed cell, live Google metadata/storage, PostgreSQL, real socket handshake or authorization proof.",
         "Real PostgreSQL query plan and concurrent admission not rerun for the scoped variant.",
         "Windows/Linux execution, live remote host/mobile flows and CI soak are not recorded.",
         "Historical receipt before Audit1279 selector removal; original command, currentCommand, counts and result are preserved as data and do not validate the shortened selector: {\"date\":\"2026-09-25\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false\",\"currentCommand\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false\",\"result\":\"passed\",\"durationSeconds\":0.513,\"summary\":\"189 tests across seven files passed; independent root rerun also passed189 tests. Relay typecheck passed separately.\"}",

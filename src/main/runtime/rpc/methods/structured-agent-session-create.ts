@@ -176,10 +176,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     ...(atRest ? { atRest: args.firstMessage ? { firstMessage: args.firstMessage } : {} } : {}),
-    tab: {
-      workspaceId: resolved.location.workspaceId,
-      agent: resolved.agent
-    }
+    tab: { workspaceId: resolved.location.workspaceId, agent: resolved.agent }
   }
 }
 
@@ -309,8 +306,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
         payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
       }
     : args.envelope
-  const prepared = await resolveUncommittedStructuredCreate(() =>
-    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  const prepared = await resolveUncommittedStructuredCreate(
+    () => prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope }),
+    args.agent
   )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }

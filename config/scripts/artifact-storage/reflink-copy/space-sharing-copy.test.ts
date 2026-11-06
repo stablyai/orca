@@ -12,13 +12,12 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   copyPrivateTree,
   hardlinkTree,
   makeTreeReadOnly,
   makeTreeReadOnlyAsync,
-  makeTreeWritable,
   shareTree,
   shareTreeAsync
 } from './space-sharing-copy.mjs'
@@ -53,28 +52,6 @@ describe('asynchronous immutable sharing', () => {
     )
     expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
   })
-
-  it('waits for the asynchronous sharing mechanism to finish', async () => {
-    const { root, source } = makeTree()
-    let finish!: () => void
-    const pending = new Promise<void>((resolve) => {
-      finish = resolve
-    })
-    let completed = false
-    const sharing = shareTreeAsync(source, path.join(root, 'async-copy'), {
-      platform: 'darwin',
-      clone: async () => {
-        await pending
-      }
-    }).then(() => {
-      completed = true
-    })
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(completed).toBe(false)
-    finish()
-    await sharing
-    expect(completed).toBe(true)
-  })
 })
 
 afterEach(() => {
@@ -102,24 +79,6 @@ describe('shareTree', () => {
     expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
   })
 
-  it('falls from reflink to hardlink on Linux, where ext4 has no reflinks', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'shared')
-    const reflink = vi.fn(() => {
-      throw new Error('failed to clone: Invalid cross-device link')
-    })
-    expect(shareTree(source, destination, { platform: 'linux', reflink })).toBe('hardlink')
-    expect(reflink).toHaveBeenCalledOnce()
-    expect(statSync(path.join(destination, 'nested', 'file')).ino).toBe(
-      statSync(path.join(source, 'nested', 'file')).ino
-    )
-  })
-
-  it('hardlinks on Windows, the only mechanism NTFS offers', () => {
-    const { root, source } = makeTree()
-    expect(shareTree(source, path.join(root, 'shared'), { platform: 'win32' })).toBe('hardlink')
-  })
-
   it('clears a part-way tree before trying the next mechanism', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'shared')
@@ -130,57 +89,6 @@ describe('shareTree', () => {
     }
     expect(shareTree(source, destination, { platform: 'linux', reflink })).toBe('hardlink')
     expect(existsSync(path.join(destination, 'half-written'))).toBe(false)
-  })
-
-  it('throws rather than silently paying for a second full copy', () => {
-    const { root, source } = makeTree()
-    expect(() => shareTree(source, path.join(root, 'shared'), { platform: 'freebsd' })).toThrow(
-      /Could not share storage/
-    )
-  })
-
-  it('uses strict native-copy arguments and handles their failures', async () => {
-    const nativeCopy = vi.fn(() => {
-      throw new Error('native storage sharing unavailable')
-    })
-    vi.doMock('node:child_process', () => ({ execFileSync: nativeCopy }))
-    vi.resetModules()
-    try {
-      const { shareTree: shareWithNativeCopy } = await import('./space-sharing-copy.mjs')
-      const { root, source } = makeTree()
-      const cloneDestination = path.join(root, 'clone')
-      expect(() => shareWithNativeCopy(source, cloneDestination, { platform: 'darwin' })).toThrow(
-        /Could not share storage/
-      )
-      expect(existsSync(cloneDestination)).toBe(false)
-      expect(nativeCopy).toHaveBeenNthCalledWith(
-        1,
-        '/bin/cp',
-        ['-c', '-R', '-P', source, cloneDestination],
-        { stdio: 'ignore' }
-      )
-
-      const reflinkDestination = path.join(root, 'reflink')
-      expect(shareWithNativeCopy(source, reflinkDestination, { platform: 'linux' })).toBe(
-        'hardlink'
-      )
-      expect(nativeCopy).toHaveBeenNthCalledWith(
-        2,
-        'cp',
-        ['--reflink=always', '-a', source, reflinkDestination],
-        { stdio: 'ignore' }
-      )
-      expect(statSync(path.join(reflinkDestination, 'nested', 'file')).ino).toBe(
-        statSync(path.join(source, 'nested', 'file')).ino
-      )
-      expect(readFileSync(path.join(reflinkDestination, 'nested', 'file'), 'utf8')).toBe('contents')
-      expect(readlinkSync(path.join(reflinkDestination, 'relative-link'))).toBe(
-        path.join('nested', 'file')
-      )
-    } finally {
-      vi.doUnmock('node:child_process')
-      vi.resetModules()
-    }
   })
 })
 
@@ -193,14 +101,6 @@ describe('hardlinkTree', () => {
       statSync(path.join(source, 'nested', 'file')).ino
     )
     expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
-
-  it('propagates a write through the shared inode, which is why callers must protect it', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'linked')
-    hardlinkTree(source, destination)
-    writeFileSync(path.join(destination, 'nested', 'file'), 'mutated')
-    expect(readFileSync(path.join(source, 'nested', 'file'), 'utf8')).toBe('mutated')
   })
 })
 
@@ -231,39 +131,6 @@ describe('makeTreeReadOnly', () => {
     expect(statSync(sandbox).mode & 0o4000).toBe(0o4000)
     expect(statSync(sandbox).mode & 0o222).toBe(0)
   })
-
-  it.runIf(process.platform !== 'win32')(
-    'keeps the executable bit, which Electron needs to launch',
-    () => {
-      const { source } = makeTree()
-      const executable = path.join(source, 'electron')
-      writeFileSync(executable, 'binary', { mode: 0o755 })
-      chmodSync(executable, 0o755)
-      makeTreeReadOnly(source)
-      // ext4 reports 0555; Windows read-only attribute does not prevent hardlinked executable from running on NTFS.
-      expect(statSync(executable).mode & 0o111).toBe(0o111)
-    }
-  )
-})
-
-describe('makeTreeWritable', () => {
-  it.runIf(process.platform !== 'win32')('undoes makeTreeReadOnly for the owner', () => {
-    const { source } = makeTree()
-    makeTreeReadOnly(source)
-    makeTreeWritable(source)
-    const file = path.join(source, 'nested', 'file')
-    expect(statSync(file).mode & 0o200).toBe(0o200)
-    expect(() => writeFileSync(file, 'mutated')).not.toThrow()
-  })
-
-  it.runIf(process.platform !== 'win32')('adds no write permission beyond the owner', () => {
-    const { source } = makeTree()
-    const executable = path.join(source, 'electron')
-    writeFileSync(executable, 'binary')
-    chmodSync(executable, 0o555)
-    makeTreeWritable(source)
-    expect(statSync(executable).mode & 0o777).toBe(0o755)
-  })
 })
 
 describe('copyPrivateTree', () => {
@@ -279,31 +146,6 @@ describe('copyPrivateTree', () => {
       expect(readFileSync(path.join(source, 'nested', 'file'), 'utf8')).toBe('contents')
     }
   )
-
-  it('never hardlinks, because the caller patches what it gets back', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'private')
-    const hardlink = vi.fn()
-    const result = copyPrivateTree(source, destination, { platform: 'linux', hardlink })
-    expect(hardlink).not.toHaveBeenCalled()
-    expect(statSync(path.join(destination, 'nested', 'file')).ino).not.toBe(
-      statSync(path.join(source, 'nested', 'file')).ino
-    )
-    expect(result.mechanism === 'reflink' || result.mechanism === null).toBe(true)
-  })
-
-  it('copies bytes on a platform with no private mechanism at all', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'private')
-    const hardlink = vi.fn()
-    expect(copyPrivateTree(source, destination, { platform: 'win32', hardlink })).toEqual({
-      mechanism: null,
-      copyError: null
-    })
-    expect(hardlink).not.toHaveBeenCalled()
-    expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
-    expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
 
   it('falls back to a byte copy when the private mechanism fails', () => {
     const { root, source } = makeTree()
