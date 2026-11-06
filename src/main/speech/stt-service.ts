@@ -30,7 +30,6 @@ export class SttService {
     return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner)
   }
 
-  /** Returns true on the chunk that fills a cloud session's upload cap; later audio is dropped. */
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {
     if (this.state.stopping) {
       return false

@@ -1,7 +1,8 @@
 import { saveOpenAiSpeechApiKey } from './openai-api-key-store'
 import {
   OPENAI_TRANSCRIPTION_URL,
-  sanitizeOpenAiTranscriptionErrorMessage
+  readOpenAiErrorMessage,
+  type OpenAiTranscriptionResponse
 } from './openai-transcription-client'
 
 const KEY_CHECK_TIMEOUT_MS = 10_000
@@ -32,10 +33,6 @@ async function rejectUnauthorizedOpenAiKey(apiKey: string): Promise<void> {
     void response.body?.cancel().catch(() => undefined)
     return
   }
-  const data: { error?: { message?: unknown } } = await response.json().catch(() => ({}))
-  throw new Error(
-    typeof data.error?.message === 'string'
-      ? sanitizeOpenAiTranscriptionErrorMessage(data.error.message)
-      : 'OpenAI rejected this API key.'
-  )
+  const data: OpenAiTranscriptionResponse = await response.json().catch(() => ({}))
+  throw new Error(readOpenAiErrorMessage(data) ?? 'OpenAI rejected this API key.')
 }

@@ -12,7 +12,7 @@ const MAX_CLOUD_AUDIO_SAMPLES = 10 * 60 * CLOUD_TRANSCRIPTION_SAMPLE_RATE
 const TRANSCRIPTION_RESPONSE_ALLOWANCE_MS = 30_000
 const UPLOAD_BYTES_PER_MS = 125
 
-type OpenAiTranscriptionResponse = {
+export type OpenAiTranscriptionResponse = {
   text?: unknown
   error?: {
     message?: unknown
@@ -68,14 +68,19 @@ function encodePcm16Wav(chunks: Float32Array[], sampleRate: number): Buffer<Arra
   return buffer
 }
 
+export function readOpenAiErrorMessage(data: OpenAiTranscriptionResponse): string | undefined {
+  return typeof data.error?.message === 'string'
+    ? sanitizeOpenAiTranscriptionErrorMessage(data.error.message)
+    : undefined
+}
+
 function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): string {
   if (typeof data.text === 'string') {
     return data.text.trim()
   }
-  if (typeof data.error?.message === 'string') {
-    throw new Error(sanitizeOpenAiTranscriptionErrorMessage(data.error.message))
-  }
-  throw new Error('OpenAI transcription response did not include text')
+  throw new Error(
+    readOpenAiErrorMessage(data) ?? 'OpenAI transcription response did not include text'
+  )
 }
 
 export class OpenAiTranscriptionSession {
@@ -151,11 +156,9 @@ export class OpenAiTranscriptionSession {
 
     const data = (await response.json().catch(() => ({}))) as OpenAiTranscriptionResponse
     if (!response.ok) {
-      const message =
-        typeof data.error?.message === 'string'
-          ? sanitizeOpenAiTranscriptionErrorMessage(data.error.message)
-          : response.statusText
-      throw new Error(`OpenAI transcription failed: ${message}`)
+      throw new Error(
+        `OpenAI transcription failed: ${readOpenAiErrorMessage(data) ?? response.statusText}`
+      )
     }
 
     return parseOpenAiTranscriptionResponse(data)
