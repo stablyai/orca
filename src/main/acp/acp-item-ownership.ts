@@ -6,7 +6,10 @@ export class AcpItemOwnership {
   private readonly turns = new Map<string, Map<string, AcpItemOwner>>()
   private readonly pending = new Map<string, AcpItemOwner>()
   private readonly ended = new Set<string>()
-  private closed = { turn: undefined as string | undefined, items: new Map<string, AcpItemOwner>() }
+  private closed: { turn: string | undefined; items: Map<string, AcpItemOwner> } = {
+    turn: undefined,
+    items: new Map()
+  }
   private dirty = new Map<string, AcpItemOwner>()
   private endings = new Set<string>()
   private disposed = false
