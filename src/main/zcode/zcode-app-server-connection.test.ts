@@ -101,6 +101,7 @@ const TEST_TIMEOUT_MS = 20_000
 describe('openZcodeAppServerConnection', () => {
   it(
     'creates a session and answers a send over the real framing',
+    // Real provider startup and supervised shutdown need headroom on slow hosts.
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const connection = await openZcodeAppServerConnection({
