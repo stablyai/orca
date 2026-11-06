@@ -12,7 +12,7 @@ const pullRequest: NativeChatOpenedPullRequest = {
 // Keyboard focus shows the Hide button, as card hover does, without a pointer in the headless shot.
 function focusHide(frame: HTMLElement): void {
   frame.ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
-  frame.querySelector<HTMLButtonElement>('button[aria-label="Hide"]')?.focus()
+  frame.querySelector<HTMLButtonElement>('button')?.focus()
 }
 
 export const card = defineFixture({

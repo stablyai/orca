@@ -232,6 +232,10 @@ export function NativeChatOpenedPullRequestCard({
               )}
         </span>
         <NativeChatCardHideButton
+          ariaLabel={translate(
+            'components.native-chat.openedPullRequests.hide',
+            "Don't show opened pull requests"
+          )}
           updates={{ nativeChatOpenedPullRequests: false }}
           settingSectionId={NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID}
           hiddenMessage={translate(

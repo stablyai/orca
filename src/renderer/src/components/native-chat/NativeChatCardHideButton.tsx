@@ -12,11 +12,13 @@ export const NATIVE_CHAT_HIDEABLE_CARD_CLASS = 'group/chat-card'
 export function NativeChatCardHideButton({
   updates,
   settingSectionId,
-  hiddenMessage
+  hiddenMessage,
+  ariaLabel
 }: {
   updates: Partial<GlobalSettings>
   settingSectionId: string
   hiddenMessage: string
+  ariaLabel?: string
 }): React.JSX.Element {
   const label = translate('components.native-chat.turnDiff.hide', 'Hide')
   return (
@@ -27,7 +29,7 @@ export function NativeChatCardHideButton({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={label}
+            aria-label={ariaLabel ?? label}
             onClick={() => void hideNativeChatCardKind(updates, settingSectionId, hiddenMessage)}
           >
             <EyeOff aria-hidden className="size-3.5" />
