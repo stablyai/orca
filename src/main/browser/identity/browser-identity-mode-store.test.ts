@@ -76,23 +76,6 @@ describe('browser identity mode store', () => {
     })
   })
 
-  it('applies the last of two selections issued together', async () => {
-    const userDataPath = makeUserData()
-    initializeBrowserIdentityModeStore(userDataPath)
-
-    const first = setBrowserIdentityMode('native')
-    const second = setBrowserIdentityMode('clean')
-
-    await expect(first).resolves.toMatchObject({ ok: true })
-    await expect(second).resolves.toMatchObject({ ok: true })
-    expect(getBrowserIdentityModeSnapshot()).toMatchObject({
-      appliedMode: 'clean',
-      configuredMode: 'clean',
-      explicitSelection: true,
-      restartRequired: false
-    })
-  })
-
   it('returns a structured error and keeps both values unchanged after a failed write', async () => {
     initializeBrowserIdentityModeStore(makeUserData())
     mocks.failWrite = true

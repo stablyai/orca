@@ -74,7 +74,7 @@ export function applyWebSessionTabsStorePatch(
           if (surface.type !== 'terminal') {
             continue
           }
-          const remapped = remapHostAgentStatus(surface)
+          const remapped = remapHostAgentStatus(surface, snapshot.worktree)
           const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
           const turnCompletedAt = remapped
             ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)

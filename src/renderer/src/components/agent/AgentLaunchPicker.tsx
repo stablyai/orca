@@ -49,6 +49,7 @@ export const AgentLaunchPicker = memo(
     disabled,
     setupDisabled,
     matchTriggerWidth,
+    portalContainer,
     emptyLabel,
     cli,
     children,
@@ -56,6 +57,8 @@ export const AgentLaunchPicker = memo(
     onOpenChange,
     onCatalogOpen,
     onOpenAgentSettings,
+    defaultAgent,
+    onSetDefault,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -69,6 +72,7 @@ export const AgentLaunchPicker = memo(
     disabled?: boolean
     setupDisabled?: boolean
     matchTriggerWidth?: boolean
+    portalContainer?: HTMLElement | null
     emptyLabel?: string
     /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
     cli?: boolean
@@ -78,6 +82,9 @@ export const AgentLaunchPicker = memo(
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
+    /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
+    defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
+    onSetDefault?: (agent: AgentPickerEntry['agent']) => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -89,12 +96,21 @@ export const AgentLaunchPicker = memo(
     const ownDraftScope = useAgentPickerDraftScope()
     const [settingsOpen, setSettingsOpen] = useState(false)
     const trigger = useRef<HTMLButtonElement>(null)
+    const searchInput = useRef<HTMLInputElement>(null)
+    const popupFocusReady = useRef(false)
+    const setSearchInput = useCallback((input: HTMLInputElement | null) => {
+      searchInput.current = input
+      if (popupFocusReady.current) {
+        input?.focus({ preventScroll: true })
+      }
+    }, [])
     const [open, setOpenState] = useState(false)
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
     const setOpen = useCallback(
       (next: boolean) => {
         if (!next) {
+          popupFocusReady.current = false
           setInitialQuery('')
         }
         setOpenState(next)
@@ -169,6 +185,7 @@ export const AgentLaunchPicker = memo(
             <Button
               ref={trigger}
               type="button"
+              data-agent-launch-picker-trigger="true"
               aria-label={translate('agentPicker.select', 'Select agent')}
               variant="outline"
               className="w-full min-w-0"
@@ -208,7 +225,15 @@ export const AgentLaunchPicker = memo(
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
+            portalContainer={portalContainer}
             align="start"
+            onOpenAutoFocus={(event) => {
+              popupFocusReady.current = true
+              if (searchInput.current) {
+                event.preventDefault()
+                searchInput.current.focus({ preventScroll: true })
+              }
+            }}
             className={
               matchTriggerWidth
                 ? 'w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)'
@@ -222,12 +247,15 @@ export const AgentLaunchPicker = memo(
                 model={model}
                 entries={entries}
                 initialQuery={initialQuery}
+                searchInputRef={setSearchInput}
                 value={value}
                 draftForEntry={draftForEntry}
                 mode="select"
                 disabled={disabled}
                 setupDisabled={setupDisabled}
                 onSelectAgent={selectAgent}
+                defaultAgent={defaultAgent}
+                onSetDefault={onSetDefault}
                 runLaunch={runLaunch}
               />
             ) : (

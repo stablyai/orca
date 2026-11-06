@@ -15,7 +15,7 @@ import {
 } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
 const lookup = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: lookup
 }))
 const repo: Repo = {

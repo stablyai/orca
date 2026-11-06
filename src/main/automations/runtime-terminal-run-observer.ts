@@ -18,7 +18,7 @@ import {
   type JudgedRun,
   type IdleRunVerdict
 } from './automation-run-agent-evidence'
-import { readProvenTerminalExit } from '../runtime/terminal-wait-results'
+import { readProvenTerminalExit } from '../runtime/terminal/wait/terminal-wait-results'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 

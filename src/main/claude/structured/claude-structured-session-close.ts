@@ -10,8 +10,8 @@ import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
-} from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
-import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+} from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
@@ -20,7 +20,7 @@ import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { claudeHeldSends } from '../claude-command-lifecycle'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 /** Root exit releases the lease even with unverified descendants; a failed spawn proves no exit. */
 export function claudeRootExitObserved(
@@ -242,29 +242,6 @@ export function closeClaudePublishedSessionForDeps(
   deps: Omit<CloseClaudePublishedSessionInput, 'sessions' | 'sessionId'>
 ): Promise<boolean> {
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
-}
-
-/** Complete the pending close for this exact connection after observing its root exit. */
-export function finishClaudeCloseAfterExit(input: {
-  sessions: Map<string, ClaudeSession>
-  sessionId: string
-  connection: ClaudeStreamJsonConnection | null
-  deps: Parameters<typeof closeClaudePublishedSessionForDeps>[2]
-  afterClose: (close: () => Promise<boolean>) => Promise<boolean>
-}): void {
-  const { sessions, sessionId, deps } = input
-  if (sessions.get(sessionId)?.connection !== input.connection) {
-    return
-  }
-  void input
-    .afterClose(() => closeClaudePublishedSessionForDeps(sessions, sessionId, deps))
-    .catch((error: unknown) =>
-      deps.logger?.warn('finishing a Claude close after its process exited reported', {
-        scope: 'claude-close-after-exit',
-        sessionId,
-        error
-      })
-    )
 }
 
 export async function closeClaudeSession(

@@ -4,7 +4,7 @@ import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deleti
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
 import {
   getComposerEligibleRepos,

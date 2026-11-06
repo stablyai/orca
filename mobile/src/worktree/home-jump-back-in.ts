@@ -16,12 +16,18 @@ import type {
 import { buildAgentRowLineageTree } from './agent-row-lineage'
 import { getWorktreeDotStatus } from './workspace-list-ordering'
 
-const ATTENTION_ROWS_PER_HOST = 6
-const ATTENTION_ROWS_SHOWN = 3
+// Feed shows the first few and "Show all" the rest; the bound keeps a busy desktop's list small.
+const ATTENTION_ROWS_PER_HOST = 25
+const ATTENTION_ROWS_SHOWN = 25
+
+/** Agents blocked on the user: they rank first, badge the Feed tab and are counted per desktop. */
+export function homeAgentNeedsYou(dotStatus: WorktreeStatus): boolean {
+  return dotStatus === 'permission' || dotStatus === 'failed'
+}
 
 // Lower comes first: agents blocked on the user, then finished work they haven't seen, then running work.
 function attentionRank(dotStatus: WorktreeStatus, unread: boolean): number | null {
-  if (dotStatus === 'permission' || dotStatus === 'failed') {
+  if (homeAgentNeedsYou(dotStatus)) {
     return 0
   }
   if (dotStatus === 'done' && unread) {

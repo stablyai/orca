@@ -10,7 +10,7 @@ import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
+import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import {
   AutomationRunLaunchError,
   type HeadlessAutomationDispatchLaunch

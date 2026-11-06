@@ -1,25 +1,26 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
-  OrcaRuntimeService,
-  addWorktree,
   addWorktreeMock,
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   ensurePathWithinWorkspaceMock,
-  resolveDefaultBaseRefWithLocalGit,
-  getBranchConflictKind,
   getPRForBranchMock,
-  listWorktrees,
   resolveLocalGitUsernameMock
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { resolveDefaultBaseRefWithLocalGit } from '../../git/repo-default-base-ref'
+import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_REPO_PATH,
   deferred,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {

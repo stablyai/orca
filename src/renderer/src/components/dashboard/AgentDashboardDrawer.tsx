@@ -137,11 +137,9 @@ export function AgentDashboardDrawer({
     close()
   }, [close])
   // Store-driven closes bypass close(); clear menu state for sidebar collapse and workspace-board exclusivity too.
-  useEffect(() => {
-    if (!open) {
-      setMenuOpen(false)
-    }
-  }, [open])
+  if (!open && menuOpen) {
+    setMenuOpen(false)
+  }
   const handleSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
       // Radix can request coordinate-free dismissal; allow only the drawer’s guarded Escape/outside/close paths.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { exposeRun } from './run-receipt'
-import type { RunRow } from '../../../../orchestration/types'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 
 // Loose RPC return types cannot prove internal fields were stripped.

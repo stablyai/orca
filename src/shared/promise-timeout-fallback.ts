@@ -13,3 +13,14 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback:
     }
   })
 }
+
+export function withTimeoutResult<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<{ ok: true; value: T } | { ok: false }> {
+  return withTimeout(
+    promise.then((value) => ({ ok: true, value }) as const),
+    timeoutMs,
+    { ok: false }
+  )
+}

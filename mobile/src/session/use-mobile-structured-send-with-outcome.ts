@@ -14,7 +14,11 @@ import {
 } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { MAX_SKILL_REFS } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
-import type { StructuredAgentSessionComposerOptions } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
+import {
+  structuredAgentSessionGoalObjective,
+  type StructuredAgentSessionComposerOptions
+} from '../../../src/shared/agent-session/view/structured-agent-session-composer'
+import { translate } from '../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import {
@@ -83,7 +87,12 @@ export function useMobileStructuredSendWithOutcome(args: {
   sendsOut: MobileStructuredSendsOut
   controller: Pick<
     StructuredAgentSessionComposerOptions,
-    'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands' | 'compactInstructions'
+    | 'snapshot'
+    | 'setOption'
+    | 'invokeAction'
+    | 'conversationCommands'
+    | 'compactInstructions'
+    | 'changeThreadGoal'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter
@@ -149,9 +158,27 @@ export function useMobileStructuredSendWithOutcome(args: {
       }
       const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sendAttachments = attachments ?? []
+      const hasAttachments = Boolean(sendAttachments.length || images?.length)
+      // Goal mode: the host sets the objective, or an agent-owned goal takes it as its own /goal.
+      const objective = intent?.goal ? structuredAgentSessionGoalObjective(text) : null
+      if (objective === '') {
+        return 'rejected'
+      }
+      if (objective !== null && hasAttachments) {
+        onSendError(
+          translate('chat.goal.attachmentsUnsupported', 'Remove attachments before setting a goal.')
+        )
+        return 'rejected'
+      }
+      if (objective !== null && controller.changeThreadGoal) {
+        return (await controller.changeThreadGoal({ kind: 'set', objective }))
+          ? 'accepted'
+          : 'rejected'
+      }
+      const messageText = objective === null ? text : `/goal ${objective}`
       const commandOutcome = await dispatchMobileStructuredCommand({
-        text,
-        hasAttachments: Boolean(sendAttachments.length || images?.length),
+        text: messageText,
+        hasAttachments,
         client,
         sessionId,
         fence: currentFence,
@@ -192,7 +219,7 @@ export function useMobileStructuredSendWithOutcome(args: {
           imageAttachments.push(attachment)
         }
       }
-      const wireText = nativeChatTextWithFileReferences(text, files)
+      const wireText = nativeChatTextWithFileReferences(messageText, files)
       const skills = takesSkills ? (pickedSkills ?? []) : []
       let body: ReturnType<typeof structuredAgentSessionSendBody>
       try {
@@ -235,6 +262,9 @@ export function useMobileStructuredSendWithOutcome(args: {
           ? { delivery: 'queue-if-active' as const }
           : {}),
         ...captured,
+        ...(intent?.usageLimitContinuationOfTurnItemId
+          ? { usageLimitContinuationOfTurnItemId: intent.usageLimitContinuationOfTurnItemId }
+          : {}),
         deadline,
         clientMessageId: send.clientMessageId,
         onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),

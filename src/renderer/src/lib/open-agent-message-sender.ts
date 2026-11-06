@@ -25,7 +25,7 @@ import {
   agentMessageSenderUnavailableText,
   resolveAgentMessageSenderTarget
 } from '@/components/native-chat/native-chat-agent-message-sender-target'
-import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import {
   executionHostIdForStructuredTarget,
   resolveStructuredAgentSessionOwner,

@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch/continuation/structured-agent-launch-settlement'
 
 const mocks = vi.hoisted(() => {
   const answers: ((support: unknown) => void)[] = []
@@ -30,8 +30,10 @@ vi.mock('@/store', async () => {
     )
   }
 })
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({ gateWorktreeAgentActivation: mocks.gate }))
-vi.mock('@/lib/resume-sleeping-agent-session', () => ({
+vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
+  gateWorktreeAgentActivation: mocks.gate
+}))
+vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: vi.fn()
 }))
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
@@ -77,8 +79,8 @@ import {
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
-import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 

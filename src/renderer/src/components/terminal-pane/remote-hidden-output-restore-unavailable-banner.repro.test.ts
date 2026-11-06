@@ -103,7 +103,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -267,7 +267,6 @@ function createManager(paneCount = 1, initialActivePaneId: number | null = null)
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),

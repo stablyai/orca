@@ -1,3 +1,4 @@
+import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
@@ -121,6 +122,8 @@ export type PtyApi = {
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
+  /** Who besides this window is viewing or typing into these PTYs; empty for unknown ids. */
+  getTerminalAttention: (ids: string[]) => Promise<Record<string, RuntimeTerminalAttention>>
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
@@ -253,7 +256,7 @@ export type PtyApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
-      gapEscapeState?: string
+      midEscape?: true | 'unknown'
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

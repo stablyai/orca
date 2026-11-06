@@ -1,4 +1,4 @@
-import type { LegacyAdoptionRow } from '../../types'
+import type { LegacyAdoptionRow } from '../orchestration-records'
 import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'

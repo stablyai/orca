@@ -6,7 +6,7 @@ import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/co
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
-} from '../agent-completion-coordinator-types'
+} from '../agent-completion/agent-completion-coordinator-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,

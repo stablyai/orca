@@ -39,7 +39,7 @@ import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
 import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>

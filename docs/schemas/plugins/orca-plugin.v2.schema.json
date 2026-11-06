@@ -1491,7 +1491,8 @@
             "notifications:show",
             "storage:own",
             "secrets:own",
-            "settings:own"
+            "settings:own",
+            "appearance:write"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1505,7 +1506,8 @@
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
-            "settings:own": "1.4.160"
+            "settings:own": "1.4.160",
+            "appearance:write": "1.4.249"
           }
         }
       },

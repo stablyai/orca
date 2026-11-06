@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NativeChatBlock } from '../../../../../src/shared/native-chat/native-chat-types'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 
 const scrolls = vi.hoisted(() => ({ toEnd: vi.fn(), to: vi.fn() }))
 
@@ -66,7 +67,7 @@ vi.mock('../../../components/MobileSourceCopyButton', () => ({
 vi.mock('../../../platform/external-link', () => ({ openExternalLink: vi.fn() }))
 vi.mock('../../../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 
-import '../../../platform/external-link'
+import { openExternalLink } from '../../../platform/external-link'
 import { ToolRun } from './MobileNativeChatToolRun'
 import {
   MobileNativeChatDisclosureContext,
@@ -81,6 +82,20 @@ describe('ToolRun', () => {
     renderer = null
   })
 
+  function render(blocks: NativeChatBlock[], onOpenLink: (url: string) => void): ReactTestRenderer {
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: onOpenLink },
+          createElement(ToolRun, { blocks })
+        )
+      )
+    })
+    openRun(renderer!)
+    return renderer!
+  }
+
   function openRun(tree: ReactTestRenderer): void {
     act(() => {
       tree.root.findAll((node) => String(node.type) === 'Pressable')[0]!.props.onPress()
@@ -91,6 +106,40 @@ describe('ToolRun', () => {
     node
       .findAll((node) => String(node.type) === 'Text')
       .map((text) => String(text.children.join('')))
+
+  describe('web search hits, handed to the chat link sheet', () => {
+    const openRow = (tree: ReactTestRenderer, label: string): void => {
+      act(() => {
+        tree.root
+          .findAll((node) => String(node.type) === 'Pressable')
+          .findLast((node) => textIn(node).includes(label))!
+          .props.onPress()
+      })
+    }
+
+    it('hands a web search hit to the chat link sheet when one is provided', () => {
+      vi.mocked(openExternalLink).mockClear()
+      const onOpenLink = vi.fn()
+      const tree = render(
+        [
+          {
+            type: 'tool-call',
+            name: 'web_search',
+            input: { query: 'FlatList docs' },
+            webSearchResults: [{ title: 'FlatList', url: 'https://reactnative.dev/docs/flatlist' }]
+          }
+        ],
+        onOpenLink
+      )
+      openRow(tree, 'FlatList docs')
+      const hit = tree.root.findAll(
+        (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
+      )[0]!
+      act(() => hit.props.onPress())
+      expect(onOpenLink).toHaveBeenCalledWith('https://reactnative.dev/docs/flatlist')
+      expect(openExternalLink).not.toHaveBeenCalled()
+    })
+  })
 
   describe("what the reader opened, kept above the list's recycled rows", () => {
     const blocks: NativeChatBlock[] = [

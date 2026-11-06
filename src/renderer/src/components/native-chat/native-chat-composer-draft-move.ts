@@ -12,6 +12,12 @@ import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftOwner
 } from './native-chat-composer-draft-storage'
+import { moveNativeChatPendingAttachments } from './native-chat-pending-attachment-cache'
+import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
+import {
+  moveNativeChatStagedFiles,
+  reconcileNativeChatStagedDraft
+} from './native-chat-draft-attachment-staging'
 
 /** Transfer the live draft synchronously; storage acknowledgement only governs source cleanup. */
 export function moveNativeChatComposerDraft(
@@ -24,6 +30,13 @@ export function moveNativeChatComposerDraft(
     return
   }
   const source = readNativeChatComposerDraft(sourceScope)
+  moveNativeChatStagedFiles(sourceScope, destinationScope)
+  moveNativeChatPendingAttachments(sourceScope, destinationScope)
+  for (const operation of nativeChatPastedTextOperations.values()) {
+    if (operation.scopeKey === sourceScope) {
+      operation.scopeKey = destinationScope
+    }
+  }
   if (source.text !== '' || source.images.length > 0) {
     const durable = appendToNativeChatComposerDraft(destinationScope, source, owner, position)
     const destination = records.get(destinationScope)
@@ -31,5 +44,6 @@ export function moveNativeChatComposerDraft(
       deferredRemovals.set(sourceScope, { destinationScope, savedAt: destination.savedAt })
     }
   }
+  reconcileNativeChatStagedDraft(destinationScope, records.get(destinationScope))
   deleteNativeChatComposerDraft(sourceScope)
 }

@@ -35,6 +35,7 @@ import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { subscribeAccountsSnapshots } from './accounts-snapshot-stream'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -145,24 +146,11 @@ export function MobileAccountsScreen() {
     if (!client || connState !== 'connected') {
       return
     }
-    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'error') {
-        void refresh()
-        return
-      }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
-        try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
-        } catch {
-          rejectInvalidSnapshot()
-        }
-      }
+    return subscribeAccountsSnapshots(client, {
+      onSnapshot: acceptSnapshot,
+      onInvalidSnapshot: rejectInvalidSnapshot,
+      onStreamError: () => void refresh()
     })
-    return unsubscribe
   }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(

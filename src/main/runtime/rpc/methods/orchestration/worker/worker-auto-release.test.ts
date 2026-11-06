@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/worker-terminal-release-reconciliation'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
-import { WorkerAutoReleaseActivity } from '../../../../orchestration/worker-auto-release-activity'
+import { WorkerAutoReleaseActivity } from '../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import type { AgentPhase } from '../../../../../../shared/agent-status/lifecycle/agent-transitions'
 
 const GRACE_MS = 2 * 60_000

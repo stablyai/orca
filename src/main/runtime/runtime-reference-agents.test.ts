@@ -20,10 +20,13 @@ const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; re
     reachable: true
   })
 )
-vi.mock('./structured-worker-authority', () => ({
-  observeStructuredSession: () => ({ status: observations.status })
-}))
-vi.mock('./orchestration/structured-session-mail-address', () => ({
+vi.mock(
+  './orchestration/terminal-authority/structured-sessions/structured-worker-authority',
+  () => ({
+    observeStructuredSession: () => ({ status: observations.status })
+  })
+)
+vi.mock('./orchestration/mailbox/routing/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))
 vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({

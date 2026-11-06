@@ -9,7 +9,7 @@ import {
   type OrcadIdleStopRecord
 } from '../../shared/orcad-idle-exit'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
-import { hasErrorCode } from '../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 const RECORD_MAX_BYTES = 16 * 1024
 

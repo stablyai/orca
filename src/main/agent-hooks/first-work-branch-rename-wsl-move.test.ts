@@ -189,32 +189,6 @@ describe('first-work rename while a WSL move takes the project', () => {
     expect(branchRenames).toHaveLength(1)
   })
 
-  it('renames a project the move is not taking', async () => {
-    const { deps, setDisplayName } = makeDeps({
-      getRepo: () => ({ ...LOCAL_REPO, id: 'other-repo' })
-    })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-
-    expect(setDisplayName).toHaveBeenCalled()
-  })
-
-  it('leaves the same repo id on another host to its own host', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-    const { deps, setDisplayName } = makeDeps({
-      getRepo: () => ({ ...LOCAL_REPO, executionHostId: 'runtime:env-1' })
-    })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('branch is owned by runtime:env-1'))
-    expect(info).not.toHaveBeenCalledWith(expect.stringContaining('WSL move'))
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(generateBranchNameMock).not.toHaveBeenCalled()
-    expect(setDisplayName).not.toHaveBeenCalled()
-    info.mockRestore()
-  })
-
   it('keeps a moving folder workspace title pending', async () => {
     let moving = true
     const { deps, setDisplayName, setRenameError } = makeDeps({

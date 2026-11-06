@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

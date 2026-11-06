@@ -7,7 +7,7 @@ import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
 } from '@/runtime/runtime-host-connection-state'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 import { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
 
 type RuntimeMirrorStatus = {

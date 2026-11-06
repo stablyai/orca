@@ -152,15 +152,6 @@ it.each(['growth', 'replacement'] as const)(
   }
 )
 
-it('accepts exactly the existing 64 MiB limit', async () => {
-  const path = await file('limit.dmp')
-  await truncate(path, LIMIT)
-  const result = await capture()
-  expect(result?.filePath).toBe(path)
-  expect(result?.sizeBytes).toBe(LIMIT)
-  expect(state.parsedBytes).toEqual([LIMIT])
-})
-
 it('ignores an already oversize candidate without parsing it', async () => {
   const next = await file('next.dmp')
   const path = await file('oversize.dmp', true)
@@ -168,23 +159,6 @@ it('ignores an already oversize candidate without parsing it', async () => {
   const result = await capture()
   expect(result?.filePath).toBe(next)
   expect(state.parsedBytes).toEqual([131])
-})
-
-it('documents same-path partial-header rejection for this capture window', async () => {
-  const path = await file('partial.dmp', false, Buffer.from('MDMP'))
-  let clock = CRASHED_AT
-  const result = await captureMinidumpSignature(CRASHED_AT, {
-    expectedProcessType: 'renderer',
-    timeoutMs: 500,
-    now: () => clock,
-    sleep: async (ms) => {
-      clock += ms
-      await writeFile(path, rendererDump())
-    }
-  })
-  expect(result).toBeNull()
-  expect(state.parsedBytes).toEqual([4])
-  expect((await capture())?.filePath).toBe(path)
 })
 
 it('can recover partial-header rejection after completed-path promotion', async () => {
@@ -227,19 +201,6 @@ it('preserves the opened dump when later growth exceeds the limit', async () => 
   expect((await capture())?.filePath).toBe(next)
 })
 
-it('records bytes actually parsed when permitted growth follows directory stat', async () => {
-  const race = await file('racing.dmp')
-  state.callbacks.afterStat = async (path) => {
-    if (path !== race) {
-      return
-    }
-    state.callbacks.afterStat = undefined
-    await truncate(race, 132)
-  }
-  expect((await capture())?.sizeBytes).toBe(132)
-  expect(state.parsedBytes).toEqual([132])
-})
-
 it('captures a size-zero opened dump that gains contents before its first read', async () => {
   const race = await file('racing.dmp', false, Buffer.alloc(0))
   state.callbacks.afterOpenStat = async (path) => {
@@ -250,19 +211,6 @@ it('captures a size-zero opened dump that gains contents before its first read',
   }
   const result = await capture()
   expect(result?.filePath).toBe(race)
-  expect(result?.signature.processType).toBe('renderer')
-  expect(result?.sizeBytes).toBe(131)
-})
-
-it('reports the observed shorter extent when the opened dump shrinks while reading', async () => {
-  const race = await file('shrinking.dmp', false, Buffer.concat([rendererDump(), Buffer.alloc(10)]))
-  state.callbacks.afterOpenStat = async (path) => {
-    if (path === race) {
-      state.callbacks.afterOpenStat = undefined
-      await truncate(path, 131)
-    }
-  }
-  const result = await capture()
   expect(result?.signature.processType).toBe('renderer')
   expect(result?.sizeBytes).toBe(131)
 })

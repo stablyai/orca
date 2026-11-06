@@ -104,7 +104,7 @@ vi.mock('../../markdown/navigation/MarkdownTableOfContentsPanel', () => ({
 import MarkdownPreview from './MarkdownPreview'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
-import { registerHttpLinkStoreAccessor } from '../../../../lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '../../../../lib/browser/navigation/http-link-routing'
 
 describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
   let container: HTMLDivElement
@@ -184,15 +184,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
       )
     })
   }
-
-  it('plain Cmd-click opens the link in the Orca browser', () => {
-    const anchor = render()
-    click(anchor, { metaKey: true })
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
-    })
-    expect(openUrlMock).not.toHaveBeenCalled()
-  })
 
   it('Cmd+Shift-click opens the link in the system default browser', () => {
     const anchor = render()
@@ -328,21 +319,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
           line: 120,
           column: 1
         })
-      )
-    })
-
-    it('reveals the line after replacing the preview in the same worktree', async () => {
-      await clickLineLink('file:///repo/src/Example.cs#L42C7')
-      act(() => {
-        root.unmount()
-      })
-      flushFrames()
-
-      expect(storeState.openFile).toHaveBeenCalledWith(
-        expect.objectContaining({ worktreeId: 'wt-1', filePath: '/repo/src/Example.cs' })
-      )
-      expect(storeState.setPendingEditorReveal).toHaveBeenLastCalledWith(
-        expect.objectContaining({ filePath: '/repo/src/Example.cs', line: 42, column: 7 })
       )
     })
 

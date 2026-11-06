@@ -49,7 +49,7 @@ import {
   clearNativeChatPendingAttachmentsForTests,
   settleNativeChatPendingAttachment
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'

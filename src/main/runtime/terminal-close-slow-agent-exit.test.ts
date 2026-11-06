@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/sessions/immediate-kill-reply-budget'
 
 import { startLateExitHarness } from '../ipc/pty/daemon-late-exit-test-fixture'
 import { finishPtyShutdown } from '../ipc/pty/provider/liveness'
 import { shutdownProviderAndDetectExit } from '../ipc/pty/provider/shutdown-detect'
 import type { PtyRuntimeControllerDeps } from '../ipc/pty/runtime/controller-deps'
 import { stopAndWaitPtyFromRuntimeController } from '../ipc/pty/runtime/kill'
-import type { OrchestrationDb } from './orchestration/db'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
+import type { WorkerTerminalResourceRow } from './orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { OrcaRuntimeService } from './orca-runtime'
 
 import { completeWorkerTerminalRelease } from './rpc/methods/orchestration/worker/worker-release-completion'

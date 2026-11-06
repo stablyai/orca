@@ -8,7 +8,7 @@ import type {
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { getTimelineTargetLabel } from './issue-conversation-entries'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function renderTimelineTarget(
   target: GitHubIssueTimelineTarget | undefined

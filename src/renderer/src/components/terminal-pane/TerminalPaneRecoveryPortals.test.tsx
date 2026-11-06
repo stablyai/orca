@@ -23,7 +23,8 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('./use-wsl-host-unavailable-reason', () => ({ useWslHostUnavailableReason: () => null }))
 vi.mock('./use-managed-pairing-refused', () => ({
-  useManagedPairingRefusedEnvironmentId: () => null
+  useManagedPairingRefusedEnvironmentId: () => null,
+  useManagedServerReplaced: () => false
 }))
 vi.mock('./remote-server-outage', () => ({
   useWorkspaceRuntimeEnvironmentId: () => 'env-1',

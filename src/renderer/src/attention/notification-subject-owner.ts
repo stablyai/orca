@@ -12,11 +12,11 @@ import {
   findIndexedWorktreeOwner,
   findIndexedWorktreeOwnerForHost,
   findIndexedFolderWorkspaceOwner,
-  findIndexedRepoOwner,
-  findIndexedProjectGroupOwner,
-  getCatalogOwnerHostId
-} from '@/lib/worktree-runtime-owner-index'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+  findIndexedProjectGroupOwner
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwner } from '@/lib/workspace/ownership/repo-owner-index'
+import { getCatalogOwnerHostId } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
 type SubjectOwnerState = WorktreeRuntimeOwnerState &
   Partial<
