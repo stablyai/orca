@@ -58,7 +58,8 @@ export class GitGraphHistoryController {
     const file = state.openFiles.find((file) => file.id === `${worktreeId}::git-graph`)
     this.executionHostId =
       file?.operationProvenance?.generation.route.executionHostId ??
-      gitGraphScope(worktreeId, state)?.route.executionHostId
+      gitGraphScope(worktreeId, state)?.route.executionHostId ??
+      undefined
     this.scope = gitGraphScope(worktreeId, state, this.executionHostId)
     this.filter = filterFor(worktreeId)
   }
@@ -252,7 +253,6 @@ export class GitGraphHistoryController {
             }
           }
           accumulated = { ...page, items }
-          // One extra page catches a selection pushed past the loaded depth.
           if (
             (!revealId &&
               items.length >= targetDepth &&
