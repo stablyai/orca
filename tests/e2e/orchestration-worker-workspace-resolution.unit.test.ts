@@ -20,7 +20,7 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 
 const scanLocalRepoWorktreesForResolution = vi.hoisted(() => vi.fn())
-vi.mock('../../src/main/runtime/repo-worktree-resolution-scan', () => ({
+vi.mock('../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution
 }))
 

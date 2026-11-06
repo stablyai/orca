@@ -1,3 +1,5 @@
+import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
@@ -9,7 +11,11 @@ import {
   type GitHubChecksContextOwner
 } from '@/components/github-checks-tab-state'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
-import { getCheckCounts, getChecksSummaryLabel } from '@/components/pr-check-counts'
+import {
+  getCheckCounts,
+  getOverallCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
@@ -68,6 +74,7 @@ export function ChecksTab({
   )
   const repos = useAppStore((s) => s.repos)
   const projects = useAppStore((s) => s.projects)
+  const { checkOwner, onOwnerUpdated } = usePRCheckRefreshOwner(item, sourceContext)
   const [fixingChecks, setFixingChecks] = useState(false)
   const [fixChecksComposerPrompt, setFixChecksComposerPrompt] = useState<string | null>(null)
   const mountedRef = useMountedRef()
@@ -160,8 +167,17 @@ export function ChecksTab({
   const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
-  const summaryLabel = getChecksSummaryLabel(list)
-  const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(counts)
+  const overallCounts = getOverallCheckCounts(
+    list,
+    checkOwner,
+    resolvedChecksState.checkObservationOwner
+  )
+  const summaryLabel = getChecksSummaryLabel(
+    list,
+    checkOwner,
+    resolvedChecksState.checkObservationOwner
+  )
+  const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
@@ -178,18 +194,19 @@ export function ChecksTab({
         sourceContext,
         repoId,
         repoPath,
-        item,
-        headSha,
+        item: checkOwner,
+        headSha: checkOwner.headSha,
         prRepo,
         mountedRef,
+        onOwnerUpdated,
         onChecksUpdated
       }),
     [
       canUseChecksRepoContext,
-      headSha,
-      item,
+      checkOwner,
       mountedRef,
       onChecksUpdated,
+      onOwnerUpdated,
       runtimeHost,
       prRepo,
       repoId,
@@ -209,8 +226,8 @@ export function ChecksTab({
         sourceContext,
         repoId,
         repoPath,
-        item,
-        headSha,
+        item: checkOwner,
+        headSha: checkOwner.headSha,
         prRepo,
         failedOnly,
         mountedRef,
@@ -219,8 +236,7 @@ export function ChecksTab({
     [
       canUseChecksRepoContext,
       handleRefresh,
-      headSha,
-      item,
+      checkOwner,
       mountedRef,
       prRepo,
       runtimeHost,
@@ -305,7 +321,8 @@ export function ChecksTab({
       SummaryIcon={SummaryIcon}
       summaryColor={summaryColor}
       summaryLabel={summaryLabel}
-      counts={counts}
+      counts={overallCounts}
+      showSummary={isCompletePRCheckOwner(checkOwner)}
       listLength={list.length}
       refreshAction={refreshAction}
       rerunAction={rerunAction}
@@ -353,6 +370,8 @@ export function ChecksTab({
       summaryColor={summaryColor}
       summaryLabel={summaryLabel}
       counts={counts}
+      summaryPending={overallCounts.pending > 0 && overallCounts.failing === 0}
+      owner={checkOwner}
       sorted={sorted}
       renderCheckRow={renderCheckRow}
       fixChecksAgentDialog={fixChecksAgentDialog}

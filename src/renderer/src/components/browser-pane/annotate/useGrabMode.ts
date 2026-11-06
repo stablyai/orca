@@ -8,6 +8,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 export type GrabModeState = 'idle' | 'armed' | 'awaiting' | 'confirming' | 'error'
 
@@ -248,6 +249,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [state, cancel])
+
+  // Includes the copy toast's wait before rearming, while the page still has focus.
+  useGuestEscape(browserPageId, state !== 'idle', cancel)
 
   return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }
 }

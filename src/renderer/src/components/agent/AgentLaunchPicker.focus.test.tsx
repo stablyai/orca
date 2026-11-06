@@ -104,6 +104,10 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
   expect(search()?.selectionStart).toBe(2)
   expect(document.querySelector('[aria-label="Configure Claude"]')).toBeNull()
   expect(launch).not.toHaveBeenCalled()
+  // The row Enter would pick reads as highlighted, like the project and host comboboxes.
+  expect(
+    getByRole(document.body, 'menuitem', { name: /^Codex/ }).hasAttribute('data-search-default')
+  ).toBe(true)
   await user.keyboard('{Enter}')
   expect(launch).toHaveBeenCalledOnce()
   expect(launch.mock.calls[0][0]).toBe('codex')

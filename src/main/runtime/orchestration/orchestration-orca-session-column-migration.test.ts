@@ -7,7 +7,7 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from './terminal-authority/structured-sessions/structured-worker-identity'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'

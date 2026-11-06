@@ -1,7 +1,12 @@
 import { useCallback } from 'react'
 import type { useAppStore } from '@/store'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../../shared/execution-host'
+import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import {
   createWorktreeContextMenuDeleteIntent,
@@ -15,9 +20,20 @@ import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
+  canCreateChildWorktree,
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+
+function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
+  return resolveReviewRepository(repos, {
+    ...worktree,
+    // Unstamped clicked rows are local, regardless of the active workspace's owner.
+    hostId:
+      worktree.hostId ??
+      (worktree.runtimeOwnerEnvironmentId?.trim() ? undefined : LOCAL_EXECUTION_HOST_ID)
+  })
+}
 
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
@@ -41,7 +57,7 @@ export function useWorktreeContextMenuCommands(args: {
   sleepableWorktrees: readonly Worktree[]
   subtreeSleepableWorktrees: readonly Worktree[]
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
-  validParentWorktreeId: string | null
+  validParent: Worktree | null
   worktree: Worktree
   statusesForWorktree: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
 }) {
@@ -146,6 +162,20 @@ export function useWorktreeContextMenuCommands(args: {
       focus: 'displayName'
     })
   }, [args])
+  const handleNewChildWorktree = useCallback(() => {
+    const state = args.getState()
+    const repo = resolveChildWorktreeRepository(state.repos, args.worktree)
+    if (!repo || !canCreateChildWorktree({ ...args, repo })) {
+      return
+    }
+    args.setMenuOpenState(false)
+    args.openModal('new-workspace-composer', {
+      initialRepoId: repo.id,
+      initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, state.projectHostSetups),
+      initialParentWorktreeId: args.worktree.id,
+      telemetrySource: 'sidebar'
+    })
+  }, [args])
   const sleepWorktreesAfterMenuClose = useCallback(
     (worktrees: readonly Worktree[]) => {
       args.setMenuOpenState(false)
@@ -181,11 +211,19 @@ export function useWorktreeContextMenuCommands(args: {
     args.setMenuOpenState(false)
   }, [args])
   const handleOpenParent = useCallback(() => {
-    if (args.validParentWorktreeId) {
-      activateAndRevealWorktree(args.validParentWorktreeId, { navigationIntent: 'user-open' })
+    if (args.validParent) {
+      // A parent on another machine shares no host with the child; open the parent's own row.
+      activateAndRevealWorktree(args.validParent.id, {
+        navigationIntent: 'user-open',
+        executionHostId: args.validParent.hostId
+      })
     }
-  }, [args.validParentWorktreeId])
+  }, [args.validParent])
   return {
+    canCreateChildWorktree: canCreateChildWorktree({
+      ...args,
+      repo: resolveChildWorktreeRepository(args.getState().repos, args.worktree)
+    }),
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,
@@ -194,6 +232,7 @@ export function useWorktreeContextMenuCommands(args: {
     handleCreateGroupFromRepo,
     handleDelete,
     handleMoveProjectToGroup,
+    handleNewChildWorktree,
     handleOpenParent,
     handleRemoveProjectFromGroup,
     handleRename,

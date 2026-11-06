@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ColdRestoreDetection } from '../../daemon/history-reader'
+import type { ColdRestoreDetection } from '../../daemon/history/restoration/terminal-history-cold-restore-info'
 import { captureWslMoveRestoreHints } from './wsl-move-restore-hints'
 
 const restored = (

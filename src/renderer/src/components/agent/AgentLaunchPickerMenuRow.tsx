@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupButton, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
@@ -44,6 +45,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   openSetup,
   onSetupOpenChange,
   label = entry.label,
+  searchDefault,
   source,
   selected,
   mode,
@@ -51,7 +53,9 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   disabled,
   runLaunch,
   shortcut,
-  onSelectAgent
+  onSelectAgent,
+  isDefault = false,
+  onSetDefault
 }: {
   entry: AgentPickerEntry
   draftScope?: object
@@ -68,6 +72,8 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     } | null
   ) => void
   label?: string
+  /** The row Enter in the search field would pick. */
+  searchDefault?: boolean
   source?: AgentPickerDraft
   selected?: AgentPickerDraft
   mode?: 'launch' | 'select'
@@ -76,6 +82,9 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   runLaunch: AgentPickerMenuLaunch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
+  isDefault?: boolean
+  /** Base agent rows only; setup rows are presets, not default-agent choices. */
+  onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useUiLanguageRevision()
   const setupId = useId()
@@ -91,24 +100,29 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     : undefined
   const closeMenu = useDropdownMenuClose()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  const setDefault =
+    onSetDefault && entry.surfaces.length ? () => onSetDefault(entry.agent) : undefined
   if (setupDisabled) {
     return (
-      <DropdownMenuItem
-        disabled={disabled || !entry.surfaces.length}
-        onSelect={() => {
-          onSelectAgent?.(entry.agent)
-          runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
-        }}
-      >
-        <AgentIcon agent={entry.agent} size={14} />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate">{label}</span>
-          {entry.description ? (
-            <span className="truncate text-xs text-muted-foreground">{entry.description}</span>
-          ) : null}
-        </span>
-        {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-      </DropdownMenuItem>
+      <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
+        <DropdownMenuItem
+          disabled={disabled || !entry.surfaces.length}
+          data-search-default={searchDefault || undefined}
+          onSelect={() => {
+            onSelectAgent?.(entry.agent)
+            runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
+          }}
+        >
+          <AgentIcon agent={entry.agent} size={14} />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate">{label}</span>
+            {entry.description ? (
+              <span className="truncate text-xs text-muted-foreground">{entry.description}</span>
+            ) : null}
+          </span>
+          {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+        </DropdownMenuItem>
+      </AgentDefaultContextMenu>
     )
   }
   return (
@@ -147,6 +161,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       renderAnchor={(trigger) => (
         <div
           data-agent-launch-row
+          data-search-default={searchDefault || undefined}
           onClick={(event) => {
             event.preventDefault()
             if (disabled || !entry.surfaces.length) {
@@ -176,18 +191,21 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
             }
           }}
         >
-          <Button asChild variant="menu-launch" size="menu">
-            <span>
-              <AgentIcon agent={entry.agent} size={14} />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-              {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-                <span className="text-xs text-muted-foreground">
-                  {chatUnavailableLabel(unavailable.reason)}
-                </span>
-              ) : null}
-            </span>
-          </Button>
+          {/* Why: the anchor is a Radix sub-trigger's asChild child, so the context menu wraps the label instead. */}
+          <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
+            <Button asChild variant="menu-launch" size="menu">
+              <span>
+                <AgentIcon agent={entry.agent} size={14} />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+                {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
+                  <span className="text-xs text-muted-foreground">
+                    {chatUnavailableLabel(unavailable.reason)}
+                  </span>
+                ) : null}
+              </span>
+            </Button>
+          </AgentDefaultContextMenu>
           {trigger}
         </div>
       )}

@@ -11,6 +11,14 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import {
+  closeSavedMobileNativeChatDraft,
+  resetMobileNativeChatDraftPersistenceForTests,
+  retainSavedMobileNativeChatDrafts,
+  saveMobileNativeChatDraft,
+  setMobileNativeChatDraftSource,
+  type MobileNativeChatSavedDraft
+} from './mobile-native-chat-draft-persistence'
 
 // Text and its edit revision outlive the screen while its tab remains open.
 // Picks behave like desktop chips: user edits drop skills the text stops naming and an origin that stops leading.
@@ -42,6 +50,7 @@ export function recordMobileNativeChatSkillPick(
     return { ...inputs, skills: skill.path ? [...kept, { name, path: skill.path }] : kept }
   })
   drafts.set(draftKey, { ...current, skillOrigin: skill.token })
+  saveMobileNativeChatDraft(draftKey, 'deferred')
 }
 
 // A rejected send's restored text gets back the files it named, even if newer edits dropped them.
@@ -59,6 +68,7 @@ export function restoreMobileNativeChatPickedSkills(
     ...current,
     skills: [...current.skills, ...skills.filter((skill) => !paths.has(skill.path))]
   }))
+  saveMobileNativeChatDraft(draftKey, 'deferred')
 }
 
 export function readMobileNativeChatSkillOrigin(draftKey: string): string | null {
@@ -106,9 +116,8 @@ function writeDraft(
   if (next === text) {
     return
   }
-  for (const listener of listeners) {
-    listener()
-  }
+  saveMobileNativeChatDraft(draftKey, next === '' ? 'immediate' : 'deferred')
+  notifyDrafts()
 }
 
 export function setMobileNativeChatDraftText(
@@ -156,6 +165,7 @@ function notifyDrafts(): void {
 
 export function closeMobileNativeChatTabDraft(scope: string): void {
   closeMobileNativeChatEditInputs(scope)
+  closeSavedMobileNativeChatDraft(scope)
   if (retireTabText(scope)) {
     notifyDrafts()
   }
@@ -170,10 +180,47 @@ export function pruneMobileNativeChatTabDrafts(
   for (const scope of pruneMobileNativeChatTabInputs(hostId, worktreeId, tabIds)) {
     changed = retireTabText(scope) || changed
   }
+  retainSavedMobileNativeChatDrafts(hostId, worktreeId, tabIds)
   if (changed) {
     notifyDrafts()
   }
 }
+
+// Launch-seed text is prefill, not the user's draft, so it is never saved (desktop's unsavedText rule).
+function userText(scope: string): string {
+  const text = drafts.get(scope)?.text ?? ''
+  return text === mobileNativeChatLaunchDraftSeeds.get(scope)?.text ? '' : text
+}
+
+setMobileNativeChatDraftSource({
+  saved: () => {
+    const saved = new Map<string, MobileNativeChatSavedDraft>()
+    for (const [scope, draft] of drafts) {
+      if (userText(scope) !== '') {
+        saved.set(scope, {
+          text: draft.text,
+          skills: readMobileNativeChatDraftInputs(scope).skills,
+          skillOrigin: draft.skillOrigin
+        })
+      }
+    }
+    return saved
+  },
+  restore: (scope, saved) => {
+    const current = drafts.get(scope)
+    // Any write before the load finished, a clear or send included, outranks the saved draft; only untouched prefill yields.
+    if (current && current.text !== mobileNativeChatLaunchDraftSeeds.get(scope)?.text) {
+      return
+    }
+    updateMobileNativeChatDraftInputs(scope, (inputs) => ({ ...inputs, skills: saved.skills }))
+    drafts.set(scope, {
+      text: saved.text,
+      editGeneration: (current?.editGeneration ?? 0) + 1,
+      skillOrigin: saved.skillOrigin
+    })
+    notifyDrafts()
+  }
+})
 
 export function useMobileNativeChatDraft(draftKey: string | null): string {
   const read = (): string => (draftKey ? (drafts.get(draftKey)?.text ?? '') : '')
@@ -184,6 +231,7 @@ export function resetMobileNativeChatDraftStoreForTests(): void {
   resetMobileNativeChatDraftInputsForTests()
   drafts.clear()
   mobileNativeChatLaunchDraftSeeds.clear()
+  resetMobileNativeChatDraftPersistenceForTests()
 }
 
 export type MobileComposerWriter = ((text: string) => boolean) & {

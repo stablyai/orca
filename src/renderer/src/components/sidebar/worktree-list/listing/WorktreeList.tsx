@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -19,6 +20,10 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
+import {
+  getProjectGroupHeaderKey,
+  isProjectSectionGroupKey
+} from '../../../../../../shared/sidebar-list/group-keys'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'
@@ -40,6 +45,14 @@ import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
+import { ProjectsCollapseAllButton } from '../controls/ProjectsCollapseAllButton'
+import { useProjectsCollapseShortcut } from '../controls/use-projects-collapse-shortcut'
+import { useProjectsCollapseAllAnnouncement } from '../controls/use-projects-collapse-all-announcement'
+import {
+  areAllProjectsCollapsed,
+  getRenderedProjectCollapseKeys,
+  setAllProjectsCollapsed
+} from './project-collapse-all'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
@@ -53,6 +66,7 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewStart?: () => void
   onWorkspaceBoardDragPreviewCommit?: () => void
   onWorkspaceBoardDragPreviewCancel?: () => void
+  projectsCollapseTarget?: HTMLElement | null
 }
 
 // Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
@@ -68,7 +82,8 @@ const WorktreeList = React.memo(function WorktreeList({
   onWorktreeCardClick,
   onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
-  onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+  onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
+  projectsCollapseTarget
 }: WorktreeListProps) {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -99,6 +114,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
+  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const settings = useAppStore((s) => s.settings)
@@ -151,6 +167,33 @@ const WorktreeList = React.memo(function WorktreeList({
     [rowModel.occurrencePlan]
   )
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
+  const projectCollapseKeys = useMemo(
+    () => (groupBy === 'repo' ? getRenderedProjectCollapseKeys(rowModel.sectionRows) : []),
+    [groupBy, rowModel.sectionRows]
+  )
+  const projectSectionCount = useMemo(
+    () =>
+      new Set([
+        ...rowModel.occurrencePlan.sections.map(({ key }) => key).filter(isProjectSectionGroupKey),
+        ...visibleScope.visibleProjectGroupsForRows.map(({ id }) => getProjectGroupHeaderKey(id))
+      ]).size,
+    [rowModel.occurrencePlan, visibleScope.visibleProjectGroupsForRows]
+  )
+  const allProjectsCollapsed = areAllProjectsCollapsed(
+    projectCollapseKeys,
+    effectiveCollapsedGroups
+  )
+  const handleToggleAllProjects = useCallback(() => {
+    void useAppStore.getState().recordFeatureInteraction('projects-collapse-all')
+    // Direction follows what is displayed, which may differ from stored state while a picker forces sections open.
+    setCollapsedGroups(
+      setAllProjectsCollapsed(
+        useAppStore.getState().collapsedGroups,
+        projectCollapseKeys,
+        !allProjectsCollapsed
+      )
+    )
+  }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
@@ -215,6 +258,23 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
+  useProjectsCollapseShortcut(
+    projectCollapseKeys.length > 0 && !filtersHideAllRows,
+    handleToggleAllProjects
+  )
+  const announceProjectCollapse = useProjectsCollapseAllAnnouncement(
+    Boolean(projectsCollapseTarget) &&
+      groupBy === 'repo' &&
+      projectSectionCount > 1 &&
+      !filtersHideAllRows
+  )
+  const handleToggleGroup = useCallback(
+    (groupKey: string) => {
+      toggleGroup(groupKey)
+      announceProjectCollapse(groupKey)
+    },
+    [announceProjectCollapse, toggleGroup]
+  )
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
@@ -222,6 +282,15 @@ const WorktreeList = React.memo(function WorktreeList({
 
   return (
     <>
+      {projectsCollapseTarget && projectCollapseKeys.length > 0
+        ? createPortal(
+            <ProjectsCollapseAllButton
+              allCollapsed={allProjectsCollapsed}
+              onToggle={handleToggleAllProjects}
+            />,
+            projectsCollapseTarget
+          )
+        : null}
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
@@ -256,7 +325,8 @@ const WorktreeList = React.memo(function WorktreeList({
         groupBy={groupBy}
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
-        toggleGroup={toggleGroup}
+        toggleGroup={handleToggleGroup}
+        onToggleAllProjects={handleToggleAllProjects}
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={createWorkspaceForRepoHeader}
         handleOpenRepoSettings={handleOpenRepoSettings}
@@ -276,6 +346,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
+        handleRefreshProjectGroup={projectGroupDialogs.handleRefreshProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}

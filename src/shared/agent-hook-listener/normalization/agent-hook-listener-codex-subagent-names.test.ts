@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHookListenerState } from '../listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
+import { pollCodexTranscriptStatus } from '../providers/codex-transcript-poll'
 
 describe('Codex child names from provider metadata', () => {
   const directories: string[] = []
@@ -27,14 +28,15 @@ describe('Codex child names from provider metadata', () => {
           : { id, ...fields }
         writeFileSync(transcriptPath, `${JSON.stringify({ type: 'session_meta', payload })}\n`)
       },
-      post(hookEventName = 'SubagentStart') {
+      post(hookEventName = 'SubagentStart', agentType = 'default') {
         return normalizeAndAccept(state, 'codex', {
           hook_event_name: hookEventName,
           agent_id: 'child',
-          agent_type: 'default',
+          agent_type: agentType,
           transcript_path: transcriptPath
-        })?.payload.subagents
-      }
+        })
+      },
+      state
     }
   }
 
@@ -43,7 +45,7 @@ describe('Codex child names from provider metadata', () => {
     writeMeta({ agent_path: '/root/adversarial_visual', agent_nickname: 'Scout' })
     appendFileSync(transcriptPath, 'x'.repeat(2 * 1024 * 1024))
 
-    expect(post()).toEqual([
+    expect(post()?.payload.subagents).toEqual([
       expect.objectContaining({
         id: 'child',
         agentType: 'default',
@@ -52,20 +54,20 @@ describe('Codex child names from provider metadata', () => {
       })
     ])
     rmSync(transcriptPath)
-    expect(post('PermissionRequest')?.[0]).toMatchObject({
+    expect(post('PermissionRequest')?.payload.subagents?.[0]).toMatchObject({
       description: 'adversarial_visual',
       state: 'waiting'
     })
-    expect(post('PostToolUse')?.[0]).toMatchObject({
+    expect(post('PostToolUse')?.payload.subagents?.[0]).toMatchObject({
       description: 'adversarial_visual',
       state: 'working'
     })
-    expect(post('SubagentStop')).toBeUndefined()
+    expect(post('SubagentStop')?.payload.subagents).toBeUndefined()
   })
 
   it('recovers a child first seen in a tool hook and retries metadata that was not yet written', () => {
     const { writeMeta, post } = fixture()
-    expect(post('PostToolUse')).toEqual([
+    expect(post('PostToolUse')?.payload.subagents).toEqual([
       expect.objectContaining({
         id: 'child',
         agentType: 'default',
@@ -74,6 +76,21 @@ describe('Codex child names from provider metadata', () => {
       })
     ])
     writeMeta({ agent_path: '/root/review/mobile' })
-    expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
+    expect(post('PostToolUse')?.payload.subagents?.[0]?.description).toBe('review/mobile')
+  })
+
+  it('names a child from its own rollout by polling when no parent rollout is known', () => {
+    const { writeMeta, post, state } = fixture()
+    // A relay restart can leave only this child hook, sent before its rollout was readable.
+    const started = post('SubagentStart', 'worker')
+    expect(started?.payload.subagents?.[0]).toMatchObject({ agentType: 'worker' })
+    expect(started?.payload.subagents?.[0]?.description).toBeUndefined()
+
+    writeMeta({ agent_path: null, agent_nickname: 'Planck', agent_role: 'worker' })
+    const polled = pollCodexTranscriptStatus(state, started!, {}, 'production')
+    expect(polled?.payload.subagents?.[0]).toMatchObject({
+      agentType: 'worker',
+      description: 'Planck'
+    })
   })
 })

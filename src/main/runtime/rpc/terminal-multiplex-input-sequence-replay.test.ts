@@ -2,7 +2,7 @@ import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktre
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
+import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'

@@ -3,7 +3,7 @@ import { hasWslSourceChange, selectPrE2eSpecs } from './pr-e2e-source-routing.mj
 
 describe('real WSL terminal lane', () => {
   it.each([
-    'config/scripts/verify-wsl-e2e-participation.mjs',
+    'config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.mjs',
     'config/scripts/runtime-verification/participation/verify-playwright-participation.mjs',
     'src/main/wsl/discovery/wsl-availability.ts',
     'src/main/wsl/execution/wsl-runner.ts',
@@ -16,7 +16,7 @@ describe('real WSL terminal lane', () => {
     'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts',
     'tests/e2e/terminal-inline-images-windows.spec.ts',
     'tests/e2e/wsl-bridge-no-background-boot.spec.ts',
-    'config/scripts/verify-wsl-no-background-boot-participation.mjs',
+    'config/scripts/runtime-verification/participation/verify-wsl-no-background-boot-participation.mjs',
     '.github/actions/setup-wsl-test-runtime/setup.ps1',
     '.github/workflows/windows-wsl-e2e.yml'
   ])('routes %s to both WSL sentinels', (path) => {

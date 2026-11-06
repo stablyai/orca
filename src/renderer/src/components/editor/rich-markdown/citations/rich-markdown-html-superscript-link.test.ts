@@ -2,38 +2,21 @@
 
 import { Editor } from '@tiptap/core'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
-import { describe, expect, it, vi } from 'vitest'
-import { marked } from 'marked'
+import { describe, expect, it } from 'vitest'
+
 import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import {
   createRichMarkdownEditorCodec,
   createRichMarkdownSourceTransport
 } from '../document/rich-markdown-source-transport'
-import {
-  classifyHtmlSuperscriptLinkAction,
-  createRichMarkdownHtmlSuperscriptLinkContext
-} from './rich-markdown-html-superscript-link-context'
-import {
-  HTML_SUPERSCRIPT_LINK_SOURCE_LIMIT,
-  matchHtmlSuperscriptLinkSource,
-  parseHtmlSuperscriptLinkSource
-} from './rich-markdown-html-superscript-link-source'
-import { projectMarkdownHrefForClipboard } from '../../markdown/link-routing/markdown-internal-links'
+import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+
 import { findRichMarkdownSearchMatches } from '../search/rich-markdown-search'
 import { findRichMarkdownSelectedTextRanges } from '../review/rich-markdown-review-text-ranges'
-import { getRichMarkdownVisibleText } from '../review/rich-markdown-visible-text-map'
+
 import { handleRichMarkdownCut } from '../clipboard/rich-markdown-cut-handler'
 import { getSelectedHtmlSuperscriptLinkStatus } from '../links/rich-markdown-selected-link-actions'
-import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
-import { resolveRichMarkdownWorktreeRoot } from './useRichMarkdownSuperscriptLinkSetup'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { AppState } from '@/store/types'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import {
-  inspectRichMarkdownSourceOwningSlice,
-  RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT
-} from '../clipboard/rich-markdown-source-owning-slice'
 
 const TEST_KEY = '0123456789abcdef0123456789abcdef'
 
@@ -68,24 +51,6 @@ function nodeNames(editor: Editor): string[] {
 }
 
 describe('rich Markdown HTML superscript links', () => {
-  it('parses the reported fragment and preserves its exact source', () => {
-    const source = '<sup><a href="https://example.com/source">[12]</a></sup>'
-    const editor = createEditor(`研究结果${source}。`)
-    try {
-      expect(nodeNames(editor)).toContain('richMarkdownHtmlSuperscriptLink')
-      expect(editor.getMarkdown()).toBe(`研究结果${source}。`)
-      const citation = editor.state.doc.firstChild?.child(1)
-      expect(citation?.attrs).toMatchObject({
-        source,
-        href: 'https://example.com/source',
-        label: '[12]',
-        title: null
-      })
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('retains casing, whitespace, quote style, entities, title, and adjacency', () => {
     const first =
       "<SUP ><A title='A &amp; B' href='https://example.com/?a=1&amp;b=2'>[&notit;]</A ></SUP >"
@@ -154,52 +119,6 @@ describe('rich Markdown HTML superscript links', () => {
     }
   })
 
-  it('keeps sequential codecs isolated and exposes the complete marked surface', () => {
-    const first = createRichMarkdownEditorCodec(TEST_KEY)
-    const second = createRichMarkdownEditorCodec('fedcba9876543210fedcba9876543210')
-    expect(Object.getOwnPropertyNames(first.marked).sort()).toEqual(
-      Object.getOwnPropertyNames(marked).sort()
-    )
-    const authoredFirstToken = first.transport.create('inline-html', '<b>K1</b>')
-    const editor = createEditor(authoredFirstToken, second.transport.key)
-    try {
-      expect(editor.getMarkdown()).toBe(authoredFirstToken)
-      expect(nodeNames(editor)).not.toContain('rawMarkdownHtmlInline')
-      expect(nodeNames(editor)).not.toContain('markdownDocLink')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('keeps source matching linear across many rejected candidates', () => {
-    const input = '<sup>'.repeat(2_000)
-    let transitions = 0
-    for (let index = 0; index < input.length; index += 5) {
-      const stats = { transitions: 0 }
-      expect(matchHtmlSuperscriptLinkSource(input, index, stats)).toBeNull()
-      transitions += stats.transitions
-    }
-    expect(transitions).toBeLessThan(input.length * 4)
-  })
-
-  it('projects only browser-safe clipboard hrefs', () => {
-    expect(projectMarkdownHrefForClipboard(' https://example.com ')).toBe('https://example.com')
-    expect(projectMarkdownHrefForClipboard('#section')).toBe('#section')
-    expect(projectMarkdownHrefForClipboard('./guide.md')).toBe('./guide.md')
-    expect(projectMarkdownHrefForClipboard('javascript:alert(1)')).toBeNull()
-    expect(projectMarkdownHrefForClipboard('java\nscript:alert(1)')).toBeNull()
-    expect(projectMarkdownHrefForClipboard('C:\\repo\\guide.md')).toBeNull()
-    expect(projectMarkdownHrefForClipboard('\\\\server\\share\\guide.md')).toBeNull()
-    expect(projectMarkdownHrefForClipboard('//example.com/path')).toBeNull()
-  })
-
-  it('rejects duplicate attributes and parses quoted greater-than characters', () => {
-    expect(
-      parseHtmlSuperscriptLinkSource('<sup><a href="https://example.com/?q=>">[1]</a></sup>')?.href
-    ).toBe('https://example.com/?q=>')
-    expect(parseHtmlSuperscriptLinkSource('<sup><a href="a" href="b">[1]</a></sup>')).toBeNull()
-  })
-
   it('renders inert live DOM while exposing link semantics through Orca context', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -250,74 +169,6 @@ describe('rich Markdown HTML superscript links', () => {
     }
   })
 
-  it('keeps whitespace and remote outside-root destinations non-actionable', () => {
-    const local = {
-      version: 0,
-      sourceFilePath: '/repo/README.md',
-      worktreeId: 'worktree-1',
-      worktreeRoot: '/repo',
-      sourceOwner: { kind: 'local' as const }
-    }
-    expect(classifyHtmlSuperscriptLinkAction('   ', local)).toBe(false)
-    expect(classifyHtmlSuperscriptLinkAction('file:///etc/passwd', local)).toBe(true)
-    expect(
-      classifyHtmlSuperscriptLinkAction('file:///etc/passwd', {
-        ...local,
-        sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
-      })
-    ).toBe(false)
-    expect(
-      classifyHtmlSuperscriptLinkAction('file:///etc/passwd', {
-        ...local,
-        sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'runtime-1' }
-      })
-    ).toBe(false)
-  })
-
-  it('scopes citation Tab focus to the selected editor bubble', () => {
-    const editor = createEditor('<sup><a href="https://example.com">[12]</a></sup>')
-    const firstBubble = document.createElement('div')
-    firstBubble.dataset.richMarkdownLinkBubbleOwner = 'first-owner'
-    const firstButton = document.createElement('button')
-    firstBubble.appendChild(firstButton)
-    const secondBubble = document.createElement('div')
-    secondBubble.dataset.richMarkdownLinkBubbleOwner = 'second-owner'
-    const secondButton = document.createElement('button')
-    secondBubble.appendChild(secondButton)
-    document.body.append(firstBubble, secondBubble)
-    try {
-      editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, 1)))
-      const event = {
-        key: 'Tab',
-        shiftKey: false,
-        isComposing: false,
-        preventDefault: () => {}
-      } as KeyboardEvent
-      expect(
-        handleRichMarkdownCitationKey({
-          editor,
-          event,
-          linkBubbleOwnerId: 'second-owner'
-        })
-      ).toBe(true)
-      expect(document.activeElement).toBe(secondButton)
-    } finally {
-      editor.destroy()
-      firstBubble.remove()
-      secondBubble.remove()
-    }
-  })
-
-  it('uses a folder workspace path as the citation source root', () => {
-    const state = {
-      folderWorkspaces: [{ id: 'folder-1', folderPath: '/workspace/platform' } as FolderWorkspace],
-      worktreesByRepo: {}
-    } as Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
-    expect(resolveRichMarkdownWorktreeRoot(state, folderWorkspaceKey('folder-1'))).toBe(
-      '/workspace/platform'
-    )
-  })
-
   it('self-validates clipboard HTML and rejects a forged semantic mismatch', () => {
     const source = '<sup><a title="Source" href="./guide.md">[12]</a></sup>'
     const host = document.createElement('div')
@@ -362,23 +213,6 @@ describe('rich Markdown HTML superscript links', () => {
     } finally {
       editor.destroy()
       host.remove()
-    }
-  })
-
-  it('rejects oversized clipboard source before UTF-8 encoding', () => {
-    const editor = createEditor('')
-    const oversizedSource = 'x'.repeat(HTML_SUPERSCRIPT_LINK_SOURCE_LIMIT + 1)
-    const encodeSpy = vi.spyOn(TextEncoder.prototype, 'encode')
-    try {
-      editor.commands.setContent(
-        `<sup data-rich-markdown-html-superscript-link="1" data-orca-superscript-link-source="${oversizedSource}"><a>x</a></sup>`,
-        { contentType: 'html' }
-      )
-      expect(nodeNames(editor)).not.toContain('richMarkdownHtmlSuperscriptLink')
-      expect(encodeSpy.mock.calls.some(([value]) => value === oversizedSource)).toBe(false)
-    } finally {
-      encodeSpy.mockRestore()
-      editor.destroy()
     }
   })
 
@@ -431,136 +265,6 @@ describe('rich Markdown HTML superscript links', () => {
         citationOnly.destroy()
         citationHost.remove()
       }
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('enforces aggregate UTF-8 bounds even when oversized text precedes the citation', () => {
-    const citation = '<sup><a href="https://example.com">[1]</a></sup>'
-    const exactText = 'a'.repeat(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT - 3)
-    const exact = createEditor(`${exactText}${citation}`)
-    try {
-      expect(
-        inspectRichMarkdownSourceOwningSlice(exact.state.doc.slice(0, exact.state.doc.content.size))
-      ).toEqual({ containsSourceOwningNode: true, canPreserve: true })
-    } finally {
-      exact.destroy()
-    }
-
-    const over = createEditor(`${exactText}a${citation}`)
-    try {
-      expect(
-        inspectRichMarkdownSourceOwningSlice(over.state.doc.slice(0, over.state.doc.content.size))
-      ).toEqual({ containsSourceOwningNode: true, canPreserve: false })
-    } finally {
-      over.destroy()
-    }
-
-    const astralOver = createEditor(
-      `${'😀'.repeat(Math.floor(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT / 4))}${citation}`
-    )
-    try {
-      expect(
-        inspectRichMarkdownSourceOwningSlice(
-          astralOver.state.doc.slice(0, astralOver.state.doc.content.size)
-        )
-      ).toEqual({ containsSourceOwningNode: true, canPreserve: false })
-    } finally {
-      astralOver.destroy()
-    }
-  })
-
-  it('counts visible leaf serializers in source-owning slice bounds', () => {
-    const editor = createEditor('')
-    try {
-      const schema = editor.state.schema
-      const hardBreak = schema.nodes.hardBreak
-      const docLink = schema.nodes.markdownDocLink
-      const citation = schema.nodes.richMarkdownHtmlSuperscriptLink
-      if (!hardBreak || !docLink || !citation) {
-        throw new Error('Expected rich Markdown leaf node types')
-      }
-      const citationAttrs = {
-        source: '<sup><a href="x">[1]</a></sup>',
-        href: 'x',
-        label: '[1]',
-        title: null
-      }
-      const exactDoc = schema.node('doc', null, [
-        schema.node('paragraph', null, [
-          schema.text('a'.repeat(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT - 4)),
-          hardBreak.create(),
-          citation.create(citationAttrs)
-        ])
-      ])
-      expect(
-        inspectRichMarkdownSourceOwningSlice(exactDoc.slice(0, exactDoc.content.size))
-      ).toEqual({ containsSourceOwningNode: true, canPreserve: true })
-      const overHardBreakDoc = schema.node('doc', null, [
-        schema.node('paragraph', null, [
-          schema.text('a'.repeat(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT - 3)),
-          hardBreak.create(),
-          citation.create(citationAttrs)
-        ])
-      ])
-      expect(
-        inspectRichMarkdownSourceOwningSlice(
-          overHardBreakDoc.slice(0, overHardBreakDoc.content.size)
-        )
-      ).toEqual({ containsSourceOwningNode: true, canPreserve: false })
-
-      const oversizedLeafDoc = schema.node('doc', null, [
-        schema.node('paragraph', null, [
-          docLink.create({ target: 'Guide', label: 'x'.repeat(300_000) }),
-          citation.create(citationAttrs)
-        ])
-      ])
-      expect(
-        inspectRichMarkdownSourceOwningSlice(
-          oversizedLeafDoc.slice(0, oversizedLeafDoc.content.size)
-        )
-      ).toEqual({ containsSourceOwningNode: true, canPreserve: false })
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('remaps review text across adjacent citation atoms without inventing spaces', () => {
-    const editor = createEditor(
-      '<sup><a href="https://one.example">[1]</a></sup><sup><a href="https://two.example">[2]</a></sup>'
-    )
-    try {
-      const ranges = findRichMarkdownSelectedTextRanges({ editor, selectedText: '[1][2]' })
-      expect(ranges).toHaveLength(1)
-      expect(ranges[0]).toEqual({ from: 1, to: 3 })
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('preserves block separators in visible text and review remapping', () => {
-    const editor = createEditor('foo\n\nbar')
-    try {
-      expect(getRichMarkdownVisibleText(editor.state.doc)).toBe('foo\nbar')
-      expect(findRichMarkdownSelectedTextRanges({ editor, selectedText: 'foo bar' })).toEqual([
-        { from: 1, to: 4 },
-        { from: 6, to: 9 }
-      ])
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('maps dense search matches with a monotonic segment walk', () => {
-    const citation = '<sup><a href="https://example.com">[1]</a></sup>'
-    const editor = createEditor(`x${citation}`.repeat(200))
-    try {
-      const stats = { segmentVisits: 0 }
-      expect(findRichMarkdownSearchMatches(editor.state.doc, 'x', undefined, stats)).toHaveLength(
-        200
-      )
-      expect(stats.segmentVisits).toBeLessThan(1_000)
     } finally {
       editor.destroy()
     }

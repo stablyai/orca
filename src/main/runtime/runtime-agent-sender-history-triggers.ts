@@ -10,7 +10,7 @@ const HISTORY_TRIGGERS = [
   {
     table: 'dispatch_contexts',
     columns:
-      'status, assignee_handle, assignee_pane_key, assignee_orca_session_id, follow_up_of_dispatch_id, process_incarnation',
+      'status, assignee_handle, assignee_pane_key, assignee_orca_session_id, follow_up_of_dispatch_id, process_incarnation, host_scope, launch_token_hash',
     panes: ['assignee_pane_key'],
     // Its own row, and its parent's follow-up lookup.
     dispatches: ['id', 'follow_up_of_dispatch_id']
@@ -18,10 +18,16 @@ const HISTORY_TRIGGERS = [
   {
     table: 'worker_terminal_resources',
     columns:
-      'owner_dispatch_id, origin_dispatch_id, pane_key, terminal_handle, prior_owner_dispatch_ids, ownership_state, release_state, retained_reason, process_incarnation',
+      'owner_dispatch_id, origin_dispatch_id, pane_key, terminal_handle, prior_owner_dispatch_ids, ownership_state, release_state, retained_reason, process_incarnation, host_scope',
     panes: ['pane_key'],
     dispatches: ['owner_dispatch_id', 'origin_dispatch_id'],
     priors: true
+  },
+  {
+    table: 'worker_dispatches',
+    columns: 'start_options',
+    panes: [],
+    dispatches: ['dispatch_id']
   },
   {
     table: 'remote_dispatch_attachments',
@@ -34,7 +40,7 @@ const HISTORY_TRIGGERS = [
 function markDirty(row: 'NEW' | 'OLD', trigger: (typeof HISTORY_TRIGGERS)[number]): string {
   const keys = [
     ...trigger.panes.map((column) => `SELECT 'pane' AS kind, ${row}.${column} AS key`),
-    ...trigger.dispatches.map((column) => `SELECT 'dispatch', ${row}.${column}`),
+    ...trigger.dispatches.map((column) => `SELECT 'dispatch' AS kind, ${row}.${column} AS key`),
     ...('priors' in trigger
       ? [
           `SELECT 'dispatch', value FROM json_each(CASE WHEN json_valid(${row}.prior_owner_dispatch_ids) THEN ${row}.prior_owner_dispatch_ids ELSE '[]' END)`

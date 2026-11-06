@@ -5,6 +5,7 @@ import type {
 import type { NativeChatTaskListPredecessors } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import { nativeChatRowOffersRewind } from '../../../../../src/shared/native-chat/native-chat-rewind-eligibility'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import type { NativeChatTurnDiff } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 
@@ -14,6 +15,8 @@ export type MobileNativeChatTurnRow = {
   turnStatusAbove?: boolean
   turnExpanded: boolean
   turnKey?: string
+  /** The row is the user message its turn starts from, whether or not the turn folds. */
+  opensTurn?: true
   activeTurnIsWorking: boolean
   trailingRun: boolean
   workRun?: readonly NativeChatMessage[]
@@ -33,7 +36,7 @@ export type MobileNativeChatTurnRow = {
 }
 
 /** The message and its derived render inputs share one reuse boundary. */
-export type MobileNativeChatRowProps = MobileNativeChatTurnRow & {
+export type MobileNativeChatRowProps = Omit<MobileNativeChatTurnRow, 'opensTurn'> & {
   message: NativeChatMessage
   rowKey: string
   previousTodoWrite: NativeChatToolCallBlock | undefined
@@ -42,6 +45,7 @@ export type MobileNativeChatRowProps = MobileNativeChatTurnRow & {
   receipt: NativeChatResolvedPrompt | undefined
   awaiting: boolean
   runOwner: string | undefined
+  rewindable?: true
 }
 
 /** The per-chat lookups a row's props are read from. */
@@ -64,17 +68,25 @@ export function resolveMobileNativeChatRowProps(
   lookups: MobileNativeChatRowLookups
 ): MobileNativeChatRowProps {
   const predecessors = lookups.taskListPredecessors.get(message.id)
-  const turn = lookups.resolveTurnRow(index, message)
+  const { opensTurn, ...turn } = lookups.resolveTurnRow(index, message)
+  const unsentNotice = message.unsent ? lookups.unsentNotices.get(message.id) : undefined
+  // The phone nests no subagent sections; the chat's eligible ids still exclude other chats' rows.
+  const rewindable = nativeChatRowOffersRewind(
+    message,
+    { depth: 0, turnKey: opensTurn ? message.id : undefined },
+    unsentNotice !== undefined
+  )
   return {
     message,
     rowKey: lookups.rowKeyOf(message),
     // The calls, not the record: a rebuilt record would defeat the row's memo.
     previousTodoWrite: predecessors?.todowrite,
     previousUpdatePlan: predecessors?.update_plan,
-    unsentNotice: message.unsent ? lookups.unsentNotices.get(message.id) : undefined,
+    unsentNotice,
     receipt: lookups.receipts?.get(message.id),
     awaiting: isActionableStructuredAgentSessionPrompt(message.id, lookups.actionablePromptIds),
     ...turn,
-    runOwner: lookups.runOwners.get(message.id)
+    runOwner: lookups.runOwners.get(message.id),
+    ...(rewindable ? { rewindable: true as const } : {})
   }
 }

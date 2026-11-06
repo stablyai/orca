@@ -342,6 +342,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       send,
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
+      alternateSteers: sendButton.alternateSend === 'steer',
       setActiveSuggestion,
       setDraft,
       setCaret

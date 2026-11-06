@@ -30,6 +30,8 @@ export function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
+  // The bridge serves claimed hosts, including owned ones whose state stays internal below.
+  requestDesktopBrowserBridgeReconcile()
   const target = getSshTargetRegistryStore()?.getTarget(targetId)
   // Internal targets must not leak transport state into clients' persisted reconnect hints.
   if (isOwnedSshTargetId(targetId) || (target && isRuntimeOwnedSshTarget(target))) {
@@ -43,7 +45,6 @@ export function broadcastSshState(
   }
   // Paired clients lack local SSH IPC; publish runtime events to clear stale reconnect overlays.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
-  requestDesktopBrowserBridgeReconcile()
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {

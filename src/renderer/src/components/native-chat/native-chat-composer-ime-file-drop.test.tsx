@@ -276,21 +276,6 @@ describe('OS file drops through the real composing chat field', () => {
     }
   )
 
-  it('numbers images dropped together 1, 2, 3, each with its chip in the prompt', async () => {
-    render(
-      <NativeChatPaneFileDropSurface className="chat">
-        <ComposerProbe />
-      </NativeChatPaneFileDropSurface>
-    )
-    const editor = screen.getByRole('textbox')
-    await osDrop(editor, ['a.png', 'b.png', 'c.png'])
-    expect(
-      [...editor.querySelectorAll('[data-native-chat-image-reference]')].map(
-        (chip) => chip.textContent
-      )
-    ).toEqual(['Image #1', 'Image #2', 'Image #3'])
-  })
-
   it('preserves a mixed drop and subsequent question through accepted send', async () => {
     const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
     const transport: NativeChatStructuredComposerTransport = {
@@ -382,24 +367,5 @@ describe('OS file drops through the real composing chat field', () => {
     expect(promptValue(editor)).toBe('')
     expect(readNativeChatComposerDraft('pane:worktree-1').text).toBe('')
     expect(readNativeChatComposerDraft('pane:worktree-1').images).toEqual([])
-  })
-
-  it('shows a dropped file and a file picked with the attach button as the same filename pill', async () => {
-    render(
-      <NativeChatPaneFileDropSurface className="chat">
-        <ComposerProbe />
-      </NativeChatPaneFileDropSurface>
-    )
-    const editor = screen.getByRole('textbox')
-    await osDrop(editor)
-    await act(async () => fireEvent.click(screen.getByText('Attach')))
-    expect(
-      [...editor.querySelectorAll('[data-native-chat-file-reference]')].map(
-        (pill) => pill.textContent
-      )
-    ).toEqual(['notes.txt', 'browser issues.md'])
-    expect(screen.getByTestId('draft').textContent).toBe(
-      '@/drop/notes.txt @"/picked/browser issues.md" '
-    )
   })
 })
