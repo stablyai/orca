@@ -871,6 +871,22 @@
           "imported_other": "Imported {{value0}} themes",
           "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new theme and try again.",
           "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "ExperimentalPane": {
+          "newWorktreeCardStyle": {
+            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "title": "New card style",
+            "toggleLabel": "Toggle new card style"
+          }
+        },
+        "experimental": {
+          "search": {
+            "newWorktreeCardStyle": {
+              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+              "title": "New card style"
+            }
+          }
         }
       },
       "sidebar": {
