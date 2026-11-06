@@ -155,7 +155,8 @@ export function registerPRWatch(registration: PRWatchRegistration): PRWatchHandl
   }
 }
 
-/** Complete reads of PRs' current heads; earlier-head reads never arrive here. */
+/** Complete reads of PRs' current heads; earlier-head reads never arrive here.
+ *  prFollowUpCandidate(prKey) is set before an observation of a resolved follow-up watch is published. */
 export function subscribePRObservations(
   callback: (observation: PRObservation) => void
 ): () => void {

@@ -238,14 +238,15 @@ export class PRWatchService {
       return
     }
     this.resume.verifyRead(candidate, pr, outcome.fetchedAt)
-    publishPRObservation(prObservationOf(pr, prKey, outcome.fetchedAt), (error) =>
-      this.deps.logger.warn('a pull request observer failed', { scope: 'pr-watch', prKey, error })
-    )
+    // Resolved first, so observers of this read already find the follow-up's candidate.
     const resolved = resolvePRFollowUp(candidate, prKey)
     if (resolved) {
       // One job per resolved PR serves every reason, so a chat and a follow-up never read it twice.
       schedulePRWatchRead({ prKey }, resolved, this.now())
     }
+    publishPRObservation(prObservationOf(pr, prKey, outcome.fetchedAt), (error) =>
+      this.deps.logger.warn('a pull request observer failed', { scope: 'pr-watch', prKey, error })
+    )
     const active = this.activeCandidate(prKey)
     if (!active) {
       return
