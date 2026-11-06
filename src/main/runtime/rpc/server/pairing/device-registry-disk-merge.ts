@@ -62,16 +62,23 @@ export class DeviceRegistryWriter {
 
   /**
    * `current` merged over the file when another writer changed it since this process last read it,
-   * else null. Stats at most once per interval, except right after our own save. An unreadable or
-   * corrupt file, or our own quarantine's absence, proves nothing about removals, so it changes
-   * nothing.
+   * else null. Stats at most once per interval unless `fresh` or right after our own save. An
+   * unreadable or corrupt file, or our own quarantine's absence, proves nothing about removals, so
+   * it changes nothing.
    */
-  adoptExternalEdits(current: readonly DeviceEntry[]): DeviceEntry[] | null {
+  adoptExternalEdits(
+    current: readonly DeviceEntry[],
+    options: { fresh?: boolean } = {}
+  ): DeviceEntry[] | null {
     if (this.quarantinedUntilWritten) {
       return null
     }
     const now = performance.now()
-    if (this.readStamp !== null && now - this.checkedAt < EXTERNAL_EDIT_CHECK_INTERVAL_MS) {
+    if (
+      !options.fresh &&
+      this.readStamp !== null &&
+      now - this.checkedAt < EXTERNAL_EDIT_CHECK_INTERVAL_MS
+    ) {
       return null
     }
     this.checkedAt = now

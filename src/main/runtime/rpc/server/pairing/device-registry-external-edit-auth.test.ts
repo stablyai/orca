@@ -24,11 +24,11 @@ function registryPath(): string {
   return join(dir, DEVICE_REGISTRY_FILENAME)
 }
 
-function removeOnDisk(deviceId: string): void {
+// Auth checks see another process's edit once the registry's one-second stat window has passed.
+function removeOnDisk(deviceId: string, advanceMs = 1000): void {
   const rows: { deviceId: string }[] = JSON.parse(readFileSync(registryPath(), 'utf8'))
   writeFileSync(registryPath(), JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
-  // Another process's edit is seen once the registry's one-second stat window has passed.
-  vi.advanceTimersByTime(1000)
+  vi.advanceTimersByTime(advanceMs)
 }
 
 function spyOnSaves() {
@@ -102,12 +102,13 @@ describe('device registry auth checks see edits made on disk', () => {
     const offer = registry.getOrCreatePendingDevice('phone', 'mobile')
     expect(registry.getOrCreatePendingDevice('phone', 'mobile').deviceId).toBe(offer.deviceId)
 
-    removeOnDisk(offer.deviceId)
+    // Pairing offers read the file as it is, with no stat window.
+    removeOnDisk(offer.deviceId, 0)
     const fresh = registry.getOrCreatePendingDevice('phone', 'mobile')
 
     expect(fresh.deviceId).not.toBe(offer.deviceId)
     expect(registry.validateToken(offer.token)).toBeNull()
-    removeOnDisk(fresh.deviceId)
+    removeOnDisk(fresh.deviceId, 0)
     expect(registry.getPendingDevice('mobile')).toBeNull()
   })
 
