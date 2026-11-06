@@ -9141,8 +9141,8 @@
           "proxyConnectionReuseHelp": "Schnellere Verbindungen über langsame ProxyCommand- oder ProxyJump-Hosts. Nur aktivieren, wenn ssh_config keine hostspezifischen Match- oder %h-Regeln verwendet.",
           "reconnectOnLaunch": "Beim Start erneut verbinden",
           "reconnectOnLaunchHelp": "Wenn deaktiviert, bleiben dieser Host und alle darüber erreichbaren Orca-Server beim Start getrennt, bis eine Verbindung hergestellt wird.",
-          "allowRemoteCliControl": "Steuerung von Orca über die orca-CLI dieses Hosts zulassen",
-          "allowRemoteCliControlHelp": "Für neue Hosts standardmäßig aktiviert. Ermöglicht orca-Befehlen auf diesem Host, Orca-Browser-Tabs auf diesem Desktop zu öffnen und zu steuern – nur in den Arbeitsbereichen dieses Hosts und nur bei bestehender Verbindung. Außerdem können Terminals, die von einer älteren Orca-Version auf diesem Host gestartet wurden, Orchestrierungsbefehle (check, inbox, send, ask, reply) für ihre eigenen betreuten Aufgaben ausführen. Sie können weder Dateien noch Zwischenablage oder Cookies lesen. Wenn deaktiviert, erreichen sie nur den Orca-Server dieses Hosts.",
+          "allowRemoteCliControl": "Diesem Host erlauben, Orca-Browser-Tabs in seinen Arbeitsbereichen zu steuern",
+          "allowRemoteCliControlHelp": "Für neue Hosts standardmäßig aktiviert. Agents und orca-Befehle auf diesem Host können Orca-Browser-Tabs auf diesem Desktop öffnen, lesen und verwenden – nur in den Arbeitsbereichen dieses Hosts und nur bei bestehender Verbindung. Tabs, die er steuert, zeigen seinen Namen. Terminals, die auf diesem Host von einer älteren Orca-Version gestartet wurden, benötigen diese Option ebenfalls, um orca-Orchestrierungsbefehle auszuführen. Er kann weder Ihre Dateien noch Zwischenablage oder Cookies lesen.",
           "editTitle": "SSH-Host bearbeiten",
           "addTitle": "SSH-Host hinzufügen",
           "editDescription": "Verbindungsdaten für diesen Rechner aktualisieren. Änderungen gelten ab der nächsten Verbindung.",
@@ -22419,7 +22419,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "Ein Agent verwendet diese Seite"
+    "agentDriving": "Ein Agent verwendet diese Seite",
+    "controlledByHost": "Gesteuert von {{host}}"
   },
   "nativeChat": {
     "math": {
@@ -23243,5 +23244,14 @@
     "sameAsTextDefault": "Wie Standard · {{value0}}",
     "chatChoicesNote": "Modell- oder Effort-Auswahlen für {{agent}} ohne CLI-Flag gelten für Chats.",
     "composedChoicesNote": "Effort- und Geschwindigkeitsauswahlen für {{agent}} sind im Modellargument enthalten."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} steuert einen Browser-Tab",
+    "description": "Agents auf diesem SSH-Host können Orca-Browser-Tabs in seinen Arbeitsbereichen öffnen und verwenden. Tabs, die er steuert, zeigen seinen Namen. Sie können dies unter Einstellungen > SSH ändern.",
+    "stop": "Stoppen",
+    "disallow": "Nicht erlauben",
+    "stopped": "{{host}} steuert bis zum Neustart von Orca keine Browser-Tabs mehr.",
+    "disallowed": "{{host}} kann keine Browser-Tabs mehr steuern. Sie können dies unter Einstellungen > SSH wieder aktivieren.",
+    "failed": "{{host}} konnte nicht gestoppt werden. Deaktivieren Sie die Browsersteuerung unter Einstellungen > SSH."
   }
 }
