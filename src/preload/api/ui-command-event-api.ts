@@ -271,6 +271,7 @@ export type UiCommandEventApi = {
       runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
       position?: RuntimeFileOpenPosition
+      preview?: boolean
     }) => void
   ) => () => void
   onRevealEditorTabFromRuntime: (callback: (data: RuntimeEditorTabReveal) => void) => () => void

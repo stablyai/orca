@@ -203,13 +203,19 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
     const position = getFileOpenPosition(ctx.flags)
+    const preview = ctx.flags.get('preview') === true
+    // Preview tabs have no cursor, so a position would be silently dropped.
+    if (preview && position) {
+      throw new RuntimeClientError('invalid_argument', '--preview cannot be used with --line.')
+    }
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await callFileOpen(ctx, 'files.open', {
       worktree,
       relativePath,
       navigation: getFileOpenNavigation(ctx.flags),
-      ...position
+      ...position,
+      ...(preview ? { preview: true } : {})
     })
     requireOpened(result.result, relativePath)
     printResult(result, ctx.json, formatFileOpen)
