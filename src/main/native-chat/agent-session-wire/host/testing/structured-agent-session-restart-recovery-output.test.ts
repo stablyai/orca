@@ -20,6 +20,7 @@ import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW,
+  HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
 } from './structured-agent-session-host-test-data'
 import {
@@ -28,7 +29,6 @@ import {
   restTestSend,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 const LAST_CHUNK_AT = HOST_TEST_NOW + 5_500
 const CONNECTION_CLOSED_AT = HOST_TEST_NOW + 60_000
