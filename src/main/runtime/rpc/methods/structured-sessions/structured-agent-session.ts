@@ -67,7 +67,7 @@ import '../../../../../shared/rpc-contract/structured-agent-session-rename-param
 import '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import { sendStructuredAgentSessionForClient } from './conversation/structured-agent-session-send-compatibility'
 import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
-import { runConversationCommandForClient } from '../structured-agent-session-conversation-command'
+import { runConversationCommandForClient } from './conversation/structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'

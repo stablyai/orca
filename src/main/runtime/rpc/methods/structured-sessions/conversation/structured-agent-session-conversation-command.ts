@@ -1,13 +1,13 @@
 import type { z } from 'zod'
-import type { ConversationCommandParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
-import { recordMobileChatSend } from '../../../telemetry/mobile-client-telemetry'
-import type { RpcContext } from '../core'
+import type { ConversationCommandParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
+import { recordMobileChatSend } from '../../../../../telemetry/mobile-client-telemetry'
+import type { RpcContext } from '../../../core'
 import {
   ensureStructuredHostInstalled,
   requireStructuredCapability,
   requireStructuredSessionHost,
   structuredCallerFor
-} from './structured-sessions/creation/structured-agent-session-gate'
+} from '../creation/structured-agent-session-gate'
 
 /** A person's slash command runs as their send; the desktop composer counts it as one too. */
 export async function runConversationCommandForClient(
