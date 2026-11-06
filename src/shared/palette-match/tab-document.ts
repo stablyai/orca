@@ -13,7 +13,12 @@ export type PaletteTabDocumentInput = {
   id: string
   title: string
   /** Paths and URLs shown or resolvable on the row, in display preference order. */
-  secondaryTexts: readonly string[]
+  secondaryTexts?: readonly string[]
+  /**
+   * Absolute paths, indexed as secondary fields after secondaryTexts. Their worktree
+   * root matches every tab in the worktree, so their tokens only prove container scope.
+   */
+  locationTexts?: readonly string[]
   worktreeName: string
   branch: string
   repoName: string
@@ -40,7 +45,8 @@ export function parsePaletteTabIndexedFieldId(fieldId: string, prefix: string): 
 
 /**
  * Every tab field is visible identity text, so tokens combine freely — a tab has
- * no hidden supporting evidence in phase 2.
+ * no hidden supporting evidence in phase 2. Location texts prove container scope
+ * only, but an exact full-path query still counts as a destination.
  */
 export function buildPaletteTabDocument(input: PaletteTabDocumentInput): PaletteDocument {
   const fields: PaletteVisibleFieldSource[] = [
@@ -81,12 +87,24 @@ export function buildPaletteTabDocument(input: PaletteTabDocumentInput): Palette
     }
   ]
 
-  for (const [index, text] of input.secondaryTexts.entries()) {
+  const secondaryTexts = input.secondaryTexts ?? []
+  for (const [index, text] of secondaryTexts.entries()) {
     fields.push({
       id: paletteTabSecondaryFieldId(index),
       profile: 'path',
       text,
       role: 'secondary',
+      destinationEligible: true
+    })
+  }
+
+  for (const [offset, text] of (input.locationTexts ?? []).entries()) {
+    fields.push({
+      id: paletteTabSecondaryFieldId(secondaryTexts.length + offset),
+      profile: 'path',
+      text,
+      role: 'container',
+      // A pasted full path is still an equality destination.
       destinationEligible: true
     })
   }

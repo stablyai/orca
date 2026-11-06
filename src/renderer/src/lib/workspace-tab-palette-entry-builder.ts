@@ -39,6 +39,10 @@ import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-pa
 import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 
+/**
+ * Builds Cmd-J entries for each worktree's terminal and editor tabs, skipping tabs
+ * whose host owner is unverifiable. Editor absolute paths index as location text.
+ */
 export function buildSearchableWorkspaceTabEntries({
   worktrees,
   ownershipWorktrees,
@@ -183,7 +187,6 @@ export function buildSearchableWorkspaceTabEntries({
           document: buildPaletteTabDocument({
             id: tab.id,
             title,
-            secondaryTexts: [],
             worktreeName,
             branch,
             repoName,
@@ -260,7 +263,8 @@ export function buildSearchableWorkspaceTabEntries({
         document: buildPaletteTabDocument({
           id: tab.id,
           title,
-          secondaryTexts: [file.relativePath, file.filePath],
+          secondaryTexts: [file.relativePath],
+          locationTexts: [file.filePath],
           worktreeName,
           branch,
           repoName

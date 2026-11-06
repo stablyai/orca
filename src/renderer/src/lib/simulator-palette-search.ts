@@ -144,6 +144,7 @@ function baseResult(
   }
 }
 
+/** Builds Cmd-J entries for simulator tabs owned by each worktree's verified host. */
 export function buildSearchableSimulatorTabs({
   worktrees,
   ownershipWorktrees,
@@ -201,7 +202,6 @@ export function buildSearchableSimulatorTabs({
         document: buildPaletteTabDocument({
           id: tab.id,
           title: simulatorPaletteTabTitle(tab),
-          secondaryTexts: [],
           worktreeName: resolveWorktreeDisplayName(worktree),
           branch: resolveWorktreeBranchLabel(worktree),
           repoName,
