@@ -8,7 +8,7 @@ describe('inline image DA1 ownership', () => {
     async (loading) => {
       vi.resetModules()
       const { installTerminalCapabilityReplyHandlers } =
-        await import('./terminal-capability-replies')
+        await import('./emulation/terminal-capability-replies')
       const { attachInlineImages, detachInlineImages, terminalRendersInlineImages } =
         await import('../../lib/pane-manager/pane-inline-images')
       const { primeTerminalImageAddon } =

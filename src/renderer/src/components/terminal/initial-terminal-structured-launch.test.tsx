@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type * as ParkedWatcherRegistryModule from '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -51,12 +52,19 @@ vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => mocks.authority
 }))
-vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
-  pruneParkedTerminalWatchers: vi.fn(),
-  terminalWatcherLiveWorkspaceIds: () => new Set(),
-  syncParkedTerminalTabWatchersForWorkspaces: vi.fn(),
-  disposeAllParkedTerminalWatchers: vi.fn()
+vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
+  syncParkedTerminalTabWatchersForWorkspaces: vi.fn()
 }))
+
+vi.mock(
+  '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+    pruneParkedTerminalWatchers: vi.fn(),
+    terminalWatcherLiveWorkspaceIds: () => new Set(),
+    disposeAllParkedTerminalWatchers: vi.fn()
+  })
+)
 
 const PENDING_INTENT = { callerProvidesSurface: false, seedUserDefaultSurface: true }
 

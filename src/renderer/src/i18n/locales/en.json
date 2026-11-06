@@ -1016,7 +1016,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
-      "sameAsChoice": "Same as {{agent}} · {{choice}}"
+      "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1126,7 +1127,7 @@
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
         "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
         "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
-        "zipformerStreamingEn": "English only. Lightweight 20M-param model, good balance of speed and size.",
+        "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
         "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
         "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
@@ -4505,7 +4506,8 @@
             "chatUnavailableAfterSelection": "Couldn't start a {{value0}} chat.",
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
-            "agentsLoading": "Loading agents"
+            "agentsLoading": "Loading agents",
+            "chatNotOnWindows": "No chat on Windows yet"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -18042,6 +18044,8 @@
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
+          "fullOutputUnavailable": "Couldn't load the full output.",
+          "retryFullOutput": "Retry",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
@@ -19585,6 +19589,18 @@
         "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
       },
+      "agyInstall": {
+        "open": "Install",
+        "title": "Install Antigravity",
+        "description": "Press Enter in the terminal to run the official installer. Closing this terminal stops any command still running.",
+        "target": "Install location: {{location}}",
+        "thisDevice": "This device",
+        "wslLocation": "WSL {{distro}}",
+        "terminal": "Antigravity installer",
+        "detected": "Antigravity is detected on PATH. Close the terminal when the installer has finished.",
+        "close": "Close terminal",
+        "recheck": "Re-check agents"
+      },
       "agentSurface": {
         "chat": {
           "label": "Chat UI",
@@ -19901,6 +19917,9 @@
       },
       "composer": {
         "send": "Send",
+        "planMode": "Plan",
+        "moreControls": "More chat controls",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
         "previewQueue": "Queue",
         "previewSteer": "Steer",
@@ -20694,7 +20713,8 @@
         "hidden": "Orca won't show opened pull requests anymore",
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
-      }
+      },
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
     },
     "tab": {
       "bar": {

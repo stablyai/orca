@@ -114,7 +114,7 @@ vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 vi.mock('@/lib/shortcut-platform', () => ({

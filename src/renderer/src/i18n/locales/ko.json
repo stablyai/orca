@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
-      "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
+      "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -499,7 +500,7 @@
         "parakeetV2": "영어 전용. v3와 정확도는 비슷하며 속도는 더 빠릅니다. 문장 부호와 대소문자 지원.",
         "zipformerBilingual": "중국어 + 영어 혼용 지원. 지연 시간이 짧은 실시간 스트리밍.",
         "paraformerBilingual": "중국어(표준 중국어 + 방언) + 영어. 다양한 중국어 억양과 지역 방언에 강합니다.",
-        "zipformerStreamingEn": "영어 전용. 파라미터 2천만 개의 경량 모델로, 속도와 크기의 균형이 좋습니다.",
+        "zipformerStreamingEnRetired": "더 이상 제공되지 않습니다. 문장 앞부분이 누락됩니다. 삭제하여 공간을 확보하세요.",
         "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
         "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
         "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
@@ -3734,7 +3735,8 @@
             "chatUnavailableAfterSelection": "{{value0}} 채팅을 시작할 수 없습니다.",
             "chatCheckFailed": "채팅 가능 여부를 확인할 수 없습니다.",
             "terminalListNeedsServerUpdate": "터미널 에이전트를 나열하려면 이 서버의 Orca를 업데이트하세요",
-            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다"
+            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다",
+            "chatNotOnWindows": "Windows에서는 아직 채팅 불가"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -16975,6 +16977,8 @@
           "noRunUsageYet": "아직 실행 사용량 없음",
           "noWorkspace": "워크스페이스 없음",
           "latestSavedOutput": "최근 저장된 출력",
+          "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+          "retryFullOutput": "다시 시도",
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
@@ -18644,6 +18648,7 @@
         "notDoneGoalChangeIncomplete": "목표 변경을 완료하지 못했습니다. 채팅을 확인하세요."
       },
       "composer": {
+        "planMode": "계획",
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
         "previewQueue": "대기열에 추가",
@@ -19389,7 +19394,8 @@
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "worktree": "작업 트리"
-      }
+      },
+      "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요."
     },
     "tab": {
       "bar": {

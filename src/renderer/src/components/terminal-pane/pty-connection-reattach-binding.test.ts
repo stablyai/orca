@@ -67,7 +67,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -643,7 +643,7 @@ describe('connectPanePty', () => {
     expect(transport.connect).not.toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: eagerPtyId })
     )
-    const { hasPtySerializer } = await import('./pty-buffer-serializer')
+    const { hasPtySerializer } = await import('./snapshots/pty-buffer-serializer')
     expect(hasPtySerializer(eagerPtyId)).toBe(true)
 
     const serializeRequestHandler = (

@@ -1,6 +1,6 @@
 import type * as React from 'react'
-import { vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
+
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 
@@ -71,7 +71,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases: fixture.mocks.resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: fixture.mocks.scheduleTerminalWebglAtlasRecovery
 }))
 

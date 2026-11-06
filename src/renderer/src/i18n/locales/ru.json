@@ -900,7 +900,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} остаются в виде чатов, как вы настроили.",
       "defaultSurfaceSetAllChat": "Перевести все в чат",
       "defaultSurfaceSetAllTerminal": "Перевести все в терминал",
-      "sameAsChoice": "Как у {{agent}} · {{choice}}"
+      "sameAsChoice": "Как у {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat пока недоступен в Windows, поэтому {{value0}} открывается в терминале на этом хосте. Чаты на хосте macOS или Linux по-прежнему работают."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",
@@ -997,7 +998,7 @@
         "parakeetV2": "Только английский. Быстрее v3 при схожей точности. Пунктуация и регистр букв.",
         "zipformerBilingual": "Китайский + английский с переключением языков. Потоковая обработка в реальном времени с низкой задержкой.",
         "paraformerBilingual": "Китайский (путунхуа + диалекты) + английский. Хорошо распознаёт китайскую речь с акцентами и региональными особенностями.",
-        "zipformerStreamingEn": "Только английский. Лёгкая модель с 20 млн параметров и хорошим балансом скорости и размера.",
+        "zipformerStreamingEnRetired": "Больше не предлагается: теряет начало фраз. Удалите модель, чтобы освободить место.",
         "zipformerStreamingZh": "Только китайский. Сверхлёгкая модель с 14 млн параметров, идеальна для устройств с ограниченными ресурсами.",
         "zipformerStreamingKo": "Только корейский. Потоковая обработка в реальном времени с низкой задержкой.",
         "parakeetJa": "Только японский. Обучена на более чем 35 тыс. часов естественной речи. Поддерживает пунктуацию.",
@@ -4376,7 +4377,8 @@
             "chatUnavailableAfterSelection": "Не удалось начать чат {{value0}}.",
             "startChat": "Начните чат с {{value0}}",
             "cliTag": "(CLI)",
-            "agentsLoading": "Загрузка агентов"
+            "agentsLoading": "Загрузка агентов",
+            "chatNotOnWindows": "В Windows чата пока нет"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Переключить вкладку",
@@ -18139,6 +18141,8 @@
           "noRunUsageYet": "Данных об использовании запусков пока нет",
           "noWorkspace": "Нет рабочего пространства",
           "latestSavedOutput": "Последний сохранённый вывод",
+          "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
+          "retryFullOutput": "Повторить",
           "backToList": "Все автоматизации",
           "tableName": "Название",
           "tableProject": "Проект",
@@ -19939,6 +19943,7 @@
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
       },
       "composer": {
+        "planMode": "Планирование",
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
         "previewQueue": "В очередь",
@@ -20759,7 +20764,8 @@
         "folder": "Папка",
         "mainCheckout": "Основная рабочая копия",
         "worktree": "Рабочее дерево"
-      }
+      },
+      "explicitChatWindows": "Чат этого агента пока недоступен в Windows. Откройте его в терминале."
     },
     "tab": {
       "bar": {

@@ -809,7 +809,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 依您的設定繼續以聊天方式開啟。",
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
-      "sameAsChoice": "與 {{agent}} 相同 · {{choice}}"
+      "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -904,7 +905,7 @@
         "parakeetV2": "僅限英文。準確度與 v3 相近，速度更快。支援標點符號及大小寫。",
         "zipformerBilingual": "中文 + 英文，支援語言混用。低延遲即時串流。",
         "paraformerBilingual": "中文（國語 + 方言）+ 英文。擅長辨識各地口音與方言。",
-        "zipformerStreamingEn": "僅限英文。2,000 萬個參數的輕量模型，兼顧速度與大小。",
+        "zipformerStreamingEnRetired": "已不再提供：它會遺漏句子開頭。刪除它以釋放空間。",
         "zipformerStreamingZh": "僅限中文。1,400 萬個參數的超輕量模型，適合資源有限的裝置。",
         "zipformerStreamingKo": "僅限韓文。低延遲即時串流。",
         "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",
@@ -4188,7 +4189,8 @@
             "chatUnavailableAfterSelection": "無法開始與 {{value0}} 的聊天。",
             "startChat": "開始與 {{value0}} 聊天",
             "cliTag": "(CLI)",
-            "agentsLoading": "正在載入代理程式"
+            "agentsLoading": "正在載入代理程式",
+            "chatNotOnWindows": "Windows 尚不支援聊天"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切換分頁",
@@ -17398,6 +17400,8 @@
           "noRunUsageYet": "尚無執行用量",
           "noWorkspace": "無工作區",
           "latestSavedOutput": "最近儲存的輸出",
+          "fullOutputUnavailable": "無法載入完整輸出。",
+          "retryFullOutput": "重試",
           "backToList": "全部自動化",
           "tableName": "名稱",
           "tableProject": "專案",
@@ -19104,6 +19108,7 @@
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
       },
       "composer": {
+        "planMode": "規劃",
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
         "previewQueue": "加入佇列",
@@ -19787,7 +19792,8 @@
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
         "worktree": "工作樹"
-      }
+      },
+      "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。"
     },
     "tab": {
       "bar": {

@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
-      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}"
+      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -499,7 +500,7 @@
         "parakeetV2": "仅限英语。准确度与 v3 相近，速度更快。支持标点和大小写。",
         "zipformerBilingual": "中文 + 英文，支持语言混用。低延迟实时流式处理。",
         "paraformerBilingual": "中文（普通话 + 方言）+ 英文。擅长识别各地口音和方言。",
-        "zipformerStreamingEn": "仅限英语。2000 万参数的轻量模型，兼顾速度和体积。",
+        "zipformerStreamingEnRetired": "已不再提供：它会丢失句子开头。删除它以释放空间。",
         "zipformerStreamingZh": "仅限中文。1400 万参数的超轻量模型，适合资源有限的设备。",
         "zipformerStreamingKo": "仅限韩语。低延迟实时流式处理。",
         "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
@@ -3734,7 +3735,8 @@
             "chatNotOnHost": "此主机不支持聊天",
             "chatNotInWsl": "WSL 不支持聊天",
             "cliTag": "(CLI)",
-            "chatNotOverSsh": "SSH 连接不支持聊天"
+            "chatNotOverSsh": "SSH 连接不支持聊天",
+            "chatNotOnWindows": "Windows 暂不支持聊天"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -16975,6 +16977,8 @@
           "noRunUsageYet": "尚无运行用量",
           "noWorkspace": "无工作区",
           "latestSavedOutput": "最近保存的输出",
+          "fullOutputUnavailable": "无法加载完整输出。",
+          "retryFullOutput": "重试",
           "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",
@@ -18587,6 +18591,7 @@
         "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "composer": {
+        "planMode": "规划",
         "send": "发送",
         "alternateSteerHint": "{{shortcut}} 立即发送",
         "previewQueue": "加入队列",
@@ -19332,7 +19337,8 @@
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "worktree": "工作树"
-      }
+      },
+      "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。"
     },
     "tab": {
       "bar": {

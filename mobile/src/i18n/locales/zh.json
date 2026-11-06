@@ -3982,6 +3982,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "原始代理窗格不可用。已保存的输出仍保留在此处。",
       "openAgent": "打开代理",
       "retryHistory": "重试历史记录",
+      "fullOutputUnavailable": "无法加载完整输出。",
+      "retryFullOutput": "重试",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已加载的历史记录中没有匹配的运行。请加载更多以继续。",
       "noMatchingRunsYet": "暂无匹配的运行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",

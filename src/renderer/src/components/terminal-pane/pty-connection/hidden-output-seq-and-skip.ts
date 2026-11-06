@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/terminal-live-scrollback-restore'
 import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
-import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
+import { sendTerminalOscColorQueryReplies } from '../emulation/terminal-capability-replies'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 

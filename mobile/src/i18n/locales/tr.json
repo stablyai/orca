@@ -3978,6 +3978,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Özgün aracı bölmesi kullanılamıyor. Kaydedilen çıktı burada kalır.",
       "openAgent": "Aracıyı aç",
       "retryHistory": "Geçmişi yeniden yükle",
+      "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
+      "retryFullOutput": "Yeniden dene",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Yüklenen geçmişte eşleşen çalıştırma yok. Devam etmek için daha fazlasını yükleyin.",
       "noMatchingRunsYet": "Henüz eşleşen çalıştırma yok.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
