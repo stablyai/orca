@@ -28,6 +28,7 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
 import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
+import type { StructuredAgentLaunchPersistedRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-record'
 
 /** Settles launch waits and retires chat ownership for purged tabs of one workspace. */
 export function retirePurgedTabLaunches(
@@ -35,7 +36,9 @@ export function retirePurgedTabLaunches(
   worktreeId: string,
   terminalTabs: readonly TerminalTab[],
   unifiedTabs: readonly Tab[],
-  cancelledSessionIds: ReadonlySet<string>
+  cancelledSessionIds: ReadonlySet<string>,
+  /** Set when only this host's copy went: another host's launch under the id lives on. */
+  launchHostId?: ExecutionHostId
 ): void {
   // A launch tab that never spawned has no spawn left to answer its prompt's wait.
   for (const tab of terminalTabs) {
@@ -63,7 +66,12 @@ export function retirePurgedTabLaunches(
         ? getStructuredAgentSessionLaunchOwner(tab.entityId)
         : undefined
     const target = structuredAgentSessionTargetForHost(owner)
-    if (owner && target && shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)) {
+    if (
+      owner &&
+      target &&
+      (!launchHostId || owner === launchHostId) &&
+      shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)
+    ) {
       markStructuredAgentSessionLaunchCancelledSilently(worktreeId, tab.entityId, owner)
       discardStructuredAgentSessionChatSends(tab.entityId)
       clearWebSessionFocusIntentIfMatches(
@@ -180,10 +188,19 @@ function cancelLaunchesIn(
 export function settleRetiredHostInput(state: AppState, removed: ReadonlySet<string>): void {
   flushRetiredHostEdits(state, removed)
   const hostIds = new Set<ExecutionHostId>([...removed].map(toRuntimeExecutionHostId))
+  retireSavedStructuredLaunches(
+    readStructuredAgentLaunchRecords().filter((record) => hostIds.has(record.executionHostId))
+  )
+}
+
+/** Ends these saved launches in one save of each journal: each row its address names. */
+export function retireSavedStructuredLaunches(
+  records: readonly StructuredAgentLaunchPersistedRecord[]
+): void {
   batchStructuredAgentLaunchRecordWrites(() => {
-    for (const record of readStructuredAgentLaunchRecords()) {
+    for (const record of records) {
       const worktreeId = record.surfaceAddress?.worktreeId
-      if (worktreeId && hostIds.has(record.executionHostId)) {
+      if (worktreeId) {
         markStructuredAgentSessionLaunchCancelledSilently(
           worktreeId,
           record.sessionId,

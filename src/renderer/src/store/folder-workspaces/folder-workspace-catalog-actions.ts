@@ -15,6 +15,7 @@ import {
 import {
   clearRestoredFolderWorkspaceSessionOwners,
   fetchFolderWorkspaceCatalogForTarget,
+  getFolderCatalogWorkspaceKeysByHost,
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
@@ -25,6 +26,23 @@ export function createFolderWorkspaceCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchFolderWorkspaces' | 'fetchFolderWorkspacesForAllHosts'> {
+  // Why outside the updater: a replayed updater must not repeat it. Unchanged catalogs settle too:
+  // an equal listing does not prove an earlier draw happened.
+  const settleFolderLaunchRecovery = (
+    catalog: FetchedFolderWorkspaceCatalog,
+    fence: HostCatalogFence
+  ): void => {
+    const listedByHost = getFolderCatalogWorkspaceKeysByHost(catalog, get().projectGroups)
+    void import('@/lib/agent-session/launch/structured-agent-session-launch-restore').then(
+      ({ settleStructuredLaunchesForFolderCatalog }) => {
+        // The import defers this: a host since removed, re-paired or read again settles nothing.
+        if (isHostCatalogFenceCurrent(get, fence)) {
+          settleStructuredLaunchesForFolderCatalog(catalog.hostId, listedByHost)
+        }
+      }
+    )
+  }
+
   // Why: folder workspaces are owned through their project groups; merge each host's folder slice against them.
   const applyCatalog = (
     catalog: FetchedFolderWorkspaceCatalog,
@@ -60,6 +78,9 @@ export function createFolderWorkspaceCatalogActions(
         folderWorkspacePathStatuses: {}
       }
     })
+    if (applied) {
+      settleFolderLaunchRecovery(catalog, fence)
+    }
     return applied
   }
 

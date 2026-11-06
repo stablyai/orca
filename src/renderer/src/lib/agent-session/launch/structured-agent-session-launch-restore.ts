@@ -13,7 +13,10 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { useAppStore } from '@/store/index'
+import { catalogOwnsHost } from '@/store/slices/project-group-owner-routing'
+import { retireSavedStructuredLaunches } from '@/store/slices/worktrees/teardown/purged-structured-launch-retirement'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import type { StructuredAgentLaunchPersistedRecord } from './structured-agent-session-launch-record'
@@ -87,6 +90,36 @@ export function restoreStructuredLaunchSurfacesListedBy(
     }
   }
   restoreLaunchSurfaces(owed)
+}
+
+/** A host's folder catalog applied: saved launches in folders it lists come back on the host each
+ *  folder belongs to; saved-only launches it owns in folders it no longer lists end. A launch live
+ *  here ends only by its own paths, as the catalog may predate its folder. A folder id the catalog
+ *  lists under any host ends nothing: its owner may still be unresolved. */
+export function settleStructuredLaunchesForFolderCatalog(
+  catalogHostId: ExecutionHostId,
+  listedByHost: ReadonlyMap<ExecutionHostId, ReadonlySet<string>>
+): void {
+  const listed = new Set([...listedByHost.values()].flatMap((keys) => [...keys]))
+  const dropped: StructuredAgentLaunchPersistedRecord[] = []
+  for (const [hostId, byWorkspace] of owedHostLaunches()) {
+    if (!catalogOwnsHost(catalogHostId, hostId)) {
+      continue
+    }
+    for (const [worktreeId, records] of byWorkspace) {
+      if (parseWorkspaceKey(worktreeId)?.type === 'folder' && !listed.has(worktreeId)) {
+        dropped.push(
+          ...records.filter((record) => !getStructuredLaunchStateBySessionId(record.sessionId))
+        )
+      }
+    }
+  }
+  if (dropped.length > 0) {
+    retireSavedStructuredLaunches(dropped)
+  }
+  for (const [hostId, keys] of listedByHost) {
+    restoreStructuredLaunchSurfacesListedBy(hostId, keys)
+  }
 }
 
 /** Only a chat not already showing on its own host is drawn; a shown one costs no catalog read,

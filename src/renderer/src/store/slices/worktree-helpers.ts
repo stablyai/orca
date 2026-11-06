@@ -49,8 +49,12 @@ import type {
 import type { AppState } from '../types'
 import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
 import type { WorktreeRefreshResult } from './worktrees/listing/worktree-refresh-result'
-export type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
-import type { WorktreePurgeTargets } from './worktree-purge-target'
+export type {
+  WorktreePurgeOptions,
+  WorktreePurgeTarget,
+  WorktreePurgeTargets
+} from './worktree-purge-target'
+import type { WorktreePurgeOptions, WorktreePurgeTargets } from './worktree-purge-target'
 export type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
 import type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -304,7 +308,10 @@ export type WorktreeSlice = {
     executionHostId?: ExecutionHostId
   ) => Worktree | DetectedWorktree | undefined
   /** Purge worktree/terminal maps on server deletion and once at hydration (design §4.4). */
-  purgeWorktreeTerminalState: (worktreeTargets: WorktreePurgeTargets) => void
+  purgeWorktreeTerminalState: (
+    worktreeTargets: WorktreePurgeTargets,
+    options?: WorktreePurgeOptions
+  ) => void
   /** Retire removed-runtime catalog/worktree/tab/PTY/browser/editor state only from saved-list removal diff. Serving-local runtime stamps never saved here must survive; empty/unmatched diff is inert (#8881). */
   purgeStaleRuntimeHostState: (removedEnvironmentIds: Iterable<string>) => void
   /** Move worktree-scoped maps/pointers on path-derived ID rename, preserving live tabs/selection; equal IDs are inert. */

@@ -1,6 +1,10 @@
 import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
+import type {
+  WorktreePurgeOptions,
+  WorktreePurgeTarget,
+  WorktreePurgeTargets
+} from '../../worktree-helpers'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
@@ -32,19 +36,22 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
 export function buildWorktreePurgeState(
   s: AppState,
   worktreeTargets: WorktreePurgeTargets,
-  changedPaneKeys?: Set<string>
+  changedPaneKeys?: Set<string>,
+  options?: WorktreePurgeOptions
 ): Partial<AppState> {
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
   const twinScopes = collectHostTwinPurgeScopes(s, targets)
   if (twinScopes.size === 0) {
-    return buildFullWorktreePurgeState(s, targets, changedPaneKeys)
+    return buildFullWorktreePurgeState(s, targets, changedPaneKeys, options)
   }
   const twinIds = new Set([...twinScopes.values()].flatMap((twins) => [...twins.keys()]))
   const fullTargets = targets.filter((target) => !target.hostId || !twinIds.has(target.id))
   let patch =
-    fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets, changedPaneKeys) : {}
+    fullTargets.length > 0
+      ? buildFullWorktreePurgeState(s, fullTargets, changedPaneKeys, options)
+      : {}
   for (const [hostId, twinHostIds] of twinScopes) {
     const twinPatch = buildHostTwinPurgeState(
       { ...s, ...patch },
@@ -86,17 +93,21 @@ export function buildWorktreePurgeState(
 export function buildFullWorktreePurgeState(
   s: AppState,
   normalizedTargets: readonly WorktreePurgeTarget[],
-  changedPaneKeys?: Set<string>
+  changedPaneKeys?: Set<string>,
+  options?: WorktreePurgeOptions
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
   // One retirement: each launch journal it changes is saved once, at its end.
+  const launchHostId = options?.launchHostId
   batchStructuredAgentLaunchRecordWrites(() => {
     const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
       worktreeIdSet,
-      undefined,
-      normalizedTargets
+      launchHostId ? (_, hostId) => hostId === launchHostId : undefined,
+      launchHostId
+        ? normalizedTargets.map(({ id }) => ({ id, hostId: launchHostId }))
+        : normalizedTargets
     )
     for (const worktreeId of worktreeIdSet) {
       retirePurgedTabLaunches(
@@ -104,7 +115,8 @@ export function buildFullWorktreePurgeState(
         worktreeId,
         s.tabsByWorktree[worktreeId] ?? [],
         s.unifiedTabsByWorktree[worktreeId] ?? [],
-        cancelledSessionIds
+        cancelledSessionIds,
+        launchHostId
       )
     }
   })

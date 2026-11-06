@@ -143,6 +143,23 @@ export function getFolderWorkspaceCatalogReplacementIdentities(
   return replacedIdentities
 }
 
+/** The workspace keys a fetched catalog lists, by the host each listed folder belongs to. */
+export function getFolderCatalogWorkspaceKeysByHost(
+  catalog: FetchedFolderWorkspaceCatalog,
+  projectGroups: readonly ProjectGroup[]
+): Map<ExecutionHostId, Set<string>> {
+  const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
+  const keysByHost = new Map<ExecutionHostId, Set<string>>()
+  for (const workspace of catalog.folderWorkspaces) {
+    const hostId = resolveHostId(workspace)
+    keysByHost.set(
+      hostId,
+      (keysByHost.get(hostId) ?? new Set()).add(folderWorkspaceKey(workspace.id))
+    )
+  }
+  return keysByHost
+}
+
 /**
  * Drops a restored owner once its own host settles it. Folder ids can repeat across hosts, so a
  * copy on another host proves nothing; only the owner's copy or the owner's hydrated catalog does.

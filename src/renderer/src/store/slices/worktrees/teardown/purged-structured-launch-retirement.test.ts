@@ -15,6 +15,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-reload'
 import type { WorktreePurgeTarget } from '../../worktree-helpers'
+import { settleStructuredLaunchesForFolderCatalog } from '@/lib/agent-session/launch/structured-agent-session-launch-restore'
 import { cancelStructuredLaunchesForWorktrees } from './purged-structured-launch-retirement'
 
 const LAUNCHES = 'orca:structuredAgentLaunches:v1'
@@ -231,4 +232,39 @@ describe('ending launches for dropped workspaces', () => {
       new Set(['no-evidence'])
     )
   })
+
+  it.each([3, 30])(
+    "ends a host's saved-only launches in folders its catalog no longer lists in one save (%i)",
+    (count) => {
+      const folders = Array.from({ length: count }, (_, index) => `folder:gone-${count}-${index}`)
+      const ours = folders.map((id, index) => row(`ours-${count}-${index}`, ENV_1, id))
+      // Another host's launches under the very same folder ids.
+      const twins = folders.map((id, index) => row(`twin-${count}-${index}`, ENV_2, id))
+      reloadWith([...ours, ...twins, row('listed', ENV_1, 'folder:kept')])
+      // Half held live again after a Retry; the rest saved only, their folders never loaded.
+      for (const [index, { sessionId }] of ours.entries()) {
+        if (index % 2 === 0) {
+          expect(restorePersistedStructuredLaunchState(folders[index]!, sessionId)).toBeDefined()
+        }
+      }
+      const catalog = () =>
+        settleStructuredLaunchesForFolderCatalog(
+          ENV_1,
+          new Map([[ENV_1, new Set(['folder:kept'])]])
+        )
+      const saves = countSaves(catalog)
+      // Only the saved-only ones end; a launch live here ends by its own paths.
+      const live = ours.filter((_, index) => index % 2 === 0).map(({ sessionId }) => sessionId)
+      expect(saves.mutations).toEqual([TOMBSTONES, LAUNCHES])
+      expect(saves.tombstoneRows).toBe(count - live.length)
+      expect(readStructuredAgentLaunchRecords().map(({ sessionId }) => sessionId)).toEqual([
+        ...live,
+        ...twins.map(({ sessionId }) => sessionId),
+        'listed'
+      ])
+      expect(live.every((sessionId) => getStructuredLaunchStateBySessionId(sessionId))).toBe(true)
+      // The same catalog again ends and saves nothing.
+      expect(countSaves(catalog).mutations).toEqual([])
+    }
+  )
 })

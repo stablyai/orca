@@ -140,7 +140,7 @@ export function createPurgeWorktreeTerminalState(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['purgeWorktreeTerminalState'] {
-  return (worktreeTargets) => {
+  return (worktreeTargets, options) => {
     const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
       const worktreeId = typeof target === 'string' ? target : target.id
       return worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
@@ -157,7 +157,7 @@ export function createPurgeWorktreeTerminalState(
     )
     settleAttentionRemovedBy(set, get, () =>
       get().updateAgentStatusState((s, changedPaneKeys) =>
-        buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
+        buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys, options)
       )
     )
   }

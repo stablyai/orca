@@ -300,7 +300,7 @@ export function createFolderWorkspaceMutationActions(
           await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
           // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
           void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: workspaceKey })
-          get().purgeWorktreeTerminalState([workspaceKey])
+          get().purgeWorktreeTerminalState([workspaceKey], { launchHostId: ownerHostId })
           chatDrafts.deleteWorkspaceChatDrafts(chatDraftKeys)
         }
         return true

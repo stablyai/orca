@@ -17,6 +17,7 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import { releaseHostLaunchMessage } from './structured-agent-session-host-launch-custody'
+import { markStructuredAgentSessionLaunchCancelledSilently } from './structured-agent-session-launch-cancel'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
 import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
@@ -262,5 +263,43 @@ describe('one host launch settling beside many others', () => {
     // Beside 29 other launches, its start, shown first turn and submission touch only its row.
     expect(editing.preparedOthers).toBe(0)
     expect(submitted).toMatchObject({ mutations: 1, savedRows: 30, preparedOthers: 0 })
+  })
+
+  it('keeps custody saved when the composer cannot durably take the message back', async () => {
+    const status = Promise.withResolvers<AgentLaunchReleasePhaseStatusResult>()
+    host.status.mockReturnValueOnce(status.promise)
+    const launch = startLaunches(3).ours()
+    await vi.waitFor(() => expect(host.status).toHaveBeenCalledOnce())
+    const state = getStructuredLaunchStateBySessionId(SESSION_ID)!
+    const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // The host refuses while nothing can be saved: the refusal still shows.
+      status.resolve({ state: 'failed', code: 'agent_launch_setup_not_completed' })
+      await launch.launchResult.catch(() => undefined)
+      await vi.waitFor(() => expect(lifecycle()).toBe('failed'))
+      await vi.runOnlyPendingTimersAsync()
+    } finally {
+      full.mockRestore()
+      warn.mockRestore()
+    }
+    // Every word is back in front of the user, beside the separate draft...
+    expect(draft(SESSION_ID)).toContain(HELD)
+    expect(draft(SESSION_ID)).toContain('Also run lint')
+    // ...but nothing claims the hand-back is durable: the launch and its saved row still hold it.
+    expect(state.intent.hostLaunch?.firstMessage?.clientMessageId).toBe(MESSAGE_ID)
+    expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
+
+    // Dismissed once storage works: a late callback for it restores no row.
+    markStructuredAgentSessionLaunchCancelledSilently('workspace-1', SESSION_ID, 'local')
+    expect(savedRow()).toBeUndefined()
+    const late = await countWork(() => {
+      releaseHostLaunchMessage(state.intent, false)
+      notifyStructuredLaunchStateChanged(state)
+    })
+    expect(late).toMatchObject({ mutations: 0, preparedOthers: 0 })
+    expect(savedRow()).toBeUndefined()
   })
 })
