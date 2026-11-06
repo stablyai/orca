@@ -141,7 +141,7 @@ export function NativeChatResolvedView({
     () => ({ paneKey, agent, sessionId }),
     [paneKey, agent, sessionId]
   )
-  const delivery = useNativeChatPendingDelivery({
+  const { clear: clearDelivery, ...delivery } = useNativeChatPendingDelivery({
     paneKey,
     agent,
     session,
@@ -244,13 +244,12 @@ export function NativeChatResolvedView({
   const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
   useRecheckNativeChatFileLinksWhenTurnEnds(turnActive)
 
-  const { clear: clearPendingDelivery } = delivery
   const stopAgent = useCallback(() => {
     setWorkingInterrupted(true)
     // Stop can outlive its delayed-write handle; clear cached echoes explicitly to prevent ghost prompts.
-    clearPendingDelivery()
+    clearDelivery()
     interactiveSend.cancel()
-  }, [interactiveSend, clearPendingDelivery])
+  }, [interactiveSend, clearDelivery])
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,

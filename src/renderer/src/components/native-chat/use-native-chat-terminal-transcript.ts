@@ -33,7 +33,7 @@ export function useNativeChatTerminalTranscript({
   launchPrompt: NativeChatLaunchPrompt | null
   agent: AgentType
   commandMarkers: NativeChatCommandMarker[]
-  delivery: ReturnType<typeof useNativeChatPendingDelivery>
+  delivery: Pick<ReturnType<typeof useNativeChatPendingDelivery>, 'pending' | 'notices'>
   workingEpoch?: number | null
 } & Omit<Parameters<typeof deriveNativeChatStreamingText>[0], 'messages'>) {
   const launchPromptMessage = useMemo(
