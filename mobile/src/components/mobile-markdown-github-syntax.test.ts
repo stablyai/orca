@@ -56,4 +56,29 @@ describe('GitHub syntax in mobile Markdown', () => {
       { type: 'paragraph', children: [{ type: 'text', value: 'Minor ' }] }
     ])
   })
+
+  it('keeps linked badges, percentage widths and commented images as before', () => {
+    expect(
+      blocks(
+        '<a href="https://ci.example/run"><img src="https://img.shields.io/ci.svg" alt="CI"></a>\n\n' +
+          '<!-- like <img src="https://example.com/x.png"> -->\n\n' +
+          '<img width="50%" src="https://example.com/half.png" alt="half">'
+      )
+    ).toEqual([
+      {
+        type: 'paragraph',
+        children: [
+          {
+            type: 'link',
+            url: 'https://ci.example/run',
+            children: [{ type: 'image', url: 'https://img.shields.io/ci.svg', alt: 'CI' }]
+          }
+        ]
+      },
+      {
+        type: 'paragraph',
+        children: [{ type: 'image', url: 'https://example.com/half.png', alt: 'half' }]
+      }
+    ])
+  })
 })

@@ -119,13 +119,27 @@ function attrValue(tag: string, name: string): string {
 const tagAttributesSource = `(?:[^<>"']|"[^"]*"|'[^']*')*`
 const imageTagPattern = new RegExp(`<img\\b${tagAttributesSource}>`, 'gi')
 
-export type HtmlImage = { start: number; end: number; src: string; alt: string; width?: number }
+export type HtmlImage = {
+  start: number
+  end: number
+  src: string
+  alt: string
+  width?: number
+  height?: number
+}
+
+/** A pixel length (`300`, `300px`); percentages and other units stay unread. */
+function pixels(value: string): number | undefined {
+  const match = /^\s*(\d+)(?:px)?\s*$/i.exec(value)
+  return match ? Number(match[1]) : undefined
+}
 
 /** The `<img>` tags in HTML with an https source, where they sit, and their authored width. */
 export function htmlImages(html: string): HtmlImage[] {
   return [...html.matchAll(imageTagPattern)].flatMap((match) => {
     const src = attrValue(match[0], 'src')
-    const width = Number.parseInt(attrValue(match[0], 'width'), 10)
+    const width = pixels(attrValue(match[0], 'width'))
+    const height = pixels(attrValue(match[0], 'height'))
     return /^https:\/\//i.test(src)
       ? [
           {
@@ -133,7 +147,8 @@ export function htmlImages(html: string): HtmlImage[] {
             end: match.index + match[0].length,
             src,
             alt: attrValue(match[0], 'alt'),
-            ...(width > 0 ? { width } : {})
+            ...(width ? { width } : {}),
+            ...(height ? { height } : {})
           }
         ]
       : []

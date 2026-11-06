@@ -87,7 +87,7 @@ function phrasing(
     } else if (token.type === 'html_inline') {
       const pair = inlineTagPairs(tokens).get(index - 1)
       if (pair) {
-        nodes.push(inlineTagNode(pair.tag, phrasing(tokens.slice(index, pair.close), 0).nodes))
+        nodes.push(inlineTagNode(pair, phrasing(tokens.slice(index, pair.close), 0).nodes))
         index = pair.close + 1
       } else {
         nodes.push({ type: 'html', value: token.content })
@@ -239,6 +239,10 @@ function toTree(tokens: readonly Token[], source: string, env: MathEnv): Root {
 }
 
 // Clean only parser HTML nodes, never code: blocks become preview Markdown, inline tags become remaining text; nested leftover block HTML stays text.
+/** Comments go before images are cut out, so an `<img>` in one stays hidden. */
+const withoutComments = (html: string): string =>
+  html.replace(/<!--(?:(?!-->)[\s\S])*(?:-->|$)/g, '')
+
 function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
   const inline = !BLOCK_PARENTS.has(parent.type)
   parent.children = parent.children.flatMap((child): RootContent[] => {
@@ -252,7 +256,7 @@ function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
       return [{ type: 'break' }]
     }
     // An https `<img>` draws as an image with its authored width; the HTML around it as before.
-    return withImagesSplitOut(child.value).flatMap((piece): RootContent[] => {
+    return withImagesSplitOut(withoutComments(child.value)).flatMap((piece): RootContent[] => {
       if (typeof piece !== 'string') {
         return inline ? [piece] : [{ type: 'paragraph', children: [piece] }]
       }

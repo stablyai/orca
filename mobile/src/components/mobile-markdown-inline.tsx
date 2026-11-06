@@ -167,7 +167,9 @@ function renderPhrasing(
           ? [styles.inlineCode, styles.kbd, ctx.tone.inlineCode]
           : node.tag === 'sup' || node.tag === 'sub'
             ? [styles[node.tag], ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null]
-            : styles.ins
+            : node.tag === 'ins'
+              ? styles.ins
+              : null
       const spanStyle = [outer, tagStyle]
       return (
         <MarkdownText key={key} style={spanStyle}>
@@ -193,7 +195,13 @@ function renderPhrasing(
         // GitHub's raised note number.
         <MarkdownText
           key={key}
-          style={[outer, styles.sup, styles.footnoteReference, ctx.tone.link]}
+          style={[
+            outer,
+            styles.sup,
+            ctx.textScale !== 1 ? { fontSize: 10 * ctx.textScale } : null,
+            styles.footnoteReference,
+            ctx.tone.link
+          ]}
         >
           {node.label ?? node.identifier}
         </MarkdownText>
