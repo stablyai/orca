@@ -15,11 +15,34 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constant
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
+  type ManagedWorktree = Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let runId: string
   const paths: string[] = []
+
+  function parentWorktree(): ManagedWorktree {
+    return {
+      id: 'repo::parent',
+      repoId: 'repo',
+      path: '/tmp/parent-worktree',
+      head: 'parent-head',
+      branch: 'refs/heads/dev',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'parent',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    }
+  }
 
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
@@ -46,10 +69,7 @@ describe('orchestration new-worktree workers', () => {
       worktreeId: 'repo::parent',
       status: 'running'
     } as never)
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-      id: 'repo::parent',
-      repoId: 'repo'
-    } as never)
+    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue(parentWorktree())
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({
       id: 'repo',
       kind: 'git'
@@ -366,6 +386,25 @@ describe('orchestration new-worktree workers', () => {
         lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
       })
     )
+  })
+
+  it('reports the effective parent branch in a created child worktree effect', async () => {
+    mockCreatedWorktree()
+
+    const { result } = await startWorker()
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ baseBranch: 'refs/heads/dev' })
+    )
+    expect(result).toMatchObject({
+      effects: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          action: 'created_child',
+          baseBranch: 'refs/heads/dev'
+        })
+      ])
+    })
   })
 
   it('reports an absent setup hook as not configured without failing the start', async () => {
