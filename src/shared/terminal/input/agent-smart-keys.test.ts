@@ -28,6 +28,25 @@ describe('resolveAgentSmartKeys', () => {
     ])
   })
 
+  it("opens Codex's async question with ⇧← before its digits", () => {
+    const ask = resolveAgentSmartKeys('codex', {
+      state: 'waiting',
+      toolName: 'request_user_input_async',
+      interactivePrompt: JSON.stringify({
+        questions: [{ title: 'Which db?', options: ['a', 'b', 'c'] }, { title: 'Table name?' }]
+      })
+    })
+    expect(ask?.state).toBe('question')
+    expect(ask?.keys.map((key) => key.writes.join(''))).toEqual([
+      '\x1b[1;2D',
+      '1',
+      '2',
+      '3',
+      '\r',
+      '\x1d'
+    ])
+  })
+
   it('declines one Codex approval with n and stops OpenCode with two separate Escapes', () => {
     const codexNo = resolveAgentSmartKeys('codex', {
       state: 'waiting',
