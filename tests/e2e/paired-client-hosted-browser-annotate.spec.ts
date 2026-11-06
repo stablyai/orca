@@ -16,6 +16,7 @@ test('annotates an element on a client-hosted page of a paired host', async ({
   orcaPage,
   testRepoPath
 }, testInfo) => {
+  // Launches a second paired client app and waits for its runtime to adopt the repo.
   test.setTimeout(240_000)
   const server = createServer((_request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
@@ -63,11 +64,11 @@ test('annotates an element on a client-hosted page of a paired host', async ({
     await input.fill(url)
     await input.press('Enter')
 
-    let pageId: string | null = null
+    const found: { pageId: string | null } = { pageId: null }
     await expect
       .poll(
         async () =>
-          (pageId = await page.evaluate((targetUrl) => {
+          (found.pageId = await page.evaluate((targetUrl) => {
             const state = window.__store!.getState()
             const browserPage = Object.values(state.browserPagesByWorkspace)
               .flat()
@@ -81,8 +82,7 @@ test('annotates an element on a client-hosted page of a paired host', async ({
         { timeout: 60_000 }
       )
       .not.toBeNull()
-    // The poll assigns pageId inside a callback, which control-flow narrowing cannot see.
-    const clientPageId = pageId as string | null
+    const clientPageId = found.pageId
     if (!clientPageId) {
       throw new Error('The client-hosted page never registered')
     }
