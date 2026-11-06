@@ -6,7 +6,7 @@ import { wslGatedAccess } from '../../../native-chat/wsl-transcript-fs-access'
 import { listZcodeSqliteSessionsViaWorker } from '../opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { scanIssueTextFromError } from '../../session-scan-issues'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
+import { scopeOnlyScan, scopeWalksAgentFiles } from '../../session-scope-cwd'
 
 // Keep ZCode discovery separate so OpenCode cannot absorb its database rows.
 export function zcodeDiscoveries(
@@ -28,10 +28,12 @@ export function zcodeDiscoveries(
         limit,
         issues,
         scopePaths,
+        ...(scopeOnlyScan(options) ? { reportsProgress: true } : {}),
         signal: options.signal
       }).then((candidates) => candidates.map((candidate) => candidate.file))
+    // A scope-only scan would parse the recency list just to drop it.
     const [files, scopeFiles] = await Promise.all([
-      list(),
+      scopeOnlyScan(options) ? [] : list(),
       scopeWalksAgentFiles('zcode', options.scopePaths) ? list(options.scopePaths) : undefined
     ])
     return {

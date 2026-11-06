@@ -131,6 +131,12 @@ describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
       layout: 'the same folder for a workspace',
       piRoot: sameFolder,
       scope: { scopePaths: ['/repo/app'], limit: 1 }
+    },
+    // Scope-only reads Pi by its cwd buckets, which sit under the agent folder's sessions/.
+    {
+      layout: 'a parent folder for a scope-only workspace',
+      piRoot: (dir: string) => join(dir, '..'),
+      scope: { scopePaths: ['/repo/app'], scopeOnly: true }
     }
   ])('lists each transcript once under its writer when Pi scans $layout', async (testCase) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-pi-omp-shared-'))

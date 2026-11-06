@@ -51,9 +51,10 @@ vi.mock('./ai-vault-session-refresh', () => ({
   useAiVaultSessionRefresh: (
     scopePaths: PanelRequest['scopePaths'],
     executionHostScope: PanelRequest['executionHostScope'],
-    sessionLimit: PanelRequest['sessionLimit']
+    sessionLimit: PanelRequest['sessionLimit'],
+    scopeOnly: PanelRequest['scopeOnly']
   ) => {
-    panelRequests.push({ scopePaths, executionHostScope, sessionLimit })
+    panelRequests.push({ scopePaths, scopeOnly, executionHostScope, sessionLimit })
     return {
       error: null,
       loading: false,

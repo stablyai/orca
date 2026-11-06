@@ -146,6 +146,8 @@ export default function AiVaultPanel({
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection, scope]
   )
+  // Workspace and Project scan only their own sessions; All keeps the newest sessions everywhere.
+  const scopeOnly = scope !== 'all'
   const {
     error,
     loading,
@@ -154,7 +156,7 @@ export default function AiVaultPanel({
     scanResult,
     sessions: history,
     loadedSessionLimit
-  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit)
+  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit, scopeOnly)
   // Send scope identity: the host owns project worktree enumeration, and hundreds of paths cannot fit a request.
   const searchWithin = useMemo(
     () =>
@@ -174,6 +176,7 @@ export default function AiVaultPanel({
   const sessions = searching ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
+    scopeOnly: scopeOnly || undefined,
     includeAntigravityIdeSessions: true,
     limit: sessionLimit === 'unlimited' ? undefined : sessionLimit,
     unlimited: sessionLimit === 'unlimited'

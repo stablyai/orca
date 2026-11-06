@@ -7,7 +7,7 @@ import { antigravityDiscoveries } from './scanners/antigravity/session-scanner-a
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
 import { configureOpenCodeWslReaders } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
-import { scopeWalksAgentFiles } from './session-scope-cwd'
+import { scopeOnlyScan, scopeWalksAgentFiles } from './session-scope-cwd'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
 export { DEFAULT_CODEX_HOME_DIR } from './session-scanner-agent-sources'
@@ -51,6 +51,10 @@ function agentDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   const rootDirs = source.rootDirs(options, wslHomeDirs)
+  // Scope-only scans read cwd-bucket agents by folder name and cannot place cwd-less ones; keep only roots.
+  if (scopeOnlyScan(options) && !scopeWalksAgentFiles(agent, options.scopePaths)) {
+    return rootDirs.map(async (rootDir) => ({ agent, rootDir, files: [] }))
+  }
   const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
     discoverFiles({
       rootDir,

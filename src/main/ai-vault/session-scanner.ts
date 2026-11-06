@@ -25,6 +25,7 @@ import {
 } from './scanners/cursor/session-scanner-cursor-chat-meta'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { clampPositiveInteger } from './session-scanner-values'
+import { scopeOnlyScan } from './session-scope-cwd'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './scanners/devin/session-scanner-devin-db'
@@ -32,7 +33,7 @@ import { withOpenCodeSqliteScanScope } from './scanners/opencode/sqlite/session-
 
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
-/** Return recency-capped sessions plus recovered in-scope sessions, deduplicated and sorted. */
+/** Return recency-capped sessions plus recovered in-scope sessions (only those for scopeOnly), deduplicated and sorted. */
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
@@ -65,7 +66,9 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         })
         throwIfAiVaultScanCancelled(options.signal)
 
-        const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
+        const candidates = scopeOnlyScan(options)
+          ? []
+          : await sessionCandidatesFromDiscoveries(discoveries, options)
         const parseCandidates = candidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER)
 
         const workload = aiVaultScanWorkload(options.signal)

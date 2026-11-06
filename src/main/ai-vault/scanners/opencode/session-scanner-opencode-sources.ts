@@ -11,7 +11,7 @@ import { discoverOpenCodeSessions } from './sqlite/session-scanner-opencode-sqli
 import { listOpenCode2SqliteSessionsViaWorker } from './reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { isOpenCodeV2DatabaseName } from '../../../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
+import { scopeOnlyScan, scopeWalksAgentFiles } from '../../session-scope-cwd'
 
 type OpenCodeSource = {
   storageDir: string
@@ -35,6 +35,7 @@ export function opencodeDiscoveries(
           limitPerAgent: limit,
           issues,
           scopePaths: options.scopePaths,
+          scopeOnly: options.scopeOnly,
           signal: options.signal
         })
       ),
@@ -100,10 +101,12 @@ async function discoverOpenCode2Sessions(
       limit,
       issues,
       scopePaths,
+      ...(scopeOnlyScan(options) ? { reportsProgress: true } : {}),
       signal: options.signal
     }).then((candidates) => candidates.map((candidate) => candidate.file))
+  // A scope-only scan would parse the recency list just to drop it.
   const [files, scopeFiles] = await Promise.all([
-    list(),
+    scopeOnlyScan(options) ? [] : list(),
     scopeWalksAgentFiles('opencode2', options.scopePaths) ? list(options.scopePaths) : undefined
   ])
   return {

@@ -177,9 +177,15 @@ describe('aiVault.listSessions params schema', () => {
   it('clamps scopePaths past the cap instead of rejecting', () => {
     // Older/web producers may exceed this bound; truncation only narrows optional discovery paths.
     const scopePaths = Array.from({ length: 65 }, (_, index) => `/p/${index}`)
-    const parsed = AiVaultListSessionsParams.safeParse({ scopePaths })
+    const parsed = AiVaultListSessionsParams.safeParse({ scopePaths, scopeOnly: true })
     expect(parsed.success).toBe(true)
     expect(parsed.data?.scopePaths).toEqual(scopePaths.slice(0, 64))
+    // The clamped paths cannot answer alone, so the recency scan still lists the rest.
+    expect(parsed.data?.scopeOnly).toBeUndefined()
+    expect(
+      AiVaultListSessionsParams.safeParse({ scopePaths: scopePaths.slice(0, 64), scopeOnly: true })
+        .data?.scopeOnly
+    ).toBe(true)
   })
 
   it('rejects an over-long scopePath', () => {

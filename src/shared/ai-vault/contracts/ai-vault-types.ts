@@ -235,8 +235,26 @@ export type AiVaultListArgs = {
   force?: boolean
   // Scope paths preserve older relevant sessions outside the globally recency-capped result.
   scopePaths?: readonly string[]
+  /** Return only sessions inside scopePaths, skipping the global recency scan. Older hosts ignore it, so clients still filter. */
+  scopeOnly?: boolean
   executionHostScope?: ExecutionHostScope
   requestToken?: string
+}
+
+/** Cap scope paths for a host; a capped scope cannot answer alone, so it keeps the recency scan. */
+export function boundedAiVaultScopeArgs(
+  scopePaths: readonly string[] | undefined,
+  scopeOnly: boolean | undefined
+): Pick<AiVaultListArgs, 'scopePaths' | 'scopeOnly'> {
+  return {
+    ...(scopePaths ? { scopePaths: scopePaths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT) } : {}),
+    ...(scopeOnly === true &&
+    scopePaths &&
+    scopePaths.length > 0 &&
+    scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
+      ? { scopeOnly: true }
+      : {})
+  }
 }
 
 export type AiVaultListResult = {

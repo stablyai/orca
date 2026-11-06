@@ -21,7 +21,8 @@ import type {
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   deriveMobileAiVaultScopePaths,
-  mobileAiVaultScanScopePaths
+  mobileAiVaultScanScopeArgs,
+  mobileAiVaultScopeRowsCover
 } from './agent-history-scope-paths'
 import {
   agentHistoryHostStatusRead,
@@ -49,9 +50,10 @@ export type AgentHistoryScreenState =
       issues: AiVaultScanIssue[]
     }
 
+type FetchedRowsSource = { hostId: string; client: RpcClient; scope: AiVaultScope }
 type FetchedHistoryState =
   | Exclude<AgentHistoryScreenState, { kind: 'ready' }>
-  | (Extract<AgentHistoryScreenState, { kind: 'ready' }> & { hostId: string; client: RpcClient })
+  | (Extract<AgentHistoryScreenState, { kind: 'ready' }> & FetchedRowsSource)
 
 export type MobileAgentHistoryStateParams = {
   hostId: string
@@ -144,17 +146,20 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         generationRef.current === generation &&
         (client?.getGeneration?.() ?? 0) === clientGeneration
 
+      // Workspace and Project rows hold only that scope, so they cannot stand in for a wider one.
+      const keepsRows = (prev: FetchedHistoryState) =>
+        prev.kind === 'ready' && mobileAiVaultScopeRowsCover(prev.scope, options.scope)
       if (!client || connState !== 'connected') {
         if (isCurrent()) {
           setHostStatusProbe(null)
           const message = t('agentHistory.useAgentHistoryState.waitingForHost', 'Waiting for host…')
           // Keep stale rows visible during reconnect reloads instead of replacing them with full-screen error, matching host list.
-          setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'error', message }))
+          setScreenState((prev) => (keepsRows(prev) ? prev : { kind: 'error', message }))
         }
         return
       }
 
-      setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+      setScreenState((prev) => (keepsRows(prev) ? prev : { kind: 'loading' }))
       activeLoads.current += 1
       try {
         // Gate capability before calling RPC absent on older hosts.
@@ -175,18 +180,18 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         // Wait for worktree list before scoped fetch to avoid unrelated history flash; once loaded, proceed even if workspace is missing to avoid stuck spinner.
         if (options.scope !== 'all' && !activeWorktree && !worktreesLoaded) {
           if (isCurrent()) {
-            setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+            setScreenState((prev) => (keepsRows(prev) ? prev : { kind: 'loading' }))
           }
           return
         }
 
-        const scopePaths = mobileAiVaultScanScopePaths(
-          deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
-        )
         const reply = await agentHistorySessionScan.request(client, {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
-          scopePaths
+          ...mobileAiVaultScanScopeArgs(
+            options.scope,
+            deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
+          )
         })
         if (!isCurrent()) {
           return
@@ -199,6 +204,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           kind: 'ready',
           hostId,
           client,
+          scope: options.scope,
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
           sessions: result.sessions as AiVaultSession[],
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue, classified by `kind` like desktop History (an unknown kind still reads as a notice).

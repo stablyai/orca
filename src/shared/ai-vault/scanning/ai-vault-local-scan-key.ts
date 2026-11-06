@@ -12,6 +12,7 @@ export function aiVaultLocalScanKey(args?: AiVaultListArgs): string {
 export function aiVaultLocalScanScopeKey(args?: AiVaultListArgs): string {
   return JSON.stringify({
     scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
-    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
+    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true,
+    ...(args?.scopeOnly === true ? { scopeOnly: true } : {})
   })
 }

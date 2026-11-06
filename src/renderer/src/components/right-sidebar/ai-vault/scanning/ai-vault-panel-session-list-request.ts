@@ -33,6 +33,7 @@ export function resolveAiVaultPanelSessionListRequest(
       activeProjectKey,
       projectHostSetupProjection
     }),
+    scopeOnly: DEFAULT_AI_VAULT_SCOPE !== 'all',
     executionHostScope: resolveAiVaultHostScopeDefaults(
       getAiVaultResumeWorkspaceExecutionHostId(state, workspaceId),
       workspaceId

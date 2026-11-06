@@ -50,7 +50,10 @@ function getSharedClient(): OpenCodeSqliteWorkerClient {
 type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
 type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
 
-type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'>
+type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'> & {
+  /** A scoped list counts its databases for scan progress when no unscoped list runs beside it. */
+  reportsProgress?: boolean
+}
 
 export function listOpenCodeSqliteSessionsViaWorker(
   args: SqliteListArgs
@@ -107,18 +110,18 @@ export function captureZcodeSqliteSessionViaWorker(
 }
 
 async function listForHost(
-  args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
+  args: SqliteListArgs & { agent?: Parameters<OpenCodeSqliteWorkerClient['list']>[0]['agent'] }
 ): Promise<SessionFileCandidate[]> {
   const agent = args.agent ?? 'opencode'
-  const scoped = Boolean(args.scopePaths?.length)
+  const reports = !args.scopePaths?.length || args.reportsProgress === true
   const issues: AiVault.AiVaultScanIssue[] = []
   const closeSource =
-    !scoped && args.dbPaths.length > 0 ? openAiVaultScanSource(args.signal, agent) : null
+    reports && args.dbPaths.length > 0 ? openAiVaultScanSource(args.signal, agent) : null
   try {
     const candidates = await listCandidatesForHost({ ...args, issues })
     // A database counts once it holds this agent's sessions: OpenCode 1 and 2 share one file.
     const dbPaths = candidates.map((c) => splitOpenCodeSqliteCandidate(c.file.path, agent)?.dbPath)
-    if (!scoped) {
+    if (reports) {
       noteAiVaultScanDatabases(args.signal, agent, new Set(dbPaths.filter(Boolean)).size)
     }
     return candidates

@@ -58,6 +58,8 @@ export type AiVaultScanOptions = {
   limitPerAgent?: number
   // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
+  // Return only scopePaths sessions; set by Workspace and Project views.
+  scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
   signal?: AbortSignal
