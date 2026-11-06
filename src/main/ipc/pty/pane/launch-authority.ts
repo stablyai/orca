@@ -13,7 +13,7 @@ export function admitRendererAgentLaunchAuthority(args: {
   isReattach: boolean
   hasStablePaneOwner: boolean
   incarnationId: unknown
-}): { launchToken: string; launchAgent: TuiAgent } | null {
+}): { launchToken: string; launchAgent: TuiAgent; launchConfig: SleepingAgentLaunchConfig } | null {
   if (
     args.isReattach ||
     args.hasStablePaneOwner ||
@@ -27,7 +27,11 @@ export function admitRendererAgentLaunchAuthority(args: {
   ) {
     return null
   }
-  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+  return {
+    launchToken: args.launchToken,
+    launchAgent: args.launchAgent,
+    launchConfig: args.launchConfig
+  }
 }
 
 export function admitProviderReattachLaunchIdentity(args: {
