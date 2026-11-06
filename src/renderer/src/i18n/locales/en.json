@@ -6495,11 +6495,7 @@
         },
         "SidebarHeader": {
           "92154beb7e": "New workspace",
-          "49f62c5665": "Workspace board",
-          "5c9c7c16aa": "Add a project to create workspaces",
-          "a30e34eb5c": "Close workspace board",
           "newCollection": "Add Collection",
-          "views": "Sidebar view",
           "addProject": "Add project",
           "expandAllProjects": "Expand all projects",
           "collapseAllProjects": "Collapse all projects"
@@ -7375,26 +7371,6 @@
           "createFailed": "Could not create the collection",
           "nameLabel": "Name",
           "projectsLabel": "Projects"
-        },
-        "WorktreeIssueLinkField": {
-          "25852bfc59": "Linear",
-          "5b440069e6": "GitHub",
-          "161b2d053a": "Open linked issue",
-          "d4785f9954": "Issue links are set when a folder workspace is created and can't be changed here yet.",
-          "964d9bc00a": "Not a Linear issue key or linear.app issue URL.",
-          "0a7a2c6efd": "Not a GitHub issue number or issue URL.",
-          "72486800ff": "Saving unlinks {{first}} and {{second}} — a workspace tracks one issue.",
-          "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
-          "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
-          "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
-          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
-          "ad78f9bee2": "Issue",
-          "662ae142f8": "Issue #, or a GitHub or Linear URL",
-          "929c98d05a": "Issue provider"
-        },
-        "worktreeIssueDisplacement": {
-          "3f61c0a8d2": "Linear {{value}}",
-          "9c4b7e1f60": "GitHub #{{value}}"
         },
         "WorktreeCardSshHostControl": {
           "connectFailed": "SSH connection failed",
