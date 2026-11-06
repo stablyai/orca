@@ -629,7 +629,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
       "defaultSurfaceSetAllChat": "Tout mettre en Chat",
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
-      "sameAsChoice": "Identique à {{agent}} · {{choice}}"
+      "sameAsChoice": "Identique à {{agent}} · {{choice}}",
+      "modelListFallback": "Liste intégrée. Orca n’a pas pu obtenir de liste de modèles depuis cet hôte."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "lien symbolique",

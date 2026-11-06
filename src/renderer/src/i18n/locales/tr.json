@@ -836,7 +836,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} ayarladığınız gibi sohbet olarak kalıyor.",
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
-      "sameAsChoice": "{{agent}} ile aynı · {{choice}}"
+      "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
+      "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",

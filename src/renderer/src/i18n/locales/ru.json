@@ -900,7 +900,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} остаются в виде чатов, как вы настроили.",
       "defaultSurfaceSetAllChat": "Перевести все в чат",
       "defaultSurfaceSetAllTerminal": "Перевести все в терминал",
-      "sameAsChoice": "Как у {{agent}} · {{choice}}"
+      "sameAsChoice": "Как у {{agent}} · {{choice}}",
+      "modelListFallback": "Встроенный список. Orca не удалось получить список моделей с этого хоста."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "символическая ссылка",

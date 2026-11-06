@@ -36,6 +36,8 @@ export type AgentChoiceControlsProps = {
   layout?: 'stacked' | 'contents' | 'rows'
   /** The host's own list; without a listing the fields keep the release's seed models. */
   liveCatalog?: AgentSessionModelCatalogResult
+  /** Tells the reader this list is the release's, because the host gave none. */
+  usesSeedModels?: boolean
   onChange: (value: AgentDedicatedChoices | undefined) => void
 }
 
@@ -71,6 +73,7 @@ export function AgentChoiceFields({
   defaultLabels,
   layout = 'stacked',
   liveCatalog,
+  usesSeedModels,
   onSelect
 }: Omit<AgentChoiceControlsProps, 'onChange'> & {
   onSelect: (patch: AgentChoicePatch) => void
@@ -132,6 +135,14 @@ export function AgentChoiceFields({
           ]}
           onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
         />
+      ) : null}
+      {catalog && usesSeedModels ? (
+        <p data-agent-model-list-fallback className="text-xs text-muted-foreground">
+          {translate(
+            'settings.agents.modelListFallback',
+            'Built-in list. Orca could not get a model list from this host.'
+          )}
+        </p>
       ) : null}
       {options.map(({ option, route }) => {
         const choices =

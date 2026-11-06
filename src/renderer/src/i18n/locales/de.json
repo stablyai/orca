@@ -844,7 +844,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}"
+      "sameAsChoice": "Wie {{agent}} · {{choice}}",
+      "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",

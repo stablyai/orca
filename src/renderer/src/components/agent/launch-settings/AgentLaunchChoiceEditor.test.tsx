@@ -43,6 +43,8 @@ const LISTED = {
   ]
 }
 
+const HOST = { kind: 'environment', environmentId: 'env-1' } as const
+
 function renderEditor(model?: string): void {
   render(
     <TooltipProvider>
@@ -52,7 +54,7 @@ function renderEditor(model?: string): void {
         choices={model ? { model } : undefined}
         userArgs=""
         permission={undefined}
-        catalogTarget={{ kind: 'local' }}
+        catalogTarget={HOST}
         save={async () => {}}
       />
     </TooltipProvider>
@@ -72,11 +74,25 @@ describe('AgentLaunchChoiceEditor model list', () => {
     renderEditor('gpt-6-astra')
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra']))
     expect(menus.get('Reasoning effort')).toEqual(['__agent_default__', 'low', 'ultra'])
+    expect(call).toHaveBeenCalledWith(HOST, 'agentSession.modelCatalog', {
+      agent: 'codex',
+      waitForListing: true
+    })
+    expect(document.querySelector('[data-agent-model-list-fallback]')).toBeNull()
 
     cleanup()
     renderEditor('gpt-old')
     await waitFor(() =>
       expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra', 'gpt-old'])
+    )
+  })
+
+  it('says the list is built in once the host fails to answer', async () => {
+    call.mockRejectedValue(new Error('offline'))
+    renderEditor()
+    expect(document.querySelector('[data-agent-model-list-fallback]')).toBeNull()
+    await waitFor(() =>
+      expect(document.querySelector('[data-agent-model-list-fallback]')).not.toBeNull()
     )
   })
 })

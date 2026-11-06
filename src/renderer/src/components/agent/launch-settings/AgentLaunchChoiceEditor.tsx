@@ -39,7 +39,10 @@ export function AgentLaunchChoiceEditor({
   permissionControlRef?: Ref<HTMLDivElement>
   save: (patch: AgentChoicePatch | undefined, userArgs: string) => Promise<void>
 }): React.JSX.Element {
-  const liveCatalog = useAgentSettingsModelCatalog(agent, catalogTarget)
+  const { catalog: liveCatalog, usesSeedModels } = useAgentSettingsModelCatalog(
+    agent,
+    catalogTarget
+  )
   const menu = useRef({ open: false, committed: false })
   const editorRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState<string | null>(null)
@@ -108,6 +111,7 @@ export function AgentLaunchChoiceEditor({
           disabled={pending}
           layout="rows"
           liveCatalog={liveCatalog}
+          usesSeedModels={usesSeedModels}
           onOpenChange={onOpenChange}
           optionIds={['effort']}
           onSelect={(patch) => commit(patch)}

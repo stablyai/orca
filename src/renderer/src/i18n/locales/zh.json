@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
-      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}"
+      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
+      "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
