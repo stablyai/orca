@@ -128,7 +128,8 @@ export function useMobileSessionTerminalSubscription(
       const outputAck = createTerminalOutputAck({
         client,
         capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered),
-        terminal: covered ? undefined : getTerminalRef(handle)
+        terminal: covered ? undefined : getTerminalRef(handle),
+        isCurrent: lifetime.isCurrent
       })
 
       // A path switch replays this listener on a new stream whose snapshot covers output the old one never delivered.

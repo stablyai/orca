@@ -561,7 +561,7 @@ describe('terminal output credit', () => {
     expect(acks(harness)).toEqual([])
 
     act(() => parsed.forEach((onParsed) => onParsed()))
-    act(() => vi.advanceTimersByTime(50))
+    act(() => vi.advanceTimersByTime(250))
     expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 10 }]])
   })
 
@@ -571,9 +571,25 @@ describe('terminal output credit', () => {
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.fields.showNativeChatRef.current = true
     harness.event(0, { type: 'data', chunk: 'dropped' })
-    act(() => vi.advanceTimersByTime(50))
+    act(() => vi.advanceTimersByTime(250))
     expect(parsed).toEqual([])
     expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 7 }]])
+  })
+
+  it('retries an ack the bridge refused before sending it', async () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    harness.fields.client.sendRequest.mockRejectedValueOnce(new Error('bridge request cap'))
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'hello' })
+    act(() => parsed.forEach((onParsed) => onParsed()))
+    await act(async () => vi.advanceTimersByTime(250))
+    await act(async () => vi.advanceTimersByTime(250))
+    expect(acks(harness)).toEqual([
+      ['terminal.ackOutput', { streamToken: 'token-1', units: 5 }],
+      ['terminal.ackOutput', { streamToken: 'token-1', units: 5 }]
+    ])
   })
 
   it('never acks a host that did not echo credit', () => {
@@ -583,7 +599,7 @@ describe('terminal output credit', () => {
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     harness.event(0, { type: 'data', chunk: 'hello' })
     act(() => parsed.forEach((onParsed) => onParsed()))
-    act(() => vi.advanceTimersByTime(200))
+    act(() => vi.advanceTimersByTime(500))
     expect(acks(harness)).toEqual([])
   })
 
@@ -594,7 +610,7 @@ describe('terminal output credit', () => {
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     harness.event(0, { type: 'data', chunk: 'hello' })
-    act(() => vi.advanceTimersByTime(200))
+    act(() => vi.advanceTimersByTime(500))
     expect(harness.terminal.write).toHaveBeenCalledWith('hello')
     expect(acks(harness)).toEqual([])
   })

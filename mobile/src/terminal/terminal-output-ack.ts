@@ -1,4 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
@@ -6,7 +7,8 @@ import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
 // Ack in batches: per-chunk acks would double the phone's request rate during a flood.
 const ACK_BATCH_UNITS = 128 * 1024
 // A tail under the batch still needs credit back, or a later large chunk waits on it forever.
-const ACK_QUIET_MS = 50
+// Measured from the first unacked unit, so a steady trickle can't postpone it and typing echoes share one ack.
+const ACK_DELAY_MS = 250
 
 export type TerminalOutputAck = {
   /** The `terminal.subscribe` capabilities, with `outputAck` when this terminal can ack. */
@@ -23,26 +25,41 @@ export function createTerminalOutputAck(args: {
   capabilities: Record<string, 1>
   // Only a terminal that reports what xterm parsed may ask; a native route can't, and its stream would stall.
   terminal: TerminalWebViewHandle | undefined
+  isCurrent: () => boolean
 }): TerminalOutputAck {
   const asks = args.terminal?.writeWithParseAck !== undefined
   let streamToken: string | null = null
   let epoch = 0
   let parsedUnits = 0
-  let quietTimer: ReturnType<typeof setTimeout> | null = null
+  let flushTimer: ReturnType<typeof setTimeout> | null = null
 
-  const cancelQuietTimer = () => {
-    if (quietTimer !== null) {
-      clearTimeout(quietTimer)
-      quietTimer = null
+  const cancelFlushTimer = () => {
+    if (flushTimer !== null) {
+      clearTimeout(flushTimer)
+      flushTimer = null
     }
   }
 
-  const flush = () => {
-    cancelQuietTimer()
-    if (streamToken !== null && parsedUnits > 0) {
+  const credit = (units: number) => {
+    parsedUnits += units
+    if (parsedUnits >= ACK_BATCH_UNITS) {
+      flush()
+    } else if (flushTimer === null) {
+      flushTimer = setTimeout(flush, ACK_DELAY_MS)
+    }
+  }
+
+  function flush() {
+    cancelFlushTimer()
+    if (streamToken !== null && parsedUnits > 0 && args.isCurrent()) {
       const params = { streamToken, units: parsedUnits }
-      // A failed ack means a failed connection; its resubscribe gets a fresh token and window.
-      void args.client.sendRequest('terminal.ackOutput', params).catch(() => {})
+      const sentEpoch = epoch
+      void args.client.sendRequest('terminal.ackOutput', params).catch((error: unknown) => {
+        // A refused send (bridge request cap) must retry or its units stay in flight on the host; a maybe-delivered one must not.
+        if (!isRpcDeliveryUnknown(error) && sentEpoch === epoch) {
+          credit(params.units)
+        }
+      })
     }
     parsedUnits = 0
   }
@@ -50,7 +67,7 @@ export function createTerminalOutputAck(args: {
   return {
     capabilities: asks ? { ...args.capabilities, outputAck: 1 } : args.capabilities,
     start(subscribed) {
-      cancelQuietTimer()
+      cancelFlushTimer()
       epoch += 1
       parsedUnits = 0
       // Credit only after the echo: a host that didn't echo refuses `terminal.ackOutput`.
@@ -71,13 +88,7 @@ export function createTerminalOutputAck(args: {
           return
         }
         settled = true
-        parsedUnits += units
-        if (parsedUnits >= ACK_BATCH_UNITS) {
-          flush()
-          return
-        }
-        cancelQuietTimer()
-        quietTimer = setTimeout(flush, ACK_QUIET_MS)
+        credit(units)
       }
     }
   }
