@@ -1,5 +1,5 @@
 import type { FeatureInteractionId } from './feature-interactions'
-import { PROJECT_GROUPING_TIP_TOUR, withUpgradeTipTarget } from './project-grouping-upgrade-tour'
+import { PROJECT_GROUPING_TIP_TOUR } from './project-grouping-upgrade-tour'
 
 export type ContextualTourId =
   | 'project-grouping-upgrade'
@@ -293,11 +293,8 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
   return typeof value === 'string' && CONTEXTUAL_TOUR_IDS.includes(value as ContextualTourId)
 }
 
-export function getContextualTour(id: ContextualTourId, projectId?: string): ContextualTour {
-  return withUpgradeTipTarget(
-    CONTEXTUAL_TOURS.find((tour) => tour.id === id)!,
-    projectId
-  )
+export function getContextualTour(id: ContextualTourId): ContextualTour {
+  return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
 }
 
 export const getContextualTourStepIndex = (id: ContextualTourId, stepId: ContextualTourStepId) =>

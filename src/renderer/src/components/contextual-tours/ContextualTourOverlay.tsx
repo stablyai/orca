@@ -33,7 +33,6 @@ import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creati
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
 export function ContextualTourOverlay(): JSX.Element | null {
-  const groupingAudience = useAppStore((state) => state.projectGroupingUpgradeTipAudience)
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
   const activeStepIndex = useAppStore((s) => s.activeContextualTourStepIndex)
   const activeTourSource = useAppStore((s) => s.activeContextualTourSource)
@@ -82,14 +81,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const telemetryDefinedStepCountRef = useRef(1)
 
   const activeTour = useMemo(
-    () =>
-      activeTourId
-        ? getContextualTour(
-            activeTourId,
-            groupingAudience?.membership === 'eligible' ? groupingAudience.projectId : undefined
-          )
-        : null,
-    [activeTourId, groupingAudience]
+    () => (activeTourId ? getContextualTour(activeTourId) : null),
+    [activeTourId]
   )
 
   const emitContextualTourOutcome = useCallback(

@@ -63,7 +63,7 @@ beforeEach(() => {
     activeModal: 'none'
   })
   const header = document.createElement('div')
-  header.dataset.projectGroupingKey = 'project:github:org/app'
+  header.dataset.sidebarSectionTitle = 'projects'
   header.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 100, width: 200, height: 30 })
   document.body.appendChild(header)
 })
@@ -71,7 +71,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.restoreAllMocks()
-  document.querySelectorAll('[data-project-grouping-key]').forEach((element) => element.remove())
+  document.querySelectorAll('[data-sidebar-section-title]').forEach((element) => element.remove())
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 

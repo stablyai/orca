@@ -237,7 +237,7 @@ export function ContextualTourOverlaySurface({
                 settings: (
                   <button
                     type="button"
-                    className="text-primary hover:text-primary/80"
+                    className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
                     onClick={() =>
                       onStepAction({ kind: 'open-project-grouping-settings', label: '' })
                     }

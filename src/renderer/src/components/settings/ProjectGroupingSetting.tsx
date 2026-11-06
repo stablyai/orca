@@ -125,9 +125,9 @@ export function ProjectGroupingSetting({
               {options.map((option) => (
                 <label
                   key={option.value}
-                  className="flex items-start gap-3 rounded-md border border-border p-3"
+                  className="flex items-center gap-3 rounded-md border border-border p-3"
                 >
-                  <RadioGroupItem value={option.value} className="mt-0.5" />
+                  <RadioGroupItem value={option.value} />
                   <span className="space-y-1 text-sm">
                     <span className="block font-medium">{option.label}</span>
                     <span className="block text-xs text-muted-foreground">
