@@ -2,6 +2,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 /** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
+import { callerLaunchSource } from '../../../agent-launch/agent-started-telemetry'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -102,7 +103,9 @@ export function agentLaunchWorkspaceFactory(
               }
             : {}),
           ...(cwd ? { startupCwd: cwd } : {}),
-          ...(launchSource ? { startupLaunchSource: launchSource } : {}),
+          ...(launchSource
+            ? { startupLaunchSource: callerLaunchSource(context, launchSource) }
+            : {}),
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
           ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
           ...(accountEnv ? { startupAccountEnv: { ...accountEnv } } : {}),

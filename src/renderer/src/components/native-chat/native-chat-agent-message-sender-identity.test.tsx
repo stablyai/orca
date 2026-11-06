@@ -52,6 +52,12 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
         return () => {
           feed.listeners.delete(listener)
         }
+      },
+      subscribeSession: (_sessionId: string, listener: () => void) => {
+        feed.listeners.add(listener)
+        return () => {
+          feed.listeners.delete(listener)
+        }
       }
     }
   }

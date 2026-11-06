@@ -74,6 +74,7 @@ export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeader
   const blocked =
     input.health === 'blocked' &&
     input.blockedReason !== 'access-revoked' &&
+    input.blockedReason !== 'server-replaced' &&
     input.compatibility?.kind === 'blocked'
       ? { reason: input.compatibility.reason }
       : null

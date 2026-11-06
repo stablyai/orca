@@ -15,7 +15,10 @@ import {
   type RuntimeHostConnectionState
 } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
-import type { RuntimeHostBlockedCopy } from './remote-host-connection-status'
+import type {
+  RuntimeHostBlockedCopy,
+  RuntimeHostBlockedRecovery
+} from './remote-host-connection-status'
 
 function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
@@ -145,36 +148,38 @@ export function RuntimeHostStatusRow({
   blocked,
   onConnect,
   onDisconnect,
-  onRepair
+  onRecover
 }: {
   label: string
   state: RuntimeHostConnectionState
   detail?: string
   diagnostics?: RemoteRuntimeSharedConnectionDiagnostics | null
   /** Set when the host refused this client; its copy replaces the transport state. */
-  blocked?: (RuntimeHostBlockedCopy & { canRepair: boolean }) | null
+  blocked?: (RuntimeHostBlockedCopy & { recovery: RuntimeHostBlockedRecovery | null }) | null
   onConnect?: () => Promise<void>
   onDisconnect?: () => Promise<void>
-  onRepair?: () => void
+  onRecover?: () => void
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [submenuOpen, setSubmenuOpen] = useState(false)
   const actionPointerActiveRef = useRef(false)
   const mountedRef = useMountedRef()
-  // Why: reconnecting with a revoked token is futile; a new pairing link is the only way back.
-  const repairs = Boolean(blocked?.canRepair && onRepair)
+  // Why: reconnecting a refused pairing is futile; only its recovery (a new pairing) gets back in.
+  const repairs = Boolean(blocked?.recovery && onRecover)
   const actionLabel = repairs
-    ? translate('auto.components.status.bar.RuntimeHostStatusRow.repair', 'Re-pair…')
-    : blocked?.canRepair
+    ? blocked?.recovery === 'open-settings'
+      ? translate('auto.components.status.bar.RuntimeHostStatusRow.open_settings', 'Open settings…')
+      : translate('auto.components.status.bar.RuntimeHostStatusRow.repair', 'Re-pair…')
+    : blocked?.recovery
       ? null
       : runtimeActionLabel(state)
   const transportAction = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
-  const action = repairs ? onRepair : transportAction
+  const action = repairs ? onRecover : transportAction
   const hasSubmenu = Boolean(detail || blocked)
 
   const handleAction = useCallback(async () => {
     if (repairs) {
-      onRepair?.()
+      onRecover?.()
       return
     }
     if (!transportAction) {
@@ -188,7 +193,7 @@ export function RuntimeHostStatusRow({
         setBusy(false)
       }
     }
-  }, [mountedRef, onRepair, repairs, transportAction])
+  }, [mountedRef, onRecover, repairs, transportAction])
 
   const lastConnectedLabel = diagnostics?.lastConnectedAt
     ? translate(

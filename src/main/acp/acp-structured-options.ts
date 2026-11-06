@@ -1,3 +1,4 @@
+import { acpInitializeForkSupport } from './acp-fork-support'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
@@ -60,6 +61,7 @@ export class AcpStructuredOptions {
     > = {}
   ) {}
 
+  private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
@@ -114,6 +116,7 @@ export class AcpStructuredOptions {
 
   /** Each process proves its own built-ins; session rows alone cannot. */
   adoptInitialize(initialized: InitializeResponse): void {
+    this.forkSupport = acpInitializeForkSupport(initialized)
     this.isBuiltin = this.dialect.builtinCommands?.(initialized) ?? (() => false)
     if (this.reportedCommands) {
       this.adoptCommands(this.reportedCommands)
@@ -154,7 +157,7 @@ export class AcpStructuredOptions {
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
-  read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
+  read(): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
     const sessionEfforts: AgentSessionOptionChoice[] = effortOption
@@ -204,6 +207,7 @@ export class AcpStructuredOptions {
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
     return {
       models,
+      forkSupport: this.forkSupport,
       current: {
         ...(currentModel ? { model: currentModel } : {}),
         ...(effortOption ? { effort: effortOption.currentValue } : {}),

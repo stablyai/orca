@@ -74,8 +74,7 @@ export function translateAcpRequest(
   }
   const tool = requestToolSchema.safeParse(params)
   const callId = tool.success ? (tool.data.toolCall?.toolCallId ?? tool.data.toolCallId) : undefined
-  const turn = callId ? options.tools.turn(callId) : undefined
-  const join = { thread: options.sessionId, ...(turn === undefined ? {} : { turn }) }
+  const join = { thread: options.sessionId, ...(callId ? options.tools.join(callId) : {}) }
   const settlement =
     method === 'session/request_permission'
       ? undefined

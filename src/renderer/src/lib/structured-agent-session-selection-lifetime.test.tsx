@@ -49,7 +49,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: transport.call
 }))
 vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
-  useStructuredAgentSessionStatusSummary: () => ({ summary: undefined, observation: 0 })
+  useStructuredAgentSessionPermissionStatus: () => ({ permissionReport: false, observation: 0 })
 }))
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapability: () => true,
