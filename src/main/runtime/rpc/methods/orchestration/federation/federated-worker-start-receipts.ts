@@ -1,4 +1,5 @@
 import type { OrchestrationWorkerLaunchReceipt } from '../worker/worker-launch-preferences'
+import type { WorkerDefaultAgentSelection } from '../worker/worker-configured-agent-preflight'
 
 export function isKnownRemoteStartFailure(code: string): boolean {
   return [
@@ -23,6 +24,7 @@ export function federatedFailedReceipt(
   server: { environmentId: string; name: string },
   outcome: {
     launch: OrchestrationWorkerLaunchReceipt
+    agentSelection?: WorkerDefaultAgentSelection
     setup?: { state: string }
     effects?: unknown[]
     residualResources?: unknown[]
@@ -46,8 +48,9 @@ export function federatedUnknownReceipt(
   worker: FederatedStartWorker,
   taskId: string,
   serverName: string,
-  launch: OrchestrationWorkerLaunchReceipt
-): unknown {
+  launch: OrchestrationWorkerLaunchReceipt,
+  agentSelection?: { agent: string; source: string; projectId?: string; projectName?: string }
+) {
   return {
     taskId,
     dispatchId: worker.dispatch_id,
@@ -55,6 +58,7 @@ export function federatedUnknownReceipt(
     stage: worker.stage,
     server: { name: serverName },
     launch,
+    ...(agentSelection ? { agentSelection } : {}),
     failedStage: worker.stage,
     lastError: worker.last_error,
     effects: [],

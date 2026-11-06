@@ -6,6 +6,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
+import { mockWorkerStartReady } from './worker-start-ready.test-fixture'
+
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
   const { coordinatorPaneKey } = h
@@ -27,44 +29,7 @@ describe('orchestration RPC methods', () => {
 
   describe('composed workers', () => {
     function mockCurrentWorkerStart(options?: { ready?: boolean }): void {
-      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-        handle === 'term_coord'
-          ? coordinatorPaneKey
-          : handle === 'term_worker'
-            ? 'tab_worker:leaf_worker'
-            : null
-      )
-      vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-      vi.spyOn(runtime, 'showTerminal').mockImplementation(
-        async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
-      )
-      vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
-        id: 'repo::worktree'
-      } as never)
-      vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
-        id: 'repo::worktree'
-      } as never)
-      vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-        handle: 'term_worker',
-        worktreeId: 'repo::worktree',
-        title: 'worker'
-      })
-      vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-        handle: 'term_worker',
-        condition: 'tui-idle',
-        satisfied: options?.ready !== false,
-        status: 'running',
-        exitCode: null
-      })
-      vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
-        handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
-      )
-      vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
-      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
-        handle: 'term_worker',
-        accepted: true,
-        bytesWritten: 1
-      })
+      mockWorkerStartReady(runtime, coordinatorPaneKey, options)
     }
 
     it('rejects a declared caller that disagrees with complete attested evidence', async () => {

@@ -1,6 +1,6 @@
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
@@ -31,6 +31,7 @@ import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRu
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { ProjectDefaultAgentSetting } from '../ProjectDefaultAgentSetting'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
 import {
@@ -149,12 +150,6 @@ export function RepositoryPane({
     [clearCopiedTemplateResetTimer]
   )
 
-  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
-    updateSelectedRepo(repo.id, {
-      hookSettings: nextSettings
-    })
-  }
-
   const handleCopyTemplate = async () => {
     // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
     await window.api.ui.writeClipboardText(`scripts:
@@ -177,6 +172,7 @@ export function RepositoryPane({
   const identityEntryTitles = new Set([
     translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate('settings.projectDefaultAgent.title', 'Default agent'),
     translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
     translate(
@@ -190,6 +186,9 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
+  const defaultAgentEntry = allEntries.find(
+    (entry) => entry.title === translate('settings.projectDefaultAgent.title', 'Default agent')
+  )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
   )
@@ -220,7 +219,7 @@ export function RepositoryPane({
         copiedTemplate={copiedTemplate}
         forceVisible={forceFullPaneForRepoMatch}
         onCopyTemplate={() => void handleCopyTemplate()}
-        onUpdateHookSettings={updateSelectedRepoHookSettings}
+        onUpdateHookSettings={(hookSettings) => updateSelectedRepo(repo.id, { hookSettings })}
       />
     ) : null
 
@@ -304,6 +303,17 @@ export function RepositoryPane({
         >
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
+
+        {project && updateProject ? (
+          <ProjectDefaultAgentSetting
+            project={project}
+            globalDefault={settings?.defaultTuiAgent}
+            executionHostId={selectedHostId}
+            updateProject={updateProject}
+            keywords={defaultAgentEntry?.keywords}
+            forceVisible={forceFullPaneForRepoMatch}
+          />
+        ) : null}
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
