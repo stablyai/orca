@@ -190,11 +190,12 @@ const folderlessListing = (spec: AcpLaunchSpec) =>
 
 // Agents (notably opencode) answer session/new with a transient -32603 while
 // their providers still open; without a retry one probe failure degrades the picker.
-const TRANSIENT_AGENT_RETRY_DELAYS_MS = [250, 500, 1_000] as const
+const TRANSIENT_AGENT_RETRY_DELAYS_MS = [250, 500] as const
 
 const isTransientAgentFailure = (error: unknown): boolean =>
   error instanceof AcpAgentError && error.code === -32603
 
+/** Retries transient -32603 agent answers at most three attempts total, stopping on abort or agent switch. */
 async function retryTransientAgentFailure<T>(
   run: () => Promise<T>,
   operation?: StructuredAgentResolutionOperation
@@ -206,12 +207,13 @@ async function retryTransientAgentFailure<T>(
       if (attempt >= TRANSIENT_AGENT_RETRY_DELAYS_MS.length || !isTransientAgentFailure(error)) {
         throw error
       }
-      assertStructuredAgentResolutionCurrent(operation)
       await sleep(TRANSIENT_AGENT_RETRY_DELAYS_MS[attempt], operation?.signal)
+      assertStructuredAgentResolutionCurrent(operation)
     }
   }
 }
 
+/** Resolves on timeout or abort; the caller must re-check operation currency afterwards. */
 async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
     return

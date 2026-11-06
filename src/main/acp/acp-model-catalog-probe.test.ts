@@ -197,6 +197,25 @@ describe('ACP model catalog probes', () => {
     expect(closed()).toBe(1)
   })
 
+  it('does not issue another session/new when aborted during retry backoff', async () => {
+    const { agent, deps, closed } = scriptedOpenCode2(true)
+    agent.on('session/new', (frame) =>
+      agent.fail(frame, -32603, 'Internal error: Internal service failure')
+    )
+    const stop = new AbortController()
+    const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+      { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      { workspacePath: '/work/project', signal: stop.signal }
+    )
+    await vi.waitFor(() =>
+      expect(agent.frames.filter((frame) => frame.method === 'session/new')).toHaveLength(1)
+    )
+    stop.abort()
+    await expect(listing).rejects.toThrow()
+    expect(agent.frames.filter((frame) => frame.method === 'session/new')).toHaveLength(1)
+    expect(closed()).toBe(1)
+  })
+
   it('lists OMP from a session kept in a folder it removes, in the chat folder', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(false)
     const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-omp-listing-'))
