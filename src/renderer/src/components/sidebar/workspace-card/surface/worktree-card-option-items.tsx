@@ -19,6 +19,7 @@ import {
   getWorktreeCardDisplayOptions
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
 import { translate } from '@/i18n/i18n'
+import { getWorktreeCardStyle } from '../../../../../../shared/worktree/card-style'
 
 type CardMenuItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -66,6 +67,9 @@ export function WorktreeCardDisplayMenuItem({
   const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   const toggleProperty = useToggleCardProperty()
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
+  const slotLayout = useAppStore((s) => getWorktreeCardStyle(s.settings) === 'experimental-2')
+  const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow === true)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -80,6 +84,20 @@ export function WorktreeCardDisplayMenuItem({
         className="w-56"
         data-workspace-board-preserve-open={boardAttr(preserveWorkspaceBoardOpen)}
       >
+        {slotLayout ? (
+          <>
+            <DropdownMenuCheckboxItem
+              checked={detailsRow}
+              onCheckedChange={(checked) =>
+                void updateSettings({ worktreeCardDetailsRow: checked === true })
+              }
+              onSelect={(e) => e.preventDefault()}
+            >
+              {translate('sidebar.cardSlot.detailsRow', 'Details row')}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {options.map((opt) => (
           <DropdownMenuCheckboxItem
             key={opt.id}

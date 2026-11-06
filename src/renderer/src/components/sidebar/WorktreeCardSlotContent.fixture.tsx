@@ -7,6 +7,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { worktreeCardStyleSettingsUpdate } from '../../../../shared/worktree/card-style'
 import WorktreeCard from './workspace-card/surface/WorktreeCard'
+import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'
 
 const MINUTE = 60_000
 const SIDEBAR_WIDTH = 320
@@ -56,6 +57,7 @@ function makeWorktree(seed: WorkspaceSeed, now: number): Worktree {
 }
 
 function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): void {
+  agentExpansion.clearWorktreeAgentExpansionStateForTests()
   const tabsByWorktree: Record<string, TerminalTab[]> = {}
   const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {}
   const unreadAgentCompletionPanes: Record<string, 'agent-completion'> = {}
@@ -76,7 +78,9 @@ function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): void {
         stateHistory: [],
         ...(agent.toolName ? { toolName: agent.toolName, toolInput: agent.toolInput } : {}),
         ...(agent.message ? { lastAssistantMessage: agent.message } : {}),
-        ...(agent.failed ? { mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: now } } : {})
+        ...(agent.failed
+          ? { mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: now } }
+          : {})
       }
       ptyIdsByTabId[tabId] = [`pty-${tabId}`]
       if (agent.unread) {
@@ -309,7 +313,7 @@ function Card({
   children,
   childCount = 0,
   collapsed = false,
-  hiddenDescendantIds
+  descendantIds
 }: {
   worktree: Worktree
   nested?: boolean
@@ -317,7 +321,7 @@ function Card({
   children?: React.ReactNode
   childCount?: number
   collapsed?: boolean
-  hiddenDescendantIds?: readonly string[]
+  descendantIds?: readonly string[]
 }): React.JSX.Element {
   return (
     <div className="relative" data-worktree-id={worktree.id}>
@@ -330,7 +334,7 @@ function Card({
         nativeDragEnabled={false}
         lineageChildCount={childCount}
         lineageCollapsed={collapsed}
-        lineageHiddenDescendantIds={hiddenDescendantIds}
+        lineageDescendantIds={descendantIds}
         lineageChildren={children}
         onLineageToggle={childCount > 0 ? noop : undefined}
       />
@@ -348,10 +352,8 @@ const nestedWorktrees = worktreesFor(NESTED, now)
 FOLDER_WORKSPACE.isUnread = false
 FOLDER_WORKSPACE.lastActivityAt = now - 9 * MINUTE
 
-export const exceptions = defineFixture({
-  width: SIDEBAR_WIDTH,
-  setup: () => seedWorkspaces(FLAT, now),
-  render: () => (
+function FlatList(): React.JSX.Element {
+  return (
     <SidebarFrame>
       {FLAT.map((seed) => (
         <Card
@@ -363,6 +365,12 @@ export const exceptions = defineFixture({
       <Card worktree={FOLDER_WORKSPACE} />
     </SidebarFrame>
   )
+}
+
+export const exceptions = defineFixture({
+  width: SIDEBAR_WIDTH,
+  setup: () => seedWorkspaces(FLAT, now),
+  render: () => <FlatList />
 })
 
 export const nesting = defineFixture({
@@ -370,8 +378,17 @@ export const nesting = defineFixture({
   setup: () => seedWorkspaces(NESTED, now),
   render: () => (
     <SidebarFrame>
-      <Card worktree={nestedWorktrees.get('wt-parent')!} childCount={1}>
-        <Card nested worktree={nestedWorktrees.get('wt-child')!} childCount={1}>
+      <Card
+        worktree={nestedWorktrees.get('wt-parent')!}
+        childCount={1}
+        descendantIds={['wt-child', 'wt-grandchild']}
+      >
+        <Card
+          nested
+          worktree={nestedWorktrees.get('wt-child')!}
+          childCount={1}
+          descendantIds={['wt-grandchild']}
+        >
           <Card nested worktree={nestedWorktrees.get('wt-grandchild')!} />
         </Card>
       </Card>
@@ -379,8 +396,23 @@ export const nesting = defineFixture({
         worktree={nestedWorktrees.get('wt-collapsed-parent')!}
         childCount={1}
         collapsed
-        hiddenDescendantIds={['wt-collapsed-child']}
+        descendantIds={['wt-collapsed-child']}
       />
     </SidebarFrame>
   )
+})
+
+export const agentsExpanded = defineFixture({
+  width: SIDEBAR_WIDTH,
+  setup: () => {
+    seedWorkspaces(FLAT, now)
+    const none = new Set<string>()
+    const state = {
+      expandedLineageParents: none,
+      expandedIdleChildGroups: none,
+      compactRootListExpanded: true
+    }
+    FLAT.forEach((seed) => agentExpansion.seedWorktreeAgentExpansionStateForTests(seed.id, state))
+  },
+  render: () => <FlatList />
 })

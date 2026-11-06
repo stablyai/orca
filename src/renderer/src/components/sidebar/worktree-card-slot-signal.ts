@@ -136,6 +136,7 @@ export function titleRowSlot(args: {
   manualUnread: boolean
   ownLinesShown: boolean
   lastActivityAt: number | null
+  lineageLatestAt?: number | null
 }): SlotSignal {
   if (args.offline) {
     return { kind: 'offline' }
@@ -150,5 +151,10 @@ export function titleRowSlot(args: {
   if (args.ownLinesShown) {
     return { kind: 'quiet' }
   }
-  return { kind: 'time', at: latest(args.hiddenLines) ?? args.lastActivityAt }
+  const ownAt = latest(args.hiddenLines) ?? args.lastActivityAt
+  const lineageAt = args.lineageLatestAt ?? null
+  return {
+    kind: 'time',
+    at: ownAt === null || (lineageAt !== null && lineageAt > ownAt) ? lineageAt : ownAt
+  }
 }

@@ -11,7 +11,9 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 export function renderWorktreeCardIndicators(
   card: WorktreeCardController
 ): React.ReactElement | null {
-  const { worktree, hasDetails, hasPorts, newCardStyle, showPR, showIssue } = card
+  const { worktree, hasDetails, hasPorts, showPR, showIssue } = card
+  // 1.0 draws the PR in its status lane; 2.0 has no lane, so it lists the PR like Classic.
+  const newCardStyle = card.newCardStyle && card.worktreeCardStyle !== 'experimental-2'
   if (!hasDetails && !hasPorts) {
     return null
   }

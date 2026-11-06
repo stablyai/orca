@@ -234,7 +234,8 @@
       "needYouCount": "{{count}} need you",
       "needsYou": "Needs you",
       "failed": "Failed",
-      "lastSeen": "Last seen {{state}}"
+      "lastSeen": "Last seen {{state}}",
+      "detailsRow": "Details row"
     }
   },
   "app": {

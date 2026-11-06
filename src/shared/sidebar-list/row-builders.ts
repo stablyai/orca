@@ -65,7 +65,7 @@ export function buildNewExternalWorktreesInboxRow(
   }
 }
 
-function hiddenDescendantIds(
+function descendantIds(
   occurrences: readonly WorktreeOccurrence<Worktree>[],
   parent: WorktreeOccurrence<Worktree>
 ): string[] {
@@ -142,11 +142,7 @@ export function appendWorktreeRows(
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),
             lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree)),
-            ...(options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
-              ? {
-                  lineageHiddenDescendantIds: hiddenDescendantIds(sectionOccurrences, occurrence)
-                }
-              : {})
+            lineageDescendantIds: descendantIds(sectionOccurrences, occurrence)
           }
         : {})
     })
