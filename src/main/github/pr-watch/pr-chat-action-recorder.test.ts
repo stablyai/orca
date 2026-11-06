@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import {
-  finishedShellCalls,
+  finishedShellCall,
   pushedPullRequestHead,
-  pushUpdatesByCall,
-  type PendingPRChatPush
+  pushUpdatesByCall
 } from './pr-chat-action-recorder'
 
 function toolCallRow(body: Record<string, unknown>): JournalRow {
@@ -24,9 +23,8 @@ function toolCallRow(body: Record<string, unknown>): JournalRow {
 }
 
 function pushedBranches(row: JournalRow): unknown[] {
-  return finishedShellCalls('chat-1', [row])
-    .flatMap(pushUpdatesByCall)
-    .map(({ branch, newSha }) => ({ branch, newSha }))
+  const call = row.kind === 'item' ? finishedShellCall('chat-1', row, 0) : null
+  return (call ? pushUpdatesByCall(call) : []).map(({ branch, newSha }) => ({ branch, newSha }))
 }
 
 const TO_ORIGIN = 'To github.com:acme/repo.git\n'
@@ -98,20 +96,19 @@ describe('push updates from recorded tool calls', () => {
 })
 
 describe('pushedPullRequestHead', () => {
-  const pushOf = (output: string): PendingPRChatPush => ({
-    chatId: 'chat-1',
-    anchor: { itemId: 'item', revision: 1 },
-    candidate: { cacheKey: 'c', repoKind: 'git', repoId: 'r', repoPath: '/repo', branch: 'work' },
-    updates: pushUpdatesByCall({
+  const updateOf = (output: string) =>
+    pushUpdatesByCall({
       chatId: 'chat-1',
       anchor: { itemId: 'item', revision: 1 },
       script: 'git push',
       output,
       finishedAt: 0
-    }),
-    deadline: 0,
-    replayed: false
-  })
+    })[0]!
+  // The remote as resolved through the checkout's config; here, what the `To` line parsed to.
+  const match = (output: string, pr: PRInfo) => {
+    const update = updateOf(output)
+    return pushedPullRequestHead(update, update.remote, pr)
+  }
   const pr = (fields: Partial<PRInfo>): PRInfo =>
     ({
       number: 20,
@@ -121,23 +118,23 @@ describe('pushedPullRequestHead', () => {
       ...fields
     }) as PRInfo
 
-  it('binds a push to the branch and repository its own update line names', () => {
+  it('binds a push to the branch, repository and forge host its own update line names', () => {
     // `git push origin work:review` updated review, not the checked-out branch.
-    const workToReview = pushOf(`${TO_ORIGIN}   1234567..89abcde  work -> review\n`)
-    expect(pushedPullRequestHead(workToReview, pr({}))).toEqual({
-      headSha: '89abcde0123',
-      superseded: false
-    })
+    const workToReview = `${TO_ORIGIN}   1234567..89abcde  work -> review\n`
+    expect(match(workToReview, pr({}))).toEqual({ headSha: '89abcde0123', superseded: false })
     // A new branch in another repository is not this fork PR's head.
-    const upstream = pushOf('To github.com:parent/repo.git\n * [new branch]      HEAD -> review\n')
-    expect(pushedPullRequestHead(upstream, pr({}))).toBeNull()
-    // Same owner and repository on another forge host is another repository.
-    const otherHost = pushOf(
-      'To https://github.enterprise.example/acme/repo.git\n * [new branch]      HEAD -> review\n'
-    )
-    expect(pushedPullRequestHead(otherHost, pr({}))).toBeNull()
+    expect(
+      match('To github.com:parent/repo.git\n * [new branch]      HEAD -> review\n', pr({}))
+    ).toBeNull()
+    // The same commit pushed to the same owner/repo on another forge host is another repository.
+    expect(
+      match(
+        'To https://github.enterprise.example/acme/repo.git\n   1234567..89abcde  work -> review\n',
+        pr({})
+      )
+    ).toBeNull()
     // Another push moved the PR on before the read: the proven head is kept, marked superseded.
-    expect(pushedPullRequestHead(workToReview, pr({ headSha: 'ffff0000aaaa' }))).toEqual({
+    expect(match(workToReview, pr({ headSha: 'ffff0000aaaa' }))).toEqual({
       headSha: '89abcde',
       superseded: true
     })

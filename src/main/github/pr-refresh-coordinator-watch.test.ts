@@ -148,6 +148,7 @@ describe('pr-refresh watch jobs', () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     registerPRWatch({ repoId: 'repo-9', branch: 'topic', prNumber: 9, reason: 'pr-follow-ups' })
     attachPRWatchSource({
+      registrationsSettled: Promise.resolve(),
       resolveRepo: async () => ({
         repoId: 'repo-9',
         repoPath: WATCHED,
@@ -175,6 +176,7 @@ describe('pr-refresh watch jobs', () => {
       reason: 'pr-follow-ups'
     })
     seams.attachPRWatchSource({
+      registrationsSettled: Promise.resolve(),
       resolveRepo: async () => ({
         repoId: 'repo-7',
         repoPath: WATCHED,

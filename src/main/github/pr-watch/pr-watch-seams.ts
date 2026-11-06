@@ -15,6 +15,8 @@ import {
 } from './pr-watch-types'
 
 export type PRWatchSeamSource = {
+  /** Resolves once the caller's startup registrations are all made; at once when it has none. */
+  registrationsSettled: Promise<void>
   resolveRepo: PRWatchServiceDeps['resolveRepo']
   pullRequestActionsFor: (prKey: string) => PRChatActionRecord[]
   ownerChatFor: (prKey: string) => string | null
@@ -32,6 +34,7 @@ type FollowUp = {
 const FOLLOW_UP_CACHE_KEY = 'pr-follow-up::'
 
 const followUps = new Map<string, FollowUp>()
+const knownWaiters = new Set<() => void>()
 const observers = new Set<(observation: PRObservation) => void>()
 let source: PRWatchSeamSource | null = null
 
@@ -64,6 +67,29 @@ export function attachPRWatchSource(next: PRWatchSeamSource): () => void {
 }
 
 /** A registration's own job until a read resolves it, then the resolved PR's shared job. */
+function notifyKnown(): void {
+  knownWaiters.forEach((wake) => wake())
+}
+
+/** The PRs follow-up registrations hold, once the caller's registrations are settled and each has
+ *  resolved to its PR (or gone); until then which PRs they hold is unknown. */
+export async function settledPRFollowUpKeys(): Promise<Set<string>> {
+  await source?.registrationsSettled
+  for (;;) {
+    const entries = [...followUps.values()]
+    if (entries.every((entry) => entry.resolvedPRKey !== undefined)) {
+      return new Set(entries.flatMap((entry) => entry.resolvedPRKey ?? []))
+    }
+    await new Promise<void>((resolve) => {
+      const wake = () => {
+        knownWaiters.delete(wake)
+        resolve()
+      }
+      knownWaiters.add(wake)
+    })
+  }
+}
+
 export function isPRFollowUpJob(job: PRWatchJob): boolean {
   const own = followUps.get(prWatchQueueKey(job))
   return own ? own.resolvedPRKey === undefined : prFollowUpCandidate(job.prKey) !== null
@@ -94,6 +120,7 @@ export function resolvePRFollowUp(
   // Pinned to the resolved number, so a reused branch can't swap another PR into this job.
   entry.candidate = { ...entry.candidate, linkedPRNumber: parsePRKey(prKey)?.number ?? null }
   cancelPRWatchRead(entry.job)
+  notifyKnown()
   return entry.candidate
 }
 
@@ -122,6 +149,7 @@ export function registerPRWatch(registration: PRWatchRegistration): PRWatchHandl
       if (entry.count === 0 && followUps.get(key) === entry) {
         followUps.delete(key)
         cancelPRWatchRead(job)
+        notifyKnown()
       }
     }
   }

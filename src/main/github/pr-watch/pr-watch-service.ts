@@ -8,6 +8,7 @@ import type {
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
+import { classifyGitHubOwnerRepoFromRemoteUrl } from '../github-ssh-host-alias-resolution'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
 import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assembly'
@@ -19,34 +20,37 @@ import {
   setPRWatchJobHooks
 } from '../pr-refresh-coordinator'
 import { prChecksDone, prWatchNextDueAt, type PRWatchJob } from '../pr-refresh-watch-jobs'
-import { finishedShellCalls, PRChatActionRecorder } from './pr-chat-action-recorder'
-import { PRReplayedHeads, replayCrashWindow } from './pr-chat-call-replay'
-import { deletePRMovedHeads, endPRWatchState } from './pr-check-event-tables'
+import type { PushRemote } from './pr-chat-action-recorder'
+import {
+  deleteInactiveCurrentPRHeads,
+  deletePRMovedHeads,
+  endPRWatchState
+} from './pr-check-event-tables'
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
 import { PREventDeliveryTrigger } from './pr-event-delivery'
-import { resolvePRCommitSha } from './pr-head-check-read'
+import { isCommitInPRHead, resolvePRCommitSha } from './pr-head-check-read'
 import {
   activeSavedPRWatches,
-  recordPRChatAction,
+  completePRPendingAction,
   recordPRHeadObservation
 } from './pr-head-evaluation'
+import { PRPendingActionResume } from './pr-pending-action-resume'
+import type { PRVerifiedAction } from './pr-pending-action-types'
+import type { PRPendingActionRow, PRPendingObligation } from './pr-pending-actions'
 import {
   isPRFollowUpJob,
   prFollowUpCandidate,
   publishPRObservation,
-  resolvePRFollowUp
+  resolvePRFollowUp,
+  settledPRFollowUpKeys
 } from './pr-watch-seams'
-import {
-  hasPRChatActionFrom,
-  hasPRChatActions,
-  sweepGonePRWatchChats,
-  type PRChatAction
-} from './pr-watch-tables'
+import { hasPRChatActions, sweepGonePRWatchChats, type PRChatAction } from './pr-watch-tables'
 import {
   prKeyOf,
   prObservationOf,
   prWatchCandidate,
-  type PRWatchServiceDeps
+  type PRWatchServiceDeps,
+  type PRWatchWorkspace
 } from './pr-watch-types'
 
 const ACTION_WINDOW_MS = 14 * 24 * 60 * 60_000
@@ -63,10 +67,7 @@ function settled(pr: PRInfo): boolean {
 
 export class PRWatchService {
   private readonly chatWatches = new Map<string, ChatWatch>()
-  private readonly reconciled = new Set<string>()
-  private readonly replayedHeads = new PRReplayedHeads()
-  private startedAt = Number.POSITIVE_INFINITY
-  private readonly recorder: PRChatActionRecorder
+  private readonly resume: PRPendingActionResume
   private readonly earlierHeads: PREarlierHeadJobs
   private readonly deliveries: PREventDeliveryTrigger
   private stopObserving: (() => void) | null = null
@@ -75,16 +76,16 @@ export class PRWatchService {
 
   constructor(private readonly deps: PRWatchServiceDeps) {
     this.now = deps.now ?? Date.now
-    this.recorder = new PRChatActionRecorder({
-      chatWorkspace: deps.chatWorkspace,
-      isRecorded: (chatId, anchorItemId) =>
-        hasPRChatActionFrom(this.deps.database.db, chatId, anchorItemId),
+    this.resume = new PRPendingActionResume({
+      ...deps,
       repositories: async ({ repoPath, connectionId, wslDistro }) =>
         (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, { wslDistro }))
           .candidates,
+      resolvePushRemote,
       readAfterPush: (candidate) => enqueuePRRefresh(candidate, 'post-push'),
       resolveCommitSha: resolvePRCommitSha,
-      record: (action, candidate, how) => this.recordAction(action, candidate, how),
+      isCommitInPRHead,
+      complete: (row, verified) => this.completeAction(row, verified),
       now: this.now
     })
     this.earlierHeads = new PREarlierHeadJobs({
@@ -100,7 +101,6 @@ export class PRWatchService {
     if (this.deps.database.readOnly) {
       return
     }
-    this.startedAt = this.now()
     this.stopObserving = addPRRefreshOutcomeObserver((candidate, outcome) =>
       this.observe(candidate, outcome)
     )
@@ -119,6 +119,14 @@ export class PRWatchService {
     for (const [prKey, watch] of this.chatWatches) {
       index = this.earlierHeads.scheduleMoved(prKey, watch.candidate, index)
     }
+    this.resume.drain()
+    // Current heads retire only once every reason is known, follow-up registrations included.
+    void settledPRFollowUpKeys().then((followUps) => {
+      if (!this.deps.database.isClosed && this.stopObserving) {
+        const held = new Set([...active.keys(), ...followUps])
+        this.deps.database.transaction((db) => deleteInactiveCurrentPRHeads(db, held))
+      }
+    })
   }
 
   stop(): void {
@@ -128,14 +136,12 @@ export class PRWatchService {
     for (const prKey of this.chatWatches.keys()) {
       cancelPRWatchRead({ prKey })
     }
-    this.recorder.clear()
+    this.resume.clear()
     this.earlierHeads.clear()
     this.chatWatches.clear()
-    this.reconciled.clear()
-    this.replayedHeads.clear()
   }
 
-  /** Each committed batch: finished calls may be PR actions, and the chat may take its lines now. */
+  /** Each committed batch: a finished call's obligations were captured with it; resume them now. */
   observeCommittedRows(
     chatId: string,
     journal: AgentSessionJournal,
@@ -144,56 +150,17 @@ export class PRWatchService {
     if (this.deps.database.readOnly) {
       return
     }
-    if (!rows) {
-      this.reconcileChat(chatId, journal)
-    }
-    const calls = rows ? finishedShellCalls(chatId, rows) : []
-    if (calls.length > 0) {
-      void this.recorder.record(calls).catch((error: unknown) =>
-        this.deps.logger.warn('recording pull request actions failed', {
-          scope: 'pr-watch',
-          chatId,
-          error
-        })
-      )
+    if (rows?.some((row) => row.kind === 'item' && row.body.kind === 'tool-call')) {
+      this.resume.drain()
     }
     this.deliveries.committed(chatId, journal)
   }
 
-  /** Recovers the crash window once per chat per start; retryable at the next open if it fails. */
-  reconcileChat(chatId: string, journal: AgentSessionJournal): void {
-    if (this.reconciled.has(chatId) || this.deps.database.readOnly) {
-      return
+  private completeAction(row: PRPendingActionRow, verified: PRVerifiedAction[]): void {
+    completePRPendingAction(this.deps.database, row, verified)
+    for (const { action, candidate } of verified) {
+      void this.watchChatPR(pullRequestKey(action), action, this.now(), candidate)
     }
-    this.reconciled.add(chatId)
-    void replayCrashWindow({
-      db: this.deps.database.db,
-      journal: { sessionId: chatId, physicalCursor: journal.physicalCursor, item: journal.item },
-      startedAt: this.startedAt,
-      record: (calls) => this.recorder.record(calls, true)
-    }).then(
-      (complete) => complete || this.reconciled.delete(chatId),
-      (error: unknown) => {
-        this.reconciled.delete(chatId)
-        this.deps.logger.warn('replaying pull request actions failed', {
-          scope: 'pr-watch',
-          chatId,
-          error
-        })
-      }
-    )
-  }
-
-  private recordAction(
-    action: PRChatAction,
-    candidate: GitHubPRRefreshCandidate,
-    how: { superseded: boolean; replayed: boolean }
-  ): void {
-    recordPRChatAction(this.deps.database, action, how.superseded ? this.now() : null)
-    if (how.replayed) {
-      this.replayedHeads.mark(pullRequestKey(action), action.headSha)
-    }
-    void this.watchChatPR(pullRequestKey(action), action, this.now(), candidate)
   }
 
   /** A known candidate starts the watch synchronously, before the read that verified it is evaluated. */
@@ -207,7 +174,10 @@ export class PRWatchService {
     let candidate = known ?? existing?.candidate
     if (!candidate) {
       const workspace = await this.deps.chatWorkspace(action.chatId)
-      candidate = workspace ? prWatchCandidate(workspace, action.number) : undefined
+      candidate =
+        workspace && workspace !== 'not-git'
+          ? prWatchCandidate(workspace, action.number)
+          : undefined
     }
     if (!candidate) {
       return
@@ -260,7 +230,7 @@ export class PRWatchService {
     if (!pr?.headSha || !prKey || outcome.kind !== 'found') {
       return
     }
-    this.recorder.verify(candidate, pr, outcome.fetchedAt)
+    this.resume.verifyRead(candidate, pr, outcome.fetchedAt)
     publishPRObservation(prObservationOf(pr, prKey, outcome.fetchedAt), (error) =>
       this.deps.logger.warn('a pull request observer failed', { scope: 'pr-watch', prKey, error })
     )
@@ -302,14 +272,12 @@ export class PRWatchService {
     isCurrentHead: boolean,
     observedAt = this.now()
   ): boolean {
-    const silent = this.replayedHeads.takeFirstRead(prKey, headSha, isCurrentHead)
     const written = recordPRHeadObservation(this.deps.database, {
       prKey,
       headSha,
       rollup,
       isCurrentHead,
-      observedAt,
-      silent
+      observedAt
     })
     for (const chatId of written.chatIds) {
       this.deliveries.owe(chatId, this.deps.openJournal(chatId))
@@ -331,4 +299,33 @@ export class PRWatchService {
       }
     }
   }
+}
+
+/** A push's `To` target, its SSH host alias resolved through the checkout's config. A URL git
+ *  printed without its user is tried as `git@`; a host that names no GitHub stays as parsed. */
+async function resolvePushRemote(
+  workspace: PRWatchWorkspace,
+  evidence: Extract<PRPendingObligation, { kind: 'pushed' }>['evidence']
+): Promise<PushRemote | 'unknown' | null> {
+  const url = evidence.remoteUrl
+  if (!url) {
+    return 'unknown'
+  }
+  const context = {
+    repoPath: workspace.checkoutPath,
+    connectionId: workspace.connectionId,
+    ...(workspace.wslDistro ? { wslDistro: workspace.wslDistro } : {})
+  }
+  const scpLike = !url.includes('://') && !url.includes('@')
+  for (const candidate of scpLike ? [url, `git@${url}`] : [url]) {
+    const result = await classifyGitHubOwnerRepoFromRemoteUrl(candidate, context)
+    if (result.kind === 'indeterminate') {
+      return null
+    }
+    if (result.kind === 'github') {
+      const { owner, repo, host } = result.ownerRepo
+      return { host: host ?? 'github.com', owner, repo }
+    }
+  }
+  return evidence.remote?.host.includes('.') ? evidence.remote : 'unknown'
 }

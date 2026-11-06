@@ -45,6 +45,18 @@ CREATE TABLE IF NOT EXISTS pr_pending_heads (
   expires_at    INTEGER,
   PRIMARY KEY (pr_key, head_sha)
 );
+CREATE TABLE IF NOT EXISTS pr_pending_actions (
+  chat_id             TEXT    NOT NULL,
+  anchor_item_id      TEXT    NOT NULL,
+  anchor_revision     INTEGER NOT NULL,
+  evidence_json       TEXT    NOT NULL,
+  finished_at         INTEGER NOT NULL,
+  resolve_deadline_at INTEGER NOT NULL,
+  verify_deadline_at  INTEGER NOT NULL,
+  next_attempt_at     INTEGER NOT NULL,
+  attempts            INTEGER NOT NULL,
+  PRIMARY KEY (chat_id, anchor_item_id)
+);
 CREATE TABLE IF NOT EXISTS pr_check_contexts (
   pr_key       TEXT    NOT NULL,
   head_sha     TEXT    NOT NULL,
@@ -155,7 +167,10 @@ export function hasPRChatActions(db: Database.Database, prKey: string): boolean 
 export function readPRWatchChatIds(db: Database.Database): string[] {
   return (
     db
-      .prepare('SELECT chat_id FROM pr_chat_actions UNION SELECT chat_id FROM pr_event_deliveries')
+      .prepare(
+        `SELECT chat_id FROM pr_chat_actions UNION SELECT chat_id FROM pr_event_deliveries
+          UNION SELECT chat_id FROM pr_pending_actions`
+      )
       .all() as { chat_id: string }[]
   ).map((row) => row.chat_id)
 }
@@ -165,9 +180,11 @@ export function readPRWatchChatIds(db: Database.Database): string[] {
 export function deletePRWatchChats(db: Database.Database, chatIds: readonly string[]): void {
   const actions = db.prepare('DELETE FROM pr_chat_actions WHERE chat_id = ?')
   const deliveries = db.prepare('DELETE FROM pr_event_deliveries WHERE chat_id = ?')
+  const pending = db.prepare('DELETE FROM pr_pending_actions WHERE chat_id = ?')
   for (const chatId of chatIds) {
     actions.run(chatId)
     deliveries.run(chatId)
+    pending.run(chatId)
   }
   db.exec(`
 DELETE FROM pr_check_events WHERE id NOT IN (SELECT event_id FROM pr_event_deliveries);

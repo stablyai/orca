@@ -69,3 +69,23 @@ export function resolvePRCommitSha(
     return /^[0-9a-f]{40,64}$/u.test(sha) && sha.startsWith(abbreviated.toLowerCase()) ? sha : null
   })
 }
+
+/** Whether `sha` is already in the PR's history: an ancestor of, or the same as, its head. */
+export function isCommitInPRHead(
+  candidate: GitHubPRRefreshCandidate,
+  pr: PRRepository,
+  sha: string,
+  headSha: string
+): Promise<boolean> {
+  return withPRRepository(candidate, pr, async (repository, options) => {
+    await assertRateLimitBudget('core', repository, options)
+    const path = `repos/${repository.owner}/${repository.repo}/compare/${encodeURIComponent(sha)}...${encodeURIComponent(headSha)}`
+    const { stdout } = await ghExecFileAsync(['api', path, '--jq', '.status'], {
+      ...options,
+      ...githubHostExecOptions(repository)
+    })
+    noteRepositoryRateLimitSpend(repository, 'core', 1, options)
+    const status = stdout.trim()
+    return status === 'ahead' || status === 'identical'
+  })
+}

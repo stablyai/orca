@@ -13,7 +13,6 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import { deliverPendingPullRequestEvents } from './pr-event-delivery'
 import { insertPRCheckEvent, readOldestPRPendingDelivery } from './pr-check-event-tables'
 import { insertPRChatAction } from './pr-watch-tables'
-import { journalShellCallsFinishedBetween } from './pr-chat-call-replay'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'chat-1',
@@ -136,47 +135,5 @@ describe('deliverPendingPullRequestEvents', () => {
     ).rejects.toThrow('mark failed')
     expect(lines(journal)).toEqual([])
     expect(readOldestPRPendingDelivery(database.db, 'chat-1')?.verdict).toBe('failure')
-  })
-
-  it('replays only calls that finished in the crash window before watches started', async () => {
-    const start = 10 * 24 * 60 * 60_000
-    let now = start - 5 * 24 * 60 * 60_000
-    const journal = await journals.open({
-      identity: IDENTITY,
-      stateDirectory: root,
-      now: () => now,
-      mintEpoch: () => 'epoch-1'
-    })
-    const createCall = (ordinal: number) =>
-      journal.appendItem(
-        { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal },
-        {
-          kind: 'tool-call',
-          name: 'shell',
-          input: { command: 'gh pr create --fill' },
-          state: 'completed',
-          output: {
-            head: `https://github.com/acme/repo/pull/${ordinal}`,
-            byteLength: 30,
-            digest: 'd',
-            truncated: false
-          }
-        },
-        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-    // Before an upgrade: a PR opened five days ago, long since merged, must not get a late line.
-    await createCall(1)
-    now = start - 30 * 60_000
-    await createCall(2)
-    now = start + 60_000
-    await createCall(3)
-    const replayed = journalShellCallsFinishedBetween(
-      openTestJournalHostDatabase(root).db,
-      { sessionId: 'chat-1', physicalCursor: journal.physicalCursor, item: journal.item },
-      start - 2 * 60 * 60_000,
-      start
-    )
-    // Only the call that finished while no live observer ran; the later one is seen live.
-    expect(replayed.map((call) => call.output)).toEqual(['https://github.com/acme/repo/pull/2'])
   })
 })

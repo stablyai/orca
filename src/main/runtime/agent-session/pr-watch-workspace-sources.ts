@@ -41,7 +41,10 @@ export function prWatchWorkspaceSources(
       )
       const repo = runtime.store().getRepo(worktree.repoId)
       const branch = worktree.git.branch.replace(/^refs\/heads\//u, '')
-      if (!repo || repo.kind === 'folder' || !branch) {
+      if (repo?.kind === 'folder') {
+        return 'not-git'
+      }
+      if (!repo || !branch) {
         return null
       }
       return { ...repoSource(runtime, repo, executionHostId), checkoutPath: worktree.path, branch }

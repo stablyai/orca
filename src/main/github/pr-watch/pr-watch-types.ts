@@ -55,8 +55,9 @@ export type PRChatActionRecord = {
 
 export type PRWatchServiceDeps = {
   database: JournalHostDatabase
-  /** The chat's git workspace; null for a gone chat, a folder workspace or an unresolvable one. */
-  chatWorkspace: (chatId: string) => Promise<PRWatchWorkspace | null>
+  /** The chat's git workspace. 'not-git': a folder workspace or a chat outside a worktree, which
+   *  never gets lines. Null: gone or not resolvable right now. */
+  chatWorkspace: (chatId: string) => Promise<PRWatchWorkspace | 'not-git' | null>
   chatExists: (chatId: string) => boolean
   resolveRepo: (
     repoId: string,

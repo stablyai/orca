@@ -16,15 +16,13 @@ export type PRWatchRuntimeDeps = {
   legacySessionTabIds: readonly string[]
   hostId: string
   logger: StructuredAgentSessionLogger
-  resolveWorkspace: (workspaceId: string) => Promise<PRWatchWorkspace | null>
+  resolveWorkspace: (workspaceId: string) => Promise<PRWatchWorkspace | 'not-git' | null>
   resolveRepo: PRWatchServiceDeps['resolveRepo']
 }
 
 let generation = 0
 let starting: Promise<void> | null = null
 let running: { service: PRWatchService; detach: () => void } | null = null
-// Chats whose journals committed before watches started; reconciled once they do.
-const seenBeforeStart = new Map<string, AgentSessionJournal>()
 
 /** The open chat's journal, if any: the publication feed hands a new observer it at once. */
 function openChatJournal(chatId: string): AgentSessionJournal | null {
@@ -56,15 +54,20 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
       // Folder workspaces have no checkout to read a PR through, so their chats get no lines.
       chatWorkspace: async (chatId) => {
         const location = store.getConversation(chatId)?.location
-        return location?.workspaceKind === 'git-worktree'
+        if (!location) {
+          return null
+        }
+        return location.workspaceKind === 'git-worktree'
           ? deps.resolveWorkspace(location.workspaceId).catch(() => null)
-          : null
+          : 'not-git'
       },
       resolveRepo: deps.resolveRepo,
       openJournal: openChatJournal,
       logger: deps.logger
     })
     const detach = attachPRWatchSource({
+      // No follow-up source registers in this build yet.
+      registrationsSettled: Promise.resolve(),
       resolveRepo: deps.resolveRepo,
       pullRequestActionsFor: (prKey) =>
         journalDatabase.isClosed ? [] : readPRChatActionRecords(journalDatabase.db, prKey),
@@ -73,10 +76,6 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
     })
     running = { service, detach }
     await service.start()
-    for (const [sessionId, journal] of seenBeforeStart) {
-      service.reconcileChat(sessionId, journal)
-    }
-    seenBeforeStart.clear()
   })().catch((error: unknown) => {
     starting = null
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
@@ -98,9 +97,6 @@ export function observePRWatchCommittedRows(
   journal: AgentSessionJournal,
   rows: readonly JournalRow[] | undefined
 ): void {
-  if (running) {
-    running.service.observeCommittedRows(sessionId, journal, rows)
-  } else {
-    seenBeforeStart.set(sessionId, journal)
-  }
+  // Before watches start, captured obligations simply wait in their table for the first drain.
+  running?.service.observeCommittedRows(sessionId, journal, rows)
 }

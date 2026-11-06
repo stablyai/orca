@@ -8,10 +8,17 @@ import {
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
+import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
 import { endPRWatchState, readPRPendingHeads } from './pr-check-event-tables'
-import { recordPRChatAction, recordPRHeadObservation } from './pr-head-evaluation'
+import {
+  activeSavedPRWatches,
+  completePRPendingAction,
+  recordPRChatAction,
+  recordPRHeadObservation
+} from './pr-head-evaluation'
+import { PRPendingActionResume } from './pr-pending-action-resume'
+import { capturePRPendingActions } from './pr-pending-actions'
 import { deletePRWatchChats } from './pr-watch-tables'
-import { PRChatActionRecorder } from './pr-chat-action-recorder'
 import { prWatchCandidate } from './pr-watch-types'
 
 const PR_KEY = 'github.com/acme/repo#3'
@@ -85,7 +92,7 @@ describe('recordPRHeadObservation over saved state', () => {
   })
 })
 
-describe('a replayed or superseded push head', () => {
+describe('a superseded push head and startup', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'pr-head-replay-'))
     database = openTestJournalHostDatabase(root)
@@ -96,42 +103,8 @@ describe('a replayed or superseded push head', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('seeds a replayed action’s already-final first read without a line', () => {
-    recordPRChatAction(database, {
-      chatId: 'chat-1',
-      anchor: { itemId: 'orca:anchor', revision: 1 },
-      forgeHost: 'github.com',
-      owner: 'acme',
-      repo: 'repo',
-      number: 3,
-      kind: 'opened',
-      headSha: null,
-      observedAt: 0
-    })
-    const first = recordPRHeadObservation(database, {
-      prKey: PR_KEY,
-      headSha: HEAD_A,
-      rollup: green(31001),
-      isCurrentHead: true,
-      observedAt: 10,
-      silent: true
-    })
-    expect(first.chatIds).toEqual([])
-    // A later result on that head is new and reported as usual.
-    expect(
-      recordPRHeadObservation(database, {
-        prKey: PR_KEY,
-        headSha: HEAD_A,
-        rollup: green(31009),
-        isCurrentHead: true,
-        observedAt: 20
-      }).chatIds
-    ).toEqual(['chat-1'])
-  })
-
   it('keys a superseded push by its full SHA, so a force-push back repeats nothing', async () => {
     const fullA = '89abcde0000000000000000000000000000000ff'
-    const recorded: { headSha: string | null; superseded: boolean }[] = []
     const workspace = {
       repoId: 'r',
       repoPath: '/repo',
@@ -140,42 +113,59 @@ describe('a replayed or superseded push head', () => {
       branch: 'work',
       connectionId: null
     }
-    const recorder = new PRChatActionRecorder({
+    capturePRPendingActions(
+      database.db,
+      'chat-1',
+      [
+        {
+          kind: 'item',
+          itemId: 'item',
+          revision: 1,
+          body: {
+            kind: 'tool-call',
+            name: 'shell',
+            input: { command: 'git push origin work:review' },
+            state: 'completed',
+            output: {
+              head: 'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n',
+              byteLength: 1,
+              digest: 'd',
+              truncated: false
+            }
+          }
+        } as unknown as JournalRow
+      ],
+      0,
+      () => undefined
+    )
+    const resume = new PRPendingActionResume({
+      database,
+      chatExists: () => true,
       chatWorkspace: async () => workspace,
-      isRecorded: () => false,
       repositories: async () => [],
+      resolvePushRemote: async () => ({ host: 'github.com', owner: 'acme', repo: 'repo' }),
       readAfterPush: () => {},
       resolveCommitSha: async (_candidate, _pr, abbreviated) =>
         fullA.startsWith(abbreviated) ? fullA : null,
-      record: (action, _candidate, how) => {
-        recorded.push({ headSha: action.headSha, superseded: how.superseded })
-        recordPRChatAction(database, action, how.superseded ? 50 : null)
-      },
-      now: () => 0
+      isCommitInPRHead: async () => false,
+      complete: (row, verified) => completePRPendingAction(database, row, verified),
+      logger: { warn: () => {} },
+      now: () => 10
     })
-    await recorder.record([
-      {
-        chatId: 'chat-1',
-        anchor: { itemId: 'item', revision: 1 },
-        script: 'git push origin work:review',
-        output: 'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n',
-        finishedAt: 0
-      }
-    ])
+    resume.drain()
     // Another push moved the PR to B before the first read.
-    recorder.verify(
-      prWatchCandidate(workspace, null),
-      {
-        number: 3,
-        headRefName: 'review',
-        headSha: HEAD_B,
-        headRepo: { owner: 'acme', repo: 'repo' },
-        prRepo: { owner: 'acme', repo: 'repo' }
-      } as PRInfo,
-      40
-    )
-    await vi.waitFor(() => expect(recorded).toEqual([{ headSha: fullA, superseded: true }]))
-    recorder.clear()
+    const movedOn = {
+      number: 3,
+      headRefName: 'review',
+      headSha: HEAD_B,
+      headRepo: { owner: 'acme', repo: 'repo' },
+      prRepo: { owner: 'acme', repo: 'repo' }
+    } as PRInfo
+    await vi.waitFor(() => {
+      resume.verifyRead(prWatchCandidate(workspace, null), movedOn, 40)
+      expect(readPRPendingHeads(database.db, PR_KEY).map((head) => head.headSha)).toEqual([fullA])
+    })
+    resume.clear()
     // The earlier head's own read reports it once; the PR later returning to A repeats nothing.
     expect(
       recordPRHeadObservation(database, {
@@ -187,5 +177,43 @@ describe('a replayed or superseded push head', () => {
       }).chatIds
     ).toEqual(['chat-1'])
     expect(read(fullA, green(31001), 70)).toEqual([])
+  })
+
+  it('keeps a current head an unresolved follow-up may hold through startup', async () => {
+    recordPRChatAction(database, {
+      chatId: 'chat-1',
+      anchor: { itemId: 'orca:anchor', revision: 1 },
+      forgeHost: 'github.com',
+      owner: 'acme',
+      repo: 'repo',
+      number: 3,
+      kind: 'opened',
+      headSha: null,
+      observedAt: 0
+    })
+    read(HEAD_A, [{ ...green(31001)[0], status: 'IN_PROGRESS', conclusion: null }])
+    const seams = await import('./pr-watch-seams')
+    const registration = seams.registerPRWatch({
+      repoId: 'repo-1',
+      branch: 'feature',
+      prNumber: 3,
+      reason: 'pr-follow-ups'
+    })
+    seams.attachPRWatchSource({
+      registrationsSettled: Promise.resolve(),
+      resolveRepo: () => new Promise(() => {}),
+      pullRequestActionsFor: () => [],
+      ownerChatFor: () => null
+    })
+    // Startup, past the action window: the action no longer holds the PR, the follow-up may.
+    expect(activeSavedPRWatches(database, 30 * 24 * 60 * 60_000, 14 * 24 * 60 * 60_000).size).toBe(
+      0
+    )
+    let known = false
+    void seams.settledPRFollowUpKeys().then(() => (known = true))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(known).toBe(false)
+    expect(readPRPendingHeads(database.db, PR_KEY)).toHaveLength(1)
+    registration.unregister()
   })
 })

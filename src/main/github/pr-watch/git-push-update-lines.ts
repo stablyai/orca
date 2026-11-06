@@ -14,6 +14,8 @@ export type GitPushUpdate = {
   /** The forge host and repository of the `To <url>` line above it; null when git named none we
    *  can read. */
   remote: { host: string; owner: string; repo: string } | null
+  /** The `To` URL as git printed it, for resolving an SSH host alias against the checkout's config. */
+  remoteUrl: string | null
 }
 
 const GIT_PUSH_RUN = new RegExp(`${COMMAND_START}git\\s+push(?=$|[\\s;&|)])`, 'u')
@@ -65,11 +67,13 @@ function branchOf(ref: string): string | null {
 export function gitPushUpdates(output: string): GitPushUpdate[] {
   const updates: GitPushUpdate[] = []
   let remote: GitPushUpdate['remote'] = null
+  let remoteUrl: string | null = null
   for (const raw of output.split('\n')) {
     const line = raw.replace(/\r$/u, '')
     const to = line.startsWith('To ') ? TO_LINE.exec(line) : undefined
     if (to !== undefined) {
       remote = to ? { host: to[1]!.toLowerCase(), owner: to[2]!, repo: to[3]! } : null
+      remoteUrl = line.slice('To '.length).trim()
       continue
     }
     const human = HUMAN_LINE.exec(line)
@@ -80,7 +84,7 @@ export function gitPushUpdates(output: string): GitPushUpdate[] {
     if (!branch || !summary) {
       continue
     }
-    updates.push({ branch, newSha: SUMMARY_NEW_SHA.exec(summary)?.[1] ?? null, remote })
+    updates.push({ branch, newSha: SUMMARY_NEW_SHA.exec(summary)?.[1] ?? null, remote, remoteUrl })
   }
   return updates
 }

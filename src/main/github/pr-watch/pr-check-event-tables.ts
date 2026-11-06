@@ -150,19 +150,19 @@ export function endPRWatchState(db: Database.Database, prKey: string): void {
   db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ?').run(prKey)
 }
 
-/**
- * Startup: drops moved heads past their fixed deadline, and the current-head rows of watches no
- * recent action holds. Unexpired moved heads stay whatever holds them: a follow-up registration
- * resolves only after startup, and each expires on its own deadline anyway.
- */
-export function retirePRWatchState(
-  db: Database.Database,
-  now: number,
-  activePRKeys: ReadonlySet<string>
-): void {
+/** Moved heads past their fixed deadline; nothing holds them any longer. */
+export function deleteExpiredPRPendingHeads(db: Database.Database, now: number): void {
   db.prepare('DELETE FROM pr_pending_heads WHERE expires_at IS NOT NULL AND expires_at <= ?').run(
     now
   )
+}
+
+/** Current-head rows of PRs no watch reason holds. The caller runs this only once every reason is
+ *  known, follow-up registrations included: an unresolved one's PR is unknown, not absent. */
+export function deleteInactiveCurrentPRHeads(
+  db: Database.Database,
+  activePRKeys: ReadonlySet<string>
+): void {
   const inactive = (
     db.prepare('SELECT DISTINCT pr_key FROM pr_pending_heads WHERE moved_at IS NULL').all() as {
       pr_key: string
