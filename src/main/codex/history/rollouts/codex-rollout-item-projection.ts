@@ -158,6 +158,16 @@ export function codexRolloutItem(value: unknown): CodexThreadItem | null {
         }
       })
     item.status = item.status ?? 'inProgress'
+  } else if (type === 'userMessage' && Array.isArray(raw.content)) {
+    item.content = raw.content.map((value) => {
+      const part = readRecord(value)
+      if (['image', 'Image', 'input_image'].includes(String(part.type))) {
+        return { ...part, type: 'image', url: part.image_url ?? part.url }
+      }
+      return ['local_image', 'LocalImage'].includes(String(part.type))
+        ? { ...part, type: 'localImage' }
+        : value
+    })
   } else if (type === 'agentMessage' && Array.isArray(raw.content) && raw.text === undefined) {
     item.text = raw.content.map((part) => readString(readRecord(part), 'text') ?? '').join('')
   } else if (type === 'reasoning') {

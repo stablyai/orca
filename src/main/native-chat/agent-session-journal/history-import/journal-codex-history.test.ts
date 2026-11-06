@@ -1,4 +1,5 @@
 import { createCodexHistoryCollector } from './journal-codex-history'
+import { readRecord } from '../../../codex/app-server/codex-item-field-readers'
 import { codexCommandPresentation } from '../../../codex/history/rollouts/codex-command-presentation'
 import { codexRolloutItem } from '../../../codex/history/rollouts/codex-rollout-item-projection'
 import { projectCodexHistoryItem } from '../../../codex/history/journal-views/codex-history-projection'
@@ -287,7 +288,7 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
         paginated: true,
         offset: ordinal,
         selected: true,
-        recordId: `physical:${String((record.payload.item as { id?: string } | undefined)?.id ?? ordinal)}`
+        recordId: `physical:${String(readRecord(record.payload.item).id ?? ordinal)}`
       })
     )
     return collector.items()
@@ -300,6 +301,43 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
     )?.body
   const turnBody = (records: typeof source) =>
     collect(records).find((row) => row.body.kind === 'turn')?.body
+  for (const withText of [false, true]) {
+    const prompt = source[2]!
+    const rows = collect([
+      source[1]!,
+      {
+        ...prompt,
+        payload: {
+          ...prompt.payload,
+          item: {
+            ...readRecord(prompt.payload.item),
+            content: [
+              ...(withText ? [{ type: 'text', text: 'what is wrong here?' }] : []),
+              { type: 'local_image', path: '/tmp/shot.png' },
+              { type: 'image', image_url: 'data:image/png;base64,aGVsbG8=' }
+            ]
+          }
+        }
+      }
+    ])
+    const user = rows.find((row) => row.body.kind === 'message')!
+    expect(user.body).toMatchObject({
+      role: 'user',
+      blocks: withText
+        ? [
+            { type: 'text', text: 'what is wrong here?' },
+            { type: 'image-ref', path: '/tmp/shot.png' },
+            { type: 'image-ref', url: 'data:image/png;base64,aGVsbG8=' }
+          ]
+        : [
+            { type: 'image-ref', path: '/tmp/shot.png' },
+            { type: 'image-ref', url: 'data:image/png;base64,aGVsbG8=' }
+          ]
+    })
+    expect(rows[0]?.body).toMatchObject({
+      userItemId: 'legacy:codex:bounded:physical%3A01a1b0de-9eb4-7d00-8a61-b394bb501cec'
+    })
+  }
   const unfinished = turnBody(source.slice(0, 2))
   expect(unfinished).toMatchObject({ state: 'completed' })
   expect(unfinished).not.toHaveProperty('outcome')
@@ -323,7 +361,6 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
     state: 'completed',
     outcome: 'failure'
   })
-  expect(project(source)).toMatchObject({ endedAs: 'interrupted' })
   expect(project([...source.slice(0, -2), closure, abort, closure])).toMatchObject({
     state: 'failed',
     exitCode: -1
@@ -342,26 +379,74 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
     ...source[5]!,
     payload: {
       ...source[5]!.payload,
-      item: { ...(source[5]!.payload.item as object), id: `evict-${n}` }
+      item: { ...readRecord(source[5]!.payload.item), id: `evict-${n}` }
     }
   }))
   expect(project([...source.slice(0, -2), closure, ...churn, abort, closure], 4096)).toMatchObject({
     state: 'failed',
     exitCode: -1
   })
+  const prior = churn.map((record) => ({
+    ...record,
+    timestamp: '2026-11-05T12:00:00Z',
+    payload: { ...record.payload, turn_id: 'prior' }
+  }))
+  expect(project([...prior, ...source], 4096)).toMatchObject({ endedAs: 'interrupted' })
   const running = {
     ...closure,
     payload: {
       ...closure.payload,
-      item: { ...(closure.payload.item as object), status: 'in_progress', exit_code: null }
+      item: { ...readRecord(closure.payload.item), status: 'in_progress', exit_code: null }
     }
   }
   expect(project([...source.slice(0, -2), running])).toMatchObject({ state: 'running' })
+  const started = {
+    ...running,
+    payload: {
+      ...running.payload,
+      type: 'item_started',
+      completed_at_ms: undefined,
+      item: { ...readRecord(running.payload.item), duration: null }
+    }
+  }
+  expect(project([source[1]!, started])).toMatchObject({ state: 'running' })
+  const snapshots = collect([started, closure, started])
+  expect(snapshots).toHaveLength(1)
+  expect(snapshots[0]?.body).toMatchObject({ state: 'failed', exitCode: -1 })
+  expect(snapshots[0]?.body).not.toHaveProperty('endedAs')
+  const patch = (await recordedCodexRollout('c'))[5]!
+  const patchStart = {
+    ...patch,
+    payload: {
+      ...patch.payload,
+      type: 'item_started',
+      item: { ...readRecord(patch.payload.item), status: 'in_progress' }
+    }
+  }
+  expect(collect([patchStart, patch, patchStart]).map((row) => row.body)).toMatchObject([
+    { kind: 'diff', patch: { head: 'before\n' } }
+  ])
   const missingTime = { ...closure, payload: { ...closure.payload, started_at_ms: undefined } }
   expect(project([...source.slice(0, -1), missingTime])).toMatchObject({
     state: 'failed',
     exitCode: -1
   })
+  expect(
+    collect([...source.slice(0, -1), missingTime])
+      .filter((row) => row.body.kind === 'tool-call')
+      .map((row) => row.body.kind === 'tool-call' && row.body.callId)
+  ).toEqual([
+    'exec-9e16b5a2-aa91-41ce-9694-3d5ffbe84745',
+    'exec-4348160a-500b-4f8b-938b-427f9617fc5d',
+    'exec-30ac4087-b83f-4063-b33d-d4668c019761',
+    'exec-422971fb-5f49-4f00-8701-a031ef77f289'
+  ])
+  expect(
+    collect([
+      ...source.slice(0, -1),
+      { ...closure, payload: { ...closure.payload, turn_id: undefined } }
+    ]).at(-1)?.body
+  ).toMatchObject({ callId: 'exec-422971fb-5f49-4f00-8701-a031ef77f289' })
   const legacy = source.map((record, index) =>
     index === 0 ? { ...record, payload: { ...record.payload, history_mode: 'full' } } : record
   )

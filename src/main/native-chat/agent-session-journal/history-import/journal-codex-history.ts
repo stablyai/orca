@@ -6,13 +6,10 @@ import { historicalTurnLifecycle } from '../../../codex/structured/journal/codex
 import { codexTurnLifecycleIdentity } from '../../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import {
-  boundLegacyImportBlock,
-  boundPayload,
-  boundToolInput,
+  boundLegacyImportBody,
   type JournalPayloadLimits
 } from '../item-lifecycle/journal-payload-bounds'
 import {
@@ -30,7 +27,7 @@ type Turn = {
 type Fact = {
   bytes: number
   turn?: Turn
-  terminal?: number
+  firstTerminal?: number
   interrupted?: boolean
   turnKey?: string
 }
@@ -44,21 +41,16 @@ export function createCodexHistoryCollector(
   const facts = new Map<string, Fact>()
   const placement = new WeakMap<
     JournalReplacementItem,
-    { group: number; at: number; position: number }
+    { group: number; at: number; position: number; completedSnapshot: boolean }
   >()
   let factBytes = 0,
     order = 0,
     position = 0,
     segment = '',
     lastStart = -Infinity,
+    lastRecordAt = 0,
     lastTurnId: string | null = null
-  let interval: { at: number; position: number } | null = null
-  const identity = (recordId: string) => ({
-    provider: 'legacy' as const,
-    agent: 'codex' as const,
-    sessionId,
-    recordId
-  })
+  let interval: { at: number; position: number; turnKey: string } | null = null
   const remember = (key: string, fact: Omit<Fact, 'bytes'>) => {
     factBytes -= facts.get(key)?.bytes ?? 0
     const bytes = Buffer.byteLength(JSON.stringify([key, fact])) + 128
@@ -75,44 +67,33 @@ export function createCodexHistoryCollector(
           turn.complete = false
         }
       }
-      interval = null
-    }
-    window.reserve(factBytes + (interval ? 64 : 0))
-  }
-  const bound = (body: AgentJournalItemBody): AgentJournalItemBody => {
-    if (body.kind === 'message') {
-      return { ...body, blocks: body.blocks.map((block) => boundLegacyImportBlock(block, limits)) }
-    }
-    if (body.kind === 'tool-call') {
-      return {
-        ...body,
-        input: boundToolInput(body.input, limits),
-        ...(body.output ? { output: boundPayload(body.output.head, limits) } : {})
+      if (oldKey === interval?.turnKey) {
+        interval = null
       }
     }
-    if (body.kind === 'diff') {
-      return { ...body, patch: boundPayload(body.patch.head, limits) }
-    }
-    return body
+    window.reserve(factBytes + (interval ? Buffer.byteLength(interval.turnKey) + 64 : 0))
   }
-  const store = (key: string, row: JournalReplacementItem, group: number, at: number) => {
-    const previous = window.get(key)
-    const firstPosition = previous ? placement.get(previous)?.position : undefined
-    placement.set(row, { group, at, position: firstPosition ?? position++ })
+  const store = (
+    key: string,
+    row: JournalReplacementItem,
+    group: number,
+    at: number,
+    completedSnapshot = false
+  ) => {
+    const previous = placement.get(window.get(key) ?? row)
+    placement.set(row, { group, at, position: previous?.position ?? position++, completedSnapshot })
     window.upsert(key, row, 128)
   }
   const turnRow = (turn: Turn) => {
     const lifecycle = historicalTurnLifecycle(segment, turn.source)!
+    delete lifecycle.userItemId
     if (turn.userItemId) {
       lifecycle.userItemId = turn.userItemId
-    } else {
-      delete lifecycle.userItemId
     }
-    const id = codexTurnLifecycleIdentity(sessionId, turn.id)
     store(
       `turn:${segment}:${turn.id}`,
       {
-        identity: id,
+        identity: codexTurnLifecycleIdentity(sessionId, turn.id),
         body: agentJournalTurnBody(lifecycle),
         ownerFence: 0,
         turnScope: { kind: 'thread' }
@@ -135,6 +116,7 @@ export function createCodexHistoryCollector(
         factBytes = 0
         interval = null
         lastStart = -Infinity
+        lastRecordAt = 0
         lastTurnId = null
         window.reserve(0)
       }
@@ -146,6 +128,9 @@ export function createCodexHistoryCollector(
       const turnId = readString(payload, 'turn_id')
       const turnKey = `turn:${segment}:${turnId}`
       const time = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : Number.NaN
+      if (Number.isFinite(time)) {
+        lastRecordAt = time
+      }
       let turn = facts.get(turnKey)?.turn
       if (['task_started', 'task_complete', 'turn_aborted'].includes(String(payload.type))) {
         if (!turnId) {
@@ -173,7 +158,7 @@ export function createCodexHistoryCollector(
           }
         }
         if (!turn) {
-          turn = { id: turnId, order: -1, complete: false, source: { id: turnId } }
+          turn = { id: turnId, order: ++order, complete: false, source: { id: turnId } }
         }
         if (payload.type !== 'task_started') {
           const wasTerminal = ['completed', 'failed', 'interrupted'].includes(
@@ -202,14 +187,14 @@ export function createCodexHistoryCollector(
             Number.isFinite(time) &&
             time >= lastStart
           ) {
-            interval = { at: time, position: descriptor.ordinal }
+            interval = { at: time, position: descriptor.ordinal, turnKey }
           }
         }
         remember(turnKey, { turn })
         turnRow(turn)
         return
       }
-      if (payload.type !== 'item_completed') {
+      if (payload.type !== 'item_completed' && payload.type !== 'item_started') {
         return
       }
       const item = codexRolloutItem(payload.item)
@@ -217,11 +202,21 @@ export function createCodexHistoryCollector(
         return
       }
       const key = `${segment}:${item.id}`
+      const rowKey = item.type === 'contextCompaction' ? `compaction:${segment}:${turnId}` : key
       const old = facts.get(key)
-      const terminal = ['completed', 'failed', 'declined', 'interrupted'].includes(
-        String(item.status)
-      )
-      const first = old?.terminal ?? (terminal && turn?.complete ? descriptor.ordinal : undefined)
+      const retained = window.get(rowKey)
+      if (
+        payload.type === 'item_started' &&
+        ((retained && placement.get(retained)?.completedSnapshot) ||
+          old?.firstTerminal !== undefined)
+      ) {
+        return
+      }
+      const terminal =
+        payload.type === 'item_completed' &&
+        ['completed', 'failed', 'declined', 'interrupted'].includes(String(item.status))
+      const first =
+        old?.firstTerminal ?? (terminal && turn?.complete ? descriptor.ordinal : undefined)
       const start = payload.started_at_ms,
         end = payload.completed_at_ms
       const newlyInterrupted =
@@ -245,14 +240,22 @@ export function createCodexHistoryCollector(
         (old?.interrupted === true && item.status === 'failed' && item.exitCode === -1)
       const body = projectCodexHistoryItem(item, null, interrupted)
       if (item.type === 'commandExecution') {
-        remember(key, { terminal: first, interrupted, turnKey })
+        remember(key, { firstTerminal: first, interrupted, turnKey })
       }
       if (!body) {
         return
       }
       const row: JournalReplacementItem = {
-        identity: identity(descriptor.recordId),
-        body: bound(withJournalReasoningLifecycle(body, endedJournalReasoning())),
+        identity: {
+          provider: 'legacy',
+          agent: 'codex',
+          sessionId,
+          recordId: descriptor.recordId
+        },
+        body: boundLegacyImportBody(
+          withJournalReasoningLifecycle(body, endedJournalReasoning()),
+          limits
+        ),
         ownerFence: 0,
         ...(Number.isFinite(time) ? { observedAt: time } : {}),
         turnScope: turnId
@@ -268,14 +271,17 @@ export function createCodexHistoryCollector(
         turnRow(turn)
       }
       store(
-        item.type === 'contextCompaction' ? `compaction:${segment}:${turnId}` : key,
+        rowKey,
         row,
-        turn?.order ?? (lastStart > -Infinity ? -1 : ++order),
+        turn?.order ?? ++order,
         item.type === 'userMessage'
           ? -Infinity
           : typeof start === 'number' && Number.isFinite(start)
             ? start
-            : descriptor.ordinal
+            : typeof end === 'number' && Number.isFinite(end)
+              ? end
+              : lastRecordAt,
+        payload.type === 'item_completed'
       )
     },
     items: () => {
