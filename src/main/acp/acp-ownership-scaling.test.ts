@@ -20,8 +20,37 @@ function permission(lane: AcpTimelineTranslator, callId: string) {
   ).events
 }
 
+function complete(lane: AcpTimelineTranslator, index: number) {
+  lane.openPrompt(`send-${index}`, index)
+  for (const update of [
+    {
+      sessionUpdate: 'tool_call',
+      toolCallId: `item-${index}`,
+      title: 'Read',
+      status: 'completed'
+    },
+    {
+      sessionUpdate: 'agent_thought_chunk',
+      messageId: `item-${index}`,
+      content: { type: 'text', text: ' ' }
+    }
+  ]) {
+    lane.notification(
+      'session/update',
+      { sessionId: 'session-1', _meta: { promptId: `prompt:send-${index}` }, update },
+      index
+    )
+  }
+  lane.promptResult(`send-${index}`, { stopReason: 'end_turn' }, index)
+  lane.publication()?.()
+}
+
 describe('ACP ownership resource contract', () => {
   it.each([200, 2000])('retires completed history with linear work across %i turns', (turns) => {
+    // Prime lazy protocol validators before counting ownership retirement on a fresh translator.
+    const warmup = new AcpTimelineTranslator({ sessionId: 'session-1', dialect: GROK_ACP_DIALECT })
+    complete(warmup, -1)
+    warmup.dispose()
     const lane = new AcpTimelineTranslator({ sessionId: 'session-1', dialect: GROK_ACP_DIALECT })
     const get = Map.prototype.get
     const owner = AcpItemOwnership.prototype.get
@@ -82,28 +111,7 @@ describe('ACP ownership resource contract', () => {
       })
     })
     for (let index = 0; index < turns; index += 1) {
-      lane.openPrompt(`send-${index}`, index)
-      for (const update of [
-        {
-          sessionUpdate: 'tool_call',
-          toolCallId: `item-${index}`,
-          title: 'Read',
-          status: 'completed'
-        },
-        {
-          sessionUpdate: 'agent_thought_chunk',
-          messageId: `item-${index}`,
-          content: { type: 'text', text: ' ' }
-        }
-      ]) {
-        lane.notification(
-          'session/update',
-          { sessionId: 'session-1', _meta: { promptId: `prompt:send-${index}` }, update },
-          index
-        )
-      }
-      lane.promptResult(`send-${index}`, { stopReason: 'end_turn' }, index)
-      lane.publication()?.()
+      complete(lane, index)
     }
     // Two keys, four own-key phases: capture, payload cleanup, settlement and publication.
     expect(visits).toBeLessThanOrEqual(turns * 2 * 4)

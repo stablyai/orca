@@ -277,6 +277,9 @@ describe('ACP ownership publication handoff', () => {
         return append(steps)
       })
       lane.apply(translator.promptResult('latest', { stopReason: 'end_turn' }, 1550))
+      expect(
+        translator.notification('session/update', { sessionId: NAMESPACE, update: chunk }, 1551)
+      ).toEqual([])
       expect(pendingWork).toBeGreaterThan(0)
       refusing = 'failed'
       request('permanently-refused')
