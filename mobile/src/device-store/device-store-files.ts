@@ -88,11 +88,7 @@ export async function writeDeviceStoreRow(
   sealed: Uint8Array | null
 ): Promise<void> {
   if (row.table === 'cache') {
-    if (sealed) {
-      await fs.writeBytes(row.uri, sealed)
-    } else {
-      await fs.delete(row.uri)
-    }
+    await (sealed ? fs.writeBytes(row.uri, sealed) : fs.delete(row.uri))
     return
   }
   const tmpUri = row.uri + DRAFT_TMP_SUFFIX
