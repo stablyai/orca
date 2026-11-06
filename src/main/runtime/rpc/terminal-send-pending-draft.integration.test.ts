@@ -267,6 +267,23 @@ describe('terminal.send into a composer with unsent input', () => {
     expect(write.mock.calls.some((call) => call[1] === '\r')).toBe(true)
   })
 
+  it('still pastes when the composer already shows exactly the prompt being sent', async () => {
+    // Not a draft to protect: a held paste, or the echo #38401 presses Enter on.
+    const prompt = 'Status update: the build is green.'
+    const { runtime, write, handle } = await makeClaudeRuntime(`\u276F ${prompt}`)
+    await runtime.isTerminalRunningSettledPromptAgent(handle)
+
+    vi.useFakeTimers()
+    const send = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
+    await vi.waitFor(() => expect(write).toHaveBeenCalled())
+    expect(String(write.mock.calls[0]?.[1])).toContain(
+      `${AGENT_PROMPT_BRACKETED_PASTE_START}${prompt}`
+    )
+    await vi.runAllTimersAsync()
+    expect(await send).toMatchObject({ accepted: true })
+    expect(write.mock.calls.some((call) => call[1] === '\r')).toBe(true)
+  })
+
   it('refuses when the pty stops while the composer re-read is in flight', async () => {
     const { runtime, write, handle } = await makeClaudeRuntime('\u276F ')
     await runtime.isTerminalRunningSettledPromptAgent(handle)

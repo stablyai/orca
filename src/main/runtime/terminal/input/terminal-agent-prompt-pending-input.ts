@@ -4,6 +4,7 @@ import {
   isTerminalSendSettlementAgent
 } from './agent-prompt-submission-verification'
 import { assertAgentPromptRequestActive, waitForAgentPromptDelay } from './agent-prompt-signals'
+import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
 
 const COMPOSER_DRAFT_READ_ATTEMPTS = 3
@@ -23,10 +24,11 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
   protected async assertAgentPromptEntryGuards(
     permissionBaseline: AgentPromptActivity,
     ptyId: string,
+    prompt: string | undefined,
     signal?: AbortSignal
   ): Promise<void> {
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    await this.assertNoPendingComposerInput(ptyId, signal)
+    await this.assertNoPendingComposerInput(ptyId, prompt, signal)
   }
 
   /**
@@ -40,10 +42,11 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
    */
   protected async assertComposerStillClear(
     ptyId: string,
+    prompt: string | undefined,
     signal: AbortSignal,
     assertWritable: (signal: AbortSignal) => void
   ): Promise<void> {
-    await this.assertNoPendingComposerInput(ptyId, signal)
+    await this.assertNoPendingComposerInput(ptyId, prompt, signal)
     assertWritable(signal)
   }
 
@@ -55,10 +58,22 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
    * composer can be read are checked; a screen that cannot be read is unknown, never a
    * refusal, so an unreadable host keeps working rather than blocking every send.
    *
+   * A composer holding exactly `prompt` is exempt: that text is the agent's own, not a user's.
+   * It is either a held paste this chain's resubmit layer exists to re-send, or the echo #38401
+   * watches for to press Enter early, and refusing it would shadow both. Judged by that same
+   * `isCompleteAgentPromptDraft`, so "shows the prompt" means one thing across the two features;
+   * anything short of the whole prompt — a half-typed draft (#16289) — still refuses.
+   *
+   * @param prompt The raw text about to be pasted, when the caller knows it. Absent means no
+   * exemption: an unidentified send refuses over any draft, exactly as before.
    * @throws AgentPromptPendingInputError carrying the draft, for the caller to report as
    * `refusedReason: 'pending-input'`.
    */
-  protected async assertNoPendingComposerInput(ptyId: string, signal?: AbortSignal): Promise<void> {
+  protected async assertNoPendingComposerInput(
+    ptyId: string,
+    prompt?: string,
+    signal?: AbortSignal
+  ): Promise<void> {
     const pty = this.ptysById.get(ptyId)
     // Why: the launch agent is stale once the user swaps agents in the pane.
     const agent = pty?.foregroundAgent ?? pty?.launchAgent
@@ -66,7 +81,7 @@ export abstract class OrcaRuntimeWithPendingComposerInputGuard extends OrcaRunti
       return
     }
     const pendingInput = await this.readComposerDraft(ptyId, signal)
-    if (pendingInput !== null) {
+    if (pendingInput !== null && !isCompleteAgentPromptDraft(pendingInput, prompt ?? '')) {
       throw new AgentPromptPendingInputError(pendingInput)
     }
   }
