@@ -153,7 +153,10 @@ describe('Pi host awaited open', () => {
     const opening = openAt8(h, acquired.acquisitionGeneration).catch((error: unknown) => error)
     reply.refuseAfterWriteFailure()
     const failure = await opening
-    expect(failure).toMatchObject({ message: 'Pi refused its state', retry: 'never' })
-    expect(failure.cause).toBeInstanceOf(JsonlRpcResponseError)
+    expect(failure).toMatchObject({
+      message: 'Pi refused its state',
+      retry: 'never',
+      cause: expect.any(JsonlRpcResponseError)
+    })
   })
 })
