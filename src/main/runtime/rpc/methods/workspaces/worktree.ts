@@ -38,7 +38,7 @@ import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projectio
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
-import { runApprovedCreatedWorktreeSetup } from '../../created-worktree-approved-setup'
+import { runApprovedCreatedWorktreeSetup } from '../../../created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
