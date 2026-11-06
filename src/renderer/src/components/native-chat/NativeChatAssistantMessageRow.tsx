@@ -2,6 +2,7 @@ import { useContext } from 'react'
 import { cn } from '@/lib/utils'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from './native-chat-fork-context'
+import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
@@ -49,11 +50,11 @@ export function NativeChatAssistantMessageRow({
     runtimeContext,
     fork
   } = props
-  const { markdown, prose } = content
+  const { prose } = content
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
-  // A thought heading a run reads inside it, so the row has no words of its own.
-  const words = message.role === 'reasoning' ? '' : markdown
+  // The same words slot construction gives the turn's response actions to.
+  const words = nativeChatAgentRowWords(message)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its last words, even with tools or thoughts after them.
   const showControls =

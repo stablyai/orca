@@ -36,6 +36,7 @@ import {
 } from './native-chat-subagent-section-slots'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from './native-chat-transcript-work-runs'
+import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -219,11 +220,9 @@ export function buildNativeChatTranscriptSlots(
   }
   sectionSlots.openBefore(pending, undefined, 0)
   const drawn = nativeChatTranscriptWorkRuns(slots, typography)
-  // The same prose wins collapsed and expanded: folding hides tools, never a turn's last words.
-  const proseRowIds = new Set(
-    messages.filter((_message, index) => foldRows[index]!.rendersProse).map(({ id }) => id)
-  )
-  const lastProseByTurn = new Map<string, NativeChatMessageSlot>()
+  // The same words win collapsed and expanded: folding hides tools, never a turn's last words. An
+  // image-only reply has none, so it never takes the actions from text before it.
+  const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()
   for (const slot of drawn) {
     if (slot.kind !== 'message' || slot.depth !== 0 || slot.turnKey === undefined) {
       continue
@@ -232,12 +231,12 @@ export function buildNativeChatTranscriptSlots(
     if (
       slot.drawsMessage &&
       slot.message.role === 'assistant' &&
-      proseRowIds.has(slot.message.id)
+      nativeChatAgentRowWords(slot.message).length > 0
     ) {
-      lastProseByTurn.set(slot.turnKey, slot)
+      lastWordsByTurn.set(slot.turnKey, slot)
     }
   }
-  for (const slot of lastProseByTurn.values()) {
+  for (const slot of lastWordsByTurn.values()) {
     slot.endsResponse = true
   }
   for (let index = 0; index < drawn.length - 1; index += 1) {

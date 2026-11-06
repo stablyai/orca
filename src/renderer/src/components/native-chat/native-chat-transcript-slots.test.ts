@@ -105,6 +105,28 @@ describe('transcript slots', () => {
     expect(working.find((slot) => slot.message.id === 'a')?.activeTurnIsWorking).toBe(true)
   })
 
+  it("keeps a turn's actions on its text when an image-only reply lands after it", () => {
+    const image: NativeChatMessage = {
+      id: 'a-image',
+      role: 'assistant',
+      blocks: [{ type: 'image-ref', url: 'https://example.test/picture.png' }],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    const slots = build(
+      [
+        text('A', 'Show the picture', 'user'),
+        text('a-text', 'Here is the picture.'),
+        text('B', 'Inspect it next', 'user'),
+        image
+      ],
+      { turnKeys: ['A', 'A', 'B', 'A'] }
+    )
+    expect(slots.filter((slot) => slot.endsResponse).map((slot) => slot.message.id)).toEqual([
+      'a-text'
+    ])
+  })
+
   it('keeps a message whose only content is a turn status under it', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
     const slots = build([text('u', '', 'user')], {
