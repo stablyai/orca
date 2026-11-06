@@ -137,23 +137,21 @@ export function useNativeChatViewportAlign({
     alignRef.current = null
   }, [])
   const isAlignHeld = useCallback(() => alignRef.current !== null, [])
-  // The held row's index, found once per measurement pass rather than once per resized row.
-  const heldIndexRef = useRef<{ measurements: readonly VirtualItem[]; index: number } | null>(null)
   const pinsEndGrowth = useCallback((index: number, measurements: readonly VirtualItem[]) => {
     const held = alignRef.current
     if (held === null || !('index' in held) || held.edge !== 'end') {
       return false
     }
-    if (heldIndexRef.current?.measurements !== measurements) {
-      const current = measurements.findIndex((item) => item.key === held.key)
-      heldIndexRef.current = { measurements, index: current }
+    // One read while the row stays put; scan only after rows were inserted or removed before it.
+    if (measurements[held.index]?.key !== held.key) {
+      const moved = measurements.findIndex((item) => item.key === held.key)
+      if (moved === -1) {
+        alignRef.current = null
+        return false
+      }
+      held.index = moved
     }
-    const pinned = heldIndexRef.current.index
-    if (pinned === -1) {
-      alignRef.current = null
-      return false
-    }
-    return index <= pinned
+    return index <= held.index
   }, [])
   const releaseEndPin = useCallback(() => {
     const held = alignRef.current
