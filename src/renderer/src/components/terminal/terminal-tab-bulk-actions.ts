@@ -1,4 +1,7 @@
-import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
+import { editorTabsNeedingSavePrompt } from '@/store/slices/editor/tabs/editor-tab-close-target'
+import { afterPendingTabs } from '@/runtime/layout-owner-pending-tabs'
+import { requestEditorFileClose } from '../editor/autosave/editor-autosave'
+import { runAfterEditorFramesFlush } from '../editor/save/flush/editor-pending-flush'
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute
@@ -68,7 +71,10 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     return
   }
   const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  const currentEditorFiles = workspaceEditorFiles(state, activeWorktreeId)
+  const editorTabs = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).filter((tab) =>
+    isEditorTabContentType(tab.contentType)
+  )
+  const editorById = new Map(editorTabs.map((tab) => [tab.id, tab]))
   const runtimeEnvironmentId = resolveTerminalWorktreeRoute(
     state,
     activeWorktreeId
@@ -79,13 +85,14 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
   const orderedIds = reconcileTabOrder(
     state.tabBarOrderByWorktree[activeWorktreeId],
     terminalIds,
-    currentEditorFiles.map((file) => file.id)
+    editorTabs.map((tab) => tab.id)
   )
 
   const index = orderedIds.indexOf(tabId)
   if (index === -1) {
     return
   }
+  const closingEditors: typeof editorTabs = []
   for (const id of orderedIds.slice(index + 1)) {
     if (isPinnedVisibleTab(state, activeWorktreeId, id)) {
       continue
@@ -105,11 +112,32 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
       }
       continue
     }
-    const unifiedTab = (state.unifiedTabsByWorktree?.[activeWorktreeId] ?? []).find(
-      (tab) => tab.entityId === id && isEditorTabContentType(tab.contentType)
-    )
-    if (!unifiedTab?.isPinned) {
-      useAppStore.getState().closeFile(id)
+    const tab = editorById.get(id)
+    if (tab && !tab.isPinned) {
+      closingEditors.push(tab)
     }
   }
+  runAfterEditorFramesFlush(
+    useAppStore.getState(),
+    closingEditors.map((tab) => tab.entityId),
+    () => {
+      const latest = useAppStore.getState()
+      const liveIds = new Set(
+        (latest.unifiedTabsByWorktree[activeWorktreeId] ?? [])
+          .filter((tab) => !tab.isPinned)
+          .map((tab) => tab.id)
+      )
+      const live = closingEditors.filter((tab) => liveIds.has(tab.id))
+      const promptIds = editorTabsNeedingSavePrompt(latest, live)
+      const closingIds = live.filter((tab) => !promptIds.has(tab.id)).map((tab) => tab.id)
+      latest.closeUnifiedTabs(closingIds)
+      afterPendingTabs(closingIds, () => {
+        for (const tab of live) {
+          if (promptIds.has(tab.id)) {
+            requestEditorFileClose(tab.entityId, { tabId: tab.id })
+          }
+        }
+      })
+    }
+  )
 }

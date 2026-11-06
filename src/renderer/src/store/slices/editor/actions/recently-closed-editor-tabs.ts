@@ -77,7 +77,7 @@ export function createRecentlyClosedEditorTabs(
       )
       const untitledIdsToDelete = new Set(untitledToDelete.map((file) => file.id))
       const closingFiles = activeWorktreeId
-        ? workspaceEditorFiles(state, activeWorktreeId)
+        ? workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[activeWorktreeId])
         : state.openFiles
       // closeAll bypasses closeFile; notify removed mirrors’ hosts or next snapshot reopens them.
       for (const file of closingFiles) {
@@ -177,9 +177,10 @@ export function createRecentlyClosedEditorTabs(
               }
             : s.tabBarOrderByWorktree
 
-          const capturedFiles = workspaceEditorFiles(records, activeWorktreeId).filter(
-            (file) => !kept.has(file.id)
-          )
+          const capturedFiles = workspaceEditorFiles(
+            records.openFiles,
+            records.unifiedTabsByWorktree[activeWorktreeId]
+          ).filter((file) => !kept.has(file.id))
           let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
           let capturedCloseCount = 0
           // Share one position index or per-file tab/group rescans make close-all cubic.
@@ -275,4 +276,18 @@ export function createRecentlyClosedEditorTabs(
       }
     }
   }
+}
+
+export function closedEditorTabOrder(
+  state: Pick<AppState, 'tabBarOrderByWorktree'>,
+  closedIdsByWorkspace: ReadonlyMap<string, ReadonlySet<string>>
+): Pick<AppState, 'tabBarOrderByWorktree'> {
+  if (!state.tabBarOrderByWorktree) {
+    return { tabBarOrderByWorktree: state.tabBarOrderByWorktree }
+  }
+  const order = { ...state.tabBarOrderByWorktree }
+  for (const [workspaceId, ids] of closedIdsByWorkspace) {
+    order[workspaceId] = (order[workspaceId] ?? []).filter((id) => !ids.has(id))
+  }
+  return { tabBarOrderByWorktree: order }
 }

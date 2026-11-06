@@ -123,7 +123,12 @@ export type EditorFilesSlice = {
       | 'externalSshTargetId'
     > &
       Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly' | 'operationProvenance'>>,
-    options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
+    options?: {
+      anchor?: string | null
+      targetGroupId?: string
+      sourceFileId?: string
+      placementWorkspaceId?: string
+    }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void

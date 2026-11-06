@@ -1,3 +1,4 @@
+import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
@@ -161,7 +162,7 @@ function EditorPanelInner({
       )?.kind !== 'local'
   )
 
-  useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
+  useMarkdownPreviewShortcut({ activeFile, activeViewStateId, panelRef, openMarkdownPreview })
 
   const handleContentChangeForFile = useEditorContentChangeHandler({ fileContents, diffContents })
 
@@ -243,30 +244,30 @@ function EditorPanelInner({
 
   const handleOpenPreviewToSide = (): void => {
     const state = useAppStore.getState()
-    const sourceGroupId = activeViewStateId
-      ? ((state.unifiedTabsByWorktree[activeFile.worktreeId] ?? []).find(
-          (t) => t.id === activeViewStateId
-        )?.groupId ?? null)
-      : null
+    const placement = editorViewPlacement(state, activeFile, activeViewStateId)
     openFilePreviewToSide({
       language: model.resolvedLanguage,
       filePath: activeFile.filePath,
       worktreeId: activeFile.worktreeId,
-      sourceGroupId
+      placementWorkspaceId: placement.placementWorkspaceId,
+      sourceGroupId: placement.targetGroupId ?? null
     })
   }
   const handleOpenDiffTargetFile = (preferredMarkdownViewMode?: 'rich'): void => {
     if (!model.openFileState.canOpen) {
       return
     }
-    const openedFileId = openFile({
-      filePath: activeFile.filePath,
-      relativePath: activeFile.relativePath,
-      worktreeId: activeFile.worktreeId,
-      runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-      language: detectLanguage(activeFile.relativePath),
-      mode: 'edit'
-    })
+    const openedFileId = openFile(
+      {
+        filePath: activeFile.filePath,
+        relativePath: activeFile.relativePath,
+        worktreeId: activeFile.worktreeId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+        language: detectLanguage(activeFile.relativePath),
+        mode: 'edit'
+      },
+      editorViewPlacement(useAppStore.getState(), activeFile, activeViewStateId)
+    )
     if (preferredMarkdownViewMode) {
       setEditorViewMode(openedFileId, 'edit')
       setMarkdownViewMode(openedFileId, preferredMarkdownViewMode)
@@ -303,7 +304,10 @@ function EditorPanelInner({
         runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
         language: model.resolvedLanguage
       },
-      { sourceFileId: activeFile.id }
+      {
+        sourceFileId: activeFile.id,
+        ...editorViewPlacement(useAppStore.getState(), activeFile, activeViewStateId)
+      }
     )
   }
   const disableRenameBrowse = Boolean(

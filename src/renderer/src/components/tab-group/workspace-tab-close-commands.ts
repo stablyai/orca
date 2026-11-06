@@ -30,7 +30,10 @@ export function createWorkspaceTabCloseCommands({
     if (!otherReference) {
       if (needsSavePromptOnClose(useAppStore.getState(), entityId)) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
-        requestEditorFileClose(entityId, whenEmptied ? { onClosed: whenEmptied } : undefined)
+        requestEditorFileClose(entityId, {
+          tabId: closingTabId,
+          ...(whenEmptied ? { onClosed: whenEmptied } : {})
+        })
         return false
       }
     }

@@ -1,13 +1,15 @@
-import { workspaceEditorFiles } from '../tabs/workspace-editor-files'
+import { closedEditorTabOrder } from './recently-closed-editor-tabs'
+import { findAdjacentOpenFileId } from '../tabs/editor-tab-close-target'
+import {
+  editorContentIsReferenced,
+  editorPlacementIndex,
+  workspaceEditorFiles
+} from '../tabs/workspace-editor-files'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import {
-  type ClosedEditorTabSnapshot,
-  MAX_RECENT_CLOSED_EDITOR_TABS,
-  type OpenFile
-} from '../types/open-file'
+import { type ClosedEditorTabSnapshot, MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
 import {
   deleteUntouchedUntitledFile,
@@ -20,26 +22,6 @@ import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { closeFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
-function findAdjacentOpenFileId(
-  files: readonly OpenFile[],
-  closedFileIds: ReadonlySet<string>,
-  preferredFileId: string | null
-): string | null {
-  const preferredIndex = files.findIndex((file) => file.id === preferredFileId)
-  const nextFile = files
-    .slice(Math.max(preferredIndex + 1, 0))
-    .find((file) => !closedFileIds.has(file.id))
-  if (nextFile) {
-    return nextFile.id
-  }
-  return (
-    files
-      .slice(0, Math.max(preferredIndex, 0))
-      .toReversed()
-      .find((file) => !closedFileIds.has(file.id))?.id ?? null
-  )
-}
-
 export function createCloseFileAction(
   set: EditorSet,
   get: EditorGet
@@ -49,6 +31,23 @@ export function createCloseFileAction(
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
       const placementId = opts?.placementWorkspaceId ?? preClose?.worktreeId
+      const state = get()
+      const owners = editorPlacementIndex(state.unifiedTabsByWorktree).workspacesByEntityId.get(
+        fileId
+      )
+      if (
+        (opts?.placementWorkspaceId && owners?.size) ||
+        (owners && [...owners].some((id) => id !== placementId))
+      ) {
+        const tabIds = (placementId ? (state.unifiedTabsByWorktree[placementId] ?? []) : [])
+          .filter((tab) => tab.entityId === fileId && isEditorTabContentType(tab.contentType))
+          .map((tab) => tab.id)
+        state.closeUnifiedTabs(tabIds)
+        return
+      }
+      if (!owners?.size && editorContentIsReferenced(state, fileId)) {
+        return
+      }
       // Why: stale same-owner records survive tab close; retain other owners and pending drafts.
       const fileIdsToClose = new Set(
         preClose
@@ -64,6 +63,11 @@ export function createCloseFileAction(
                     !get().unifiedTabsByWorktree[file.worktreeId]?.some(
                       (tab) => tab.entityId === file.id && tab.isPinned
                     ) &&
+                    ![
+                      ...(editorPlacementIndex(
+                        get().unifiedTabsByWorktree
+                      ).workspacesByEntityId.get(file.id) ?? [])
+                    ].some((id) => id !== placementId) &&
                     !file.isDirty &&
                     !(file.id in get().editorDrafts))
               )
@@ -146,13 +150,18 @@ export function createCloseFileAction(
 
           if (s.activeFileId && fileIdsToClose.has(s.activeFileId)) {
             const worktreeId = placementId ?? closedFile?.worktreeId ?? s.activeWorktreeId
-            const worktreeFiles = worktreeId ? workspaceEditorFiles(s, worktreeId) : s.openFiles
+            const worktreeFiles = worktreeId
+              ? workspaceEditorFiles(s.openFiles, s.unifiedTabsByWorktree[worktreeId])
+              : s.openFiles
             newActiveId = findAdjacentOpenFileId(worktreeFiles, fileIdsToClose, s.activeFileId)
           }
 
           const closedWorktreeId = placementId ?? closedFile?.worktreeId
           if (closedWorktreeId) {
-            const worktreeFiles = workspaceEditorFiles(s, closedWorktreeId)
+            const worktreeFiles = workspaceEditorFiles(
+              s.openFiles,
+              s.unifiedTabsByWorktree[closedWorktreeId]
+            )
             const worktreeActiveFileId = s.activeFileIdByWorktree[closedWorktreeId]
             if (worktreeActiveFileId && fileIdsToClose.has(worktreeActiveFileId)) {
               newActiveFileIdByWorktree[closedWorktreeId] = findAdjacentOpenFileId(
@@ -168,7 +177,7 @@ export function createCloseFileAction(
           // Why: editors share a mixed tab strip with browser tabs; closing the last editor should reveal a browser tab before falling back to a terminal.
           const activeWorktreeId = s.activeWorktreeId
           const remainingForWorktree = activeWorktreeId
-            ? workspaceEditorFiles({ ...s, openFiles: newFiles }, activeWorktreeId)
+            ? workspaceEditorFiles(newFiles, s.unifiedTabsByWorktree[activeWorktreeId])
             : newFiles
           const browserTabsForWorktree = activeWorktreeId
             ? (s.browserTabsByWorktree[activeWorktreeId] ?? [])
@@ -215,15 +224,6 @@ export function createCloseFileAction(
 
           // Why: prune the closed id from tabBarOrderByWorktree so stale ids don't shift positions on the next reconcile.
           const worktreeId = placementId ?? closedFile?.worktreeId ?? activeWorktreeId
-          const nextTabBarOrderByWorktree =
-            worktreeId && s.tabBarOrderByWorktree
-              ? {
-                  ...s.tabBarOrderByWorktree,
-                  [worktreeId]: (s.tabBarOrderByWorktree[worktreeId] ?? []).filter(
-                    (entryId) => !closedTabOrderIds.has(entryId)
-                  )
-                }
-              : s.tabBarOrderByWorktree
 
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
@@ -284,7 +284,10 @@ export function createCloseFileAction(
             editorViewMode: newEditorViewMode,
             markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
             markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
-            tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+            ...closedEditorTabOrder(
+              s,
+              worktreeId ? new Map([[worktreeId, closedTabOrderIds]]) : new Map()
+            ),
             pendingEditorReveal: null,
             pendingEditorFocusRequest:
               s.pendingEditorFocusRequest && fileIdsToClose.has(s.pendingEditorFocusRequest.fileId)

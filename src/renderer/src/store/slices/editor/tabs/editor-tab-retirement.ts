@@ -1,50 +1,103 @@
+import { closedEditorTabOrder } from '../actions/recently-closed-editor-tabs'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import type { EditorSet, EditorGet } from '../types/editor-set-get'
-import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
+import {
+  createRecentlyClosedTabPositionIndex,
+  pushRecentlyClosedTabKind
+} from '../../recently-closed-tabs'
 import { MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
-import { editorContentIsReferenced } from './workspace-editor-files'
+import {
+  editorContentIsReferenced,
+  editorPlacementIndex,
+  openFileIndex
+} from './workspace-editor-files'
 
-/** Capture a view before its group disappears; content can survive in another workspace. */
-export function editorTabRetirement(set: EditorSet, get: EditorGet, before: AppState, tab: Tab) {
-  const file = isEditorTabContentType(tab.contentType)
-    ? before.openFiles.find((entry) => entry.id === tab.entityId)
-    : undefined
-  const position = file ? getRecentlyClosedTabPosition(before, tab.worktreeId, file.id) : undefined
+/** Capture placements before their groups disappear; a bulk close publishes history once. */
+export function editorTabsRetirement(
+  set: EditorSet,
+  get: EditorGet,
+  before: AppState,
+  tabs: readonly Tab[]
+) {
+  const files = openFileIndex(before.openFiles)
+  const positions = new Map<string, ReturnType<typeof createRecentlyClosedTabPositionIndex>>()
+  const views = tabs.flatMap((tab) => {
+    const file = isEditorTabContentType(tab.contentType) ? files.get(tab.entityId) : undefined
+    if (!file) {
+      return []
+    }
+    let index = positions.get(tab.worktreeId)
+    if (!index) {
+      index = createRecentlyClosedTabPositionIndex(before, tab.worktreeId)
+      positions.set(tab.worktreeId, index)
+    }
+    return [{ tab, file, position: index.positionFor(file.id, tab.id) }]
+  })
   return () => {
-    if (
-      !file ||
-      get().unifiedTabsByWorktree[tab.worktreeId]?.some((entry) => entry.id === tab.id)
-    ) {
+    const current = get()
+    const placements = editorPlacementIndex(current.unifiedTabsByWorktree)
+    const closed = views.filter(({ tab }) => !placements.workspaceByTabId.has(tab.id))
+    if (closed.length === 0) {
       return
     }
-    if (
-      file.mode !== 'markdown-preview' &&
-      !(file.isUntitled && !file.isDirty && !before.editorDrafts[file.id])
-    ) {
-      const { id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snapshot } = file
-      set((state) => ({
-        recentlyClosedEditorTabsByWorktree: {
-          ...state.recentlyClosedEditorTabsByWorktree,
-          [tab.worktreeId]: [
-            { ...snapshot, reopenId: id, ...(position ? { position } : {}) },
-            ...(state.recentlyClosedEditorTabsByWorktree[tab.worktreeId] ?? [])
-          ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
-        },
-        recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
-          state.recentlyClosedTabKindsByWorktree,
-          tab.worktreeId,
-          'editor'
-        )
-      }))
+    set((state) => {
+      let history = state.recentlyClosedEditorTabsByWorktree
+      let kinds = state.recentlyClosedTabKindsByWorktree
+      const counts = new Map<string, number>()
+      for (const { tab, file, position } of closed) {
+        if (
+          file.mode === 'markdown-preview' ||
+          (file.isUntitled && !file.isDirty && !before.editorDrafts[file.id])
+        ) {
+          continue
+        }
+        const { id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snapshot } = file
+        if (history === state.recentlyClosedEditorTabsByWorktree) {
+          history = { ...history }
+        }
+        history[tab.worktreeId] = [
+          { ...snapshot, reopenId: id, ...(position ? { position } : {}) },
+          ...(history[tab.worktreeId] ?? [])
+        ].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+        counts.set(tab.worktreeId, (counts.get(tab.worktreeId) ?? 0) + 1)
+      }
+      for (const [workspaceId, count] of counts) {
+        kinds = pushRecentlyClosedTabKind(kinds, workspaceId, 'editor', count)
+      }
+      const closedIdsByWorkspace = new Map<string, Set<string>>()
+      for (const { tab } of closed) {
+        const ids = closedIdsByWorkspace.get(tab.worktreeId) ?? new Set<string>()
+        ids.add(tab.id)
+        if (!placements.workspacesByEntityId.get(tab.entityId)?.has(tab.worktreeId)) {
+          ids.add(tab.entityId)
+        }
+        closedIdsByWorkspace.set(tab.worktreeId, ids)
+      }
+      return {
+        recentlyClosedEditorTabsByWorktree: history,
+        recentlyClosedTabKindsByWorktree: kinds,
+        ...closedEditorTabOrder(state, closedIdsByWorkspace)
+      }
+    })
+    const released = new Map(closed.map(({ file, tab }) => [file.id, tab.worktreeId]))
+    for (const [id, workspaceId] of released) {
+      releaseUnreferencedEditorContent(get, id, workspaceId)
     }
-    releaseUnreferencedEditorContent(get, file.id)
   }
 }
 
-export function releaseUnreferencedEditorContent(get: EditorGet, entityId: string): void {
+export function editorTabRetirement(set: EditorSet, get: EditorGet, before: AppState, tab: Tab) {
+  return editorTabsRetirement(set, get, before, [tab])
+}
+
+export function releaseUnreferencedEditorContent(
+  get: EditorGet,
+  entityId: string,
+  placementWorkspaceId?: string
+): void {
   if (!editorContentIsReferenced(get(), entityId)) {
-    get().closeFile(entityId, { captureRecentlyClosed: false })
+    get().closeFile(entityId, { captureRecentlyClosed: false, placementWorkspaceId })
   }
 }

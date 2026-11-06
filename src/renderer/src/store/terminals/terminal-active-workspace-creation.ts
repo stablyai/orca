@@ -5,6 +5,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { isEditorTabContentType } from '../slices/editor/tabs/editor-tab-content-type'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createActiveWorkspaceTerminalActions(
@@ -81,12 +82,14 @@ export async function openNewTerminalTabInWorkspace(
   get().setActiveTabType('terminal', worktreeId)
   const latest = get()
   const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
-  const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
+  const currentEditors = (latest.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) =>
+    isEditorTabContentType(tab.contentType)
+  )
   const currentBrowsers = latest.browserTabsByWorktree[worktreeId] ?? []
   const stored = latest.tabBarOrderByWorktree[worktreeId]
   const validIds = new Set([
     ...currentTerminals.map((tab) => tab.id),
-    ...currentEditors.map((file) => file.id),
+    ...currentEditors.map((tab) => tab.id),
     ...currentBrowsers.map((tab) => tab.id)
   ])
   const base = (stored ?? []).filter((id) => validIds.has(id))
