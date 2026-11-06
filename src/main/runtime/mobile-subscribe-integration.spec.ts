@@ -366,6 +366,23 @@ describe('mobile subscribe integration', () => {
         reason: 'apply-layout'
       })
     })
+
+    it('desktop mode restores unmounted PTY to 80x24 fallback across phone viewport resubscribes', async () => {
+      const { runtime, ptySizes } = createRuntime()
+      ptySizes.delete('pty-1')
+
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      // Keyboard open changes rows while previousCols is still null; must not capture phone cols (45) as desktop baseline.
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 14 })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 14 })
+
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 80, rows: 24 })
+    })
   })
 
   describe('cleanup paths', () => {
@@ -524,6 +541,18 @@ describe('mobile subscribe integration', () => {
       runtime.setMobileDisplayMode('pty-1', 'desktop')
       await runtime.applyMobileDisplayMode('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 200, rows: 60 })
+    })
+
+    it('restores desktop dimensions when an unmeasured subscribe resubscribes with a viewport inside soft-leave grace', async () => {
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', undefined)
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      runtime.setMobileDisplayMode('pty-1', 'desktop')
+      await runtime.applyMobileDisplayMode('pty-1')
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
     })
   })
 

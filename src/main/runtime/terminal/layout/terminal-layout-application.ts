@@ -101,7 +101,9 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
         return { ok: false, reason: 'resize-failed' }
       }
       this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
-      this.notePaneGrid(ptyId, target.cols, target.rows)
+      if (target.kind !== 'phone') {
+        this.notePaneGrid(ptyId, target.cols, target.rows)
+      }
     }
 
     // Publish remote-desktop ownership even at equal geometry; also notify on override changes to repair inconsistent held banners (#7588).

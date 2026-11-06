@@ -17,14 +17,28 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
         sub.wasResizedToPhone = false
       }
       const anyWasResized = clearedFitSubscribers.length > 0
+      const currentSize = this.getTerminalSize(ptyId)
+      const needsPhoneWidthRecovery = currentSize !== null && currentSize.cols < 80
       // Held overrides can outlive all fitted subscriber flags after null-viewport resubscribe; restore from the common baseline resolver (#7588).
-      if (anyWasResized || this.terminalFitOverrides.has(ptyId)) {
+      if (anyWasResized || this.terminalFitOverrides.has(ptyId) || needsPhoneWidthRecovery) {
         const restore = this.resolveDesktopRestoreTarget(ptyId)
-        const result = await this.enqueueLayout(ptyId, {
-          kind: 'desktop',
-          cols: restore.cols,
-          rows: restore.rows
-        })
+        const admitUnplantedLayout =
+          !anyWasResized && !this.terminalFitOverrides.has(ptyId) && needsPhoneWidthRecovery
+        if (admitUnplantedLayout) {
+          this.freshSubscribeGuard.add(ptyId)
+        }
+        let result: Awaited<ReturnType<typeof this.enqueueLayout>>
+        try {
+          result = await this.enqueueLayout(ptyId, {
+            kind: 'desktop',
+            cols: restore.cols,
+            rows: restore.rows
+          })
+        } finally {
+          if (admitUnplantedLayout) {
+            this.freshSubscribeGuard.delete(ptyId)
+          }
+        }
         // Failed restore retains the override; re-arm flags so a later finite unsubscribe still schedules restoration (#7588).
         if (!result.ok) {
           for (const sub of clearedFitSubscribers) {
