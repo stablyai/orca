@@ -316,6 +316,10 @@ describe('OrcaRuntimeService', () => {
         shouldHydrateShellPath: true
       })
     )
+
+    // `orca agent hooks on` with hooks already enabled must still repair a wiped config (#17672).
+    await runtime.updateClientSettings({ agentStatusHooksEnabled: true })
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledTimes(2)
   })
 
   it('serializes paired-client hook reconciliation and reads current settings', async () => {

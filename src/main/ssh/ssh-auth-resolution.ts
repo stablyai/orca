@@ -231,7 +231,10 @@ export function resolveAgentConfigValue(
   target: SshTarget,
   resolved: SshResolvedConfig | null
 ): BaseAgent | string | undefined {
-  const identitiesOnly = resolved?.identitiesOnly ?? target.identitiesOnly ?? false
+  // ssh -G reports an explicit `no` when unset, so a manual target's own setting must still apply.
+  const identitiesOnly = isOpenSshConfigBackedTarget(target)
+    ? (resolved?.identitiesOnly ?? target.identitiesOnly ?? false)
+    : target.identitiesOnly === true || resolved?.identitiesOnly === true
   if (!identitiesOnly) {
     return agentSocket
   }

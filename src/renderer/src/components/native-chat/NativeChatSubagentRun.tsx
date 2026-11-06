@@ -117,7 +117,7 @@ export function NativeChatSubagentEntries({
           </>
         )
         return (
-          <li key={agent.id}>
+          <li key={agent.id} data-native-chat-subagent-entry={agent.id}>
             {sectionOpen === undefined && !navigation ? (
               <div className="flex items-center gap-1.5 py-0.5">{entry}</div>
             ) : (
