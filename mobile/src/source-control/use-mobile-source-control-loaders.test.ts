@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +7,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { createOrcaQueryClient } from '../query/orca-query-client'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -131,6 +133,7 @@ describe('useMobileSourceControlLoaders branch compare', () => {
   ): Promise<(identityKey: string, worktreeId: string) => Promise<void>> {
     function Harness(props: { identityKey: string; worktreeId: string }): null {
       read.loaders = useMobileSourceControlLoaders({
+        hostId: 'host-1',
         client,
         connState: 'connected',
         statusIdentityKey: props.identityKey,
@@ -139,12 +142,15 @@ describe('useMobileSourceControlLoaders branch compare', () => {
       })
       return null
     }
+    const queryClient = createOrcaQueryClient()
+    const render = (props: { identityKey: string; worktreeId: string }) =>
+      createElement(QueryClientProvider, { client: queryClient }, createElement(Harness, props))
     await act(async () => {
-      renderer = create(createElement(Harness, { identityKey: IDENTITY, worktreeId: WORKTREE }))
+      renderer = create(render({ identityKey: IDENTITY, worktreeId: WORKTREE }))
     })
     return async (identityKey, worktreeId) => {
       await act(async () => {
-        renderer?.update(createElement(Harness, { identityKey, worktreeId }))
+        renderer?.update(render({ identityKey, worktreeId }))
       })
     }
   }

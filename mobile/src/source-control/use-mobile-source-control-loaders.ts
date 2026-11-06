@@ -1,4 +1,13 @@
-import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
+import { hashKey, useQueryClient } from '@tanstack/react-query'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
@@ -10,28 +19,25 @@ import {
   type RequestScope
 } from '../transport/generation-scoped-request-owner'
 import type { ConnectionState } from '../transport/types'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
+import { hostQueryLiveOptions, useHostQuery } from '../query/host-query'
+import { hostQueryKey } from '../query/host-query-key'
+import { hostScreenState } from '../query/host-query-screen-state'
 import {
   nextBranchCompareState,
   readBranchCompareOutcome,
   type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
-import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
-import {
-  isMobileGitTransientRefreshError,
-  isMobileGitUnavailableReply,
-  readMobileGitRefusal
-} from './mobile-git-status'
-import {
-  SELECTOR_RETRY_COUNT,
-  SELECTOR_RETRY_DELAY_MS,
-  wait,
-  type LoadStatusOptions,
-  type MobileBranchCompareState,
-  type ScreenState,
-  type StatusLoadInFlight
+import { gitStatusQuery, type GitStatusRead } from './mobile-git-status-query'
+import type {
+  LoadStatusOptions,
+  MobileBranchCompareState,
+  ScreenState
 } from './mobile-source-control-screen-state'
 
 type Params = {
+  hostId: string
   client: RpcClient | null
   connState: ConnectionState
   statusIdentityKey: string
@@ -43,9 +49,10 @@ type Params = {
 type BranchCompareParameters = Readonly<Record<string, never>>
 const WHOLE_WORKTREE: BranchCompareParameters = {}
 
+const NO_INPUT = {}
+
 export type MobileSourceControlLoaders = {
   screenState: ScreenState
-  setScreenState: (next: ScreenState | ((prev: ScreenState) => ScreenState)) => void
   branchCompareState: MobileBranchCompareState
   setBranchCompareState: (
     next: MobileBranchCompareState | ((prev: MobileBranchCompareState) => MobileBranchCompareState)
@@ -59,20 +66,56 @@ export type MobileSourceControlLoaders = {
 }
 
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
-  const { client, connState, statusIdentityKey, worktreeId, setActionError, onStatusLoadSuccess } =
-    params
+  const {
+    hostId,
+    client,
+    connState,
+    statusIdentityKey,
+    worktreeId,
+    setActionError,
+    onStatusLoadSuccess
+  } = params
   // Desktop's settings decide the compare base here and the list order and diffs upstream.
-  const { settings, reload: reloadSettings } = useMobileSourceControlSettings(client, connState)
+  const { settings, reload: reloadSettings } = useMobileSourceControlSettings(
+    hostId,
+    client,
+    connState
+  )
   const compareAgainstUpstream = settings.compareAgainstUpstream
-  const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
+  const queryClient = useQueryClient()
+  const exec = useWorkspaceExecutionHost() ?? 'local'
+  const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
+  const statusEnabled = worktreeId !== '' && !isSyntheticWorkspaceRoute(worktreeId)
+  const statusKey = useMemo(
+    () => hostQueryKey(hostId, gitStatusQuery.family, target, NO_INPUT),
+    [hostId, target]
+  )
+  // A screen under another one stops observing, so it revalidates when it is back on top rather than while hidden.
+  const [focused, setFocused] = useState(true)
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true)
+      return () => {
+        setFocused(false)
+        // Screens above can write (Review stages files), so coming back always revalidates.
+        void queryClient.invalidateQueries({
+          queryKey: statusKey,
+          exact: true,
+          refetchType: 'none'
+        })
+      }
+    }, [queryClient, statusKey])
+  )
+  const statusQuery = useHostQuery(gitStatusQuery, { hostId, client }, target, NO_INPUT, {
+    enabled: statusEnabled,
+    subscribed: focused
+  })
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
   })
   const [rebaseBaseRef, setRebaseBaseRef] = useState<string | null>(null)
-  const currentStatusIdentityRef = useRef('')
-  const loadGenerationRef = useRef(0)
   const mountedRef = useRef(true)
-  const statusLoadInFlightRef = useRef<StatusLoadInFlight | null>(null)
+  const keepActionErrorRef = useRef(false)
   const branchCompare = useRef(
     new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareAttempt>()
   ).current
@@ -82,11 +125,9 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     lastResetIdentityRef.current = statusIdentityKey
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
-    setScreenState({ kind: 'loading' })
     setBranchCompareState({ kind: 'idle' })
     setRebaseBaseRef(null)
   }
-  currentStatusIdentityRef.current = statusIdentityKey
 
   const setRootRef = useCallback(
     (node: View | null): void => {
@@ -96,7 +137,6 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       }
       // Invalidate route-detached RPC writes without waiting for passive cleanup.
       mountedRef.current = false
-      loadGenerationRef.current += 1
       branchCompare.reset()
     },
     [branchCompare]
@@ -140,149 +180,121 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
 
+  const compareWith = useEffectEvent((read: GitStatusRead | undefined) => {
+    if (read?.kind === 'ready') {
+      void loadBranchCompare({
+        preserveReadyOnFailure: true,
+        upstreamName: read.status.upstreamStatus?.upstreamName
+      })
+    }
+  })
+  const onStatusRead = useEffectEvent((read: GitStatusRead) => {
+    if (read.kind !== 'ready') {
+      return
+    }
+    compareWith(read)
+    if (keepActionErrorRef.current) {
+      keepActionErrorRef.current = false
+    } else {
+      setActionError(null)
+    }
+    // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
+    onStatusLoadSuccess?.()
+  })
+  // Every status read that lands, from focus, foreground, the connected edge or an action, refreshes the compare.
+  const statusHash = hashKey(statusKey)
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (
+          event.type === 'updated' &&
+          event.action.type === 'success' &&
+          event.query.queryHash === statusHash
+        ) {
+          onStatusRead(event.query.state.data)
+        }
+      }),
+    [queryClient, statusHash]
+  )
+  // Rows from memory still need their compare, as does a new compare setting; a revalidation in flight brings its own.
+  const compareShownStatus = useEffectEvent(() => {
+    if (!statusQuery.isFetching) {
+      compareWith(statusQuery.data)
+    }
+  })
+  useEffect(() => {
+    compareShownStatus()
+  }, [statusHash, compareAgainstUpstream])
+
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
       if (options?.rereadSettings) {
         reloadSettings()
       }
-      const loadKey = statusIdentityKey
-      const inFlight = statusLoadInFlightRef.current
-      if (inFlight && !options?.force && inFlight.key === loadKey && inFlight.client === client) {
-        return await inFlight.promise
-      }
-
-      const loadPromise = (async () => {
-        const generation = loadGenerationRef.current + 1
-        loadGenerationRef.current = generation
-        const isCurrentLoad = () =>
-          mountedRef.current &&
-          loadGenerationRef.current === generation &&
-          currentStatusIdentityRef.current === loadKey
-        if (!worktreeId) {
-          if (isCurrentLoad()) {
-            setScreenState({ kind: 'loading' })
-          }
-          return false
-        }
-        if (!client || connState !== 'connected') {
-          if (isCurrentLoad()) {
-            setScreenState({
-              kind: 'error',
-              message:
-                connState === 'connected'
-                  ? translate(
-                      'sourceControl.loaders.connectingToDesktop',
-                      'Connecting to desktop...'
-                    )
-                  : translate('sourceControl.loaders.waitingForDesktop', 'Waiting for desktop...')
-            })
-          }
-          return false
-        }
-        if (!isCurrentLoad()) {
-          return false
-        }
-        setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
-        try {
-          for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
-            // Changes rows show each file's +/- counts, so ask the host for line stats.
-            const reply = await gitStatusHostPayloadRead.request(client, {
-              worktree: `id:${worktreeId}`
-            })
-            if (!isCurrentLoad()) {
-              return false
-            }
-            // Inspect refusal code before acceptance policy loses capability/retry routing information.
-            const refusal = readMobileGitRefusal(reply)
-            if (!refusal) {
-              const result = gitStatusHostPayloadRead.interpret(reply)
-              setScreenState({ kind: 'ready', status: result })
-              void loadBranchCompare({
-                preserveReadyOnFailure: true,
-                upstreamName: result.upstreamStatus?.upstreamName
-              })
-              if (options?.clearActionErrorOnSuccess !== false) {
-                setActionError(null)
-              }
-              // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
-              onStatusLoadSuccess?.()
-              return true
-            }
-            if (isMobileGitUnavailableReply(reply)) {
-              setScreenState({
-                kind: 'unavailable',
-                message: translate(
-                  'sourceControl.loaders.updateDesktop',
-                  'Update Orca desktop to use Source Control on mobile.'
-                )
-              })
-              return false
-            }
-            const shouldRetry =
-              refusal.code === 'selector_not_found' ||
-              isMobileGitTransientRefreshError(refusal.code, refusal.message)
-            if (shouldRetry && attempt < SELECTOR_RETRY_COUNT) {
-              await wait(SELECTOR_RETRY_DELAY_MS)
-              if (!isCurrentLoad()) {
-                return false
-              }
-              continue
-            }
-            throw new Error(
-              refusal.message ||
-                translate('sourceControl.loaders.loadFailed', 'Unable to load source control')
-            )
-          }
-        } catch (err) {
-          if (!isCurrentLoad()) {
-            return false
-          }
-          const message =
-            err instanceof Error
-              ? err.message
-              : translate('sourceControl.loaders.loadFailed', 'Unable to load source control')
-          setScreenState((prev) => {
-            // Mutations can succeed while refresh races an abort; retain the last good screen through transient read failure.
-            if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
-              return prev
-            }
-            return { kind: 'error', message }
-          })
-          return false
-        }
+      if (!client || !statusEnabled) {
         return false
-      })()
-
-      statusLoadInFlightRef.current = { key: loadKey, client, promise: loadPromise }
+      }
+      const live = hostQueryLiveOptions(gitStatusQuery, client, hostId, target, NO_INPUT)
       try {
-        return await loadPromise
-      } finally {
-        if (statusLoadInFlightRef.current?.promise === loadPromise) {
-          statusLoadInFlightRef.current = null
+        // A forced read must see what an action just wrote, so it replaces a revalidation already out.
+        if (options?.force) {
+          await queryClient.cancelQueries({ queryKey: live.queryKey, exact: true })
         }
+        keepActionErrorRef.current = options?.clearActionErrorOnSuccess === false
+        return (await queryClient.query(live)).kind === 'ready'
+      } catch {
+        keepActionErrorRef.current = false
+        return false
       }
     },
-    [
-      client,
-      connState,
-      loadBranchCompare,
-      onStatusLoadSuccess,
-      reloadSettings,
-      statusIdentityKey,
-      worktreeId,
-      setActionError
-    ]
+    [client, hostId, queryClient, reloadSettings, statusEnabled, target]
   )
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadStatus({ force: true, preserveReadyOnFailure: true })
-    }, [loadStatus])
-  )
+  const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
+  const screenState = useMemo((): ScreenState => {
+    if (statusRead?.kind === 'ready') {
+      return { kind: 'ready', status: statusRead.status }
+    }
+    if (statusRead?.kind === 'unavailable') {
+      return {
+        kind: 'unavailable',
+        message: translate(
+          'sourceControl.loaders.updateDesktop',
+          'Update Orca desktop to use Source Control on mobile.'
+        )
+      }
+    }
+    if (!statusEnabled) {
+      return { kind: 'loading' }
+    }
+    const empty = client
+      ? hostScreenState(
+          { data: statusRead, error: statusError, isFetching: statusFetching },
+          connState
+        )
+      : 'empty-connecting'
+    if (empty === 'empty-connecting' || empty === 'empty-offline') {
+      return {
+        kind: 'error',
+        message:
+          connState === 'connected'
+            ? translate('sourceControl.loaders.connectingToDesktop', 'Connecting to desktop...')
+            : translate('sourceControl.loaders.waitingForDesktop', 'Waiting for desktop...')
+      }
+    }
+    if (empty === 'empty-error') {
+      return {
+        kind: 'error',
+        message:
+          statusError?.message ||
+          translate('sourceControl.loaders.loadFailed', 'Unable to load source control')
+      }
+    }
+    return { kind: 'loading' }
+  }, [statusRead, statusError, statusFetching, statusEnabled, client, connState])
 
   return {
     screenState,
-    setScreenState,
     branchCompareState,
     setBranchCompareState,
     mountedRef,

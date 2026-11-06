@@ -204,62 +204,6 @@
         "startedAt": 0
       }
     },
-    "6a5580a606dc": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "branch": "feature",
-            "entries": [
-              {
-                "added": 4,
-                "area": "unstaged",
-                "path": "src/app.ts",
-                "removed": 1,
-                "status": "modified"
-              },
-              {
-                "area": "staged",
-                "oldPath": "src/older.ts",
-                "path": "src/old.ts",
-                "status": "renamed"
-              }
-            ],
-            "head": "head-oid",
-            "upstreamStatus": {
-              "ahead": 1,
-              "behind": 0,
-              "hasUpstream": true,
-              "upstreamName": "origin/feature"
-            }
-          }
-        }
-      }
-    },
     "6d220bb7b42a": {
       "name": "worktree.show#1",
       "ordinal": 5,
@@ -267,32 +211,6 @@
         {
           "name": "method",
           "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "72e251ae531b": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
         },
         {
           "name": "params",
@@ -379,6 +297,32 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
+      }
+    },
+    "891438a18444": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
     "8c8e528ca222": {
@@ -523,6 +467,62 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
+    "9cb2ba41c834": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "branch": "feature",
+            "entries": [
+              {
+                "added": 4,
+                "area": "unstaged",
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              },
+              {
+                "area": "staged",
+                "oldPath": "src/older.ts",
+                "path": "src/old.ts",
+                "status": "renamed"
+              }
+            ],
+            "head": "head-oid",
+            "upstreamStatus": {
+              "ahead": 1,
+              "behind": 0,
+              "hasUpstream": true,
+              "upstreamName": "origin/feature"
+            }
+          }
+        }
+      }
+    },
     "a0e527bdf205": {
       "branchCompareState": {
         "kind": "idle"
@@ -659,6 +659,32 @@
         }
       }
     },
+    "d16c7a42b81c": {
+      "name": "git.status#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "d65d39bc05d3": {
       "name": "worktree.show#1",
       "ordinal": 5,
@@ -695,32 +721,6 @@
       "name": "git.branchCompare#1",
       "ordinal": 12,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
-    },
-    "e3973bb12da1": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -803,7 +803,7 @@
       {
         "id": "sc-changes-loaded.prelude:status-pending",
         "observation": {
-          "sender": ["e3973bb12da1", "72e251ae531b"],
+          "sender": ["891438a18444", "d16c7a42b81c"],
           "payloads": ["f648b042d810", "973ac78137f2"],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -815,7 +815,7 @@
       {
         "id": "sc-changes-loaded.prelude:compare-pending",
         "observation": {
-          "sender": ["e3973bb12da1", "6a5580a606dc", "6d220bb7b42a", "587de4c7f7fc"],
+          "sender": ["891438a18444", "9cb2ba41c834", "6d220bb7b42a", "587de4c7f7fc"],
           "payloads": ["f648b042d810", "973ac78137f2", "ad2a2a1df35b", "c2212473f0c1"],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -828,8 +828,8 @@
         "id": "sc-changes-loaded.normal:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "8c8e528ca222",
             "9536c968b88a",
             "35cc9e325d08"
@@ -852,8 +852,8 @@
         "id": "sc-changes-loaded.result-absent:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "54cc20e9cfbc",
             "9536c968b88a",
             "f1bc948c977d"
@@ -876,8 +876,8 @@
         "id": "sc-changes-loaded.result-null:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "8cf0ca1cc85d",
             "9536c968b88a",
             "f1bc948c977d"
@@ -900,8 +900,8 @@
         "id": "sc-changes-loaded.inner-ok-missing:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "bb66129d9391",
             "9536c968b88a",
             "f1bc948c977d"
@@ -924,8 +924,8 @@
         "id": "sc-changes-loaded.inner-false-string-error:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "ecfe4b0cfe19",
             "9536c968b88a",
             "f1bc948c977d"
@@ -948,8 +948,8 @@
         "id": "sc-changes-loaded.inner-false-object-error:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "7440046c1348",
             "9536c968b88a",
             "f1bc948c977d"
@@ -972,8 +972,8 @@
         "id": "sc-changes-loaded.outer-refused:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "ae3822726c00",
             "9536c968b88a",
             "f1bc948c977d"
@@ -996,8 +996,8 @@
         "id": "sc-changes-loaded.outer-refused-no-message:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "4fadbf6b1661",
             "9536c968b88a",
             "f1bc948c977d"
@@ -1020,8 +1020,8 @@
         "id": "sc-changes-loaded.method-not-found:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "b7a249bf3627",
             "9536c968b88a",
             "f1bc948c977d"
@@ -1044,8 +1044,8 @@
         "id": "sc-changes-loaded.transport-rejection:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "d65d39bc05d3",
             "9536c968b88a",
             "f1bc948c977d"
@@ -1068,8 +1068,8 @@
         "id": "sc-changes-loaded.transport-rejection-no-message:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "6a5580a606dc",
+            "891438a18444",
+            "9cb2ba41c834",
             "7689d7b4e8e2",
             "9536c968b88a",
             "f1bc948c977d"
