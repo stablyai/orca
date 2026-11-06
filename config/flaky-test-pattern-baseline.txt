@@ -267,9 +267,6 @@
 1 test-no-real-time-wait:src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts
 5 test-no-real-time-wait:src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts
 1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-legacy-send-behind-command.test.ts
-1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-provider-operations-while-starting.test.ts
-1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-runtime-exit.test.ts
-1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-runtime.test.ts
 3 test-no-real-time-wait:src/main/runtime/layout-command-pane-starts-layout-owner.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.test.ts
@@ -678,11 +675,7 @@
 3 test-no-wall-clock:src/main/rate-limits/service-minimax-usage.test.ts
 3 test-no-wall-clock:src/main/rate-limits/service-refresh-orchestration.test.ts
 4 test-no-wall-clock:src/main/rate-limits/service-zcode-usage.test.ts
-1 test-no-wall-clock:src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.test.ts
 2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts
-1 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-provider-operations-while-starting.test.ts
-1 test-no-wall-clock:src/main/runtime/agent-state-rules/agent-state-rules-engine.test.ts
-1 test-no-wall-clock:src/main/runtime/antigravity-readiness-transcripts.test.ts
 2 test-no-wall-clock:src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/mobile-relay-e2ee.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts
