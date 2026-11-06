@@ -120,14 +120,16 @@ export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
   }
 }
 
-/** Absent producers retain options fallback; present evidence owns the description, even cleared. */
-export function projectRuntimePermission<T extends { reportedPermissionMode?: string | null }>(
-  state: T,
+/** No runtime permission evidence: the options fallback stands. */
+export const NO_RUNTIME_PERMISSION_REPORT = false
+
+/** A primitive per answer, so subscribers re-render only when it changes: no evidence, cleared or stale (undefined), or the reported mode. */
+export function runtimePermissionReport(
   summary: unknown,
   fence: number | null
-): T {
+): typeof NO_RUNTIME_PERMISSION_REPORT | string | null | undefined {
   if (typeof summary !== 'object' || summary === null || !('runtimePermission' in summary)) {
-    return state
+    return NO_RUNTIME_PERMISSION_REPORT
   }
   const report = summary.runtimePermission
   const valid =
@@ -140,5 +142,15 @@ export function projectRuntimePermission<T extends { reportedPermissionMode?: st
     report.fence === fence &&
     'mode' in report &&
     (report.mode === null || typeof report.mode === 'string')
-  return { ...state, reportedPermissionMode: valid ? report.mode : undefined }
+  return valid ? report.mode : undefined
+}
+
+/** Absent producers retain options fallback; present evidence owns the description, even cleared. */
+export function applyRuntimePermissionReport<T extends { reportedPermissionMode?: string | null }>(
+  state: T,
+  report: ReturnType<typeof runtimePermissionReport>
+): T {
+  return report === NO_RUNTIME_PERMISSION_REPORT
+    ? state
+    : { ...state, reportedPermissionMode: report }
 }

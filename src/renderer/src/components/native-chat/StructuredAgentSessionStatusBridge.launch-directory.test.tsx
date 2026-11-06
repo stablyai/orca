@@ -309,9 +309,8 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       act(() => expect(() => feed().emit({ type: 'end' })).not.toThrow())
       expect(statuses()[0].structuredHostOwned).toBeUndefined()
       expect(warning).toHaveBeenCalled()
-      expect(afterBridge).toHaveBeenCalledTimes(2)
-      // The second disconnect emission retries the unconsumed input even though the row installed.
-      expect(projection).toHaveBeenCalledTimes(2)
+      expect(afterBridge).toHaveBeenCalledOnce()
+      expect(projection).toHaveBeenCalledOnce()
       await act(() => vi.advanceTimersByTimeAsync(300))
       expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2)
       act(() =>
@@ -321,6 +320,8 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
         })
       )
       expect(statuses()[0]).toMatchObject({ structuredHostOwned: true, updatedAt: 20 })
+      // The unconsumed disconnect input is retried with the host's next tick.
+      expect(projection).toHaveBeenCalledTimes(2)
       projection.mockRestore()
     } finally {
       stop()
