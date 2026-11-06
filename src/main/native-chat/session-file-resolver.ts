@@ -1,6 +1,6 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
-import { dirname, extname, join } from 'node:path'
+import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   resolveNativeChatTranscriptAgent,
@@ -28,9 +28,8 @@ import {
 import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
 import { findWslSessionPath } from './wsl-session-path-scan'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
-import { readIndexedCodexThreadRolloutPath } from '../codex/history/index/codex-state-db'
 import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
-import { admitTranscriptPath } from './transcript-path-admission'
+import { findIndexedNativeCodexRollout } from './native-codex-indexed-rollout'
 import { findIndexedWslCodexRollout } from './wsl-codex-indexed-rollout'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
@@ -288,7 +287,7 @@ async function findHostSessionFile(
     return history
   }
   if (agent === 'codex') {
-    const indexed = await findIndexedCodexSessionFile(root, sessionId, signal, strictErrors)
+    const indexed = await findIndexedNativeCodexRollout(root, sessionId, signal, strictErrors)
     if (indexed) {
       return indexed
     }
@@ -306,25 +305,4 @@ async function findHostSessionFile(
     strictErrors
   })
   return files[0] ?? null
-}
-
-async function findIndexedCodexSessionFile(
-  root: string,
-  sessionId: string,
-  signal?: AbortSignal,
-  strictErrors?: boolean
-): Promise<string | null> {
-  signal?.throwIfAborted()
-  const indexed = readIndexedCodexThreadRolloutPath(dirname(root), sessionId, strictErrors)
-  if (!indexed) {
-    return null
-  }
-  const admitted = await admitTranscriptPath(root, indexed)
-  if (admitted && (await readCodexRolloutSessionMetaId(admitted.path, signal)) === sessionId) {
-    return indexed
-  }
-  if (strictErrors) {
-    throw new Error('The indexed Codex rollout does not match this account and session.')
-  }
-  return null
 }

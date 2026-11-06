@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -27,7 +27,88 @@ function restoreEnv(key: string, previous: string | undefined): void {
   }
 }
 
+function indexRollout(home: string, path: string): void {
+  const db = new SyncDatabase(join(home, 'state_5.sqlite'))
+  try {
+    db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL)')
+    db.prepare('INSERT INTO threads VALUES (?, ?)').run('thread-a', path)
+  } finally {
+    db.close()
+  }
+}
+
 describe('resolveSessionFilePath', () => {
+  it.skipIf(process.platform === 'win32').each(['thread-a', 'other-thread'])(
+    'rejects a foreign actual target behind symlink/.. even if the lexical shadow has the requested ID (%s)',
+    async (foreignId) => {
+      const home = await realpath(await makeRoot('orca-native-codex-actual-target-'))
+      const sessions = join(home, 'sessions')
+      const foreign = join(home, 'another-account')
+      await mkdir(sessions)
+      await mkdir(join(foreign, 'child'), { recursive: true })
+      await writeFile(
+        join(sessions, 'rollout-thread-a.jsonl'),
+        '{"type":"session_meta","payload":{"id":"thread-a"}}\n'
+      )
+      await writeFile(
+        join(foreign, 'rollout-thread-a.jsonl'),
+        `${JSON.stringify({ type: 'session_meta', payload: { id: foreignId } })}\n`
+      )
+      await symlink(join(foreign, 'child'), join(sessions, 'link'))
+      indexRollout(home, `${sessions}/link/../rollout-thread-a.jsonl`)
+
+      await expect(
+        resolveSessionFilePath('codex', 'thread-a', {
+          codexSessionsDirs: [sessions],
+          strictErrors: true
+        })
+      ).rejects.toThrow()
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'selects the actual in-account target rather than a different lexical shadow',
+    async () => {
+      const home = await realpath(await makeRoot('orca-native-codex-actual-inside-'))
+      const sessions = join(home, 'sessions')
+      const target = join(sessions, 'nested', 'rollout-thread-a.jsonl')
+      await mkdir(join(sessions, 'nested', 'child'), { recursive: true })
+      for (const file of [target, join(sessions, 'rollout-thread-a.jsonl')]) {
+        await writeFile(file, '{"type":"session_meta","payload":{"id":"thread-a"}}\n')
+      }
+      await symlink(join(sessions, 'nested', 'child'), join(sessions, 'link'))
+      indexRollout(home, `${sessions}/link/../rollout-thread-a.jsonl`)
+
+      await expect(
+        resolveSessionFilePath('codex', 'thread-a', {
+          codexSessionsDirs: [sessions],
+          strictErrors: true
+        })
+      ).resolves.toBe(target)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps filename fallback when the actual indexed target is missing behind symlink/..',
+    async () => {
+      const home = await realpath(await makeRoot('orca-native-codex-actual-missing-'))
+      const sessions = join(home, 'sessions')
+      const original = join(sessions, 'rollout-thread-a.jsonl')
+      const foreign = join(home, 'another-account')
+      await mkdir(sessions)
+      await mkdir(join(foreign, 'child'), { recursive: true })
+      await writeFile(original, '{"type":"session_meta","payload":{"id":"thread-a"}}\n')
+      await symlink(join(foreign, 'child'), join(sessions, 'link'))
+      indexRollout(home, `${sessions}/link/../rollout-thread-a.jsonl`)
+
+      await expect(
+        resolveSessionFilePath('codex', 'thread-a', {
+          codexSessionsDirs: [sessions]
+        })
+      ).resolves.toBe(original)
+    }
+  )
+
   it('imports the indexed Codex continuation instead of an older same-ID rollout', async () => {
     const home = await makeRoot('orca-native-chat-codex-head-')
     const sessions = join(home, 'sessions')
@@ -51,7 +132,7 @@ describe('resolveSessionFilePath', () => {
 
     await expect(
       resolveSessionFilePath('codex', 'thread-a', { codexSessionsDirs: [sessions] })
-    ).resolves.toBe(head)
+    ).resolves.toBe(await realpath(head))
   })
 
   it('refuses an indexed Codex rollout outside the requested account', async () => {
