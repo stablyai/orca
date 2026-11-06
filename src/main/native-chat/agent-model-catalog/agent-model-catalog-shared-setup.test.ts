@@ -51,12 +51,12 @@ const listing = (id: string): AgentModelCatalogSuccess => ({
 // resolution or project-settings check can each be held once.
 function harness() {
   const records: Record<string, AgentSessionRecord> = { a: chat('a'), b: chat('b') }
-  const folder = {
-    path: '/ws',
-    gate: undefined as PromiseWithResolvers<void> | undefined,
-    cli: undefined as PromiseWithResolvers<void> | undefined,
-    settings: undefined as PromiseWithResolvers<void> | undefined
-  }
+  const folder: {
+    path: string
+    gate?: PromiseWithResolvers<void>
+    cli?: PromiseWithResolvers<void>
+    settings?: PromiseWithResolvers<void>
+  } = { path: '/ws' }
   const once = async (name: 'gate' | 'cli' | 'settings') => {
     const held = folder[name]
     folder[name] = undefined
