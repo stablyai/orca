@@ -45,10 +45,8 @@ export async function executeWorktreeCreation(
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
     : request
-  if (!trustedRequest) {
-    return
-  }
-  const preparedRequest = await prepareRequestForCreate(creationId, trustedRequest)
+  const preparedRequest =
+    trustedRequest && (await prepareRequestForCreate(creationId, trustedRequest))
   if (!preparedRequest) {
     return
   }
