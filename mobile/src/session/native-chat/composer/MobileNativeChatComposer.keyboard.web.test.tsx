@@ -199,7 +199,9 @@ describe('mobile composer modifier submit in the paired web page', () => {
 
   function queuedGeometry() {
     const anchor = { top: 430, width: 390, clipTop: 250, clipHeight: 300 }
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
       if (this === container) {
         return new DOMRect(0, 80, 390, 620)
       }
