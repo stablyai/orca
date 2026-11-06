@@ -140,22 +140,23 @@ export function NativeChatTurnDiffRollup({
         ) : null}
         {/* Shown on card hover or keyboard focus, like the transcript's other row actions. The
             negative margin keeps the header one text line tall, as the row-height estimate assumes. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="-my-1 ml-auto shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/turn-diff:pointer-events-auto group-hover/turn-diff:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-              aria-label={translate('components.native-chat.turnDiff.hide', 'Hide')}
-              onClick={() => void hideTurnDiffSummaries()}
-            >
-              <EyeOff aria-hidden className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate('components.native-chat.turnDiff.hide', 'Hide')}
-          </TooltipContent>
-        </Tooltip>
+        <span className="-my-1 ml-auto flex shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/turn-diff:pointer-events-auto group-hover/turn-diff:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate('components.native-chat.turnDiff.hide', 'Hide')}
+                onClick={() => void hideTurnDiffSummaries()}
+              >
+                <EyeOff aria-hidden className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate('components.native-chat.turnDiff.hide', 'Hide')}
+            </TooltipContent>
+          </Tooltip>
+        </span>
       </div>
       <div className="space-y-1">
         {files.map((file) => (
