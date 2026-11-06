@@ -1,3 +1,4 @@
+import { structuredSessionTaskControlRoutes } from './structured-agent-session-task-control-router'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -130,16 +131,14 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return change(input)
   }
 
-  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
-    input
-  ) => {
-    const stop = this.owner(input.sessionId).stopBackgroundTasks
-    return stop ? stop(input) : Promise.resolve({ cancelled: false })
-  }
-
-  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
-    sessionId
-  ) => this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)
+  private readonly taskControls = structuredSessionTaskControlRoutes(
+    (id) => this.owner(id),
+    (id) => this.liveOwnerOrNull(id)
+  )
+  stopBackgroundTasks = this.taskControls.stopBackgroundTasks
+  backgroundTaskStops = this.taskControls.backgroundTaskStops
+  foregroundTasks = this.taskControls.foregroundTasks
+  backgroundTask = this.taskControls.backgroundTask
 
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false

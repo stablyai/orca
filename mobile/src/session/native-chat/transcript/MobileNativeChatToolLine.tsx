@@ -33,6 +33,7 @@ import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
+import { MobileNativeChatForegroundTaskAction } from '../input/MobileNativeChatForegroundTaskAction'
 
 function toolDuration(durationMs: unknown, t: Translate): string | null {
   if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
@@ -266,6 +267,9 @@ export function MobileNativeChatToolLine({
             ) : null}
           </View>
         </Pressable>
+        {call?.state === 'running' && !body ? (
+          <MobileNativeChatForegroundTaskAction toolUseId={call.callId} />
+        ) : null}
         {fullCommand ? (
           <MobileSourceCopyButton
             text={fullCommand}

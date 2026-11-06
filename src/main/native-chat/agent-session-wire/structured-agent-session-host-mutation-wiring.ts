@@ -25,6 +25,7 @@ import type { StructuredAgentSessionConversations } from './structured-agent-ses
 import type * as conversation from './structured-agent-session-host-delivery'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
+import { backgroundStructuredAgentSessionTask } from './structured-agent-session-background-action'
 
 type Inputs = {
   deps: StructuredAgentSessionHostDeps
@@ -89,6 +90,10 @@ export function structuredAgentSessionMutationDelegates(
   attachContext: () => StructuredAgentSessionAttachContext
 ) {
   return {
+    backgroundTask: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof backgroundStructuredAgentSessionTask>[2]
+    ) => backgroundStructuredAgentSessionTask(context(), caller, params),
     cancel: (
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof cancelStructuredAgentSessionTurn>[2]

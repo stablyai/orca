@@ -10,7 +10,6 @@ import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
 } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
@@ -42,6 +41,7 @@ import { hostStatesTurnScopes } from '../../../../shared/native-chat/transcript/
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
+import { structuredAgentSessionTaskActions } from './structured-agent-session-task-actions'
 
 export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) {
   const {
@@ -293,12 +293,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
-    stopBackgroundTask: (taskId?: string) =>
-      mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
-        turnId: 'background-tasks',
-        scope: 'background-tasks',
-        ...(taskId ? { taskId } : {})
-      }),
+    ...structuredAgentSessionTaskActions(mutate),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
       respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,

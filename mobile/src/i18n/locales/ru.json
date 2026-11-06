@@ -2047,7 +2047,9 @@
       "stopAll": "Остановить фоновые задачи",
       "stopTask": "Остановить {{value0}}",
       "task": "Фоновая задача",
-      "workflow": "Фоновый процесс"
+      "workflow": "Фоновый процесс",
+      "background": "В фон",
+      "backgrounding": "В фон…"
     },
     "browserTabActionSheet": {
       "forward": "Вперёд",
@@ -2730,7 +2732,8 @@
       "waitForCommand": "Дождитесь завершения /compact или /clear.",
       "waitForStart": "Дождитесь запуска агента.",
       "waitForTurn": "Дождитесь ответа агента или остановите его.",
-      "waitMoment": "Подождите немного."
+      "waitMoment": "Подождите немного.",
+      "notDoneBackgroundTask": "Не удалось перевести задачу в фон."
     },
     "workerAutoClose": {
       "running": "Временный агент оркестрации · Закроется через 2 минуты после завершения",

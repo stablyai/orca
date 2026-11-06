@@ -11,6 +11,10 @@ import { structuredSessionForegroundCommands } from '../../../src/shared/structu
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { mobileStructuredHostClockOffsetMs } from './mobile-structured-host-clock-offset'
+import type {
+  AgentSessionForegroundTask,
+  AgentSessionBackgroundResult
+} from '../../../src/shared/agent-session/agent-session-foreground-task'
 
 export type MobileStructuredBackgroundTasks = {
   // Scope strip expansion and stopping state to the conversation.
@@ -19,6 +23,7 @@ export type MobileStructuredBackgroundTasks = {
   // Treat retained rows as unverifiable off-stream; convert host timestamps with this offset.
   rowContext: AgentChildRowContext
   stop: (taskId?: string) => Promise<StructuredAgentSessionMutationResult<AgentSessionCancelResult>>
+  background?: (task: AgentSessionForegroundTask) => Promise<boolean>
 }
 
 export function useMobileStructuredBackgroundTasks(args: {
@@ -56,8 +61,22 @@ export function useMobileStructuredBackgroundTasks(args: {
       }),
     [mutate]
   )
+  const background = useCallback(
+    async (target: AgentSessionForegroundTask) => {
+      if (!streamLive) {
+        return false
+      }
+      const result = await mutate<AgentSessionBackgroundResult>(
+        'agentSession.backgroundTask',
+        'agentSession.backgroundTask',
+        { target }
+      )
+      return result.status === 'accepted' && result.value.backgrounded && result.sameFence
+    },
+    [mutate, streamLive]
+  )
   return useMemo(
-    () => ({ sessionKey, view, rowContext, stop }),
-    [sessionKey, view, rowContext, stop]
+    () => ({ sessionKey, view, rowContext, stop, background }),
+    [sessionKey, view, rowContext, stop, background]
   )
 }

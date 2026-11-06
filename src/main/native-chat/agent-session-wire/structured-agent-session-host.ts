@@ -283,6 +283,7 @@ export class StructuredAgentSessionHost {
     () => this.attachContext()
   )
   cancel = this.mutations.cancel
+  backgroundTask = this.mutations.backgroundTask
   respondToPrompt = this.mutations.respondToPrompt
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal

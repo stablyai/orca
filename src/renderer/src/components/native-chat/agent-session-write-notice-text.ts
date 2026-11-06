@@ -30,6 +30,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneStop: () => translate('components.native-chat.writeNotice.notDoneStop', COPY.notDoneStop),
   notDoneStopTask: () =>
     translate('components.native-chat.writeNotice.notDoneStopTask', COPY.notDoneStopTask),
+  notDoneBackgroundTask: () =>
+    translate(
+      'components.native-chat.writeNotice.notDoneBackgroundTask',
+      COPY.notDoneBackgroundTask
+    ),
   notDoneStopTasks: () =>
     translate('components.native-chat.writeNotice.notDoneStopTasks', COPY.notDoneStopTasks),
   notDoneAnswer: () =>
