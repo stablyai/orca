@@ -269,9 +269,9 @@ async function start(retryOf?: string) {
     `id:${rig.workspace}`,
     '--agent',
     'codex',
-    '--spec',
-    'Reply once then wait',
-    ...(retryOf ? ['--retry-of', retryOf] : [])
+    ...(retryOf
+      ? ['--task', db.getWorkerDispatch(retryOf)!.task_id, '--retry-of', retryOf]
+      : ['--spec', 'Reply once then wait'])
   ])
   expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
   const result = resultOf(receipt.output)

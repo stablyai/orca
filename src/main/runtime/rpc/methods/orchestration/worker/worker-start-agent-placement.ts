@@ -193,7 +193,8 @@ async function launchWorkerAgent(
     await tearDownFailedWorkerStart({
       runtime: args.runtime,
       structuredSession,
-      dispatchId: args.dispatchId
+      dispatchId: args.dispatchId,
+      error
     })
     throw error
   }

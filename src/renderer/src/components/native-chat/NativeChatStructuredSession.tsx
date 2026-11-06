@@ -226,7 +226,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   })
   const availability = useNativeChatAvailabilityNotice({
     unavailable: controller.unavailable,
-    signIn,
+    signIn: props.agent === 'claude' ? null : signIn,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,

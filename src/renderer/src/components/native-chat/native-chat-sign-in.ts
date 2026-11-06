@@ -5,6 +5,8 @@ import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 import { agentSessionRemoteSignInCommand } from '../../../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/web-runtime-terminal-create-failure-notice'
+import { startStoppedWslHostForUserAct } from '@/lib/wsl-host-user-start'
 import { toast } from 'sonner'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
@@ -107,7 +109,10 @@ export function useNativeChatSignIn(input: {
     setOpening(true)
     void (async () => {
       if (environmentId) {
-        await createWebRuntimeSessionTerminal(
+        if (!(await startStoppedWslHostForUserAct(environmentId))) {
+          return
+        }
+        const outcome = await createWebRuntimeSessionTerminal(
           {
             worktreeId,
             environmentId,
@@ -116,8 +121,11 @@ export function useNativeChatSignIn(input: {
             viewMode: 'terminal',
             activate: true
           },
-          { userAct: true }
+          { notifyFailure: false }
         )
+        if (outcome.status === 'failed') {
+          notifyWebRuntimeTerminalCreateFailure(outcome.message, { environmentId, worktreeId })
+        }
       } else {
         const store = useAppStore.getState()
         const tab = store.createTab(worktreeId, groupId, undefined, {

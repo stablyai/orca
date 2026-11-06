@@ -8,6 +8,7 @@ import type { AgentJournalStatusItem } from '../../../../shared/agent-session/jo
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { NativeChatSignInContext, type NativeChatSignIn } from './native-chat-sign-in'
 
 import { i18n } from '@/i18n/i18n'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -42,6 +43,7 @@ function orcaStopView(
 }
 
 const NO_OFFER = { offeredTurnItemId: null, continueNow: () => {} }
+const authAction = { signingIn: false, signIn: vi.fn() }
 
 function renderStatus(
   body: AgentJournalStatusItem,
@@ -49,7 +51,8 @@ function renderStatus(
   continueAvailable = false,
   remoteHost = false,
   agentName?: string,
-  offer: ContinueOffer = NO_OFFER
+  offer: ContinueOffer = NO_OFFER,
+  signIn: NativeChatSignIn | null = null
 ) {
   const [message] = projectStructuredItemsToNativeChat([
     {
@@ -65,12 +68,14 @@ function renderStatus(
   return render(
     <TooltipProvider>
       <NativeChatOrcaStopContext.Provider value={view}>
-        <MessageRow
-          message={message!}
-          agentName={agentName}
-          expandSignal={false}
-          onScrollMessageToTop={vi.fn()}
-        />
+        <NativeChatSignInContext.Provider value={signIn}>
+          <MessageRow
+            message={message!}
+            agentName={agentName}
+            expandSignal={false}
+            onScrollMessageToTop={vi.fn()}
+          />
+        </NativeChatSignInContext.Provider>
       </NativeChatOrcaStopContext.Provider>
     </TooltipProvider>
   )
@@ -198,6 +203,25 @@ describe('usage-limit reset clock changes', () => {
 })
 
 describe('notice rows', () => {
+  it('keeps the OMP status recovery action usable after switching language', async () => {
+    renderStatus(
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords({ kind: 'notSignedIn' }, { agentName: 'OMP', surface: 'row' })
+      },
+      null,
+      false,
+      false,
+      'OMP',
+      NO_OFFER,
+      authAction
+    )
+    await act(() => i18n.changeLanguage('fr'))
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    expect(authAction.signIn).toHaveBeenCalledOnce()
+  })
+
   it('updates a mounted auth row when the reader changes language', async () => {
     renderStatus(
       {
