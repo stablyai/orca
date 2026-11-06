@@ -56,7 +56,7 @@ function thread(overrides: Partial<AgentPaneThread>): AgentPaneThread {
         agentType: 'codex',
         currentAgentState: null,
         currentAgentEntry: null,
-        responsePreview: null,
+        responsePreview: '',
         latestTimestamp: 1,
         latestEvent: null,
         events: [],
