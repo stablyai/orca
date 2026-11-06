@@ -65,8 +65,9 @@ export function useNativeChatSteerChordPreview(
       element.removeEventListener('keydown', onKeyDown)
       element.removeEventListener('keyup', onKeyUp)
       element.removeEventListener('focusout', release)
+      clearTimeout(timer)
       // A key-up missed while the chord offered nothing must not show a stale preview later.
-      release()
+      setHeld(false)
     }
   }, [root, enabled])
 

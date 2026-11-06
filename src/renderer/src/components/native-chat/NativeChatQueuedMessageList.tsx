@@ -42,7 +42,6 @@ export function NativeChatQueuedMessageList({
   steerHeld?: boolean
   /** Where focus goes once Steer, Delete or a closing edit takes the focused card away. */
   focusComposer?: () => void
-
   /** The chat files added in a card's editor attach to, as its chat box attaches them. */
   editAttachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {

@@ -259,7 +259,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             onMouseDown={(event) => event.preventDefault()}
             onClick={onSteerPreview}
             size="sm"
-            className="h-8 gap-1.5 rounded-full px-3 pointer-coarse:h-10"
           >
             {steerPreview === 'queue' ? (
               <ListEnd className="size-3.5" />
