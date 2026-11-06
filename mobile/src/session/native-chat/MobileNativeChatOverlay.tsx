@@ -1,5 +1,5 @@
 import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
-import { Activity, memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -72,17 +72,18 @@ export function MobileNativeChatOverlay(props: Props): React.JSX.Element | null 
     setLastShown(props)
   }
   const drawn = shown ? props : lastShown
-  if (!drawn) {
+  // The same element while hidden lets React skip the hidden tree.
+  const content = useMemo(
+    () => (drawn ? <MobileNativeChatOverlayContent {...drawn} /> : null),
+    [drawn]
+  )
+  if (!content) {
     return null
   }
-  return (
-    <Activity mode={shown ? 'visible' : 'hidden'}>
-      <MobileNativeChatOverlayContent {...drawn} />
-    </Activity>
-  )
+  return <Activity mode={shown ? 'visible' : 'hidden'}>{content}</Activity>
 }
 
-const MobileNativeChatOverlayContent = memo(function MobileNativeChatOverlayContent({
+function MobileNativeChatOverlayContent({
   controller,
   imageSource,
   worktreePath,
@@ -376,7 +377,7 @@ const MobileNativeChatOverlayContent = memo(function MobileNativeChatOverlayCont
       </MobileMarkdownLinksContext.Provider>
     </MobileNativeChatRowOverlaysHost>
   )
-})
+}
 
 const styles = StyleSheet.create({
   overlay: StyleSheet.absoluteFillObject
