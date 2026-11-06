@@ -53,6 +53,7 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
         data-current={device.udid === selectedUdid || undefined}
         onSelect={() => {
           onSelectDevice(device.udid)
+          setSearch('')
           setOpen(false)
         }}
       >

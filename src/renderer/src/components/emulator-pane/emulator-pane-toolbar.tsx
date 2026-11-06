@@ -141,7 +141,6 @@ export function EmulatorPaneToolbar({
           disabled={
             loading ||
             devices.length === 0 ||
-            !selectedUdid ||
             devices.find((device) => device.udid === selectedUdid)?.isAvailable === false
           }
         >
