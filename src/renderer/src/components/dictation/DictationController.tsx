@@ -58,6 +58,10 @@ export function DictationController() {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       await finishCapture()
+      // A speech error during the tail already tore this session down; a newer one may own the refs now.
+      if (activeSessionIdRef.current !== sessionId) {
+        return
+      }
       try {
         await window.api.speech.stopDictation(sessionId)
       } catch {
