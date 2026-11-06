@@ -377,6 +377,14 @@ describe('composer workspace context', () => {
       })
       read().forEach((value, index) => expect(value).toBe(first[index]))
       expect(visits).toBe(0)
+      store.setState({
+        settings: createGlobalSettingsFixture({
+          machineName: 'Old local name',
+          activeRuntimeEnvironmentId: 'hub'
+        })
+      })
+      read().forEach((value, index) => expect(value).toBe(first[index]))
+      expect(visits).toBe(0)
       store
         .getState()
         .setEnvironmentRemovedSshTargetLabels('unrelated-server', { target: 'Old target' })

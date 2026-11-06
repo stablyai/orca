@@ -105,7 +105,6 @@ export function createNativeChatComposerWorkspaceSelector(
       ...(explicitHost
         ? []
         : [
-            state.settings?.activeRuntimeEnvironmentId,
             state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null,
             runtimeIds,
             ...OWNER_CONTEXT_INPUT_KEYS.map((key) => state[key])
