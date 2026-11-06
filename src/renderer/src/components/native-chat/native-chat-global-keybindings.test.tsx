@@ -77,7 +77,7 @@ function Composer() {
   useGlobalKeybindings({ layout: layout as never, floatingWorkspace: floatingWorkspace as never })
   const onKeyDown = useNativeChatComposerKeyDown({
     autocomplete: { mode: 'none' },
-    mentionFiles: { files: [], loading: false },
+    mentionFiles: { files: [], loading: false, failed: false },
     completeMention: noop,
     activeSuggestion: 0,
     draft: 'draft stays',
@@ -352,6 +352,8 @@ it('carries native default deletion through the IPC bridge and preserves composi
   })
   const input: Input = {
     type: 'keyDown',
+    location: 0,
+    modifiers: [],
     key: 'Backspace',
     code: 'Backspace',
     meta: process.platform === 'darwin',
