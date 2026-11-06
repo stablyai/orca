@@ -162,7 +162,7 @@ export function useMobileNativeChatUsageLimit(
       autoContinue: kind === 'off' ? null : kind,
       cancel: kind === 'scheduled' && canCancel ? cancel : null,
       cancelling,
-      cancelFailed: failedCut === turnItemId,
+      cancelFailed: failedCut === turnItemId && kind === 'scheduled',
       canSwitchAccount:
         switchAnswer?.asked === asked ? switchAnswer.canSwitch : live ? undefined : false,
       continueNow
