@@ -253,7 +253,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     }
   )
 
-  it('holds opposite picks during a transmitted mode write and exits Plan without consuming the draft', async () => {
+  it('retries a held opposite pick after settlement and exits Plan without consuming the draft', async () => {
     let mode: 'default' | 'plan' = 'default'
     const client = optionsClient(async () => ({
       models: [],
@@ -266,7 +266,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     const { calls, mutate } = recordingMutate(async (index, fields) =>
       index === 0
         ? reply.promise
-        : index === 2
+        : index === 4
           ? exitReply.promise
           : accepted({ key: String(fields.key), value: String(fields.value) }, true)
     )
@@ -346,13 +346,25 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       true
     )
     expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(false)
+    mode = 'default'
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(3)
+    expect(calls[2]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    mode = 'plan'
+    act(() => field().props.onChangeText('keep /pl tail'))
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+    await act(async () => labelled('/plan')[0]!.props.onPress())
+    expect(calls).toHaveLength(4)
+    act(() => field().props.onChangeText('keep /def tail'))
     focus.mockClear()
     act(() => labelled('Exit plan mode')[0]!.props.onPress())
     expect(labelled('Exit plan mode')).toHaveLength(0)
     expect(field().props.value).toBe('keep /def tail')
     expect(focus).toHaveBeenCalled()
-    expect(calls).toHaveLength(3)
-    expect(calls[2]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    expect(calls).toHaveLength(5)
+    expect(calls[4]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
     mode = 'default'
     await act(async () =>
       exitReply.resolve(
