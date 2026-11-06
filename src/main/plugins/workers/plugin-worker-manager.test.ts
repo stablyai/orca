@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginWorkerHandle } from './plugin-host-process'
 import {
   PluginWorkerManager,
@@ -123,6 +123,10 @@ describe('PluginWorkerManager restart policy', () => {
 })
 
 describe('PluginWorkerManager idle reap', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('does not count time the machine slept as idle time', async () => {
     const minute = 60_000
     const busy = worker(2 * minute)
