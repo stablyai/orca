@@ -543,7 +543,6 @@
     "usageLimit": {
       "reached": "{{agent}} kullanım sınırına ulaştı.",
       "reachedNamed": "{{agent}}, {{window}} sınırına ulaştı.",
-      "resetsAt": "Sıfırlanma zamanı: {{when}}.",
       "theAgent": "Ajan",
       "windowCredits": "ek kullanım",
       "windowSession": "oturum",
@@ -852,6 +851,13 @@
       "openImage": "Görseli aç",
       "wrapLines": "Satırları kaydır",
       "disableLineWrap": "Satır kaydırmayı kapat"
+    },
+    "markdownCallout": {
+      "note": "Not",
+      "tip": "İpucu",
+      "important": "Önemli",
+      "warning": "Uyarı",
+      "caution": "Dikkat"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Alt paneli kapat"
@@ -3277,7 +3283,8 @@
       "moreFields_one": "+{{count}} alan",
       "moreFields_other": "+{{count}} alan",
       "noItems": "Proje öğesi yok",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} tane daha"
     },
     "githubProjectPickers": {
       "add": "Ekle",

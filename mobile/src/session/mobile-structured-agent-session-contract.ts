@@ -29,6 +29,7 @@ import type { NativeChatContextUsageSummary } from '../../../src/shared/native-c
 import type { MobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 import type { AgentSessionRewindSurface } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { MobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
@@ -74,6 +75,7 @@ export type StructuredMobileSession = Omit<
     rewind: AgentSessionRewindSurface | undefined
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
+    usageLimit: MobileNativeChatUsageLimit | null
   }
 
 export type MobileStructuredAgentSessionArgs = {
