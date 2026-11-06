@@ -16,6 +16,7 @@ export type EmulatorDevice = {
   state: 'shutdown' | 'booting' | 'booted'
   detail?: string
   isAvailable: boolean
+  lastUsedAt?: string
 }
 
 export type EmulatorBackendCapabilities = {
