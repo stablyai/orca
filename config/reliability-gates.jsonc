@@ -14977,7 +14977,7 @@
       "id": "terminal-input.plugin-explicit-worktree-routing",
       "title": "Plugin terminal input stays inside the freshly resolved worktree",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "plugin-platform",
       "layer": "main-relay-contract",
       "surfaces": [
@@ -14988,37 +14988,16 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile-relay"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Deterministic macOS contract evidence covers opaque local- and SSH-shaped terminal ids, one bounded worktree listing, mismatch rejection, and the main/relay host-call adapter matrix. It does not launch a live PTY or provision a relay-hosted plugin.",
+      "coveredPlatforms": [],
+      "coveredProviders": [],
+      "coverageNotes": "Audit1678 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Deterministic macOS contract evidence covers opaque local- and SSH-shaped terminal ids, one bounded worktree listing, mismatch rejection, and the main/relay host-call adapter matrix. It does not launch a live PTY or provision a relay-hosted plugin.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/8549"],
       "invariant": "terminal.sendText accepts only an explicit provider-owned terminal id present in one bounded inventory of the worktree resolved immediately before the send; an absent id causes zero send calls, and relay callers cannot supply their own capability grants or transport classification.",
-      "oracle": "Resolve the active worktree once, list that worktree with the v0 terminal cap once, and assert zero sendTerminal calls for a mismatched opaque id versus exactly one send for matching local- and SSH-shaped ids; then run the same permission and schema cases through desktop-main and registered relay panel/worker adapters and compare error codes.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/workers/plugin-host-methods.test.ts"
-      ],
-      "testFiles": ["src/main/plugins/workers/plugin-host-methods.test.ts"],
-      "assertionRefs": [
-        {
-          "file": "src/main/plugins/workers/plugin-host-methods.test.ts",
-          "assertions": [
-            "a terminal outside the freshly resolved worktree performs one capped list and zero sends",
-            "matching local- and SSH-shaped opaque ids each perform one capped list and one exact send",
-            "workspace.readContext drops provider paths, path-bearing internal worktree ids, and terminal titles while capping its terminal projection"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-07-10",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/workers/plugin-host-methods.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.18,
-          "summary": "2 files and 17 tests passed, covering the 13-method main/relay conformance matrix and exact terminal routing call counts."
-        }
-      ],
+      "oracle": "Audit1678 retires changed-source assertion and execution scope without equivalent replacement coverage. Existing unchanged-selector receipts remain scoped to their original sources. Historical prior-source oracle: Resolve the active worktree once, list that worktree with the v0 terminal cap once, and assert zero sendTerminal calls for a mismatched opaque id versus exactly one send for matching local- and SSH-shaped ids; then run the same permission and schema cases through desktop-main and registered relay panel/worker adapters and compare error codes.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "plugin host main/relay contract tests"
@@ -15042,6 +15021,8 @@
         "Keep relay-hosted plugin provisioning behind a separate reviewed policy before replacing the fail-closed registration."
       ],
       "knownGaps": [
+        "No active assertion references remain after this audit; surviving unaffected receipts record historical scope only.",
+        "Audit1678 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded.",
         "Linux and Windows execution evidence is not recorded.",
         "Daemon, WSL, remote-runtime, and mobile-relay providers have no live input evidence.",
         "Local and SSH coverage is contract-level over opaque ids, not a live PTY input/echo run.",

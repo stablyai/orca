@@ -672,7 +672,6 @@
 1 test-no-wall-clock:src/main/persistence/profile-state/profile-state-section-repair.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-deregistered-repo-residue.test.ts
 1 test-no-wall-clock:src/main/persistence/tracking-repos/worktree-metadata-normalization.test.ts
-1 test-no-wall-clock:src/main/plugins/workers/plugin-host-methods.test.ts
 2 test-no-wall-clock:src/main/provider-process/provider-group-orphan-guard.integration.test.ts
 1 test-no-wall-clock:src/main/provider-process/provider-group-orphan-guard.test.ts
 18 test-no-wall-clock:src/main/provider-process/provider-process-supervisor.integration.test.ts
@@ -943,7 +942,6 @@
 1 test-timeout-needs-reason:src/main/persistence/applying-settings/persistence-source-control-ai-migration.test.ts
 1 test-timeout-needs-reason:src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
 1 test-timeout-needs-reason:src/main/plugins/workers/plugin-worker-supervision.integration.test.ts
-1 test-timeout-needs-reason:src/main/ports/port-scan-command-client.test.ts
 1 test-timeout-needs-reason:src/main/ports/port-scan-command-execution.test.ts
 2 test-timeout-needs-reason:src/main/providers/agent-foreground-process-git-bash.win32.test.ts
 1 test-timeout-needs-reason:src/main/providers/local-pty/local-pty-child-process-verdict.test.ts
