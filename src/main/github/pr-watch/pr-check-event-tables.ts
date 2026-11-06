@@ -150,7 +150,11 @@ export function endPRWatchState(db: Database.Database, prKey: string): void {
   db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ?').run(prKey)
 }
 
-/** Startup: drops moved heads past their deadline and the pending heads of watches no longer active. */
+/**
+ * Startup: drops moved heads past their fixed deadline, and the current-head rows of watches no
+ * recent action holds. Unexpired moved heads stay whatever holds them: a follow-up registration
+ * resolves only after startup, and each expires on its own deadline anyway.
+ */
 export function retirePRWatchState(
   db: Database.Database,
   now: number,
@@ -160,10 +164,13 @@ export function retirePRWatchState(
     now
   )
   const inactive = (
-    db.prepare('SELECT DISTINCT pr_key FROM pr_pending_heads').all() as { pr_key: string }[]
+    db.prepare('SELECT DISTINCT pr_key FROM pr_pending_heads WHERE moved_at IS NULL').all() as {
+      pr_key: string
+    }[]
   ).filter((row) => !activePRKeys.has(row.pr_key))
+  const retire = db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ? AND moved_at IS NULL')
   for (const { pr_key: prKey } of inactive) {
-    endPRWatchState(db, prKey)
+    retire.run(prKey)
   }
 }
 

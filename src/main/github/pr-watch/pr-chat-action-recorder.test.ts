@@ -109,7 +109,8 @@ describe('pushedPullRequestHead', () => {
       output,
       finishedAt: 0
     }),
-    deadline: 0
+    deadline: 0,
+    replayed: false
   })
   const pr = (fields: Partial<PRInfo>): PRInfo =>
     ({
@@ -130,6 +131,11 @@ describe('pushedPullRequestHead', () => {
     // A new branch in another repository is not this fork PR's head.
     const upstream = pushOf('To github.com:parent/repo.git\n * [new branch]      HEAD -> review\n')
     expect(pushedPullRequestHead(upstream, pr({}))).toBeNull()
+    // Same owner and repository on another forge host is another repository.
+    const otherHost = pushOf(
+      'To https://github.enterprise.example/acme/repo.git\n * [new branch]      HEAD -> review\n'
+    )
+    expect(pushedPullRequestHead(otherHost, pr({}))).toBeNull()
     // Another push moved the PR on before the read: the proven head is kept, marked superseded.
     expect(pushedPullRequestHead(workToReview, pr({ headSha: 'ffff0000aaaa' }))).toEqual({
       headSha: '89abcde',

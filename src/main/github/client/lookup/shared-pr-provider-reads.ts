@@ -36,17 +36,25 @@ function sharedPRKey(
   ]
 }
 
-/** A bounded read may join an unbounded one in flight; never the reverse. */
+/** How a lookup reads its provider requests: a CI-line watch's page bound, a user's refresh. */
+export type PRProviderReadOptions = { checkPageLimit?: number; userRefresh?: boolean }
+
+/** A bounded read may join an unbounded one in flight; never the reverse. A user's refresh joins
+ *  nothing begun before the click: it starts the read later callers share. */
 function sharedRead<T>(
   probes: CoalescedProbes<T>,
   key: (pageLimit: number | undefined) => string,
-  pageLimit: number | undefined,
+  reads: PRProviderReadOptions,
   read: () => Promise<T>
 ): Promise<T> {
-  const unbounded = pageLimit === undefined ? undefined : probes.get(key(undefined))
+  const { checkPageLimit, userRefresh } = reads
+  const unbounded =
+    checkPageLimit === undefined || userRefresh ? undefined : probes.get(key(undefined))
   return unbounded && Date.now() - unbounded.startedAt < PROBE_COALESCE_STALE_MS
     ? unbounded.promise
-    : runCoalescedProbe(probes, key(pageLimit), read)
+    : runCoalescedProbe(probes, key(checkPageLimit), read, PROBE_COALESCE_STALE_MS, {
+        userRefresh: userRefresh === true
+      })
 }
 
 export function readSharedPullRequestSidebarQuery(
@@ -54,13 +62,13 @@ export function readSharedPullRequestSidebarQuery(
   number: number,
   options: GhExecOptions,
   executionScope: string,
-  pageLimit?: number
+  reads: PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null | undefined> {
   return sharedRead(
     sidebarReads,
     (limit) => JSON.stringify(sharedPRKey(repository, number, options, executionScope, limit)),
-    pageLimit,
-    () => readPullRequestSidebarQuery(repository, number, options, pageLimit)
+    reads,
+    () => readPullRequestSidebarQuery(repository, number, options, reads.checkPageLimit)
   )
 }
 
@@ -70,7 +78,7 @@ export function readSharedPRCheckObservation(
   headSha: string | undefined,
   options: GhExecOptions,
   executionScope: string,
-  pageLimit?: number
+  reads: PRProviderReadOptions = {}
 ): Promise<unknown[] | undefined> {
   return sharedRead(
     checkReads,
@@ -79,7 +87,7 @@ export function readSharedPRCheckObservation(
         ...sharedPRKey(repository, number, options, executionScope, limit),
         headSha ?? null
       ]),
-    pageLimit,
-    () => readCompletePRCheckObservation(repository, number, headSha, options, pageLimit)
+    reads,
+    () => readCompletePRCheckObservation(repository, number, headSha, options, reads.checkPageLimit)
   )
 }

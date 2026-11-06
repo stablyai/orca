@@ -62,6 +62,7 @@ export async function resolvePRForBranchOutcome(input: {
   )
   const { headRepo } = resolved
   const candidates = exactRepositoryCandidates(resolved.candidates, options.exactRepository)
+  const reads = { checkPageLimit: options.checkPageLimit, userRefresh: options.userRefresh }
   // Without local cwd, unresolved connection-backed lookups could follow ambient GH_REPO/GH_HOST.
   if (connectionId && candidates.length === 0) {
     return { kind: 'no-pr', fetchedAt: Date.now() }
@@ -138,7 +139,7 @@ export async function resolvePRForBranchOutcome(input: {
       number: linkedPRNumber,
       ghOptions,
       executionScope,
-      checkPageLimit: options.checkPageLimit
+      reads
     })
     data = exactLookup.data
     dataRepo = exactLookup.dataRepo
@@ -151,7 +152,7 @@ export async function resolvePRForBranchOutcome(input: {
       ghOptions,
       executionScope,
       policy: implicitPRPolicy,
-      checkPageLimit: options.checkPageLimit
+      reads
     })
     data = branchLookup.data
     dataRepo = branchLookup.dataRepo
@@ -190,7 +191,7 @@ export async function resolvePRForBranchOutcome(input: {
             ghOptions,
             executionScope,
             policy: implicitPRPolicy,
-            checkPageLimit: options.checkPageLimit
+            reads
           })
           data = upstreamLookup.data
           dataRepo = upstreamLookup.dataRepo
@@ -220,7 +221,7 @@ export async function resolvePRForBranchOutcome(input: {
       ghOptions,
       executionScope,
       policy: implicitPRPolicy,
-      checkPageLimit: options.checkPageLimit
+      reads
     })
     data = fallbackLookup.data
     dataRepo = fallbackLookup.dataRepo

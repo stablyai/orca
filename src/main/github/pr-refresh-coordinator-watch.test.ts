@@ -165,4 +165,30 @@ describe('pr-refresh watch jobs', () => {
     expect(options(WATCHED)).toMatchObject({ checkPageLimit: 10 })
     expect(options('/repo')?.checkPageLimit).toBeUndefined()
   })
+
+  it('pins a branch registration to the PR number its first read names', async () => {
+    const seams = await import('./pr-watch/pr-watch-seams')
+    seams.registerPRWatch({
+      repoId: 'repo-7',
+      branch: 'feature',
+      prNumber: null,
+      reason: 'pr-follow-ups'
+    })
+    seams.attachPRWatchSource({
+      resolveRepo: async () => ({
+        repoId: 'repo-7',
+        repoPath: WATCHED,
+        repoKind: 'git',
+        connectionId: null
+      }),
+      pullRequestActionsFor: () => [],
+      ownerChatFor: () => null
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const cacheKey = 'pr-follow-up::watch::pr-follow-ups:local:repo-7:branch:feature'
+    const prKey = 'github.com/acme/watched#12'
+    seams.resolvePRFollowUp({ ...makeCandidate({ repoPath: WATCHED }), cacheKey }, prKey)
+    // Reusing the branch for another PR later must not swap it into #12's job.
+    expect(seams.prFollowUpCandidate(prKey)?.linkedPRNumber).toBe(12)
+  })
 })

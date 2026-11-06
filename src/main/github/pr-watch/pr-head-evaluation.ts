@@ -71,6 +71,8 @@ export function recordPRHeadObservation(
     rollup: readonly unknown[]
     isCurrentHead: boolean
     observedAt: number
+    /** A replayed action's first read: a result already final then seeds memory without a line. */
+    silent?: boolean
   }
 ): { final: boolean; chatIds: string[] } {
   const { prKey, headSha, isCurrentHead, observedAt } = read
@@ -78,11 +80,9 @@ export function recordPRHeadObservation(
     if (isCurrentHead) {
       markPRPendingHeadsMoved(db, prKey, headSha, observedAt, MOVED_HEAD_TTL_MS)
     }
-    const evaluation = evaluatePRCheckOccurrence(
-      read.rollup,
-      true,
-      readPRCheckContexts(db, prKey, headSha)
-    )
+    const prior = readPRCheckContexts(db, prKey, headSha)
+    const evaluation = evaluatePRCheckOccurrence(read.rollup, true, prior)
+    const reportable = !(read.silent && prior.size === 0)
     replacePRCheckContexts(db, prKey, headSha, evaluation.contexts)
     if (evaluation.final) {
       deletePRPendingHead(db, prKey, headSha)
@@ -98,15 +98,16 @@ export function recordPRHeadObservation(
     if (isCurrentHead) {
       prunePRCheckContexts(db, prKey, headSha)
     }
-    const chatIds = evaluation.verdict
-      ? insertPRCheckEvent(db, {
-          prKey,
-          headSha,
-          verdict: evaluation.verdict,
-          observedAt,
-          isCurrentHead
-        }).chatIds
-      : []
+    const chatIds =
+      evaluation.verdict && reportable
+        ? insertPRCheckEvent(db, {
+            prKey,
+            headSha,
+            verdict: evaluation.verdict,
+            observedAt,
+            isCurrentHead
+          }).chatIds
+        : []
     return { final: evaluation.final, chatIds }
   })
 }

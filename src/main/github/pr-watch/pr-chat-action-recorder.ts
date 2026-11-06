@@ -4,7 +4,6 @@ import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { pullRequestsOpenedBy } from '../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { nativeChatToolCallScript } from '../../../shared/native-chat/tools/native-chat-tool-call-script'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
-import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { gitPushUpdates, runsGitPush, type GitPushUpdate } from './git-push-update-lines'
 import type { PRChatAction } from './pr-watch-tables'
 import { parsePRKey, prKeyOf, prWatchCandidate, type PRWatchWorkspace } from './pr-watch-types'
@@ -50,28 +49,6 @@ export function finishedShellCalls(chatId: string, rows: readonly JournalRow[]):
   )
 }
 
-const REPLAY_CALL_LIMIT = 200
-
-/** The journal's newest finished shell calls since `since`, bounded so a long chat stays cheap. */
-export function recentJournalShellCalls(
-  chatId: string,
-  journal: Pick<AgentSessionJournal, 'visitItems' | 'item'>,
-  since: number
-): PRChatToolCall[] {
-  const toolCalls: string[] = []
-  journal.visitItems((itemId, _sequence, body) => {
-    if (body.kind === 'tool-call') {
-      toolCalls.push(itemId)
-    }
-  })
-  return toolCalls.slice(-REPLAY_CALL_LIMIT).flatMap((itemId) => {
-    const item = journal.item(itemId)
-    return item && item.observedAt > since
-      ? (finishedShellCall(chatId, item, item.observedAt) ?? [])
-      : []
-  })
-}
-
 /** GitHub pull requests the call created. Other hosts get no CI lines yet. */
 export function pullRequestsOpenedByCall(call: PRChatToolCall): PRChatOpened[] {
   return pullRequestsOpenedBy(call.script, call.output).flatMap((opened) =>
@@ -96,6 +73,10 @@ export type PendingPRChatPush = {
   candidate: GitHubPRRefreshCandidate
   updates: GitPushUpdate[]
   deadline: number
+  /** Replayed from the journal after a crash, not seen live. */
+  replayed: boolean
+  /** A superseded head's full SHA is being resolved; the push stays pending until it is. */
+  resolving?: boolean
 }
 
 export function pushUpdatesByCall(call: PRChatToolCall): GitPushUpdate[] {
@@ -116,13 +97,15 @@ function sameRepository(
 
 /**
  * The head this push gave the PR, when its own update line proves the PR's head branch was the
- * target: by the new commit when the PR still shows it, else by the `To` repository and branch,
- * in which case a later push may already have moved the PR on (`superseded`).
+ * target. The new commit, when the PR still shows it, proves it with the repository; with no commit
+ * to compare (a new branch) or a PR already moved on, only the full target, forge host included,
+ * does. A moved-on head is git's abbreviation (`superseded`), to be resolved before it is saved.
  */
 export function pushedPullRequestHead(
   push: PendingPRChatPush,
   pr: PRInfo
 ): { headSha: string; superseded: boolean } | null {
+  const prHost = (pr.headRepo?.host ?? 'github.com').toLowerCase()
   for (const update of push.updates) {
     if (update.branch !== pr.headRefName || !pr.headSha) {
       continue
@@ -133,7 +116,7 @@ export function pushedPullRequestHead(
         ? { headSha: pr.headSha, superseded: false }
         : null
     }
-    if (sameRemote) {
+    if (sameRemote && update.remote?.host === prHost) {
       return update.newSha
         ? { headSha: update.newSha, superseded: true }
         : { headSha: pr.headSha, superseded: false }
@@ -155,9 +138,19 @@ type RecorderDeps = {
   ) => Promise<readonly { owner: string; repo: string; host?: string }[]>
   /** Reads the checkout's PR by branch soon, as after any push. */
   readAfterPush: (candidate: GitHubPRRefreshCandidate) => void
-  /** Saves a verified action and starts or renews its PR's watch; `superseded` marks a pushed head
-   *  the PR already moved off, so it keeps its own historical read. */
-  record: (action: PRChatAction, candidate: GitHubPRRefreshCandidate, superseded: boolean) => void
+  /** The full SHA GitHub knows for a commit git printed abbreviated; null when it can't say. */
+  resolveCommitSha: (
+    candidate: GitHubPRRefreshCandidate,
+    pr: { host: string; owner: string; repo: string },
+    abbreviated: string
+  ) => Promise<string | null>
+  /** Saves a verified action and starts or renews its PR's watch. `superseded` marks a pushed head
+   *  the PR already moved off; `replayed` an action recovered from the journal, not seen live. */
+  record: (
+    action: PRChatAction,
+    candidate: GitHubPRRefreshCandidate,
+    how: { superseded: boolean; replayed: boolean }
+  ) => void
   now: () => number
 }
 
@@ -174,31 +167,33 @@ export class PRChatActionRecorder {
     this.timers.clear()
   }
 
-  /** `replayedAt` replays calls already in the journal; a push past its verification window is
-   *  no longer checkable, so only recent ones are retried. */
-  async record(calls: readonly PRChatToolCall[], replayedAt?: number): Promise<void> {
+  /** `replayed` recovers calls already in the journal. Resolves false when some call could not be
+   *  handled yet (no workspace), so the caller keeps the replay retryable. */
+  async record(calls: readonly PRChatToolCall[], replayed = false): Promise<boolean> {
+    let complete = true
     for (const call of calls) {
-      if (replayedAt !== undefined && this.deps.isRecorded(call.chatId, call.anchor.itemId)) {
+      if (replayed && this.deps.isRecorded(call.chatId, call.anchor.itemId)) {
         continue
       }
       const opened = pullRequestsOpenedByCall(call)
-      const stale = replayedAt !== undefined && replayedAt - call.finishedAt > PUSH_VERIFY_MS
-      const updates = stale ? [] : pushUpdatesByCall(call)
+      const updates = pushUpdatesByCall(call)
       if (opened.length === 0 && updates.length === 0) {
         continue
       }
       const workspace = await this.deps.chatWorkspace(call.chatId)
       if (!workspace) {
+        complete = false
         continue
       }
       if (opened.length > 0) {
-        await this.recordOpened(call, workspace, opened, replayedAt === undefined)
+        await this.recordOpened(call, workspace, opened, replayed)
       }
       // The update lines name the target repository and branch, so any cwd the call ran in counts.
       if (updates.length > 0) {
-        this.awaitPush(call, workspace, updates)
+        this.awaitPush(call, workspace, updates, replayed)
       }
     }
+    return complete
   }
 
   /** Only a PR in one of the chat repository's own GitHub remotes gets lines. */
@@ -206,7 +201,7 @@ export class PRChatActionRecorder {
     call: PRChatToolCall,
     workspace: PRWatchWorkspace,
     opened: readonly PRChatOpened[],
-    live: boolean
+    replayed: boolean
   ): Promise<void> {
     const candidates = await this.deps.repositories(workspace)
     for (const pr of opened) {
@@ -223,23 +218,29 @@ export class PRChatActionRecorder {
             ...action,
             kind: 'opened',
             headSha: null,
-            observedAt: live ? this.deps.now() : call.finishedAt
+            observedAt: replayed ? call.finishedAt : this.deps.now()
           },
           prWatchCandidate(workspace, pr.number),
-          false
+          { superseded: false, replayed }
         )
       }
     }
   }
 
-  private awaitPush(call: PRChatToolCall, workspace: PRWatchWorkspace, updates: GitPushUpdate[]) {
+  private awaitPush(
+    call: PRChatToolCall,
+    workspace: PRWatchWorkspace,
+    updates: GitPushUpdate[],
+    replayed: boolean
+  ) {
     const candidate = prWatchCandidate(workspace, null)
     const push: PendingPRChatPush = {
       chatId: call.chatId,
       anchor: call.anchor,
       candidate,
       updates,
-      deadline: this.deps.now() + PUSH_VERIFY_MS
+      deadline: this.deps.now() + PUSH_VERIFY_MS,
+      replayed
     }
     this.pushes.add(push)
     // Each pushed branch is read by name: `work:review` updated review, whatever is checked out.
@@ -276,31 +277,51 @@ export class PRChatActionRecorder {
       return
     }
     for (const push of this.pushes) {
-      const head = push.candidate.repoPath === candidate.repoPath && pushedPullRequestHead(push, pr)
+      const head =
+        !push.resolving && push.candidate.repoPath === candidate.repoPath
+          ? pushedPullRequestHead(push, pr)
+          : null
       if (!head) {
         continue
       }
-      this.pushes.delete(push)
-      this.deps.record(
-        {
-          chatId: push.chatId,
-          anchor: push.anchor,
-          forgeHost: key.host,
-          owner: key.owner,
-          repo: key.repo,
-          number: key.number,
-          kind: 'pushed',
-          headSha: head.headSha,
-          observedAt
-        },
-        {
-          ...push.candidate,
-          branch: pr.headRefName ?? push.candidate.branch,
-          linkedPRNumber: key.number,
-          cacheKey: `${push.candidate.cacheKey}#${key.number}`
-        },
-        head.superseded
-      )
+      const save = (headSha: string) => {
+        this.pushes.delete(push)
+        this.deps.record(
+          {
+            chatId: push.chatId,
+            anchor: push.anchor,
+            forgeHost: key.host,
+            owner: key.owner,
+            repo: key.repo,
+            number: key.number,
+            kind: 'pushed',
+            headSha,
+            observedAt
+          },
+          {
+            ...push.candidate,
+            branch: pr.headRefName ?? push.candidate.branch,
+            linkedPRNumber: key.number,
+            cacheKey: `${push.candidate.cacheKey}#${key.number}`
+          },
+          { superseded: head.superseded, replayed: push.replayed }
+        )
+      }
+      if (!head.superseded) {
+        save(head.headSha)
+        continue
+      }
+      // Every head is keyed by its full SHA, so a later read of the same commit finds its memory.
+      push.resolving = true
+      void this.deps
+        .resolveCommitSha(push.candidate, key, head.headSha)
+        .catch(() => null)
+        .then((full) => {
+          push.resolving = false
+          if (full && this.pushes.has(push)) {
+            save(full)
+          }
+        })
     }
   }
 }

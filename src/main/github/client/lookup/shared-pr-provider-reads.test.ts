@@ -53,10 +53,23 @@ describe('shared PR provider reads', () => {
 
   it('lets a bounded watch read join a full read, but never serve one', async () => {
     mocks.sidebar.mockImplementation(() => new Promise(() => {}))
-    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE, 10)
+    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE, {
+      checkPageLimit: 10
+    })
     void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE)
-    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE, 10)
+    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE, {
+      checkPageLimit: 10
+    })
     expect(mocks.sidebar).toHaveBeenCalledTimes(2)
     expect(mocks.sidebar.mock.calls.map((call) => call[3])).toEqual([10, undefined])
+  })
+
+  it('starts a fresh read for a user refresh instead of joining one begun before the click', async () => {
+    mocks.sidebar.mockImplementation(() => new Promise(() => {}))
+    void readSharedPullRequestSidebarQuery(REPO, 13, { cwd: '/repo' }, SCOPE)
+    void readSharedPullRequestSidebarQuery(REPO, 13, { cwd: '/repo' }, SCOPE, { userRefresh: true })
+    // Later ordinary callers share the refresh's read.
+    void readSharedPullRequestSidebarQuery(REPO, 13, { cwd: '/repo-wt' }, SCOPE)
+    expect(mocks.sidebar).toHaveBeenCalledTimes(2)
   })
 })

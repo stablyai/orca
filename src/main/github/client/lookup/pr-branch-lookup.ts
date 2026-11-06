@@ -19,6 +19,7 @@ import {
 } from './pull-request-lookup-data'
 import { getPRByNumber } from './pr-number-lookup'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
+import type { PRProviderReadOptions } from './shared-pr-provider-reads'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
@@ -82,7 +83,7 @@ export async function hydrateBranchLookupWithExactPR(
   branchData: PullRequestLookupData | null,
   ghOptions: GhExecOptions,
   executionScope: string,
-  checkPageLimit?: number
+  reads: PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null> {
   if (!branchData) {
     return null
@@ -94,7 +95,7 @@ export async function hydrateBranchLookupWithExactPR(
       ghOptions,
       executionScope,
       branchData,
-      { checkPageLimit }
+      reads
     )
     return exact ?? branchData
   } catch {
@@ -109,7 +110,7 @@ export async function lookupPRByBranchName(args: {
   ghOptions: GhExecOptions
   executionScope: string
   policy?: PullRequestLookupPolicy
-  checkPageLimit?: number
+  reads?: PRProviderReadOptions
 }): Promise<{
   data: PullRequestLookupData | null
   dataRepo: OwnerRepo | null
@@ -141,7 +142,7 @@ export async function lookupPRByBranchName(args: {
           branchData,
           args.ghOptions,
           args.executionScope,
-          args.checkPageLimit
+          args.reads
         )
         if (
           data &&
@@ -170,7 +171,7 @@ export async function lookupPRByBranchName(args: {
             branchData,
             args.ghOptions,
             args.executionScope,
-            args.checkPageLimit
+            args.reads
           )
           if (
             data &&
@@ -207,7 +208,7 @@ export async function lookupPRByBranchName(args: {
           { ...parsedData, checksUnavailable: true },
           args.ghOptions,
           args.executionScope,
-          args.checkPageLimit
+          args.reads
         )
       : {
           ...normalizePullRequestLookupData(parsedData),

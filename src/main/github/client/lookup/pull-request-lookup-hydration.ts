@@ -6,13 +6,16 @@ import {
   normalizePullRequestLookupData,
   type PullRequestLookupData
 } from './pull-request-lookup-data'
-import { readSharedPRCheckObservation } from './shared-pr-provider-reads'
+import {
+  readSharedPRCheckObservation,
+  type PRProviderReadOptions
+} from './shared-pr-provider-reads'
 export async function hydratePullRequestLookupData(
   ownerRepo: OwnerRepo,
   data: PullRequestLookupData,
   ghOptions: GhExecOptions,
   executionScope: string,
-  checkPageLimit?: number
+  reads: PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData> {
   const normalized = normalizePullRequestLookupData(data)
   const checks =
@@ -24,7 +27,7 @@ export async function hydratePullRequestLookupData(
           data.headRefOid,
           ghOptions,
           executionScope,
-          checkPageLimit
+          reads
         )
   const hasRichMergeFields =
     'reviewDecision' in data || 'mergeStateStatus' in data || 'autoMergeRequest' in data

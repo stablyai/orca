@@ -19,14 +19,12 @@ import {
   setPRWatchJobHooks
 } from '../pr-refresh-coordinator'
 import { prChecksDone, prWatchNextDueAt, type PRWatchJob } from '../pr-refresh-watch-jobs'
-import {
-  finishedShellCalls,
-  PRChatActionRecorder,
-  recentJournalShellCalls
-} from './pr-chat-action-recorder'
+import { finishedShellCalls, PRChatActionRecorder } from './pr-chat-action-recorder'
+import { PRReplayedHeads, replayCrashWindow } from './pr-chat-call-replay'
 import { deletePRMovedHeads, endPRWatchState } from './pr-check-event-tables'
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
 import { PREventDeliveryTrigger } from './pr-event-delivery'
+import { resolvePRCommitSha } from './pr-head-check-read'
 import {
   activeSavedPRWatches,
   recordPRChatAction,
@@ -45,7 +43,6 @@ import {
   type PRChatAction
 } from './pr-watch-tables'
 import {
-  parsePRKey,
   prKeyOf,
   prObservationOf,
   prWatchCandidate,
@@ -67,6 +64,8 @@ function settled(pr: PRInfo): boolean {
 export class PRWatchService {
   private readonly chatWatches = new Map<string, ChatWatch>()
   private readonly reconciled = new Set<string>()
+  private readonly replayedHeads = new PRReplayedHeads()
+  private startedAt = Number.POSITIVE_INFINITY
   private readonly recorder: PRChatActionRecorder
   private readonly earlierHeads: PREarlierHeadJobs
   private readonly deliveries: PREventDeliveryTrigger
@@ -78,12 +77,14 @@ export class PRWatchService {
     this.now = deps.now ?? Date.now
     this.recorder = new PRChatActionRecorder({
       chatWorkspace: deps.chatWorkspace,
-      isRecorded: (chatId, anchorItemId) => hasPRChatActionFrom(this.db, chatId, anchorItemId),
+      isRecorded: (chatId, anchorItemId) =>
+        hasPRChatActionFrom(this.deps.database.db, chatId, anchorItemId),
       repositories: async ({ repoPath, connectionId, wslDistro }) =>
         (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, { wslDistro }))
           .candidates,
       readAfterPush: (candidate) => enqueuePRRefresh(candidate, 'post-push'),
-      record: (action, candidate, superseded) => this.recordAction(action, candidate, superseded),
+      resolveCommitSha: resolvePRCommitSha,
+      record: (action, candidate, how) => this.recordAction(action, candidate, how),
       now: this.now
     })
     this.earlierHeads = new PREarlierHeadJobs({
@@ -95,14 +96,11 @@ export class PRWatchService {
     this.deliveries = new PREventDeliveryTrigger(deps)
   }
 
-  private get db() {
-    return this.deps.database.db
-  }
-
   async start(): Promise<void> {
     if (this.deps.database.readOnly) {
       return
     }
+    this.startedAt = this.now()
     this.stopObserving = addPRRefreshOutcomeObserver((candidate, outcome) =>
       this.observe(candidate, outcome)
     )
@@ -134,6 +132,7 @@ export class PRWatchService {
     this.earlierHeads.clear()
     this.chatWatches.clear()
     this.reconciled.clear()
+    this.replayedHeads.clear()
   }
 
   /** Each committed batch: finished calls may be PR actions, and the chat may take its lines now. */
@@ -161,30 +160,39 @@ export class PRWatchService {
     this.deliveries.committed(chatId, journal)
   }
 
-  /** Once per chat per start: calls committed before a crash, or before watches started, are
-   *  recorded from the journal itself; calls that already produced an action are skipped. */
+  /** Recovers the crash window once per chat per start; retryable at the next open if it fails. */
   reconcileChat(chatId: string, journal: AgentSessionJournal): void {
     if (this.reconciled.has(chatId) || this.deps.database.readOnly) {
       return
     }
     this.reconciled.add(chatId)
-    const now = this.now()
-    const calls = recentJournalShellCalls(chatId, journal, now - ACTION_WINDOW_MS)
-    void this.recorder.record(calls, now).catch((error: unknown) =>
-      this.deps.logger.warn('replaying pull request actions failed', {
-        scope: 'pr-watch',
-        chatId,
-        error
-      })
+    void replayCrashWindow({
+      db: this.deps.database.db,
+      journal: { sessionId: chatId, physicalCursor: journal.physicalCursor, item: journal.item },
+      startedAt: this.startedAt,
+      record: (calls) => this.recorder.record(calls, true)
+    }).then(
+      (complete) => complete || this.reconciled.delete(chatId),
+      (error: unknown) => {
+        this.reconciled.delete(chatId)
+        this.deps.logger.warn('replaying pull request actions failed', {
+          scope: 'pr-watch',
+          chatId,
+          error
+        })
+      }
     )
   }
 
   private recordAction(
     action: PRChatAction,
     candidate: GitHubPRRefreshCandidate,
-    superseded: boolean
+    how: { superseded: boolean; replayed: boolean }
   ): void {
-    recordPRChatAction(this.deps.database, action, superseded ? this.now() : null)
+    recordPRChatAction(this.deps.database, action, how.superseded ? this.now() : null)
+    if (how.replayed) {
+      this.replayedHeads.mark(pullRequestKey(action), action.headSha)
+    }
     void this.watchChatPR(pullRequestKey(action), action, this.now(), candidate)
   }
 
@@ -259,8 +267,7 @@ export class PRWatchService {
     const resolved = resolvePRFollowUp(candidate, prKey)
     if (resolved) {
       // One job per resolved PR serves every reason, so a chat and a follow-up never read it twice.
-      const number = parsePRKey(prKey)?.number ?? null
-      schedulePRWatchRead({ prKey }, { ...resolved, linkedPRNumber: number }, this.now())
+      schedulePRWatchRead({ prKey }, resolved, this.now())
     }
     const active = this.activeCandidate(prKey)
     if (!active) {
@@ -269,7 +276,7 @@ export class PRWatchService {
     this.sweepGoneChats(false)
     const rollup = observedPRCheckRollup(outcome)
     // A follow-up keeps an older owner's lines coming; with no owner there is nothing to write.
-    if (rollup && (this.chatWatches.has(prKey) || hasPRChatActions(this.db, prKey))) {
+    if (rollup && (this.chatWatches.has(prKey) || hasPRChatActions(this.deps.database.db, prKey))) {
       this.applyHeadRead(prKey, pr.headSha, rollup, true, outcome.fetchedAt)
     }
     if (pr.state === 'merged' || pr.state === 'closed') {
@@ -295,12 +302,14 @@ export class PRWatchService {
     isCurrentHead: boolean,
     observedAt = this.now()
   ): boolean {
+    const silent = this.replayedHeads.takeFirstRead(prKey, headSha, isCurrentHead)
     const written = recordPRHeadObservation(this.deps.database, {
       prKey,
       headSha,
       rollup,
       isCurrentHead,
-      observedAt
+      observedAt,
+      silent
     })
     for (const chatId of written.chatIds) {
       this.deliveries.owe(chatId, this.deps.openJournal(chatId))

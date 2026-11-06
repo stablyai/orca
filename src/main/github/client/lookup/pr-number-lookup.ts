@@ -20,7 +20,10 @@ import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
-import { readSharedPullRequestSidebarQuery } from './shared-pr-provider-reads'
+import {
+  readSharedPullRequestSidebarQuery,
+  type PRProviderReadOptions
+} from './shared-pr-provider-reads'
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
@@ -60,9 +63,9 @@ export async function getPRByNumber(
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   executionScope: string,
   knownPullRequestData?: PullRequestLookupData | null,
-  options: { includeStackSummary?: boolean; checkPageLimit?: number } = {}
+  options: { includeStackSummary?: boolean } & PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null> {
-  const { checkPageLimit } = options
+  const reads = { checkPageLimit: options.checkPageLimit, userRefresh: options.userRefresh }
   try {
     let sidebarData: Awaited<ReturnType<typeof readSharedPullRequestSidebarQuery>>
     try {
@@ -73,7 +76,7 @@ export async function getPRByNumber(
               number,
               ghOptions,
               executionScope,
-              checkPageLimit
+              reads
             )
           : undefined
     } catch (error) {
@@ -121,7 +124,7 @@ export async function getPRByNumber(
         },
         ghOptions,
         executionScope,
-        checkPageLimit
+        reads
       )
       return { ...hydrated, ...(compatibleStack ? { stack: compatibleStack } : {}) }
     }
@@ -149,7 +152,7 @@ export async function getPRByNumber(
       },
       ghOptions,
       executionScope,
-      checkPageLimit
+      reads
     )
   } catch (err) {
     // Missing links return to branch discovery; other failures get one cheaper REST recovery lookup.
@@ -167,7 +170,7 @@ export async function getPRByNumber(
             { ...restData, checksUnavailable: true },
             ghOptions,
             executionScope,
-            checkPageLimit
+            reads
           )
         : null
     } catch (restErr) {
@@ -188,7 +191,7 @@ export async function lookupPRByNumber(args: {
   ghOptions: ReturnType<typeof ghRepoExecOptions>
   executionScope: string
   policy?: PullRequestLookupPolicy
-  checkPageLimit?: number
+  reads?: PRProviderReadOptions
 }): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
   for (const candidate of args.candidates) {
     if (args.policy?.isRejected(candidate, args.number)) {
@@ -201,7 +204,7 @@ export async function lookupPRByNumber(args: {
         args.ghOptions,
         args.executionScope,
         undefined,
-        { includeStackSummary: true, checkPageLimit: args.checkPageLimit }
+        { includeStackSummary: true, ...args.reads }
       )
       if (!linkedData || (args.policy && !(await args.policy.accepts(linkedData, candidate)))) {
         continue
@@ -233,7 +236,7 @@ export async function lookupPRByNumber(args: {
           { ...parsedData, checksUnavailable: true },
           args.ghOptions,
           args.executionScope,
-          args.checkPageLimit
+          args.reads
         )
       : {
           ...normalizePullRequestLookupData(parsedData),

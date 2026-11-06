@@ -5,6 +5,7 @@ import { cancelPRWatchRead, schedulePRWatchRead } from '../pr-refresh-coordinato
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
 import { prWatchQueueKey, type PRWatchJob } from '../pr-refresh-watch-jobs'
 import {
+  parsePRKey,
   prWatchCandidate,
   type PRChatActionRecord,
   type PRObservation,
@@ -90,6 +91,8 @@ export function resolvePRFollowUp(
     return null
   }
   entry.resolvedPRKey = prKey
+  // Pinned to the resolved number, so a reused branch can't swap another PR into this job.
+  entry.candidate = { ...entry.candidate, linkedPRNumber: parsePRKey(prKey)?.number ?? null }
   cancelPRWatchRead(entry.job)
   return entry.candidate
 }

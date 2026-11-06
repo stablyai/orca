@@ -11,8 +11,9 @@ export type GitPushUpdate = {
   branch: string
   /** The new commit as git abbreviated it; null for a new branch, whose line names none. */
   newSha: string | null
-  /** The GitHub repository of the `To <url>` line above it; null when git named none we can read. */
-  remote: { owner: string; repo: string } | null
+  /** The forge host and repository of the `To <url>` line above it; null when git named none we
+   *  can read. */
+  remote: { host: string; owner: string; repo: string } | null
 }
 
 const GIT_PUSH_RUN = new RegExp(`${COMMAND_START}git\\s+push(?=$|[\\s;&|)])`, 'u')
@@ -25,8 +26,10 @@ const HUMAN_LINE =
 const PORCELAIN_LINE =
   /^([ +*])\t[^\t:]*:(\S+)\t(\[new [a-z]+\]|[0-9a-f]+\.\.\.?[0-9a-f]+)(?: \(.*\))?$/u
 const SUMMARY_NEW_SHA = /^[0-9a-f]+\.\.\.?([0-9a-f]+)$/u
-// `To github.com:owner/repo.git`, `To https://github.com/owner/repo`, `To ssh://git@host/owner/repo.git`.
-const TO_LINE = /^To \S*?[:/]([^/:\s]+)\/([^/\s]+?)(?:\.git)?\/?$/u
+// `To git@github.com:owner/repo.git`, `To https://github.com/owner/repo`,
+// `To ssh://git@host:22/owner/repo.git`: scheme, user and port dropped, host kept.
+const TO_LINE =
+  /^To (?:[a-z][a-z0-9+.-]*:\/\/)?(?:[^@/\s]+@)?([^:/\s]+)(?::\d+)?[:/]([^/:\s]+)\/([^/\s]+?)(?:\.git)?\/?$/u
 // `--dry-run`, or a short-option bundle with `n` before any value-taking `o` (`-n`, `-nv`, `-fn`).
 const DRY_RUN_WORD = /^(?:--dry-run|-[a-mp-zA-Z]*n[a-zA-Z]*)$/u
 
@@ -66,7 +69,7 @@ export function gitPushUpdates(output: string): GitPushUpdate[] {
     const line = raw.replace(/\r$/u, '')
     const to = line.startsWith('To ') ? TO_LINE.exec(line) : undefined
     if (to !== undefined) {
-      remote = to ? { owner: to[1]!, repo: to[2]! } : null
+      remote = to ? { host: to[1]!.toLowerCase(), owner: to[2]!, repo: to[3]! } : null
       continue
     }
     const human = HUMAN_LINE.exec(line)
