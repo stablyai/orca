@@ -1160,7 +1160,9 @@
         "cb4d287238": "Servername",
         "3affe7de3a": "Eine Kopplungs-URL von einem Orca-Server einfügen, den dieser Browser erreichen kann.",
         "e3bcd082ac": "Mit Orca verbinden",
-        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen."
+        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen.",
+        "replaceSavedServer": "Dieser Link verbindet mit einem anderen Server als „{{name}}“ ({{endpoint}}). Verbinde dich nur, wenn du dem Endpunkt unten vertraust.",
+        "keepSavedServer": "Gespeicherten Server behalten"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Der Agenten-Sitzungsverlauf ist für diesen Ausführungshost nicht verfügbar.",
@@ -3034,7 +3036,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Review erforderlich",
         "7698af5263": "Eigene",
         "94f0339621": "Mir zugewiesen",
         "c2268a9982": "Alle",

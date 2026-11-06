@@ -2116,6 +2116,8 @@
       "managedAccountEnvOverride": "Ce lancement de Claude définit ses propres variables de connexion Anthropic. Supprimez-les pour utiliser un compte Claude géré.",
       "managedAccountUnsupported": "Un compte Claude a été ajouté dans WSL, mais les chats Claude nécessitent un compte Claude sous Windows.",
       "modelUnavailable": "{{agent}} n'a pas pu utiliser {{detail}}. Choisissez un autre modèle, puis renvoyez le message.",
+      "modelUnavailableUpdate": "{{agent}} n'a pas pu utiliser {{detail}}. Mettez à jour {{agent}} vers {{minimumVersion}} ou une version ultérieure pour le conserver après un redémarrage, ou choisissez un autre modèle, puis renvoyez le message.",
+      "modelNotSelected": "{{agent}} n'a aucun modèle sélectionné. Vérifiez la sélection du modèle et la connexion à {{agent}}, puis renvoyez le message.",
       "noTurnToStop": "{{agent}} n'avait aucun tour en cours à arrêter.",
       "notDelivered": "Ce message n'a pas été remis.",
       "notDeliveredSendAgain": "Ce message n'a pas été remis. Renvoyez-le pour continuer.",

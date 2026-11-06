@@ -43,12 +43,13 @@ function workRunSlot(
 ): NativeChatMessageSlot {
   const head = members[0]!
   // A turn's bar sits on its first row and its rollup on its last, so the run takes each from there.
-  const { turnDiff } = members.at(-1)!
+  const { turnDiff, openedPullRequests } = members.at(-1)!
   return {
     ...head,
     workRun: members.map((member) => member.message),
     trailingRun: members.some((member) => member.trailingRun),
     turnDiff,
+    openedPullRequests,
     estimatedHeight: estimateNativeChatRowHeight(
       nativeChatWorkRunContentMetrics(
         nativeChatRowContentMetrics(head.message, typography),
@@ -59,6 +60,7 @@ function workRunSlot(
         hasStatus: head.status !== undefined,
         hasTurnDiff: turnDiff !== undefined,
         turnDiffFileCount: turnDiff?.files.length,
+        openedPullRequestCount: openedPullRequests?.length,
         inSubagentSection: head.depth > 0
       },
       typography
