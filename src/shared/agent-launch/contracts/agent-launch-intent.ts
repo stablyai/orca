@@ -137,6 +137,7 @@ export type AgentLaunchModeReason =
   | 'structured_support_unknown'
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
+  | 'chat_unavailable_on_windows'
   | 'structured_unsupported_on_host'
   | 'pinned_claude_account'
   | 'chat_runtime_not_installed'

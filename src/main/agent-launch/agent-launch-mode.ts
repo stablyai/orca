@@ -79,6 +79,7 @@ const HOST_SUPPORT_REASON: Record<StructuredAgentCreateSupportReason, AgentLaunc
     agent: 'structured_unsupported_on_host',
     remote: 'remote_execution_host',
     wsl: 'wsl_execution_runtime',
+    windows: 'chat_unavailable_on_windows',
     'chat-program': 'chat_runtime_not_installed'
   }
 

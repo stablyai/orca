@@ -14,6 +14,7 @@ export const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
+  chat_unavailable_on_windows: "this agent's chat isn't available on Windows yet",
   structured_unsupported_on_host: 'the execution host cannot create one here',
   pinned_claude_account:
     '--account runs Claude on a non-active account, which only a terminal can do',
