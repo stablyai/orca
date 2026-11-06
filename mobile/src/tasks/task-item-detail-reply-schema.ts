@@ -4,6 +4,7 @@ import {
   CHECK_STATUS,
   MERGEABLE_STATE,
   prCount,
+  prFlag,
   prNullableText,
   prStringList,
   prText,
@@ -75,7 +76,8 @@ export const gitlabWorkItemDetailSchema = z
           stage: z.string(),
           status: z.string(),
           webUrl: prNullableText('webUrl'),
-          duration: salvagedOptional('duration', z.number().finite().nullable())
+          duration: salvagedOptional('duration', z.number().finite().nullable()),
+          allowFailure: prFlag('allowFailure')
         })
       )
     ),

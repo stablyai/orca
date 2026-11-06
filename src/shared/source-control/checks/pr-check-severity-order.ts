@@ -7,6 +7,7 @@ const CHECK_SEVERITY_RANK = new Map<string, number>([
   ['timed_out', 0],
   ['action_required', 0],
   ['cancelled', 1],
+  ['allowed_failure', 1],
   ['pending', 2],
   ['success', 3],
   ['neutral', 4],

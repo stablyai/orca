@@ -26,6 +26,7 @@ type GitLabRawJob = {
   duration?: number | null
   started_at?: string | null
   finished_at?: string | null
+  allow_failure?: boolean
 }
 
 type GitLabRawBridge = {
@@ -37,6 +38,7 @@ type GitLabRawBridge = {
   duration?: number | null
   started_at?: string | null
   finished_at?: string | null
+  allow_failure?: boolean
   downstream_pipeline?: {
     id?: number
     project_id?: number
@@ -54,7 +56,8 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
     status: raw.status ?? '',
     webUrl: raw.web_url ?? '',
     duration: typeof raw.duration === 'number' ? raw.duration : null,
-    ...gitLabRunTimes(raw)
+    ...gitLabRunTimes(raw),
+    ...(raw.allow_failure === true ? { allowFailure: true } : {})
   }
 }
 
@@ -71,7 +74,8 @@ function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelin
     webUrl: raw.downstream_pipeline?.web_url ?? raw.web_url ?? '',
     duration: typeof raw.duration === 'number' ? raw.duration : null,
     // The trigger job's own times can end long before the child pipeline it now stands for.
-    ...(childStatus ? {} : gitLabRunTimes(raw))
+    ...(childStatus ? {} : gitLabRunTimes(raw)),
+    ...(raw.allow_failure === true ? { allowFailure: true } : {})
   }
 }
 

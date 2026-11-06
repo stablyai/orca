@@ -254,6 +254,8 @@ export type GitLabPipelineJob = {
   /** Provider ISO times; absent from older Orca servers and from jobs that haven't started. */
   startedAt?: string
   finishedAt?: string
+  /** `allow_failure: true` in CI config; absent from older Orca servers. */
+  allowFailure?: boolean
 }
 
 // The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.

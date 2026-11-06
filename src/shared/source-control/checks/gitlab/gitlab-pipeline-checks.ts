@@ -22,14 +22,15 @@ export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheck
 }
 
 export function mapGitLabPipelineJobStatusToConclusion(
-  status: string
+  status: string,
+  allowFailure = false
 ): PRCheckDetail['conclusion'] {
   const s = status.toLowerCase()
   if (s === 'success') {
     return 'success'
   }
   if (s === 'failed') {
-    return 'failure'
+    return allowFailure ? 'allowed_failure' : 'failure'
   }
   if (s === 'canceled' || s === 'canceling') {
     return 'cancelled'
@@ -111,7 +112,7 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
   return jobs.map((job) => ({
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
-    conclusion: mapGitLabPipelineJobStatusToConclusion(job.status),
+    conclusion: mapGitLabPipelineJobStatusToConclusion(job.status, job.allowFailure),
     url: job.webUrl || null,
     ...checkRunTimes(job.startedAt, job.finishedAt),
     // Truthiness, not != null: the runtime RPC schema requires a positive int.
