@@ -30,7 +30,7 @@ function sshState(platform: NodeJS.Platform): SshConnectionState {
 }
 
 function serverStatus(platform: NodeJS.Platform) {
-  // SAFETY: the resolver reads only hostPlatform from a verified status.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only hostPlatform from a verified status.
   return { status: { hostPlatform: platform } as RuntimeStatus, checkedAt: 1 }
 }
 
