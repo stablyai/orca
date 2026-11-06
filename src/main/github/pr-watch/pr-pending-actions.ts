@@ -3,6 +3,7 @@
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
 import type { GitPushUpdate } from './git-push-update-lines'
 import {
@@ -11,6 +12,7 @@ import {
   pushUpdatesByCall,
   type PRChatOpened
 } from './pr-chat-action-recorder'
+import { numberColumn, textColumn } from './pr-watch-sqlite-columns'
 import { hasPRChatActionFrom } from './pr-watch-tables'
 
 /** Workspace and repository resolution may still succeed until then. */
@@ -126,15 +128,39 @@ export function capturePRPendingActions(
   }
 }
 
-type StoredRow = {
-  chat_id: string
-  anchor_item_id: string
-  anchor_revision: number
-  evidence_json: string
-  finished_at: number
-  resolve_deadline_at: number
-  verify_deadline_at: number
-  attempts: number
+function rowFromStored(row: SqliteRow): PRPendingActionRow[] {
+  const chatId = textColumn(row, 'chat_id')
+  const itemId = textColumn(row, 'anchor_item_id')
+  const evidence = textColumn(row, 'evidence_json')
+  const revision = numberColumn(row, 'anchor_revision')
+  const finishedAt = numberColumn(row, 'finished_at')
+  const resolveDeadlineAt = numberColumn(row, 'resolve_deadline_at')
+  const verifyDeadlineAt = numberColumn(row, 'verify_deadline_at')
+  const attempts = numberColumn(row, 'attempts')
+  if (
+    chatId === null ||
+    itemId === null ||
+    evidence === null ||
+    revision === null ||
+    finishedAt === null ||
+    resolveDeadlineAt === null ||
+    verifyDeadlineAt === null ||
+    attempts === null
+  ) {
+    return []
+  }
+  const obligations: PRPendingObligation[] = JSON.parse(evidence)
+  return [
+    {
+      chatId,
+      anchor: { itemId, revision },
+      obligations,
+      finishedAt,
+      resolveDeadlineAt,
+      verifyDeadlineAt,
+      attempts
+    }
+  ]
 }
 
 /** Rows due now and not already running (`chat\0anchor` keys), oldest attempt first. */
@@ -150,16 +176,8 @@ export function readDuePRPendingActions(
         AND chat_id || char(0) || anchor_item_id NOT IN (SELECT value FROM json_each(?))
         ORDER BY next_attempt_at LIMIT ?`
     )
-    .all(now, JSON.stringify(running), limit) as StoredRow[]
-  return rows.map((row) => ({
-    chatId: row.chat_id,
-    anchor: { itemId: row.anchor_item_id, revision: row.anchor_revision },
-    obligations: JSON.parse(row.evidence_json) as PRPendingObligation[],
-    finishedAt: row.finished_at,
-    resolveDeadlineAt: row.resolve_deadline_at,
-    verifyDeadlineAt: row.verify_deadline_at,
-    attempts: row.attempts
-  }))
+    .all(now, JSON.stringify(running), limit)
+  return rows.flatMap(rowFromStored)
 }
 
 /** The earliest attempt still to come; rows already due are running or about to run. */
@@ -168,8 +186,8 @@ export function nextPRPendingActionAt(db: Database.Database, after: number): num
     .prepare(
       'SELECT MIN(next_attempt_at) AS next FROM pr_pending_actions WHERE next_attempt_at > ?'
     )
-    .get(after) as { next: number | null }
-  return row.next
+    .get(after)
+  return row ? numberColumn(row, 'next') : null
 }
 
 /** Marks obligations done in the saved row; the row is deleted once every one is. */
@@ -182,11 +200,12 @@ export function markPRPendingObligationsDone(
     .prepare(
       'SELECT evidence_json FROM pr_pending_actions WHERE chat_id = ? AND anchor_item_id = ?'
     )
-    .get(row.chatId, row.anchor.itemId) as { evidence_json: string } | undefined
-  if (!stored) {
+    .get(row.chatId, row.anchor.itemId)
+  const evidence = stored ? textColumn(stored, 'evidence_json') : null
+  if (evidence === null) {
     return
   }
-  const obligations = JSON.parse(stored.evidence_json) as PRPendingObligation[]
+  const obligations: PRPendingObligation[] = JSON.parse(evidence)
   for (const index of indices) {
     obligations[index].done = true
   }

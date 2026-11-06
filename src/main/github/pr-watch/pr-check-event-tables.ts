@@ -1,6 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import type { CheckOutcome } from '../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckContextState } from './pr-check-occurrence'
+import { numberColumn, textColumn, textColumnValues } from './pr-watch-sqlite-columns'
 import { PR_KEY_SQL } from './pr-watch-tables'
 
 // Per-head check memory, pending heads, events and their delivery outbox (tables in pr-watch-tables).
@@ -14,23 +15,20 @@ export function readPRCheckContexts(
     .prepare(
       'SELECT context, last_state, last_run_id, pending_seen FROM pr_check_contexts WHERE pr_key = ? AND head_sha = ?'
     )
-    .all(prKey, headSha) as {
-    context: string
-    last_state: CheckOutcome | null
-    last_run_id: string | null
-    pending_seen: number
-  }[]
-  return new Map(
-    rows.map((row) => [
-      row.context,
-      {
-        context: row.context,
-        lastState: row.last_state,
-        lastRunId: row.last_run_id,
+    .all(prKey, headSha)
+  const contexts = new Map<string, PRCheckContextState>()
+  for (const row of rows) {
+    const context = textColumn(row, 'context')
+    if (context !== null) {
+      contexts.set(context, {
+        context,
+        lastState: checkOutcome(textColumn(row, 'last_state')),
+        lastRunId: textColumn(row, 'last_run_id'),
         pendingSeen: row.pending_seen === 1
-      }
-    ])
-  )
+      })
+    }
+  }
+  return contexts
 }
 
 export function replacePRCheckContexts(
@@ -57,17 +55,24 @@ export type PRPendingHead = {
 }
 
 export function readPRPendingHeads(db: Database.Database, prKey?: string): PRPendingHead[] {
-  const rows = (
+  const rows =
     prKey === undefined
       ? db.prepare('SELECT * FROM pr_pending_heads').all()
       : db.prepare('SELECT * FROM pr_pending_heads WHERE pr_key = ?').all(prKey)
-  ) as { pr_key: string; head_sha: string; moved_at: number | null; expires_at: number | null }[]
-  return rows.map((row) => ({
-    prKey: row.pr_key,
-    headSha: row.head_sha,
-    movedAt: row.moved_at,
-    expiresAt: row.expires_at
-  }))
+  return rows.flatMap((row) => {
+    const rowPRKey = textColumn(row, 'pr_key')
+    const headSha = textColumn(row, 'head_sha')
+    return rowPRKey === null || headSha === null
+      ? []
+      : [
+          {
+            prKey: rowPRKey,
+            headSha,
+            movedAt: numberColumn(row, 'moved_at'),
+            expiresAt: numberColumn(row, 'expires_at')
+          }
+        ]
+  })
 }
 
 /** A head that moves keeps a fixed deadline from the move; a restart never extends it. */
@@ -119,11 +124,10 @@ export function hasPRPendingDelivery(db: Database.Database, chatId: string): boo
 }
 
 export function readPRPendingDeliveryChatIds(db: Database.Database): string[] {
-  return (
-    db
-      .prepare("SELECT DISTINCT chat_id FROM pr_event_deliveries WHERE state = 'pending'")
-      .all() as { chat_id: string }[]
-  ).map((row) => row.chat_id)
+  return textColumnValues(
+    db.prepare("SELECT DISTINCT chat_id FROM pr_event_deliveries WHERE state = 'pending'").all(),
+    'chat_id'
+  )
 }
 
 /** Drops a head; its context memory follows on the next prune unless it reported a line. */
@@ -163,13 +167,12 @@ export function deleteInactiveCurrentPRHeads(
   db: Database.Database,
   activePRKeys: ReadonlySet<string>
 ): void {
-  const inactive = (
-    db.prepare('SELECT DISTINCT pr_key FROM pr_pending_heads WHERE moved_at IS NULL').all() as {
-      pr_key: string
-    }[]
-  ).filter((row) => !activePRKeys.has(row.pr_key))
+  const inactive = textColumnValues(
+    db.prepare('SELECT DISTINCT pr_key FROM pr_pending_heads WHERE moved_at IS NULL').all(),
+    'pr_key'
+  ).filter((prKey) => !activePRKeys.has(prKey))
   const retire = db.prepare('DELETE FROM pr_pending_heads WHERE pr_key = ? AND moved_at IS NULL')
-  for (const { pr_key: prKey } of inactive) {
+  for (const prKey of inactive) {
     retire.run(prKey)
   }
 }
@@ -185,12 +188,12 @@ export function insertPRCheckEvent(
     isCurrentHead: boolean
   }
 ): { eventId: number; occurrence: number; chatIds: string[] } {
-  const { last } = db
+  const last = db
     .prepare(
       'SELECT COALESCE(MAX(occurrence), 0) AS last FROM pr_check_events WHERE pr_key = ? AND head_sha = ?'
     )
-    .get(event.prKey, event.headSha) as { last: number }
-  const occurrence = last + 1
+    .get(event.prKey, event.headSha)
+  const occurrence = (last ? (numberColumn(last, 'last') ?? 0) : 0) + 1
   const eventId = Number(
     db
       .prepare(
@@ -208,13 +211,14 @@ export function insertPRCheckEvent(
         event.isCurrentHead ? 1 : 0
       ).lastInsertRowid
   )
-  const chatIds = (
+  const chatIds = textColumnValues(
     db
       .prepare(
         `SELECT DISTINCT chat_id FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? AND observed_at <= ?`
       )
-      .all(event.prKey, event.observedAt) as { chat_id: string }[]
-  ).map((row) => row.chat_id)
+      .all(event.prKey, event.observedAt),
+    'chat_id'
+  )
   const deliver = db.prepare(
     "INSERT OR IGNORE INTO pr_event_deliveries (chat_id, event_id, state) VALUES (?, ?, 'pending')"
   )
@@ -242,23 +246,18 @@ export function readOldestPRPendingDelivery(
         JOIN pr_check_events e ON e.id = d.event_id
         WHERE d.chat_id = ? AND d.state = 'pending' ORDER BY e.id LIMIT 1`
     )
-    .get(chatId) as
-    | {
-        id: number
-        pr_key: string
-        head_sha: string
-        occurrence: number
-        verdict: 'failure' | 'success'
-      }
-    | undefined
-  return row
-    ? {
-        eventId: row.id,
-        prKey: row.pr_key,
-        headSha: row.head_sha,
-        occurrence: row.occurrence,
-        verdict: row.verdict
-      }
+    .get(chatId)
+  const eventId = row ? numberColumn(row, 'id') : null
+  const prKey = row ? textColumn(row, 'pr_key') : null
+  const headSha = row ? textColumn(row, 'head_sha') : null
+  const occurrence = row ? numberColumn(row, 'occurrence') : null
+  const verdict = row ? textColumn(row, 'verdict') : null
+  return eventId !== null &&
+    prKey !== null &&
+    headSha !== null &&
+    occurrence !== null &&
+    (verdict === 'failure' || verdict === 'success')
+    ? { eventId, prKey, headSha, occurrence, verdict }
     : null
 }
 
@@ -271,4 +270,10 @@ export function markPRDeliveryDelivered(
   db.prepare(
     "UPDATE pr_event_deliveries SET state = 'delivered', item_id = ? WHERE chat_id = ? AND event_id = ?"
   ).run(itemId, chatId, eventId)
+}
+
+function checkOutcome(value: string | null): CheckOutcome | null {
+  return value === 'passed' || value === 'failed' || value === 'pending' || value === 'neutral'
+    ? value
+    : null
 }

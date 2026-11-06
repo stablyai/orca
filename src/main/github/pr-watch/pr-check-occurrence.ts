@@ -28,21 +28,19 @@ export type PRCheckOccurrenceEvaluation = {
 
 type ObservedContext = { context: string; state: CheckOutcome; runId: string | null }
 
-function field(row: object, name: string): unknown {
-  return name in row ? (row as Record<string, unknown>)[name] : undefined
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
 }
 
 /** A check run reruns as a new run with a new id; a legacy status reruns under a new target URL. */
 function observedContext(row: unknown): ObservedContext | null {
-  if (!row || typeof row !== 'object' || field(row, 'pendingApproval')) {
+  if (!isRecord(row) || row.pendingApproval) {
     return null
   }
   const state = classifyCheckOutcome(normalizeRollupCheck(row))
-  if (field(row, '__typename') === 'CheckRun') {
-    const name = field(row, 'name')
-    const suite = field(row, 'checkSuite')
-    const suiteId = suite && typeof suite === 'object' ? field(suite, 'databaseId') : undefined
-    const runId = field(row, 'databaseId')
+  if (row.__typename === 'CheckRun') {
+    const { name, databaseId: runId } = row
+    const suiteId = isRecord(row.checkSuite) ? row.checkSuite.databaseId : undefined
     return typeof name === 'string'
       ? {
           // Workflows may share a job name; the suite tells them apart.
@@ -52,8 +50,7 @@ function observedContext(row: unknown): ObservedContext | null {
         }
       : null
   }
-  const name = field(row, 'context')
-  const url = field(row, 'targetUrl')
+  const { context: name, targetUrl: url } = row
   return typeof name === 'string'
     ? { context: `status:${name}`, state, runId: typeof url === 'string' && url ? url : null }
     : null

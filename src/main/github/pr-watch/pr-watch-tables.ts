@@ -1,5 +1,7 @@
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
+import { numberColumn, textColumn, textColumnValues } from './pr-watch-sqlite-columns'
 
 /** Added without a user_version change, so an older build opens the journal and ignores them. */
 export function ensurePRWatchTables(db: Database.Database): void {
@@ -84,33 +86,44 @@ export type PRChatAction = {
   observedAt: number
 }
 
-type ActionRow = {
-  chat_id: string
-  anchor_item_id: string
-  anchor_revision: number
-  forge_host: string
-  owner: string
-  repo: string
-  number: number
-  kind: PRChatActionKind
-  head_sha: string | null
-  observed_at: number
-}
-
 export const PR_KEY_SQL = `forge_host || '/' || owner || '/' || repo || '#' || number`
 
-function actionFromRow(row: ActionRow): PRChatAction {
-  return {
-    chatId: row.chat_id,
-    anchor: { itemId: row.anchor_item_id, revision: row.anchor_revision },
-    forgeHost: row.forge_host,
-    owner: row.owner,
-    repo: row.repo,
-    number: row.number,
-    kind: row.kind,
-    headSha: row.head_sha,
-    observedAt: row.observed_at
+function actionFromRow(row: SqliteRow): PRChatAction[] {
+  const chatId = textColumn(row, 'chat_id')
+  const itemId = textColumn(row, 'anchor_item_id')
+  const forgeHost = textColumn(row, 'forge_host')
+  const owner = textColumn(row, 'owner')
+  const repo = textColumn(row, 'repo')
+  const kind = textColumn(row, 'kind')
+  const revision = numberColumn(row, 'anchor_revision')
+  const number = numberColumn(row, 'number')
+  const observedAt = numberColumn(row, 'observed_at')
+  if (
+    chatId === null ||
+    itemId === null ||
+    forgeHost === null ||
+    owner === null ||
+    repo === null ||
+    (kind !== 'opened' && kind !== 'pushed') ||
+    revision === null ||
+    number === null ||
+    observedAt === null
+  ) {
+    return []
   }
+  return [
+    {
+      chatId,
+      anchor: { itemId, revision },
+      forgeHost,
+      owner,
+      repo,
+      number,
+      kind,
+      headSha: textColumn(row, 'head_sha'),
+      observedAt
+    }
+  ]
 }
 
 export function insertPRChatAction(db: Database.Database, action: PRChatAction): boolean {
@@ -136,14 +149,13 @@ export function insertPRChatAction(db: Database.Database, action: PRChatAction):
 }
 
 export function readPRChatActions(db: Database.Database, prKey?: string): PRChatAction[] {
-  const rows = (
+  const rows =
     prKey === undefined
       ? db.prepare('SELECT * FROM pr_chat_actions ORDER BY observed_at').all()
       : db
           .prepare(`SELECT * FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? ORDER BY observed_at`)
           .all(prKey)
-  ) as ActionRow[]
-  return rows.map(actionFromRow)
+  return rows.flatMap(actionFromRow)
 }
 
 export function hasPRChatActionFrom(
@@ -166,14 +178,15 @@ export function hasPRChatActions(db: Database.Database, prKey: string): boolean 
 }
 
 export function readPRWatchChatIds(db: Database.Database): string[] {
-  return (
+  return textColumnValues(
     db
       .prepare(
         `SELECT chat_id FROM pr_chat_actions UNION SELECT chat_id FROM pr_event_deliveries
           UNION SELECT chat_id FROM pr_pending_actions`
       )
-      .all() as { chat_id: string }[]
-  ).map((row) => row.chat_id)
+      .all(),
+    'chat_id'
+  )
 }
 
 /** A gone chat takes its actions and deliveries; events, heads and context memory no remaining

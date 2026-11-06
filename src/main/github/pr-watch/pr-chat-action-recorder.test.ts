@@ -1,29 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import {
   finishedShellCall,
   pushedPullRequestHead,
   pushUpdatesByCall
 } from './pr-chat-action-recorder'
+import { prInfoFixture } from './pr-watch-test-fixtures'
 
-function toolCallRow(body: Record<string, unknown>): JournalRow {
-  const head = typeof body.output === 'string' ? body.output : ''
+type ToolCallRow = { itemId: string; revision: number; body: AgentJournalToolCallItem }
+
+function toolCallRow(
+  call: Omit<AgentJournalToolCallItem, 'kind' | 'state' | 'output'> & { output: string }
+): ToolCallRow {
+  const head = call.output
   return {
-    kind: 'item',
     itemId: 'claude:session:toolu_01',
     revision: 2,
     body: {
+      ...call,
       kind: 'tool-call',
       state: 'completed',
-      ...body,
       output: { head, byteLength: head.length, digest: 'd', truncated: false }
     }
-  } as unknown as JournalRow
+  }
 }
 
-function pushedBranches(row: JournalRow): unknown[] {
-  const call = row.kind === 'item' ? finishedShellCall('chat-1', row, 0) : null
+function pushedBranches(row: ToolCallRow): unknown[] {
+  const call = finishedShellCall('chat-1', row, 0)
   return (call ? pushUpdatesByCall(call) : []).map(({ branch, newSha }) => ({ branch, newSha }))
 }
 
@@ -110,13 +114,13 @@ describe('pushedPullRequestHead', () => {
     return pushedPullRequestHead(update, update.remote, pr)
   }
   const pr = (fields: Partial<PRInfo>): PRInfo =>
-    ({
+    prInfoFixture({
       number: 20,
       headRefName: 'review',
       headSha: '89abcde0123',
       headRepo: { owner: 'acme', repo: 'repo' },
       ...fields
-    }) as PRInfo
+    })
 
   it('binds a push to the branch, repository and forge host its own update line names', () => {
     // `git push origin work:review` updated review, not the checked-out branch.

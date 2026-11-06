@@ -16,6 +16,8 @@ import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
 const { getPRForBranchOutcomeMock } = coordinatorMocks
 const WATCHED = '/watched-repo'
+// Fake time starts here; reads stamp `fetchedAt` from the fake clock as it advances.
+const START_AT = 1_000
 
 function watchReads(): number {
   return getPRForBranchOutcomeMock.mock.calls.filter(([repoPath]) => repoPath === WATCHED).length
@@ -27,13 +29,14 @@ async function startWatch(): Promise<void> {
   schedulePRWatchRead(
     { prKey: 'github.com/acme/watched#7' },
     makeCandidate({ repoPath: WATCHED, cacheKey: 'watch', linkedPRNumber: 7 }),
-    Date.now()
+    START_AT
   )
 }
 
 describe('pr-refresh watch jobs', () => {
   beforeEach(() => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
+    vi.setSystemTime(START_AT)
     getPRForBranchOutcomeMock.mockImplementation(async () => ({
       kind: 'found',
       pr: makePR({ checksStatus: 'pending' }),
@@ -93,7 +96,7 @@ describe('pr-refresh watch jobs', () => {
       schedulePRWatchRead(
         { prKey: `github.com/acme/watched#${index}` },
         makeCandidate({ repoPath: `${WATCHED}-${index}`, cacheKey: `watch-${index}` }),
-        Date.now()
+        START_AT
       )
     }
     reportVisiblePRRefreshCandidates(

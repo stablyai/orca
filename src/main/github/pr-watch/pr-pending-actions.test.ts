@@ -7,7 +7,6 @@ import {
   type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
@@ -17,6 +16,7 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import { settlePRPendingObligations } from './pr-head-evaluation'
 import type { PRPendingActionResumeDeps } from './pr-pending-action-types'
 import { PRPendingActionResume } from './pr-pending-action-resume'
+import { prInfoFixture } from './pr-watch-test-fixtures'
 import { prWatchCandidate } from './pr-watch-types'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -64,7 +64,7 @@ function openJournal(): Promise<AgentSessionJournal> {
 
 function count(table: string): number {
   const database = openTestJournalHostDatabase(root)
-  return (database.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n
+  return Number(database.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n)
 }
 
 /** A fresh resume, as after a restart: nothing in memory, only the saved row. */
@@ -292,13 +292,13 @@ describe('pending PR actions', () => {
     const resume = resumeAfterRestart()
     resume.drain()
     // The create alone doesn't complete the row; the push's PR read does, with both actions.
-    const read = {
+    const read = prInfoFixture({
       number: 8,
       headRefName: 'review',
       headSha: '89abcde0000000000000000000000000000000ff',
       headRepo: { owner: 'acme', repo: 'repo' },
       prRepo: { owner: 'acme', repo: 'repo' }
-    } as PRInfo
+    })
     await vi.waitFor(() => {
       resume.verifyRead(prWatchCandidate(WORKSPACE, null), read, clock)
       expect(count('pr_pending_actions')).toBe(0)
@@ -306,7 +306,7 @@ describe('pending PR actions', () => {
     resume.clear()
     const kinds = openTestJournalHostDatabase(root)
       .db.prepare('SELECT kind FROM pr_chat_actions ORDER BY kind')
-      .all() as { kind: string }[]
+      .all()
     expect(kinds.map((row) => row.kind)).toEqual(['opened', 'pushed'])
   })
 })

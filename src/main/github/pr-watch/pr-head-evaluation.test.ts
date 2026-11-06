@@ -2,13 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
-import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import { endPRWatchState, readPRPendingHeads } from './pr-check-event-tables'
 import {
   activeSavedPRWatches,
@@ -19,6 +17,7 @@ import {
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { capturePRPendingActions } from './pr-pending-actions'
 import { deletePRWatchChats } from './pr-watch-tables'
+import { prInfoFixture, shellCallRow } from './pr-watch-test-fixtures'
 import { prWatchCandidate } from './pr-watch-types'
 
 const PR_KEY = 'github.com/acme/repo#3'
@@ -85,10 +84,8 @@ describe('recordPRHeadObservation over saved state', () => {
     expect(readPRPendingHeads(database.db, PR_KEY)).toHaveLength(1)
     database.transaction((db) => deletePRWatchChats(db, ['chat-1']))
     expect(readPRPendingHeads(database.db, PR_KEY)).toEqual([])
-    const contexts = database.db.prepare('SELECT COUNT(*) AS n FROM pr_check_contexts').get() as {
-      n: number
-    }
-    expect(contexts.n).toBe(0)
+    const contexts = database.db.prepare('SELECT COUNT(*) AS n FROM pr_check_contexts').get()
+    expect(contexts?.n).toBe(0)
   })
 })
 
@@ -101,13 +98,13 @@ const WORKSPACE = {
   branch: 'work',
   connectionId: null
 }
-const MOVED_ON = {
+const MOVED_ON = prInfoFixture({
   number: 3,
   headRefName: 'review',
   headSha: HEAD_B,
   headRepo: { owner: 'acme', repo: 'repo' },
   prRepo: { owner: 'acme', repo: 'repo' }
-} as PRInfo
+})
 
 /** chat-1's captured `git push origin work:review`, resumed and awaiting its PR read. */
 function capturePushAndResume(readAfterPush = () => {}): PRPendingActionResume {
@@ -115,23 +112,11 @@ function capturePushAndResume(readAfterPush = () => {}): PRPendingActionResume {
     database.db,
     'chat-1',
     [
-      {
-        kind: 'item',
-        itemId: 'item',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'shell',
-          input: { command: 'git push origin work:review' },
-          state: 'completed',
-          output: {
-            head: 'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n',
-            byteLength: 1,
-            digest: 'd',
-            truncated: false
-          }
-        }
-      } as unknown as JournalRow
+      shellCallRow(
+        'item',
+        'git push origin work:review',
+        'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n'
+      )
     ],
     0,
     () => undefined
@@ -241,7 +226,8 @@ describe('a superseded push head and startup', () => {
     )
     let known = false
     void seams.settledPRFollowUpKeys().then(() => (known = true))
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // A full macrotask turn: every settled microtask has run, the unresolved follow-up has not.
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(known).toBe(false)
     expect(readPRPendingHeads(database.db, PR_KEY)).toHaveLength(1)
     registration.unregister()

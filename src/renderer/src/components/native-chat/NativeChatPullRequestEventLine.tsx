@@ -64,10 +64,7 @@ export function NativeChatPullRequestEventLine({
     <div className="group/ci-line flex h-6 min-w-0 items-center justify-center gap-1.5 text-xs text-chat-foreground-faint">
       <Icon
         aria-hidden
-        className={cn(
-          'size-3.5 shrink-0',
-          failing ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300'
-        )}
+        className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}
       />
       {event ? (
         <span className="min-w-0 truncate">
