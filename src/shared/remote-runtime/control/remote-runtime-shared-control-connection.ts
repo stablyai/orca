@@ -62,10 +62,10 @@ export class RemoteRuntimeSharedControlConnection {
     timeoutMs: number,
     envelope?: Parameters<typeof requestSharedControl>[0]['envelope'],
     signal?: AbortSignal,
-    beforeSend?: () => void
+    send?: Pick<Parameters<typeof requestSharedControl>[0], 'beforeSend' | 'prepareRequest'>
   ): ReturnType<typeof requestSharedControl<TResult>> {
     return requestSharedControl<TResult>({
-      beforeSend,
+      ...send,
       pendingRequests: this.pendingRequests,
       deviceToken: this.connection.credential.deviceToken,
       method,

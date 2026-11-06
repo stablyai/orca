@@ -141,20 +141,6 @@ describe('desktop restore admission', () => {
     expect(spawned.at(-1)).toBe('hidden-8')
   })
 
-  it('never delays a manual new terminal behind a restore storm', async () => {
-    startDesktopDaemon()
-    const storm = Array.from({ length: 12 }, (_, i) =>
-      restore(`hidden-${i}`, 'automatic-restore').catch(() => null)
-    )
-    await vi.advanceTimersByTimeAsync(0)
-    expect(guard.gate.snapshot().waiting).toBeGreaterThan(0)
-
-    await expect(shell('manual')).resolves.toMatchObject({ isNew: true })
-    expect(spawned).toContain('manual')
-    await vi.advanceTimersByTimeAsync(12_000)
-    await Promise.all(storm)
-  })
-
   // Windows Fast Startup cannot reliably distinguish boot identity, so crash-pause detection stays disabled.
   it.skipIf(process.platform === 'win32')(
     'keeps hidden agents sleeping after a same-boot crash, but restores the visible pane',

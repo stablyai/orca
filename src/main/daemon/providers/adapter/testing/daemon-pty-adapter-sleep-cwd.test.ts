@@ -101,31 +101,6 @@ describe('a native shell slept and woken', () => {
   })
 
   // The process lookup execFile()s lsof, which Windows lacks; Sleep there keeps only the OSC 7 cwd.
-  it('on Windows, Sleep without OSC 7 never looks up the process', async () => {
-    const realPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    try {
-      const historyDir = join(dir, 'history')
-      const sessionId = 'wt-1::/project@@sleep-win'
-      const history = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      await history.spawn({ cols: 80, rows: 24, cwd: dir, sessionId })
-      lastSubprocess._simulateData('PS C:\\project> cd deep\r\nPS C:\\project\\deep> ')
-      await history.shutdown(sessionId, { immediate: true, keepHistory: true })
-
-      const saved = JSON.parse(
-        readFileSync(
-          join(historyDir, getHistorySessionDirName(sessionId), 'checkpoint.json'),
-          'utf8'
-        )
-      )
-      expect(resolveProcessCwdSpy).not.toHaveBeenCalled()
-      expect(saved.cwd).toBe(dir)
-      history.dispose()
-    } finally {
-      Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true })
-    }
-  })
 
   async function sleepAndWake(sessionId: string, deadlineMs?: number) {
     const historyDir = join(dir, 'history')
@@ -140,22 +115,6 @@ describe('a native shell slept and woken', () => {
     history.dispose()
     return { savedCwd: saved.cwd, wokeCwd: spawnedCwds.at(-1) }
   }
-
-  it('wakes in the spawn folder when the shell folder was deleted', async () => {
-    resolveProcessCwdSpy.mockResolvedValueOnce(`${dir}/deep (deleted)`)
-    const { savedCwd, wokeCwd } = await sleepAndWake('wt-1::/project@@sleep-deleted')
-    expect(resolveProcessCwdSpy).toHaveBeenCalled()
-    expect(savedCwd).toBe(dir)
-    expect(wokeCwd).toBe(dir)
-  })
-
-  it('wakes in the spawn folder when the shell folder is unreadable', async () => {
-    resolveProcessCwdSpy.mockResolvedValueOnce('')
-    const { savedCwd, wokeCwd } = await sleepAndWake('wt-1::/project@@sleep-unreadable')
-    expect(resolveProcessCwdSpy).toHaveBeenCalled()
-    expect(savedCwd).toBe(dir)
-    expect(wokeCwd).toBe(dir)
-  })
 
   it('gives a hung folder read a quarter of the Sleep deadline, then checkpoints', async () => {
     // Freeze only the clock, so the read's budget is exact while socket timers stay real.

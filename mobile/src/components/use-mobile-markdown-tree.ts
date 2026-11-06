@@ -25,6 +25,7 @@ export function useMobileMarkdownTree(
   text: string,
   visuals: boolean,
   growing: boolean,
+  chatMath: boolean,
   { fileLinkExists, githubRepo }: MobileMarkdownTreeLinks
 ): { root: Root; directives: NativeChatVisualDirective[] } {
   const visualLines = useMemo(
@@ -33,7 +34,7 @@ export function useMobileMarkdownTree(
   )
   const source = visualLines?.text ?? text
   const root = useMemo(() => {
-    const parsed = parseMobileMarkdownTree(source, growing)
+    const parsed = parseMobileMarkdownTree(source, growing, chatMath)
     // Same order as desktop: file links first, so a path's `#` never becomes an issue link.
     if (fileLinkExists) {
       linkNativeChatFilePaths(parsed, fileLinkExists)
@@ -42,6 +43,6 @@ export function useMobileMarkdownTree(
       linkGitHubReferences(parsed, githubRepo)
     }
     return parsed
-  }, [source, growing, fileLinkExists, githubRepo])
+  }, [source, growing, chatMath, fileLinkExists, githubRepo])
   return { root, directives: visualLines?.directives ?? NO_DIRECTIVES }
 }

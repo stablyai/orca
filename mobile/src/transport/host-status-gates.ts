@@ -88,9 +88,13 @@ export function useHostStatusGates(args: {
   // Keep proven capabilities across drops while marking them unverified until the reconnect read settles.
   const [unverified, setUnverified] = useState(false)
 
+  // Mark during render; only a settled read clears it, and no read runs while disconnected.
+  if ((connState !== 'connected' || !client) && !unverified) {
+    setUnverified(true)
+  }
+
   useEffect(() => {
     if (connState !== 'connected' || !client) {
-      setUnverified(true)
       return
     }
     return startHostStatusRead(client, hostId, (gates) => {

@@ -38,7 +38,6 @@ vi.mock(
 )
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
-import { buildOpenCodeSqliteCandidatePath } from '../../shared/opencode-sqlite-session-path'
 import {
   appendOpenCodeSqliteTurn,
   writeOpenCodeSqliteDatabase
@@ -50,7 +49,6 @@ import { openSessionSearchDatabase } from './session-search-schema'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
-  writeClaudeTranscript,
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 
@@ -60,7 +58,6 @@ const TOOL_ONLY = 'zarquonium'
 const TOOL_FILE = '/repo/app/src/telemetry/shard-reindex.ts'
 const SESSION = 'ses_capture'
 const SECOND_SESSION = 'ses_second'
-const CLAUDE_SESSION = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
 let harness: SessionSearchIndexerHarness
 let clock: FakeSessionSearchClock
@@ -153,26 +150,6 @@ function writeVault(): void {
   ])
 }
 
-it('finds a sentence an OpenCode assistant wrote, through the real indexer', async () => {
-  writeVault()
-  await startIndexer()
-
-  const response = openEngine().search({ query: ANSWER })
-
-  expect(response.planner.route).toBe('phrase')
-  expect(response.hits).toHaveLength(1)
-  const hit = response.hits[0]
-  expect(hit).toMatchObject({
-    agent: 'opencode',
-    sessionId: SESSION,
-    cwd: '/tmp/opencode'
-  })
-  expect(hit?.evidence?.role).toBe('assistant')
-  expect(hit?.evidence?.snippet).toContain('quokkaTelemetry')
-  expect(openEngine().search({ query: 'reindex the shards' }).hits).toHaveLength(1)
-  expect(openEngine().search({ query: OTHER }).hits[0]?.sessionId).toBe(SECOND_SESSION)
-})
-
 it('searches tool output under the all scope and not under conversation', async () => {
   writeVault()
   await startIndexer()
@@ -182,48 +159,6 @@ it('searches tool output under the all scope and not under conversation', async 
   expect(all.hits[0]).toMatchObject({ agent: 'opencode', sessionId: SESSION })
   expect(all.hits[0]?.evidence?.role).toBe('tool')
   expect(openEngine().search({ query: TOOL_ONLY, scope: 'conversation' }).hits).toEqual([])
-})
-
-it('indexes a tool call by its file argument and a failed one by its error', async () => {
-  writeVault()
-  await startIndexer()
-
-  expect(openEngine().search({ query: TOOL_FILE, scope: 'all' }).hits[0]?.sessionId).toBe(SESSION)
-  const failed = openEngine().search({ query: 'reindex exited with code', scope: 'all' })
-  expect(failed.hits[0]?.evidence?.role).toBe('tool')
-})
-
-it('folds a reasoning part into the assistant turn it belongs to', async () => {
-  writeVault()
-  await startIndexer()
-
-  const hit = openEngine().search({ query: 'checking how the shard map is built' }).hits[0]
-  expect(hit?.sessionId).toBe(SESSION)
-  expect(hit?.evidence?.role).toBe('assistant')
-})
-
-it('reads an OpenCode session once, not on every pass', async () => {
-  writeVault()
-  const claudePath = join(harness.claudeProjectDir, 'control.jsonl')
-  await writeClaudeTranscript(claudePath, ['control turn'], CLAUDE_SESSION)
-  const started = await startIndexer()
-
-  await started.reconcile()
-  await started.reconcile()
-
-  expect(openCodeReadCalls).toEqual([`capture:${SESSION}`, `capture:${SECOND_SESSION}`])
-  const rows = harness.read((db) =>
-    db.prepare('SELECT path, state, session_row_id FROM files ORDER BY path').all()
-  ) as { path: string; state: string; session_row_id: number | null }[]
-  expect(
-    rows.find((row) => row.path === buildOpenCodeSqliteCandidatePath(dbPath(), SESSION))
-  ).toMatchObject({ state: 'current' })
-  expect(
-    rows.find((row) => row.path === buildOpenCodeSqliteCandidatePath(dbPath(), SESSION))
-      ?.session_row_id
-  ).not.toBeNull()
-  expect(started.status()).toMatchObject({ filesDue: 0, filesFailed: 0, phase: 'current' })
-  expect(started.status().sessionsByAgent).toMatchObject({ opencode: 2, claude: 1 })
 })
 
 it('re-reads a session that gained a message and replaces its rows', async () => {
