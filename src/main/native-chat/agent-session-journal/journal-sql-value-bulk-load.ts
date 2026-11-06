@@ -2,7 +2,7 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
 import { encodeJournalSqlValue, type JournalSqlValueLocation } from './journal-sql-value-codec'
-import { JournalSqlInputEntities } from './journal-sql-input-entities'
+import { JournalSqlDomainTables } from './journal-sql-domain-tables'
 
 type Entry = { value: unknown; ordinal: number; incarnation: number }
 
@@ -10,13 +10,13 @@ type Entry = { value: unknown; ordinal: number; incarnation: number }
 export class JournalSqlValueBulkLoad {
   private readonly collections = new Map<string, Map<string, Entry>>()
   private readonly locations = new WeakMap<object, JournalSqlValueLocation>()
-  private readonly entities: JournalSqlInputEntities
+  private readonly tables: JournalSqlDomainTables
 
   constructor(
     private readonly scope: JournalSqlScope,
     private readonly items: JournalSqlItemValues | undefined
   ) {
-    this.entities = new JournalSqlInputEntities(scope)
+    this.tables = new JournalSqlDomainTables(scope)
     if (
       scope.db
         .prepare(`SELECT collection FROM journal_proj_collections
@@ -62,7 +62,7 @@ export class JournalSqlValueBulkLoad {
         }
       }
     )
-    const entity = this.entities.for(collection)
+    const entity = this.tables.for(collection)
     if (entity) {
       entity.store(location, encoded.json, value, true, ordinal)
     } else {
@@ -104,7 +104,7 @@ export class JournalSqlValueBulkLoad {
       (session_id, generation, collection, size, next_ordinal, next_incarnation)
       VALUES (?, ?, ?, ?, ?, ?)`)
     for (const [collection, entries] of this.collections) {
-      const entity = this.entities.for(collection)
+      const entity = this.tables.for(collection)
       if (entity) {
         entity.importCounters(entries.size)
       } else {

@@ -1,11 +1,9 @@
+import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
-import { journalSqlValueSchema } from './journal-sql-value-schema'
-import { journalSqlInputEntitySchema } from './journal-sql-input-entity-schema'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { JournalSqlKeyedMap, JournalSqlKeyedSet } from './journal-sql-keyed-values'
-import { journalSqlIndexSchema } from './journal-sql-index-schema'
 import { JournalSqlPlaceIndex } from './journal-sql-place-index'
 import type { QueuedMessageRow } from './queued-message-table'
 
@@ -19,7 +17,7 @@ afterEach(() => {
 function fixture() {
   const db = new Database(':memory:')
   databases.push(db)
-  db.exec(journalSqlValueSchema() + journalSqlInputEntitySchema())
+  db.exec(journalSqlProjectionSchema())
   const context = () => new JournalSqlValueContext(new JournalSqlScope(db, 'session', 'generation'))
   return { db, context }
 }
@@ -189,7 +187,6 @@ it('preserves undefined entries, membership, reinsert order and change-record or
 
 it('materializes indexed cards through their source incarnation across commands', () => {
   const f = fixture()
-  f.db.exec(journalSqlIndexSchema())
   let command = f.context()
   let cards = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'queue.cards')
   cards.set('card', {

@@ -1,29 +1,5 @@
 export function journalSqlInputEntitySchema(): string {
   return `
-CREATE TABLE IF NOT EXISTS journal_proj_input_entity_counters (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  submissions_count INTEGER NOT NULL DEFAULT 0,
-  submissions_ordinal INTEGER NOT NULL DEFAULT 0,
-  submissions_incarnation INTEGER NOT NULL DEFAULT 0,
-  receipts_count INTEGER NOT NULL DEFAULT 0,
-  receipts_ordinal INTEGER NOT NULL DEFAULT 0,
-  receipts_incarnation INTEGER NOT NULL DEFAULT 0,
-  cards_count INTEGER NOT NULL DEFAULT 0,
-  cards_ordinal INTEGER NOT NULL DEFAULT 0,
-  cards_incarnation INTEGER NOT NULL DEFAULT 0,
-  entries_count INTEGER NOT NULL DEFAULT 0,
-  entries_ordinal INTEGER NOT NULL DEFAULT 0,
-  entries_incarnation INTEGER NOT NULL DEFAULT 0,
-  legacy_entries_count INTEGER NOT NULL DEFAULT 0,
-  lineage_count INTEGER NOT NULL DEFAULT 0,
-  lineage_ordinal INTEGER NOT NULL DEFAULT 0,
-  lineage_incarnation INTEGER NOT NULL DEFAULT 0,
-  sources_count INTEGER NOT NULL DEFAULT 0,
-  sources_ordinal INTEGER NOT NULL DEFAULT 0,
-  sources_incarnation INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (session_id, epoch)
-) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS journal_proj_submissions (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

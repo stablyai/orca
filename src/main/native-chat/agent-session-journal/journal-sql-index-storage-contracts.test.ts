@@ -1,3 +1,4 @@
+import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import Database from '../../sqlite/sync-database'
@@ -5,13 +6,9 @@ import type { JournalIndexStorageFactory } from './journal-index-storage'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 import { memoryJournalStateQueries } from './journal-memory-state-queries'
-import { journalSqlIndexSchema } from './journal-sql-index-schema'
 import { sqlJournalIndexStorage } from './journal-sql-index-storage'
-import { journalSqlScalarSchema } from './journal-sql-scalars'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlValueContext } from './journal-sql-value-context'
-import { journalSqlValueSchema } from './journal-sql-value-schema'
-import { journalSqlInputEntitySchema } from './journal-sql-input-entity-schema'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -24,12 +21,7 @@ afterEach(() => {
 function sqlCommands() {
   const db = new Database(':memory:')
   databases.push(db)
-  db.exec(
-    journalSqlValueSchema() +
-      journalSqlInputEntitySchema() +
-      journalSqlIndexSchema() +
-      journalSqlScalarSchema()
-  )
+  db.exec(journalSqlProjectionSchema())
   return (): { storage: JournalIndexStorageFactory; finish: () => void } => {
     const context = new JournalSqlValueContext(new JournalSqlScope(db, 'session', 'generation'))
     return {

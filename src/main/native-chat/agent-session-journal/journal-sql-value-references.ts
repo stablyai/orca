@@ -1,5 +1,5 @@
 import type { JournalSqlScope } from './journal-sql-scope'
-import { JournalSqlInputEntities } from './journal-sql-input-entities'
+import { JournalSqlDomainTables } from './journal-sql-domain-tables'
 import type {
   JournalSqlValueLocation,
   JournalSqlValueReference,
@@ -7,7 +7,7 @@ import type {
 } from './journal-sql-value-codec'
 
 export class JournalSqlValueReferences {
-  private readonly entities: JournalSqlInputEntities
+  private readonly tables: JournalSqlDomainTables
   constructor(
     private readonly scope: JournalSqlScope,
     private readonly detached: (
@@ -19,11 +19,11 @@ export class JournalSqlValueReferences {
     ) => json,
     private readonly forget: (location: JournalSqlValueLocation) => void = () => undefined
   ) {
-    this.entities = new JournalSqlInputEntities(scope)
+    this.tables = new JournalSqlDomainTables(scope)
   }
 
   retain(location: JournalSqlValueLocation): void {
-    if (this.entities.for(location.collection)) {
+    if (this.tables.for(location.collection)) {
       return
     }
     this.scope.db
@@ -35,7 +35,7 @@ export class JournalSqlValueReferences {
   }
 
   private current(location: JournalSqlValueLocation) {
-    const entity = this.entities.for(location.collection)
+    const entity = this.tables.for(location.collection)
     if (entity) {
       return entity.header(location.key)
     }
@@ -84,7 +84,7 @@ export class JournalSqlValueReferences {
     if (Number(active?.incarnation) === location.incarnation) {
       return
     }
-    const entity = this.entities.for(location.collection)
+    const entity = this.tables.for(location.collection)
     const snapshot = entity
       ? entity.load(location)
       : this.scope.db
@@ -146,12 +146,12 @@ export class JournalSqlValueReferences {
     const previous = this.references(location)
     this.removeReferences(location)
     this.forget(location)
-    this.entities.for(location.collection)?.remove(location)
+    this.tables.for(location.collection)?.remove(location)
     this.prune(previous)
   }
 
   update(location: JournalSqlValueLocation, json: string, value: unknown) {
-    const entity = this.entities.for(location.collection)
+    const entity = this.tables.for(location.collection)
     if (entity) {
       return {
         stored: entity.update(location, json, value),
@@ -181,7 +181,7 @@ export class JournalSqlValueReferences {
       if (Number(active?.incarnation) === location.incarnation || this.referenced(location)) {
         continue
       }
-      const entity = this.entities.for(location.collection)
+      const entity = this.tables.for(location.collection)
       const removed = entity
         ? { changes: entity.remove(location) }
         : this.scope.db

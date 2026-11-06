@@ -1,10 +1,9 @@
+import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import Database from '../../sqlite/sync-database'
 import { ensureJournalOutcomeTables } from './journal-outcome-format'
 import { JournalSqlScope } from './journal-sql-scope'
-import { journalSqlValueSchema } from './journal-sql-value-schema'
-import { journalSqlItemSchema } from './journal-sql-item-schema'
 import { JournalSqlItemValues } from './journal-sql-item-values'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { JournalSqlKeyedMap } from './journal-sql-keyed-values'
@@ -19,7 +18,7 @@ afterEach(() => {
 function fixture() {
   const db = new Database(':memory:')
   databases.push(db)
-  db.exec(journalSqlValueSchema() + journalSqlItemSchema())
+  db.exec(journalSqlProjectionSchema())
   ensureJournalOutcomeTables(db)
   const command = () => {
     const scope = new JournalSqlScope(db, 'session', 'projection')

@@ -24,8 +24,7 @@ export class JournalSqlQueryFacts {
           'inputs.sources',
           'inputs.handovers',
           'inputs.rejections',
-          'inputs.presentations',
-          'aliases'
+          'inputs.presentations'
         ].includes(collection)
       ) {
         this.pending.set(JSON.stringify([collection, key]), [collection, key])
@@ -53,8 +52,6 @@ export class JournalSqlQueryFacts {
         this.visibility(key)
       } else if (collection.startsWith('inputs.')) {
         this.candidate(key)
-      } else if (collection === 'aliases') {
-        this.alias(key)
       }
     }
   }
@@ -135,30 +132,6 @@ export class JournalSqlQueryFacts {
         Number(context.header('inputs.candidates', key)?.ordinal),
         handover?.fence ?? source?.fence ?? send.fence,
         handover?.fence ?? null
-      )
-  }
-
-  private alias(key: string): void {
-    const { context } = this
-    const { scope } = context
-    const value = context.read<string>('aliases', key, false)
-    if (value === undefined) {
-      scope.db
-        .prepare(`DELETE FROM journal_proj_aliases
-        WHERE session_id=? AND generation=? AND entry_key=?`)
-        .run(...scope.prefix, key)
-      return
-    }
-    scope.db
-      .prepare(`INSERT INTO journal_proj_aliases
-      (session_id, generation, entry_key, target_key, ordinal) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(session_id, generation, entry_key) DO UPDATE SET
-      target_key=excluded.target_key, ordinal=excluded.ordinal`)
-      .run(
-        ...scope.prefix,
-        key,
-        journalSqlEntryKey(value),
-        Number(context.header('aliases', key)?.ordinal)
       )
   }
 }

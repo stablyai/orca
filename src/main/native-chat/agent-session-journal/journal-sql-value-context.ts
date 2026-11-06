@@ -14,7 +14,7 @@ import { JournalSqlValueReferences } from './journal-sql-value-references'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
 import { JournalSqlValueBulkLoad } from './journal-sql-value-bulk-load'
 import { JournalSqlValueChanges } from './journal-sql-value-changes'
-import { JournalSqlInputEntities } from './journal-sql-input-entities'
+import { JournalSqlDomainTables } from './journal-sql-domain-tables'
 
 /** One command owns these objects; SAVEPOINT rollback discards the context, never adopts a mirror. */
 export class JournalSqlValueContext {
@@ -26,12 +26,12 @@ export class JournalSqlValueContext {
 
   private readonly references: JournalSqlValueReferences
   private bulk?: JournalSqlValueBulkLoad
-  readonly entities: JournalSqlInputEntities
+  readonly tables: JournalSqlDomainTables
   constructor(
     readonly scope: JournalSqlScope,
     readonly items?: JournalSqlItemValues
   ) {
-    this.entities = new JournalSqlInputEntities(scope)
+    this.tables = new JournalSqlDomainTables(scope)
     this.reader = new JournalSqlValueReader(scope, this.objects, items)
     this.references = new JournalSqlValueReferences(
       scope,
@@ -86,7 +86,7 @@ export class JournalSqlValueContext {
   }
 
   collection(name: string): void {
-    if (this.entities.for(name) || this.collections.has(name)) {
+    if (this.tables.for(name) || this.collections.has(name)) {
       return
     }
     this.scope.db
@@ -147,7 +147,7 @@ export class JournalSqlValueContext {
     const source =
       typeof value === 'object' && value !== null ? this.objects.locations.get(value) : undefined
     const same = previous && source && this.reader.load(previous) === this.reader.load(source)
-    const entity = this.entities.for(collection)
+    const entity = this.tables.for(collection)
     const counters = entity
       ? entity.counters(!before, !same)
       : this.scope.db
@@ -237,7 +237,7 @@ export class JournalSqlValueContext {
     } else {
       this.references.drop(location)
     }
-    const entity = this.entities.for(collection)
+    const entity = this.tables.for(collection)
     if (entity) {
       entity.delete(key)
     } else {

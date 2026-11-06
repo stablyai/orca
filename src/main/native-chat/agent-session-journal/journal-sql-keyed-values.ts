@@ -13,7 +13,7 @@ export function clearJournalSqlCollection(
   collection: string
 ): void {
   const { scope } = context
-  const entity = context.entities.for(collection)
+  const entity = context.tables.for(collection)
   if (entity) {
     for (const key of entity.keys()) {
       context.delete(collection, key)
@@ -92,7 +92,7 @@ export function* journalSqlOrderedKeys(
   limit = -1
 ): Generator<string> {
   const { scope } = context
-  const entity = context.entities.for(collection)
+  const entity = context.tables.for(collection)
   if (entity) {
     for (const key of entity.keys(limit)) {
       if (limit === 1 || context.header(collection, key)) {

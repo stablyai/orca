@@ -1,7 +1,7 @@
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlItemValues } from './journal-sql-item-values'
 import type { JournalSqlValueObjects } from './journal-sql-value-objects'
-import { JournalSqlInputEntities } from './journal-sql-input-entities'
+import { JournalSqlDomainTables } from './journal-sql-domain-tables'
 import {
   decodeJournalSqlValue,
   journalSqlLocationKey,
@@ -12,18 +12,18 @@ import {
 
 export class JournalSqlValueReader {
   readonly loaded = new Map<string, unknown>()
-  private readonly entities: JournalSqlInputEntities
+  private readonly tables: JournalSqlDomainTables
 
   constructor(
     private readonly scope: JournalSqlScope,
     private readonly objects: JournalSqlValueObjects,
     private readonly items?: JournalSqlItemValues
   ) {
-    this.entities = new JournalSqlInputEntities(scope)
+    this.tables = new JournalSqlDomainTables(scope)
   }
 
   size(collection: string): number {
-    const entity = this.entities.for(collection)
+    const entity = this.tables.for(collection)
     if (entity) {
       return entity.size()
     }
@@ -35,7 +35,7 @@ export class JournalSqlValueReader {
   }
 
   header(collection: string, key: string) {
-    const entity = this.entities.for(collection)
+    const entity = this.tables.for(collection)
     if (entity) {
       return entity.header(key)
     }
@@ -51,7 +51,7 @@ export class JournalSqlValueReader {
     if (!this.loaded.has(key)) {
       let encoded = json
       if (encoded === undefined) {
-        const entity = this.entities.for(location.collection)
+        const entity = this.tables.for(location.collection)
         const row = entity
           ? entity.load(location)
           : this.scope.db

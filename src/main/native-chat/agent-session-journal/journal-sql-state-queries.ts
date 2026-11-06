@@ -7,11 +7,7 @@ import type { JournalStateQueries } from './journal-state-queries'
 import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 import type { JournalSqlQueryFacts } from './journal-sql-query-facts'
-import {
-  journalSqlEntryKey,
-  journalSqlOrderedKeys,
-  journalSqlOrderedValues
-} from './journal-sql-keyed-values'
+import { journalSqlOrderedKeys, journalSqlOrderedValues } from './journal-sql-keyed-values'
 import type { QueuedMessageRow } from './queued-message-table'
 
 export function sqlJournalStateQueries(
@@ -89,12 +85,12 @@ export function sqlJournalStateQueries(
     *aliasesForSubmission(_state, itemId) {
       facts.flush()
       const rows = scope.db
-        .prepare(`SELECT entry_key FROM journal_proj_aliases
-        WHERE session_id=? AND generation=? AND target_key=? ORDER BY ordinal`)
-        .all(...scope.prefix, journalSqlEntryKey(itemId))
+        .prepare(`SELECT alias FROM journal_proj_aliases
+        WHERE session_id=? AND epoch=? AND target=? ORDER BY ordinal`)
+        .all(...scope.prefix, itemId)
       for (const row of rows) {
         scope.examined(row)
-        yield String(JSON.parse(String(row.entry_key)))
+        yield String(row.alias)
       }
     },
     candidatesForFence: (_state, fence) => candidateRows('effective_fence', fence),
@@ -103,7 +99,7 @@ export function sqlJournalStateQueries(
     legacyInputEntryCount() {
       facts.flush()
       const row = scope.db
-        .prepare(`SELECT legacy_entries_count FROM journal_proj_input_entity_counters
+        .prepare(`SELECT legacy_entries_count FROM journal_proj_domain_counters
         WHERE session_id=? AND epoch=?`)
         .get(...scope.prefix)
       if (row) {

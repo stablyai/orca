@@ -6,6 +6,8 @@ import { journalSqlQuerySchema } from './journal-sql-query-schema'
 import { journalSqlPauseSchema } from './journal-sql-pause-marks'
 import { journalSqlMetaSchema } from './journal-sql-meta'
 import { journalSqlInputEntitySchema } from './journal-sql-input-entity-schema'
+import { journalSqlDomainCounterSchema } from './journal-sql-domain-counter-schema'
+import { journalSqlPrimitiveFactSchema } from './journal-sql-primitive-fact-schema'
 
 export function journalSqlProjectionSchema(): string {
   return (
@@ -13,7 +15,9 @@ export function journalSqlProjectionSchema(): string {
     journalSqlValueSchema() +
     journalSqlScalarSchema() +
     journalSqlItemSchema() +
+    journalSqlDomainCounterSchema() +
     journalSqlInputEntitySchema() +
+    journalSqlPrimitiveFactSchema() +
     journalSqlQuerySchema() +
     journalSqlPauseSchema() +
     journalSqlMetaSchema()
