@@ -2876,6 +2876,8 @@
         "loadGitHubWorkFailed": "Impossible de charger le travail GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Tout le monde",
+        "gitlabInvolvementReviewing": "En relecture",
         "gitlabViewTodos": "Mes tâches",
         "startWorkspaceFromMr": "Démarrer un espace de travail depuis la MR {{number}}",
         "startWorkspaceFromIssue": "Démarrer un espace de travail depuis l’issue {{number}}",
@@ -11781,7 +11783,7 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau et lancer d’autres programmes.",
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
           "uiWarning": "Exécute le code de l’éditeur dans Orca pour afficher sa vue. Orca indique ce à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {
@@ -19177,6 +19179,7 @@
         "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",
         "argumentsPositionalPrompt": "Les arguments enregistrés contiennent un message.",
         "argumentsUnsupportedOption": "Les arguments enregistrés contiennent une option non prise en charge ({{option}}).",
+        "pluginInputRequired": "{{agent}} s’est arrêté car le plugin « {{plugin}} » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal {{agent}}.",
         "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
         "hostFaultTryAgain": "Orca a rencontré un problème, l'opération n'a donc pas abouti. Réessayez.",
         "hostStopped": "{{agent}} n'a jamais fini de démarrer, Orca l'a donc arrêté.",
@@ -19285,6 +19288,9 @@
         "imageUnavailable": "Aperçu indisponible",
         "send": "Envoyer",
         "alternateSteerHint": "{{shortcut}} pour envoyer maintenant",
+        "previewQueue": "Mettre en file",
+        "previewSteer": "Envoyer maintenant",
+        "previewSteerQueued": "Envoyer le suivant",
         "alternateQueueHint": "{{shortcut}} pour mettre en file d’attente",
         "noPty": "Aucun terminal actif — rebasculez pour vous reconnecter.",
         "locked": "La saisie est détenue par un autre appareil.",

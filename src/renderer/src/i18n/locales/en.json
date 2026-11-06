@@ -695,6 +695,10 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
+        "changedFilesSummary": "Changed files summary",
+        "changedFilesSummaryDescription": "Shows the files each turn changed, with line counts, below the reply.",
+        "changedFilesSummaryKeywordDiff": "diff",
+        "changedFilesSummaryKeywordEdits": "edits",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -3351,6 +3355,8 @@
         "loadGitHubWorkFailed": "Failed to load GitHub work.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Everyone",
+        "gitlabInvolvementReviewing": "Reviewing",
         "gitlabViewTodos": "My Todos",
         "startWorkspaceFromMr": "Start workspace from MR {{number}}",
         "startWorkspaceFromIssue": "Start workspace from issue {{number}}",
@@ -12217,7 +12223,7 @@
             "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
-          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network and run other programs.",
+          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.",
           "uiWarning": "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
         },
         "PluginConsentProvenance": {
@@ -14553,6 +14559,13 @@
                   "title": "{{reviewLabelCap}} not supported here",
                   "body": "This repository provider does not support creating a {{reviewLabel}} from Orca."
                 }
+              },
+              "runTime": {
+                "justNow": "just now",
+                "started": "Started {{time}}",
+                "finished": "Finished {{time}}",
+                "notLatestCommitDetail": "Ran on commit {{sha}}, not the latest commit",
+                "notLatestCommit": "Earlier commit"
               }
             }
           },
@@ -19716,6 +19729,7 @@
         "couldNotStopTheAgent": "Couldn't stop the agent.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
         "hostFault": "Orca ran into a problem, so this didn't go through.",
         "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
         "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
@@ -19847,7 +19861,11 @@
         "partial": "Partial diff",
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files",
-        "showMoreFiles": "Show {{count}} more"
+        "showMoreFiles": "Show {{count}} more",
+        "hide": "Hide",
+        "hidden": "Hidden",
+        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI.",
+        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat UI</settings>"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -19886,6 +19904,9 @@
       "composer": {
         "send": "Send",
         "alternateSteerHint": "{{shortcut}} to steer",
+        "previewQueue": "Queue",
+        "previewSteer": "Steer",
+        "previewSteerQueued": "Steer queued",
         "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
@@ -20164,7 +20185,8 @@
         "stateIdleCount_one": "{{value0}} stopped",
         "stateIdleCount_other": "{{value0}} stopped",
         "stateUnverifiableCount_one": "{{value0}} with status unavailable",
-        "stateUnverifiableCount_other": "{{value0}} with status unavailable"
+        "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+        "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",
       "find": {
@@ -21482,6 +21504,9 @@
       "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
       "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
       "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
+      "switchedNoteTitle": "New agents will open in Chat UI",
+      "switchedNoteBody": "Prefer the terminal? Switch back anytime: search <term>Chat UI</term> in Settings.",
+      "openSettings": "Open Settings",
       "dismiss": "Dismiss",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
