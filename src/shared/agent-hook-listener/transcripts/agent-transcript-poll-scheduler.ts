@@ -105,6 +105,10 @@ export class AgentTranscriptPollScheduler<T> {
     this.deadlines.schedule(key, entry, delay)
   }
 
+  peek(key: string): T | undefined {
+    return this.entries.get(key)?.value
+  }
+
   clear(key: string): void {
     const entry = this.entries.get(key)
     if (!entry) {

@@ -12,6 +12,7 @@ import type { AgentHookSource } from '../shared/agent-hook-listener/transport/ag
 import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 import {
   advanceTranscriptPollIdle,
+  presenceRestatedPollRow,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate,
@@ -179,7 +180,16 @@ export class AgentHookResultRetryScheduler {
       return
     }
     if (advanced.action === 'probe') {
-      void this.host.checkAgentPresence(paneKey)
+      void this.host.checkAgentPresence(paneKey).then(() => {
+        const row = presenceRestatedPollRow(
+          this.host.state,
+          next,
+          this.transcriptPollScheduler.peek(paneKey)
+        )
+        if (row && this.host.isListening()) {
+          this.scheduleTranscriptPoll(source, body, row, env, version, advanced.idle)
+        }
+      })
     }
     this.scheduleTranscriptPoll(source, body, next, env, version, advanced.idle)
   }

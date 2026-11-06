@@ -4,6 +4,7 @@ import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
 import { hasPendingCodexSubagentIdentity } from '../codex-subagent-roster'
+import { isSameAgentProcess } from '../agent-status/process/agent-process-presence'
 
 export function shouldPollHookTranscript(
   state: HookListenerState,
@@ -52,6 +53,30 @@ export function advanceTranscriptPollIdle(
     return { idle: { ...idle, probedAt: now }, action: 'probe' }
   }
   return { idle, action: 'poll' }
+}
+
+/** A probe can restate a live row (e.g. suspension flip) with no hook to re-arm its poll; returns that row. */
+export function presenceRestatedPollRow<T extends AgentHookEventPayload>(
+  state: HookListenerState,
+  polled: T,
+  pending: { original: AgentHookEventPayload } | undefined
+): T | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers store rows of their own enriched type.
+  const row = state.lastStatusByPaneKey.get(polled.paneKey) as T | undefined
+  // A pending poll for any other row was re-armed by a newer hook.
+  if (!row || row === polled || (pending && pending.original !== polled)) {
+    return undefined
+  }
+  const owner = row.agentPresence
+  const prior = polled.agentPresence?.process
+  const sameOwner = !owner?.process || !prior || isSameAgentProcess(owner.process, prior)
+  return !owner?.ended &&
+    sameOwner &&
+    row.payload.agentType === polled.payload.agentType &&
+    row.payload.state === polled.payload.state &&
+    row.providerSession?.id === polled.providerSession?.id
+    ? row
+    : undefined
 }
 
 /** Child rollout discovery keeps its existing cadence; only a root-only pane can use one file watch. */

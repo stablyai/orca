@@ -9,6 +9,7 @@ import type { AgentHookSource } from '../../../shared/agent-hook-listener/transp
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   advanceTranscriptPollIdle,
+  presenceRestatedPollRow,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate,
@@ -158,7 +159,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
     if (advanced.action === 'probe') {
       // An exited owner is reconciled, which clears this poll.
-      void this.checkAgentPresence(paneKey)
+      void this.checkAgentPresence(paneKey).then(() => {
+        const row = presenceRestatedPollRow(
+          this.state,
+          next,
+          this.transcriptPollScheduler.peek(paneKey)
+        )
+        if (row && this.server) {
+          this.scheduleTranscriptPoll(source, body, row, advanced.idle)
+        }
+      })
     }
     this.scheduleTranscriptPoll(source, body, next, advanced.idle)
   }
