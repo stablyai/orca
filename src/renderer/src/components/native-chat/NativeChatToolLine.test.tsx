@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
+import { NativeChatOpenSubagentProvider } from './native-chat-transcript-frame'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
@@ -39,5 +40,25 @@ describe('tool sentence rows', () => {
     )
     fireEvent.click(button)
     expect(screen.queryByText('command failed')).toBeNull()
+  })
+
+  it('opens the child from an Agent card instead of expanding the launch ack', () => {
+    const onOpen = vi.fn()
+    render(
+      <NativeChatOpenSubagentProvider onOpen={onOpen}>
+        <NativeChatToolLine
+          block={{
+            type: 'tool-call',
+            name: 'Agent',
+            input: { description: 'Fix the greeting', prompt: 'Say hello' },
+            state: 'completed'
+          }}
+          result={{ type: 'tool-result', output: 'Async agent launched.\nagentId: child-1' }}
+        />
+      </NativeChatOpenSubagentProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open Fix the greeting' }))
+    expect(onOpen).toHaveBeenCalledWith('child-1')
+    expect(screen.queryByText(/Async agent launched/)).toBeNull()
   })
 })

@@ -1444,6 +1444,10 @@
   },
   "components": {
     "native-chat": {
+      "activity": {
+        "subagentsLabel_one": "{{count}} subagent",
+        "subagentsLabel_other": "{{count}} subagents"
+      },
       "approval": {
         "allow": "Allow",
         "deny": "Deny",

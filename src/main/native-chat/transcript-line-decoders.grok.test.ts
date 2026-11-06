@@ -12,7 +12,7 @@ describe('decodeGrokTranscriptLine', () => {
     expect(decodeGrokTranscriptLine(line, 'fb-2')).toEqual({
       id: 'fb-2:asst-1',
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'grep', input: { pattern: 'foo' } }],
+      blocks: [{ type: 'tool-call', name: 'grep', input: { pattern: 'foo' }, callId: 'c1' }],
       timestamp: null,
       source: 'transcript'
     })
