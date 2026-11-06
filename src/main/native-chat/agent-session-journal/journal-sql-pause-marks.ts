@@ -16,11 +16,11 @@ export function journalSqlPauseKey(value: unknown): unknown {
 
 export function journalSqlPauseSchema(): string {
   return `CREATE TABLE IF NOT EXISTS journal_proj_clear_members (
-    session_id TEXT NOT NULL, generation TEXT NOT NULL, ordinal INTEGER NOT NULL,
-    message_id TEXT NOT NULL, PRIMARY KEY (session_id, generation, ordinal)
+    session_id TEXT NOT NULL, epoch TEXT NOT NULL, ordinal INTEGER NOT NULL,
+    message_id TEXT NOT NULL, PRIMARY KEY (session_id, epoch, ordinal)
   ) WITHOUT ROWID;
   CREATE INDEX IF NOT EXISTS journal_proj_clear_members_id
-    ON journal_proj_clear_members(session_id, generation, message_id);`
+    ON journal_proj_clear_members(session_id, epoch, message_id);`
 }
 
 /** Only changing marks loads clear membership; unchanged commands reuse the encoded saved scalar. */
@@ -97,10 +97,10 @@ export class JournalSqlPauseMarks {
     const clear = marks.cleared
     if (this.membersChanged) {
       this.scope.db
-        .prepare('DELETE FROM journal_proj_clear_members WHERE session_id=? AND generation=?')
+        .prepare('DELETE FROM journal_proj_clear_members WHERE session_id=? AND epoch=?')
         .run(...this.scope.prefix)
       const insert = this.scope.db.prepare(`INSERT INTO journal_proj_clear_members
-        (session_id, generation, ordinal, message_id) VALUES (?, ?, ?, ?)`)
+        (session_id, epoch, ordinal, message_id) VALUES (?, ?, ?, ?)`)
       for (const [ordinal, id] of (clear?.messageIds ?? []).entries()) {
         insert.run(...this.scope.prefix, ordinal, id)
       }
@@ -136,7 +136,7 @@ export class JournalSqlPauseMarks {
   private readMembers(): readonly string[] {
     return this.scope.db
       .prepare(`SELECT message_id FROM journal_proj_clear_members
-      WHERE session_id=? AND generation=? ORDER BY ordinal`)
+      WHERE session_id=? AND epoch=? ORDER BY ordinal`)
       .all(...this.scope.prefix)
       .map((row) => String(this.scope.examined(row).message_id))
   }

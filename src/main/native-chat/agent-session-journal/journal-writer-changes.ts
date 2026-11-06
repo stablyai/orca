@@ -47,7 +47,7 @@ export class JournalWriterChanges {
     for (const itemId of this.itemIds) {
       const row = scope.db
         .prepare(`SELECT revision, sequence, sequence_index FROM journal_proj_items
-        WHERE session_id=? AND generation=? AND entry_key=?`)
+        WHERE session_id=? AND epoch=? AND entry_key=?`)
         .get(...scope.prefix, JSON.stringify(itemId))
       if (row) {
         scope.examined(row)

@@ -12,13 +12,13 @@ export class JournalSqlScope {
   constructor(
     readonly db: Database.Database,
     readonly sessionId: string,
-    readonly generation: string,
+    readonly epoch: string,
     readonly work: JournalSqlReadWork = { rows: 0, decodedBytes: 0 },
     private readonly indexValues?: JournalSqlIndexValues
   ) {}
 
   get prefix(): [string, string] {
-    return [this.sessionId, this.generation]
+    return [this.sessionId, this.epoch]
   }
 
   examined(row: SqliteRow): SqliteRow {
@@ -49,6 +49,6 @@ export class JournalSqlScope {
   }
 
   withIndexValues(values: JournalSqlIndexValues): JournalSqlScope {
-    return new JournalSqlScope(this.db, this.sessionId, this.generation, this.work, values)
+    return new JournalSqlScope(this.db, this.sessionId, this.epoch, this.work, values)
   }
 }

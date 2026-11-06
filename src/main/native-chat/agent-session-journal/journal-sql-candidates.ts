@@ -21,13 +21,13 @@ export class JournalSqlCandidates implements JournalInputCandidateStorage {
       this.scope.forget(`candidates:${this.indexId}`, card.messageId)
       this.scope.db
         .prepare(`DELETE FROM journal_proj_candidates
-          WHERE session_id=? AND generation=? AND index_id=? AND id=?`)
+          WHERE session_id=? AND epoch=? AND index_id=? AND id=?`)
         .run(...this.prefix, card.messageId)
       return
     }
     this.scope.db
       .prepare(`INSERT OR REPLACE INTO journal_proj_candidates
-        (session_id, generation, index_id, id, position, is_mail, card_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        (session_id, epoch, index_id, id, position, is_mail, card_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .run(
         ...this.prefix,
         card.messageId,
@@ -42,16 +42,14 @@ export class JournalSqlCandidates implements JournalInputCandidateStorage {
     this.walked = []
     this.scope.forget(`candidates:${this.indexId}`)
     this.scope.db
-      .prepare(
-        'DELETE FROM journal_proj_candidates WHERE session_id=? AND generation=? AND index_id=?'
-      )
+      .prepare('DELETE FROM journal_proj_candidates WHERE session_id=? AND epoch=? AND index_id=?')
       .run(...this.prefix)
   }
 
   hasMail(): boolean {
     const row = this.scope.db
       .prepare(`SELECT id FROM journal_proj_candidates
-        WHERE session_id=? AND generation=? AND index_id=? AND is_mail LIMIT 1`)
+        WHERE session_id=? AND epoch=? AND index_id=? AND is_mail LIMIT 1`)
       .get(...this.prefix)
     if (row) {
       this.scope.examined(row)
@@ -65,7 +63,7 @@ export class JournalSqlCandidates implements JournalInputCandidateStorage {
       // A page includes its last position's complete tie group before applying JS id order.
       const page = this.scope.db
         .prepare(`SELECT position FROM journal_proj_candidates
-          WHERE session_id=? AND generation=? AND index_id=? AND position>?
+          WHERE session_id=? AND epoch=? AND index_id=? AND position>?
           ORDER BY position LIMIT 32`)
         .all(...this.prefix, position)
       page.forEach((row) => this.scope.examined(row))
@@ -75,7 +73,7 @@ export class JournalSqlCandidates implements JournalInputCandidateStorage {
       const through = Number(page.at(-1)!.position)
       const rows = this.scope.db
         .prepare(`SELECT id, position, card_json FROM journal_proj_candidates
-          WHERE session_id=? AND generation=? AND index_id=? AND position>? AND position<=?`)
+          WHERE session_id=? AND epoch=? AND index_id=? AND position>? AND position<=?`)
         .all(...this.prefix, position, through)
       rows.forEach((row) => this.scope.examined(row))
       rows.sort(

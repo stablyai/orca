@@ -9,7 +9,7 @@ import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalWriterInputOperation } from './journal-writer-operations'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 
-/** The writer chooses the projection generation; callers identify only their live open handle. */
+/** The writer chooses the projection epoch; callers identify only their live open handle. */
 export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
 
 export type JournalWriterCoreOperation =

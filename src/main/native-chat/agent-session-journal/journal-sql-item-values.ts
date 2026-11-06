@@ -66,8 +66,8 @@ export class JournalSqlItemValues {
     const original = preserve ? this.detached.get(key) : undefined
     this.scope.db
       .prepare(`INSERT INTO journal_proj_item_versions
-      (session_id, generation, entry_key, incarnation, inline_json) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(session_id, generation, entry_key, incarnation) DO UPDATE SET
+      (session_id, epoch, entry_key, incarnation, inline_json) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(session_id, epoch, entry_key, incarnation) DO UPDATE SET
         outcome_generation=NULL, outcome_seq=NULL, inline_json=excluded.inline_json`)
       .run(...this.scope.prefix, location.key, location.incarnation, encoded)
     this.pending.set(JSON.stringify([location.key, location.incarnation]), location)
@@ -75,7 +75,7 @@ export class JournalSqlItemValues {
       this.scope.db
         .prepare(`UPDATE journal_proj_item_versions
         SET outcome_generation=?, outcome_seq=?, inline_json=NULL
-        WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+        WHERE session_id=? AND epoch=? AND entry_key=? AND incarnation=?`)
         .run(
           original.outcome_generation,
           original.outcome_seq,
@@ -99,7 +99,7 @@ export class JournalSqlItemValues {
   ): void {
     this.scope.db
       .prepare(`INSERT INTO journal_proj_item_versions
-      (session_id, generation, entry_key, incarnation, outcome_generation, outcome_seq)
+      (session_id, epoch, entry_key, incarnation, outcome_generation, outcome_seq)
       VALUES (?, ?, ?, ?, ?, ?)`)
       .run(
         ...this.scope.prefix,
@@ -114,7 +114,7 @@ export class JournalSqlItemValues {
   stored(location: JournalSqlValueLocation): boolean {
     const row = this.scope.db
       .prepare(`SELECT 1 AS present FROM journal_proj_item_versions
-      WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=? AND incarnation=?`)
       .get(...this.scope.prefix, location.key, location.incarnation)
     return !!row && !!this.scope.examined(row)
   }
@@ -122,7 +122,7 @@ export class JournalSqlItemValues {
   load(location: JournalSqlValueLocation): StoredJournalSqlValue | undefined {
     const version = this.scope.db
       .prepare(`SELECT outcome_generation, outcome_seq, inline_json FROM journal_proj_item_versions
-      WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=? AND incarnation=?`)
       .get(...this.scope.prefix, location.key, location.incarnation)
     if (!version) {
       return undefined
@@ -150,7 +150,7 @@ export class JournalSqlItemValues {
       ORDER BY seq DESC LIMIT 1`)
     const bind = this.scope.db.prepare(`UPDATE journal_proj_item_versions SET
       outcome_generation=?, outcome_seq=?, inline_json=NULL
-      WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=? AND incarnation=?`)
     for (const location of this.pending.values()) {
       const row = newest.get(outcomeGeneration, location.key, through)
       if (row) {
@@ -159,7 +159,7 @@ export class JournalSqlItemValues {
       // Only this row's final incarnation has an outcome; intermediate captures keep their value.
       const current = this.scope.db
         .prepare(`SELECT incarnation FROM journal_proj_items
-        WHERE session_id=? AND generation=? AND entry_key=?`)
+        WHERE session_id=? AND epoch=? AND entry_key=?`)
         .get(...this.scope.prefix, location.key)
       if (current) {
         this.scope.examined(current)
@@ -179,7 +179,7 @@ export class JournalSqlItemValues {
         this.scope.db
           .prepare(`UPDATE journal_proj_items SET byte_size=(SELECT length(CAST(value_json AS BLOB))
           FROM journal_outcomes WHERE generation=? AND seq=? AND field='items' AND entry_key=?)
-          WHERE session_id=? AND generation=? AND entry_key=?`)
+          WHERE session_id=? AND epoch=? AND entry_key=?`)
           .run(outcomeGeneration, row.seq, location.key, ...this.scope.prefix, location.key)
       }
     }
@@ -188,14 +188,14 @@ export class JournalSqlItemValues {
 
   delete(key: string): void {
     this.scope.db
-      .prepare('DELETE FROM journal_proj_items WHERE session_id=? AND generation=? AND entry_key=?')
+      .prepare('DELETE FROM journal_proj_items WHERE session_id=? AND epoch=? AND entry_key=?')
       .run(...this.scope.prefix, key)
   }
 
   forget(location: JournalSqlValueLocation): boolean {
     const row = this.scope.db
       .prepare(`SELECT outcome_generation, outcome_seq FROM journal_proj_item_versions
-      WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=? AND incarnation=?`)
       .get(...this.scope.prefix, location.key, location.incarnation)
     if (row) {
       this.scope.examined(row)
@@ -203,7 +203,7 @@ export class JournalSqlItemValues {
     }
     const removed = this.scope.db
       .prepare(`DELETE FROM journal_proj_item_versions
-      WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=? AND incarnation=?`)
       .run(...this.scope.prefix, location.key, location.incarnation)
     this.pending.delete(JSON.stringify([location.key, location.incarnation]))
     return removed.changes > 0
@@ -217,11 +217,11 @@ export class JournalSqlItemValues {
   ): void {
     this.scope.db
       .prepare(`INSERT INTO journal_proj_items
-      (session_id, generation, entry_key, incarnation, ordinal, sequence, sequence_index,
+      (session_id, epoch, entry_key, incarnation, ordinal, sequence, sequence_index,
        revision, kind, turn_id, turn_item_id, opener_item_id, root, subagent_id, context_clear, byte_size,
        live_work, subagent_row, subagent_group_key, subagent_names)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(session_id, generation, entry_key) DO UPDATE SET
+      ON CONFLICT(session_id, epoch, entry_key) DO UPDATE SET
       incarnation=excluded.incarnation, ordinal=excluded.ordinal, sequence=excluded.sequence,
       sequence_index=excluded.sequence_index, revision=excluded.revision, kind=excluded.kind,
       turn_id=excluded.turn_id, turn_item_id=excluded.turn_item_id,

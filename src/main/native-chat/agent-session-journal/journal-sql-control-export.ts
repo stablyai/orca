@@ -27,7 +27,7 @@ function isImporter(value: unknown): value is Importer {
 }
 
 /**
- * Copies an actual open's restored control facts into a SQL reducer over an empty generation.
+ * Copies an actual open's restored control facts into a SQL reducer over an empty epoch.
  * Both graphs are built by the same reducer classes over different storage, so they pair field by
  * field; each memory index hands its entries to the SQL index of the same place, and every value
  * goes through one value context, so an object two collections share stays shared.

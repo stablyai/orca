@@ -279,7 +279,7 @@ export function sqlJournalInputLineageFacts(
   const { context } = deps
   const facts: Omit<JournalInputLineageFacts, 'base' | 'clock'> = {
     cards,
-    // Callers: epoch publish over its new generation's rows; actual opens restore in memory.
+    // Callers: epoch publish over its new epoch's rows; actual opens restore in memory.
     frontier() {
       context.flush()
       const { scope } = context

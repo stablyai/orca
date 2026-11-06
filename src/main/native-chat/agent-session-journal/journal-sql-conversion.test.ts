@@ -53,7 +53,7 @@ it.each([
   }
   const pointed = db
     .prepare(`SELECT COUNT(*) AS count FROM journal_proj_item_versions
-    WHERE generation=? AND outcome_seq IS NOT NULL AND inline_json IS NULL`)
+    WHERE epoch=? AND outcome_seq IS NOT NULL AND inline_json IS NULL`)
     .get('epoch')?.count
   expect(pointed).toBeGreaterThan(0)
 })

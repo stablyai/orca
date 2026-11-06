@@ -36,7 +36,7 @@ export function sqlJournalStateQueries(
     facts.flush()
     const row = scope.db
       .prepare(`SELECT sequence FROM journal_proj_items
-      WHERE session_id=? AND generation=? AND context_clear=1 ORDER BY sequence DESC LIMIT 1`)
+      WHERE session_id=? AND epoch=? AND context_clear=1 ORDER BY sequence DESC LIMIT 1`)
       .get(...scope.prefix)
     if (row) {
       scope.examined(row)
@@ -75,7 +75,7 @@ export function sqlJournalStateQueries(
       facts.flush()
       const rows = scope.db
         .prepare(`SELECT entry_key FROM journal_proj_items
-        WHERE session_id=? AND generation=? AND sequence>? ORDER BY ordinal`)
+        WHERE session_id=? AND epoch=? AND sequence>? ORDER BY ordinal`)
         .all(...scope.prefix, sequence)
       for (const row of rows) {
         scope.examined(row)
@@ -126,7 +126,7 @@ export function sqlJournalStateQueries(
       for (const opener of openers) {
         const turn = scope.db
           .prepare(`SELECT entry_key FROM journal_proj_items
-          WHERE session_id=? AND generation=? AND opener_item_id=? LIMIT 1`)
+          WHERE session_id=? AND epoch=? AND opener_item_id=? LIMIT 1`)
           .get(...scope.prefix, opener)
         if (turn) {
           scope.examined(turn)
@@ -139,7 +139,7 @@ export function sqlJournalStateQueries(
       facts.flush()
       const row = scope.db
         .prepare(`SELECT entry_key FROM journal_proj_items
-        WHERE session_id=? AND generation=? AND (turn_id IS NOT NULL OR context_clear=1)
+        WHERE session_id=? AND epoch=? AND (turn_id IS NOT NULL OR context_clear=1)
         ORDER BY sequence DESC, ordinal DESC LIMIT 1`)
         .get(...scope.prefix)
       if (!row) {

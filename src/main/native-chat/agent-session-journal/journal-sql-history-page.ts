@@ -61,11 +61,11 @@ class HistoryPage {
   constructor(
     private readonly db: Database.Database,
     sessionId: string,
-    generation: string,
+    epoch: string,
     private readonly reader: Pick<HistoryReader, 'form' | 'budgetBytes'>,
     work: JournalSqlHistoryWork
   ) {
-    this.scope = new JournalSqlScope(db, sessionId, generation)
+    this.scope = new JournalSqlScope(db, sessionId, epoch)
     this.values = new JournalSqlHistoryValues(db, this.scope, work)
     const scalars = new JournalSqlScalars(this.scope, 'reducer')
     const meta = db.prepare('SELECT epoch FROM journal_proj_meta WHERE session_id=?').get(sessionId)
@@ -94,7 +94,7 @@ class HistoryPage {
     const cursor = request.direction === 'before' ? request.cursor : undefined
     const end = cursor?.sequence ?? Number.MAX_SAFE_INTEGER
     const own = request.scope === 'own-agent' ? ' AND root=1' : ''
-    const where = `session_id=? AND generation=? AND hidden=0${own}`
+    const where = `session_id=? AND epoch=? AND hidden=0${own}`
     const prefix = this.scope.prefix
     const limit = request.direction === 'hydrate' ? 200 : resolveHistoryLimit(request.limit)
     const start = this.windowStart(where, end, limit)
@@ -138,9 +138,9 @@ class HistoryPage {
       .get(...prefix, end)
     const turn = this.db
       .prepare(`SELECT entry_key, incarnation FROM journal_proj_items INDEXED BY journal_proj_items_position
-      WHERE session_id=? AND generation=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
+      WHERE session_id=? AND epoch=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
       AND sequence=(SELECT sequence FROM journal_proj_items INDEXED BY journal_proj_items_turn
-        WHERE session_id=? AND generation=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
+        WHERE session_id=? AND epoch=? AND hidden=0 AND (turn_id IS NOT NULL OR context_clear=1)
         ORDER BY sequence DESC, ordinal DESC LIMIT 1)
       ORDER BY sequence_index DESC, ordinal DESC LIMIT 1`)
       .get(...prefix, ...prefix)

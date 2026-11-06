@@ -24,7 +24,7 @@ export class JournalSqlItemEntity {
   header(key: string) {
     const row = this.scope.db
       .prepare(`SELECT ordinal, incarnation FROM journal_proj_items
-        WHERE session_id=? AND generation=? AND entry_key=?`)
+        WHERE session_id=? AND epoch=? AND entry_key=?`)
       .get(...this.scope.prefix, key)
     return row && this.scope.examined(row)
   }
@@ -102,7 +102,7 @@ export class JournalSqlItemEntity {
   keys(limit = -1): string[] {
     return this.scope.db
       .prepare(`SELECT entry_key FROM journal_proj_items
-        WHERE session_id=? AND generation=? ORDER BY ordinal LIMIT ?`)
+        WHERE session_id=? AND epoch=? ORDER BY ordinal LIMIT ?`)
       .all(...this.scope.prefix, limit)
       .map((row) => String(this.scope.examined(row).entry_key))
   }

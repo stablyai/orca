@@ -142,7 +142,7 @@ export class JournalProjectionStaleError extends Error {
   override readonly name = 'JournalProjectionStaleError'
 }
 
-/** An open takes the current generation for its handle; any other open's commands then refuse. */
+/** An open takes the current epoch for its handle; any other open's commands then refuse. */
 export function claimJournalSqlProjection(db: Database.Database, target: JournalWriterTarget) {
   const epoch = currentJournalSqlEpoch(db, target.sessionId)
   const changed =

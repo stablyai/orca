@@ -64,7 +64,7 @@ export class JournalSqlQueryFacts {
         AND input_id=? AND current=1) AND
       NOT EXISTS(SELECT 1 FROM journal_proj_input_presentations WHERE session_id=? AND epoch=?
         AND input_id=? AND current=1))
-      WHERE session_id=? AND generation=? AND entry_key=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=?`)
       .run(
         ...scope.prefix,
         String(JSON.parse(key)),
@@ -85,7 +85,7 @@ export class JournalSqlQueryFacts {
     const itemId = agentJournalSubmissionKey(send.clientMessageId)
     const item = scope.db
       .prepare(`SELECT sequence, turn_item_id FROM journal_proj_items
-      WHERE session_id=? AND generation=? AND entry_key=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=?`)
       .get(...scope.prefix, journalSqlEntryKey(itemId))
     if (item) {
       scope.examined(item)

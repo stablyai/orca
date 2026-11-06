@@ -39,10 +39,10 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
     }
     this.scope.db
       .prepare(`INSERT INTO journal_proj_release_state
-        (session_id, generation, index_id, floor, pause_gen) VALUES (?, ?, ?, ?, ?)`)
+        (session_id, epoch, index_id, floor, pause_gen) VALUES (?, ?, ?, ?, ?)`)
       .run(...this.prefix, paused ? state.floor : null, Number(paused))
     const insert = this.scope.db.prepare(`INSERT INTO journal_proj_releases
-      (session_id, generation, index_id, id, introduced, position, pause_gen)
+      (session_id, epoch, index_id, id, introduced, position, pause_gen)
       VALUES (?, ?, ?, ?, ?, ?, ?)`)
     for (const entry of releases) {
       insert.run(
@@ -58,8 +58,8 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
   pause(cut: number): void {
     this.scope.db
       .prepare(`INSERT INTO journal_proj_release_state
-        (session_id, generation, index_id, floor, pause_gen) VALUES (?, ?, ?, ?, 1)
-        ON CONFLICT(session_id, generation, index_id) DO UPDATE
+        (session_id, epoch, index_id, floor, pause_gen) VALUES (?, ?, ?, ?, 1)
+        ON CONFLICT(session_id, epoch, index_id) DO UPDATE
         SET floor=excluded.floor, pause_gen=pause_gen+1`)
       .run(...this.prefix, cut)
   }
@@ -72,7 +72,7 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
     }
     this.scope.db
       .prepare(`DELETE FROM journal_proj_releases
-        WHERE session_id=? AND generation=? AND index_id=? AND id=?`)
+        WHERE session_id=? AND epoch=? AND index_id=? AND id=?`)
       .run(...this.prefix, prior.card.messageId)
   }
 
@@ -87,20 +87,20 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
     }
     this.scope.db
       .prepare(`INSERT OR IGNORE INTO journal_proj_release_state
-        (session_id, generation, index_id) VALUES (?, ?, ?)`)
+        (session_id, epoch, index_id) VALUES (?, ?, ?)`)
       .run(...this.prefix)
     this.scope.db
       .prepare(`INSERT OR REPLACE INTO journal_proj_releases
-        (session_id, generation, index_id, id, introduced, position, pause_gen)
-        SELECT session_id, generation, index_id, ?, ?, ?, pause_gen
-        FROM journal_proj_release_state WHERE session_id=? AND generation=? AND index_id=?`)
+        (session_id, epoch, index_id, id, introduced, position, pause_gen)
+        SELECT session_id, epoch, index_id, ?, ?, ?, pause_gen
+        FROM journal_proj_release_state WHERE session_id=? AND epoch=? AND index_id=?`)
       .run(card.messageId, source.introduced, card.position, ...this.prefix)
   }
 
   query(place: JournalInputPlace): InputPlaceQuery {
     const state = this.scope.db
       .prepare(`SELECT floor, pause_gen FROM journal_proj_release_state
-        WHERE session_id=? AND generation=? AND index_id=?`)
+        WHERE session_id=? AND epoch=? AND index_id=?`)
       .get(...this.prefix)
     if (!state) {
       return { position: -Infinity }
@@ -109,7 +109,7 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
     const floor = state.floor === null ? -Infinity : Number(state.floor)
     const exists = this.scope.db
       .prepare(`SELECT id FROM journal_proj_releases
-        WHERE session_id=? AND generation=? AND index_id=? LIMIT 1`)
+        WHERE session_id=? AND epoch=? AND index_id=? LIMIT 1`)
       .get(...this.prefix)
     if (!exists) {
       return { position: -Infinity }
@@ -119,7 +119,7 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
       const sincePause = place.context.cut <= floor
       const positions = this.scope.db
         .prepare(`SELECT position, introduced FROM journal_proj_releases
-          WHERE session_id=? AND generation=? AND index_id=? ${sincePause ? 'AND pause_gen=?' : ''}
+          WHERE session_id=? AND epoch=? AND index_id=? ${sincePause ? 'AND pause_gen=?' : ''}
           ORDER BY position DESC`)
         .iterate(...this.prefix, ...(sincePause ? [state.pause_gen] : []))
       for (const row of positions) {

@@ -41,7 +41,7 @@ export async function openJournalWriterSession(
 function liveWorkItemKeys(session: JournalWriterSession): string[] {
   return session.db
     .prepare(`SELECT entry_key FROM journal_proj_items INDEXED BY journal_proj_items_live_work
-    WHERE session_id=? AND generation=? AND live_work=1 ORDER BY ordinal`)
+    WHERE session_id=? AND epoch=? AND live_work=1 ORDER BY ordinal`)
     .all(...session.scopePrefix())
     .map((row) => JSON.parse(String(row.entry_key)) as string)
 }

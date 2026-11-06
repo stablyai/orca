@@ -82,7 +82,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     }
     this.scope.db
       .prepare(`INSERT OR REPLACE INTO journal_proj_places
-        (session_id, generation, index_id, id, domain, sequence, tie, position,
+        (session_id, epoch, index_id, id, domain, sequence, tie, position,
          head, command, waiting, handoff, card_json) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`)
       .run(
         ...this.prefix,
@@ -102,7 +102,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     const card = journalSqlEntryCard(entry)
     this.scope.db
       .prepare(`INSERT INTO journal_proj_places
-        (session_id, generation, index_id, id, domain, sequence, tie, position,
+        (session_id, epoch, index_id, id, domain, sequence, tie, position,
          head, command, waiting, handoff, card_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         ...this.prefix,
@@ -120,10 +120,10 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     // Matching numeric entries keep their flags, as the memory implementation's no-op does.
     const result = this.scope.db
       .prepare(`INSERT INTO journal_proj_places
-        (session_id, generation, index_id, id, domain, sequence, tie, position,
+        (session_id, epoch, index_id, id, domain, sequence, tie, position,
          head, command, waiting, handoff, card_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, NULL)
-        ON CONFLICT(session_id, generation, index_id, id) DO UPDATE SET
+        ON CONFLICT(session_id, epoch, index_id, id) DO UPDATE SET
           domain=excluded.domain, sequence=excluded.sequence, tie=excluded.tie,
           position=excluded.position, head=0, command=0, waiting=0, handoff=0, card_json=NULL
         WHERE domain IS NOT excluded.domain OR sequence<>excluded.sequence
@@ -145,21 +145,21 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     this.scope.forget(`places:${this.indexId}`, id)
     this.scope.db
       .prepare(`DELETE FROM journal_proj_places
-        WHERE session_id=? AND generation=? AND index_id=? AND id=?`)
+        WHERE session_id=? AND epoch=? AND index_id=? AND id=?`)
       .run(...this.prefix, id)
   }
 
   clear(): void {
     this.scope.forget(`places:${this.indexId}`)
     this.scope.db
-      .prepare('DELETE FROM journal_proj_places WHERE session_id=? AND generation=? AND index_id=?')
+      .prepare('DELETE FROM journal_proj_places WHERE session_id=? AND epoch=? AND index_id=?')
       .run(...this.prefix)
   }
 
   isEmpty(): boolean {
     const row = this.scope.db
       .prepare(`SELECT id FROM journal_proj_places
-        WHERE session_id=? AND generation=? AND index_id=? LIMIT 1`)
+        WHERE session_id=? AND epoch=? AND index_id=? LIMIT 1`)
       .get(...this.prefix)
     if (row) {
       this.scope.examined(row)
@@ -187,7 +187,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     const flags = commandOnly ? 'command' : '(head OR command OR waiting OR handoff)'
     const rows = this.scope.db
       .prepare(`SELECT id, sequence, tie, position, head, command, waiting, handoff, card_json
-        FROM journal_proj_places WHERE session_id=? AND generation=? AND index_id=?
+        FROM journal_proj_places WHERE session_id=? AND epoch=? AND index_id=?
         AND ${flags} ${cut ? 'AND domain=? AND sequence<?' : ''}`)
       .all(...this.prefix, ...(cut ? [cut.epoch, cut.sequence] : []))
     rows.forEach((row) => this.scope.examined(row))
@@ -199,7 +199,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     if (!commandOnly) {
       const positions = this.scope.db
         .prepare(`SELECT domain, sequence, position FROM journal_proj_places
-          WHERE session_id=? AND generation=? AND index_id=? ORDER BY position DESC`)
+          WHERE session_id=? AND epoch=? AND index_id=? ORDER BY position DESC`)
         .iterate(...this.prefix)
       for (const row of positions) {
         this.scope.examined(row)
@@ -228,7 +228,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
   private edge(descending: boolean, after?: number): SqliteRow[] {
     const row = this.scope.db
       .prepare(`SELECT sequence, tie FROM journal_proj_places
-        WHERE session_id=? AND generation=? AND index_id=? ${after === undefined ? '' : 'AND sequence>?'}
+        WHERE session_id=? AND epoch=? AND index_id=? ${after === undefined ? '' : 'AND sequence>?'}
         ORDER BY sequence ${descending ? 'DESC' : 'ASC'}, tie ${descending ? 'DESC' : 'ASC'} LIMIT 1`)
       .get(...this.prefix, ...(after === undefined ? [] : [after]))
     if (!row) {
@@ -237,7 +237,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
     this.scope.examined(row)
     const ties = this.scope.db
       .prepare(`SELECT id, sequence, tie, position FROM journal_proj_places
-        WHERE session_id=? AND generation=? AND index_id=? AND sequence=? AND tie=?`)
+        WHERE session_id=? AND epoch=? AND index_id=? AND sequence=? AND tie=?`)
       .all(...this.prefix, row.sequence, row.tie)
     ties.forEach((tie) => this.scope.examined(tie))
     return ties.sort(compareJournalSqlPlaces)
@@ -246,7 +246,7 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
   idsAfter(sequence: number): string[] {
     const rows = this.scope.db
       .prepare(`SELECT id, sequence, tie FROM journal_proj_places
-        WHERE session_id=? AND generation=? AND index_id=? AND sequence>? ORDER BY sequence, tie`)
+        WHERE session_id=? AND epoch=? AND index_id=? AND sequence>? ORDER BY sequence, tie`)
       .all(...this.prefix, sequence)
     rows.forEach((row) => this.scope.examined(row))
     return rows.sort(compareJournalSqlPlaces).map((row) => String(row.id))

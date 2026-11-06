@@ -34,9 +34,7 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
   clear(): void {
     this.scope.forget(`domains:${this.indexId}`)
     this.scope.db
-      .prepare(
-        'DELETE FROM journal_proj_domains WHERE session_id=? AND generation=? AND index_id=?'
-      )
+      .prepare('DELETE FROM journal_proj_domains WHERE session_id=? AND epoch=? AND index_id=?')
       .run(...this.prefix)
   }
 
@@ -53,7 +51,7 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
     const card = journalSqlEntryCard(entry)
     this.scope.db
       .prepare(`INSERT INTO journal_proj_domains
-        (session_id, generation, index_id, id, introduced, domain, sequence, position,
+        (session_id, epoch, index_id, id, introduced, domain, sequence, position,
          head, command, waiting, handoff, card_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         ...this.prefix,
@@ -76,7 +74,7 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
       this.scope.forget(`domains:${this.indexId}`, card.messageId)
       this.scope.db
         .prepare(`DELETE FROM journal_proj_domains
-          WHERE session_id=? AND generation=? AND index_id=? AND id=?`)
+          WHERE session_id=? AND epoch=? AND index_id=? AND id=?`)
         .run(...this.prefix, card.messageId)
     }
   }
@@ -98,9 +96,9 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
     const flags = positionOnly ? [0, 0, 0, 0] : journalSqlCardFlags(card, actionable, handoff)
     const result = this.scope.db
       .prepare(`INSERT INTO journal_proj_domains
-        (session_id, generation, index_id, id, introduced, domain, sequence, position,
+        (session_id, epoch, index_id, id, introduced, domain, sequence, position,
          head, command, waiting, handoff, card_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(session_id, generation, index_id, id) DO UPDATE SET
+        ON CONFLICT(session_id, epoch, index_id, id) DO UPDATE SET
           introduced=excluded.introduced, domain=excluded.domain, sequence=excluded.sequence,
           position=excluded.position, head=excluded.head, command=excluded.command,
           waiting=excluded.waiting, handoff=excluded.handoff, card_json=excluded.card_json
@@ -145,7 +143,7 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
   private block(low: number, high: number, coordinate?: AgentJournalCursor): InputPlaceQuery {
     const rows = this.scope.db
       .prepare(`SELECT id, domain, sequence, position, head, command, waiting, handoff, card_json
-        FROM journal_proj_domains WHERE session_id=? AND generation=? AND index_id=?
+        FROM journal_proj_domains WHERE session_id=? AND epoch=? AND index_id=?
         AND introduced>=? AND introduced<?`)
       .all(...this.prefix, low, high)
     rows.forEach((row) => this.scope.examined(row))

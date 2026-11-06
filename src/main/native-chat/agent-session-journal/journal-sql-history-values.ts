@@ -74,7 +74,7 @@ export class JournalSqlHistoryValues {
     }
     const row = this.db
       .prepare(`SELECT entry_key, incarnation FROM journal_proj_items
-      WHERE session_id=? AND generation=? AND entry_key=?`)
+      WHERE session_id=? AND epoch=? AND entry_key=?`)
       .get(...this.scope.prefix, key)
     return row ? this.item(row) : undefined
   }

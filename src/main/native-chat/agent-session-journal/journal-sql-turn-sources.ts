@@ -8,7 +8,7 @@ export class JournalSqlTurnSources implements JournalTurnSourceStorage {
   get(id: string): TurnSource | undefined {
     const row = this.scope.db
       .prepare(`SELECT source_json FROM journal_proj_turn_sources
-        WHERE session_id=? AND generation=? AND id=?`)
+        WHERE session_id=? AND epoch=? AND id=?`)
       .get(...this.scope.prefix, id)
     if (!row) {
       return undefined
@@ -20,7 +20,7 @@ export class JournalSqlTurnSources implements JournalTurnSourceStorage {
   set(id: string, source: TurnSource): void {
     this.scope.db
       .prepare(`INSERT OR REPLACE INTO journal_proj_turn_sources
-        (session_id, generation, id, sequence, sequence_index, ordinary, relevant, source_json)
+        (session_id, epoch, id, sequence, sequence_index, ordinary, relevant, source_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         ...this.scope.prefix,
@@ -36,7 +36,7 @@ export class JournalSqlTurnSources implements JournalTurnSourceStorage {
   delete(id: string): void {
     this.scope.forget('turn-sources', id)
     this.scope.db
-      .prepare('DELETE FROM journal_proj_turn_sources WHERE session_id=? AND generation=? AND id=?')
+      .prepare('DELETE FROM journal_proj_turn_sources WHERE session_id=? AND epoch=? AND id=?')
       .run(...this.scope.prefix, id)
   }
 
@@ -55,7 +55,7 @@ export class JournalSqlTurnSources implements JournalTurnSourceStorage {
   private newest(predicate: '' | 'AND ordinary' | 'AND relevant'): TurnSource | undefined {
     const edge = this.scope.db
       .prepare(`SELECT sequence, sequence_index FROM journal_proj_turn_sources
-        WHERE session_id=? AND generation=? ${predicate}
+        WHERE session_id=? AND epoch=? ${predicate}
         ORDER BY sequence DESC, sequence_index DESC LIMIT 1`)
       .get(...this.scope.prefix)
     if (!edge) {
@@ -64,7 +64,7 @@ export class JournalSqlTurnSources implements JournalTurnSourceStorage {
     this.scope.examined(edge)
     const ties = this.scope.db
       .prepare(`SELECT source_json FROM journal_proj_turn_sources
-        WHERE session_id=? AND generation=? ${predicate} AND sequence=? AND sequence_index=?`)
+        WHERE session_id=? AND epoch=? ${predicate} AND sequence=? AND sequence_index=?`)
       .all(...this.scope.prefix, edge.sequence, edge.sequence_index)
     const sources = ties.map((row) => {
       this.scope.examined(row)
