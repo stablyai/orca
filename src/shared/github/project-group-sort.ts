@@ -87,7 +87,7 @@ function getFieldValueForGrouping(
     }
   }
   const value = contentValue === null ? undefined : row.fieldValuesByFieldId[field.id]
-  if (!hasNonEmptyFieldValue(value)) {
+  if (!value || !hasNonEmptyFieldValue(value)) {
     return {
       key: EMPTY_PROJECT_GROUP_KEY,
       label: labelForEmpty(field),
