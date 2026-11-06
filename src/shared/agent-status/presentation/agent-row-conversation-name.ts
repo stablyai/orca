@@ -4,6 +4,7 @@ import { isClaudeManagementTitle } from '../title/agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../title/agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-title'
+import { aiworkTitleConversationName } from '../title/providers/aiwork-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import { resolveTabNameSource } from '../../tab-title-resolution'
@@ -76,7 +77,9 @@ function conversationNameFromLiveTitle(
   agentTypeLabelLower: string,
   defaultTitle: string | undefined
 ): string | null {
-  const stripped = stripLeadingAgentTitleDecorationOrEmpty(liveTitle.trim()).trim()
+  const decorated = stripLeadingAgentTitleDecorationOrEmpty(liveTitle.trim()).trim()
+  // AiWork's per-step activity suffix would make the row name flicker.
+  const stripped = agentType === 'aiwork' ? aiworkTitleConversationName(decorated) : decorated
   if (!stripped) {
     return null
   }

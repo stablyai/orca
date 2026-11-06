@@ -63,7 +63,9 @@ const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   'claude-agent-teams': CLAUDE_PERMISSION_OPTIONS,
   codex: ['-a', '--ask-for-approval', '-s', '--sandbox', '--yolo', '--not-so-yolo', '--full-auto'],
   grok: ['--permission-mode', '--always-approve', '--yolo', '--dangerously-skip-permissions'],
-  gemini: ['--approval-mode', '-y']
+  gemini: ['--approval-mode', '-y'],
+  // Why: `aiwork tui` rejects a repeated `-y`, and these aliases are the same switch.
+  aiwork: ['--yes', '--dangerously-skip-permissions']
 }
 const CODEX_VALUES = [
   '-a',

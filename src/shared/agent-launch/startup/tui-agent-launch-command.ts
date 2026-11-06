@@ -26,7 +26,9 @@ import type { TuiAgent } from '../catalog/tui-agent'
 const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   codex: ['-c', 'check_for_update_on_startup=false'],
   aider: ['--no-check-update', '--no-show-release-notes'],
-  cursor: ['--disable-auto-update']
+  cursor: ['--disable-auto-update'],
+  // Why: AiWork's startup update check and update-ready notification should not run ahead of Orca's injected prompt.
+  aiwork: ['--ignore-upgrade']
 }
 
 const STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV: Partial<

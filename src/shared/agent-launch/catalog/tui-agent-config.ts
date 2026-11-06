@@ -325,7 +325,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   // prettier-ignore
   devin: { detectCmd: 'devin', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
+  // Why: `-y` is a `tui` option and aiwork-tui owns the foreground; its `--prompt` sits behind `aiwork tui --`. China and global releases name the launcher `aiworkcn` and `aiworkcli`; an unrelated `aiwork` CLI lacks aiwork-tui.
+  // prettier-ignore
+  aiwork: { detectCmd: 'aiwork', detectCmdAliases: ['aiworkcn', 'aiworkcli'], detectRequiredCommands: ['aiwork-tui'], launchCmd: 'aiwork tui', expectedProcess: 'aiwork-tui', promptInjectionMode: 'stdin-after-start' }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(
