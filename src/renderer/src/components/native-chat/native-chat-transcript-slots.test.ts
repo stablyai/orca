@@ -122,6 +122,28 @@ describe('turn-owned grouping', () => {
     ])
   })
 
+  it('keeps the opened pull request card when the turn ends in a run of tool calls', () => {
+    const slots = build([text('A', 'open a PR', 'user'), toolRun('create'), toolRun('checks')], {
+      openedPullRequests: new Map([
+        [
+          'A',
+          [
+            {
+              provider: 'github',
+              url: 'https://github.com/o/r/pull/3',
+              slug: { owner: 'o', repo: 'r', host: 'github.com' },
+              number: 3
+            }
+          ]
+        ]
+      ])
+    })
+    expect(slots.map((slot) => [slot.message.id, slot.openedPullRequests?.[0]?.number])).toEqual([
+      ['A', undefined],
+      ['create', 3]
+    ])
+  })
+
   it('skips only the open reasoning the live line discloses, and only while it does', () => {
     const reasoning = (id: string, state: 'running' | 'completed'): NativeChatMessage => ({
       ...text(id, 'Weighing two approaches', 'reasoning'),

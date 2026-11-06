@@ -65,7 +65,8 @@ describe('pullRequestsOpenedBy', () => {
 function bashTurn(
   input: unknown,
   output: string,
-  extra: Pick<NativeChatToolCallBlock, 'state'> = {}
+  extra: Pick<NativeChatToolCallBlock, 'state'> = {},
+  fullOutputItemId?: string
 ): NativeChatMessage {
   return {
     id: 'm1',
@@ -74,9 +75,14 @@ function bashTurn(
     source: 'transcript',
     blocks: [
       { type: 'tool-call', name: 'Bash', input, callId: 'c1', ...extra },
-      { type: 'tool-result', output, callId: 'c1' }
+      {
+        type: 'tool-result',
+        output,
+        callId: 'c1',
+        ...(fullOutputItemId ? { fullOutputItemId } : {})
+      }
     ]
-  } as NativeChatMessage
+  }
 }
 
 function openedIn(message: NativeChatMessage): number[] {
@@ -106,6 +112,15 @@ describe('nativeChatTurnOpenedPullRequests', () => {
         )
       )
     ).toEqual([38712])
+    // Older Codex transcripts keep the output as JSON.
+    expect(
+      openedIn(
+        bashTurn(
+          { command: ['bash', '-lc', 'gh pr create --fill'] },
+          JSON.stringify({ output: GH_CREATE_OUTPUT, metadata: { exit_code: 0 } })
+        )
+      )
+    ).toEqual([38712])
   })
 
   it('counts a finished call that failed after opening, but not one still running', () => {
@@ -115,8 +130,7 @@ describe('nativeChatTurnOpenedPullRequests', () => {
   })
 
   it('asks for a clipped create output whole, and skips a partly loaded turn', () => {
-    const clipped = bashTurn({ command: 'gh pr create --fill' }, 'hook output…')
-    ;(clipped.blocks[1] as { fullOutputItemId?: string }).fullOutputItemId = 'item-7'
+    const clipped = bashTurn({ command: 'gh pr create --fill' }, 'hook output…', {}, 'item-7')
     expect(nativeChatTurnOpenedPullRequests([clipped], ['t1']).clippedCreateOutputs).toEqual([
       'item-7'
     ])

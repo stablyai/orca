@@ -12,8 +12,8 @@ export function hideNativeChatCardKind(
   updates: Partial<GlobalSettings>,
   settingsSectionId: string
 ): void {
-  const { updateSettings, openSettingsPage, openSettingsTarget } = useAppStore.getState()
-  void updateSettings(updates).then(
+  const { updateSettingsOrThrow, openSettingsPage, openSettingsTarget } = useAppStore.getState()
+  void updateSettingsOrThrow(updates).then(
     () =>
       toast.success(
         translate('components.native-chat.cardKindHidden.title', "We won't show these anymore."),

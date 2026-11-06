@@ -49,8 +49,12 @@ function argvCommand(input: unknown): readonly string[] | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
-  const record = value as { command?: unknown; cmd?: unknown }
-  const argv = Array.isArray(record.command) ? record.command : record.cmd
+  const argv =
+    'command' in value && Array.isArray(value.command)
+      ? value.command
+      : 'cmd' in value
+        ? value.cmd
+        : null
   return Array.isArray(argv) && argv.every((part) => typeof part === 'string') ? argv : null
 }
 
@@ -185,7 +189,7 @@ const CHANGES_PULL_REQUEST =
 
 export type NativeChatTurnOpenedPullRequests = {
   byTurn: ReadonlyMap<string, readonly NativeChatOpenedPullRequest[]>
-  /** Results cut to a head whose create command printed nothing in it; their full text may hold the URL. */
+  /** Create commands' results cut to a head; their full text decides what they opened. */
   clippedCreateOutputs: readonly string[]
   /** The newest finished command that may have changed a pull request, so cards reread it. */
   latestChangeKey: string | undefined
@@ -217,7 +221,7 @@ export function nativeChatTurnOpenedPullRequests(
       if (!script) {
         continue
       }
-      if (CHANGES_PULL_REQUEST.test(script) || isPullRequestCreateScript(script)) {
+      if (CHANGES_PULL_REQUEST.test(shellCode(script)) || isPullRequestCreateScript(script)) {
         latestChangeKey = `${message.id}:${pairIndex}`
       }
       if (!turnKey || turnKey === options.partialTurnKey) {
@@ -226,9 +230,9 @@ export function nativeChatTurnOpenedPullRequests(
       const fullOutput = result.fullOutputItemId
         ? options.fullOutputs?.get(result.fullOutputItemId)
         : undefined
-      const opened = pullRequestsOpenedBy(script, fullOutput ?? result.output)
+      const opened = pullRequestsOpenedBy(script, commandOutputText(fullOutput ?? result.output))
+      // Evidence past the clipped head can add a pull request or disqualify one, so read it whole.
       if (
-        opened.length === 0 &&
         result.fullOutputItemId &&
         fullOutput === undefined &&
         isPullRequestCreateScript(script)
@@ -246,6 +250,24 @@ export function nativeChatTurnOpenedPullRequests(
     }
   }
   return { byTurn, clippedCreateOutputs, latestChangeKey }
+}
+
+/** Older Codex transcripts keep a command's output as JSON (`{"output": "...", "metadata": ...}`). */
+function commandOutputText(output: string): string {
+  if (!output.startsWith('{')) {
+    return output
+  }
+  try {
+    const parsed: unknown = JSON.parse(output)
+    return parsed !== null &&
+      typeof parsed === 'object' &&
+      'output' in parsed &&
+      typeof parsed.output === 'string'
+      ? parsed.output
+      : output
+  } catch {
+    return output
+  }
 }
 
 function isPullRequestCreateScript(script: string): boolean {

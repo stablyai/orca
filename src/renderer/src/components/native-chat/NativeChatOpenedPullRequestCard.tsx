@@ -37,6 +37,7 @@ export const NativeChatPullRequestChangeContext = createContext<string | undefin
 
 // An open pull request rereads this often while its card is on screen; merged or closed ones stop.
 const OPEN_PULL_REQUEST_REFRESH_MS = 60_000
+const MAX_REFRESH_MS = 15 * 60_000
 
 const STATE_TEXT_TONE: Record<GitHubWorkItem['state'], string> = {
   open: 'text-emerald-600 dark:text-emerald-300',
@@ -66,6 +67,14 @@ function previewLink(
     : null
 }
 
+type HeldDetails = {
+  key: string | null
+  item: GitHubWorkItem | null
+  settled: boolean
+  /** Reads in a row that answered nothing, which stretch the reread interval. */
+  failures: number
+}
+
 /** Title, counts and state read from the pull request; a failed reread keeps the last answer. */
 function usePullRequestDetails(target: ReturnType<typeof previewLink>): {
   item: GitHubWorkItem | null
@@ -75,11 +84,12 @@ function usePullRequestDetails(target: ReturnType<typeof previewLink>): {
   // A chat in a hidden tab stays mounted; it rereads when shown again, not while hidden.
   const chatVisible = useContext(NativeChatMarkdownImageOwnerContext)?.isVisible ?? true
   const key = target ? githubLinkPreviewKey(target.repo, target.link) : null
-  const [held, setHeld] = useState(() => {
+  const [held, setHeld] = useState<HeldDetails>(() => {
     const item = target ? readCachedGitHubLinkPreview(target.repo, target.link) : null
-    return { key, item, settled: item !== null || target === null }
+    return { key, item, settled: item !== null || target === null, failures: 0 }
   })
-  const current = held.key === key ? held : { key, item: null, settled: target === null }
+  const current: HeldDetails =
+    held.key === key ? held : { key, item: null, settled: target === null, failures: 0 }
   const [tick, setTick] = useState(0)
   const readKey = useRef<string | null>(null)
   const read = useEffectEvent((onSettled: (item: GitHubWorkItem | null) => void) => {
@@ -88,6 +98,9 @@ function usePullRequestDetails(target: ReturnType<typeof previewLink>): {
     }
     // The first read may use a fresh cached answer; later ones follow a change and must ask again.
     const fresh = readKey.current !== key
+    if (!fresh && current.item?.state === 'merged') {
+      return
+    }
     readKey.current = key
     void (fresh ? loadGitHubLinkPreview : reloadGitHubLinkPreview)(target.repo, target.link).then(
       onSettled,
@@ -102,11 +115,15 @@ function usePullRequestDetails(target: ReturnType<typeof previewLink>): {
     read((item) => {
       if (!cancelled) {
         // A failed reread keeps the last answer rather than blanking a card that had one.
-        setHeld((last) => ({
-          key,
-          item: item ?? (last.key === key ? last.item : null),
-          settled: true
-        }))
+        setHeld((last) => {
+          const previous = last.key === key ? last : null
+          return {
+            key,
+            item: item ?? previous?.item ?? null,
+            settled: true,
+            failures: item ? 0 : (previous?.failures ?? 0) + 1
+          }
+        })
       }
     })
     return () => {
@@ -116,17 +133,26 @@ function usePullRequestDetails(target: ReturnType<typeof previewLink>): {
   const settledState = current.item?.state
   const polls =
     chatVisible && key !== null && settledState !== 'merged' && settledState !== 'closed'
+  // A lookup that keeps failing (signed out, another host) backs off instead of asking every minute.
+  const delay = Math.min(OPEN_PULL_REQUEST_REFRESH_MS * 2 ** current.failures, MAX_REFRESH_MS)
   useEffect(() => {
     if (!polls) {
       return
     }
-    const timer = window.setInterval(() => {
+    // A window in the background waits to be shown before it asks.
+    const reread = (): void => {
       if (document.visibilityState === 'visible') {
         setTick((value) => value + 1)
+      } else {
+        document.addEventListener('visibilitychange', reread, { once: true })
       }
-    }, OPEN_PULL_REQUEST_REFRESH_MS)
-    return () => window.clearInterval(timer)
-  }, [polls])
+    }
+    const timer = window.setTimeout(reread, delay)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', reread)
+    }
+  }, [polls, delay, tick])
   return { item: current.item, settled: current.settled }
 }
 
@@ -137,7 +163,8 @@ function OpenedPullRequestRow({
 }): React.JSX.Element {
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
   const onLinkClick = useNativeChatLinkClick()
-  const { item, settled } = usePullRequestDetails(previewLink(githubRepo, pullRequest))
+  const target = previewLink(githubRepo, pullRequest)
+  const { item, settled } = usePullRequestDetails(target)
   return (
     <a
       href={pullRequest.url}
@@ -155,7 +182,12 @@ function OpenedPullRequestRow({
           item ? STATE_TEXT_TONE[item.state] : 'text-chat-foreground-faint'
         )
       })}
-      <span className="shrink-0 text-chat-foreground-faint">{pullRequestName(pullRequest)}</span>
+      <span className="shrink-0 text-chat-foreground-faint">
+        {/* Another repo than the chat's own can't be read here, so its full name says which. */}
+        {githubRepo && !target && pullRequest.provider === 'github'
+          ? `${pullRequest.slug.owner}/${pullRequest.slug.repo}#${pullRequest.number}`
+          : pullRequestName(pullRequest)}
+      </span>
       {item ? (
         <span className="min-w-0 flex-1 truncate">{item.title}</span>
       ) : (
