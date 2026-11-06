@@ -139,7 +139,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     return leaf?.worktreeId ?? this.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
   }
 
-  // Prefer stored workspace selection, then the current renderer graph.
+  /** The focused workspace, preferring stored selection, then the renderer graph. */
   async resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
     path: string

@@ -85,6 +85,7 @@ export function resolveStoredWorkspaceContext(
   }
 }
 
+/** First nonempty, trimmed label; an empty final value stays empty. */
 function nonEmpty(...values: readonly (string | undefined)[]): string {
   return values.find((value) => value && value.trim().length > 0)?.trim() ?? ''
 }
