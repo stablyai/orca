@@ -26,6 +26,7 @@ import {
 } from '../src/mobile-web-shell/bridge/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
 import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/bridge-envelope'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/bridge-route-update'
 import { activateMobileUiLocale, subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
@@ -170,7 +171,10 @@ bootstrapShellPage({
       }
     })
     // Mount with the route's chunks loaded: a boot Suspense fallback holds the finished screen back 300 ms.
-    const bootRoutes = preloadBootRoutes(window.location.pathname)
+    // A boot that opens a target keeps the lazy path: its stack only moves the URL to the target when it mounts after the container.
+    const bootRoutes = session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM]
+      ? null
+      : preloadBootRoutes(window.location.pathname)
     // Activation settles to English on failure and preloads settle either way, so the page always mounts.
     void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes]).then(() =>
       createRoot(container).render(

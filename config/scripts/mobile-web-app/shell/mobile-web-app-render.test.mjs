@@ -304,7 +304,7 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 
   it('reports its frame from the route screen, not from the router shell above it', async () => {
-    // Suspense wrapper commits before route chunk arrives; reporting paint there would uncover empty body.
+    // A paint reported before the route chunk arrives would uncover an empty body.
     const chunk = routeChunks['./h/[hostId]/index.tsx']
     expect(chunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
     const path = `/assets/${chunk}`
@@ -318,11 +318,11 @@ describeRender('the Route A page in a real browser', () => {
     try {
       const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
       await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
+      // The page waits for the held chunk before it mounts, so nothing may report a paint meanwhile.
       await opened.page.waitForFunction(
-        () => document.documentElement.dataset.orcaWebEntry === 'mounted',
+        () => document.documentElement.dataset.orcaWebEntry === 'shell-ready',
         { timeout: 30_000, polling: 250 }
       )
-      // Mounted with empty fallback body reproduces premature paint signal.
       expect(await opened.page.evaluate(() => document.body.innerText)).not.toContain(
         SHELL_HOST.name
       )
