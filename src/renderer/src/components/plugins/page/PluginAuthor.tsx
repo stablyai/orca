@@ -87,8 +87,8 @@ export function PluginAuthorCard({
         {profileUrl ? (
           <Button
             variant="link"
-            size="xs"
-            className="h-auto max-w-full p-0 text-sm font-semibold"
+            size="inline"
+            className="max-w-full"
             onClick={(event) => openAppHttpLink(profileUrl, { event })}
           >
             <span className="truncate">{author.publisher}</span>
