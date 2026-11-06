@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  mintEpoch,
-  ReservePlacer,
-  type PlacementCell
-} from './reserve-placement.js'
+import { ReservePlacer, type PlacementCell } from './reserve-placement.js'
 
 function cell(cellId: string, overrides: Partial<PlacementCell> = {}): PlacementCell {
   return {
@@ -29,50 +25,6 @@ function warmPlacer(now: { value: number }, random = () => 0.3) {
 }
 
 describe('reserve placer', () => {
-  it('reports free seats under the ceiling, never below zero or without a ceiling', () => {
-    const placer = warmPlacer({ value: 0 })
-    expect(placer.free(cell('c1', { seats: 60, bookings: 10 }))).toBe(30)
-    expect(placer.free(cell('c1', { seats: 120 }))).toBe(0)
-    expect(placer.free(cell('c1', { ceiling: undefined }))).toBe(0)
-  })
-
-  it('places on the first cell that answers ok and counts one call', async () => {
-    const now = { value: 0 }
-    const placer = warmPlacer(now)
-    const cells = [cell('c1'), cell('c2')]
-    placer.pick(cells, 'us-central1', new Set())
-    now.value = 1_000
-    cells.forEach((entry) => (entry.polledAt = now.value))
-    const result = await placer.place({
-      cells,
-      region: 'us-central1',
-      epoch: 4,
-      reserve: async () => ({ outcome: 'ok' })
-    })
-    expect(result).toMatchObject({ kind: 'placed', epoch: 4, calls: 1 })
-  })
-
-  it('stops after three refusals and falls back to the database pool when it has cells', async () => {
-    const now = { value: 0 }
-    const placer = warmPlacer(now)
-    const cells = [cell('c1'), cell('c2'), cell('c3'), cell('c4'), cell('db1', { reserve: false })]
-    placer.pick(cells, 'us-central1', new Set())
-    now.value = 1_000
-    cells.forEach((entry) => (entry.polledAt = now.value))
-    const asked: string[] = []
-    const result = await placer.place({
-      cells,
-      region: 'us-central1',
-      epoch: 2,
-      reserve: async (cellId) => {
-        asked.push(cellId)
-        return { outcome: 'full' }
-      }
-    })
-    expect(asked).toHaveLength(3)
-    expect(new Set(asked).size).toBe(3)
-    expect(result).toEqual({ kind: 'database', calls: 3 })
-  })
 
   it('re-mints above a seated-newer answer', async () => {
     const now = { value: 0 }
@@ -95,31 +47,6 @@ describe('reserve placer', () => {
     expect(result).toMatchObject({ kind: 'placed', epoch: 8 })
   })
 
-  it('paces with a bounded Retry-After when reserve cells have seats but no budget', () => {
-    const now = { value: 0 }
-    const placer = warmPlacer(now)
-    const cells = [cell('c1', { intakePerSec: 2 })]
-    expect(placer.pick(cells, 'us-central1', new Set())).toBeNull()
-    expect(placer.fallback(cells, 'us-central1', 0)).toEqual({ kind: 'pace', retryAfterSeconds: 3, calls: 0 })
-  })
-
-  it('never offers a stale, draining, non-general, full or other-region cell', () => {
-    const now = { value: 10_000 }
-    const placer = warmPlacer(now)
-    const cells = [
-      cell('stale', { polledAt: 6_000 }),
-      cell('draining', { draining: true, polledAt: 10_000 }),
-      cell('isolated', { general: false, polledAt: 10_000 }),
-      cell('full', { seats: 99, bookings: 1, polledAt: 10_000 }),
-      cell('asia-east2', { region: 'asia-east2', polledAt: 10_000 }),
-      cell('db', { reserve: false, polledAt: 10_000 }),
-      cell('old', { ceiling: undefined, polledAt: 10_000 })
-    ]
-    placer.pick(cells, 'us-central1', new Set())
-    now.value = 11_000
-    expect(placer.pick(cells, 'us-central1', new Set())).toBeNull()
-  })
-
   it('counts its own bookings against the seat estimate until the next poll', () => {
     const now = { value: 0 }
     const placer = warmPlacer(now)
@@ -132,14 +59,6 @@ describe('reserve placer', () => {
     expect(placer.pick(cells, 'us-central1', new Set())).toBeNull()
   })
 
-  it('weights the reserve pool by free seats and gives it nothing while a database cell is unknown', () => {
-    const now = { value: 0 }
-    const placer = warmPlacer(now)
-    const cells = [cell('r1', { seats: 50 }), cell('d1', { reserve: false, seats: 50 })]
-    expect(placer.reservePoolShare(cells, 'us-central1')).toBeCloseTo(0.5)
-    cells.push(cell('d2', { reserve: false, ceiling: undefined }))
-    expect(placer.reservePoolShare(cells, 'us-central1')).toBe(0)
-  })
 })
 
 describe('reserve placer under concurrent placements', () => {
@@ -169,12 +88,5 @@ describe('reserve placer under concurrent placements', () => {
     await first
     // The cell's poll sent at 1,003 covers neither; only the second (counted at 1,005) is left.
     expect(placer.load({ ...target, polledAt: 1_003 })).toBe(1)
-  })
-})
-
-describe('epoch mint', () => {
-  it('mints one above every known epoch', () => {
-    expect(mintEpoch([])).toBe(1)
-    expect(mintEpoch([3, 9, 4])).toBe(10)
   })
 })

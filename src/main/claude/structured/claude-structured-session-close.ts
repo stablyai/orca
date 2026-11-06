@@ -244,29 +244,6 @@ export function closeClaudePublishedSessionForDeps(
   return closeClaudePublishedSession({ sessions, sessionId, ...deps })
 }
 
-/** Complete the pending close for this exact connection after observing its root exit. */
-export function finishClaudeCloseAfterExit(input: {
-  sessions: Map<string, ClaudeSession>
-  sessionId: string
-  connection: ClaudeStreamJsonConnection | null
-  deps: Parameters<typeof closeClaudePublishedSessionForDeps>[2]
-  afterClose: (close: () => Promise<boolean>) => Promise<boolean>
-}): void {
-  const { sessions, sessionId, deps } = input
-  if (sessions.get(sessionId)?.connection !== input.connection) {
-    return
-  }
-  void input
-    .afterClose(() => closeClaudePublishedSessionForDeps(sessions, sessionId, deps))
-    .catch((error: unknown) =>
-      deps.logger?.warn('finishing a Claude close after its process exited reported', {
-        scope: 'claude-close-after-exit',
-        sessionId,
-        error
-      })
-    )
-}
-
 export async function closeClaudeSession(
   input: CloseClaudePublishedSessionInput & {
     acquisitions: ClaudeAcquisitionRegistry

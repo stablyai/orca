@@ -52,7 +52,7 @@ afterEach(async () => {
 })
 
 /** A session parked on an approval nobody answered — the state a deliberate close leaves behind. */
-async function awaitingApproval() {
+async function awaitingApproval(rowRetired = () => false) {
   const journal = await journals.open({
     identity: {
       sessionId: SESSION,
@@ -103,6 +103,7 @@ async function awaitingApproval() {
     logger: createStructuredAgentSessionLogger(),
     sessions,
     getConversation: () => null,
+    rowRetired,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -151,6 +152,17 @@ describe('worktree ps and a closed structured chat', () => {
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(0)
     expect(row.status).toBe('inactive')
+  })
+
+  it('does not bring it back when its journal is read again', async () => {
+    let closed = false
+    const { feed, store } = await awaitingApproval(() => closed)
+    closed = true
+    feed.close(SESSION)
+
+    feed.publish(SESSION, undefined, { replay: true })
+
+    expect(worktreeFor(store).agents).toHaveLength(0)
   })
 
   it('keeps an aged host-held approval state authoritative', async () => {

@@ -1,10 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import {
-  AGENT_SESSION_REWIND_REASONS,
-  type AgentSessionRewindReason
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+  agentSessionRewindReasonNotice,
+  type AgentSessionRewindNotice
+} from '../../../../shared/agent-session/lifecycle/agent-session-rewind-request'
 
-const reasonCopy = {
+const copy = {
   unsupported: () =>
     translate(
       'components.native-chat.rewind.unsupported',
@@ -49,43 +49,38 @@ const reasonCopy = {
     translate(
       'components.native-chat.rewind.outcomeUnknown',
       "Orca couldn't confirm whether the conversation went back to an earlier message. It checks before your next message is sent."
+    ),
+  refused: () =>
+    translate(
+      'components.native-chat.rewind.refused',
+      "Orca couldn't go back to this message. Check the conversation before continuing."
+    ),
+  unavailable: () =>
+    translate(
+      'components.native-chat.rewind.unavailable',
+      'Wait for the chat to finish connecting.'
+    ),
+  'returned-unknown': () =>
+    translate(
+      'components.native-chat.rewind.outcomeUnknownReturned',
+      "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent."
+    ),
+  timeout: () =>
+    translate(
+      'components.native-chat.rewind.timeout',
+      "The chat didn't update after going back to this message. Reopen it to see the latest."
+    ),
+  pending: () =>
+    translate(
+      'components.native-chat.rewind.pending',
+      'Wait for the conversation to go back to the earlier message.'
     )
-} satisfies Record<AgentSessionRewindReason, () => string>
+} satisfies Record<AgentSessionRewindNotice, () => string>
+
+export function sayNativeChatRewind(notice: AgentSessionRewindNotice): string {
+  return copy[notice]()
+}
 
 export function nativeChatRewindReasonCopy(reason: string | undefined): string {
-  const known = AGENT_SESSION_REWIND_REASONS.find((value) => value === reason)
-  return known
-    ? reasonCopy[known]()
-    : translate(
-        'components.native-chat.rewind.refused',
-        "Orca couldn't go back to this message. Check the conversation before continuing."
-      )
-}
-
-export function nativeChatRewindUnavailableCopy(): string {
-  return translate(
-    'components.native-chat.rewind.unavailable',
-    'Wait for the chat to finish connecting.'
-  )
-}
-
-export function nativeChatRewindReturnedUnknownCopy(): string {
-  return translate(
-    'components.native-chat.rewind.outcomeUnknownReturned',
-    "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent."
-  )
-}
-
-export function nativeChatRewindTimeoutCopy(): string {
-  return translate(
-    'components.native-chat.rewind.timeout',
-    "The chat didn't update after going back to this message. Reopen it to see the latest."
-  )
-}
-
-export function nativeChatRewindPendingCopy(): string {
-  return translate(
-    'components.native-chat.rewind.pending',
-    'Wait for the conversation to go back to the earlier message.'
-  )
+  return copy[agentSessionRewindReasonNotice(reason)]()
 }

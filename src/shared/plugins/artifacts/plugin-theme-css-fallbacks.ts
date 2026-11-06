@@ -39,6 +39,7 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--diff-removed-gutter': tint('--diff-removed', 22, 32),
   '--chat-diff-added': { mixForeground: 30, into: '--diff-added' },
   '--chat-diff-removed': { mixForeground: 30, into: '--diff-removed' },
+  '--chat-link': { mixForeground: 30, into: '--text-link' },
   // At the default chat contrast setting.
   '--chat-canvas': { light: ['--background'], dark: { mixForeground: 5 } },
   '--chat-foreground-strong': {

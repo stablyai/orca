@@ -15,6 +15,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { withCheckoutLock } from '../git/branch-switch'
 import {
   probeBranchUpstream,
   renameCurrentBranch,
@@ -248,45 +249,56 @@ async function runAutoRename(
     return retryFailedGeneration(worktreeId, generated, deps, retry)
   }
 
-  // Generation can outlive a branch switch or publication.
-  const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
-  if (branchNow !== currentBranch) {
-    return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
-  }
-  const postGenerationProbe = await probeBranchUpstream(exec)
-  if (postGenerationProbe.outcome !== 'no-upstream') {
-    return retry(
-      postGenerationProbe.outcome === 'has-upstream'
-        ? `branch "${currentBranch}" was pushed during generation`
-        : `upstream probe failed after generation: ${postGenerationProbe.message}`
+  // An in-app branch switch can land during generation; recheck and rename under its lock.
+  const renamed = await withCheckoutLock(worktreePath, async (): Promise<boolean | string> => {
+    if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
+      return stop('worktree is not eligible for auto-rename', true)
+    }
+    // Generation can outlive a branch switch or publication.
+    const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+    if (branchNow !== currentBranch) {
+      return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
+    }
+    const postGenerationProbe = await probeBranchUpstream(exec)
+    if (postGenerationProbe.outcome !== 'no-upstream') {
+      return retry(
+        postGenerationProbe.outcome === 'has-upstream'
+          ? `branch "${currentBranch}" was pushed during generation`
+          : `upstream probe failed after generation: ${postGenerationProbe.message}`
+      )
+    }
+
+    const username = (await resolveLocalGitUsername(repo.path)) || null
+    // Models may echo the configured prefix; strip it before adding the prefix ourselves.
+    const slug = stripConfiguredBranchPrefix(
+      generated.slug,
+      getConfiguredBranchPrefix(settings, username)
     )
-  }
+    if (!slug) {
+      return stop('model produced only the configured prefix', true)
+    }
+    const newBranch = await resolveUniqueBranchName(
+      exec,
+      slug,
+      // Use the nonthrowing builder so invalid prefixes follow this background task's stop/retry policy.
+      (slugLeaf) => computeBranchName(slugLeaf, settings, username),
+      currentBranch
+    )
+    if (!newBranch || newBranch === currentBranch) {
+      return stop(`no distinct unique branch name for slug "${slug}"`, true)
+    }
 
-  const username = (await resolveLocalGitUsername(repo.path)) || null
-  // Models may echo the configured prefix; strip it before adding the prefix ourselves.
-  const slug = stripConfiguredBranchPrefix(
-    generated.slug,
-    getConfiguredBranchPrefix(settings, username)
-  )
-  if (!slug) {
-    return stop('model produced only the configured prefix', true)
+    // Awaited name lookups can outlive the start of a WSL move.
+    if (isWslMoveRepoBlocked(repo)) {
+      return retry('a WSL move started before the branch rename')
+    }
+    await renameCurrentBranch(exec, newBranch)
+    return newBranch
+  })
+  if (typeof renamed === 'boolean') {
+    return renamed
   }
-  const newBranch = await resolveUniqueBranchName(
-    exec,
-    slug,
-    // Use the nonthrowing builder so invalid prefixes follow this background task's stop/retry policy.
-    (slugLeaf) => computeBranchName(slugLeaf, settings, username),
-    currentBranch
-  )
-  if (!newBranch || newBranch === currentBranch) {
-    return stop(`no distinct unique branch name for slug "${slug}"`, true)
-  }
-
-  // Awaited name lookups can outlive the start of a WSL move.
-  if (isWslMoveRepoBlocked(repo)) {
-    return retry('a WSL move started before the branch rename')
-  }
-  await renameCurrentBranch(exec, newBranch)
+  const newBranch = renamed
 
   // Collision suffixes belong in display and folder names too.
   const newBranchLeaf = newBranch.slice(newBranch.lastIndexOf('/') + 1)

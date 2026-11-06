@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react'
+import { useId, useState, type Dispatch, type SetStateAction } from 'react'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -46,11 +46,13 @@ export function AddRepoNestedImportStep({
   const showSeparateSpinner = isAdding && pendingImportMode === 'separate'
   const showGroupSpinner = isAdding && pendingImportMode === 'group'
 
-  useEffect(() => {
+  const [prevIsAdding, setPrevIsAdding] = useState(isAdding)
+  if (prevIsAdding !== isAdding) {
+    setPrevIsAdding(isAdding)
     if (!isAdding) {
       setPendingImportMode(null)
     }
-  }, [isAdding])
+  }
 
   const handleImport = (mode: 'group' | 'separate'): void => {
     setPendingImportMode(mode)

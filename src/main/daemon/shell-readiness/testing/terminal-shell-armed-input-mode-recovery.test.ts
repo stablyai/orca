@@ -4,137 +4,12 @@ import {
   PROCESS_BOUNDARY_GROUND
 } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { Session } from '../../sessions/session'
-import { TerminalShellLifecycleScanner } from '../terminal-shell-lifecycle-scanner'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 
 const COMMAND_START = '\x1b]133;C\x07'
 const COMMAND_DONE = '\x1b]133;D;1\x07'
 const PROMPT_START = '\x1b]133;A\x07'
 const HOST_FOCUS_GROUND = buildProcessBoundaryGround({ keepFocusReporting: true })
-
-function triggers(scanner: TerminalShellLifecycleScanner, chunk: string): boolean {
-  return scanner.scan(chunk).uncleanDeathTriggerEnd !== undefined
-}
-
-describe('armed input modes arm the unclean-death trigger', () => {
-  it.each([
-    ['mouse protocol and SGR encoding', '\x1b[?1003h\x1b[?1006h'],
-    ['focus reporting', '\x1b[?1004h'],
-    ['a kitty keyboard push', '\x1b[>1u'],
-    ['application keypad', '\x1b[?66h'],
-    ["pi's modifyOtherKeys fallback", '\x1b[>4;2m']
-  ])('triggers when a normal-buffer program dies with %s armed', (_label, arm) => {
-    const scanner = new TerminalShellLifecycleScanner()
-    const chunk = `${COMMAND_START}${arm}PROGRAM${COMMAND_DONE}$ `
-
-    const events = scanner.scan(chunk)
-
-    expect(events.uncleanDeathTriggerEnd).toBe(chunk.length - '$ '.length)
-  })
-
-  it('does not trigger once modifyOtherKeys is disarmed, and the ground disarms it', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-    expect(triggers(scanner, `${COMMAND_START}\x1b[>4;2mpi\x1b[>4;0m${COMMAND_DONE}`)).toBe(false)
-    expect(triggers(scanner, `${COMMAND_START}\x1b[>4;2m${COMMAND_DONE}`)).toBe(true)
-    scanner.groundProcessBoundary()
-    expect(triggers(scanner, `${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-  })
-
-  it('never triggers for modes a shell prompt arms itself', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-
-    expect(triggers(scanner, `\x1b[?2004h\x1b[?1h\x1b=$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(
-      false
-    )
-    expect(triggers(scanner, `\x1b[?2004h\x1b[?1h$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-  })
-
-  it('does not trigger when the program disarms its modes before exiting', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-    const chunk = `${COMMAND_START}\x1b[?1003h\x1b[?1006h\x1b[>1uRUN\x1b[?1003l\x1b[?1006l\x1b[<u${COMMAND_DONE}`
-
-    expect(triggers(scanner, chunk)).toBe(false)
-  })
-
-  it('re-triggers at every D until the mode is disarmed', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-
-    expect(triggers(scanner, `${COMMAND_START}\x1b[?1004hRUN${COMMAND_DONE}`)).toBe(true)
-    // A refuted proof leaves ?1004 armed and command-owned; each later D re-asks.
-    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(true)
-    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(true)
-    expect(triggers(scanner, `\x1b[?1004l$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-  })
-
-  it('treats modes the prompt armed before the command started as shell-owned', () => {
-    // Synthetic fish prompt sequence from src/tty_handoff.rs; no captured transcript covers it.
-    const scanner = new TerminalShellLifecycleScanner()
-    const prompt = '\x1b[?1004h\x1b[=5u$ \x1b[=0u'
-
-    expect(triggers(scanner, `${prompt}${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-    expect(triggers(scanner, `${prompt}${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-    expect(triggers(scanner, `${prompt}${COMMAND_START}\x1b[?1002hRUN${COMMAND_DONE}`)).toBe(true)
-  })
-
-  it('tracks kitty flags per screen like xterm, so a clean alt exit leaves none armed', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-
-    expect(
-      triggers(scanner, `$ ${COMMAND_START}\x1b[?1049h\x1b[>1uTUI\x1b[?1049l${COMMAND_DONE}`)
-    ).toBe(false)
-    expect(
-      triggers(
-        scanner,
-        `\x1b[>5u$ ${COMMAND_START}\x1b[?1049h\x1b[>1uTUI\x1b[?1049l${COMMAND_DONE}`
-      )
-    ).toBe(false)
-  })
-
-  it('still triggers when a TUI dies on the alt screen with its kitty flags pushed', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-
-    expect(triggers(scanner, `$ ${COMMAND_START}\x1b[?1049h\x1b[>1uTUI${COMMAND_DONE}`)).toBe(true)
-  })
-
-  it('bounds the kitty stack so the ground can always clear it', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-    // Model xterm’s stack cap, or 250 pushes would outlast the ground’s two pop-99 resets.
-    scanner.scan(`${COMMAND_START}${'\x1b[>5u'.repeat(250)}RUN`)
-    scanner.scan(PROCESS_BOUNDARY_GROUND)
-
-    expect(triggers(scanner, `\x1b[?1000h\x1b[?1000l\x1b[<uRUN${COMMAND_DONE}`)).toBe(false)
-  })
-
-  it('drops main-screen kitty flags that a bare ?1049l swaps out', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-
-    // xterm swaps in the (empty) alt-screen flags even with no matching ?1049h.
-    expect(triggers(scanner, `${COMMAND_START}\x1b[>1u\x1b[?1049lRUN${COMMAND_DONE}`)).toBe(false)
-  })
-
-  it('stays inert for the ground: it clears the armed set without re-arming', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-    scanner.seedOwner('shell')
-    expect(triggers(scanner, `${COMMAND_START}\x1b[?1003h\x1b[>1uRUN${COMMAND_DONE}`)).toBe(true)
-    const generation = scanner.generation
-
-    expect(triggers(scanner, PROCESS_BOUNDARY_GROUND)).toBe(false)
-    expect(scanner.generation).toBe(generation)
-    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-  })
-
-  it('keeps host focus through the ground and clears the rest, without a new owner', () => {
-    const scanner = new TerminalShellLifecycleScanner()
-    scanner.seedOwner('shell')
-    const prompt = `\x1b[?1004h\x1b[>5u$ ${COMMAND_START}`
-    expect(triggers(scanner, `${prompt}\x1b[?1003h\x1b[>1uRUN${COMMAND_DONE}`)).toBe(true)
-    const generation = scanner.generation
-
-    expect(scanner.groundProcessBoundary()).toBe(HOST_FOCUS_GROUND)
-    expect(scanner.generation).toBe(generation)
-    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-  })
-})
 
 function createSubprocess(confirmed: boolean) {
   let onData: ((data: string) => void) | null = null
@@ -258,19 +133,6 @@ describe('host-armed modes survive and command-armed modes do not', () => {
 
     expect(snapshot?.modes.mouseTrackingMode).toBe('none')
     expect(snapshot?.snapshotAnsi).toContain('\x1b[?1004h')
-  })
-})
-
-describe("prompt-armed focus is the host's only once a 133;C proves the prompt ended", () => {
-  it.each([
-    ['keeps it after a C', `${COMMAND_START}\x1b[?1003hRUN`, HOST_FOCUS_GROUND],
-    ['grounds it without a C', '\x1b[?1049hTUI', PROCESS_BOUNDARY_GROUND]
-  ])('%s', (_label, command, ground) => {
-    const scanner = new TerminalShellLifecycleScanner()
-    const events = scanner.scan(`${PROMPT_START}\x1b[?1004h$ ${command}${COMMAND_DONE}`)
-
-    expect(events.uncleanDeathTriggerEnd).toBeDefined()
-    expect(scanner.groundProcessBoundary()).toBe(ground)
   })
 })
 

@@ -6,7 +6,8 @@ import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
 } from './transcript/mobile-native-chat-disclosure-store'
-import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
+import { type NativeScrollEvent, type NativeSyntheticEvent, View } from 'react-native'
+import { MobileNativeChatSendErrorBanner } from './MobileNativeChatSendErrorBanner'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -18,6 +19,7 @@ import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/t
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { MobileNativeChatInputLockStatus } from './composer/MobileNativeChatInputLockStatus'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 import { MobileNativeChatEmptyStateView } from '../MobileNativeChatEmptyStateView'
@@ -110,9 +112,13 @@ type ChatViewProps = MobileNativeChatSendProps &
     onRemoveAttachment?: (id: string) => void
     isAttaching?: boolean
     inputLockReason?: MobileNativeChatInputLockReason | null
+    /** Why a `disconnected` lock holds: which host is out, and Reconnect when it can help. */
+    hostOutage?: ComponentProps<typeof MobileNativeChatInputLockStatus>['hostOutage']
     // Report send failures here only while mounted; the route uses a toast otherwise.
     sendErrorMessage?: string | null
     onClearSendError?: () => void
+    /** Present for an error that stays until dismissed, such as a failed Continue. */
+    onDismissSendError?: () => void
     filePaths?: string[]
     onNeedFiles?: (query: string) => void
     skillDiscovery?: NativeChatSkillDiscoverySnapshot
@@ -172,8 +178,10 @@ export function MobileNativeChatView({
   onMicPressIn,
   onMicPressOut,
   inputLockReason,
+  hostOutage = null,
   sendErrorMessage,
   onClearSendError,
+  onDismissSendError,
   filePaths,
   onNeedFiles,
   skillDiscovery,
@@ -371,22 +379,15 @@ export function MobileNativeChatView({
           {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
           collapsedPrompt={collapsedPrompt}
         />
-        <Text
-          style={lockReason === 'waiting' ? styles.inputLockStatus : undefined}
-          accessibilityLiveRegion="polite"
-        >
-          {lockReason === 'waiting' ? composerPlaceholder : null}
-        </Text>
-        {sendErrorMessage ? (
-          // This banner is the only channel for a send failure — announce it.
-          <View
-            style={styles.sendError}
-            accessibilityRole="alert"
-            accessibilityLiveRegion="assertive"
-          >
-            <Text style={styles.sendErrorText}>{sendErrorMessage}</Text>
-          </View>
-        ) : null}
+        <MobileNativeChatInputLockStatus
+          lockReason={lockReason}
+          waitingText={composerPlaceholder}
+          hostOutage={hostOutage}
+        />
+        <MobileNativeChatSendErrorBanner
+          message={sendErrorMessage}
+          onDismiss={onDismissSendError}
+        />
         {trayContent}
         <View style={promptOwnsInput ? styles.hidden : undefined}>
           <MobileNativeChatDraftComposer

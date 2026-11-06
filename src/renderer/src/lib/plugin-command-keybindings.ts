@@ -6,9 +6,13 @@ import {
   type KeybindingMatchOptions,
   type KeybindingInput,
   type KeybindingOverrides,
+  type KeybindingActionId,
   type PluginKeybindingActionId
 } from '../../../shared/keybindings'
-import { fileSearchClaimsTextKey } from './file-search-shortcut-policy'
+import {
+  type fileSearchClaimsTextKey,
+  textFieldClaimsActionKey
+} from './file-search-shortcut-policy'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspaceTerminalInputTarget,
@@ -86,10 +90,11 @@ export function globalShortcutTargetYields(
   input: KeybindingInput & Parameters<typeof fileSearchClaimsTextKey>[0],
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
-  options: KeybindingMatchOptions
+  options: KeybindingMatchOptions,
+  actionId?: KeybindingActionId
 ): boolean {
   return (
-    fileSearchClaimsTextKey(input) ||
+    textFieldClaimsActionKey(input, actionId) ||
     isFloatingWorkspaceTerminalInputTarget(input.target) ||
     (isFloatingWorkspacePanelFocused() &&
       matchFloatingWorkspacePanelChord(input, platform, null, overrides, options) !== null)

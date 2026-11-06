@@ -10,6 +10,7 @@ import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from './metadata/runtime-managed-worktree-metadata'
+import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
 import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
 
 export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
@@ -61,6 +62,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        crossStoreParent?: CrossStoreParentRef
         noParent?: boolean
       }
     }
@@ -75,6 +77,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
+        readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
         notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),

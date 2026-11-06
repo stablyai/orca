@@ -56,9 +56,11 @@ export function MobileQueuedMessageComposer({
   }, [])
   const agent = context?.agent ?? 'codex'
   const reported = context?.structured?.catalog.reported
+  // As on desktop, a host-set goal is an action, not text a queued message can hold.
+  const hostSetsGoals = context?.structured?.threadGoal?.changes === 'host'
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported),
-    [agent, reported]
+    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals),
+    [agent, reported, hostSetsGoals]
   )
   const refuseCommand = (text: string): boolean => {
     if (acceptsText(text)) {

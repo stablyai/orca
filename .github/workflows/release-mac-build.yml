@@ -240,6 +240,22 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+      - name: Gate the update manifest on the minimum macOS
+        # Tags cut before the gate keep their manifest unchanged.
+        if: hashFiles('config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs') != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          PUBLISH: ${{ !inputs.qualification_only }}
+        run: |
+          set -euo pipefail
+          node config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          if [ "$PUBLISH" = true ]; then
+            gh release upload "$TAG" dist/*-mac.yml --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+
       - name: Verify release remains draft after artifact upload
         if: ${{ !inputs.qualification_only }}
         # Re-draft premature builder publication before failing; latest must not keep an incomplete Windows release.

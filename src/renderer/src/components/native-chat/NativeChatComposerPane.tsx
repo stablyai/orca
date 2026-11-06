@@ -285,7 +285,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const { goalMode } = submission
-    const { sendHeld, ...sendState } = nativeChatComposerSendState({
+    const { sendHeld, ...sendButton } = nativeChatComposerSendState({
       draft,
       messageDelivery: submission.messageDelivery,
       imageAttachments,
@@ -343,8 +343,9 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       interrupt: editSession?.cancel ?? interrupt,
       send,
       hasAttachments: imageAttachments.length > 0,
-      acceptPromptSuggestion: sendState.promptSuggestion?.accept,
+      acceptPromptSuggestion: sendButton.promptSuggestion?.accept,
       ...(!editSession && steerHead ? { steerHead } : {}),
+      alternateSteers: sendButton.alternateSend === 'steer',
       setActiveSuggestion,
       setDraft,
       setCaret
@@ -378,7 +379,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           imageAttachments={imageAttachments}
           numberImages={Boolean(structuredTransport)}
           attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
-          {...sendState}
+          {...sendButton}
           isWorking={isWorking}
           isStopping={isStopping}
           afterStop={afterStop}

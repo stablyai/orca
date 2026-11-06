@@ -13,7 +13,7 @@ import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { restoreJournal } from '../../../native-chat/agent-session-journal/journal-open'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
-import type { AcpLaunchSpec } from '../../../acp/acp-launch-specs'
+import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
 import { createAcpAgentConnection } from '../../../acp/acp-agent-connection'
 import { createOpenCodeAcpConnection } from '../../../opencode/opencode-acp-connection'
@@ -160,7 +160,8 @@ function createAcpAdapter(
         ...deps.acpLaunchCommand,
         dataDirectory: deps.stateDirectory
       },
-      ...(spec.agent === 'omp'
+      // Agents that list models in a throwaway chat-folder session report commands there too.
+      ...(acpListingNeedsChatFolder(spec.modelDiscovery)
         ? {
             atRestCommands: new AcpAtRestCommandCatalog(spec, {
               ...deps.acpLaunchCommand,

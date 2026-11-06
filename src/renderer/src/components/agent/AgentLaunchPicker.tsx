@@ -57,6 +57,8 @@ export const AgentLaunchPicker = memo(
     onOpenChange,
     onCatalogOpen,
     onOpenAgentSettings,
+    defaultAgent,
+    onSetDefault,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -80,6 +82,9 @@ export const AgentLaunchPicker = memo(
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
+    /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
+    defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
+    onSetDefault?: (agent: AgentPickerEntry['agent']) => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -248,6 +253,8 @@ export const AgentLaunchPicker = memo(
                 disabled={disabled}
                 setupDisabled={setupDisabled}
                 onSelectAgent={selectAgent}
+                defaultAgent={defaultAgent}
+                onSetDefault={onSetDefault}
                 runLaunch={runLaunch}
               />
             ) : (

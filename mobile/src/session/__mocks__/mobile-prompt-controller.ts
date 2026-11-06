@@ -158,6 +158,7 @@ function Harness(props: HarnessProps) {
     worktreePath: null,
     connState,
     onOpenFile: vi.fn(),
+    onRunInTerminal: vi.fn(),
     images: {
       sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],

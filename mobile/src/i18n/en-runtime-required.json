@@ -287,6 +287,9 @@
       "uncommittedFiles_one": "{{count}} uncommitted",
       "uncommittedFiles_other": "{{count}} uncommitted"
     },
+    "failure": {
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal."
+    },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",
       "reviewNotes_other": "{{count}} review notes"
