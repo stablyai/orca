@@ -219,16 +219,17 @@ function insertContentEditableDictationChunk(
     return true
   }
   const selection = element.ownerDocument.getSelection()
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const textNode = element.ownerDocument.createTextNode(text)
-    range.insertNode(textNode)
-    range.setStartAfter(textNode)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
+  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  if (!selection || !range || !element.contains(range.commonAncestorContainer)) {
+    return false
   }
+  range.deleteContents()
+  const textNode = element.ownerDocument.createTextNode(text)
+  range.insertNode(textNode)
+  range.setStartAfter(textNode)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
   editorElement.dispatchEvent(
     new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
   )
