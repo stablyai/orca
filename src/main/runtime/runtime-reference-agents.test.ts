@@ -26,7 +26,7 @@ vi.mock(
     observeStructuredSession: () => ({ status: observations.status })
   })
 )
-vi.mock('./orchestration/structured-session-mail-address', () => ({
+vi.mock('./orchestration/mailbox/routing/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))
 vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({

@@ -13,7 +13,7 @@ import { useMobileStructuredSessionCommands } from './use-mobile-structured-sess
 
 const { createMobileCommandMenuHostFixture } =
   await vi.importActual<MobileCommandMenuHostFixtureModule>(
-    '../../../src/main/native-chat/agent-session-wire/mobile-queued-edit-host.test-fixture'
+    '../../../src/main/native-chat/agent-session-wire/host/testing/mobile-queued-edit-host.test-fixture'
   )
 
 type Hook = ReturnType<typeof useMobileStructuredSessionCommands>

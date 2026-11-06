@@ -39,6 +39,7 @@ function stubWindow(ssh: SshApiStub): void {
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
         onDetectedPortsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onStateChanged: (handler: (data: { targetId: string; state: unknown }) => void) => {
           onStateChangedHandler = handler
           return () => {}

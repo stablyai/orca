@@ -15,7 +15,7 @@ import {
   type CodexProviderInvocationDeps
 } from './codex-provider-session-rename'
 import type { CodexSession } from './codex-structured-session-state'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 const USAGE_RPC_TIMEOUT_MS = 10_000
 const COLD_USAGE_TIMEOUT_MS = 30_000

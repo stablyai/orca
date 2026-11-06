@@ -10,9 +10,9 @@ import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
-import { redactWorkerTerminalView } from '../../../../orchestration/worker-terminal-redaction'
-import { readWorkerTranscript } from '../../../../orchestration/worker-transcript-read'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
+import { redactWorkerTerminalView } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
+import { readWorkerTranscript } from '../../../../orchestration/workers/transcripts/worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../../../../shared/wsl-hook-relay-contract'
 
 export async function readExactWorkerOutput(args: {

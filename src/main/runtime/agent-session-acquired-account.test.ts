@@ -8,7 +8,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { createRestTestRig } from '../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+import { createRestTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore

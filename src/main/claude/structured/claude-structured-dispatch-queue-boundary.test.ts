@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wire/operations/structured-agent-session-operation-settlement'
 import { createClaudeUserMessageQueue } from '../claude-agent-sdk-user-message-queue'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { sessionFor } from './claude-structured-dispatch-test-support'

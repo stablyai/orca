@@ -215,6 +215,11 @@ export class TerminalHost {
     }
   }
 
+  // An exited session has no program left to tell.
+  reportFocusLost(sessionId: string): void {
+    this.sessions.get(sessionId)?.reportFocusLost()
+  }
+
   async getCwd(sessionId: string): Promise<string | null> {
     return await resolveTerminalHostSessionCwd(
       getAliveTerminalHostSession(this.sessions, sessionId)

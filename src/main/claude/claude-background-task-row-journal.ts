@@ -4,9 +4,9 @@ import { backgroundTaskJournalBody } from '../../shared/native-chat/input/native
 import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type {
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionLifecycleJournal,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLifecycleJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 

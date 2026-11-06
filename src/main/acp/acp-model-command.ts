@@ -9,7 +9,7 @@ import {
 import { acpPromptErrorDetail } from './acp-turn-failures'
 import type { AcpAgentError } from './acp-errors'
 import { acpAgentName } from './acp-structured-agent-definitions'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import type { AcpModelCommandReply } from './acp-dialects/acp-dialect'
 import { boundAcpOptionWrite, type AcpOptionWriteBound } from './acp-session-option-write'
 import type { AcpSessionEvent } from './acp-session-runtime'
