@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -47,17 +48,18 @@ function jcodeMessageTokens(message: Record<string, unknown>): number {
 export async function parseJcodeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const fold = foldJcodeSessionContent(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    await wslGatedReadFile(file.path, 'utf-8', 'scan', signal),
     platform,
     { messages }
   )
   let step = fold.next()
   while (!step.done) {
-    await messages?.drain?.()
+    await waitForPromiseWithSignal(messages?.drain?.() ?? Promise.resolve(), signal)
     step = fold.next()
   }
   return step.value

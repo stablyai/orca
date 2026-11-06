@@ -126,11 +126,12 @@ export async function parseKiroSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
   messages?: TranscriptMessageSink,
-  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
+  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const accumulator = createKiroAccumulator(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    await wslGatedReadFile(file.path, 'utf-8', 'scan', signal),
     messages
   )
   if (!accumulator) {
@@ -141,6 +142,7 @@ export async function parseKiroSessionFile(
     const { trailingPartialLine, skippedRecords } = await consumeCompleteJsonlLines({
       path: kiroTranscriptPathForMetadata(file.path),
       start: 0,
+      signal,
       drain: () => messages?.drain?.() ?? Promise.resolve(),
       onLine: (line) => consumeKiroTranscriptLine(accumulator, line)
     })

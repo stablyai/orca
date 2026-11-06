@@ -1,3 +1,5 @@
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
@@ -170,7 +172,7 @@ async function parseCachedInLane(
 
   if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, key, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
-      return reuseCachedSession(candidate, key, entry, stats)
+      return reuseCachedSession(candidate, key, entry, stats, signal)
     }
     // Metadata-only sidecar changes can merge onto the saved fold without rereading the transcript.
     if (sidecarEnrichesWithoutReparse(candidate) && entry.foldSession !== undefined) {
@@ -180,6 +182,7 @@ async function parseCachedInLane(
         platform,
         signal
       )
+      throwIfAiVaultScanCancelled(signal)
       const session = reuseUnchangedSidecarSession(entry.session, enriched.session)
       storeSessionParseCacheEntry(key, {
         ...entry,
@@ -256,7 +259,8 @@ async function reuseCachedSession(
   candidate: SessionFileCandidate,
   key: string,
   entry: SessionParseCacheEntry,
-  stats?: SessionParseStats
+  stats?: SessionParseStats,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   if (stats) {
     stats.reused++
@@ -266,9 +270,9 @@ async function reuseCachedSession(
   if (session && session.messageCount === 0) {
     const subagentTranscriptCount =
       session.agent === 'claude'
-        ? await countSubagentTranscripts(candidate.file.path)
+        ? await countSubagentTranscripts(candidate.file.path, signal)
         : session.agent === 'omp'
-          ? await countOmpSubagentTranscripts(candidate.file.path)
+          ? await countOmpSubagentTranscripts(candidate.file.path, signal)
           : null
     if (
       subagentTranscriptCount !== null &&
@@ -279,8 +283,9 @@ async function reuseCachedSession(
   }
   // Index titles can change independently of the transcript signature.
   if (session && candidate.agent === 'codex') {
-    session = await refreshCachedCodexTitle(candidate, session)
+    session = await waitForPromiseWithSignal(refreshCachedCodexTitle(candidate, session), signal)
   }
+  throwIfAiVaultScanCancelled(signal)
   storeSessionParseCacheEntry(key, { ...entry, session })
   return session
 }

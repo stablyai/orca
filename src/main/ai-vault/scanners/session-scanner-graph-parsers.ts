@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 export { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './omp/session-scanner-omp-title'
@@ -50,10 +51,11 @@ type ParserSessionOptions = {
 export async function parseRovoSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const metadata = asRecord(
-    JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
+    JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan', signal)) as unknown
   )
   if (!metadata) {
     return null
@@ -76,15 +78,15 @@ export async function parseRovoSessionFile(
   )
 
   const contextPath = rovoTranscriptPathForMetadata(file.path)
-  const context = await readJsonObjectIfExists(contextPath)
+  const context = await readJsonObjectIfExists(contextPath, signal)
   if (context) {
     for (const message of arrayValue(context.messages)) {
       consumeRovoSessionContext(accumulator, { messages: [message] })
-      await messages?.drain?.()
+      await waitForPromiseWithSignal(messages?.drain?.() ?? Promise.resolve(), signal)
     }
     for (const entry of arrayValue(context.message_history)) {
       consumeRovoSessionContext(accumulator, { message_history: [entry] })
-      await messages?.drain?.()
+      await waitForPromiseWithSignal(messages?.drain?.() ?? Promise.resolve(), signal)
     }
   }
 

@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
@@ -123,7 +124,7 @@ export async function readCursorChatMeta(
   transcriptPath: string,
   signal?: AbortSignal
 ): Promise<CursorChatMeta | null> {
-  const metaPath = await cursorChatMetaPath(transcriptPath)
+  const metaPath = await waitForPromiseWithSignal(cursorChatMetaPath(transcriptPath), signal)
   if (!metaPath) {
     return null
   }

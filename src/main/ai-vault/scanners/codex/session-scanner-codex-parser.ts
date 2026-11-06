@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type {
@@ -211,6 +212,7 @@ async function finalizeCodexParseState(
   args: {
     codexHome: string | null
     titleReader?: (sessionId: string) => Promise<string | null>
+    signal?: AbortSignal
     executionHostId?: ExecutionHostId
     executionHostPlatform?: NodeJS.Platform | null
   }
@@ -224,7 +226,10 @@ async function finalizeCodexParseState(
   let titleKind: AiVaultSessionTitleKind =
     snapshot.titleSource === 'meta' && snapshot.accumulator.title ? 'named' : 'fallback'
   if (snapshot.sawSessionMeta) {
-    const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
+    const indexedTitle = await waitForPromiseWithSignal(
+      Promise.resolve(args.titleReader?.(snapshot.accumulator.sessionId)),
+      args.signal
+    )
     if (indexedTitle) {
       snapshot.accumulator.title = indexedTitle
       titleKind = 'named'

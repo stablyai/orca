@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
@@ -126,15 +127,15 @@ export async function readStreamedSessionDocument<T>(args: {
   for await (const chunk of args.bytes) {
     throwIfAiVaultScanCancelled(args.signal)
     parser.write(decoder.write(chunk))
-    await args.drain?.()
-    await yieldToEventLoop()
+    await waitForPromiseWithSignal(args.drain?.() ?? Promise.resolve(), args.signal)
+    await yieldToEventLoop(undefined, { signal: args.signal })
   }
   const tail = decoder.end()
   if (tail) {
     parser.write(tail)
   }
   parser.end()
-  await args.drain?.()
+  await waitForPromiseWithSignal(args.drain?.() ?? Promise.resolve(), args.signal)
   throwIfAiVaultScanCancelled(args.signal)
   if (consumeFailure) {
     throw consumeFailure.error

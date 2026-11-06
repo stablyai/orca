@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
@@ -127,9 +128,10 @@ export async function readResumableTranscript(
       channel.mute(() => displayState.consumeLine(partialLine))
     }
 
-    const session = await displayState.finalize(args.platform)
+    throwIfAiVaultScanCancelled(args.signal)
+    const session = await displayState.finalize(args.platform, { signal: args.signal })
     const consumerSession = args.sessionForConsumers
-      ? await args.sessionForConsumers(session)
+      ? await waitForPromiseWithSignal(args.sessionForConsumers(session), args.signal)
       : session
     throwIfAiVaultScanCancelled(args.signal)
     channel.finishRead({
@@ -198,7 +200,7 @@ export async function readWholeTranscript(
       args.onSkippedRecords
     )
     const consumerSession = args.sessionForConsumers
-      ? await args.sessionForConsumers(session)
+      ? await waitForPromiseWithSignal(args.sessionForConsumers(session), args.signal)
       : session
     throwIfAiVaultScanCancelled(args.signal)
     channel.finishRead({

@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
@@ -28,12 +29,13 @@ import { numberValue } from '../../session-scanner-token-values'
 export async function parseKimiSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   let stateRecord: Record<string, unknown> | null
   try {
     stateRecord = asRecord(
-      JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
+      JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan', signal)) as unknown
     )
   } catch (error) {
     // Propagate WSL refusal so an unreachable state file is not cached as no session.
@@ -54,7 +56,8 @@ export async function parseKimiSessionFile(
 
   // Kimi resume requires the indexed work directory; session IDs alone are not sufficient.
   const workDirBySessionId = await readKimiWorkDirBySessionId(
-    kimiSessionIndexPathFromStatePath(file.path)
+    kimiSessionIndexPathFromStatePath(file.path),
+    signal
   )
   accumulator.cwd = workDirBySessionId.get(sessionId) ?? null
 
@@ -63,14 +66,19 @@ export async function parseKimiSessionFile(
   updateTimeline(accumulator, extractString(stateRecord.createdAt))
   updateTimeline(accumulator, extractString(stateRecord.updatedAt))
 
-  await consumeKimiWireTranscript(accumulator, kimiPrimaryAgentWirePath(file.path, stateRecord))
+  await consumeKimiWireTranscript(
+    accumulator,
+    kimiPrimaryAgentWirePath(file.path, stateRecord),
+    signal
+  )
 
   return finalizeSession(accumulator, platform)
 }
 
 async function consumeKimiWireTranscript(
   accumulator: SessionAccumulator,
-  wirePath: string
+  wirePath: string,
+  signal?: AbortSignal
 ): Promise<void> {
   let pendingAssistantText: string[] = []
   const flushAssistant = (): void => {
@@ -82,11 +90,11 @@ async function consumeKimiWireTranscript(
     }
   }
 
-  const input = openTranscriptReadStream(wirePath, { encoding: 'utf-8' }, 'scan')
+  const input = openTranscriptReadStream(wirePath, { encoding: 'utf-8' }, 'scan', signal)
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
-      await accumulator.messages.drain?.()
+      await waitForPromiseWithSignal(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -123,7 +131,7 @@ async function consumeKimiWireTranscript(
     input.destroy()
   }
   flushAssistant()
-  await accumulator.messages.drain?.()
+  await waitForPromiseWithSignal(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
 }
 
 function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown): void {

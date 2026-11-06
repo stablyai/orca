@@ -1,4 +1,5 @@
 import type { Hash } from 'node:crypto'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
@@ -130,7 +131,7 @@ export async function consumeCompleteJsonlLines(args: {
         remainderLength = chunkEnd - consumedThrough
       }
     }
-    await args.drain?.()
+    await waitForPromiseWithSignal(args.drain?.() ?? Promise.resolve(), args.signal)
     chunkStart = chunkEnd
   }
 

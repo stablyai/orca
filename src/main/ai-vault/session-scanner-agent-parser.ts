@@ -1,7 +1,7 @@
 import { parseQoderSessionFile } from './scanners/qoder/session-scanner-qoder-parser'
 import { parseCodebuddySessionFile } from './scanners/codebuddy/session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './scanners/droid/session-scanner-droid-parser'
@@ -52,7 +52,7 @@ async function readOpenCodeSqliteCandidate(
         : agent === 'zcode'
           ? parseZcodeSqliteSessionViaWorker
           : parseOpenCodeSqliteSessionViaWorker
-    const session = await parse(request)
+    const session = await waitForPromiseWithSignal(parse(request), signal)
     throwIfSignalAborted(signal)
     return session
   }
@@ -62,11 +62,11 @@ async function readOpenCodeSqliteCandidate(
       : agent === 'zcode'
         ? captureZcodeSqliteSessionViaWorker
         : captureOpenCodeSqliteSessionViaWorker
-  const result = await capture(request)
+  const result = await waitForPromiseWithSignal(capture(request), signal)
   for (const message of result.messages) {
     throwIfSignalAborted(signal)
     messages.push(message)
-    await messages.drain?.()
+    await waitForPromiseWithSignal(messages.drain?.() ?? Promise.resolve(), signal)
   }
   throwIfSignalAborted(signal)
   return result.session
@@ -108,7 +108,7 @@ export async function parseAgentSessionFile(
       if (sqliteCandidate) {
         return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal)
       }
-      return parseOpenCodeSessionFile(candidate.file, platform, messages)
+      return parseOpenCodeSessionFile(candidate.file, platform, messages, signal)
     }
     case 'opencode2': {
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
@@ -124,11 +124,11 @@ export async function parseAgentSessionFile(
         : null
     }
     case 'grok':
-      return parseGrokSessionFile(candidate.file, platform, messages)
+      return parseGrokSessionFile(candidate.file, platform, messages, signal)
     case 'hermes':
       return parseHermesSessionFile(candidate.file, platform, messages, signal)
     case 'rovo':
-      return parseRovoSessionFile(candidate.file, platform, messages)
+      return parseRovoSessionFile(candidate.file, platform, messages, signal)
     case 'openclaw':
       return parseMessageGraphSessionFile('openclaw', candidate.file, platform, messages)
     case 'pi':
@@ -144,12 +144,12 @@ export async function parseAgentSessionFile(
     case 'devin':
       return parseDevinSessionFile(candidate.file, platform, messages, signal)
     case 'kimi':
-      return parseKimiSessionFile(candidate.file, platform, messages)
+      return parseKimiSessionFile(candidate.file, platform, messages, signal)
     case 'muse':
-      return parseMuseSessionFile(candidate.file, platform, messages)
+      return parseMuseSessionFile(candidate.file, platform, messages, signal)
     case 'jcode':
-      return parseJcodeSessionFile(candidate.file, platform, messages)
+      return parseJcodeSessionFile(candidate.file, platform, messages, signal)
     case 'kiro':
-      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords)
+      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords, signal)
   }
 }

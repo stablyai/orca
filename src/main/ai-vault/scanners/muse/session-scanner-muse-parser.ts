@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { unwrapMuseLogRecords } from '../../../../shared/muse-session-log'
@@ -217,9 +218,10 @@ function foldMuseLines(
 export async function parseMuseSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  const content = await wslGatedReadFile(file.path, 'utf-8', 'scan')
+  const content = await wslGatedReadFile(file.path, 'utf-8', 'scan', signal)
   const accumulator = createAccumulator({
     agent: 'muse',
     file,
@@ -229,7 +231,7 @@ export async function parseMuseSessionFile(
   const dedupe: MuseDedupeState = { text: null, ms: null }
   for (const line of content.split('\n')) {
     foldMuseLines(accumulator, [line], dedupe)
-    await messages?.drain?.()
+    await waitForPromiseWithSignal(messages?.drain?.() ?? Promise.resolve(), signal)
   }
   return finalizeSession(accumulator, platform)
 }

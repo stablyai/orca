@@ -1,3 +1,5 @@
+import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -31,11 +33,18 @@ export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): 
 }
 
 /** Count direct task transcripts only; nested artifacts and grandchildren belong to their own parents. */
-export async function countOmpSubagentTranscripts(transcriptFilePath: string): Promise<number> {
+export async function countOmpSubagentTranscripts(
+  transcriptFilePath: string,
+  signal?: AbortSignal
+): Promise<number> {
   let entries
   try {
-    entries = await wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan')
+    entries = await waitForPromiseWithSignal(
+      wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan', signal),
+      signal
+    )
   } catch {
+    throwIfAiVaultScanCancelled(signal)
     return 0
   }
   return entries.filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
@@ -84,7 +93,10 @@ export function withOmpSubagentTranscriptCount(
       }
       return {
         ...session,
-        subagentTranscriptCount: await countOmpSubagentTranscripts(transcriptFilePath)
+        subagentTranscriptCount: await countOmpSubagentTranscripts(
+          transcriptFilePath,
+          options?.signal
+        )
       }
     }
   }
