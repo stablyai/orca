@@ -181,6 +181,12 @@ beforeEach(() => {
       'linux'
     )
   )
+  vi.spyOn(settingsTransport, 'readHostAgentStartupSettings').mockResolvedValue({
+    agentCmdOverrides: { claude: '/host/claude' },
+    agentDefaultArgs: {},
+    agentDefaultEnv: {},
+    agentPermissionDefault: 'auto'
+  })
   stubRuntimeEnvironmentBridge({ call })
 })
 afterEach(() => {

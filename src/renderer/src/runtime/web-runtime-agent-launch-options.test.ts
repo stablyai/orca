@@ -454,7 +454,7 @@ it('replaces recognized permission text from a historical host snapshot and reta
     }
   })
   await launch({ sessionOptions: { permissionMode: 'ask' } })
-  expect(params('session.tabs.createTerminal').command).toContain('desktop-claude')
+  expect(params('session.tabs.createTerminal').command).toContain('/host/claude')
   expect(params('session.tabs.createTerminal').command).toContain("'--permission-mode' 'default'")
 })
 
@@ -612,18 +612,20 @@ it('preserves empty action text and inherits permission from text-only host snap
   )
 })
 
-it.each<Record<string, string>>([{ effort: 'high' }, { permissionMode: 'full-access' }])(
-  'keeps the prepared launch when an older host snapshot is unavailable (%j)',
-  async (sessionOptions) => {
-    host.capabilities = ['agent-session.host-authority.v1']
-    vi.mocked(settingsTransport.readHostAgentLaunchSettings).mockResolvedValue(null)
-    await launch({ sessionOptions })
-    expect(params('session.tabs.createTerminal').command).toContain('desktop-claude')
-    expect(params('session.tabs.createTerminal').command).toContain(
-      sessionOptions.effort ? "'high'" : '--dangerously-skip-permissions'
-    )
-  }
-)
+it('refuses a draft handoff when the host settings are unavailable', async () => {
+  host.capabilities = []
+  vi.mocked(settingsTransport.readHostAgentStartupSettings).mockResolvedValue(null)
+  await expect(
+    launch({ prompt: 'Continue this work', promptDelivery: 'draft' })
+  ).resolves.toMatchObject({
+    delivered: false,
+    failureNotified: true,
+    outcome: { status: 'failed' }
+  })
+  expect(call.mock.calls.map(([request]) => request.method)).not.toContain(
+    'session.tabs.createTerminal'
+  )
+})
 
 it('keeps the prepared permission environment for an older host', async () => {
   host.capabilities = ['agent-session.host-authority.v1']

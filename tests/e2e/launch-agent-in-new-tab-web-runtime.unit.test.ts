@@ -366,6 +366,13 @@ describe('launchAgentInNewTab paired web runtime', () => {
 
   it('retains the prompt and reports once when delivery rejects after an accepted create', async () => {
     mocks.actualOperation = true
+    mocks.hostRpc.mockResolvedValue({
+      settings: {
+        agentCmdOverrides: { claude: '/host/claude' },
+        agentDefaultArgs: {},
+        agentDefaultEnv: {}
+      }
+    })
     const dispatch = vi.fn(async () => ({
       ok: true,
       result: { tab: { id: 'host-tab', leafId: 'leaf' } }
