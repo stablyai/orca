@@ -1,4 +1,7 @@
+import { useContext } from 'react'
 import { cn } from '@/lib/utils'
+import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
+import { NativeChatForkSlotContext } from './native-chat-fork-context'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
@@ -41,6 +44,7 @@ export function NativeChatAssistantMessageRow({
     activeTurnIsWorking,
     trailingRun,
     continuesTurn = false,
+    endsResponse,
     inSubagentSection = false,
     runtimeContext,
     fork
@@ -50,9 +54,21 @@ export function NativeChatAssistantMessageRow({
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
   const words = message.role === 'reasoning' ? '' : markdown
-  // Hide controls on system asides and the still-working frontier, where more content may arrive.
+  // Hide controls on system asides and the still-working frontier, where more content may arrive. In
+  // a turn they belong to its last words, even with tools or thoughts after them.
   const showControls =
-    !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
+    !isSystem &&
+    words.length > 0 &&
+    (endsResponse ?? !continuesTurn) &&
+    activeTurnIsWorking !== true
+  // Fixed by the row's own kind, never by support or eligibility, so the row's actions never shift.
+  const holdsForkSlot =
+    useContext(NativeChatForkSlotContext) &&
+    message.role === 'assistant' &&
+    message.source === 'transcript' &&
+    !message.agentStart &&
+    !inSubagentSection &&
+    isRootAgentJournalItem(message)
   const revealOnHover =
     'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
@@ -92,7 +108,13 @@ export function NativeChatAssistantMessageRow({
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          action={fork ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null}
+          action={
+            fork ? (
+              <NativeChatForkAction itemId={message.id} fork={fork} />
+            ) : holdsForkSlot ? (
+              <span aria-hidden className="size-6 shrink-0" />
+            ) : null
+          }
           className={cn(
             revealOnHover,
             // They hang into the gap below; a section keeps them inside its border instead.

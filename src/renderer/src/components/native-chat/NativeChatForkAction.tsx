@@ -11,7 +11,7 @@ export function NativeChatForkAction({
   fork: NativeChatForkRowAction
 }) {
   const label = translate('components.native-chat.fork.action', 'Fork from this response')
-  // Drawn while support is still being learned, so the row does not shift when it lands.
+  // Disabled while support is still being learned; an unoffered row keeps an empty slot of this size.
   const disabledReason = fork.pending
     ? translate('components.native-chat.fork.pending', 'Forking this chat…')
     : fork.support.kind === 'unknown'

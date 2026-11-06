@@ -77,6 +77,34 @@ describe('transcript slots', () => {
     ).toEqual(['u'])
   })
 
+  it("gives a finished turn's actions to its last words, collapsed or expanded, though tools follow", () => {
+    const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
+    const messages = [
+      text('u', 'Inspect the config', 'user'),
+      text('a', 'I will look.'),
+      toolRun('b')
+    ]
+    const holder = (overrides: Partial<Parameters<typeof build>[1]>) =>
+      build(messages, {
+        turnStatuses: { active: null, completedByTurn: { u: settled } },
+        ...overrides
+      })
+        .filter((slot) => slot.endsResponse)
+        .map((slot) => slot.message.id)
+
+    expect(holder({})).toEqual(['a'])
+    expect(holder({ expandedTurnKeys: new Set(['u']) })).toEqual(['a'])
+    // Expanded, the tool sits right after it, which is what `continuesTurn` alone hid controls on.
+    const expanded = build(messages, {
+      turnStatuses: { active: null, completedByTurn: { u: settled } },
+      expandedTurnKeys: new Set(['u'])
+    })
+    expect(expanded.find((slot) => slot.message.id === 'a')?.continuesTurn).toBe(true)
+    // A running turn's frontier still offers nothing: its rows stay live.
+    const working = build(messages, { liveTurnKey: 'u', isWorking: true })
+    expect(working.find((slot) => slot.message.id === 'a')?.activeTurnIsWorking).toBe(true)
+  })
+
   it('keeps a message whose only content is a turn status under it', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
     const slots = build([text('u', '', 'user')], {

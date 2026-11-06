@@ -55,6 +55,8 @@ export type MessageRowProps = {
   trailingRun?: boolean
   /** Hover controls would overlap the next row. */
   continuesTurn?: boolean
+  /** In a turn: whether this row is its last prose, the one that holds the response's actions. */
+  endsResponse?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   deliveryNotice?: NativeChatDeliveryNotice

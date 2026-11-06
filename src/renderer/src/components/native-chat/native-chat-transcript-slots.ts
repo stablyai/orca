@@ -64,6 +64,9 @@ export type NativeChatMessageSlot = {
   turnFolds: boolean
   /** The agent's next row in the same turn follows directly, so the two sit close. */
   continuesTurn?: boolean
+  /** In a turn: whether this is its last drawn prose, which holds the turn's response actions even
+   *  when tools or thoughts follow it. Absent outside a turn and in subagent sections. */
+  endsResponse?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** A closed roster list hides child sections regardless of their individual expansion state. */
   subagentRoster: NativeChatSubagentRosterState | undefined
@@ -216,6 +219,27 @@ export function buildNativeChatTranscriptSlots(
   }
   sectionSlots.openBefore(pending, undefined, 0)
   const drawn = nativeChatTranscriptWorkRuns(slots, typography)
+  // The same prose wins collapsed and expanded: folding hides tools, never a turn's last words.
+  const proseRowIds = new Set(
+    messages.filter((_message, index) => foldRows[index]!.rendersProse).map(({ id }) => id)
+  )
+  const lastProseByTurn = new Map<string, NativeChatMessageSlot>()
+  for (const slot of drawn) {
+    if (slot.kind !== 'message' || slot.depth !== 0 || slot.turnKey === undefined) {
+      continue
+    }
+    slot.endsResponse = false
+    if (
+      slot.drawsMessage &&
+      slot.message.role === 'assistant' &&
+      proseRowIds.has(slot.message.id)
+    ) {
+      lastProseByTurn.set(slot.turnKey, slot)
+    }
+  }
+  for (const slot of lastProseByTurn.values()) {
+    slot.endsResponse = true
+  }
   for (let index = 0; index < drawn.length - 1; index += 1) {
     const slot = drawn[index]!
     const next = drawn[index + 1]!

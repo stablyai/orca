@@ -51,7 +51,8 @@ export function nativeChatForkableItemIds(
 }
 
 /** A finished response of the chat's own agent, still in its current context. A fork copies through
- *  the end of that response's turn, so any of the turn's responses offers it, not only its last. */
+ *  the end of that response's turn, so any of its responses can fork it: the phone offers each one,
+ *  the desktop the turn's last words, where its response actions sit. */
 export function nativeChatRowOffersFork(
   row: {
     message: NativeChatMessage
