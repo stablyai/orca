@@ -3,8 +3,8 @@ import type { LinkActionRequest } from '@/components/link-actions/link-action-re
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
-} from '@/components/terminal-pane/terminal-link-activation'
-import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/terminal-link-click-behavior'
+} from '@/components/terminal-pane/links/gestures/terminal-link-activation'
+import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
 import {
   buildHttpLinkActions,
   httpLinkDirectClickDestination,

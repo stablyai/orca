@@ -20,7 +20,7 @@ const contracts = [
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/jsonl-file-reader.test.ts',
   'src/main/usage/jsonl-file-snapshot.test.ts',
-  'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts',
+  'src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-queued-inspection-disposal.test.ts',
   'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts',
   'src/renderer/src/store/store-identity-churn-probe.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',

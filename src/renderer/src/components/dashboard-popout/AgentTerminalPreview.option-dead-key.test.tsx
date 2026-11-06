@@ -61,13 +61,13 @@ vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
-vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: () => ({
     claimKeyEvent: () => false,
     dispose: vi.fn()
   })
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => ({ isActive: () => false, dispose: vi.fn() })
 }))
 vi.mock('@/store', () => {

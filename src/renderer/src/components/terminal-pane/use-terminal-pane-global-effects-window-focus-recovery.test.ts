@@ -81,11 +81,11 @@ vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   syncTerminalScrollIntentFromViewport: mocks.syncTerminalScrollIntentFromViewport
 }))
 
-vi.mock('./terminal-drop-handler', () => ({
+vi.mock('./input/file-drop/terminal-drop-handler', () => ({
   handleTerminalFileDrop: mocks.handleTerminalFileDrop
 }))
 
-vi.mock('./terminal-bracketed-paste', () => ({
+vi.mock('./input/paste/terminal-bracketed-paste', () => ({
   BRACKETED_PASTE_END: '\u001b[201~',
   BRACKETED_PASTE_START: '\u001b[200~',
   pasteTerminalText: mocks.pasteTerminalText,
