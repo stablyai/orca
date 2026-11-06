@@ -21,7 +21,11 @@ import {
   type AutomationRunFailure
 } from '../../shared/automation-run-failure-copy'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
-import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
+import {
+  isOrcadFencedAutomation,
+  managedOrcadHostOf,
+  ORCAD_FENCED_AUTOMATION
+} from './orcad-fenced-automation'
 
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
@@ -151,6 +155,10 @@ export function resolveAutomationRunTarget(
   automation: Automation,
   options: AutomationRunTargetOptions = {}
 ): AutomationRunTargetResult {
+  const managedHost = managedOrcadHostOf(store, automation)
+  if (managedHost) {
+    return { ok: false, ...automationRunFailure('managedHostServer', { host: managedHost.label }) }
+  }
   const context = automation.runContext ?? null
   if (!context) {
     return resolveLegacyAutomationRunTarget(store, automation)

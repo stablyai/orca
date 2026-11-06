@@ -11,6 +11,7 @@ import { automationWorktreesForRepo } from './automation-list-row-identity'
 import { getAutomationCreateRepos } from './automation-create-projects'
 import {
   automationCreateEligibleProjects,
+  automationCreateHostFor,
   automationCreateHostStableKey,
   automationCreateProjectMismatch,
   resolveAutomationCreateDestination,
@@ -252,10 +253,10 @@ export function useAutomationsPageDestinationForm({
       if (!runContext) {
         return null
       }
-      const stableKey = automationCreateHostStableKey(runContext.hostId)
-      const entry = stableKey
-        ? hostCatalog.entries.find((candidate) => candidate.stableKey === stableKey)
-        : undefined
+      const entry = automationCreateHostFor(
+        hostCatalog.entries,
+        automationCreateHostStableKey(runContext.hostId)
+      )
       const resolved = resolveAutomationCreateDestination(entry)
       return resolved.status === 'ready' ? resolved : null
     },

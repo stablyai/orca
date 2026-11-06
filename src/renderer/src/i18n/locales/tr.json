@@ -17470,7 +17470,8 @@
           "reuseLiveSession": "Etkin oturumu yeniden kullan",
           "freshEachRun": "Her çalıştırmada yeni",
           "precheckEnabled": "Etkin, {{timeout}}",
-          "precheckNone": "Yok"
+          "precheckNone": "Yok",
+          "moveToServer": "{{host}} sunucusuna taşı"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -22836,6 +22837,7 @@
       "noRunnableHost": "Bu otomasyonun çalışacağı bir sunucu yok.",
       "wslMoveInProgress": "Bu otomasyonun projesi WSL ana makinesine taşınıyor. Bu nedenle Orca bu çalıştırmayı atladı. Taşıma tamamlandığında çalıştırmalar devam edecek.",
       "wslMoveOwnedByHost": "Bu otomasyonun projesi artık WSL ana makinesinde çalışıyor ve bu otomasyon da orada ana makine tarafından çalıştırılıyor. Orca artık bu yerel kopyayı çalıştırmıyor.",
+      "managedHostServer": "{{host}} artık otomasyonları kendi Orca sunucusunda çalıştırıyor",
       "missedGraceWindow": "Orca'nın bir sonraki kontrolünde bu çalıştırma, kaçırılan çalıştırmalar için tanınan tolerans süresini aşmıştı.",
       "targetMissing": "Otomasyon sunucusu artık kayıtlı olmadığından bu otomasyonun çalışacağı bir yer yok.",
       "targetReplaced": "Otomasyon sunucusu kaldırılıp yeniden kaydedildiği için bu otomasyonun çalıştırılmadan önce yeniden ilişkilendirilmesi gerekiyor.",

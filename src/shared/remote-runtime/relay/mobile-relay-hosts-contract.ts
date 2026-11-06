@@ -19,6 +19,8 @@ export type MobileRelayHost = {
   unavailableOnDesktop?: true
   /** The server's store identity as the desktop verified it; cross-store records name it. */
   installationId?: string
+  /** The desktop SSH host this is the managed Orca server for; its automations live here. */
+  managedSshTargetId?: string
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }

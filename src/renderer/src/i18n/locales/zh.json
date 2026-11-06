@@ -16833,7 +16833,8 @@
           "reuseLiveSession": "复用活动会话",
           "freshEachRun": "每次运行新建",
           "precheckEnabled": "已启用，{{timeout}}",
-          "precheckNone": "无"
+          "precheckNone": "无",
+          "moveToServer": "移动到 {{host}}"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -22604,6 +22605,7 @@
       "noRunnableHost": "此自动化没有可运行的主机。",
       "wslMoveInProgress": "此自动化的项目正在移到其 WSL 主机，因此 Orca 跳过了此次运行。移动完成后将恢复运行。",
       "wslMoveOwnedByHost": "此自动化的项目现在在其 WSL 主机上运行，自动化本身也由该主机运行。Orca 不再运行此本地副本。",
+      "managedHostServer": "{{host}} 现在在其 Orca 服务器上运行自动化",
       "missedGraceWindow": "Orca 再次检查时，此次运行的补跑宽限期已过。",
       "targetMissing": "自动化主机已不在注册列表中，因此此自动化已无处运行。",
       "targetReplaced": "自动化主机已被移除并重新注册，因此必须重新关联此自动化后才能运行。",

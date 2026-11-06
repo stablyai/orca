@@ -26,7 +26,10 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { resolveAutomationDestination } from '../automation-destination'
+import {
+  resolveAutomationUpdateDestination,
+  routeAutomationCreate
+} from '../automation-destination'
 import {
   AUTOMATION_RUNS_PAGE_SIZE,
   automationRunsRpc,
@@ -199,11 +202,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...schedule
     } satisfies AutomationCreateParams
     await assertAutomationFieldsSupported(client, create)
-    const destination = await resolveAutomationDestination(client, target)
-    const result = await client.call<{ automation: Automation }>('automation.create', {
-      ...create,
-      ...(destination ? { destination } : {})
-    })
+    const { writer, params } = await routeAutomationCreate(client, target, create)
+    const result = await writer.call<{ automation: Automation }>('automation.create', params)
     printResult(result, json, formatAutomationShow)
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
@@ -242,7 +242,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
     )
     // Owner fencing covers the source host; moves must fence the destination too.
-    const destination = await resolveAutomationDestination(client, target)
+    const destination = await resolveAutomationUpdateDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {
       id,
       ...(expectedOwner ? { expectedOwner } : {}),

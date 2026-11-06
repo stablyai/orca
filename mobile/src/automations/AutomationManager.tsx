@@ -25,7 +25,9 @@ import {
   automationShowRead,
   automationUpdateWrite
 } from './automation-operations'
-import { automationUpdateParams, type AutomationDraft } from './automation-draft'
+import type { AutomationDraft } from './automation-draft'
+import { saveAutomation } from './automation-save'
+import type { AutomationServerHandoff } from './automation-managed-server'
 import type { AutomationTargets } from './automation-target-inventory'
 import { useAutomationCatalog } from './use-automation-catalog'
 import { automationStyles as styles } from './automation-styles'
@@ -43,6 +45,8 @@ export function AutomationManager(props: {
   executionHost?: ExecutionHostId
   /** Opens on a new automation's editor, shown once the catalog loads; read on mount only. */
   startInEditor?: boolean
+  /** A managed SSH host's create continues on its server, whose editor opens on the carried draft. */
+  handoff?: AutomationServerHandoff
   /** The screen's bar; it carries the Automations / Runs switch as its accessory. */
   renderHeader?: (tabs: ReactNode) => ReactNode
   /** Filled while the editor is open, so tab and host switches ask before dropping its edits. */
@@ -51,8 +55,9 @@ export function AutomationManager(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const catalog = useAutomationCatalog(props.client, !!props.executionHost)
-  const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
-  const [view, setView] = useState<AutomationView>(startView)
+  const [view, setView] = useState<AutomationView>(() =>
+    props.startInEditor ? { kind: 'editor', initialDraft: props.handoff?.draft } : { kind: 'list' }
+  )
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')
   const [filter, setFilter] = useState<AutomationRunScope>(null)
   const filterId = filter?.automationId ?? ''
@@ -205,43 +210,13 @@ export function AutomationManager(props: {
   }
   function save(draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) {
     const editing = view.kind === 'editor' ? view.row : undefined
-    void catalog.perform(
-      async (client, current) => {
-        if (editing) {
-          const prepared = await setupConsent.prepare(client, draft, targets, current, original)
-          if (!prepared || !current()) {
-            return null
-          }
-          const params = automationUpdateParams(editing.automation.id, prepared, original, targets)
-          const result = automationUpdateWrite.interpret(
-            await automationUpdateWrite.request(
-              client,
-              {
-                ...params,
-                expectedOwner: toAutomationOwnerPrecondition(editing.item.selector)
-              },
-              ACTION_OPTIONS
-            )
-          )
-          return {
-            automation: result.automation,
-            item: params.destination
-              ? { automationId: result.automation.id, selector: params.destination.selector }
-              : editing.item
-          }
-        }
-        await createAttempt.submit(client, draft, targets, catalog.capabilities, current, () =>
-          setupConsent.prepare(client, draft, targets, current)
-        )
-        return null
-      },
-      (saved) => {
-        if (!saved) {
-          return
-        }
-        const id = saved.automation.id
-        catalog.setRows((rows) => [...rows.filter((row) => row.automation.id !== id), saved])
-        setView({ kind: 'detail', row: saved })
+    saveAutomation(
+      { editing, catalog, setupConsent, createAttempt, handoff: props.handoff },
+      {
+        draft,
+        original,
+        targets,
+        onSaved: (saved) => setView({ kind: 'detail', row: saved })
       }
     )
   }

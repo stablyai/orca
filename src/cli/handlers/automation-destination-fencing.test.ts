@@ -7,6 +7,38 @@ import {
 import { RuntimeClientError } from '../runtime/types'
 import { AUTOMATION_HANDLERS } from './automations'
 
+// The CLI's saved servers, and the one managed server it may write to.
+const servers = vi.hoisted(() => {
+  const state: {
+    environments: { id: string; orcadDeployment?: { sshTargetId: string } }[]
+    repoIds: string[]
+    writes: { environmentId: string; params: unknown }[]
+  } = { environments: [], repoIds: [], writes: [] }
+  return state
+})
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', async (original) => ({
+  ...(await original<object>()),
+  listEnvironments: () => servers.environments
+}))
+vi.mock('../runtime-client', async (original) => ({
+  ...(await original<object>()),
+  RuntimeClient: class {
+    constructor(
+      _userDataPath: string,
+      _timeoutMs: number | undefined,
+      _pairingCode: null,
+      readonly environmentId: string
+    ) {}
+    async call(method: string, params?: unknown): Promise<unknown> {
+      if (method === 'repo.list') {
+        return ok({ repos: servers.repoIds.map((id) => ({ id })) })
+      }
+      servers.writes.push({ environmentId: this.environmentId, params })
+      return ok({ automation: { id: 'on-server' } })
+    }
+  }
+}))
+
 type SshRegistration = { id: string; label: string; generation?: number }
 
 function ok(result: unknown): unknown {
@@ -75,7 +107,12 @@ const CREATE_FLAGS: [string, string][] = [
   ['trigger', 'daily']
 ]
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  servers.environments = []
+  servers.repoIds = []
+  servers.writes = []
+})
 
 // Source-owner checks cannot protect a destination removed or re-registered before the write.
 describe('CLI automation writes fence the host they land on', () => {
@@ -251,5 +288,50 @@ describe('CLI automation writes fence the host they land on', () => {
 
     expect(call).not.toHaveBeenCalledWith('repo.show', expect.anything())
     expect(writes[0]?.params).not.toHaveProperty('destination')
+  })
+})
+
+// Desktop copies on a managed SSH host never run; its server holds them (#24863).
+describe('CLI automation creates for a managed SSH host', () => {
+  const managedHost = () => {
+    servers.environments = [{ id: 'env-1', orcadDeployment: { sshTargetId: 'box-1' } }]
+    return authority({
+      registered: [{ id: 'box-1', label: 'box 1', generation: 7 }],
+      repoConnectionId: 'box-1'
+    })
+  }
+
+  it("creates on the host's Orca server by project id", async () => {
+    const { call, writes } = managedHost()
+    servers.repoIds = ['r1']
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await AUTOMATION_HANDLERS['automations create']!({
+      client: { call } as never,
+      cwd: '/tmp',
+      flags: new Map([...CREATE_FLAGS, ['repo', 'repo-on-box-1']]),
+      json: true
+    })
+
+    expect(writes).toEqual([])
+    expect(servers.writes).toEqual([
+      { environmentId: 'env-1', params: expect.objectContaining({ repo: 'id:r1' }) }
+    ])
+    expect(servers.writes[0]?.params).not.toHaveProperty('destination')
+  })
+
+  it('asks to move a project the server does not have', async () => {
+    const { call } = managedHost()
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await expect(
+      AUTOMATION_HANDLERS['automations create']!({
+        client: { call } as never,
+        cwd: '/tmp',
+        flags: new Map([...CREATE_FLAGS, ['repo', 'repo-on-box-1']]),
+        json: true
+      })
+    ).rejects.toThrow('Move this project to box 1 first.')
+    expect(servers.writes).toEqual([])
   })
 })

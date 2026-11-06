@@ -11,6 +11,13 @@ export class AutomationDraftValidationError extends Error {
   }
 }
 
+/** The project exists only on the desktop's SSH copy, not on the host's managed Orca server. */
+export class AutomationProjectNotOnServerError extends Error {
+  constructor(readonly host: string) {
+    super(`Move this project to ${host} first.`)
+  }
+}
+
 export function automationOutcomeUnknownMessage(): string {
   return translate(
     'automations.mobile.outcomeUnknown',
@@ -37,6 +44,15 @@ export function automationErrorMessage(error: unknown): string {
           'That host is no longer available on this authority. Pick a host and try again.'
         )
     }
+  }
+  if (error instanceof AutomationProjectNotOnServerError) {
+    return translate(
+      'automations.mobile.moveProjectToServerFirst',
+      'Move this project to {{host}} first.',
+      {
+        host: error.host
+      }
+    )
   }
   if (isRpcDeliveryUnknown(error)) {
     return automationOutcomeUnknownMessage()

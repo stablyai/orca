@@ -171,3 +171,35 @@ describe('resolveAutomationRunTarget projectId drift', () => {
     })
   })
 })
+
+describe('resolveAutomationRunTarget on a managed SSH host', () => {
+  it('skips a desktop row whose SSH host now runs automations on its Orca server', () => {
+    const sshContext = { hostId: 'ssh:box', path: '/srv/repo' } as const
+    const store = makeStore(
+      [makeSetup(sshContext)],
+      [makeRepo({ connectionId: 'box', path: '/srv/repo' })]
+    )
+    store.getSshTarget = (id: string) =>
+      id === 'box'
+        ? {
+            id,
+            label: 'Build box',
+            host: 'box',
+            port: 22,
+            username: 'me',
+            orcadFence: { environmentId: 'env-1' }
+          }
+        : undefined
+    const automation = makeAutomation(makeRunContext(sshContext), {
+      executionTargetType: 'ssh',
+      executionTargetId: 'box'
+    })
+
+    expect(resolveAutomationRunTarget(store, automation)).toEqual({
+      ok: false,
+      error: 'Build box now runs automations on its Orca server',
+      errorCode: 'managedHostServer',
+      errorParams: { host: 'Build box' }
+    })
+  })
+})

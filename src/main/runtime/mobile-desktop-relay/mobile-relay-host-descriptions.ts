@@ -1,6 +1,7 @@
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { describePairedServerHosts } from '../../../shared/remote-runtime/host-catalog/paired-server-hosts'
+import { getManagedOrcadSshTargetId } from '../../../shared/managed-orcad-execution-host'
 import type {
   MobileRelayHost,
   MobileRelayHostRelay
@@ -31,6 +32,7 @@ export function describeRelayHosts(
       return []
     }
     const answer = lastVerifiedRuntimeStatus(listing.statusByEnvironmentId.get(host.environmentId))
+    const managedSshTargetId = getManagedOrcadSshTargetId(identity)
     return [
       {
         hostId: host.hostId,
@@ -41,7 +43,8 @@ export function describeRelayHosts(
         relay: relayVerdict(host.health, answer),
         ...(host.installationId ? { installationId: host.installationId } : {}),
         ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
-        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
+        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {}),
+        ...(managedSshTargetId ? { managedSshTargetId } : {})
       }
     ]
   })

@@ -23,7 +23,7 @@ import { getAutomationHostDetailDisplay } from './automation-host-detail-display
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
-import { automationRunErrorText } from './automation-run-error-copy'
+import { automationRunErrorText, managedHostServerText } from './automation-run-error-copy'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -245,7 +245,23 @@ export function AutomationDetail({
         </div>
       </div>
 
-      {automation.executionTargetType === 'ssh' ? (
+      {hostEntry?.servedBy ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
+          <span className="min-w-0">{managedHostServerText(hostEntry.label)}</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            onClick={() => onEdit(automation)}
+          >
+            {translate(
+              'auto.components.automations.AutomationDetail.moveToServer',
+              'Move to {{host}}',
+              { host: hostEntry.label }
+            )}
+          </Button>
+        </div>
+      ) : automation.executionTargetType === 'ssh' ? (
         <div className="rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
           {translate(
             'auto.components.automations.AutomationDetail.dbef8dc110',
@@ -254,7 +270,7 @@ export function AutomationDetail({
         </div>
       ) : null}
 
-      {runNowAvailability?.canRunNow === false ? (
+      {runNowAvailability?.canRunNow === false && !hostEntry?.servedBy ? (
         <div className="rounded-md border border-border/50 bg-muted/40 p-3 text-sm text-muted-foreground shadow-sm">
           {runNowAvailability.message}
         </div>

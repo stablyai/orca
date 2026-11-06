@@ -17253,7 +17253,8 @@
           "reuseLiveSession": "重複使用執行中的工作階段",
           "freshEachRun": "每次執行都新建",
           "precheckEnabled": "已啟用，{{timeout}}",
-          "precheckNone": "無"
+          "precheckNone": "無",
+          "moveToServer": "移至 {{host}}"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -22523,6 +22524,7 @@
       "noRunnableHost": "此自動化沒有可供執行的主機。",
       "wslMoveInProgress": "此自動化的專案正在移至其 WSL 主機，因此 Orca 略過了此次執行。移動完成後便會恢復執行。",
       "wslMoveOwnedByHost": "此自動化的專案現在在其 WSL 主機上執行，自動化本身也由該主機執行。Orca 不再執行這個本機副本。",
+      "managedHostServer": "{{host}} 現在在其 Orca 伺服器上執行自動化",
       "missedGraceWindow": "Orca 再次檢查時，此次執行的補執行寬限期已過。",
       "targetMissing": "自動化主機已不在註冊清單中，因此已無處執行此自動化。",
       "targetReplaced": "自動化主機已被移除並重新註冊，因此必須為此自動化重新建立關聯後才能執行。",

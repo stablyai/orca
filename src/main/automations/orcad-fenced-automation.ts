@@ -1,11 +1,13 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { Automation } from '../../shared/automations-types'
+import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence/loading-store/store'
+import { isManagedOrcadSshTarget } from '../ssh/connection/ssh-connection-store'
 import { listOrcadMigrationCutoverChainForTarget } from '../ssh/orcad-migration-cutover-journal'
 
 export const ORCAD_FENCED_AUTOMATION = "This automation now runs on its SSH host's Orca server."
 
-/** While a move is in flight, or once it took this row, any desktop write would break or duplicate it. Rows Move anyway left behind stay runnable here. */
+/** While a move is in flight, or once it took this row, any desktop write would break or duplicate it. Rows Move anyway left behind stay listed, skipped by managedOrcadHostOf. */
 export function isOrcadFencedAutomation(
   store: Pick<Store, 'getSshTarget'>,
   automation: Pick<Automation, 'id' | 'executionTargetType' | 'executionTargetId'>,
@@ -32,4 +34,16 @@ export function isOrcadFencedAutomation(
         cutover.manifest.payload.dormantState?.automations?.some(({ id }) => id === automation.id)
     )
   )
+}
+
+/** A desktop row on a host its managed Orca server now serves: it can never run here (#27499). */
+export function managedOrcadHostOf(
+  store: Pick<Store, 'getSshTarget'>,
+  automation: Pick<Automation, 'executionTargetType' | 'executionTargetId'>
+): SshTarget | null {
+  const target =
+    automation.executionTargetType === 'ssh'
+      ? store.getSshTarget(automation.executionTargetId)
+      : undefined
+  return target && isManagedOrcadSshTarget(target) ? target : null
 }

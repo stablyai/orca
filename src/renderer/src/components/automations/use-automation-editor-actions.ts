@@ -6,6 +6,7 @@ import { AUTOMATION_DEFAULT_TIME, getDefaultWorktree } from './automation-draft-
 import type { AutomationTemplate } from './automation-templates'
 import { dispatchAutomationReread } from './automation-row-action-dispatch'
 import { listAutomationsForTarget } from './automation-host-client'
+import { automationCreateHostFor } from './automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
@@ -42,7 +43,8 @@ export function useAutomationEditorActions({
     editingHostStableKey
   } = local
   const { getDefaultTarget, automationDispatchContext, rowRecoveryHost } = destination
-  const { destinationForProject, editHostResolution, editDestinationControl } = destinationForm
+  const { destinationForProject, editHostResolution, editDestinationControl, editHostEntries } =
+    destinationForm
 
   const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
@@ -110,16 +112,24 @@ export function useAutomationEditorActions({
     }
     setEditingAutomationId(latest.id)
     setEditingRowKey(row.key)
-    const initialHostStableKey = rowRecoveryHost(row.key)?.stableKey ?? null
-    const initialDestination = destinationForProject(latest.projectId, initialHostStableKey)
+    const rowHostStableKey = rowRecoveryHost(row.key)?.stableKey ?? null
+    const initialHost = automationCreateHostFor(editHostEntries, rowHostStableKey)
+    // A managed SSH host's row can only be saved by moving it to that host's Orca server.
+    const movingToServer = initialHost !== null && initialHost.stableKey !== rowHostStableKey
+    const initialDestination = destinationForProject(
+      latest.projectId,
+      initialHost?.stableKey ?? null
+    )
     setEditingDestination(
       initialDestination ? { projectId: latest.projectId, destination: initialDestination } : null
     )
-    setEditingHostStableKey(initialDestination?.entry.stableKey ?? null)
+    setEditingHostStableKey(
+      initialDestination?.entry.stableKey ?? (movingToServer ? initialHost.stableKey : null)
+    )
     const nextDraft = buildAutomationEditDraft(latest)
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
-    setTargetEdited(false)
+    setTargetEdited(movingToServer)
     setCreateOpen(true)
   }
 
