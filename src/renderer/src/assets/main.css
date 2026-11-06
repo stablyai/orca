@@ -2377,6 +2377,8 @@ html.native-shell .app-layout {
 
 .agent-working-spinner {
   animation: agent-spinner-rotate 86400s linear infinite;
+  -webkit-mask-image: conic-gradient(from 45deg, transparent, black 60deg, black);
+  mask-image: conic-gradient(from 45deg, transparent, black 60deg, black);
 }
 
 /* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
@@ -2410,6 +2412,8 @@ html.native-shell .app-layout {
   .animate-spin,
   .animate-pulse {
     animation: none;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 
