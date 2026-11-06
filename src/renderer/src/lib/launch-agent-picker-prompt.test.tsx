@@ -149,7 +149,10 @@ it.each(
     changePrompt(editor(), 'review this change')
     await act(async () => button('Launch terminal').click())
     expect(dispatch).toHaveBeenCalledOnce()
-    expect(dispatch.mock.results[0]).toMatchObject({ type: 'return', value: null })
+    expect(dispatch.mock.results[0]).toMatchObject({
+      type: 'return',
+      value: { refused: { delivered: false, failureNotified: true } }
+    })
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
     expect(document.querySelector('textarea[aria-label="Arguments"]')).not.toBeNull()

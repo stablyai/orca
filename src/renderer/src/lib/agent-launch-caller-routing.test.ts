@@ -554,7 +554,7 @@ describe('agent launch caller routing', () => {
     expect(mockCreateSupport).not.toHaveBeenCalled()
   })
 
-  it('returns null without opening any surface when no startup plan can be built', async () => {
+  it('returns a notified refusal without opening a surface when no startup plan can be built', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     // Unbalanced argument quoting must abort before any surface opens.
@@ -565,7 +565,7 @@ describe('agent launch caller routing', () => {
       agentArgs: "--model 'gpt-5.5"
     })
 
-    expect(result).toBeNull()
+    expect(result).toEqual({ refused: { delivered: false, failureNotified: true } })
     expect(store.createTab).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })
