@@ -1,15 +1,25 @@
 import { useMemo } from 'react'
+import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-
+import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 export function useWorktreeFiles(
   openFiles: readonly OpenFile[],
   renderedActiveWorktreeId: string | null
 ): OpenFile[] {
+  const tabs = useAppStore((state) =>
+    renderedActiveWorktreeId ? state.unifiedTabsByWorktree[renderedActiveWorktreeId] : undefined
+  )
   return useMemo(
     () =>
       renderedActiveWorktreeId
-        ? openFiles.filter((file) => file.worktreeId === renderedActiveWorktreeId)
+        ? workspaceEditorFiles(
+            {
+              openFiles: openFiles as OpenFile[],
+              unifiedTabsByWorktree: { [renderedActiveWorktreeId]: tabs ?? [] }
+            },
+            renderedActiveWorktreeId
+          )
         : [],
-    [openFiles, renderedActiveWorktreeId]
+    [openFiles, tabs, renderedActiveWorktreeId]
   )
 }

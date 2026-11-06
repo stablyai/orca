@@ -58,7 +58,7 @@ function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: stri
 
 describe('createEditorSlice editor drafts', () => {
   it('drops replaced preview drafts so hidden preview state cannot linger', () => {
-    const store = createEditorStore()
+    const store = createEditorTabsStore()
 
     store.getState().openFile(
       {

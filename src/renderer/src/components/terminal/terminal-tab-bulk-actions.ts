@@ -1,3 +1,4 @@
+import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute
@@ -67,7 +68,7 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     return
   }
   const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  const currentEditorFiles = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
+  const currentEditorFiles = workspaceEditorFiles(state, activeWorktreeId)
   const runtimeEnvironmentId = resolveTerminalWorktreeRoute(
     state,
     activeWorktreeId

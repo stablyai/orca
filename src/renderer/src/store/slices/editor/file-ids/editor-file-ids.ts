@@ -1,3 +1,4 @@
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
@@ -14,11 +15,16 @@ export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined)
 }
 
 export function isSameEditorOwner(
-  file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId'>,
+  file: Pick<
+    OpenFile,
+    'worktreeId' | 'runtimeEnvironmentId' | 'operationProvenance' | 'externalSshTargetId'
+  >,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  executionHostId?: string
 ): boolean {
   return (
+    (!executionHostId || getOpenFileExecutionHostId(file) === executionHostId) &&
     file.worktreeId === worktreeId &&
     runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
   )
@@ -63,9 +69,12 @@ export function canReuseLocalWslAlias(
 export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  executionHostId?: string
 ): string {
-  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
+  const runtimeKey = executionHostId?.startsWith('ssh:')
+    ? executionHostId
+    : (runtimeOwnerKey(runtimeEnvironmentId) ?? 'local')
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
@@ -134,20 +143,21 @@ export function resolveEditorFileIdForOwner(
   filePath: string,
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined,
-  modes?: readonly OpenFile['mode'][]
+  modes?: readonly OpenFile['mode'][],
+  executionHostId?: string
 ): string {
   const existing = state.openFiles.find(
     (file) =>
       file.filePath === filePath &&
       matchesEditorMode(file, modes) &&
-      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)
+      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId, executionHostId)
   )
   if (existing) {
     return existing.id
   }
   // Why: restore always names a server's file by its owned id; minting it on first open avoids a rename (and remount) at restart.
-  if (runtimeOwnerKey(runtimeEnvironmentId) !== null) {
-    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
+  if (runtimeOwnerKey(runtimeEnvironmentId) !== null || executionHostId?.startsWith('ssh:')) {
+    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId, executionHostId)
   }
   // Why: every frame restores floating files under their owned id; minting it here keeps main's tab on the same id.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {

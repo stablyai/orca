@@ -1,3 +1,4 @@
+import { editorContentIsReferenced } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
@@ -18,26 +19,20 @@ export function createWorkspaceTabCloseCommands({
   worktreeId: string
   groupTabs: Tab[]
 }) {
-  const { closeUnifiedTab, closeFile } = useAppStore.getState()
+  const { closeUnifiedTab } = useAppStore.getState()
 
   const closeEditorIfUnreferenced = (
     entityId: string,
     closingTabId: string,
     whenEmptied: (() => void) | null
   ) => {
-    const otherReference = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (item) =>
-        item.id !== closingTabId &&
-        item.entityId === entityId &&
-        isEditorTabContentType(item.contentType)
-    )
+    const otherReference = editorContentIsReferenced(useAppStore.getState(), entityId, closingTabId)
     if (!otherReference) {
       if (needsSavePromptOnClose(useAppStore.getState(), entityId)) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
         requestEditorFileClose(entityId, whenEmptied ? { onClosed: whenEmptied } : undefined)
         return false
       }
-      closeFile(entityId)
     }
     return true
   }

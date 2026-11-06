@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
@@ -35,6 +36,8 @@ import type {
 } from './restored-editor-owner'
 
 export type OpenFileOptions = {
+  placementWorkspaceId?: string
+  executionHostId?: ExecutionHostId
   preview?: boolean
   targetGroupId?: string
   recordReplacedPreview?: boolean
@@ -130,7 +133,11 @@ export type EditorFilesSlice = {
    */
   closeFile: (
     fileId: string,
-    opts?: { captureRecentlyClosed?: boolean; keepEditorBuffer?: EditorBufferKeepRequest }
+    opts?: {
+      captureRecentlyClosed?: boolean
+      keepEditorBuffer?: EditorBufferKeepRequest
+      placementWorkspaceId?: string
+    }
   ) => void
   closeAllFiles: () => void
   /** Most recently closed editor tabs per worktree (for Cmd/Ctrl+Shift+T). */
@@ -185,7 +192,8 @@ export type EditorFilesSlice = {
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
     areaFilter?: string,
-    entriesSnapshot?: GitStatusEntry[]
+    entriesSnapshot?: GitStatusEntry[],
+    options?: EditorOpenTargetOptions
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -205,7 +213,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     entries: ConflictReviewEntry[],
-    source: ConflictReviewState['source']
+    source: ConflictReviewState['source'],
+    options?: EditorOpenTargetOptions
   ) => void
   openCheckRunDetails: (
     worktreeId: string,
@@ -224,7 +233,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     compare: GitBranchCompareSummary,
-    alternate?: CombinedDiffAlternate
+    alternate?: CombinedDiffAlternate,
+    options?: EditorOpenTargetOptions
   ) => void
   openCommitAllDiffs: (
     worktreeId: string,
@@ -232,6 +242,7 @@ export type EditorFilesSlice = {
     compare: GitCommitCompareSummary,
     entries: GitBranchChangeEntry[],
     subject?: string,
-    message?: string
+    message?: string,
+    options?: EditorOpenTargetOptions
   ) => void
 }

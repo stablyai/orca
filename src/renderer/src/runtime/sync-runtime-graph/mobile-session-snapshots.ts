@@ -34,7 +34,6 @@ import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
 import type { MobileSessionPublicationInputs } from './types'
 import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function buildMobileSessionTabSnapshots(
   state: AppState,
@@ -94,9 +93,14 @@ export function buildMobileSessionTabSnapshots(
     )
     const unifiedTabById = new Map(inputs.unifiedTabs.map((tab) => [tab.id, tab]))
     const openFilesForWorktree = inputs.openFilesById
+    const placedEditorIds = new Set(
+      inputs.unifiedTabs
+        .filter((tab) => tab.contentType === 'editor' || tab.contentType === 'diff')
+        .map((tab) => tab.entityId)
+    )
     const editorIds = inputs.openFileIds.filter((fileId) => {
       const file = openFilesForWorktree?.get(fileId)
-      return file ? isMobilePublishableOpenFile(file) : false
+      return file ? placedEditorIds.has(file.id) && isMobilePublishableOpenFile(file) : false
     })
     const terminalIds = [...terminalTabById.values()]
       .filter(
@@ -112,7 +116,6 @@ export function buildMobileSessionTabSnapshots(
         .map((workspace) => workspace.id)
     })
     const tabs: RuntimeMobileSessionSnapshotTab[] = []
-    const emittedEditorFileIds = new Set<string>()
     const emittedEditorTabIds = new Set<string>()
 
     for (const item of groupProjection.order) {
@@ -135,7 +138,6 @@ export function buildMobileSessionTabSnapshots(
           buildMobileMarkdownTab(inputs, file, unifiedTab) ??
             buildMobileFileTab(inputs, file, unifiedTab)
         )
-        emittedEditorFileIds.add(file.id)
         emittedEditorTabIds.add(item.tabId ?? item.id)
       } else if (item.type === 'browser') {
         const workspace = browserWorkspaceById.get(item.id)
@@ -157,7 +159,6 @@ export function buildMobileSessionTabSnapshots(
       const unifiedEditorTabs = inputs.unifiedTabs.filter(
         (tab) => tab.contentType === 'editor' || tab.contentType === 'diff'
       )
-      const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
       for (const unifiedTab of unifiedEditorTabs) {
         if (emittedEditorTabIds.has(unifiedTab.id)) {
           continue
@@ -173,37 +174,39 @@ export function buildMobileSessionTabSnapshots(
         fallbackEditorTabs.push({ tabId: fallbackTab.id, groupId: unifiedTab.groupId })
         emittedEditorTabIds.add(unifiedTab.id)
       }
-      // Switch point: a row goes out under its tab id only, the id main's layout resolves (L280).
-      const tablessFiles = ORCA_LAYOUT_OWNER_IS_MAIN ? [] : openFilesForWorktree.values()
-      for (const file of tablessFiles) {
-        if (!isMobilePublishableOpenFile(file) || emittedEditorFileIds.has(file.id)) {
-          continue
-        }
-        if (unifiedEditorFileIds.has(file.id)) {
-          emittedEditorFileIds.add(file.id)
-          continue
-        }
-        const fallbackTab = buildMobileMarkdownTab(inputs, file) ?? buildMobileFileTab(inputs, file)
-        tabs.push(fallbackTab)
-        fallbackEditorTabs.push({ tabId: fallbackTab.id, groupId: null })
-        emittedEditorFileIds.add(file.id)
-      }
     }
 
     const active = tabs.find((tab) => tab.isActive) ?? null
-    const tabGroups = appendFallbackEditorTabsToGroups(
+    const projectedTabGroups = appendFallbackEditorTabsToGroups(
       groupProjection.tabGroups,
       inputs.groups,
       inputs.activeGroupId,
       fallbackEditorTabs,
       active?.id ?? null
     )
+    const publishedIds = new Set(tabs.map((tab) => tab.id))
+    const tabGroups = projectedTabGroups
+      ?.map((group) => {
+        const tabOrder = group.tabOrder.filter((id) => publishedIds.has(id))
+        return {
+          ...group,
+          tabOrder,
+          recentTabIds: group.recentTabIds?.filter((id) => publishedIds.has(id)),
+          activeTabId:
+            group.activeTabId && publishedIds.has(group.activeTabId)
+              ? group.activeTabId
+              : (tabOrder[0] ?? null)
+        }
+      })
+      .filter((group) => group.tabOrder.length > 0)
     const tabGroupLayout =
       tabGroups && tabGroups.length > 0
         ? pruneTabGroupLayout(inputs.tabGroupLayout, new Set(tabGroups.map((group) => group.id)))
-        : groupProjection.tabGroupLayout
+        : null
     const content = {
-      activeGroupId: inputs.activeGroupId,
+      activeGroupId: tabGroups?.some((group) => group.id === inputs.activeGroupId)
+        ? inputs.activeGroupId
+        : (tabGroups?.[0]?.id ?? null),
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),

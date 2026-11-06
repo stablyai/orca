@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RecentlyClosedTabPosition } from '../../recently-closed-tabs'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type {
@@ -119,6 +120,8 @@ export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 export type EditorTabSelection = 'focus' | 'background' | 'none'
 
 export type EditorOpenTargetOptions = {
+  placementWorkspaceId?: string
+  executionHostId?: ExecutionHostId
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null

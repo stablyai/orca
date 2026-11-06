@@ -1,3 +1,4 @@
+import { workspaceEditorFiles } from '../tabs/workspace-editor-files'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
@@ -47,6 +48,7 @@ export function createCloseFileAction(
     closeFile: (fileId, opts) => {
       // Why: capture untitled+dirty state before set() mutates the store, so cleanup of throwaway untitled files can decide after removal.
       const preClose = get().openFiles.find((f) => f.id === fileId)
+      const placementId = opts?.placementWorkspaceId ?? preClose?.worktreeId
       // Why: stale same-owner records survive tab close; retain other owners and pending drafts.
       const fileIdsToClose = new Set(
         preClose
@@ -96,7 +98,7 @@ export function createCloseFileAction(
       // Switch point: the tab's place is read before main's frame drops the tab.
       const closedPosition =
         ORCA_LAYOUT_OWNER_IS_MAIN && preClose
-          ? getRecentlyClosedTabPosition(get(), preClose.worktreeId, fileId)
+          ? getRecentlyClosedTabPosition(get(), placementId ?? preClose.worktreeId, fileId)
           : undefined
       const cleanUp = (): void => {
         set((s) => {
@@ -143,16 +145,14 @@ export function createCloseFileAction(
           const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
 
           if (s.activeFileId && fileIdsToClose.has(s.activeFileId)) {
-            const worktreeId = closedFile?.worktreeId ?? s.activeWorktreeId
-            const worktreeFiles = worktreeId
-              ? s.openFiles.filter((file) => file.worktreeId === worktreeId)
-              : s.openFiles
+            const worktreeId = placementId ?? closedFile?.worktreeId ?? s.activeWorktreeId
+            const worktreeFiles = worktreeId ? workspaceEditorFiles(s, worktreeId) : s.openFiles
             newActiveId = findAdjacentOpenFileId(worktreeFiles, fileIdsToClose, s.activeFileId)
           }
 
-          const closedWorktreeId = closedFile?.worktreeId
+          const closedWorktreeId = placementId ?? closedFile?.worktreeId
           if (closedWorktreeId) {
-            const worktreeFiles = s.openFiles.filter((file) => file.worktreeId === closedWorktreeId)
+            const worktreeFiles = workspaceEditorFiles(s, closedWorktreeId)
             const worktreeActiveFileId = s.activeFileIdByWorktree[closedWorktreeId]
             if (worktreeActiveFileId && fileIdsToClose.has(worktreeActiveFileId)) {
               newActiveFileIdByWorktree[closedWorktreeId] = findAdjacentOpenFileId(
@@ -168,7 +168,7 @@ export function createCloseFileAction(
           // Why: editors share a mixed tab strip with browser tabs; closing the last editor should reveal a browser tab before falling back to a terminal.
           const activeWorktreeId = s.activeWorktreeId
           const remainingForWorktree = activeWorktreeId
-            ? newFiles.filter((f) => f.worktreeId === activeWorktreeId)
+            ? workspaceEditorFiles({ ...s, openFiles: newFiles }, activeWorktreeId)
             : newFiles
           const browserTabsForWorktree = activeWorktreeId
             ? (s.browserTabsByWorktree[activeWorktreeId] ?? [])
@@ -214,7 +214,7 @@ export function createCloseFileAction(
             !hasRemainingUnifiedTabs
 
           // Why: prune the closed id from tabBarOrderByWorktree so stale ids don't shift positions on the next reconcile.
-          const worktreeId = closedFile?.worktreeId ?? activeWorktreeId
+          const worktreeId = placementId ?? closedFile?.worktreeId ?? activeWorktreeId
           const nextTabBarOrderByWorktree =
             worktreeId && s.tabBarOrderByWorktree
               ? {
@@ -227,7 +227,7 @@ export function createCloseFileAction(
 
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
-          const wtRecent = closedFile?.worktreeId
+          const wtRecent = placementId ?? closedFile?.worktreeId
           // Exclude deleted empty placeholders, ephemeral previews and chat visuals from undo; they have no useful reopen target.
           if (
             closedFile &&
@@ -316,7 +316,7 @@ export function createCloseFileAction(
 
       // Why: route editor/diff closes through the unified close path (MRU + visual-neighbor fallback) so they match terminal/browser tab-close behavior.
       for (const unifiedTabId of unifiedTabIdsToClose) {
-        get().closeUnifiedTab(unifiedTabId)
+        get().closeUnifiedTab(unifiedTabId, { editorRetirementHandled: true })
       }
     }
   }

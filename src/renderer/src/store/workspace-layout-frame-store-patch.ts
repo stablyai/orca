@@ -1,3 +1,4 @@
+import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 // Patch framed workspaces, reusing equal objects to avoid rerenders and retaining window-owned terminal/editor/page state. Every built patch applies and records staged browser handover (L284).
 
 import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../shared/workspace-layout/workspace-layout-beside'
@@ -218,16 +219,19 @@ export function buildLayoutFrameStorePatch(
     new Set(
       keys.flatMap((key) =>
         (tabs[key] ?? []).flatMap((tab) =>
-          isEditorTabContentType(tab.contentType) ? [`${key}\0${tab.entityId}`] : []
+          isEditorTabContentType(tab.contentType) ? [tab.entityId] : []
         )
       )
     )
   const shown = editorEntities(state.unifiedTabsByWorktree)
   const stillShown = editorEntities(built.unifiedTabsByWorktree)
   const keeps = (file: AppState['openFiles'][number]): boolean => {
-    const entity = `${file.worktreeId}\0${file.id}`
+    const entity = file.id
     return (
-      !keySet.has(file.worktreeId) ||
+      hasPendingEntityTab(null, file.id) ||
+      Object.entries(state.unifiedTabsByWorktree).some(
+        ([key, tabs]) => !keySet.has(key) && tabs.some((tab) => tab.entityId === file.id)
+      ) ||
       builtFileIds.has(file.id) ||
       stillShown.has(entity) ||
       !shown.has(entity)

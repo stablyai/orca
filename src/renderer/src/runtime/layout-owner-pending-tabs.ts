@@ -79,20 +79,24 @@ export function pendingCloseCleansFile(tabId: string): boolean {
 }
 
 /** Whether a tab showing this entity is still being opened or closed. */
-export function hasPendingEntityTab(worktreeId: string, entityId: string): boolean {
+export function hasPendingEntityTab(worktreeId: string | null, entityId: string): boolean {
   return [...pending.values()].some(
-    (entry) => entry.worktreeId === worktreeId && entry.entityId === entityId
+    (entry) =>
+      (worktreeId === null || entry.worktreeId === worktreeId) && entry.entityId === entityId
   )
 }
 
 /** Runs `run` once every pending tab showing this entity is answered; at once when none is. */
 export function afterPendingEntityTabs(
-  worktreeId: string,
+  worktreeId: string | null,
   entityId: string,
   run: () => void
 ): void {
   const tabIds = [...pending]
-    .filter(([, entry]) => entry.worktreeId === worktreeId && entry.entityId === entityId)
+    .filter(
+      ([, entry]) =>
+        (worktreeId === null || entry.worktreeId === worktreeId) && entry.entityId === entityId
+    )
     .map(([tabId]) => tabId)
   afterPendingTabs(tabIds, () => run())
 }
@@ -121,4 +125,21 @@ export function afterPendingTabs(
 
 export function _resetPendingTabsForTests(): void {
   pending.clear()
+}
+
+/** Deletion retires outstanding placement requests before their late answers can recreate a view. */
+export function retirePendingWorkspaceTabs(
+  workspaceIds: ReadonlySet<string>,
+  entityIds: ReadonlySet<string>
+): void {
+  for (const [id, entry] of pending) {
+    if (workspaceIds.has(entry.worktreeId) || entityIds.has(entry.entityId)) {
+      pending.delete(id)
+      queueMicrotask(() => {
+        for (const waiter of entry.waiters) {
+          waiter(null)
+        }
+      })
+    }
+  }
 }

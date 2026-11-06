@@ -14,6 +14,7 @@ import {
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteResultForHost,
   type WorktreeOperationRoute,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
@@ -58,12 +59,14 @@ export function captureEditorFileOperationProvenance(
   state: EditorOwnerState,
   worktreeId: string,
   ownerHint: string | null | undefined,
-  ownerHintProvided: boolean
+  ownerHintProvided: boolean,
+  executionHostId?: ExecutionHostId
 ): EditorFileOperationProvenance {
   const owner = resolveEditorOwnerRoute(
     state,
     worktreeId,
-    state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null
+    executionHostId ??
+      (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
   )
   const ownershipProjection = owner.ownershipProjection
   const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
@@ -117,7 +120,11 @@ function resolveEditorOperationAuthority(
       return undefined
     }
   } else if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-    const explicit = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+    const explicit = resolveWorktreeOperationRouteResultForHost(
+      state,
+      worktreeId,
+      route.executionHostId
+    )
     if (explicit.kind !== 'resolved' || JSON.stringify(explicit.route) !== JSON.stringify(route)) {
       return undefined
     }
@@ -146,6 +153,14 @@ export function resolveEditorOwnerRoute(
     return { kind: 'resolved', route: floatingRoute, ownershipProjection: 'explicit' }
   }
   const ownerState = focusFreeRouteStateOf(state)
+  if (folderHostId && parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+    const qualified = resolveWorktreeOperationRouteResultForHost(
+      ownerState,
+      worktreeId,
+      folderHostId
+    )
+    return { ...qualified, ownershipProjection: 'explicit' }
+  }
   const scope = parseWorkspaceKey(worktreeId)
   const explicit: WorktreeOperationRouteResolution =
     scope?.type === 'folder'

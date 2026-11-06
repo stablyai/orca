@@ -143,8 +143,11 @@ function framedViewFiles(layouts: WorkspaceLayoutCache): Map<string, FramedViewF
   const files = new Map<string, FramedViewFile>()
   for (const [key, layout] of Object.entries(layouts)) {
     for (const tab of layout.tabs) {
-      if (tab.editorView && !files.has(fileKey(key, tab.entityId))) {
-        files.set(fileKey(key, tab.entityId), {
+      if (
+        tab.editorView &&
+        !files.has(fileKey(tab.editorView.file.worktreeId ?? key, tab.entityId))
+      ) {
+        files.set(fileKey(tab.editorView.file.worktreeId ?? key, tab.entityId), {
           view: tab.editorView.view,
           file: openFileOfLayoutEditorView(tab.editorView, { ...tab, worktreeId: key })
         })
@@ -253,8 +256,12 @@ export function buildLayoutFrameSlices({
 
   const framed = framedViewFiles(layouts)
   // A diff, conflict or check tab is drawn from its view: every window open sends one.
-  const tabs = buildHydratedTabState(session, workspaceKeys, (worktreeId, fileId) =>
-    framed.has(fileKey(worktreeId, fileId))
+  const tabs = buildHydratedTabState(
+    session,
+    workspaceKeys,
+    (worktreeId, fileId) =>
+      framed.has(fileKey(worktreeId, fileId)) ||
+      (layouts[worktreeId]?.tabs.some((tab) => tab.entityId === fileId && tab.editorView) ?? false)
   )
   const editor = buildHydratedEditorSessionState(session, workspaceKeys, null)
   const openFiles = withFramedViewFiles(editor.state.openFiles, framed)
