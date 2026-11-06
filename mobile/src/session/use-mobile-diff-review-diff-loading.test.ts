@@ -110,10 +110,12 @@ it('reopens a file already seen in this review without loading it again', async 
   expect(diff).toMatchObject({ kind: 'ready', itemKey: 'unstaged:a.ts' })
 })
 
-it('does not show a worktree diff from before a status change as current', async () => {
+it('reads a worktree diff again after a status change and shows the new lines', async () => {
   await show(unstaged('a.ts'), 1)
-  await answerDiff('a.ts', 'a\nb\n')
-  expect(diff).toMatchObject({ kind: 'ready', itemKey: 'unstaged:a.ts' })
+  await answerDiff('a.ts', 'a\nolder\n')
   await show(unstaged('a.ts'), 2)
-  expect(diff).toMatchObject({ kind: 'loading', itemKey: 'unstaged:a.ts' })
+  await answerDiff('a.ts', 'a\nnewer\n')
+  expect(diff).toMatchObject({ kind: 'ready', itemKey: 'unstaged:a.ts' })
+  expect(JSON.stringify(diff)).toContain('newer')
+  expect(JSON.stringify(diff)).not.toContain('older')
 })

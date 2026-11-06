@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/types'
@@ -14,13 +15,26 @@ import type { HostQueryTarget } from '../query/host-query-key'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 
-// The input names the diff's content (oids, or the status read for worktree files), so a cached answer never goes stale.
-const reviewDiffQuery = defineHostQuery({
+const fetchReviewDiff = (
+  client: RpcClient,
+  target: HostQueryTarget,
+  input: MobileReviewDiffInput
+) => loadMobileDiffReviewDiff(client, target.worktree ?? '', input)
+
+// Branch and commit diffs are named by their oids, so a cached answer never goes stale.
+const fixedDiffQuery = defineHostQuery({
   family: 'git.diff',
   staleTime: Infinity,
   gcTime: 5 * 60_000,
-  fetch: (client, target, input: MobileReviewDiffInput) =>
-    loadMobileDiffReviewDiff(client, target.worktree ?? '', input)
+  fetch: fetchReviewDiff
+})
+
+// Worktree files move under agents: a seen diff paints at once and is read again behind it.
+const worktreeDiffQuery = defineHostQuery({
+  family: 'git.diff',
+  staleTime: 0,
+  gcTime: 5 * 60_000,
+  fetch: fetchReviewDiff
 })
 
 type DiffLoadingInput = {
@@ -50,16 +64,28 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
         })
       : null
   const connected = connState === 'connected'
-  const diff = useHostQuery(reviewDiffQuery, { hostId, client }, target, diffInput ?? NO_DIFF, {
-    enabled: diffInput !== null && connected
-  })
+  const diff = useHostQuery(
+    diffInput !== null && diffInput.statusRevision !== null ? worktreeDiffQuery : fixedDiffQuery,
+    { hostId, client },
+    target,
+    diffInput ?? NO_DIFF,
+    { enabled: diffInput !== null && connected }
+  )
+  // A newer status read re-keys the open file's diff; keep its lines on screen until the new answer lands.
+  const [lastShown, setLastShown] = useState<ReviewDiffState | null>(null)
+  if (diff.data && diff.data !== lastShown) {
+    setLastShown(diff.data)
+  }
 
   if (!currentItem || !diffInput) {
     return { kind: 'idle' }
   }
   const itemKey = currentItem.key
-  if (diff.data) {
-    return diff.data
+  const shown =
+    diff.data ??
+    (lastShown && 'itemKey' in lastShown && lastShown.itemKey === itemKey ? lastShown : undefined)
+  if (shown) {
+    return shown
   }
   if (!connected) {
     return {

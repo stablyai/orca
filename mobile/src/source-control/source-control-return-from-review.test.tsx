@@ -85,14 +85,10 @@ it('shows what Review staged when returning to Changes without remounting the sc
       tree?.update(screen(true))
     })
     // Review's read after its stage lands in the entry Changes shows.
-    let reloading: Promise<void> | undefined
     await act(async () => {
-      reloading = read.review?.loadReviewData()
+      void read.review?.loadReviewData()
     })
     await resolveStatus('staged')
-    await act(async () => {
-      await reloading
-    })
     focus.current = true
     await act(async () => {
       tree?.update(screen())

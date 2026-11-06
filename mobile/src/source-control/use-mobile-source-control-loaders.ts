@@ -181,9 +181,19 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   )
 
   // Each status read that lands, and a new compare setting, refreshes the compare; a read in flight brings its own.
+  // Review shares the status entry, so its reads wait until Changes is back on top and then compare once.
   const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
+  const comparedReadRef = useRef<string | null>(null)
   const compareShownStatus = useEffectEvent(() => {
-    if (statusRead?.kind === 'ready' && !statusFetching && statusQuery.status === 'success') {
+    const read = `${statusIdentityKey}\0${statusQuery.dataUpdatedAt}\0${compareAgainstUpstream}`
+    if (
+      focused &&
+      comparedReadRef.current !== read &&
+      statusRead?.kind === 'ready' &&
+      !statusFetching &&
+      statusQuery.status === 'success'
+    ) {
+      comparedReadRef.current = read
       void loadBranchCompare({
         preserveReadyOnFailure: true,
         upstreamName: statusRead.status.upstreamStatus?.upstreamName
@@ -192,7 +202,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   })
   useEffect(() => {
     compareShownStatus()
-  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream])
+  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream, focused])
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
