@@ -22,6 +22,7 @@ import {
 } from './agent-session-usage-limit-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
+import { CLAUDE_ACCOUNT_FAILURE_SENTENCES } from './claude-account-failure-words'
 import { joinSentences } from '../../sentence-joining'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from '../agent-session-request-timeout'
@@ -164,8 +165,7 @@ const FAILURE_SENTENCES = {
   accountSwitchInProgress: namingAgent('accountSwitchInProgress'),
   launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
-  claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
-  claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
+  ...CLAUDE_ACCOUNT_FAILURE_SENTENCES,
   agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),

@@ -28,4 +28,11 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
         ? claudeAccounts.selectAccountForTarget(args.accountId, args)
         : claudeAccounts.selectAccount(args.accountId)
   )
+  ipcMain.handle('claudeAccounts:setAutoSwitch', (_event, args: { enabled: unknown }) => {
+    // Why reject: a setting that silently coerced junk would turn switching on or off by accident.
+    if (typeof args?.enabled !== 'boolean') {
+      throw new TypeError('claudeAccounts:setAutoSwitch expects a boolean `enabled`')
+    }
+    return claudeAccounts.setAutoSwitch(args.enabled)
+  })
 }
