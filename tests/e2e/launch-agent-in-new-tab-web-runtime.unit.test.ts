@@ -9,6 +9,7 @@ import { AGENT_SESSION_AGENTS_METHOD } from '../../src/shared/agent-session/agen
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
@@ -102,16 +103,18 @@ describe('launchAgentInNewTab paired web runtime', () => {
         stubRuntimeEnvironmentBridge({ call: dispatch })
         const { launchAgentInNewTab } =
           await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-        const result = launchAgentInNewTab({
-          requestId: newAgentLaunchRequestId(),
-          agent: 'claude',
-          worktreeId: 'wt-1',
-          requestedSurface: 'terminal',
-          groupId: 'group-1',
-          activate: false,
-          agentArgs: '--verbose',
-          ...(route === 'edited' ? { sessionOptions: { effort: 'high' } } : {})
-        })
+        const result = nonRefusedAgentLaunch(
+          launchAgentInNewTab({
+            requestId: newAgentLaunchRequestId(),
+            agent: 'claude',
+            worktreeId: 'wt-1',
+            requestedSurface: 'terminal',
+            groupId: 'group-1',
+            activate: false,
+            agentArgs: '--verbose',
+            ...(route === 'edited' ? { sessionOptions: { effort: 'high' } } : {})
+          })
+        )
         await vi.advanceTimersByTimeAsync(route === 'deadline' ? 3_000 : 0)
         await expect(result?.terminalCompletion).resolves.toMatchObject({
           outcome: { status: 'created' },
@@ -326,13 +329,15 @@ describe('launchAgentInNewTab paired web runtime', () => {
       const { launchAgentInNewTab } =
         await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
       // OpenCode has no built-in structured fallback without the owning host's catalog.
-      const result = launchAgentInNewTab({
-        requestId: newAgentLaunchRequestId(),
-        agent: 'opencode',
-        worktreeId: 'wt-1',
-        prompt: 'review this context',
-        promptDelivery: 'draft'
-      })
+      const result = nonRefusedAgentLaunch(
+        launchAgentInNewTab({
+          requestId: newAgentLaunchRequestId(),
+          agent: 'opencode',
+          worktreeId: 'wt-1',
+          prompt: 'review this context',
+          promptDelivery: 'draft'
+        })
+      )
       expect(mocks.hostRpc).toHaveBeenCalledWith(
         expect.anything(),
         AGENT_SESSION_AGENTS_METHOD,
@@ -374,14 +379,16 @@ describe('launchAgentInNewTab paired web runtime', () => {
     vi.mocked(pasteDraftWhenAgentReady).mockRejectedValueOnce(new Error('paste transport failed'))
     const { launchAgentInNewTab } =
       await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      prompt: 'keep this task',
-      promptDelivery: 'submit-after-ready'
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        requestedSurface: 'terminal',
+        prompt: 'keep this task',
+        promptDelivery: 'submit-after-ready'
+      })
+    )
     await expect(result?.terminalCompletion).resolves.toMatchObject({
       outcome: { status: 'created' },
       delivered: false,
