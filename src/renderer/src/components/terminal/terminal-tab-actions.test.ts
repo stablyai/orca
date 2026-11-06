@@ -407,7 +407,7 @@ describe('closeTerminalTabsToRight', () => {
 
   it('delegates terminal tabs to the host while still closing local editor tabs to the right', () => {
     const closeTab = vi.fn()
-    const closeFile = vi.fn()
+    const closeUnifiedTabs = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue({
       ...terminalOwnerRows('web-runtime'),
@@ -415,9 +415,16 @@ describe('closeTerminalTabsToRight', () => {
         'wt-1': [{ id: 'term-a' }, { id: 'term-b' }, { id: 'term-c' }]
       },
       openFiles: [{ id: 'file-b', worktreeId: 'wt-1' }],
-      tabBarOrderByWorktree: { 'wt-1': ['term-a', 'file-b', 'term-b', 'term-c'] },
+      editorBufferIdOf: {},
+      editorBufferViews: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          { id: 'file-tab-b', entityId: 'file-b', worktreeId: 'wt-1', contentType: 'editor' }
+        ]
+      },
+      tabBarOrderByWorktree: { 'wt-1': ['term-a', 'file-tab-b', 'term-b', 'term-c'] },
       closeTab,
-      closeFile
+      closeUnifiedTabs
     })
 
     closeTerminalTabsToRight('term-a', 'wt-1')
@@ -435,7 +442,7 @@ describe('closeTerminalTabsToRight', () => {
       environmentId: 'web-runtime',
       reason: 'user'
     })
-    expect(closeFile).toHaveBeenCalledWith('file-b')
+    expect(closeUnifiedTabs).toHaveBeenCalledWith(['file-tab-b'])
     expect(closeTab).toHaveBeenCalledTimes(2)
     expect(closeTab).toHaveBeenNthCalledWith(1, 'term-b', { remoteCloseOwnedByHost: true })
     expect(closeTab).toHaveBeenNthCalledWith(2, 'term-c', { remoteCloseOwnedByHost: true })

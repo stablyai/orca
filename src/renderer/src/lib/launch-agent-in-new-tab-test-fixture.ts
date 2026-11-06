@@ -82,6 +82,7 @@ export const store = {
   tabsByWorktree: {
     'wt-1': [{ id: 'tab-1' }]
   },
+  unifiedTabsByWorktree: {},
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
