@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from './device-registry'
 import { devicePrincipalOf, fingerprintAuthenticatedPairingCredential } from './device-principal'
-import { PairingTicketExchangeError } from './pairing-ticket-exchange'
+import { PairingTicketExchangeError, usesOlderPairingMethod } from './pairing-ticket-exchange'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
 const REPLACEMENT = 'a'.repeat(48)
@@ -270,5 +270,25 @@ describe('pairing ticket exchange', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('flags only devices that signed in with a code and never moved off it', () => {
+    const registry = new DeviceRegistry(dir)
+    const older = pairedOffer(registry)
+    const exchanged = pairedOffer(registry)
+    registry.exchangePairingTicket(exchanged.deviceId, exchanged.token, REPLACEMENT)
+    const unscanned = registry.addDevice('Unscanned', 'mobile')
+    const link = registry.addDevice('Runtime', 'runtime')
+    registry.updateLastSeen(link.deviceId)
+    registry.forkDeviceKey(link.deviceId, Buffer.alloc(32, 4).toString('base64'), 'Chrome')
+
+    const flagged = (deviceId: string) =>
+      usesOlderPairingMethod(registry.getDevice(deviceId)!, registry.listDevices())
+    expect(flagged(older.deviceId)).toBe(true)
+    expect(flagged(unscanned.deviceId)).toBe(false)
+    expect(flagged(exchanged.deviceId)).toBe(false)
+    registry.validateToken(REPLACEMENT)
+    expect(flagged(exchanged.deviceId)).toBe(false)
+    expect(flagged(link.deviceId)).toBe(false)
   })
 })

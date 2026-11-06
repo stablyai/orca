@@ -8638,7 +8638,8 @@
           "diagnosticsCopyFailed": "Failed to copy diagnostics",
           "5e2c7a1f84": "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore or Restore all on the banner to resize manually.",
           "codeRefreshesAutomatically": "Code refreshes automatically. A copied code works for up to 10 minutes.",
-          "legacyEncryption": "Uses older encryption. Update the Orca app on this device."
+          "legacyEncryption": "Uses older encryption. Update the Orca app on this device.",
+          "olderPairingMethod": "Uses an older pairing method. Update the Orca app on this phone."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -9047,6 +9048,7 @@
           "6f6d5188ed": "Revoke {{value0}}",
           "434e4a6af6": "Current link",
           "df142657a5": "Not used yet",
+          "olderPairingMethod": "Uses an older pairing method. Update Orca on the device that uses this link.",
           "b18d1764ef": "Last used {{value0}}",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Active links",

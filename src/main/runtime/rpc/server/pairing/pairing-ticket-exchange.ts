@@ -132,3 +132,19 @@ export function planForkedTicketRetirement(
   }
   return devices.map((device) => (device === ticket ? retired : device))
 }
+
+/**
+ * A device that signed in with a pairing code but never swapped it for its own credential: an app
+ * from before single-use pairing. Rows with a browser key fork already moved off the code.
+ */
+export function usesOlderPairingMethod(
+  device: DeviceEntry,
+  devices: readonly DeviceEntry[]
+): boolean {
+  return (
+    device.ticket === true &&
+    device.lastSeenAt > 0 &&
+    device.exchangeToken === undefined &&
+    !devices.some((candidate) => candidate.forkedFrom === device.deviceId)
+  )
+}
