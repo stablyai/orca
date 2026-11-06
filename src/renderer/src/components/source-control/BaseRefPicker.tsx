@@ -62,15 +62,15 @@ export function BaseRefPicker({
   }, [baseRefResults.length])
 
   useEffect(() => {
-    if (!viewActive) {
-      return
-    }
     setBaseRefQuery('')
     setBaseRefResults([])
     // Drop the previous repo’s default before loading so its Following label cannot describe the new repo.
     setDefaultBaseRef(null)
     setRemoteCount(0)
-    if (!ownerHostId) {
+  }, [ownerHostId, repoId])
+
+  useEffect(() => {
+    if (!viewActive || !ownerHostId) {
       return
     }
     return watchRuntimeRepoBaseRefDefault(ownerHostId, repoId, {
