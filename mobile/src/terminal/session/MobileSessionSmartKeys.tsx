@@ -34,8 +34,12 @@ function smartKeyWord(t: Translate, name: AgentSmartKeyName): string {
       return t('session.smartKeys.rewind', 'Rewind')
     case 'queue':
       return t('session.smartKeys.queue', 'Queue')
-    case 'answerEdit':
-      return t('session.smartKeys.answerEdit', 'Answer · Edit')
+    case 'edit':
+      return t('session.smartKeys.edit', 'Edit')
+    case 'answer':
+      return t('session.smartKeys.answer', 'Answer')
+    case 'skip':
+      return t('session.smartKeys.skip', 'Skip')
     case 'confirm':
       return t('session.smartKeys.confirm', 'Confirm')
     case 'reject':

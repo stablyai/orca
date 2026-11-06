@@ -30,7 +30,9 @@ export type AgentSmartKeyName =
   | 'history'
   | 'rewind'
   | 'queue'
-  | 'answerEdit'
+  | 'edit'
+  | 'answer'
+  | 'skip'
   | 'confirm'
   | 'reject'
 
@@ -99,7 +101,8 @@ const STATE_KEYS: Record<
     working: [
       word('stop', 'Esc', [ESC]),
       word('queue', 'Tab', ['\t']),
-      word('answerEdit', '⇧←', [SHIFT_LEFT])
+      // Pulls the last queued message back into the composer.
+      word('edit', '⇧←', [SHIFT_LEFT])
     ],
     // `n` turns down only this request; Esc would also drop every queued approval.
     permission: [word('yes', 'y', ['y'], true), word('always', 'a', ['a']), word('no', 'n', ['n'])]
@@ -116,20 +119,35 @@ const STATE_KEYS: Record<
   }
 }
 
-function questionKeys(row: AgentSmartKeyRow): readonly AgentSmartKey[] | null {
+function questionKeys(
+  agent: AgentSmartKeyAgent,
+  row: AgentSmartKeyRow
+): readonly AgentSmartKey[] | null {
   const ask = parseAskFromStatus(row.interactivePrompt, row.toolName)
-  // The phone can't see which question tab is open, so offer digits for the longest one.
-  const optionCount = Math.min(
-    9,
-    Math.max(0, ...(ask?.questions ?? []).map((q) => q.options.length))
+  if (!ask) {
+    return null
+  }
+  // The phone can't see which question is open, so offer digits for the longest one.
+  const optionCount = Math.min(9, Math.max(0, ...ask.questions.map((q) => q.options.length)))
+  const digits = Array.from({ length: optionCount }, (_, index) =>
+    plain(`option${index + 1}`, String(index + 1), String(index + 1))
   )
-  if (optionCount === 0) {
+  if (agent === 'codex') {
+    // Codex keeps working while its async question waits collapsed under the composer; ⇧← opens it.
+    return ask.replyAsMessage
+      ? [
+          word('answer', '⇧←', [SHIFT_LEFT], true),
+          ...digits,
+          plain('enter', 'Enter', '\r'),
+          word('skip', '⌃]', ['\x1d'])
+        ]
+      : null
+  }
+  if (agent !== 'claude' || optionCount === 0) {
     return null
   }
   return [
-    ...Array.from({ length: optionCount }, (_, index) =>
-      plain(`option${index + 1}`, String(index + 1), String(index + 1))
-    ),
+    ...digits,
     plain('left', '←', ARROW_LEFT),
     plain('right', '→', ARROW_RIGHT),
     word('cancel', 'Esc', [ESC])
@@ -164,7 +182,7 @@ export function resolveAgentSmartKeys(
   if (parseNativeChatApprovalEnvelope(row.interactivePrompt, agent)) {
     return withKeys('permission', STATE_KEYS[agent].permission)
   }
-  return agent === 'claude' ? withKeys('question', questionKeys(row)) : null
+  return withKeys('question', questionKeys(agent, row))
 }
 
 /** Whether two sets draw the same keys, so a fresh status object doesn't redraw the row. */

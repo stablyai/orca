@@ -2894,10 +2894,11 @@
     },
     "smartKeys": {
       "always": "Always",
-      "answerEdit": "Answer · Edit",
+      "answer": "Answer",
       "background": "Background",
       "cancel": "Cancel",
       "confirm": "Confirm",
+      "edit": "Edit",
       "history": "History",
       "keyLabel": "{{word}}, sends {{combo}}",
       "mode": "Mode",
@@ -2906,6 +2907,7 @@
       "reject": "Reject",
       "rewind": "Rewind",
       "sendNow": "Send now",
+      "skip": "Skip",
       "stop": "Stop",
       "yes": "Yes"
     }
