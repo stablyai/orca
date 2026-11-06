@@ -76,6 +76,7 @@ export function ConversationTab({
   onChecksUpdated,
   onBodyUpdated,
   onCommentAdded,
+  onJumpToFile,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
@@ -98,6 +99,7 @@ export function ConversationTab({
   onChecksUpdated: (checks: PRCheckDetail[]) => void
   onBodyUpdated: (body: string) => void
   onCommentAdded: (comment: PRComment) => void
+  onJumpToFile?: (path: string) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const authorLabel =
@@ -273,7 +275,8 @@ export function ConversationTab({
       setReplyingTo((current) => (current === commentId ? null : commentId))
     },
     onReply: handleReply,
-    onCancelReply: () => setReplyingTo(null)
+    onCancelReply: () => setReplyingTo(null),
+    onJumpToFile
   }
 
   return (

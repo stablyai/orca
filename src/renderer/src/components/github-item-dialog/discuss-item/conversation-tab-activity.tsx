@@ -51,6 +51,7 @@ export function ConversationTabActivity({
     onToggleReply: (commentId: number) => void
     onReply: (comment: PRComment, replyBody: string) => Promise<boolean>
     onCancelReply: () => void
+    onJumpToFile?: (path: string) => void
   }
   onCommentFilterChange: (filter: PRCommentAudienceFilter) => void
 }): React.JSX.Element {
