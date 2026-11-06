@@ -9,7 +9,7 @@ import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent
 import { NativeChatSignInContext } from './native-chat-sign-in'
 import { NativeChatSignInButton } from './NativeChatSignInButton'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 afterEach(cleanup)
 const EMPTY: readonly never[] = []
@@ -101,7 +101,7 @@ it('bounds submission work and renders only rows whose delivery notice changes a
 })
 
 it('keeps one usable sign-in owner as typed rejection and visible failure rows arrive', () => {
-  const failure: AgentSessionFailureFact = { kind: 'notSignedIn' }
+  const failure: SubmissionRejectionFact = { kind: 'notSignedIn' }
   const { signIn } = signInView
   signIn.mockClear()
   const words = agentSessionFailureWords(failure, { agentName: 'Pi', surface: 'rejection' })
