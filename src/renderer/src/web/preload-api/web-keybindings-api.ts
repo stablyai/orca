@@ -22,8 +22,12 @@ import {
 } from './web-keybinding-normalization'
 import type { WebKeybindingDocument } from './web-keybinding-normalization'
 import {
+  GITHUB_CACHE_STORAGE_KEY,
   KEYBINDINGS_STORAGE_KEY,
+  ONBOARDING_STORAGE_KEY,
+  SESSION_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
+  UI_STORAGE_KEY,
   getBrowserPlatform,
   readJson,
   writeJson
@@ -38,35 +42,45 @@ function migrateWebSearchKeybindings(): void {
   if (window.localStorage.getItem(seedKey) === 'done') {
     return
   }
-  const existing = [SETTINGS_STORAGE_KEY, KEYBINDINGS_STORAGE_KEY].some(
-    (key) => window.localStorage.getItem(key) !== null
-  )
+  const existing = [
+    SETTINGS_STORAGE_KEY,
+    KEYBINDINGS_STORAGE_KEY,
+    UI_STORAGE_KEY,
+    SESSION_STORAGE_KEY,
+    ONBOARDING_STORAGE_KEY,
+    GITHUB_CACHE_STORAGE_KEY
+  ].some((key) => window.localStorage.getItem(key) !== null)
   if (existing && getWebKeybindingPlatform() === 'darwin') {
     const raw = window.localStorage.getItem(KEYBINDINGS_STORAGE_KEY)
+    let document: unknown = createEmptyWebKeybindingDocument()
     if (raw !== null) {
       try {
-        const parsed: unknown = JSON.parse(raw)
-        if (
-          !isJsonObject(parsed) ||
-          (parsed.keybindings !== undefined && !isJsonObject(parsed.keybindings)) ||
-          (parsed.platforms !== undefined && !isJsonObject(parsed.platforms))
-        ) {
-          return
-        }
+        document = JSON.parse(raw)
       } catch {
         return
       }
     }
-    const document = readWebKeybindingDocument()
-    const darwin = { ...document.platforms.darwin }
+    if (!isJsonObject(document)) {
+      return
+    }
+    const keybindings = document.keybindings === undefined ? {} : document.keybindings
+    const platforms = document.platforms === undefined ? {} : document.platforms
+    if (
+      !isJsonObject(keybindings) ||
+      !isJsonObject(platforms) ||
+      (platforms.darwin !== undefined && !isJsonObject(platforms.darwin))
+    ) {
+      return
+    }
+    const darwin = { ...platforms.darwin }
     for (const [actionId, bindings] of Object.entries(LEGACY_MAC_SEARCH_BINDINGS)) {
-      if (!Object.hasOwn(document.keybindings, actionId) && !Object.hasOwn(darwin, actionId)) {
+      if (!Object.hasOwn(keybindings, actionId) && !Object.hasOwn(darwin, actionId)) {
         darwin[actionId] = bindings
       }
     }
     writeJson(KEYBINDINGS_STORAGE_KEY, {
       ...document,
-      platforms: { ...document.platforms, darwin }
+      platforms: { ...platforms, darwin }
     })
   }
   window.localStorage.setItem(seedKey, 'done')
@@ -197,7 +211,11 @@ export function notifyWebKeybindingListeners(snapshot: KeybindingFileSnapshot): 
 }
 
 export function createWebKeybindingsApi(): WebKeybindingsApi {
-  migrateWebSearchKeybindings()
+  try {
+    migrateWebSearchKeybindings()
+  } catch (error) {
+    console.error('Failed to seed legacy search keybindings:', error)
+  }
   return {
     get: () => Promise.resolve(getWebKeybindingSnapshot()),
     ensureFile: () => Promise.resolve(getWebKeybindingSnapshot()),

@@ -36,6 +36,83 @@ describe('web keybindings preload API', () => {
     const snapshot = await window.api.keybindings.get()
     expect(snapshot.overrides).toEqual({ 'worktree.palette': ['Mod+Alt+J'], 'terminal.clear': [] })
     expect(snapshot.platformOverrides.win32).toEqual({ 'worktree.palette': ['Mod+Shift+J'] })
+    await window.api.keybindings.setAction({ actionId: 'worktree.palette', bindings: null })
+    installWebPreloadApi()
+    expect((await window.api.keybindings.get()).overrides).toEqual({ 'terminal.clear': [] })
+  })
+
+  it('retains legacy Mac shortcuts for a profile without saved settings', async () => {
+    const { storage } = installBrowserGlobals('MacIntel')
+    storage.setItem('orca.web.onboarding.v1', '{}')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    expect((await window.api.keybindings.get()).overrides).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
+  })
+
+  it('preserves newer document fields while adding legacy Mac shortcuts', async () => {
+    const { storage } = installBrowserGlobals('MacIntel')
+    storage.setItem(
+      'orca.web.keybindings.v1',
+      JSON.stringify({
+        version: 2,
+        metadata: { source: 'import' },
+        keybindings: { 'future.action': ['Mod+U'] },
+        platforms: {
+          darwin: { 'terminal.clear': [], 'future.macAction': ['Mod+I'] },
+          future: { 'future.action': ['Mod+O'] }
+        }
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    expect(JSON.parse(storage.getItem('orca.web.keybindings.v1')!)).toEqual({
+      version: 2,
+      metadata: { source: 'import' },
+      keybindings: { 'future.action': ['Mod+U'] },
+      platforms: {
+        darwin: {
+          'terminal.clear': [],
+          'future.macAction': ['Mod+I'],
+          'worktree.palette': ['Mod+J']
+        },
+        future: { 'future.action': ['Mod+O'] }
+      }
+    })
+  })
+
+  it('leaves an invalid Mac section intact and retries after repair', async () => {
+    const { storage } = installBrowserGlobals('MacIntel')
+    const raw = '{"platforms":{"darwin":null}}'
+    storage.setItem('orca.web.keybindings.v1', raw)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    expect(storage.getItem('orca.web.keybindings.v1')).toBe(raw)
+    storage.setItem('orca.web.keybindings.v1', '{"platforms":{"darwin":{}}}')
+    installWebPreloadApi()
+    expect((await window.api.keybindings.get()).overrides).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
+  })
+
+  it('keeps the web API available after a migration write fails and retries on launch', async () => {
+    const { storage } = installBrowserGlobals('MacIntel')
+    storage.setItem('orca.web.settings.v1', '{}')
+    const write = vi.spyOn(storage, 'setItem').mockImplementationOnce(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError')
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    expect((await window.api.keybindings.get()).overrides).toEqual({})
+    write.mockRestore()
+    installWebPreloadApi()
+    expect((await window.api.keybindings.get()).overrides).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
   })
 
   it('keeps a fresh web profile on the new defaults after saving settings and restarting', async () => {
