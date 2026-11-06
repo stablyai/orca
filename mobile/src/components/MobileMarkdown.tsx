@@ -33,6 +33,9 @@ type Props = {
   growing?: boolean
   /** The text may end mid-path: chat file links show only answers already known. */
   streaming?: boolean
+  /** Chat's math delimiters, `\(…\)` and `\[…\]` as well as `$`, as desktop chat reads them.
+   *  GitHub text (PRs, Tasks, files) leaves them off, so `\[Bug\]` stays a bracket. */
+  chatMath?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
 }
@@ -47,6 +50,7 @@ function MobileMarkdownContent({
   renderImage,
   growing = false,
   streaming = false,
+  chatMath = false,
   tone: toneName = 'default'
 }: Props) {
   useMobileColorScheme()
@@ -60,10 +64,13 @@ function MobileMarkdownContent({
     streaming
   )
   const text = content?.trim() ?? ''
-  const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing, {
-    fileLinkExists,
-    githubRepo: links?.githubRepo
-  })
+  const { root, directives } = useMobileMarkdownTree(
+    text,
+    renderVisual !== undefined,
+    growing,
+    chatMath,
+    { fileLinkExists, githubRepo: links?.githubRepo }
+  )
   if (!text) {
     return fallback ? (
       <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
@@ -74,6 +81,7 @@ function MobileMarkdownContent({
   const tone = MARKDOWN_TONES[toneName]
   const ctx: MarkdownBlockContext = {
     growing,
+    chatMath,
     onOpenFile,
     onOpenLink,
     filePathsLinkedInTree: fileLinkExists !== undefined,

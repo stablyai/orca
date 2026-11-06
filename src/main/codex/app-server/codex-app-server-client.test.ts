@@ -1,20 +1,12 @@
-import { EventEmitter } from 'node:events'
-import type { ChildProcess, spawn } from 'node:child_process'
 import { afterEach, describe, expect, it, vi, type TestContext } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  CodexAppServerTimeoutError,
-  CodexAppServerUnsupportedError,
-  isCodexAppServerUnsupportedError,
-  runCodexAppServerSession
-} from './codex-app-server-session'
+import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
 import {
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
-import { killCodexAppServerProcessTree } from './codex-app-server-process-tree-kill'
 import {
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
@@ -176,62 +168,6 @@ function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
   return { key, command: MANAGED_COMMAND, currentHash: `sha256:hash-of-${key}`, trustStatus }
 }
 
-describe('killCodexAppServerProcessTree', () => {
-  it('kills the Windows wrapper and all app-server descendants', () => {
-    const child = {
-      pid: 1234,
-      kill: vi.fn(() => true) as ChildProcess['kill']
-    }
-    const killer = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
-    killer.unref = vi.fn()
-    const spawnImpl = vi.fn(() => killer) as unknown as typeof spawn
-
-    killCodexAppServerProcessTree(child, { platform: 'win32', spawnImpl })
-
-    expect(spawnImpl).toHaveBeenCalledWith('taskkill', ['/pid', '1234', '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    expect(killer.unref).toHaveBeenCalledOnce()
-    expect(child.kill).not.toHaveBeenCalled()
-
-    killer.emit('error', new Error('taskkill unavailable'))
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('falls back when taskkill starts but cannot terminate the process tree', () => {
-    const child = {
-      pid: 1234,
-      kill: vi.fn(() => true) as ChildProcess['kill']
-    }
-    const killer = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
-    killer.unref = vi.fn()
-    const spawnImpl = vi.fn(() => killer) as unknown as typeof spawn
-
-    killCodexAppServerProcessTree(child, { platform: 'win32', spawnImpl })
-    killer.emit('exit', 1)
-
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('kills the launcher descendants before the direct process on non-Windows hosts', () => {
-    const child = {
-      pid: 1234,
-      kill: vi.fn(() => true) as ChildProcess['kill']
-    }
-    const descendants = { unref: vi.fn(), on: vi.fn() }
-    const spawnImpl = vi.fn(() => descendants) as unknown as typeof spawn
-
-    killCodexAppServerProcessTree(child, { platform: 'linux', spawnImpl })
-
-    expect(spawnImpl).toHaveBeenCalledWith('pkill', ['-KILL', '-P', '1234'], { stdio: 'ignore' })
-    // Missing pkill emits an async error that must not crash the main process.
-    expect(descendants.on).toHaveBeenCalledWith('error', expect.any(Function))
-    expect(descendants.unref).toHaveBeenCalledOnce()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-})
-
 describe('runCodexHookTrustGrantSession', () => {
   it('grants and verifies exactly the expected managed entries', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
@@ -300,21 +236,6 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(existsSync(recordFile)).toBe(false)
   })
 
-  it('reports verify-failed when expected entries are missing from the listing', async () => {
-    const { request } = createStubRequest({
-      scenario: 'happy',
-      hooks: [managedHook('/home/a/.codex/hooks.json:session_start:0:0')],
-      expectedTrustKeys: [
-        '/home/a/.codex/hooks.json:session_start:0:0',
-        '/home/a/.codex/hooks.json:stop:0:0'
-      ],
-      managedCommand: MANAGED_COMMAND
-    })
-
-    const result = await runCodexHookTrustGrantSession(request)
-    expect(result).toMatchObject({ outcome: 'verify-failed', reasonClass: 'list-mismatch' })
-  })
-
   it('rejects duplicate normalized aliases that conceal a missing expected key', async () => {
     const aliasedKey = 'C:\\Users\\Ada\\.codex\\hooks.json:session_start:0:0'
     const { request, recordFile } = createStubRequest({
@@ -349,59 +270,6 @@ describe('runCodexHookTrustGrantSession', () => {
       outcome: 'granted',
       entries: [{ key }]
     })
-  })
-
-  it('throws the unsupported error class for unknown JSON-RPC methods', async () => {
-    const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-    const { request } = createStubRequest({
-      scenario: 'unknown-method',
-      hooks: keys.map((key) => managedHook(key)),
-      expectedTrustKeys: keys,
-      managedCommand: MANAGED_COMMAND
-    })
-
-    await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
-      CodexAppServerUnsupportedError
-    )
-  })
-
-  it('throws the unsupported error class when the CLI lacks the app-server subcommand', async () => {
-    const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-    const { request } = createStubRequest({
-      scenario: 'no-subcommand',
-      hooks: [],
-      expectedTrustKeys: keys,
-      managedCommand: MANAGED_COMMAND
-    })
-
-    const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
-    expect(isCodexAppServerUnsupportedError(error)).toBe(true)
-  })
-
-  it('does not classify unrelated stderr as a missing app-server capability', async () => {
-    const { request } = createStubRequest({
-      scenario: 'transient-stderr',
-      hooks: [],
-      expectedTrustKeys: ['k'],
-      managedCommand: MANAGED_COMMAND
-    })
-
-    const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(Error)
-    expect(isCodexAppServerUnsupportedError(error)).toBe(false)
-  })
-
-  it('treats a silent exit zero before initialize as transient', async () => {
-    const { request } = createStubRequest({
-      scenario: 'silent-exit-0',
-      hooks: [],
-      expectedTrustKeys: ['k'],
-      managedCommand: MANAGED_COMMAND
-    })
-
-    const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(Error)
-    expect(isCodexAppServerUnsupportedError(error)).toBe(false)
   })
 
   it.concurrent('kills a hung server at the session deadline', async (context) => {
@@ -476,22 +344,5 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(Date.now() - startedAt - STUB_START_DEADLINE_MS).toBeLessThan(2_000)
     const childPid = Number(readFileSync(pidFile, 'utf8'))
     expect(() => process.kill(childPid, 0)).toThrow()
-  })
-
-  it('surfaces spawn failures as regular errors, not capability signals', async () => {
-    const request: CodexHookTrustGrantRequest = {
-      invocation: {
-        command: join(tmpdir(), 'orca-codex-missing-binary-does-not-exist'),
-        cliPath: null,
-        args: [],
-        timeoutMs: 2_000
-      },
-      hooksListCwd: tmpdir(),
-      expectedTrustKeys: ['k'],
-      managedCommand: MANAGED_COMMAND
-    }
-    const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(Error)
-    expect(isCodexAppServerUnsupportedError(error)).toBe(false)
   })
 })

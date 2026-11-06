@@ -51,7 +51,11 @@ export function useNativeChatPendingDelivery(args: {
     () => releaseEmptyTranscriptClaims(cachedPending, sessionId),
     [cachedPending, sessionId]
   )
-  useEffect(() => setPending(readPendingSendCache(scope)), [scope])
+  const [prevScope, setPrevScope] = useState(scope)
+  if (prevScope !== scope) {
+    setPrevScope(scope)
+    setPending(readPendingSendCache(scope))
+  }
   const save = useCallback(
     (update: (entries: NativeChatPendingSend[]) => NativeChatPendingSend[]) => {
       const current = readPendingSendCache(scope)

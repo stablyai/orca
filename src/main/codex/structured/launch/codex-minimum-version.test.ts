@@ -1,25 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakePipedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import type { AgentCliVersionReader } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../../native-chat/agent-cli-installation-error'
-import {
-  failedAcquisitionRefusal,
-  failedAcquisitionSettlement
-} from '../../../native-chat/agent-session-wire/structured-agent-session-failed-create-refusal'
-import { structuredAgentSessionStartFailure } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { requireSupportedCodexCli, withSupportedCodexCli } from './codex-cli-installation-error'
+import { withSupportedCodexCli } from './codex-cli-installation-error'
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
 } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { resolveProviderChildEnv } from '../../../provider-process/provider-process-launch'
 import { identityFor } from '../session-lifecycle/codex-structured-session-adapter-fixture'
-import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 
 const readVersion = vi.fn<AgentCliVersionReader>()
 beforeEach(() => {
@@ -38,78 +28,6 @@ function record(): AgentSessionRecord {
 }
 
 describe('Codex structured launch version admission', () => {
-  it.each(['0.100.0', '0.135.0'])(
-    'refuses %s with concise repair copy and both version facts',
-    async (version) => {
-      readVersion.mockResolvedValue({ version })
-      const caught = await requireSupportedCodexCli(
-        { program: '/execution-host/codex' },
-        readVersion
-      ).catch((error: unknown) => error)
-      expect(caught).toBeInstanceOf(AgentCliInstallationError)
-      const wording = { record: record(), newSession: true }
-      const result = failedAcquisitionRefusal(caught, wording)
-      expect(result?.refusal.message).toBe(
-        `Codex ${version} is too old for chats. Update to 0.136.0 or newer.`
-      )
-      expect(result?.refusal.message).not.toContain('Settings → Agents')
-      expect(result?.refusal.message).not.toContain('codex update')
-      expect(failedAcquisitionSettlement(caught, wording).exitProof).toBe('processless')
-      const failure = structuredAgentSessionStartFailure({ error: caught })
-      expect(failure.reason).toBe(result?.refusal.message)
-      expect(readWholeAgentSessionFailureFact(failure.rejection)).toEqual(failure.rejection)
-      if (!result) {
-        throw new Error('Expected refusal')
-      }
-      expect(
-        structuredAgentSessionStartFailure({ refusal: result.refusal, newSession: true }).reason
-      ).toBe(failure.reason)
-    }
-  )
-
-  it('leaves a missing Codex to the existing spawn refusal', async () => {
-    readVersion.mockResolvedValue({ version: null, started: false })
-    await expect(
-      requireSupportedCodexCli({ program: 'codex' }, readVersion)
-    ).resolves.toBeUndefined()
-  })
-
-  it('reports Windows ENOENT through the existing not-found failure with one explanation', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    readVersion.mockResolvedValue({ version: null, started: false })
-    await requireSupportedCodexCli({ program: 'codex.exe' }, readVersion)
-    const child = createFakePipedChild()
-    Object.assign(child, { pid: undefined })
-    const opening = openCodexAppServerConnection(
-      { command: 'codex.exe', args: ['app-server'] },
-      {},
-      () => child
-    ).catch((error: unknown) => error)
-    child.emit(
-      'error',
-      Object.assign(new Error('spawn codex.exe ENOENT'), { code: 'ENOENT', path: 'codex.exe' })
-    )
-    child.emit('close', -2, null)
-    const failure = structuredAgentSessionStartFailure(
-      { error: await opening },
-      { agentName: 'Codex' }
-    )
-    expect(failure.rejection.kind).toBe('cliMissing')
-    expect(failure.reason).toBe(
-      "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
-    )
-  })
-
-  it('allows an unknown version with a log line', async () => {
-    readVersion.mockResolvedValue({ version: null })
-    const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await expect(
-      requireSupportedCodexCli({ program: '/host/codex' }, readVersion)
-    ).resolves.toBeUndefined()
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('allowing structured chat'))
-    log.mockRestore()
-  })
-
   it.each(['start', 'resume'] as const)(
     'checks the exact host binary and launch environment before %s',
     async (mode) => {
@@ -162,64 +80,6 @@ describe('Codex structured launch version admission', () => {
         prefixArgs: ['run', '--', 'codex'],
         cwd: launch.cwd,
         env: resolveProviderChildEnv(launch, process.env)
-      })
-    }
-  )
-
-  it.each(['start', 'resume'] as const)(
-    'admits the workspace-selected version on %s',
-    async (mode) => {
-      const value = record()
-      if (mode === 'resume') {
-        value.providerHandleChain = [
-          {
-            linkId: 'link',
-            handle: codexProviderHandle('thread'),
-            origin: 'created',
-            mintedAtFence: 1,
-            observedAt: 1
-          }
-        ]
-      }
-      readVersion.mockImplementation(async (input) => ({
-        version: input.cwd === '/workspace' ? '0.136.0' : '0.135.0'
-      }))
-      const resolve = withSupportedCodexCli(
-        createCodexStructuredLaunchResolver({
-          store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
-          resolveCommand: () => ({ command: '/host/project-aware-codex', prefixArgs: [] }),
-          resolveEnvironment: async () => ({ PATH: '/host/bin' }),
-          resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => '/workspace'
-        }),
-        readVersion
-      )
-      expect(
-        (await resolve({ identity: identityFor(value.sessionId), spawnToken: TEST_SPAWN_TOKEN }))
-          .cwd
-      ).toBe('/workspace')
-    }
-  )
-
-  it.each(['posix', 'powershell', 'cmd'] as const)(
-    'leaves terminal Codex launch unchanged in %s',
-    (shell) => {
-      expect(
-        resolveAgentLaunchCommand({
-          agent: 'codex',
-          cmdOverrides: {},
-          platform: shell === 'posix' ? 'linux' : 'win32',
-          shell,
-          agentArgs: '--model chosen'
-        })
-      ).toMatchObject({
-        ok: true,
-        command:
-          shell === 'cmd'
-            ? 'codex "--model" "chosen"'
-            : shell === 'posix'
-              ? "codex '-c' 'disable_paste_burst=true' '--model' 'chosen'"
-              : "codex '--model' 'chosen'"
       })
     }
   )

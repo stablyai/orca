@@ -135,9 +135,10 @@ describe('ManagedOrcadPairingRepairs', () => {
 
   it('refuses an offer under another host key, so a foreign server stays foreign', async () => {
     const state = setup(() => readiness(offer('fresh-token', 'other-key')))
-    await expect(state.repairs.repair('env-1', REFUSED)).rejects.toBeInstanceOf(
-      OrcadManagedIdentityError
-    )
+    const result = state.repairs.repair('env-1', REFUSED)
+    await expect(result).rejects.toBeInstanceOf(OrcadManagedIdentityError)
+    // A refusal sealed by the pinned key proves that server answered, so it is never "replaced".
+    await expect(result).rejects.toMatchObject({ kind: 'foreign-port' })
     expect(state.deps.refresh).not.toHaveBeenCalled()
     expect(state.deps.repaired).not.toHaveBeenCalled()
   })
@@ -291,10 +292,24 @@ describe('buildWithPairingRepair', () => {
 
   it('never re-pairs on a foreign answer or lost contact', async () => {
     const { state, recovery: deps } = recovery()
-    const foreign = new OrcadManagedIdentityError(6_768, '4001: Unauthorized')
+    const foreign = OrcadManagedIdentityError.foreignPort(6_768, '4001: Unauthorized')
     await expect(
       buildWithPairingRepair(deps, 'env-1', vi.fn().mockRejectedValue(foreign))
     ).rejects.toBe(foreign)
+    expect(state.deps.readReadiness).not.toHaveBeenCalled()
+  })
+
+  it('holds a replaced server as a standing refusal, never re-pairing or rebuilding (#37766)', async () => {
+    const { state, recovery: deps } = recovery()
+    const replaced = OrcadManagedIdentityError.replacedServer(
+      { id: 'env-1', name: 'Box server' },
+      'another key'
+    )
+    const build = vi.fn().mockRejectedValue(replaced)
+    await expect(buildWithPairingRepair(deps, 'env-1', build)).rejects.toBe(replaced)
+    expect(state.repairs.standingFailure('env-1', 1)).toBe(replaced)
+    await expect(buildWithPairingRepair(deps, 'env-1', build)).rejects.toBe(replaced)
+    expect(build).toHaveBeenCalledOnce()
     expect(state.deps.readReadiness).not.toHaveBeenCalled()
   })
 

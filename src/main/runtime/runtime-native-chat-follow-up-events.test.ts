@@ -61,7 +61,7 @@ it('client-events ready snapshots the same normalized setting after installing i
   if (!handler || !('stream' in handler)) {
     throw new Error('missing client events method')
   }
-  const pending = handler.handler(undefined, { runtime, connectionId: 'preference' }, ready)
+  const pending = handler.handler({}, { runtime, connectionId: 'preference' }, ready)
   const message = ready.mock.calls.find(([value]) => value.type === 'ready')?.[0]
   expect(message).toMatchObject({
     type: 'ready',

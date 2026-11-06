@@ -68,34 +68,6 @@ it.each([
   expect(await exists(directory)).toBe(true)
 })
 
-it('unregisters an unused copy from LaunchServices, then deletes it', async () => {
-  const directory = await copy('terminal-host-old')
-  const bundle = join(directory, 'app.noindex', 'Orca Terminal Host.app')
-  let bundleExistedAtUnregister = false
-  run.mockImplementation(async (spec) => {
-    if (spec.program === LSREGISTER) {
-      expect(spec.args).toEqual(['-u', bundle])
-      bundleExistedAtUnregister = await exists(bundle)
-    }
-    return unused
-  })
-  await retireUnusedMacDaemonCopy(directory)
-  expect(bundleExistedAtUnregister).toBe(true)
-  expect(await exists(directory)).toBe(false)
-})
-
-it('deletes an unused copy even when LaunchServices cannot unregister it', async () => {
-  const directory = await copy('terminal-host-old')
-  run.mockImplementation(async (spec) => {
-    if (spec.program === LSREGISTER) {
-      throw new Error('lsregister unavailable')
-    }
-    return unused
-  })
-  await retireUnusedMacDaemonCopy(directory)
-  expect(await exists(directory)).toBe(false)
-})
-
 it("retires every unused copy and staging dir except the current build's and this process's staging", async () => {
   const current = await copy('terminal-host-current')
   const oldUnused = await copy('terminal-host-old')

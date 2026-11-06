@@ -14,8 +14,16 @@ import {
   readFileHandleBufferBounded
 } from './artifact-integrity'
 import { isBinaryBuffer } from '../../../../shared/binary-buffer'
-import type { RuntimeFilePreviewResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeFilePreviewResult,
+  RuntimeFileReadChunkResult
+} from '../../../../shared/runtime-types'
 import { FONT_FILE_MIME_TYPES } from '../../../../shared/font-file-extensions'
+import {
+  assertFileReadRange,
+  fileRangePage,
+  readFileHandleRange
+} from '../../../ipc/filesystem/local-file-range-read'
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
 
@@ -84,6 +92,31 @@ export async function assertLocalTerminalArtifactPathStillCanonical(
   if (currentPath !== filePath) {
     throw new Error('terminal_file_grant_stale')
   }
+}
+
+/** A page of a granted file; any type, since a download only moves its bytes. */
+export async function readLocalTerminalArtifactRangeFromHandle(
+  handle: FileHandle,
+  grant: TerminalFileGrant,
+  offset: number,
+  length: number
+): Promise<RuntimeFileReadChunkResult> {
+  const fileStats = await handle.stat()
+  if (!fileStats.isFile()) {
+    throw new Error('Cannot read a directory')
+  }
+  assertTerminalFileGrantFresh(grant, fileStats)
+  if (grant.contentDigest !== null) {
+    // Why: a digest-pinned file is small enough to verify whole per page; procfs sizes read as 0.
+    assertFileReadRange(offset, length)
+    const buffer = await readFileHandleBufferBounded(handle, LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1)
+    assertTerminalArtifactContentUnchanged(grant, buffer)
+    return fileRangePage(buffer.subarray(offset, offset + length), offset, buffer.byteLength)
+  }
+  const page = await readFileHandleRange(handle, fileStats.size, offset, length)
+  // Why: a file rewritten during this read must not land a torn page.
+  assertTerminalFileGrantFresh(grant, await handle.stat())
+  return page
 }
 
 export async function openLocalTerminalArtifactGrant(
