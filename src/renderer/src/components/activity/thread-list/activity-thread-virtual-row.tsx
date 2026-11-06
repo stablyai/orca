@@ -1,5 +1,9 @@
 import type React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  getRepoHostIdentity,
+  type HostScopedRepoKey
+} from '../../../../../shared/repository/repo-host-identity'
 import { clearActivityThread, isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
 import { ActivityThreadContextMenu } from './activity-thread-context-menu'
@@ -11,7 +15,7 @@ type ContextMenuProps = Parameters<typeof ActivityThreadContextMenu>[0]
 
 export function ActivityThreadVirtualRow({
   item,
-  projectLabelsByRepoId,
+  projectLabelsByRepoHost,
   collapsed,
   onToggleGroup,
   selectedPaneKey,
@@ -30,7 +34,7 @@ export function ActivityThreadVirtualRow({
   showJumpAction
 }: {
   item: ActivityVirtualItemDescriptor
-  projectLabelsByRepoId: ReadonlyMap<string, string>
+  projectLabelsByRepoHost: ReadonlyMap<HostScopedRepoKey, string>
   collapsed: boolean
   onToggleGroup: (groupKey: string) => void
   selectedPaneKey: string | null
@@ -90,7 +94,8 @@ export function ActivityThreadVirtualRow({
             thread={item.thread}
             projectLabel={
               item.thread.repo
-                ? (projectLabelsByRepoId.get(item.thread.repo.id) ?? item.thread.repo.displayName)
+                ? (projectLabelsByRepoHost.get(getRepoHostIdentity(item.thread.repo)) ??
+                  item.thread.repo.displayName)
                 : undefined
             }
             projectGroupLabel={

@@ -10,6 +10,7 @@ test.use({ minimumSeededWorktreeCount: 1 })
 test('Activity agent rows keep their project across working, waiting, and done states', async ({
   orcaPage
 }, testInfo) => {
+  await orcaPage.setViewportSize({ width: 1440, height: 900 })
   await waitForSessionReady(orcaPage)
   await waitForStartupWorktreeRefresh(orcaPage)
   const worktreeId = await waitForActiveWorktree(orcaPage)
@@ -87,8 +88,12 @@ test('Activity agent rows keep their project across working, waiting, and done s
   await orcaPage.keyboard.press('Escape')
   await expect(orcaPage.getByRole('group', { name: 'Project A activity' })).toBeVisible()
   for (const task of [workingTask, waitingTask, doneTask]) {
-    const groupedRow = orcaPage.getByRole('listitem', { name: task })
+    const groupedRow = orcaPage.getByRole('listitem', {
+      name: `Project A: ${task}`,
+      exact: true
+    })
     await expect(groupedRow).toBeVisible()
+    await expect(groupedRow.getByRole('button', { name: `Project A: ${task}` })).toBeVisible()
     await expect(groupedRow.locator('[data-slot="badge"]')).toHaveCount(0)
   }
 })
