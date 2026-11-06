@@ -140,7 +140,7 @@ describe('deferred PostHog client start', () => {
       expect(sdk.capture).toHaveBeenCalledWith(
         expect.objectContaining({
           properties: expect.objectContaining({
-            chat_ui_launch_tip_v1: cohort,
+            chat_ui_launch_tip_rollout_v1: cohort,
             chat_ui_launch_tip_targeting_v1: 'not-switched'
           })
         })
