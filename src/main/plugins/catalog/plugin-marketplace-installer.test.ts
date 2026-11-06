@@ -235,7 +235,6 @@ describe('PluginMarketplaceInstaller', () => {
     ).not.toHaveProperty('authorRepository')
   })
 
-
   it('keeps an install pinned to its catalog when a second catalog lists the same id', async () => {
     const { root, marketplace, installer, sourceId } = await setup()
     await installer.install(await installer.preview(sourceId, 'community.notes'))
