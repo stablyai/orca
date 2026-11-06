@@ -55,6 +55,54 @@ describe('agent.status.changed for plugins', () => {
     await Promise.resolve()
     expect(events.emitEvent).toHaveBeenCalledTimes(2)
   })
+
+  it('stops listing terminals for queued events once the last listener goes away', async () => {
+    const source = runtime([{ handle: 'term_a', title: 'zsh' }])
+    const listing = Promise.withResolvers<{ terminals: [] }>()
+    source.listTerminals.mockReturnValueOnce(listing.promise)
+    const delegate = pluginRuntimeDelegate(source, () => [])
+    const events = { wantsEvent: vi.fn(() => true), emitEvent: vi.fn() }
+    const forward = createPluginAgentStatusForwarder(delegate, events)
+    const base = { state: 'working' as const, receivedAt: 1, paneKey: `tab0:${LEAF}` }
+    forward({ ...base, workspaceId: 'repo::/a' })
+    await vi.waitFor(() => expect(source.listTerminals).toHaveBeenCalledOnce())
+    forward({ ...base, workspaceId: 'repo::/b' })
+    forward({ ...base, workspaceId: 'repo::/c' })
+    // The panel closes while the first lookup is still running.
+    events.wantsEvent.mockReturnValue(false)
+    listing.resolve({ terminals: [] })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(source.listTerminals).toHaveBeenCalledOnce()
+    expect(events.emitEvent).toHaveBeenCalledOnce()
+  })
+
+  it('shares one terminal listing per workspace among events queued behind a lookup', async () => {
+    const source = runtime([{ handle: 'term_a', title: 'zsh' }])
+    let releaseFirst: () => void = () => undefined
+    const first = source.listTerminals.getMockImplementation()!
+    source.listTerminals.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => (releaseFirst = resolve))
+      return first()
+    })
+    const delegate = pluginRuntimeDelegate(source, () => [])
+    const events = { wantsEvent: vi.fn(() => true), emitEvent: vi.fn() }
+    const forward = createPluginAgentStatusForwarder(delegate, events)
+    const base = { workspaceId: 'repo::/w', receivedAt: 1, paneKey: `tab0:${LEAF}` }
+    forward({ ...base, state: 'working' })
+    await vi.waitFor(() => expect(source.listTerminals).toHaveBeenCalledOnce())
+    forward({ ...base, state: 'waiting' })
+    forward({ ...base, state: 'done' })
+    forward({ ...base, workspaceId: 'repo::/other', state: 'done' })
+    releaseFirst()
+    await vi.waitFor(() => expect(events.emitEvent).toHaveBeenCalledTimes(4))
+    expect(source.listTerminals).toHaveBeenCalledTimes(3)
+    expect(events.emitEvent.mock.calls.map(([, payload]) => payload)).toEqual([
+      { ...base, state: 'working', terminalId: 'term_a', title: 'zsh' },
+      { ...base, state: 'waiting', terminalId: 'term_a', title: 'zsh' },
+      { ...base, state: 'done', terminalId: 'term_a', title: 'zsh' },
+      { ...base, workspaceId: 'repo::/other', state: 'done', terminalId: 'term_a', title: 'zsh' }
+    ])
+  })
 })
 
 describe('agents.list projection', () => {
