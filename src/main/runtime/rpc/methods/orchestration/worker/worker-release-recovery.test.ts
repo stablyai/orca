@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/worker-terminal-release-reconciliation'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void

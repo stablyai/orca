@@ -161,7 +161,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',
+  'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime/remote-runtime-client.test.ts',

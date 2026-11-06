@@ -13,14 +13,14 @@ import {
   SessionAddressParams
 } from '../../../../../shared/rpc-contract/orchestration-params'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-party'
-import { locateOrchestrationParty } from '../../../orchestration/orchestration-party-location'
-import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
+import { resolveOrcaSessionParty } from '../../../orchestration/addressing/orchestration-party'
+import { locateOrchestrationParty } from '../../../orchestration/addressing/orchestration-party-location'
+import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { z } from 'zod'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { defineMethod, type RpcContext } from '../../core'
 import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
-import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
+import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
 async function locateParty(
   params: z.infer<typeof PartyLocationParams>,

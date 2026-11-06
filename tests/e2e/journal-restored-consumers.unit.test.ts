@@ -54,11 +54,11 @@ import type { RestTestRig } from '../../src/main/native-chat/agent-session-wire/
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
 import {
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
-} from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc-client.test-fixture'
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import { MAX_TIMER_DELAY_MS } from '../../src/shared/timer-delay'
 import {
   buildMobileNativeChatTransientData,

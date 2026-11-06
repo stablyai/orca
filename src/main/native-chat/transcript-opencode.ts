@@ -1,4 +1,4 @@
-import { createImportedForkTip } from './agent-session-journal/imported-fork-tip'
+import { createImportedForkTip } from './agent-session-journal/history-import/imported-fork-tip'
 import type {
   OpenCodeForkTipEvent,
   OpenCodeTranscriptItem,

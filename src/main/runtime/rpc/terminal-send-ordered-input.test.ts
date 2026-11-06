@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { z } from 'zod'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-terminal-send-contract'
 

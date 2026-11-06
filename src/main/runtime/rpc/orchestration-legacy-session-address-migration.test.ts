@@ -1,6 +1,6 @@
 import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrchestrationDb } from '../orchestration/db'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { migrateV43 } from '../orchestration/db/schema/migrate-v43'
 import {
   ADDRESS_X,
