@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { triggerMediumImpact } from '../../../platform/haptics'
@@ -15,6 +15,7 @@ import {
   useMobileNativeChatConversationState,
   type MobileNativeChatConversation
 } from '../use-mobile-native-chat-conversation-state'
+import type { RpcClient } from '../../../transport/rpc-client'
 import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 import { MobileNativeChatRewindContext } from './mobile-native-chat-rewind-context'
 import { useMobileNativeChatRewindDialog } from './use-mobile-native-chat-rewind-dialog'
@@ -39,26 +40,41 @@ export function MobileNativeChatRowOverlaysHost({
   // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
   const [shown, setShown] = useMobileNativeChatConversationState<{
     image?: MobileNativeChatViewedImage
+    imageOwner?: { client: RpcClient; generation: number }
     actionsFor?: NativeChatMessage
     link?: string
   }>(conversation)
+  const client = imageSource?.client
+  const generation = client?.getGeneration?.() ?? 0
+  const ownsImage =
+    !shown?.imageOwner ||
+    (shown.imageOwner.client === client && shown.imageOwner.generation === generation)
+  useEffect(() => {
+    if (!ownsImage) {
+      setShown(null)
+    }
+  }, [ownsImage, setShown])
   const overlays = useMemo(
     () => ({
-      openImage: (image: MobileNativeChatViewedImage) => setShown({ image }),
+      imageSource,
+      openImage: (image: MobileNativeChatViewedImage) =>
+        setShown({
+          image,
+          ...(client ? { imageOwner: { client, generation } } : {})
+        }),
       openActions: (actionsFor: NativeChatMessage) => {
         triggerMediumImpact()
         setShown({ actionsFor })
       },
-      openRewind,
-      imageSource
+      openRewind
     }),
-    [setShown, openRewind, imageSource]
+    [setShown, openRewind, imageSource, client, generation]
   )
   const openLink = useCallback((link: string) => setShown({ link }), [setShown])
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {
     const close = () => setShown(null)
-    return shown?.image ? (
+    return shown?.image && ownsImage ? (
       <MobileNativeChatImageViewer
         {...shown.image}
         actions={MobileImageViewerActions}
@@ -69,7 +85,7 @@ export function MobileNativeChatRowOverlaysHost({
     ) : shown?.link ? (
       <MobileLinkActionSheet url={shown.link} onClose={close} openInOrca={onOpenUrlInOrca} />
     ) : null
-  }, [shown, setShown, onOpenUrlInOrca])
+  }, [shown, ownsImage, setShown, onOpenUrlInOrca])
   return (
     <MobileNativeChatRowOverlaysContext.Provider value={overlays}>
       <MarkdownLinkHandlerContext.Provider value={openLink}>
