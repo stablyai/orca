@@ -228,7 +228,7 @@ describe('useMobileDiffReviewController', () => {
     it('keeps an unsaved note across reopen and edits, and clears it once saved', async () => {
       loadSnapshot.mockResolvedValueOnce(unstaged(['c.ts']))
       await act(async () => {
-        renderer = create(createElement(StageProbe))
+        renderer = create(queries.wrap(createElement(StageProbe)))
         await Promise.resolve()
       })
       act(() => controller?.openComposer(3))
