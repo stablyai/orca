@@ -143,6 +143,15 @@
         "restartGaveUp_many": "Не удалось перезапустить сервер Orca в {{distro}} после {{count}} попыток"
       }
     },
+    "projectOrder": {
+      "pin": "Закрепить проект",
+      "unpin": "Открепить проект",
+      "frequent": "Часто используемые",
+      "recentDescription": "Недавно открытые вами",
+      "frequentDescription": "По частоте ваших открытий",
+      "nameDescription": "Название проекта по алфавиту",
+      "saveFailed": "Не удалось сохранить порядок проектов"
+    },
     "agentSummary": {
       "state": {
         "waiting": "ожидание",

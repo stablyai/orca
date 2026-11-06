@@ -51,6 +51,7 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
     [
       'expo-crypto',
       partialNativeModule('expo-crypto', {
+        randomUUID: () => globalThis.crypto.randomUUID(),
         getRandomBytes: (length: number) =>
           globalThis.crypto.getRandomValues(new Uint8Array(length)),
         // Hashed before it resolves, as the native module's synchronous digest is.
