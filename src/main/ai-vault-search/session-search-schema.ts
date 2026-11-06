@@ -80,6 +80,10 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
         'index_incarnation',
         randomUUID()
       )
+      db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+        'index_maintenance_generation',
+        '0'
+      )
       // Older Cursor rows omitted the file-time fallback; repair metadata without rereading transcripts.
       db.exec(`
         UPDATE sessions SET updated_at = (

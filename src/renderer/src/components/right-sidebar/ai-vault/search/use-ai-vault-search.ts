@@ -72,7 +72,8 @@ export function useAiVaultSearch(
       setPage((previous) => ({
         identity,
         hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
-        response: null,
+        response:
+          (cursor || revalidate) && previous?.identity === identity ? previous.response : null,
         error: false,
         loading: true
       }))
@@ -104,7 +105,13 @@ export function useAiVaultSearch(
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          setPage((previous) => ({
+            identity,
+            hits: previous?.identity === identity ? previous.hits : [],
+            response: previous?.identity === identity ? previous.response : null,
+            error: true,
+            loading: false
+          }))
         }
       } finally {
         pending = false

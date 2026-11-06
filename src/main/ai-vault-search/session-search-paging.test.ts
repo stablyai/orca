@@ -313,3 +313,41 @@ describe('the response carries the snapshot it was built from', () => {
     expect(after).toBeGreaterThan(before)
   })
 })
+
+it('round-trips an existing offset cursor through the engine with its raw generation fence', async () => {
+  const { db, engine } = await withSessions(4)
+  const request = { query: 'needle', limit: 1 }
+  const first = engine.search(request)
+  const incarnation = String(
+    db.prepare("SELECT value FROM meta WHERE key = 'index_incarnation'").get()!.value
+  )
+  const key = sessionSearchPageKey(request)
+  const cursor = encodeSessionSearchCursor(first.generation, 1, key, incarnation)
+  const second = engine.search({ ...request, cursor })
+  expect(second.hits[0]?.sessionId).not.toBe(first.hits[0]?.sessionId)
+  expect(decodeSessionSearchCursor(second.page.cursor!, first.generation, key, incarnation)).toBe(2)
+})
+
+it('validates frozen cursor bounds, query scopes and message ownership before exposing a hit', async () => {
+  const { engine, db } = await withSessions(4)
+  addSyntheticSession(db, { id: 9, cwd: '/private', text: 'hiddenneedle' })
+  const request = { query: 'needle', limit: 1, filters: { scopePaths: ['/repo'] } }
+  const first = engine.search(request)
+  const raw = first.page.cursor!
+  const payload = JSON.parse(Buffer.from(raw.slice(4), 'base64url').toString('utf8'))
+  const forged = (patch: object) =>
+    `ss2.${Buffer.from(JSON.stringify({ ...payload, ...patch })).toString('base64url')}`
+  for (const patch of [
+    { o: -1 },
+    { hits: Array.from({ length: 601 }, () => payload.hits[0]) },
+    { hits: [{ ...payload.hits[0], s: 9 }], o: 0 },
+    { hits: [{ ...payload.hits[0], m: 5 }], o: 0 }
+  ]) {
+    expect(() => engine.search({ ...request, cursor: forged(patch) })).toThrow(
+      SessionSearchCursorError
+    )
+  }
+  expect(() => engine.search({ ...request, cursor: `ss2.${'x'.repeat(256 * 1024)}` })).toThrow(
+    SessionSearchCursorError
+  )
+})

@@ -44,12 +44,17 @@ export class SessionSearchTypoRepair {
          SELECT m.id FROM messages_fts
          JOIN messages m ON m.id = messages_fts.rowid
          JOIN sessions s ON s.id = m.session_row_id
-         WHERE messages_fts MATCH ? LIMIT ${MAX_COUNTED_ROWS})`
+         WHERE messages_fts MATCH ? AND m.role != 'tool' LIMIT ${MAX_COUNTED_ROWS})`
     )
     // Term order uses the vocab index and keeps the candidate cutoff independent of orphan counts.
     this.candidatesByPrefix = db.prepare(
       `SELECT term FROM messages_vocab
        WHERE term >= ? AND term < ? AND length(term) BETWEEN ? AND ?
+         AND EXISTS (SELECT 1 FROM messages_fts
+           JOIN messages m ON m.id = messages_fts.rowid
+           JOIN sessions s ON s.id = m.session_row_id
+           WHERE messages_fts MATCH (? || '"' || replace(messages_vocab.term, '"', '""') || '"')
+             AND m.role != 'tool')
        ORDER BY term LIMIT ?`
     )
   }
@@ -84,7 +89,7 @@ export class SessionSearchTypoRepair {
 
   /** Probe several ranked candidates so an invisible best match does not suppress a live repair. */
   private bestVisible(lowered: string, prefix: string, scope: SessionSearchScope): string | null {
-    const counted = this.ranked(lowered, prefix)
+    const counted = this.ranked(lowered, prefix, scope)
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope) }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
@@ -96,22 +101,32 @@ export class SessionSearchTypoRepair {
       .term
   }
 
-  private ranked(lowered: string, prefix: string): { term: string; score: number }[] {
-    return this.candidates(prefix, lowered.length)
+  private ranked(
+    lowered: string,
+    prefix: string,
+    scope: SessionSearchScope
+  ): { term: string; score: number }[] {
+    return this.candidates(prefix, lowered.length, scope)
       .map((row) => ({ term: row.term, score: similarity(lowered, row.term) }))
       .filter((candidate) => candidate.score >= MIN_SIMILARITY)
       .sort((left, right) => right.score - left.score || (left.term < right.term ? -1 : 1))
   }
 
-  private candidates(prefix: string, length: number): { term: string }[] {
+  private candidates(
+    prefix: string,
+    length: number,
+    scope: SessionSearchScope
+  ): { term: string }[] {
     const last = prefix.charCodeAt(prefix.length - 1)
     const upper = prefix.slice(0, -1) + String.fromCharCode(last + 1)
-    return this.candidatesByPrefix.all(
+    const rows = this.candidatesByPrefix.all(
       prefix,
       upper,
       Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK),
       length + LENGTH_SLACK,
+      scope === 'all' ? '' : '{user_text assistant_text}: ',
       MAX_CANDIDATES
-    ) as { term: string }[]
+    )
+    return rows.flatMap((row) => (typeof row.term === 'string' ? [{ term: row.term }] : []))
   }
 }

@@ -58,3 +58,12 @@ it('never repairs a conversation query onto a word only tool output holds', asyn
   expect(wide.planner.repairedTerms).toEqual(['quicksilverfox'])
   expect(wide.hits.map((hit) => hit.sessionId)).toEqual(['1'])
 })
+
+it('excludes tool-only spellings before typo visibility and candidate selection in all scope', async () => {
+  harness = await openSessionSearchHarness('ss-typo-tool-exclusion')
+  addSyntheticSession(harness.db, { id: 1, text: 'quicksilverfox', rows: 2 })
+  addSyntheticSession(harness.db, { id: 2, role: 'tool', text: 'quicksilverfx', rows: 10 })
+  const page = harness.engine.search({ query: 'quicksilverfx', scope: 'all' })
+  expect(page.planner.repairedTerms).toEqual(['quicksilverfox'])
+  expect(page.hits.map((hit) => hit.sessionId)).toEqual(['1'])
+})

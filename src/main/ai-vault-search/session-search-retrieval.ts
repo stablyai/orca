@@ -1,6 +1,9 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchRoute, SessionSearchScope } from './session-search-engine-types'
-import type { MessageRow, SessionRow } from './session-search-hit-ranking'
+import type { SessionSearchFrozenHit } from './session-search-ranked-cursor'
+import { SessionSearchCursorError } from './session-search-page-cursor'
+import { readIndexGeneration } from './session-search-index-generation'
+import type { RankedSession, MessageRow, SessionRow } from './session-search-hit-ranking'
 import {
   andExpression,
   orExpression,
@@ -141,6 +144,41 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
+  /** Hydrate only the frozen slice; reapply scope and message ownership to untrusted cursor IDs. */
+  hydrate(hits: readonly SessionSearchFrozenHit[], scope: RetrievalScope): RankedSession[] {
+    const sessions = new Map(
+      this.loadSessions(
+        hits.map((hit) => hit.s),
+        scope
+      ).map((row) => [row.id, row])
+    )
+    const ids = hits.flatMap((hit) => (hit.m === null ? [] : [hit.m]))
+    const messages = new Map<number, MessageRow>()
+    if (ids.length) {
+      const rows = this.db
+        .prepare(`SELECT id AS rowid, session_row_id, role, ts FROM messages
+        WHERE id IN (${ids.map(() => '?').join(',')}) AND role != 'tool'`)
+        .all(...ids)
+      for (const row of rows) {
+        messages.set(Number(row.rowid), {
+          rowid: Number(row.rowid),
+          session_row_id: Number(row.session_row_id),
+          role: String(row.role),
+          ts: typeof row.ts === 'string' ? row.ts : null,
+          score: 0
+        })
+      }
+    }
+    return hits.map((hit) => {
+      const session = sessions.get(hit.s)
+      const message = hit.m === null ? null : messages.get(hit.m)
+      if (!session || message === undefined || (message && message.session_row_id !== hit.s)) {
+        throw new SessionSearchCursorError('malformed', readIndexGeneration(this.db))
+      }
+      return { session, message, score: hit.score, duplicateCount: hit.d }
+    })
+  }
+
   /** Bound SQL parameters independently of the configurable candidate limit. */
   private loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []
@@ -210,7 +248,7 @@ export class SessionSearchRetrieval {
       -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score,
       m.session_row_id, m.role, m.ts, s.updated_at
       FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
-      JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ?${eligible}`
+      JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ? AND m.role != 'tool'${eligible}`
     // Group before limiting so one long session cannot consume the candidate budget.
     // SQLite’s max(score) selects the best matching row for the other projected columns.
     const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'

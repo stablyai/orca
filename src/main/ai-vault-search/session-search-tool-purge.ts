@@ -1,3 +1,4 @@
+import { readIndexGeneration, recordIndexMaintenance } from './session-search-index-generation'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
@@ -74,6 +75,7 @@ export class SessionSearchToolPurge {
   private deletePage(ids: SqliteRow[]): number {
     this.db.exec('BEGIN IMMEDIATE')
     try {
+      const before = readIndexGeneration(this.db)
       const full = this.db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
       const message = this.db.prepare("DELETE FROM messages WHERE id = ? AND role = 'tool'")
       let deleted = 0
@@ -88,6 +90,7 @@ export class SessionSearchToolPurge {
         this.db.exec(`INSERT INTO meta(key, value) VALUES ('index_generation', '1')
           ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1`)
       }
+      recordIndexMaintenance(this.db, before)
       this.db.exec('COMMIT')
       return deleted
     } catch (error) {
