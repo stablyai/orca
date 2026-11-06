@@ -1,3 +1,4 @@
+import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/structured-agent-session-fork'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourceFromEvidence
@@ -108,6 +109,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
       : undefined
+    if (input.forkFrom) {
+      const resolved = await resolveStructuredAgentSessionForkIntent({
+        ...input,
+        forkFrom: input.forkFrom,
+        host: getStructuredAgentSessionHost(),
+        location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+      })
+      return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
+    }
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,
       input.worktree,

@@ -8,7 +8,8 @@ import { ClaudeRuntimeAuthService } from '../../claude-accounts/runtime-auth-ser
 import { ClaudeAccountService } from '../../claude-accounts/service'
 import { getInitialCodexRateLimitTarget } from '../../rate-limits/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from '../../rate-limits/claude-rate-limit-target'
-import { getKimiRuntimeTarget, resolveKimiHome } from '../../kimi/kimi-runtime-home'
+import { resolveKimiHome } from '../../kimi/kimi-runtime-home'
+import { resolveLocalAccountUsageTarget } from '../../../shared/local-account-runtime'
 import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/codex-rate-limit-wsl-home-gate'
 import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
@@ -54,7 +55,10 @@ export function createProviderAccountServices(
   )
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   // Read credentials where Kimi’s CLI refreshes its token, including WSL (#12370).
-  rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store.getSettings())))
+  rateLimits.setKimiHomeResolver(() =>
+    resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))
+  )
+  rateLimits.setAntigravityFetchTarget(resolveLocalAccountUsageTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
