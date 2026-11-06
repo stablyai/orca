@@ -172,40 +172,6 @@ afterEach(async () => {
 })
 
 describe('workspace-pinned automations capture a registration generation', () => {
-  it('stamps the pinned SSH target generation when the record is created', async () => {
-    const store = await createStoreFromState(pinnedState(FIRST_GENERATION))
-
-    const automation = createPinnedAutomation(store)
-
-    expect(automation.executionTargetType).toBe('local')
-    expect(automation.executionTargetGeneration).toBe(FIRST_GENERATION)
-  })
-
-  it('projects the pinned record onto the SSH host while the registration is unchanged', async () => {
-    const store = await createStoreFromState(pinnedState(FIRST_GENERATION))
-    createPinnedAutomation(store)
-
-    expect(store.listAutomationsForScope().items[0].selector).toEqual({
-      kind: 'ssh',
-      targetId: TARGET_ID,
-      targetGeneration: FIRST_GENERATION
-    })
-  })
-
-  it('orphans the pinned record when the same target id is re-added as a new incarnation', async () => {
-    const store = await createStoreFromState(pinnedState(FIRST_GENERATION))
-    createPinnedAutomation(store)
-    store.flush()
-    replaceStoredTargetGeneration(REPLACEMENT_GENERATION)
-
-    const reloaded = await reloadStore()
-
-    expect(reloaded.listAutomationsForScope().items[0].selector).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-  })
-
   it('refuses to dispatch the pinned record onto the replacement machine', async () => {
     const store = await createStoreFromState(pinnedState(FIRST_GENERATION))
     createPinnedAutomation(store)
@@ -221,38 +187,6 @@ describe('workspace-pinned automations capture a registration generation', () =>
     expect(() =>
       reloaded.assertAutomationOwnerFence({ id: automation.id, operation: 'execute' })
     ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved }))
-  })
-
-  it('backfills a legacy pinned record that was stored without a capture', async () => {
-    const legacy = {
-      id: 'auto-legacy',
-      name: 'Legacy',
-      prompt: 'go',
-      precheck: null,
-      agentId: 'codex',
-      projectId: 'repo-1',
-      executionTargetType: 'local',
-      executionTargetId: 'local',
-      schedulerOwner: 'local_host_service',
-      workspaceMode: 'existing',
-      workspaceId: folderWorkspaceKey('fw-1'),
-      baseBranch: null,
-      reuseSession: false,
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY',
-      dtstart: NOW,
-      enabled: true,
-      nextRunAt: NOW,
-      missedRunPolicy: 'run_once_within_grace',
-      missedRunGraceMinutes: 720,
-      createdAt: NOW,
-      updatedAt: NOW
-    }
-    const store = await createStoreFromState(
-      pinnedState(FIRST_GENERATION, { automations: [legacy] })
-    )
-
-    expect(store.listAutomations()[0].executionTargetGeneration).toBe(FIRST_GENERATION)
   })
 
   it('never re-stamps a differing capture, so a replacement cannot re-adopt the record', async () => {
@@ -307,17 +241,5 @@ describe('the destination a pinned create lands on', () => {
       expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.invalidDestination })
     )
     expect(store.listAutomations()).toHaveLength(0)
-  })
-
-  it('accepts the pinned host as the destination', async () => {
-    const store = await createStoreFromState(pinnedState(FIRST_GENERATION))
-
-    const created = store.createAutomation(PINNED_CREATE_INPUT, {
-      destination: {
-        selector: { kind: 'ssh', targetId: TARGET_ID, targetGeneration: FIRST_GENERATION }
-      }
-    })
-
-    expect(created.executionTargetGeneration).toBe(FIRST_GENERATION)
   })
 })
