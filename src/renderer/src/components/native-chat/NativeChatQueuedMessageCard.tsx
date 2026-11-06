@@ -195,7 +195,12 @@ export function NativeChatQueuedMessageCard({
       style={drag?.rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
-      className="group/queued relative px-2.5 py-1.5"
+      className={cn(
+        'group/queued relative px-2.5 py-1.5',
+        // Lit while the chat's composer shows Steer queued: the card that press would send.
+        showsSteerShortcut &&
+          '[[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-accent'
+      )}
     >
       {drag?.insertion ? (
         <span
