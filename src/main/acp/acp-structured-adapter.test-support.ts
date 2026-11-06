@@ -105,7 +105,11 @@ export async function openAcpAdapterRig(
   }
   // Use a scratch account folder for agents that prepare one.
   const { prepare, resolve, environment } = spec.account
-  const scratch = { launchEnv: {}, stateDirectory: tmpdir() }
+  const stateDirectory = prepare ? await mkdtemp(join(tmpdir(), 'orca-acp-account-')) : tmpdir()
+  if (prepare) {
+    onTestFinished(() => rm(stateDirectory, { recursive: true, force: true }))
+  }
+  const scratch = { launchEnv: {}, stateDirectory }
   const account = prepare ? environment(await resolve(scratch), {}) : {}
   const resolveLaunch: AcpStructuredSessionAdapterDeps['resolveLaunch'] =
     options.deps?.resolveLaunch ??
