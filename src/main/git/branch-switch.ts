@@ -72,7 +72,7 @@ export type BranchSwitchDeps = {
 
 export type BranchSwitchResult = {
   branch: string
-  /** The live branch the checkout left, or null when it was already on `branch`. */
+  /** The live branch the checkout left, or null when detached or already on `branch`. */
   previousBranch: string | null
 }
 
@@ -166,26 +166,38 @@ async function readRefusal(
   branch: string,
   options: GitRuntimeOptions,
   deps: BranchSwitchDeps
-): Promise<{ refusal: string | null; previousBranch: string | null }> {
+): Promise<{ refusal: string | null; previousBranch: string | null; alreadyOnTarget: boolean }> {
   const status = await deps.getStatus()
   if (status.readError !== undefined) {
     return {
       refusal: `Orca couldn't read this checkout's changes, so it didn't switch branches. ${status.readError}`,
-      previousBranch: null
+      previousBranch: null,
+      alreadyOnTarget: false
     }
   }
   const current = status.branch?.replace(/^refs\/heads\//, '')
-  if (current === branch) {
-    return { refusal: null, previousBranch: null }
+  const commitTarget = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(branch)
+  if (current === branch || (current === undefined && commitTarget && status.head === branch)) {
+    return { refusal: null, previousBranch: null, alreadyOnTarget: true }
   }
-  const refuse = (refusal: string | null) => ({ refusal, previousBranch: current ?? null })
+  const refuse = (refusal: string | null) => ({
+    refusal,
+    previousBranch: current ?? null,
+    alreadyOnTarget: false
+  })
   if (status.head === '(initial)') {
     return refuse('Make a first commit on this branch before switching branches.')
   }
   if (current === undefined) {
-    return refuse(
-      'This checkout is on a detached commit. Switch branches from a terminal so commits made here are not lost.'
+    const { stdout } = await gitExecFileAsync(
+      ['rev-list', '-n1', 'HEAD', '--not', '--branches', '--remotes', '--tags'],
+      gitOptionsForWorktree(worktreePath, options)
     )
+    if (stdout.trim()) {
+      return refuse(
+        'This checkout is on a detached commit. Switch branches from a terminal so commits made here are not lost.'
+      )
+    }
   }
   const revertInProgress = await exists(
     path.join(await resolveGitDir(worktreePath, options), 'REVERT_HEAD')
@@ -213,7 +225,7 @@ async function readRefusal(
   return refuse(await deps.getAgentBlocker())
 }
 
-/** Switch an existing local branch in place, refusing when the checkout is not safe to switch. */
+/** Switch a branch or commit in place, refusing when the checkout is not safe to switch. */
 export async function switchBranchGuarded(
   worktreePath: string,
   branch: string,
@@ -221,11 +233,16 @@ export async function switchBranchGuarded(
   deps: BranchSwitchDeps
 ): Promise<BranchSwitchResult> {
   return withCheckoutLock(worktreePath, async () => {
-    const { refusal, previousBranch } = await readRefusal(worktreePath, branch, options, deps)
+    const { refusal, previousBranch, alreadyOnTarget } = await readRefusal(
+      worktreePath,
+      branch,
+      options,
+      deps
+    )
     if (refusal !== null) {
       throw new BranchSwitchRefusedError(refusal)
     }
-    if (previousBranch === null) {
+    if (alreadyOnTarget) {
       return { branch, previousBranch }
     }
     let skippedPaths: string[]
@@ -234,7 +251,15 @@ export async function switchBranchGuarded(
     } catch (error) {
       // Git can exit non-zero after HEAD already moved (a file it could not replace, a failing
       // post-checkout hook); that switch landed and must be recorded.
-      if ((await readCurrentBranch(worktreePath, options)) !== branch) {
+      const landedTarget = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(branch)
+        ? (
+            await gitExecFileAsync(
+              ['rev-parse', 'HEAD'],
+              gitOptionsForWorktree(worktreePath, options)
+            )
+          ).stdout.trim()
+        : await readCurrentBranch(worktreePath, options)
+      if (landedTarget !== branch) {
         throw error
       }
       deps.onSwitched?.()
