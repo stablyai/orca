@@ -90,9 +90,9 @@ export function createAgentStatusProviderSessionActions(
           // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
           const preservesQuitOrigin =
             existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'
+          // Why not the earlier record's note: a typed resume of this conversation never ran that launch.
           const launchConfig =
-            (registryMatches ? registryEntry?.launchConfig : undefined) ??
-            (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
+            metadata?.launchConfig ?? (registryMatches ? registryEntry?.launchConfig : undefined)
           const record: SleepingAgentSessionRecord = {
             paneKey,
             ...(tabId ? { tabId } : {}),

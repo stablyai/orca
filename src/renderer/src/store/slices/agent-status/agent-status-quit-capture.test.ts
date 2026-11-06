@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
 import './agent-status'
-import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
 import { createTestStore } from '../store-test-helpers'
 import { makeTab } from '../store-session-test-harness'
 
@@ -138,63 +137,64 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('preserves hydrated launch config during live recapture without a registry entry', () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      }
-    } as Partial<AppState>)
-    const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
-    const launchConfig = {
-      agentCommand: "codex '--model' 'gpt-5'",
-      agentArgs: '--model gpt-5',
-      agentEnv: { CODEX_PROFILE: 'captured' }
-    }
-    store.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': {
-          paneKey: 'tab-1:leaf-1',
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'codex',
-          providerSession,
-          prompt: 'first task',
-          state: 'working',
-          capturedAt: 10,
-          updatedAt: 10,
-          launchConfig,
-          origin: 'live'
+  // A restored status replays the record's own launch; a live one may be a typed resume that never ran it.
+  it.each([
+    [true, true],
+    [false, false]
+  ])(
+    'recapturing a hydrated record from a restored status %s keeps its note: %s',
+    (restored, kept) => {
+      const store = createTestStore()
+      store.setState({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
         }
+      } as Partial<AppState>)
+      const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
+      const launchConfig = {
+        agentCommand: "codex '--model' 'gpt-5'",
+        agentArgs: '--model gpt-5',
+        agentEnv: { CODEX_PROFILE: 'captured' }
       }
-    } as Partial<AppState>)
-    expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()
+      store.setState({
+        sleepingAgentSessionsByPaneKey: {
+          'tab-1:leaf-1': {
+            paneKey: 'tab-1:leaf-1',
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            agent: 'codex',
+            providerSession,
+            prompt: 'first task',
+            state: 'working',
+            capturedAt: 10,
+            updatedAt: 10,
+            launchConfig,
+            origin: 'live'
+          }
+        }
+      } as Partial<AppState>)
+      expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()
 
-    store
-      .getState()
-      .setAgentStatus(
+      store.getState().setAgentStatus(
         'tab-1:leaf-1',
-        { state: 'working', prompt: 'first task', agentType: 'codex' },
+        {
+          state: 'working',
+          prompt: 'first task',
+          agentType: 'codex',
+          ...(restored ? { restoredUnconfirmed: true } : {})
+        },
         'Codex',
         { updatedAt: 20, stateStartedAt: 10 },
         { tabId: 'tab-1', worktreeId: 'wt-1' },
         { providerSession }
       )
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual(
-      launchConfig
-    )
-    expect(
-      collectSleepingAgentSessionRecordsForWorktree(store.getState(), 'wt-1')['tab-1:leaf-1']
-        ?.launchConfig
-    ).toEqual(launchConfig)
-
-    store.getState().captureAllSleepingAgentSessions('quit')
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
-      origin: 'quit',
-      launchConfig
-    })
-  })
+      store.getState().captureAllSleepingAgentSessions('quit')
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual(
+        kept ? launchConfig : undefined
+      )
+    }
+  )
 
   it('does not reuse a stale pane launch config for a new provider session', () => {
     const store = createTestStore()

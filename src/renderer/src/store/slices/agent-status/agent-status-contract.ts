@@ -130,7 +130,10 @@ export type AgentProviderSessionRouting = {
   connectionId?: string | null
 }
 
-export type AgentProviderSessionRecordMetadata = { launchToken?: string }
+export type AgentProviderSessionRecordMetadata = {
+  launchToken?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}
 
 export type AgentProviderSessionUpdate = {
   kind: 'providerSession'
