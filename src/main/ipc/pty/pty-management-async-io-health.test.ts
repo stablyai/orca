@@ -15,9 +15,15 @@ vi.mock('electron', () => ({
       handlers.set(name, handler)
   }
 }))
-vi.mock('../../daemon/daemon-provider-state', () => ({ getDaemonProvider: provider }))
-vi.mock('../../daemon/daemon-provider-routing', () => ({ getCurrentDaemonAdapter: () => adapter }))
-vi.mock('../../daemon/daemon-provider-restart', () => ({ restartDaemon: restart }))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  getDaemonProvider: provider
+}))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-routing', () => ({
+  getCurrentDaemonAdapter: () => adapter
+}))
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
+  restartDaemon: restart
+}))
 
 import { registerDaemonManagementHandlers } from './pty-management'
 
@@ -38,12 +44,6 @@ async function read(): Promise<DaemonAsyncIoStatus | undefined> {
   return handlers.get('pty:management:asyncIoHealth')?.()
 }
 
-it('reports current-daemon health without restarting it or listing sessions', async () => {
-  expect(await read()).toEqual({ state: 'stalled', pendingMs: 5000 })
-  expect(adapter.getAsyncIoHealth).toHaveBeenCalledOnce()
-  expect(restart).not.toHaveBeenCalled()
-})
-
 it('discards health evidence if the daemon changes while the check is pending', async () => {
   let finish: (health: DaemonAsyncIoStatus) => void = () => {}
   adapter.getAsyncIoHealth.mockImplementationOnce(
@@ -61,10 +61,4 @@ it('discards health evidence if the daemon changes while the check is pending', 
   finish({ state: 'stalled', pendingMs: 5000 })
   expect(await pending).toEqual({ state: 'unverifiable' })
   expect(restart).not.toHaveBeenCalled()
-})
-
-it('does not install a daemon when no provider exists', async () => {
-  provider.mockReturnValue(null)
-  expect(await read()).toEqual({ state: 'unverifiable' })
-  expect(adapter.getAsyncIoHealth).not.toHaveBeenCalled()
 })

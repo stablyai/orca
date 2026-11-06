@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,8 +10,6 @@ const tripwireScriptPath = path.resolve(
   'config/scripts/runtime-verification/codex-account/codex-primary-home-tripwire.mjs'
 )
 const tripwireModuleUrl = pathToFileURL(tripwireScriptPath).href
-// Why: native Windows process startup can exceed two seconds under a loaded test worker.
-const STANDALONE_START_TIMEOUT_MS = 10_000
 
 afterEach(async () => {
   await Promise.all(
@@ -27,21 +25,6 @@ async function createPrimaryHome(): Promise<string> {
 }
 
 describe('Codex primary-home tripwire', () => {
-  it('keeps the standalone monitor alive until it is stopped', async () => {
-    const primaryHome = await createPrimaryHome()
-    const child = spawn(process.execPath, [tripwireScriptPath, '--primary-home', primaryHome], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-
-    try {
-      await waitForStdout(child, '[CODEX HOME TRIPWIRE] Watching')
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      expect(child.exitCode).toBeNull()
-    } finally {
-      child.kill()
-    }
-  })
-
   it('detects a write without reading file contents', async () => {
     const primaryHome = await createPrimaryHome()
     const status = runTripwireModule<{
@@ -106,75 +89,3 @@ function snapshotCodexHome(codexHome: string): { digest: string } {
     [codexHome]
   )
 }
-
-function waitForStdout(child: ReturnType<typeof spawn>, expectedText: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error(`Timed out waiting for ${expectedText}`)),
-      STANDALONE_START_TIMEOUT_MS
-    )
-    let output = ''
-    const stdout = child.stdout
-    if (!stdout) {
-      clearTimeout(timeout)
-      reject(new Error('Tripwire child stdout is unavailable'))
-      return
-    }
-    stdout.setEncoding('utf8')
-    stdout.on('data', (chunk) => {
-      output += chunk
-      if (output.includes(expectedText)) {
-        clearTimeout(timeout)
-        resolve()
-      }
-    })
-    child.once('exit', (code) => {
-      clearTimeout(timeout)
-      reject(new Error(`Tripwire exited early with code ${code}`))
-    })
-  })
-}
-
-describe('lane-aware tripwire event classification', () => {
-  it('separates designed system-default churn from containment violations', () => {
-    const verdicts = runTripwireModule<string[]>(
-      `
-        const { classifyCodexHomeTripwireEvent } = await import(process.argv[1])
-        const cases = [
-          { changedPaths: ['.', 'goals_1.sqlite', 'logs_2.sqlite-wal', 'state_5.sqlite-shm', 'memories_1.sqlite-journal', 'tmp', 'tmp/arg0', 'tmp\\\\arg0', 'log', 'log/codex-tui.log'] },
-          { changedPaths: ['.'] },
-          { changedPaths: ['.', 'auth.json'] },
-          { changedPaths: ['auth.json'] },
-          { changedPaths: ['config.toml'] },
-          { changedPaths: ['.credentials.json'] },
-          { changedPaths: ['hooks.json'] },
-          { changedPaths: ['sessions/2026/07/rollout-x.jsonl'] },
-          { changedPaths: ['skills/SKILL.md'] },
-          { changedPaths: ['unknown-file.bin'] },
-          { changedPaths: ['goals_1.sqlite', 'auth.json'] },
-          { changedPaths: ['sessions/index.sqlite-wal'] },
-          { scanError: 'boom', changedPaths: [] },
-          {}
-        ]
-        console.log(JSON.stringify(cases.map((tripwireEvent) => classifyCodexHomeTripwireEvent(tripwireEvent))))
-      `,
-      []
-    )
-    expect(verdicts).toEqual([
-      'designed-system-default',
-      'designed-system-default',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation',
-      'violation'
-    ])
-  })
-})

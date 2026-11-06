@@ -54,6 +54,7 @@ export type UISliceContextual = {
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
     | 'agent-session-history'
+    | 'chat-account-usage'
     | 'node-dist-mirror'
     | 'workspace-status-picker'
   modalData: Record<string, unknown>

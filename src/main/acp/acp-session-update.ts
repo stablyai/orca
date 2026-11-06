@@ -3,6 +3,7 @@ import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import type { AcpSubagents } from './acp-subagents'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import type { SessionNotification } from './generated/acp-protocol.generated'
 import { acpNamedTextKey } from './acp-turn-messages'
@@ -27,10 +28,17 @@ export function acpSessionUpdate(
     backgroundTasks: AcpBackgroundTaskTimeline
     subagents: AcpSubagents
     messageKey?: string
+    scope?: AgentJournalTurnScope
   }
 ): ProviderTimelineEvent[] {
   const update = notification.update
-  const join = { join: { thread: notification.sessionId, ...(turn === undefined ? {} : { turn }) } }
+  const join = {
+    join: {
+      thread: notification.sessionId,
+      ...(turn === undefined ? {} : { turn }),
+      ...(context.scope ? { scope: context.scope } : {})
+    }
+  }
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
     case 'agent_thought_chunk': {

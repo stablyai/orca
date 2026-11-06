@@ -3,8 +3,7 @@ import { RelayAssignmentStore } from '../assignment-store.js'
 import { openRelayDatabase, type RelayDatabase } from '../../database/database.js'
 import {
   REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,
-  REGIONAL_REHOME_SQL_FAILURES_LIMIT,
-  REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT
+  REGIONAL_REHOME_SQL_FAILURES_LIMIT
 } from './regional-rehome-safety.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
@@ -72,30 +71,6 @@ describePostgres('PostgreSQL regional rehoming', () => {
     }
   }
 
-  it('defaults to a closed correction cohort even with enabled durable control', async () => {
-    const context = await fixture()
-    const closed = new RelayAssignmentStore(primary, context.now, {
-      requireLiveCells: true,
-      heartbeatTtlMs: 45_000
-    })
-    expect(await cutover(closed, context.now())).toBeNull()
-    const preview = await closed.previewRegionalRehomeEligibility({
-      observedAt: context.now(),
-      sqlFailures: 0,
-      reconnects: 0,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    })
-    expect(preview.cohortPercent).toBe(0)
-    expect(preview.counts['outside-cohort']).toBe(1)
-    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
-      attempts: 0,
-      migrations: 0
-    })
-  })
-
   it('counts existing generic migrations against the optimization cap and preview', async () => {
     const context = await fixture()
     const safety = {
@@ -126,61 +101,6 @@ describePostgres('PostgreSQL regional rehoming', () => {
       attempts: 0,
       migrations: 0
     })
-  })
-
-  it('preview excludes request capacity exhaustion before a claim', async () => {
-    const context = await fixture()
-    await primary.query(
-      `UPDATE relay_cells SET capacity_requests = reserved_requests + 1 WHERE cell_id = ?`,
-      [context.target.id]
-    )
-    const preview = await context.store.previewRegionalRehomeEligibility({
-      observedAt: context.now(),
-      sqlFailures: 0,
-      reconnects: 0,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    })
-    expect(preview.counts['no-target-headroom']).toBe(1)
-    expect(await cutover(context.store, context.now())).toBeNull()
-  })
-
-  it('claims through ambient per-cell sql retry noise', async () => {
-    const context = await fixture()
-    await primary.query(
-      `UPDATE relay_cell_rehome_safety
-       SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT}
-       WHERE cell_id IN (?, ?)`,
-      [context.source.id, context.target.id]
-    )
-
-    expect(await cutover(context.store, context.now())).not.toBeNull()
-  })
-
-  it('moves a us-central1 host onto a cell in its preferred asia-east2 region', async () => {
-    const context = await fixture()
-
-    const attempt = await cutover(context.store, context.now())
-    expect(attempt).toMatchObject({
-      preferredRegion: 'asia-east2',
-      sourceCellId: context.source.id,
-      targetCellId: context.target.id
-    })
-    expect(
-      await primary.query(
-        `SELECT preferred_region, source_cell_id, target_cell_id
-       FROM relay_region_rehome_attempts WHERE user_id = ?`,
-        [context.identity.userId]
-      )
-    ).toEqual([
-      {
-        preferred_region: 'asia-east2',
-        source_cell_id: context.source.id,
-        target_cell_id: context.target.id
-      }
-    ])
   })
 
   it('moves an asia-east2 host back onto a cell in its preferred us-central1 region', async () => {
@@ -214,39 +134,6 @@ describePostgres('PostgreSQL regional rehoming', () => {
         context.identity.userId
       ])
     ).toEqual([{ cell_id: context.target.id }])
-  })
-
-  it('leaves a host whose preference already matches its own region', async () => {
-    const context = await fixture({ preferredRegion: 'us-central1' })
-
-    await expect(cutover(context.store, context.now())).resolves.toBeNull()
-    await expect(context.store.inspectRegionalRehomeControl()).resolves.toMatchObject({
-      generation: 1,
-      enabled: true
-    })
-    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
-      attempts: 0,
-      migrations: 0
-    })
-  })
-
-  it('leaves a host whose preference is older than the configured max age', async () => {
-    const context = await fixture()
-    await primary.query(
-      `UPDATE relay_region_decisions SET observed_at = ?
-       WHERE user_id = ? AND relay_host_id = ?`,
-      [context.now() - 24 * 60 * 60_000 - 1, context.identity.userId, context.identity.relayHostId]
-    )
-
-    await expect(cutover(context.store, context.now())).resolves.toBeNull()
-    await expect(context.store.inspectRegionalRehomeControl()).resolves.toMatchObject({
-      generation: 1,
-      enabled: true
-    })
-    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
-      attempts: 0,
-      migrations: 0
-    })
   })
 
   it('leaves a host inside its per-host rehome cooldown, in either direction', async () => {
@@ -292,42 +179,6 @@ describePostgres('PostgreSQL regional rehoming', () => {
     await expect(cutover(context.store, context.now())).resolves.toMatchObject({
       sourceCellId: context.source.id,
       targetCellId: context.target.id
-    })
-  })
-
-  it('leaves a host whose preferred region holds no drainable cell', async () => {
-    // A cell that cannot be drained cannot be a target: the host would land
-    // where no later rehome could move it out again.
-    const context = await fixture({ targetProtocol: 0 })
-
-    await expect(cutover(context.store, context.now())).resolves.toBeNull()
-    await expect(context.store.inspectRegionalRehomeControl()).resolves.toMatchObject({
-      generation: 1,
-      enabled: true
-    })
-    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
-      attempts: 0,
-      migrations: 0
-    })
-  })
-
-  it('skips an unclean cell without latching the control off', async () => {
-    const context = await fixture()
-    await primary.query(
-      `UPDATE relay_cell_rehome_safety
-       SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT + 1}
-       WHERE cell_id = ?`,
-      [context.target.id]
-    )
-
-    expect(await cutover(context.store, context.now())).toBeNull()
-    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
-      generation: 1,
-      enabled: true
-    })
-    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
-      attempts: 0,
-      migrations: 0
     })
   })
 

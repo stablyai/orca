@@ -209,6 +209,7 @@ it.each(['unknown', 'ready'] as const)(
 it.each([
   ['unauthorized', 'access-revoked'],
   ['forbidden', 'access-revoked'],
+  ['orcad_server_replaced', 'server-replaced'],
   ['protocol_version_mismatch', 'incompatible'],
   ['method_not_found', 'incompatible']
 ] as const)('labels a %s refusal as %s until verification leaves blocked', async (code, reason) => {

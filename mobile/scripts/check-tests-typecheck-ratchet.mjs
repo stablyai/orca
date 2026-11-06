@@ -34,10 +34,6 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/tasks/mobile-agent-launch-architecture.test.ts',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/transport/mobile-relay-browser-cancel-budget.test.ts',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports @orca/process-host, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
 ])
 

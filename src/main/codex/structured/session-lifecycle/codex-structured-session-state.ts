@@ -1,4 +1,4 @@
-import type { CodexRenameInvocationDeps } from './codex-provider-session-rename'
+import type { CodexProviderInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -24,7 +24,7 @@ import type { CodexSkillReport } from '../catalog/codex-structured-skill-report'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
-import type { StructuredLaunchRequest } from '../../../runtime/structured-agent-launch-composition'
+import type { StructuredLaunchRequest } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'
 import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
@@ -94,7 +94,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
-  renameInvocation?: CodexRenameInvocationDeps
+  providerInvocation?: CodexProviderInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>

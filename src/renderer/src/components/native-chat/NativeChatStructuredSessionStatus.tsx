@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   structuredSessionConfirmedStopsStillListed,
@@ -25,8 +26,13 @@ export function NativeChatStructuredSessionStatus(props: {
   /** The session's own status row, whose verdict the strip's children read. */
   paneKey: string
   isVisible: boolean
-  backgroundTasks: StructuredSessionBackgroundTasksView
-  stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
+  /** The session's background work and its Stop. */
+  tasks: {
+    backgroundTasks: StructuredSessionBackgroundTasksView
+    stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
+  }
+  /** The pane's transcript, where an agent picked in the strip opens. */
+  messageListRef?: React.RefObject<NativeChatMessageListHandle | null>
 }): React.JSX.Element {
   const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
   // Keep confirmed Stop buttons pending until that specific run leaves the strip.
@@ -35,7 +41,7 @@ export function NativeChatStructuredSessionStatus(props: {
   const activeStopping = stopping?.sessionId === props.sessionId ? stopping : null
   const activeConfirmed = confirmed?.sessionId === props.sessionId ? confirmed.taskIds : null
   const confirmedListed = activeConfirmed
-    ? structuredSessionConfirmedStopsStillListed(props.backgroundTasks, activeConfirmed)
+    ? structuredSessionConfirmedStopsStillListed(props.tasks.backgroundTasks, activeConfirmed)
     : null
   if (confirmedListed !== activeConfirmed) {
     // A row that left and came back is a task the Stop did not end, so it offers Stop again.
@@ -51,7 +57,7 @@ export function NativeChatStructuredSessionStatus(props: {
   const onStop = (taskId?: string) => {
     const sessionId = props.sessionId
     // A provider may reuse the row's id for the task's next run, which this Stop did not end.
-    const run = taskId ? structuredSessionListedTaskRun(props.backgroundTasks, taskId) : null
+    const run = taskId ? structuredSessionListedTaskRun(props.tasks.backgroundTasks, taskId) : null
     setStopping((current) => {
       const taskIds = new Set(
         current?.sessionId === sessionId ? current.taskIds : NO_STOPPING_TASKS
@@ -65,7 +71,7 @@ export function NativeChatStructuredSessionStatus(props: {
         all: taskId ? current?.sessionId === sessionId && current.all : true
       }
     })
-    void props
+    void props.tasks
       .stopBackgroundTask(taskId)
       .then((result) => {
         if (taskId && run !== null && result?.cancelled) {
@@ -95,23 +101,24 @@ export function NativeChatStructuredSessionStatus(props: {
 
   return (
     <>
-      {props.backgroundTasks.show ? (
+      {props.tasks.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
           isVisible={props.isVisible}
-          tasks={props.backgroundTasks.tasks}
-          settledTasks={props.backgroundTasks.settledTasks}
-          {...(props.backgroundTasks.children
-            ? { childViews: props.backgroundTasks.children, childRowContext }
+          tasks={props.tasks.backgroundTasks.tasks}
+          settledTasks={props.tasks.backgroundTasks.settledTasks}
+          {...(props.tasks.backgroundTasks.children
+            ? { childViews: props.tasks.backgroundTasks.children, childRowContext }
             : {})}
-          indicatorActive={props.backgroundTasks.isMonitoring}
-          supportsTaskStop={props.backgroundTasks.supportsStop}
-          offersStopAll={props.backgroundTasks.offersStopAll}
-          incomplete={props.backgroundTasks.incomplete}
+          indicatorActive={props.tasks.backgroundTasks.isMonitoring}
+          supportsTaskStop={props.tasks.backgroundTasks.supportsStop}
+          offersStopAll={props.tasks.backgroundTasks.offersStopAll}
+          incomplete={props.tasks.backgroundTasks.incomplete}
           stoppingTaskIds={stoppingTaskIds}
           stoppingAll={activeStopping?.all ?? false}
           expanded={expanded?.sessionId === props.sessionId && expanded.expanded}
           onExpandedChange={(value) => setExpanded({ sessionId: props.sessionId, expanded: value })}
           onStop={onStop}
+          onShowAgent={(providerId) => props.messageListRef?.current?.revealSubagent(providerId)}
         />
       ) : null}
     </>

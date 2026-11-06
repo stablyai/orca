@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import { toast } from 'sonner'
+import { ModalBoundary } from '@/app-shell/app-root-surface-boundaries'
 import {
   CommandDialog,
   CommandEmpty,
@@ -35,7 +36,11 @@ export default function WorkspaceStatusPicker(): React.JSX.Element | null {
   if (!visible && !lingering) {
     return null
   }
-  return <WorkspaceStatusPickerContent visible={visible} />
+  return (
+    <ModalBoundary boundaryId="modal.workspace-status-picker" resetKey={visible}>
+      <WorkspaceStatusPickerContent visible={visible} />
+    </ModalBoundary>
+  )
 }
 
 function WorkspaceStatusPickerContent({ visible }: { visible: boolean }): React.JSX.Element {

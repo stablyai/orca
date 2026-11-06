@@ -2652,6 +2652,8 @@
         "loadGitHubWorkFailed": "No se pudo cargar el trabajo de GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Mis tareas pendientes",
         "startWorkspaceFromMr": "Iniciar espacio de trabajo desde MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espacio de trabajo desde issue {{number}}",
@@ -11565,7 +11567,7 @@
             "terminalRun": "Ejecutar comandos en tus terminales, incluso SSH"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo.",
-          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red y ejecutar otros programas.",
+          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red, ejecutar otros programas y controlar Orca, incluidas tus terminales y agentes.",
           "uiWarning": "Ejecuta el código del autor dentro de Orca para dibujar su vista. Orca muestra a qué puede acceder y pregunta antes de activarlo."
         },
         "PluginConsentProvenance": {
@@ -16876,6 +16878,8 @@
               "25349b66fc": "Nuevo archivo Markdown",
               "784812ca24": "Abre una pestaña del navegador en el workspace activo.",
               "892bfa9339": "Nueva pestaña del navegador",
+              "splitChatRight": "Dividir chat a la derecha",
+              "splitChatDown": "Dividir chat abajo",
               "verbs": {
                 "newBrowser": "nuevo navegador",
                 "newBrowserTab": "nueva pestaña del navegador",
@@ -16889,6 +16893,10 @@
                 "newTerminal": "nueva terminal",
                 "newTerminalTab": "nueva pestaña de terminal",
                 "newShell": "nuevo shell",
+                "splitChatRight": "dividir chat a la derecha",
+                "splitChatDown": "dividir chat abajo",
+                "chatPaneRight": "panel de chat a la derecha",
+                "chatPaneBelow": "panel de chat abajo",
                 "terminalTab": "pestaña de terminal",
                 "createWorktree": "crear worktree",
                 "addWorktree": "agregar worktree",
@@ -16898,18 +16906,8 @@
                 "removeWorktree": "quitar worktree",
                 "trashWorktree": "mandar worktree a la papelera",
                 "addQuickCommand": "agregar comando rápido",
-                "newQuickCommand": "nuevo comando rápido",
-                "splitChatRight": "dividir chat a la derecha",
-                "newChatRight": "nuevo chat a la derecha",
-                "chatPaneRight": "panel de chat a la derecha",
-                "splitChatDown": "dividir chat abajo",
-                "newChatBelow": "nuevo chat abajo",
-                "chatPaneBelow": "panel de chat abajo"
-              },
-              "splitChatRight": "Dividir chat a la derecha",
-              "splitChatRightDescription": "Abre un chat nuevo en un panel dividido a la derecha.",
-              "splitChatDown": "Dividir chat abajo",
-              "splitChatDownDescription": "Abre un chat nuevo en un panel dividido abajo."
+                "newQuickCommand": "nuevo comando rápido"
+              }
             }
           },
           "palette": {
@@ -19068,6 +19066,9 @@
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",
+        "previewQueue": "Poner en cola",
+        "previewSteer": "Enviar ahora",
+        "previewSteerQueued": "Enviar el siguiente ahora",
         "alternateQueueHint": "{{shortcut}} para poner en cola",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
@@ -20526,7 +20527,10 @@
       "workerAutoClose": {
         "running": "Trabajador temporal de orquestación · Se cierra 2 minutos después de terminar",
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
-        "keepOpen": "Mantener abierto"
+        "keepOpen": "Mantener abierto",
+        "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
+        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
+        "temporaryBadge": "Temporal"
       }
     },
     "wslHostMark": {

@@ -9,14 +9,18 @@ import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/ag
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  writeNativeChatComposerText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 
 /** Replace the agent’s /resume catalog entry with Orca’s Session History command. */
 export function withNativeChatResumeCommand(
-  commands: readonly SlashCommandSuggestion[]
+  commands: readonly SlashCommandSuggestion[],
+  accountUsage = false
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
     name: NATIVE_CHAT_RESUME_COMMAND,
@@ -26,6 +30,19 @@ export function withNativeChatResumeCommand(
     ),
     argumentHint: translate('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
+  }
+  if (accountUsage) {
+    commands = [
+      {
+        name: 'usage',
+        description: translate(
+          'components.native-chat.usage.description',
+          'Show usage for this chat’s Codex account'
+        ),
+        orcaOwned: true
+      },
+      ...commands.filter((command) => command.name !== 'usage')
+    ]
   }
   const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
   return at === -1
@@ -54,7 +71,9 @@ export type NativeChatResumeCommand = {
 
 /** In a structured chat, `/resume [search]` opens its Session History and never reaches the agent. */
 export function useNativeChatResumeCommand(args: {
-  structuredTransport: Pick<NativeChatStructuredComposerTransport, 'worktreeId'> | undefined
+  structuredTransport:
+    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage'>
+    | undefined
   agent: AgentType
   terminalTabId: string
   /** Picked skills still reach the agent, even when named resume. */
@@ -73,6 +92,25 @@ export function useNativeChatResumeCommand(args: {
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  const usage = structuredTransport?.accountUsage
+  const openUsage = useCallback(
+    (draft: string): void => {
+      const rest = draft.replace(/^\/\S+\s*/, '')
+      // Focus before opening so closing the modal returns to the editor even after a Send click.
+      textareaRef.current?.focus()
+      usage?.open()
+      setDraft(rest)
+      setCaret(rest.length)
+      setActiveSuggestion(0)
+      setNotice(null)
+      // The editor owns its selection; state alone leaves the caret where the command was.
+      const input = textareaRef.current
+      if (input) {
+        writeNativeChatComposerText(input, rest, rest.length)
+      }
+    },
+    [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
+  )
 
   const open = useCallback(
     (search: string): void => {
@@ -125,18 +163,25 @@ export function useNativeChatResumeCommand(args: {
 
   const matchesDraft = useCallback(
     (draft: string): boolean =>
-      structured && !isPickedSkill(draft) && parseNativeChatResumeDraft(draft) !== null,
-    [isPickedSkill, structured]
+      structured &&
+      !isPickedSkill(draft) &&
+      (parseNativeChatResumeDraft(draft) !== null ||
+        (usage !== undefined && /^\/usage\s*$/i.test(draft))),
+    [isPickedSkill, structured, usage]
   )
   const consume = useCallback(
     (draft: string): boolean => {
       if (!matchesDraft(draft)) {
         return false
       }
-      open(parseNativeChatResumeDraft(draft) ?? '')
+      if (/^\/usage\s*$/i.test(draft)) {
+        openUsage(draft)
+      } else {
+        open(parseNativeChatResumeDraft(draft) ?? '')
+      }
       return true
     },
-    [matchesDraft, open]
+    [matchesDraft, open, openUsage]
   )
 
   const interceptPick = useCallback(
@@ -145,14 +190,22 @@ export function useNativeChatResumeCommand(args: {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         // An explicit Orca command pick overrides an earlier same-named skill pick.
         if (leading && item.kind === 'command' && item.orcaOwned) {
+          if (item.name !== 'resume' && !(item.name === 'usage' && usage)) {
+            pick(item)
+            return
+          }
           clearSkillOrigin()
+          if (item.name === 'usage') {
+            openUsage(textareaRef.current?.value ?? '')
+            return
+          }
           // The caret can sit right after `/resume` with a search already typed past it.
           open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')
           return
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, open, textareaRef]
+    [autocomplete, clearSkillOrigin, open, openUsage, textareaRef, usage]
   )
 
   return { consume, interceptPick, matchesDraft }

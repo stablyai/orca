@@ -2612,6 +2612,8 @@
         "loadGitHubWorkFailed": "GitHub 작업을 불러오지 못했습니다.",
         "gitlabViewIssues": "이슈",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "모두",
+        "gitlabInvolvementReviewing": "리뷰 중",
         "gitlabViewTodos": "내 할 일",
         "startWorkspaceFromMr": "MR {{number}}에서 워크스페이스 시작",
         "startWorkspaceFromIssue": "이슈 {{number}}에서 워크스페이스 시작",
@@ -11281,7 +11283,7 @@
             "terminalRun": "터미널에서 명령 실행 (SSH 포함)"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
-          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행할 수 있습니다.",
+          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행하고, 터미널과 에이전트를 포함해 Orca를 제어할 수 있습니다.",
           "uiWarning": "화면을 그리기 위해 게시자의 코드를 Orca 안에서 실행합니다. Orca는 접근할 수 있는 항목을 보여 주고 사용 설정 전에 확인을 요청합니다."
         },
         "PluginConsentProvenance": {
@@ -16468,6 +16470,8 @@
               "25349b66fc": "새 Markdown 파일",
               "784812ca24": "활성 워크스페이스에서 브라우저 탭을 엽니다.",
               "892bfa9339": "새 브라우저 탭",
+              "splitChatRight": "채팅을 오른쪽으로 분할",
+              "splitChatDown": "채팅 분할",
               "verbs": {
                 "newBrowser": "새 브라우저",
                 "newBrowserTab": "새 브라우저 탭",
@@ -16481,6 +16485,10 @@
                 "newTerminal": "새 terminal",
                 "newTerminalTab": "새 terminal 탭",
                 "newShell": "새 셸",
+                "splitChatRight": "바로 채팅 분할",
+                "splitChatDown": "채팅을 분할하다",
+                "chatPaneRight": "채팅창 오른쪽",
+                "chatPaneBelow": "아래 채팅 창",
                 "terminalTab": "terminal 탭",
                 "createWorktree": "작업 트리 만들기",
                 "addWorktree": "작업 트리 추가",
@@ -16490,18 +16498,8 @@
                 "removeWorktree": "작업 트리 제거",
                 "trashWorktree": "워크트리 휴지통으로 이동",
                 "addQuickCommand": "빠른 명령 추가",
-                "newQuickCommand": "새로운 빠른 명령",
-                "splitChatRight": "바로 채팅 분할",
-                "newChatRight": "오른쪽에 새 채팅",
-                "chatPaneRight": "채팅창 오른쪽",
-                "splitChatDown": "채팅을 분할하다",
-                "newChatBelow": "아래에 새 채팅",
-                "chatPaneBelow": "아래 채팅 창"
-              },
-              "splitChatRight": "채팅을 오른쪽으로 분할",
-              "splitChatRightDescription": "오른쪽 분할 창에서 새 채팅을 엽니다.",
-              "splitChatDown": "채팅 분할",
-              "splitChatDownDescription": "아래 분할 창에서 새 채팅을 엽니다."
+                "newQuickCommand": "새로운 빠른 명령"
+              }
             }
           },
           "palette": {
@@ -18650,6 +18648,9 @@
       "composer": {
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
+        "previewQueue": "대기열에 추가",
+        "previewSteer": "지금 보내기",
+        "previewSteerQueued": "다음 항목 보내기",
         "alternateQueueHint": "{{shortcut}}(으)로 대기열에 추가",
         "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
         "locked": "입력이 다른 장치에 의해 보류됩니다.",
@@ -19941,7 +19942,10 @@
       "workerAutoClose": {
         "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
-        "keepOpen": "열어 두기"
+        "keepOpen": "열어 두기",
+        "bannerRunning": "오케스트레이션 워커 · 완료 2분 후 닫힘",
+        "bannerFinished": "오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
+        "temporaryBadge": "임시"
       }
     },
     "wslHostMark": {

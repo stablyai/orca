@@ -18,6 +18,7 @@ import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -61,6 +62,9 @@ const NodeDistMirrorDialog = lazy(
 )
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
+)
+const NativeChatAccountUsageDialog = lazy(
+  () => import('../components/native-chat/NativeChatAccountUsageDialog')
 )
 const DeleteWorktreeDialog = lazy(
   () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
@@ -209,10 +213,15 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <ProjectAddedDialog />
           </ModalBoundary>
         ) : null}
-        {/* Root hosting prevents chat capture handlers receiving history-dialog events. */}
+        {/* Root hosting prevents chat capture handlers receiving /resume and /usage dialog events. */}
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'chat-account-usage' ? (
+          <ModalBoundary boundaryId="modal.chat-account-usage" resetKey>
+            <NativeChatAccountUsageDialog />
           </ModalBoundary>
         ) : null}
         {/* Own store, not activeModal: another modal must never evict a running move. */}
@@ -255,14 +264,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <WorktreeJumpPalette />
           </ModalBoundary>
         ) : null}
-        {mountedLazyModalIds.has('workspace-status-picker') ? (
-          <ModalBoundary
-            boundaryId="modal.workspace-status-picker"
-            resetKey={activeModal === 'workspace-status-picker'}
-          >
-            <WorkspaceStatusPicker />
-          </ModalBoundary>
-        ) : null}
+        {mountedLazyModalIds.has('workspace-status-picker') ? <WorkspaceStatusPicker /> : null}
         {mountedLazyModalIds.has('setup-guide') ? (
           <ModalBoundary boundaryId="modal.setup-guide" resetKey={activeModal === 'setup-guide'}>
             <SetupGuideModal />
@@ -297,6 +299,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
         shouldMountUpdateCard={shouldMountUpdateCard}

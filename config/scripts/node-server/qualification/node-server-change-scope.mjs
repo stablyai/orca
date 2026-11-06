@@ -26,8 +26,7 @@ const BUILD_SCRIPTS = [
   'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts'
 ]
 const NODE_SERVER_POLICY_TESTS = new Set([
-  'config/scripts/node-server/qualification/node-server-change-scope.test.mjs',
-  'config/scripts/node-server/qualification/node-server-qualification.test.mjs'
+  'config/scripts/node-server/qualification/node-server-change-scope.test.mjs'
 ])
 const ALWAYS_FILES = new Set([
   'package.json',
@@ -63,7 +62,21 @@ const ALWAYS_PREFIXES = [
   'src/main/orcad/',
   'src/main/runtime/',
   'src/main/claude/',
-  'src/main/daemon/pty-subprocess/',
+  'src/main/daemon/pty-subprocess/conpty-startup-input-reader.ts',
+  'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',
+  'src/main/daemon/pty-subprocess/foreground-fallback-process.ts',
+  'src/main/daemon/pty-subprocess/foreground-process-tracker.ts',
+  'src/main/daemon/pty-subprocess/native-pty-spawn-windows.test.ts',
+  'src/main/daemon/pty-subprocess/native-pty-spawn.ts',
+  'src/main/daemon/pty-subprocess/pre-listener-events.ts',
+  'src/main/daemon/pty-subprocess/pty-shell-foreground-confirmation.ts',
+  'src/main/daemon/pty-subprocess/shell-launch-plan.ts',
+  'src/main/daemon/pty-subprocess/spawn-environment.ts',
+  'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
+  'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
+  'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
+  'src/main/daemon/pty-subprocess/spawn-preflight.ts',
+  'src/main/daemon/pty-subprocess/subprocess-handle.ts',
   'src/main/providers/',
   'config/patches/',
   'config/tsconfig',

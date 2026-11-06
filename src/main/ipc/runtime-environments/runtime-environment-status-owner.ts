@@ -6,7 +6,7 @@ import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
+import { managedOrcadRefusalNeedingUserCode } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
@@ -47,8 +47,9 @@ async function answerRefusedPairing(
   try {
     outcome = await recovery
   } catch (error) {
-    return error instanceof OrcadManagedPairingRepairFailedError
-      ? runtimeHostStatusFailure('unauthorized', error.message)
+    const code = managedOrcadRefusalNeedingUserCode(error)
+    return code && error instanceof Error
+      ? runtimeHostStatusFailure(code, error.message)
       : runtimeHostStatusError(error)
   }
   // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
@@ -78,8 +79,9 @@ export function createRuntimeEnvironmentStatusOwner(
         try {
           await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
         } catch (error) {
-          if (error instanceof OrcadManagedPairingRepairFailedError) {
-            return runtimeHostStatusFailure('unauthorized', error.message)
+          const code = managedOrcadRefusalNeedingUserCode(error)
+          if (code && error instanceof Error) {
+            return runtimeHostStatusFailure(code, error.message)
           }
           throw error
         }

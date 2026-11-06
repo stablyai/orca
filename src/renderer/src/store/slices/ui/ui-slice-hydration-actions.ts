@@ -217,6 +217,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? ui.releaseChannelOverride
             : null,
           updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
+          seenMacosUpdateRequirement: ui.seenMacosUpdateRequirement ?? null,
           osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
           browserDefaultUrl: ui.browserDefaultUrl ?? null,
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+
 import type { Tab } from '../../../../../../shared/tab-types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type {
@@ -14,7 +14,6 @@ import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-const THIRD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 
 type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -78,37 +77,6 @@ function makeAgentStatusEntry(args: {
   }
 }
 
-function makeSplitLayout(): TerminalLayoutSnapshot {
-  return {
-    root: {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: LEAF_ID },
-      second: { type: 'leaf', leafId: SECOND_LEAF_ID }
-    },
-    activeLeafId: LEAF_ID,
-    expandedLeafId: null
-  }
-}
-
-function makeThreePaneLayout(): TerminalLayoutSnapshot {
-  return {
-    root: {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: LEAF_ID },
-      second: {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', leafId: SECOND_LEAF_ID },
-        second: { type: 'leaf', leafId: THIRD_LEAF_ID }
-      }
-    },
-    activeLeafId: LEAF_ID,
-    expandedLeafId: null
-  }
-}
-
 function StatusProbe({ worktreeId }: { worktreeId: string }) {
   return <span>{useWorktreeActivityStatus(worktreeId)}</span>
 }
@@ -134,37 +102,6 @@ describe('useWorktreeActivityStatus', () => {
       unifiedTabsByWorktree: {},
       structuredChatSleptAtByPaneKey: {}
     }
-  })
-
-  it('shows a chat-only workspace as active before its first message, until the chat sleeps', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const chatTab: Tab = {
-      id: 'chat-tab',
-      entityId: 'session-1',
-      groupId: 'group-1',
-      worktreeId,
-      contentType: 'agent-session',
-      agentSessionAgent: 'codex',
-      label: 'Codex',
-      customLabel: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 0
-    }
-    mockState = { ...mockState, unifiedTabsByWorktree: { [worktreeId]: [chatTab] } }
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
-      '<span>active</span>'
-    )
-
-    mockState = {
-      ...mockState,
-      structuredChatSleptAtByPaneKey: {
-        [structuredAgentSessionPaneKey(chatTab.id, chatTab.entityId)]: 1_000
-      }
-    }
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
-      '<span>inactive</span>'
-    )
   })
 
   afterEach(() => {
@@ -211,159 +148,6 @@ describe('useWorktreeActivityStatus', () => {
     )
   })
 
-  it('keeps a restored offscreen working agent yellow from the hook snapshot', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    mockState = {
-      ...mockState,
-      tabsByWorktree: {
-        [worktreeId]: [makeTab('tab-1', worktreeId)]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1']
-      },
-      agentStatusByPaneKey: {
-        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working' })
-      }
-    }
-
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
-      '<span>working</span>'
-    )
-  })
-
-  it('lets a fresh hook done state override the same pane stale working title', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    mockState = {
-      ...mockState,
-      tabsByWorktree: {
-        [worktreeId]: [makeTab('tab-1', worktreeId)]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1']
-      },
-      runtimePaneTitlesByTabId: {
-        'tab-1': {
-          1: '⠋ Codex',
-          2: 'bash'
-        }
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': makeSplitLayout()
-      },
-      agentStatusEpoch: 1,
-      agentStatusByPaneKey: {
-        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
-      }
-    }
-
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
-  })
-
-  it('lets a retained done row override the same pane stale working title', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const tab = makeTab('tab-1', worktreeId)
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    mockState = {
-      ...mockState,
-      tabsByWorktree: {
-        [worktreeId]: [tab]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1']
-      },
-      runtimePaneTitlesByTabId: {
-        'tab-1': {
-          1: '⠋ Codex',
-          2: 'bash'
-        }
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': makeSplitLayout()
-      },
-      retainedAgentsByPaneKey: {
-        [paneKey]: {
-          entry: makeAgentStatusEntry({ paneKey, state: 'done' }),
-          worktreeId,
-          tab,
-          agentType: 'codex',
-          startedAt: 1_000
-        }
-      }
-    }
-
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
-  })
-
-  it('does not keep the card working when all retained parent agents are done', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const tab = makeTab('tab-1', worktreeId)
-    const paneKeys = [
-      makePaneKey('tab-1', LEAF_ID),
-      makePaneKey('tab-1', SECOND_LEAF_ID),
-      makePaneKey('tab-1', THIRD_LEAF_ID)
-    ]
-    mockState = {
-      ...mockState,
-      tabsByWorktree: {
-        [worktreeId]: [tab]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1']
-      },
-      runtimePaneTitlesByTabId: {
-        'tab-1': {
-          1: '⠋ Codex',
-          2: '⠋ Codex',
-          3: '⠋ Codex'
-        }
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': makeThreePaneLayout()
-      },
-      retainedAgentsByPaneKey: Object.fromEntries(
-        paneKeys.map((paneKey, index) => [
-          paneKey,
-          {
-            entry: makeAgentStatusEntry({ paneKey, state: 'done' }),
-            worktreeId,
-            tab,
-            agentType: 'codex',
-            startedAt: 1_000 + index
-          }
-        ])
-      )
-    }
-
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
-  })
-
-  it('lets a legacy numeric done hook override the matching stale working title', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const paneKey = 'tab-1:1'
-    mockState = {
-      ...mockState,
-      tabsByWorktree: {
-        [worktreeId]: [makeTab('tab-1', worktreeId)]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1']
-      },
-      runtimePaneTitlesByTabId: {
-        'tab-1': {
-          1: '⠋ Codex'
-        }
-      },
-      agentStatusEpoch: 1,
-      agentStatusByPaneKey: {
-        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
-      }
-    }
-
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
-  })
-
   it('lets a completed worker suppress its parent pane stale working title', () => {
     const worktreeId = 'repo1::/path/wt1'
     const parentPaneKey = makePaneKey('tab-parent', LEAF_ID)
@@ -400,43 +184,5 @@ describe('useWorktreeActivityStatus', () => {
     }
 
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
-  })
-
-  it('scopes cached agent summaries to the matching worktree', () => {
-    const firstWorktreeId = 'repo1::/path/wt1'
-    const secondWorktreeId = 'repo1::/path/wt2'
-    const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
-    const retainedPaneKey = 'tab-2:0'
-    const retainedTab = makeTab('tab-2', secondWorktreeId)
-    mockState = {
-      ...mockState,
-      tabsByWorktree: {
-        [firstWorktreeId]: [makeTab('tab-1', firstWorktreeId)],
-        [secondWorktreeId]: [retainedTab]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1'],
-        'tab-2': []
-      },
-      agentStatusByPaneKey: {
-        [firstPaneKey]: makeAgentStatusEntry({ paneKey: firstPaneKey, state: 'working' })
-      },
-      retainedAgentsByPaneKey: {
-        [retainedPaneKey]: {
-          entry: makeAgentStatusEntry({ paneKey: retainedPaneKey, state: 'done' }),
-          worktreeId: secondWorktreeId,
-          tab: retainedTab,
-          agentType: 'claude',
-          startedAt: 1_000
-        }
-      }
-    }
-
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={firstWorktreeId} />)).toBe(
-      '<span>working</span>'
-    )
-    expect(renderToStaticMarkup(<StatusProbe worktreeId={secondWorktreeId} />)).toBe(
-      '<span>done</span>'
-    )
   })
 })

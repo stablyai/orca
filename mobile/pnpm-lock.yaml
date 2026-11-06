@@ -287,6 +287,9 @@ importers:
       i18next:
         specifier: 26.5.11
         version: 26.5.11(typescript@7.0.2)
+      katex:
+        specifier: 0.18.10
+        version: 0.18.10
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
