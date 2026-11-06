@@ -1,19 +1,65 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { TriangleAlert, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AutoHeight } from '../components/AutoHeight'
-
-type TranscriptIssue = { path: string; message: string }
+import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultScanIssueKey,
+  aiVaultScanNoticeIssues,
+  blockingAiVaultScanIssue,
+  skippedAiVaultTranscriptIssues
+} from '../../../src/shared/ai-vault/scanning/ai-vault-scan-issue-state'
 
 // Many skipped transcripts scroll inside the notice instead of pushing the list off screen.
 const ISSUE_LIST_MAX_HEIGHT = 160
 
+/** Splits scan issues like desktop History: host/scope/notice rows keep their own text; only kind-less ones count as skipped. */
+export function AgentHistoryScanNotices({
+  sessions,
+  issues
+}: {
+  sessions: readonly unknown[]
+  issues: readonly AiVaultScanIssue[]
+}) {
+  useMobileColorScheme()
+  const scan = { sessions, issues }
+  const blocking = blockingAiVaultScanIssue(scan)
+  const notices = aiVaultScanNoticeIssues(scan)
+  const skipped = skippedAiVaultTranscriptIssues(scan)
+  return (
+    <>
+      {blocking ? (
+        <View style={styles.notice}>
+          <Text style={styles.hostIssueText}>{blocking.message}</Text>
+        </View>
+      ) : null}
+      {notices.length > 0 ? (
+        <View style={styles.notice}>
+          <AutoHeight maxHeight={ISSUE_LIST_MAX_HEIGHT}>
+            <ScrollView contentContainerStyle={styles.noticeList} nestedScrollEnabled>
+              {notices.map((issue) => (
+                <Text
+                  key={aiVaultScanIssueKey(issue)}
+                  style={issue.kind === 'host' ? styles.hostIssueText : styles.noticeText}
+                >
+                  {issue.message}
+                </Text>
+              ))}
+            </ScrollView>
+          </AutoHeight>
+        </View>
+      ) : null}
+      {skipped.length > 0 ? <AgentHistorySkippedNotice issues={skipped} /> : null}
+    </>
+  )
+}
+
 /** Says how many transcripts the scan skipped, with the paths and reasons one tap away. */
-export function AgentHistorySkippedNotice({ issues }: { issues: readonly TranscriptIssue[] }) {
+function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIssue[] }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [shown, setShown] = useState(false)
@@ -28,6 +74,7 @@ export function AgentHistorySkippedNotice({ issues }: { issues: readonly Transcr
             : t('agentHistory.panel.skipped_other', '{{count}} transcripts skipped', { count })}
         </Text>
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={() => setShown((value) => !value)}
           hitSlop={10}
           accessibilityRole="button"
@@ -44,7 +91,7 @@ export function AgentHistorySkippedNotice({ issues }: { issues: readonly Transcr
         {shown ? (
           <ScrollView contentContainerStyle={styles.issueList} nestedScrollEnabled>
             {issues.map((issue) => (
-              <View key={`${issue.path}\n${issue.message}`} style={styles.issue}>
+              <View key={aiVaultScanIssueKey(issue)} style={styles.issue}>
                 <Text style={styles.issuePath} numberOfLines={2}>
                   {issue.path}
                 </Text>
@@ -71,6 +118,7 @@ export function AgentHistoryResumeNotice({
     <View style={[styles.notice, styles.noticeRow]}>
       <Text style={styles.noticeText}>{message}</Text>
       <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
         onPress={onDismiss}
         hitSlop={12}
         accessibilityRole="button"
@@ -100,6 +148,13 @@ const styles = themedStyleSheet(() => ({
     flex: 1,
     color: colors.textSecondary,
     fontSize: 13
+  },
+  hostIssueText: {
+    color: colors.statusRed,
+    fontSize: 13
+  },
+  noticeList: {
+    gap: spacing.sm
   },
   noticeAction: {
     color: colors.textPrimary,

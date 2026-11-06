@@ -3,14 +3,14 @@ import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
-} from '../../../../shared/runtime-host-contact'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import {
@@ -27,9 +27,9 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-rev
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
-  hostChatAnswer,
   type HostChatAnswer
-} from '@/lib/new-tab-agent-menu-rows'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
@@ -39,8 +39,8 @@ import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-invent
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
-import { useHostAgentMenuSettings } from '@/components/settings/use-host-agent-launch-preferences'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 
 /** `detectionTarget` is the workspace's agent-inventory host, resolved by the caller. */
@@ -254,6 +254,7 @@ export function useAgentMenuObservation(
         defaultTuiAgent: settings?.defaultTuiAgent,
         pickerContext: {
           workspace,
+          launchCwd,
           executionHostId: facts.executionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
@@ -268,7 +269,11 @@ export function useAgentMenuObservation(
     preferencesPending,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
-    selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
+    selectionFor: (
+      agent: TuiAgent | null,
+      surface?: AgentLaunchSurface,
+      preferredSurface?: 'chat'
+    ) => {
       // A chat row can open through a host-run chat program; a terminal still needs the CLI.
       const chatRow = rows.some((row) => row.kind === 'chat' && row.agent === agent)
       const cliMissing =
@@ -276,6 +281,7 @@ export function useAgentMenuObservation(
       return resolveAgentMenuSelection({
         agent,
         surface,
+        preferredSurface,
         settings,
         executionHostId,
         inventoryReady:

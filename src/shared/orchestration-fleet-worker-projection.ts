@@ -1,4 +1,4 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status/contracts/agent-status-freshness'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { projectOrchestrationFleetAttention } from './orchestration-fleet-attention'
 import {
@@ -146,10 +146,11 @@ export function projectFleetNextAction(
   ) {
     return { kind: 'none', argv: [] }
   }
-  // Settled workers owe only the release of a terminal they still own; worker-show would repeat the settlement.
+  // Settled workers owe only the release of a terminal they still own and nobody kept open; worker-show would repeat the settlement.
   if (SETTLED_WORKER_STATES.has(worker.workerState)) {
     return worker.resource?.ownershipState === 'owned' &&
-      worker.resource.releaseState !== 'released'
+      worker.resource.releaseState !== 'released' &&
+      worker.resource.releaseState !== 'retained'
       ? {
           kind: 'release',
           argv: ['orchestration', 'worker-release', '--dispatch', worker.dispatchId]

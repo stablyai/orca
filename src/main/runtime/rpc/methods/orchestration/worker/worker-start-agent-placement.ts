@@ -3,16 +3,14 @@ import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-ter
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
 
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import {
-  WORKER_START_VOCABULARY,
-  type WorkerStartModeReceipt
-} from '../../orchestration-worker-start-mode'
+import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { WorkerStartInput } from './worker-start-schema'
 import {

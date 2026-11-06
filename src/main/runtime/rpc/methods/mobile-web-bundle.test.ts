@@ -10,7 +10,7 @@ import {
   MobileWebBundleChunkResultSchema,
   MobileWebBundleManifestResultSchema
 } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcRequest, RpcResponse } from '../core'
 import { ORCAD_MOBILE_WEB_DIR, ORCAD_MOBILE_WEB_MANIFEST } from '../../../../shared/orcad-artifacts'
 import type { RpcDispatcher } from '../dispatcher'

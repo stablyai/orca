@@ -70,10 +70,18 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  // Same gap as the tool rows' icon and sentence, between the time and its actions.
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: 6
+  },
+  // Copy and rewind sit together after the time; each 24 pt box centres a 14 pt glyph, so pulling 5 pt back on
+  // both ends keeps the time-to-glyph gap at the meta gap and ends a user row's icons on the bubble's edge.
+  metaActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: -5
   },
   unsentNotice: {
     maxWidth: '88%',

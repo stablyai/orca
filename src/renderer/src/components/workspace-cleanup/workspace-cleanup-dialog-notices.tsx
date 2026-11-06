@@ -1,8 +1,8 @@
 import React from 'react'
-import { AlertTriangle, HardDrive, Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 export function WorkspaceCleanupInitialScanBanner({
   progress
@@ -25,7 +25,7 @@ export function WorkspaceCleanupInitialScanBanner({
         )
 
   return (
-    <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-5 py-3">
+    <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-4 py-3">
       <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
       <div className="min-w-0">
         <div className="text-xs font-medium text-foreground">{title}</div>
@@ -40,54 +40,6 @@ export function WorkspaceCleanupInitialScanBanner({
   )
 }
 
-export function WorkspaceCleanupSizeScanBanner({
-  scanning,
-  scannedCount,
-  totalCount,
-  onRun
-}: {
-  scanning: boolean
-  scannedCount: number
-  totalCount: number
-  onRun: () => void
-}): React.JSX.Element {
-  const actionLabel = scanning
-    ? totalCount > 0
-      ? translate(
-          'components.workspace.cleanup.browse.measuringSizesProgress',
-          'Scanning {{value0}}/{{value1}}',
-          { value0: scannedCount, value1: totalCount }
-        )
-      : translate('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
-    : translate('components.workspace.cleanup.browse.measureSizes', 'Scan')
-
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border bg-muted/25 px-5 py-3">
-      <div className="flex min-w-0 items-start gap-2">
-        <HardDrive className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0">
-          <div className="text-xs font-medium text-foreground">
-            {translate(
-              'components.workspace.cleanup.browse.measureSizesTitle',
-              'Scan workspace sizes'
-            )}
-          </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {translate(
-              'components.workspace.cleanup.browse.measureSizesDescription',
-              'Scan disk usage to compare, sort, and filter workspaces by size.'
-            )}
-          </div>
-        </div>
-      </div>
-      <Button className="shrink-0" variant="outline" size="sm" disabled={scanning} onClick={onRun}>
-        {scanning ? <Loader2 className="size-3.5 animate-spin" /> : null}
-        {actionLabel}
-      </Button>
-    </div>
-  )
-}
-
 export function WorkspaceCleanupNotice({
   tone = 'muted',
   message
@@ -97,13 +49,13 @@ export function WorkspaceCleanupNotice({
 }): React.JSX.Element {
   if (tone === 'destructive') {
     return (
-      <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
+      <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
         {message}
       </div>
     )
   }
   return (
-    <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-5 py-2 text-xs text-muted-foreground">
+    <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-4 py-2 text-xs text-muted-foreground">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
       <span>{message}</span>
     </div>

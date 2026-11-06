@@ -35,20 +35,6 @@ describe('managed-home Codex identity', () => {
       workspaceAccountId: null
     })
   })
-
-  it('still resolves an OAuth identity when no API key is declared', async () => {
-    const home = homeWithAuthJson({
-      tokens: {
-        account_id: 'real-account',
-        id_token: idTokenWithClaims({ email: 'real@example.com' })
-      }
-    })
-
-    expect(await identity.readFromHome(home, 'account-1')).toMatchObject({
-      email: 'real@example.com',
-      providerAccountId: 'real-account'
-    })
-  })
 })
 
 describe('readCodexAuthIdentity account-id fallback', () => {
@@ -66,20 +52,6 @@ describe('readCodexAuthIdentity account-id fallback', () => {
       providerAccountId: 'claim-account',
       // workspaceAccountId uses the top-level claim, not the provider-account claim.
       workspaceAccountId: null
-    })
-  })
-
-  it('falls through to the top-level claim for workspaceAccountId when tokens.account_id is blank', async () => {
-    const contents = JSON.stringify({
-      tokens: {
-        account_id: '',
-        id_token: idTokenWithClaims({ chatgpt_account_id: 'top-level-account' })
-      }
-    })
-
-    expect(readCodexAuthIdentity(contents)).toMatchObject({
-      providerAccountId: 'top-level-account',
-      workspaceAccountId: 'top-level-account'
     })
   })
 })

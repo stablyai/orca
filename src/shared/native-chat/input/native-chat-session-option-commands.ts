@@ -3,7 +3,7 @@ import type {
   CatalogMidSessionApply,
   CatalogModel,
   CatalogOptionApply
-} from '../../agent-session-option-catalog-types'
+} from '../../agent-session/options/agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import {
   clearNativeChatSessionModel,

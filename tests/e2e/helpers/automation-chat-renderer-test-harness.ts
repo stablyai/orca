@@ -1,3 +1,4 @@
+import { unwrapRuntimeRpcResult } from '../../../src/renderer/src/runtime/runtime-rpc-result'
 import type { AutomationRun } from '../../../src/shared/automations-types'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
@@ -67,10 +68,7 @@ export async function createChatRendererBridge(
     if (!reply.ok) {
       console.info('D1 transport refusal', method, JSON.stringify(reply.error))
     }
-    if (!reply.ok) {
-      throw new Error(`${method}: ${JSON.stringify(reply.error)}`)
-    }
-    return reply.result
+    return unwrapRuntimeRpcResult(reply)
   }
   const apply = (snapshot: RuntimeMobileSessionTabsResult) => {
     if (paired) {

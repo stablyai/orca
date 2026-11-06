@@ -6,7 +6,7 @@ import type {
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationBlobDescriptor } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 /** A moved history waits while a shell runs in its worktree: that shell would overwrite it. */
 type WorktreeHasLiveShells = (worktreeId: string) => boolean

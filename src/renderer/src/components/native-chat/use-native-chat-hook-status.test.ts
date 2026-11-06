@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')

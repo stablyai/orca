@@ -1,4 +1,4 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   JournalItemRow,
@@ -45,7 +45,7 @@ export function reusePromptProjection(
     if (
       delta.ok &&
       delta.cursor.sequence === cursor.sequence &&
-      delta.rows.at(-1)?.seq === cursor.sequence &&
+      delta.through === cursor.sequence &&
       delta.rows.every((row, index) =>
         row.kind === 'outcome'
           ? row.submissionIds.length === 0 && !row.itemIds.some(outcomeTouches)

@@ -113,6 +113,20 @@ describe.runIf(posix)('system-ssh directory upload', () => {
     expect(String(error)).toContain('local tar relay upload')
     expect(isHostAnsweredSystemSshExit(error)).toBe(false)
   })
+
+  it('blames the local tar failure even when the remote exit is observed first', async () => {
+    // Local tar closes its output, so remote tar sees EOF and exits, before tar reports its own failure.
+    await script('tar', 'exec 1>&-\nsleep 1\necho "tar: could not chdir to missing" >&2\nexit 1')
+    vi.stubEnv('PATH', `${scratch}:${process.env.PATH}`)
+    vi.mocked(findSystemSsh).mockReturnValue(
+      await script('ssh', 'cat >/dev/null\necho "tar: Unexpected EOF in archive" >&2\nexit 2')
+    )
+    const error = await uploadDirectoryViaSystemSsh(target, scratch, '/remote').catch(
+      (e: unknown) => e
+    )
+    expect(String(error)).toContain('could not chdir to missing')
+    expect(isHostAnsweredSystemSshExit(error)).toBe(false)
+  })
 })
 
 describe('system sftp batch', () => {

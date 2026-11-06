@@ -7,15 +7,15 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
-  AgentSessionQueuePause,
-  AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+  AgentSessionQueuePause
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   useStructuredAgentSessionQueuedEdit,
   type QueuedEditTransport,
@@ -27,7 +27,7 @@ import {
   projectQueuedMessageCards,
   queuedMessagesQueuePause,
   type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   pendingQueueSendsOnTheirWay,
   sendingQueuedMessageCards
@@ -62,8 +62,8 @@ export type StructuredAgentSessionQueuedMessagesController = {
   editCapable: boolean
   editor: QueuedMessageInlineEditor | undefined
   edit: (messageId: string) => Promise<void>
-  /** Cmd/Ctrl+Shift+Enter: steer the head card. False when it can't steer. */
-  steerHead: () => boolean
+  /** Cmd/Ctrl+Shift+Enter: steer the head card; absent while there is no head card to steer. */
+  steerHead: (() => boolean) | undefined
   /** The agent is working, so a card's send steers into its turn. */
   isWorking: boolean
 }
@@ -196,17 +196,24 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     promptOpen: hasPendingPrompt
   })
 
+  const editingMessageId = editing.editor?.messageId
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
     }
-    const head = headSteerableQueuedMessageCard(cardsRef.current)
-    if (!head || inFlightRef.current.has(head.messageId)) {
+    const head = headSteerableQueuedMessageCard(reordered.cards)
+    if (!head || editingMessageId === head.messageId || inFlightRef.current.has(head.messageId)) {
       return false
     }
     void steer(head.messageId)
     return true
-  }, [enabled, steer])
+  }, [editingMessageId, enabled, reordered.cards, steer])
+  const steerableHead = enabled ? headSteerableQueuedMessageCard(reordered.cards) : null
+  // The same checks as the press, read from rendered state, so the composer never offers a dead steer.
+  const headSteers =
+    steerableHead !== null &&
+    editingMessageId !== steerableHead.messageId &&
+    !inFlight.has(steerableHead.messageId)
 
   const resume = useCallback(
     (): Promise<boolean> =>
@@ -287,7 +294,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     edit: editing.begin,
     editCapable: editing.capable,
     editor: editing.editor,
-    steerHead,
+    steerHead: headSteers ? steerHead : undefined,
     isWorking
   }
 }

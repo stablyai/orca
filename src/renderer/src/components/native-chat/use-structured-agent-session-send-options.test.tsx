@@ -3,18 +3,18 @@
 import { renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 
-import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
-import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
+import { projectRuntimePermission } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
+import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 
 const levels = (...values: string[]) => values.map((value) => ({ value, label: value }))

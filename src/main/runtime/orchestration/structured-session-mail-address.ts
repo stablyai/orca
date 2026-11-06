@@ -10,7 +10,7 @@
  * points its mail starts it again. For mail, a conversation has ended only when its chat was closed.
  */
 
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
 import type { OrchestrationDb } from './db'
@@ -18,6 +18,7 @@ import { OrchestrationError } from './orchestration-error'
 import { resolveOrcaSessionParty, type OrchestrationSessionParty } from './orchestration-party'
 import {
   resolveLineageRunningSession,
+  type LineageRunningSession,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
 
@@ -56,7 +57,29 @@ export function structuredSessionMailReach(
   db: OrchestrationDb | null | undefined,
   canonicalStore?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): StructuredSessionMailReach {
-  const running = resolveLineageRunningSession(store, record.sessionId)
+  return deriveStructuredSessionMailReach(
+    resolveLineageRunningSession(store, record.sessionId),
+    (id) => Boolean(addressableSessionParty(id, db, canonicalStore)),
+    () => {
+      // One keyed question per check, never every visible tab to find one.
+      const retired = store.isSessionTabRetired
+      if (retired) {
+        return { present: true, isListed: (id: string) => !retired(id) }
+      }
+      const visible = store.getVisibleSessionTabIndex?.()
+      return visible
+        ? { present: visible.present, isListed: (id: string) => visible.sessionIds.includes(id) }
+        : undefined
+    }
+  )
+}
+
+/** Read-only target admission, shared with consumers holding committed source facts. */
+export function deriveStructuredSessionMailReach(
+  running: LineageRunningSession,
+  addressable: (id: OrcaSessionId) => boolean,
+  visibility: () => { present: boolean; isListed: (id: string) => boolean } | undefined
+): StructuredSessionMailReach {
   if (running.kind === 'unverifiable') {
     return { kind: 'unverifiable', reason: running.reason }
   }
@@ -64,15 +87,12 @@ export function structuredSessionMailReach(
     return { kind: 'other-host' }
   }
   const live = running.record
-  if (
-    isOrcaSessionId(live.sessionId) &&
-    !addressableSessionParty(live.sessionId, db, canonicalStore)
-  ) {
+  if (isOrcaSessionId(live.sessionId) && !addressable(live.sessionId)) {
     // Lost worker identity cannot act through the caller resolver and therefore cannot read mail.
     return { kind: 'ended', reason: 'worker-identity-lost' }
   }
-  const visible = store.getVisibleSessionTabIndex?.()
-  if (visible?.present && !visible.sessionIds.includes(live.sessionId)) {
+  const visible = visibility()
+  if (visible?.present && !visible.isListed(live.sessionId)) {
     // Do not revive closed chats into invisible turns; their mail waits.
     return { kind: 'ended', reason: 'closed' }
   }

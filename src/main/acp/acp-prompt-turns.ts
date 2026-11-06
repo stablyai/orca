@@ -6,7 +6,13 @@ import {
   type AcpCompactionFrame
 } from './acp-compaction-turn'
 import type { AcpDialect, AcpTurnEnding } from './acp-dialects/acp-dialect'
-import { hookOutcomeRowBody } from '../../shared/agent-session-hook-outcome'
+import {
+  acpAuthenticationRequired,
+  acpPromptErrorDetail,
+  type AcpTurnFailures
+} from './acp-turn-failures'
+import { AcpAgentError } from './acp-errors'
+import { hookOutcomeRowBody } from '../../shared/agent-session/journal/agent-session-hook-outcome'
 import type { SessionUpdate } from './generated/acp-protocol.generated'
 
 export type AcpPromptTurn = {
@@ -30,6 +36,32 @@ export class AcpPromptTurns {
     private readonly dialect: AcpDialect,
     private readonly agentName?: string
   ) {}
+
+  failure(
+    clientMessageId: string,
+    error: Error,
+    at: number,
+    failures: AcpTurnFailures
+  ): AcpTurnEnding | ProviderTimelineEvent[] {
+    const detail =
+      error instanceof AcpAgentError ? acpPromptErrorDetail(this.dialect, error) : undefined
+    const failure =
+      error instanceof AcpAgentError ? this.dialect.promptFailure?.(error, at) : undefined
+    const ending = {
+      ...failure,
+      stopReason: failure?.stopReason ?? 'error',
+      at,
+      failureDetail: detail,
+      notSignedIn: acpAuthenticationRequired(this.dialect, error)
+    }
+    if (this.current?.clientMessageId !== clientMessageId) {
+      // A late answer may supply a failure reason missing from the provider's end.
+      return this.last?.clientMessageId === clientMessageId && failures.has(this.last.turn)
+        ? failures.row(this.last.turn, ending)
+        : []
+    }
+    return ending
+  }
 
   /** Reuse the host's already-open command turn for compaction. */
   open(
@@ -72,7 +104,11 @@ export class AcpPromptTurns {
     return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update)
   }
 
-  endCompaction(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] | undefined {
+  endCompaction(
+    turn: string,
+    ending: AcpTurnEnding,
+    failures: Pick<AcpTurnFailures, 'write'>
+  ): ProviderTimelineEvent[] | undefined {
     const prompt = this.compacting(turn)
     if (!prompt?.compaction) {
       return undefined
@@ -80,6 +116,7 @@ export class AcpPromptTurns {
     return acpCompactionEnd({
       ...prompt,
       ...ending,
+      failures,
       compaction: prompt.compaction,
       thread: this.sessionId,
       dialect: this.dialect,

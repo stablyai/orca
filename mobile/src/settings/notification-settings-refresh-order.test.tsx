@@ -3,6 +3,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import NotificationsScreen from './notification-settings-screen'
 
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',

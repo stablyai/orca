@@ -11,7 +11,7 @@ import {
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
 import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 

@@ -3,7 +3,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   finishAutomationWorkspaceProvenanceRequest,
@@ -16,7 +16,7 @@ import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnin
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'

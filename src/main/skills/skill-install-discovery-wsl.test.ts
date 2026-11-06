@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillInstallResult } from '../../shared/skill-install-contract'
 import type { SkillDiscoveryResult } from '../../shared/skills'
-import type { WslResult, WslSpec } from '../wsl/wsl-runner'
+import type { WslResult, WslSpec } from '../wsl/execution/wsl-runner'
 import type { discoverSkills } from './discovery'
 
 const transport = vi.hoisted(() => ({
   run: vi.fn<(spec: WslSpec) => Promise<WslResult>>(),
   native: vi.fn<typeof discoverSkills>()
 }))
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: transport.run }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: transport.run }))
 vi.mock('./discovery', () => ({ discoverSkills: transport.native }))
 
 import { discoverSkillsInWsl } from './skill-discovery-wsl'

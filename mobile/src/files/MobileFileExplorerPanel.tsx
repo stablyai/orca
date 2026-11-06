@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Text, View, type ListRenderItem } from 'react-native'
+import { FlatList, View, type ListRenderItem } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, X } from 'lucide-react-native'
+import { ChevronLeft, FolderOpen, X } from 'lucide-react-native'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -9,7 +9,7 @@ import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { getDirectoryCacheState, type DirectoryCache, type FileExplorerRow } from './file-tree'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   beginDirectoryLoad,
@@ -22,10 +22,16 @@ import { isMobileMethodUnavailableError } from '../transport/mobile-method-unava
 import { directoryCacheFromFileList } from './file-list-fallback'
 import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
-import { MobileFileExplorerNoMatches, useMobileFileExplorerRows } from './mobile-file-explorer-rows'
+import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
+import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
@@ -59,6 +65,7 @@ export function MobileFileExplorerPanel(props: {
   const [error, setError] = useState<string | null>(null)
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const [filterBarHeight, setFilterBarHeight] = useState(0)
+  const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
@@ -308,6 +315,7 @@ export function MobileFileExplorerPanel(props: {
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
+        onOpenActions={openRowActions}
       />
     )
   }
@@ -349,22 +357,26 @@ export function MobileFileExplorerPanel(props: {
   })
   const treeReady = !loading && !error && (rows.length > 0 || filtering)
   const body = loading ? (
-    <View style={styles.state}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <MobileStateView loading title={t('files.fileExplorerPanel.loading', 'Loading files…')} />
+  ) : error && connState !== 'connected' ? (
+    <MobileOfflineState onReconnect={rootRetry} />
   ) : error ? (
-    <MobileLoadErrorState message={error} onRetry={rootRetry} />
+    <MobileLoadErrorState error={error} onRetry={rootRetry} />
   ) : rows.length === 0 && filtering ? (
-    <MobileFileExplorerNoMatches
-      bottomPadding={filterBarHeight}
-      onClearFilter={() => setFilter('')}
+    <MobileNoMatchState
+      message={t(
+        'files.fileExplorerPanel.noMatchesHint',
+        'Only folders you have opened are searched.'
+      )}
+      onClear={() => setFilter('')}
+      clearLabel={t('files.fileExplorerPanel.clearFilter', 'Clear filter')}
+      bottomInset={filterBarHeight}
     />
   ) : rows.length === 0 ? (
-    <View style={styles.state}>
-      <Text style={styles.emptyText}>
-        {t('files.fileExplorerPanel.emptyState', 'No files found')}
-      </Text>
-    </View>
+    <MobileStateView
+      icon={FolderOpen}
+      title={t('files.fileExplorerPanel.emptyState', 'No files found')}
+    />
   ) : (
     <FlatList
       data={rows}
@@ -403,6 +415,7 @@ export function MobileFileExplorerPanel(props: {
           onCoveredHeightChange={setFilterBarHeight}
         />
       ) : null}
+      {rowActionsSheet}
     </View>
   )
 }

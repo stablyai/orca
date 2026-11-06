@@ -1,10 +1,10 @@
 // Capture live/output/title, exited and unbound leaves from syncWindowGraph; then restart an exited PTY, reset an agent title, lose a host and bind an unknown PTY.
 // runtime-graph-mirror-capture.test.ts replays each stage and pins these records.
 
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeSyncedLeaf, RuntimeSyncedTab } from '../../shared/runtime-types'
 import type { RuntimeLeafPtyFacts } from './runtime-leaf-record-projection'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
 
 export const WORKTREE_ID = 'repo-1::/Users/dev/orca'
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111'

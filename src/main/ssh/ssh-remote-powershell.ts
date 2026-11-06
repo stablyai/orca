@@ -11,7 +11,6 @@ type WindowsPowerShellExecutable = 'powershell.exe' | 'pwsh.exe'
 // Encoding protects DefaultShell reparsing; ExecutionPolicy Bypass is ineffective for inline code and adds EDR risk.
 // INVARIANT: remote payloads must not load script files (.ps1/.psm1, dot-source or -File); execution policy gates those.
 // If file loading becomes necessary, set process policy in-payload as buildWindowsStartupCommand does; never restore the CLI bypass switch.
-// ssh-remote-powershell.test.ts enforces static importers; compressed Invoke-Expression remains inline.
 export function powerShellCommand(
   script: string,
   executable: WindowsPowerShellExecutable = 'powershell.exe'

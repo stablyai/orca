@@ -1,4 +1,4 @@
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import { getWindowsTerminalCapabilityOwnerKey } from '@/lib/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'

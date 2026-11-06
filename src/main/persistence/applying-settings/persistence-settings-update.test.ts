@@ -1,4 +1,4 @@
-import { composeAgentLaunchProfile } from '../../../shared/tui-agent-launch-defaults'
+import { composeAgentLaunchProfile } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   closeTestStores,
   testState,
@@ -21,7 +21,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

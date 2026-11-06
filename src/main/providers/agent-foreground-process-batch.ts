@@ -1,7 +1,7 @@
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
-} from '../../shared/agent-process-recognition'
+} from '../../shared/agent-status/process/agent-process-recognition'
 import { getFirstCommandToken } from '../../shared/command-token-scanner'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import { selectForegroundProcessCandidate } from '../../shared/foreground-process-selection'

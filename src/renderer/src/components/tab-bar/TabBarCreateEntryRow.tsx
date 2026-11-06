@@ -5,6 +5,7 @@ import {
   GitCompare,
   Globe,
   Loader2,
+  MessageSquare,
   Search,
   Smartphone,
   TerminalSquare
@@ -19,7 +20,7 @@ import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentLaunchSetupButton } from '../agent/AgentLaunchSetupButton'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 
@@ -57,7 +58,7 @@ export function EntryActionRow({
   id: string
   labelOverride?: string
   loading?: boolean
-  onUseAgent?: (draft: AgentPickerDraft) => void
+  onUseAgent?: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
   onClick: () => void
   option: ActiveOption
   selected: boolean
@@ -107,7 +108,13 @@ export function EntryActionRow({
       {onUseAgent && option.kind === 'agent' && option.option.pickerEntry ? (
         <AgentLaunchSetupButton
           entry={option.option.pickerEntry}
-          initial={option.option.setup}
+          seed={option.option.setup}
+          preset={option.option.preset}
+          draftId={
+            option.option.preset
+              ? `${option.option.preset.model}:${option.option.preset.effort ?? ''}`
+              : undefined
+          }
           disabled={disabled}
           onUse={onUseAgent}
         />
@@ -125,7 +132,7 @@ export function EntryActionRow({
 }
 
 function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
-  if (option.contentType === 'terminal' && option.source === 'workspace' && option.occupantAgent) {
+  if (option.source === 'workspace' && option.occupantAgent) {
     return (
       <span
         className="inline-flex shrink-0"
@@ -148,6 +155,9 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
   }
   if (contentType === 'editor') {
     return <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  if (contentType === 'agent-session') {
+    return <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
   return <GitCompare className="size-3.5 shrink-0" aria-hidden="true" />
 }

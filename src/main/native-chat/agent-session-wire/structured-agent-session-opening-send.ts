@@ -1,4 +1,4 @@
-import { structuredAgentSessionSendOpeningTurn } from '../../../shared/structured-agent-session-opening-send'
+import { structuredAgentSessionSendOpeningTurn } from '../../../shared/agent-session/requests/structured-agent-session-opening-send'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -7,13 +7,16 @@ import { selectableStructuredSubmission } from './structured-agent-session-input
 
 /** Read opening-turn evidence from the journal fold without a snapshot. */
 export function structuredAgentSessionSendOpeningTurnInJournal(
-  journal: Pick<AgentSessionJournal, 'submissions' | 'visitItemsWithLinkage'>,
+  journal: Pick<AgentSessionJournal, 'inputOrder' | 'visitItemsWithLinkage'>,
   fence: number,
-  work?: Pick<StructuredAgentSessionCurrentWork, 'publishedSubmission'> | null
+  work?: Pick<StructuredAgentSessionCurrentWork, 'owesSend'> | null
 ): boolean {
   return structuredAgentSessionSendOpeningTurn(
-    // Released held sends no longer count as opening turns.
-    work ? journal.submissions().map(work.publishedSubmission) : journal.submissions(),
+    work
+      ? journal.inputOrder
+          .recoverableSubmissions()
+          .filter((submission) => work.owesSend(submission))
+      : journal.inputOrder.recoverableSubmissions(),
     (visit) =>
       journal.visitItemsWithLinkage((itemId, sequence, body, linkage) =>
         visit({ itemId, sequence, body, turnScope: linkage.turnScope, agentId: linkage.agentId })

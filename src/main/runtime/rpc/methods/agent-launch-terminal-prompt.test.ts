@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
-import { AGENT_PROMPT_STALLED_ERROR } from '../../agent-prompt-submission-verification'
+import { AGENT_PROMPT_STALLED_ERROR } from '../../terminal/input/agent-prompt-submission-verification'
 
 type SendResult = { handle: string; accepted: boolean; bytesWritten: number }
 type SendFn = (

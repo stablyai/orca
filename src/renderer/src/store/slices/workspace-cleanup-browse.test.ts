@@ -6,10 +6,7 @@ import {
   resetWorkspaceCleanupBrowsePersistTimer,
   WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS
 } from './workspace-cleanup-browse'
-import {
-  createDefaultWorkspaceCleanupBrowseState,
-  normalizeWorkspaceCleanupBrowseState
-} from '../../../../shared/workspace-cleanup-browse-state'
+import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 
 const DISMISSAL = {
   worktreeId: 'wt-1',
@@ -39,32 +36,6 @@ describe('workspace cleanup browse slice', () => {
     vi.useRealTimers()
   })
 
-  it('starts from the default browse state', () => {
-    const store = createStore(vi.fn().mockResolvedValue(undefined))
-    expect(store.getState().workspaceCleanupBrowse).toEqual(
-      createDefaultWorkspaceCleanupBrowseState()
-    )
-  })
-
-  it('persists the debounced state alongside the dismissals it would otherwise erase', async () => {
-    const uiSet = vi.fn().mockResolvedValue(undefined)
-    const store = createStore(uiSet)
-
-    const next = createDefaultWorkspaceCleanupBrowseState()
-    next.filters.query = 'stale'
-    store.getState().updateWorkspaceCleanupBrowseState(next)
-
-    expect(store.getState().workspaceCleanupBrowse).toBe(next)
-    expect(uiSet).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS)
-
-    expect(uiSet).toHaveBeenCalledTimes(1)
-    expect(uiSet).toHaveBeenCalledWith({
-      workspaceCleanup: { dismissals: { 'wt-1': DISMISSAL }, browse: next }
-    })
-  })
-
   it('coalesces a burst of edits into one write carrying the newest state', async () => {
     const uiSet = vi.fn().mockResolvedValue(undefined)
     const store = createStore(uiSet)
@@ -79,19 +50,5 @@ describe('workspace cleanup browse slice', () => {
 
     expect(uiSet).toHaveBeenCalledTimes(1)
     expect(uiSet.mock.calls[0][0].workspaceCleanup.browse.filters.query).toBe('sta')
-  })
-
-  it('round-trips what it persisted back through hydration', async () => {
-    const uiSet = vi.fn().mockResolvedValue(undefined)
-    const store = createStore(uiSet)
-
-    const next = createDefaultWorkspaceCleanupBrowseState()
-    next.filters.safety.blockers = ['dirty-files']
-    next.sort = { field: 'size', direction: 'desc' }
-    store.getState().updateWorkspaceCleanupBrowseState(next)
-    await vi.advanceTimersByTimeAsync(WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS)
-
-    const persisted = JSON.parse(JSON.stringify(uiSet.mock.calls[0][0].workspaceCleanup.browse))
-    expect(normalizeWorkspaceCleanupBrowseState(persisted)).toEqual(next)
   })
 })

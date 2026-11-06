@@ -1,5 +1,5 @@
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import type { RecognizedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentCompletionCoordinator,
   AgentCompletionCoordinatorOptions,

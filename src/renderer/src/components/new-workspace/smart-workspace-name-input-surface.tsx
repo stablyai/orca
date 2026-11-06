@@ -312,6 +312,7 @@ export function renderSmartWorkspaceNameInput(
         <WorkspaceEmojiPickerButton
           className="absolute top-1/2 right-1.5 -translate-y-1/2"
           disabled={disabled}
+          skipTabStop
           inputRef={localInputRef}
           onOpenChange={handleEmojiPickerOpenChange}
           onValueChange={handleEmojiPickerValueChange}

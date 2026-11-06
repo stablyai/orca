@@ -1,8 +1,8 @@
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../shared/structured-agent-session-host-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../shared/agent-session/structured-agent-session-host-capability'
 import {
   structuredAgentSessionFollowUpsQueue,
   structuredAgentSessionQueueEnabled
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 
 /** What decides, per send, whether it asks the host to hold it as a card. */
 export type StructuredAgentSessionQueueDelivery = {

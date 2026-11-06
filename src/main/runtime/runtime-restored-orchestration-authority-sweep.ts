@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
-import type { RestoredOrchestrationAuthorityReceipt } from './runtime-terminal-contracts'
+import type { RestoredOrchestrationAuthorityReceipt } from './orchestration/terminal-authority/orchestration-compatibility-authority'
 
 /** Retire only from completed provider absence proofs; failed listings cannot revoke handles the relay may still reach. */
 export function retireOrchestrationAuthorityAbsentFromInventory(

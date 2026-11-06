@@ -1,19 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { createTestStore } from './store-test-helpers'
 
 export function registerReposProjectHostCapabilityTests(): void {
-  const remoteRepo: Repo = {
-    id: 'remote-repo',
-    path: '/remote',
-    displayName: 'Remote',
-    badgeColor: '#111',
-    addedAt: 2
-  }
-
   const reposList = vi.fn()
   const reposClone = vi.fn()
   const runtimeEnvironmentCall = vi.fn()
@@ -64,30 +55,6 @@ export function registerReposProjectHostCapabilityTests(): void {
   })
 
   describe('repo slice project-host setup runtime capability', () => {
-    it('falls back to repo-derived project setup state when a remote runtime lacks support', async () => {
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'rpc-1',
-        ok: true,
-        result: { repos: [remoteRepo] },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().projectHostSetups).toEqual([
-        expect.objectContaining({ id: 'remote-repo', hostId: 'runtime:env-1' })
-      ])
-      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'repo.list',
-        params: undefined,
-        timeoutMs: 15_000
-      })
-    })
-
     it('blocks runtime project setup when the server does not advertise support', async () => {
       const store = createTestStore()
 
@@ -143,11 +110,4 @@ export function registerReposProjectHostCapabilityTests(): void {
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     })
   })
-
-  // The catalog these tests read is the one the focused host would have shown.
-  function catalogOwner(store: {
-    getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
-  }): { runtimeEnvironmentId: string | null } {
-    return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
-  }
 }

@@ -3,13 +3,14 @@ import {
   type TerminalLaunchInputAttemptOwner
 } from './terminal-launch-input-attempt'
 import type { PtyConnectionDeps } from './pty-connection-types'
-import type { PaneKey } from '../../../../shared/stable-pane-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+
+import { type PaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
-  PTY_PRECONNECT_INPUT_MAX_ENTRIES
+  PTY_PRECONNECT_INPUT_MAX_ENTRIES,
+  type PtyPreconnectInputEntry,
+  type PtyPreconnectInputKind
 } from './pty-preconnect-input-buffer'
-import type { PtyPreconnectInputEntry, PtyPreconnectInputKind } from './pty-preconnect-input-buffer'
 
 export type DeferredSplitPaneInputKind = PtyPreconnectInputKind
 export type DeferredSplitPaneInput = PtyPreconnectInputEntry

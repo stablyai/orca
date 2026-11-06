@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { OrchestrationAddressableAgent } from './structured-worker-group-addressing'
 
 // Resolve per-recipient mail at send-time; candidates are Run-scoped except explicit @worktree addresses, never host-wide.

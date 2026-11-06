@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'

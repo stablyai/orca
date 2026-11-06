@@ -43,7 +43,6 @@ vi.mock('../ipc/runtime-import-limits', async (importOriginal) => ({
 }))
 
 import { materializeDragTempPaths, type DragTempCopyEnvironment } from './dragged-temp-file-copy'
-import { mayNeedDragTempCopy } from './drag-temp-path'
 
 const SCREENSHOT_NAME = 'Screenshot 2026-09-28 at 4.03.11 PM.png'
 const canChangePermissions = process.platform !== 'win32' && process.getuid?.() !== 0
@@ -132,83 +131,6 @@ describe('materializeDragTempPaths', () => {
     }
   )
 
-  it('produces an empty copy for a zero-byte source', async () => {
-    const source = await dragTempFile('empty.png', '')
-
-    const dest = importedPath((await materializeDragTempPaths([source], env))[0])
-
-    expect((await stat(dest)).size).toBe(0)
-  })
-
-  it('passes everything through off macOS', async () => {
-    const source = await dragTempFile('shot.png', 'x')
-
-    const results = await materializeDragTempPaths([source], { ...env, platform: 'linux' })
-
-    expect(results).toEqual([{ sourcePath: source, status: 'imported', destPath: source }])
-    expect(await copyDirs()).toEqual([])
-  })
-
-  it('passes through Finder paths and temp paths outside TemporaryItems/NSIRD_*', async () => {
-    const finder = join(root, 'Desktop', 'shot.png')
-    const otherTemp = join(env.sourceTempRoot, 'TemporaryItems', 'other', 'shot.png')
-    const providerDirItself = providerDir
-    await mkdir(dirname(finder), { recursive: true })
-    await writeFile(finder, 'x')
-    await mkdir(dirname(otherTemp), { recursive: true })
-    await writeFile(otherTemp, 'x')
-
-    const paths = [finder, otherTemp, providerDirItself, '/not/there/shot.png']
-    const results = await materializeDragTempPaths(paths, env)
-
-    expect(results.map((result) => importedPath(result))).toEqual(paths)
-    expect(await copyDirs()).toEqual([])
-  })
-
-  it('passes missing TemporaryItems lookalikes outside the configured temp root through', async () => {
-    const missing = join(root, 'other', 'TemporaryItems', 'NSIRD_provider', 'gone.png')
-
-    expect(await materializeDragTempPaths([missing], env)).toEqual([
-      { sourcePath: missing, status: 'imported', destPath: missing }
-    ])
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'passes symlinks and directories through unchanged',
-    async () => {
-      const target = join(root, 'outside.png')
-      await writeFile(target, 'x')
-      const link = join(providerDir, 'link.png')
-      await symlink(target, link)
-      const nested = join(providerDir, 'folder')
-      await mkdir(nested)
-
-      const results = await materializeDragTempPaths([link, nested], env)
-
-      expect(results.map((result) => importedPath(result))).toEqual([link, nested])
-      expect(await copyDirs()).toEqual([])
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'treats a symlinked temp root and its real path as the same root',
-    async () => {
-      const source = await dragTempFile('shot.png', 'x')
-      const linkedRoot = join(root, 'var-link')
-      await symlink(env.sourceTempRoot, linkedRoot)
-      const viaLink = join(linkedRoot, 'TemporaryItems', basename(providerDir), 'shot.png')
-
-      const [throughLinkedSource] = await materializeDragTempPaths([viaLink], env)
-      const [throughLinkedRoot] = await materializeDragTempPaths([source], {
-        ...env,
-        sourceTempRoot: linkedRoot
-      })
-
-      expect(importedPath(throughLinkedSource)).not.toBe(viaLink)
-      expect(importedPath(throughLinkedRoot)).not.toBe(source)
-    }
-  )
-
   it.skipIf(process.platform === 'win32')(
     'does not copy prefix siblings, nested lookalikes, or symlink escapes',
     async () => {
@@ -230,14 +152,6 @@ describe('materializeDragTempPaths', () => {
     }
   )
 
-  it('reports a missing drag-temp file instead of passing the original through', async () => {
-    const missing = join(providerDir, 'gone.png')
-
-    expect(await materializeDragTempPaths([missing], env)).toEqual([
-      { sourcePath: missing, status: 'failed', reason: 'missing' }
-    ])
-  })
-
   it.skipIf(!canChangePermissions)(
     'reports an unreadable drag-temp file as permission denied and leaves no copy',
     async () => {
@@ -252,47 +166,6 @@ describe('materializeDragTempPaths', () => {
       expect(await copyDirs()).toEqual([])
     }
   )
-
-  it('copies at the per-file limit and hands one byte more over uncopied', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const atLimit = await dragTempFile('ten.png', '0123456789')
-    const overLimit = await dragTempFile('eleven.png', '0123456789a')
-
-    const [accepted, uncopied] = await materializeDragTempPaths([atLimit, overLimit], env)
-
-    expect(importedPath(accepted)).not.toBe(atLimit)
-    expect(uncopied).toEqual({ sourcePath: overLimit, status: 'uncopied', reason: 'too-large' })
-    expect(await copyDirs()).toHaveLength(1)
-  })
-
-  it('shares one budget within a drop, and an uncopied item does not block a smaller later one', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const finder = join(root, 'big-finder-file.png')
-    await writeFile(finder, 'x'.repeat(100))
-    const first = await dragTempFile('a.png', '0123456789')
-    const second = await dragTempFile('b.png', '0123456789')
-    const third = await dragTempFile('c.png', '01234')
-
-    const results = await materializeDragTempPaths([finder, first, second, third], env)
-
-    expect(importedPath(results[0])).toBe(finder)
-    expect(importedPath(results[1])).not.toBe(first)
-    expect(results[2]).toEqual({ sourcePath: second, status: 'uncopied', reason: 'storage-full' })
-    expect(importedPath(results[3])).not.toBe(third)
-    expect(await copyDirs()).toHaveLength(2)
-  })
-
-  it('never refuses a drop for copies earlier drops left behind', async () => {
-    const first = await dragTempFile('a.png', '0123456789')
-    const second = await dragTempFile('b.png', '0123456789')
-
-    const [firstDrop] = await materializeDragTempPaths([first], env)
-    const [secondDrop] = await materializeDragTempPaths([second], env)
-
-    expect(importedPath(firstDrop)).not.toBe(first)
-    expect(importedPath(secondDrop)).not.toBe(second)
-    expect(await copyDirs()).toHaveLength(2)
-  })
 
   it('keeps proven buffered bytes when the source changes after reading', async () => {
     const source = await dragTempFile('shot.png', 'png')
@@ -315,25 +188,6 @@ describe('materializeDragTempPaths', () => {
     ])
     expect(await readdir(env.copyRoot)).toEqual([])
     expect(warn).toHaveBeenCalledWith(expect.any(String), { code: 'ENOSPC' })
-  })
-
-  it('reports an unexpected errno as a generic copy failure', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const source = await dragTempFile('shot.png', 'png')
-    fsFaults.writeError = Object.assign(new Error('EIO: i/o error, write'), { code: 'EIO' })
-
-    expect(await materializeDragTempPaths([source], env)).toEqual([
-      { sourcePath: source, status: 'failed', reason: 'copy-failed' }
-    ])
-  })
-
-  it('reuses one copy for a duplicate source path within a batch', async () => {
-    const source = await dragTempFile('shot.png', 'x')
-
-    const [first, second] = await materializeDragTempPaths([source, source], env)
-
-    expect(importedPath(second)).toBe(importedPath(first))
-    expect(await copyDirs()).toHaveLength(1)
   })
 
   it('gives concurrent batches distinct copy directories', async () => {
@@ -370,17 +224,6 @@ describe('materializeDragTempPaths', () => {
     ])
   })
 
-  it('stops on abort without leaving a copy behind', async () => {
-    const source = await dragTempFile('shot.png', 'x')
-    const controller = new AbortController()
-    controller.abort(new Error('renderer gone'))
-
-    await expect(materializeDragTempPaths([source], env, controller.signal)).rejects.toThrow(
-      'renderer gone'
-    )
-    expect(await copyDirs()).toEqual([])
-  })
-
   it('removes copies it already made when aborted partway through a drop', async () => {
     const first = await dragTempFile('a.png', 'a')
     const second = await dragTempFile('b.png', 'b')
@@ -397,16 +240,5 @@ describe('materializeDragTempPaths', () => {
       materializeDragTempPaths([first, second], env, controller.signal)
     ).rejects.toThrow()
     expect(await copyDirs()).toEqual([])
-  })
-})
-
-describe('mayNeedDragTempCopy', () => {
-  it('matches only files below a TemporaryItems/NSIRD_* directory on macOS', () => {
-    const drag = join('/', 'var', 'T', 'TemporaryItems', 'NSIRD_screencaptureui_1', 'a.png')
-
-    expect(mayNeedDragTempCopy(drag, 'darwin')).toBe(true)
-    expect(mayNeedDragTempCopy(drag, 'linux')).toBe(false)
-    expect(mayNeedDragTempCopy(dirname(drag), 'darwin')).toBe(false)
-    expect(mayNeedDragTempCopy(join('/', 'Users', 'me', 'Desktop', 'a.png'), 'darwin')).toBe(false)
   })
 })

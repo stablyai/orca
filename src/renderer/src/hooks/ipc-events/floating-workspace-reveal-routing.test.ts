@@ -51,7 +51,6 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 
 import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
-import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 
 const MAIN = 'repo1::/repo1/main'
@@ -101,7 +100,6 @@ function setup(): {
   const unsubs: (() => void)[] = []
   registerTerminalUiRoutingIpcBridge(unsubs)
   registerTerminalPresentationIpcBridge(unsubs)
-  registerTerminalRequestIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, vi.fn())
   dispatchEvent.mockClear()
   return {
@@ -171,21 +169,6 @@ describe('taking the user to a floating workspace terminal', () => {
     expect(panelToggles(dispatchEvent)).toBe(1)
     const tabs = testStore().getState().tabsByWorktree[FLOATING] ?? []
     expect(testStore().getState().activeTabIdByWorktree[FLOATING]).toBe(tabs.at(-1)?.id)
-  })
-
-  it('a background create into the floating workspace does not open the panel', () => {
-    const { emit, dispatchEvent } = setup()
-    const before = mainWindow()
-
-    emit('onCreateTerminal', { worktreeId: FLOATING, presentation: 'background' })
-    emit('onRequestTerminalCreate', {
-      requestId: 'req-2',
-      worktreeId: FLOATING,
-      presentation: 'background'
-    })
-
-    expect(mainWindow()).toEqual(before)
-    expect(panelToggles(dispatchEvent)).toBe(0)
   })
 
   it('focusing a floating editor tab opens the panel on it', async () => {

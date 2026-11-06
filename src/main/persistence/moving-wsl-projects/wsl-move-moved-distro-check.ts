@@ -3,7 +3,7 @@
  * same distro. A new GUID under the old name is either a reinstall or a re-import of the same
  * files, which the registry cannot tell apart.
  */
-import type { WslDistroRegistration } from '../../wsl/wsl-distro-registry-id'
+import type { WslDistroRegistration } from '../../wsl/discovery/wsl-distro-registry-id'
 import type { WslMovedDistroVerdict } from './wsl-move-orchestrator-external-transitions'
 
 export function wslMovedDistroVerdict(

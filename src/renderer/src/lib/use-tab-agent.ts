@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
 import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
   resolveFocusedRetainedTabAgent,
@@ -16,42 +17,66 @@ import {
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals
 } from '../../../shared/tab-agent-from-signals'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+
+type TabHookAgents = {
+  focused: TerminalAgent | null
+  sibling: TerminalAgent | null
+  focusedCompleted: TerminalAgent | null
+  siblingCompleted: TerminalAgent | null
+}
+
+/** Every mounted tab re-runs these on each store write; recompute only when this tab's hook inputs change. */
+function createTabHookAgentResolver(): (
+  s: Pick<AppState, 'agentStatusByPaneKey' | 'retainedAgentsByPaneKey' | 'terminalLayoutsByTabId'>,
+  tabId: string
+) => TabHookAgents {
+  let last: {
+    tabId: string
+    statuses: AppState['agentStatusByPaneKey']
+    retained: AppState['retainedAgentsByPaneKey']
+    layout: AppState['terminalLayoutsByTabId'][string] | undefined
+    agents: TabHookAgents
+  } | null = null
+  return (s, tabId) => {
+    const statuses = s.agentStatusByPaneKey
+    const retained = s.retainedAgentsByPaneKey
+    const layout = s.terminalLayoutsByTabId[tabId]
+    if (
+      last &&
+      last.tabId === tabId &&
+      last.statuses === statuses &&
+      last.retained === retained &&
+      last.layout === layout
+    ) {
+      return last.agents
+    }
+    const agents: TabHookAgents = {
+      focused: resolveFocusedTabAgent(statuses, layout, tabId),
+      sibling: resolveSiblingTabAgent(statuses, layout, tabId),
+      focusedCompleted:
+        resolveFocusedCompletedTabAgent(statuses, layout, tabId) ??
+        resolveFocusedRetainedTabAgent(retained, layout, tabId),
+      siblingCompleted:
+        resolveSiblingCompletedTabAgent(statuses, layout, tabId) ??
+        resolveSiblingRetainedTabAgent(retained, layout, tabId)
+    }
+    last = { tabId, statuses, retained, layout, agents }
+    return agents
+  }
+}
 
 /** Resolve pane identity, separate from activity, without foreground probes: live focused hook → process (normalized to owner group) → reuse/hookless title → completed/retained focused identity → sleeping session → launch → sibling fallback. Native OpenCode titles cannot displace durable ownership; local OSC 133;D suppresses exited idle identity. */
 export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
-  const focusedHookAgent = useAppStore((s) =>
-    resolveFocusedTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
-  )
-  const siblingHookAgent = useAppStore((s) =>
-    resolveSiblingTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
-  )
+  const [resolveHookAgents] = useState(createTabHookAgentResolver)
+  const focusedHookAgent = useAppStore((s) => resolveHookAgents(s, tab.id).focused)
+  const siblingHookAgent = useAppStore((s) => resolveHookAgents(s, tab.id).sibling)
   const focusedCompletedHookAgent = useAppStore(
-    (s) =>
-      resolveFocusedCompletedTabAgent(
-        s.agentStatusByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      ) ??
-      resolveFocusedRetainedTabAgent(
-        s.retainedAgentsByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      )
+    (s) => resolveHookAgents(s, tab.id).focusedCompleted
   )
   const siblingCompletedHookAgent = useAppStore(
-    (s) =>
-      resolveSiblingCompletedTabAgent(
-        s.agentStatusByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      ) ??
-      resolveSiblingRetainedTabAgent(
-        s.retainedAgentsByPaneKey,
-        s.terminalLayoutsByTabId[tab.id],
-        tab.id
-      )
+    (s) => resolveHookAgents(s, tab.id).siblingCompleted
   )
   const hasCompletedHook = focusedCompletedHookAgent !== null
   const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)

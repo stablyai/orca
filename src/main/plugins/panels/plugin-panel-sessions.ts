@@ -11,7 +11,11 @@ export type PluginPanelSessionBinding = {
 
 type PluginPanelSession = PluginPanelSessionBinding & {
   ownerKey: string
+  /** Names the open panel to its worker; never authorizes anything, unlike the token. */
+  publicId: string
 }
+
+export type ResolvedPluginPanelSession = PluginPanelSessionBinding & { publicId: string }
 
 const MAX_PANEL_SESSIONS = 1_024
 
@@ -31,6 +35,9 @@ export class PluginPanelSessions {
   private readonly sessions = new Map<string, PluginPanelSession>()
   private readonly tokensByBinding = new Map<string, string>()
 
+  /** `onClosed` hears each session's public id once it can no longer be used. */
+  constructor(private readonly onClosed: (publicId: string) => void = () => undefined) {}
+
   issue(ownerKey: string, binding: PluginPanelSessionBinding): string {
     const key = bindingKey(ownerKey, binding)
     const existing = this.tokensByBinding.get(key)
@@ -47,13 +54,13 @@ export class PluginPanelSessions {
       this.delete(oldest[0], oldest[1])
     }
     const token = randomBytes(32).toString('base64url')
-    const session = { ownerKey, ...binding }
+    const session = { ownerKey, ...binding, publicId: randomBytes(9).toString('base64url') }
     this.sessions.set(token, session)
     this.tokensByBinding.set(key, token)
     return token
   }
 
-  resolve(ownerKey: string, token: string): PluginPanelSessionBinding | null {
+  resolve(ownerKey: string, token: string): ResolvedPluginPanelSession | null {
     const session = this.sessions.get(token)
     if (!session || session.ownerKey !== ownerKey) {
       return null
@@ -63,7 +70,16 @@ export class PluginPanelSessions {
       surface: session.surface,
       contributionId: session.contributionId,
       rootDir: session.rootDir,
-      manifestRevision: session.manifestRevision
+      manifestRevision: session.manifestRevision,
+      publicId: session.publicId
+    }
+  }
+
+  /** One token, e.g. when the frame it was issued for could not be set up. */
+  revoke(ownerKey: string, token: string): void {
+    const session = this.sessions.get(token)
+    if (session?.ownerKey === ownerKey) {
+      this.delete(token, session)
     }
   }
 
@@ -76,12 +92,17 @@ export class PluginPanelSessions {
   }
 
   clear(): void {
+    const closed = [...this.sessions.values()]
     this.sessions.clear()
     this.tokensByBinding.clear()
+    for (const session of closed) {
+      this.onClosed(session.publicId)
+    }
   }
 
   private delete(token: string, session: PluginPanelSession): void {
     this.sessions.delete(token)
     this.tokensByBinding.delete(bindingKey(session.ownerKey, session))
+    this.onClosed(session.publicId)
   }
 }

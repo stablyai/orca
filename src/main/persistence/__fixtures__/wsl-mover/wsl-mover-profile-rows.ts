@@ -1,6 +1,6 @@
 import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 

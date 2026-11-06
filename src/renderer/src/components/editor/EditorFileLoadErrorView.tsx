@@ -31,13 +31,16 @@ export function EditorFileLoadErrorView({
   message,
   code,
   worktreeId,
-  onRetry
+  onRetry,
+  onHostStarted
 }: {
   message: string
   code?: string
   /** The file's workspace; a stopped WSL host there gets Start instead of this error. */
   worktreeId?: string
   onRetry: () => void
+  /** Reloads after Start without asking to wake again: the click already booted the host. */
+  onHostStarted?: () => void
 }): React.JSX.Element {
   const stoppedWslHost = useStoppedWslHost(worktreeId)
   if (stoppedWslHost) {
@@ -47,7 +50,7 @@ export function EditorFileLoadErrorView({
           environmentId={stoppedWslHost.environmentId}
           distro={stoppedWslHost.distro}
           size="sm"
-          onStarted={onRetry}
+          onStarted={onHostStarted}
         />
       </div>
     )

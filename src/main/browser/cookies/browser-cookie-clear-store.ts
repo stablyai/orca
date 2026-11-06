@@ -13,7 +13,7 @@ import type {
 } from './browser-cookie-import-clear'
 import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
 import { normalizeCookiePartitionSite } from './sources/browser-cookie-source-partition'
-import type { CdpCookie } from '../browser-cdp-cookie'
+import type { CdpCookie } from './browser-cdp-cookie'
 
 function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
   if (sameSite === 'strict') {

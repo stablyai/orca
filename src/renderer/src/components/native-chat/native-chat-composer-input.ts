@@ -1,3 +1,4 @@
+import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
 
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */
@@ -11,6 +12,7 @@ export type NativeChatComposerInput = Pick<
   | 'select'
   | 'setSelectionRange'
 > & {
+  insertAgentReferences?: (references: OrchestrationAgentReference[]) => void
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
   insertSkill?: (from: number, to: number, token: string, path?: string) => void
@@ -33,6 +35,7 @@ export type NativeChatPromptEditorProps = Omit<
   /** The composer's thumbnail ids, in order, which number its image chips. */
   imageRow?: readonly string[]
   inputRef: RefObject<NativeChatComposerInput | null>
+  isComposing?: () => boolean
   initialValue: string
   disabled: boolean
   placeholder: string

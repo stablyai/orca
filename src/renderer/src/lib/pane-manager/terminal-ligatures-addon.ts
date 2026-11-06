@@ -94,8 +94,18 @@ function createCachedCharacterJoiner(
 export class TerminalLigaturesAddon extends LigaturesAddon {
   override activate(terminal: Terminal): void {
     const cache = new LigatureRangeCache()
+    // Without a font family upstream never reads font files (whole-file parse per terminal OOMed renderers) and joins its common-ligature list, as before 1.4.247.
+    const optionsWithoutFontFamily = new Proxy(terminal.options, {
+      get(options, key) {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
+        return key === 'fontFamily' ? undefined : Reflect.get(options, key, options)
+      }
+    })
     const terminalForAddon = new Proxy(terminal, {
       get(target, property) {
+        if (property === 'options') {
+          return optionsWithoutFontFamily
+        }
         if (property === 'registerCharacterJoiner') {
           return (joiner: CharacterJoiner): number =>
             target.registerCharacterJoiner(createCachedCharacterJoiner(target, joiner, cache))

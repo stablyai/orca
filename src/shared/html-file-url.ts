@@ -1,4 +1,4 @@
-import { fileUriToFilesystemPath } from './file-uri-path'
+import { fileUriToFilesystemPath } from './file-links/file-uri-path'
 
 /** File authorities name this machine, never an Orca SSH target. */
 export function htmlFilePathFromUrl(input: string): string | null {

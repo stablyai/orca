@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceCleanupDismissal } from '../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupDismissal } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { wslMoverProfile } from '../__fixtures__/wsl-mover/wsl-mover-profiles'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'

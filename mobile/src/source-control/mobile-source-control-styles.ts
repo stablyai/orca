@@ -13,62 +13,67 @@ const baseStyles = themedStyleSheet(() => ({
   header: {
     backgroundColor: colors.bgBase
   },
-  summaryCard: {
-    margin: spacing.lg,
-    marginBottom: spacing.sm,
+  statusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs
+  },
+  branchButton: {
+    flexShrink: 1,
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  branchText: {
+    flexShrink: 1,
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  conflictBanner: {
+    marginTop: spacing.sm,
     padding: spacing.md,
+    gap: spacing.sm,
     borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    borderColor: colors.statusAmber
   },
-  summaryHeader: {
+  conflictBannerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md
+    gap: spacing.sm
   },
-  branchLine: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  branchText: {
+  conflictBannerTitle: {
     flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
-  syncText: {
+  conflictBannerText: {
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  countRow: {
+  commitsRow: {
+    minHeight: 48,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginTop: spacing.sm
-  },
-  countText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  // Keep Abort below counts so narrow cards cannot overflow.
-  conflictRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.sm,
-    alignSelf: 'flex-start',
-    maxWidth: '100%'
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
   },
-  conflictText: {
-    color: colors.statusAmber,
-    fontSize: typography.metaSize,
-    textTransform: 'capitalize'
+  commitsRowText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.bodySize
+  },
+  syncText: {
+    marginLeft: 'auto',
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   },
   abortButton: {
     minHeight: 32,
@@ -81,21 +86,6 @@ const baseStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
-  },
-  completeMergeButton: {
-    minHeight: 32,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.control,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  completeMergeText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   },
   abortPressed: {
     opacity: 0.75
@@ -140,76 +130,6 @@ const baseStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.metaSize,
     lineHeight: 16
-  },
-  bulkRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  bulkButton: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs
-  },
-  bulkMenuButton: {
-    width: 42,
-    minHeight: 36,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  bulkButtonDisabled: {
-    opacity: 0.45
-  },
-  bulkButtonPressed: {
-    opacity: 0.75
-  },
-  bulkButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  createPrBlock: {
-    marginTop: spacing.md
-  },
-  createPrButton: {
-    height: 42,
-    borderRadius: radii.control,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md
-  },
-  createPrButtonDisabled: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  createPrButtonPressed: {
-    opacity: 0.78
-  },
-  createPrButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  createPrButtonTextDisabled: {
-    color: colors.textSecondary
-  },
-  createPrButtonHint: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    lineHeight: 16,
-    textAlign: 'center',
-    flexShrink: 1
   }
 }))
 

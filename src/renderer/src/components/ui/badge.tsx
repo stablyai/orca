@@ -20,7 +20,12 @@ const badgeVariants = cva(
         link: 'text-primary underline-offset-4 [a&]:hover:underline',
         /** Workspace execution-host context, quieter and squarer than status chips. */
         hostContext:
-          'h-4 rounded border-border bg-accent px-1.5 text-[10px] leading-none text-muted-foreground dark:border-border/50 dark:bg-accent/80',
+          'h-4 rounded border-border bg-[var(--host-badge,var(--accent))] px-1.5 text-[10px] leading-none text-[var(--host-badge-foreground,var(--muted-foreground))] dark:border-border/50 dark:bg-[var(--host-badge,color-mix(in_oklab,var(--accent)_80%,transparent))]',
+        /** A task label inside a dense reference row's metadata line. */
+        referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
+        /** An uppercase kind label set before a banner title; takes its color from the parent. */
+        paneLabel:
+          'h-4 border-current/30 px-1.5 py-0 align-[1px] text-3xs font-semibold tracking-wider uppercase',
         /** A skill or file sitting inline in the chat message box, ringed while selected. */
         promptPill:
           'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring'

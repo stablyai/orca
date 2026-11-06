@@ -1,3 +1,4 @@
+import type { HostStatusReply } from '../transport/host-status-reply-schema'
 import type {
   BridgeTerminalToolbar,
   BridgeTerminalKeyId,
@@ -90,6 +91,8 @@ export type MobileWebShellBridgeArgs = {
   // Effective session grants include the served-route union when this page owns the host area.
   routeGrants: readonly string[]
   ownsHostArea?: boolean
+  /** The status the shell's compatibility gate proved; null while pending or unreadable. */
+  hostStatus?: HostStatusReply | null
   onNavigate: (href: string, replace: boolean) => void
   onExternalLink: (url: string) => void
   onHaptic: (kind: BridgeHapticsKind) => void
@@ -164,6 +167,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
       ownsHostArea: latest.ownsHostArea === true,
+      readHostStatus: () => argsRef.current.hostStatus ?? null,
       sessionEstablished: latest.sessionEstablished,
       ...(establishedBackRef.current?.sessionId === sessionId
         ? { sessionBack: establishedBackRef.current.back }

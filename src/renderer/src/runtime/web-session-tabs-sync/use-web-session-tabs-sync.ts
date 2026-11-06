@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '../../store'
 import { useRuntimeSessionMirrorEnvironmentKeys } from '../use-runtime-session-mirror-environment-key'
 import { sessionTabsFreshnessKey } from './tracking'

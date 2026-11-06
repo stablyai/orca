@@ -1,3 +1,4 @@
+import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -13,6 +14,8 @@ import {
 } from '../../../../shared/github/check-details-deadline'
 import { syncPRChecksStatus } from '../slices/github-checks'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
+import { findRepoForGitHubOwner } from './repository-routing'
+import { hostedReviewOwnerIpcArgs } from '../slices/hosted-review-cache-state'
 import {
   getPRChecksCacheTtl,
   prChecksCacheSuffix,
@@ -42,10 +45,17 @@ export const createCheckActions = (
     prRepo,
     options
   ): Promise<PRCheckDetail[]> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    const repo = findRepoForGitHubOwner(
+      get(),
+      options?.repoId,
+      repoPath,
+      options?.repoOwnerExecutionHostId
     )
     const repoId = options?.repoId ?? repo?.id
+    const checkContract = capturePRCheckContract(
+      get,
+      getGitHubSourceTarget(get(), repo, options?.sourceContext)
+    )
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
@@ -74,6 +84,22 @@ export const createCheckActions = (
     const userRefresh = options?.userRefresh === true
     const force = Boolean(options?.force) || userRefresh
     const noCache = force || Boolean(options?.noCache)
+    const syncLegacyChecks = (checks: PRCheckDetail[], observedHead: string | undefined) =>
+      !checkContract.complete && checkContract.current()
+        ? syncPRChecksStatus(
+            get(),
+            repoPath,
+            repoId,
+            branch,
+            checks,
+            observedHead,
+            prRepo,
+            requestSettings,
+            repo?.connectionId,
+            repo?.executionHostId,
+            repo !== undefined
+          )
+        : null
     if (
       !force &&
       !noCache &&
@@ -81,19 +107,7 @@ export const createCheckActions = (
       (!headSha || cached.headSha === headSha)
     ) {
       const cachedChecks = cached.data ?? []
-      const prStatusUpdate = syncPRChecksStatus(
-        get(),
-        repoPath,
-        repoId,
-        branch,
-        cachedChecks,
-        cached.headSha,
-        prRepo,
-        requestSettings,
-        repo?.connectionId,
-        repo?.executionHostId,
-        repo !== undefined
-      )
+      const prStatusUpdate = syncLegacyChecks(cachedChecks, cached.headSha)
       if (prStatusUpdate) {
         set(prStatusUpdate)
       }
@@ -170,9 +184,9 @@ export const createCheckActions = (
               headSha,
               prRepo: prRepo ?? null,
               noCache,
+              ...hostedReviewOwnerIpcArgs(options),
               sourceContext: options?.sourceContext,
-              ...(userRefresh ? { userRefresh: true } : {}),
-              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+              ...(userRefresh ? { userRefresh: true } : {})
             })
       // If this read fails, the read it replaced still lands its answer, which is newer than the cache.
       const checks = await reply.catch(async (err: unknown) => {
@@ -199,24 +213,8 @@ export const createCheckActions = (
           })
         }
 
-        const prStatusUpdate = syncPRChecksStatus(
-          s,
-          repoPath,
-          repoId,
-          branch,
-          checks,
-          headSha,
-          prRepo,
-          requestSettings,
-          repo?.connectionId,
-          repo?.executionHostId,
-          repo !== undefined
-        )
-        if (prStatusUpdate?.prCache) {
-          nextState.prCache = prStatusUpdate.prCache
-        }
-
-        return nextState
+        const prStatusUpdate = syncLegacyChecks(checks, headSha)
+        return { ...nextState, ...prStatusUpdate }
       })
       return checks
     })().finally(() => {
@@ -238,8 +236,11 @@ export const createCheckActions = (
 
   fetchPRCheckDetails: async (repoPath, args, options): Promise<PRCheckRunDetails | null> => {
     try {
-      const repo = get().repos?.find((candidate) =>
-        options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+      const repo = findRepoForGitHubOwner(
+        get(),
+        options?.repoId,
+        repoPath,
+        options?.repoOwnerExecutionHostId
       )
       const repoId = options?.repoId ?? repo?.id
       const requestContext = getGitHubWorkItemRequestContext(
@@ -276,6 +277,7 @@ export const createCheckActions = (
                 checkName: args.checkName,
                 url: args.url,
                 prRepo: args.prRepo ?? null,
+                ...hostedReviewOwnerIpcArgs(options),
                 sourceContext: options?.sourceContext
               })
             )

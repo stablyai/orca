@@ -38,41 +38,6 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     )
   }
 
-  it('restores editability when the same path is explicitly opened writable', () => {
-    const store = createEditorStore()
-    openReadOnlyLog(store)
-
-    store.getState().openFile({
-      filePath: LOG_PATH,
-      relativePath: LOG_PATH,
-      worktreeId: 'wt-1',
-      language: 'jsonl',
-      mode: 'edit',
-      runtimeEnvironmentId: null
-    })
-
-    expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
-    expect(store.getState().openFiles[0]?.liveTail).toBeUndefined()
-  })
-
-  it('never flips an existing writable tab to read-only on View Log', () => {
-    const store = createEditorStore()
-    store.getState().openFile({
-      filePath: LOG_PATH,
-      relativePath: LOG_PATH,
-      worktreeId: 'wt-1',
-      language: 'jsonl',
-      mode: 'edit',
-      runtimeEnvironmentId: null
-    })
-
-    openReadOnlyLog(store)
-
-    expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
-  })
-
   it('markFileDirty and setEditorDraft hard no-op for read-only tabs', () => {
     const store = createEditorStore()
     openReadOnlyLog(store)

@@ -1,15 +1,15 @@
 import { z } from 'zod'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   getBrowserExtensionSyncStorageStore,
   type BrowserExtensionSyncItems
-} from '../browser-extension-sync-storage-store'
+} from '../profile-storage/browser-extension-sync-storage-store'
 
 /**
  * Electron disables chrome.storage.sync ("not available in this instance of Chrome"), so Orca

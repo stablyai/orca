@@ -9,7 +9,6 @@ import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
 import { nativeChatEditFilePatchText } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   nativeChatEditFileBaseName,
   nativeChatEditGutterChars,
@@ -50,8 +49,8 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
     <div
       className={cn(
         'flex items-start',
-        line.kind === 'add' && 'bg-[var(--diff-added-ground)]',
-        line.kind === 'del' && 'bg-[var(--diff-removed-ground)]'
+        line.kind === 'add' && 'bg-[var(--diff-added-background)]',
+        line.kind === 'del' && 'bg-[var(--diff-removed-background)]'
       )}
     >
       {gutterWidth > 0 ? (
@@ -118,13 +117,11 @@ export function NativeChatDiffCard({
   revealSignal,
   onReveal,
   disclosureKey,
-  initialOpen = false,
-  onLinkClick
+  initialOpen = false
 }: {
   file: NativeChatEditFile
   revealSignal?: number
   onReveal?: (element: HTMLElement) => void
-  onLinkClick?: CommentMarkdownLinkClickHandler
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
   initialOpen?: boolean
@@ -181,7 +178,7 @@ export function NativeChatDiffCard({
             label={nativeChatEditFileBaseName(file.path)}
             className="min-w-0 truncate text-chat-foreground"
             // A deleted file has nothing left to open.
-            onLinkClick={file.changeKind === 'deleted' ? undefined : onLinkClick}
+            openable={file.changeKind !== 'deleted'}
           />
           <DiffLineCounts added={file.added} removed={file.removed} size="sm" />
           {file.truncated ? (

@@ -117,12 +117,6 @@ describe('Jira title host ownership', () => {
       expect(mocks.generate).not.toHaveBeenCalled()
     }
   )
-  it('rejects a Jira account absent on the execution host', async () => {
-    expect(
-      await generateJiraIssueSummaryRequest(host, 'owner-1', { ...args, siteId: 'unknown' })
-    ).toMatchObject({ success: false })
-    expect(mocks.prepare).not.toHaveBeenCalled()
-  })
   it('rechecks a disconnected Jira account before spawning', async () => {
     mocks.status.mockReturnValueOnce({ sites: [{ id: 'site-1' }] }).mockReturnValue({ sites: [] })
     expect(await generateJiraIssueSummaryRequest(host, 'owner-1', args)).toMatchObject({

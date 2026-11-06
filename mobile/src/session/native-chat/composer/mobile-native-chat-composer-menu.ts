@@ -1,10 +1,10 @@
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import {
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
 } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat-composer-autocomplete'
+import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem,
@@ -13,12 +13,12 @@ import {
 import {
   nativeChatPickerCommands,
   nativeChatSessionSkills
-} from '../../../../../src/shared/native-chat-skill-visibility'
+} from '../../../../../src/shared/native-chat/input/native-chat-skill-visibility'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
 } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
-import { structuredSessionSlashCommands } from '../../../../../src/shared/structured-agent-session-composer'
+import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
@@ -29,6 +29,7 @@ export type MobileComposerStructuredCatalog = {
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -56,7 +57,12 @@ export function mobileComposerCatalog({
   }
   const reported = structured?.reported
   const commands = structured
-    ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
+    ? structuredSessionSlashCommands(
+        agent,
+        structured.conversationCommands,
+        reported,
+        structured.compactInstructions
+      )
     : getMobileNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),

@@ -5,13 +5,16 @@ import type { PluginHostListEntry } from '../../../../shared/plugins/plugin-list
 import type { PluginService } from '../../../plugins/plugin-service'
 import type { PluginConsentRequest } from '../../../../shared/plugins/approval/plugin-consent-request'
 import {
+  PluginDevInspectParams,
   PluginDevLoadParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
   PluginsPanelActionParams
 } from '../../../../shared/rpc-contract/plugins-params'
 import {
@@ -30,6 +33,9 @@ let pluginServiceForRpc: PluginService | null = null
 let pluginConsentForRpc: ((request: PluginConsentRequest) => Promise<void>) | null = null
 let pluginEnablementForRpc: ((pluginKey: string, enabled: boolean) => Promise<void>) | null = null
 let pluginDevPathsForRpc: ((paths: string[]) => void) | null = null
+let pluginSystemEnabledForRpc: ((enabled: boolean) => void) | null = null
+// Desktop only: headless hosts have no guest webContents to inspect.
+let pluginFrameDevToolsForRpc: ((pluginKey: string) => number) | null = null
 
 export function setPluginServiceForRpc(
   service: PluginService | null,
@@ -37,15 +43,19 @@ export function setPluginServiceForRpc(
     applyConsent: (request: PluginConsentRequest) => Promise<void>
     applyEnablement: (pluginKey: string, enabled: boolean) => Promise<void>
     setDevPluginPaths?: (paths: string[]) => void
+    setPluginSystemEnabled?: (enabled: boolean) => void
+    openFrameDevTools?: (pluginKey: string) => number
   }
 ): void {
   pluginServiceForRpc = service
   pluginConsentForRpc = writes?.applyConsent ?? null
   pluginEnablementForRpc = writes?.applyEnablement ?? null
   pluginDevPathsForRpc = writes?.setDevPluginPaths ?? null
+  pluginSystemEnabledForRpc = writes?.setPluginSystemEnabled ?? null
+  pluginFrameDevToolsForRpc = writes?.openFrameDevTools ?? null
 }
 
-function requirePluginService(): PluginService {
+export function requirePluginService(): PluginService {
   if (!pluginServiceForRpc) {
     throw new Error('Plugin service is not available on this runtime')
   }
@@ -196,6 +206,36 @@ export const PLUGIN_METHODS = [
     }
   }),
   defineMethod({
+    // Settings → Plugins' switch for windowless hosts; it approves nothing, so only approved plugins run.
+    name: 'plugins.setSystemEnabled',
+    permission: 'host-admin',
+    params: PluginSetSystemEnabledParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      if (!pluginSystemEnabledForRpc) {
+        throw new Error('Turning plugins on or off is not available on this runtime')
+      }
+      pluginSystemEnabledForRpc(params.enabled)
+      // The settings listener's refresh only logs failures; awaiting a chained one surfaces them.
+      await service.refresh()
+      return { enabled: params.enabled, plugins: await listForRpc() }
+    }
+  }),
+  defineMethod({
+    name: 'plugins.devInspect',
+    permission: 'host-admin',
+    params: PluginDevInspectParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      if (!pluginFrameDevToolsForRpc) {
+        throw new Error('Plugin frame DevTools are only available in the Orca desktop app')
+      }
+      return { pluginKey: params.pluginKey, opened: pluginFrameDevToolsForRpc(params.pluginKey) }
+    }
+  }),
+  defineMethod({
     name: 'plugins.refresh',
     permission: 'host-admin',
     params: null,
@@ -207,13 +247,34 @@ export const PLUGIN_METHODS = [
     }
   }),
   defineMethod({
+    name: 'plugins.restart',
+    permission: 'host-admin',
+    params: PluginRestartParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      const plugin = service.findValidPlugin(params.pluginKey)
+      if (!plugin) {
+        throw new Error(`plugin ${params.pluginKey} is not installed or loaded`)
+      }
+      if (!plugin.manifest.main) {
+        throw new Error(`plugin ${params.pluginKey} has no worker to restart`)
+      }
+      // Why stop only: workers start on their next command or event, so that run loads fresh code.
+      await service.deactivatePlugin(params.pluginKey)
+      return { pluginKey: params.pluginKey, plugin: await listEntryForRpc(params.pluginKey) }
+    }
+  }),
+  defineMethod({
     name: 'plugins.getLogs',
     permission: 'host-admin',
     params: PluginGetLogsParams,
     handler: async (params) => {
       const service = requirePluginService()
       await service.whenReady()
-      return { pluginKey: params.pluginKey, lines: service.getLogs(params.pluginKey) }
+      // Why `cursor` even without `after`: `orca plugin dev watch` takes a baseline, then follows.
+      const { lines, cursor } = service.getLogsSince(params.pluginKey, params.after)
+      return { pluginKey: params.pluginKey, lines, cursor }
     }
   }),
   defineMethod({

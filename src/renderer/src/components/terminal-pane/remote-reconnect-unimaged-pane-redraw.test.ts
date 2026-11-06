@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -82,6 +86,7 @@ async function connectVisibleRemotePane(
   opts: { visible?: boolean } = {}
 ): Promise<ReconnectedPane> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = vi.fn()
   transport.serializeBufferOutcome = vi.fn(
@@ -99,7 +104,9 @@ async function connectVisibleRemotePane(
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: opts.visible ?? true }
   })
-  const disposable = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+  const disposable = connectPanePty(
+    ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+  )
   await flushAsyncTicks(6)
   expect(onStreamRecovered).not.toBeNull()
   transport.resize.mockClear()

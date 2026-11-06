@@ -1,13 +1,16 @@
 import { writeFile } from 'node:fs/promises'
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await original<object>()),
-    readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (original) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await original<object>()),
+      readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { createRestTestRig, type RestTestRig } from './structured-agent-session-rest-test-rig'
@@ -17,7 +20,7 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 let rig: RestTestRig
 

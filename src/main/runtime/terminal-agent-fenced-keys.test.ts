@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { writeFencedAgentKeys } from './terminal-agent-fenced-keys'
-import { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import { RuntimeTerminalWriter } from './terminal/input/runtime-terminal-writer'
 
 it('runs the fence at the real writer handoff, after the asynchronous check settles', async () => {
   const written: string[] = []

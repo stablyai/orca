@@ -1,7 +1,6 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 const hostId = z.string().transform((value, ctx) => {
   const parsed = normalizeExecutionHostId(value)
@@ -11,7 +10,6 @@ const hostId = z.string().transform((value, ctx) => {
   ctx.addIssue({ code: 'custom', message: 'Invalid execution host' })
   return z.NEVER
 })
-const agentId = z.custom<TuiAgent>(isTuiAgent)
 export const ownerSelectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('self') }),
   z.object({
@@ -25,8 +23,10 @@ export const automationSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
   prompt: z.string(),
-  agentId,
-  surface: z.enum(['chat', 'terminal']).optional(),
+  // Open so a newer host's agent or surface keeps its row: the phone never writes the surface,
+  // and the host validates the agent on every write.
+  agentId: z.string().min(1),
+  surface: z.string().optional(),
   projectId: z.string(),
   workspaceMode: z.enum(['existing', 'new_per_run']),
   workspaceId: z.string().nullable(),
@@ -52,33 +52,31 @@ export const automationSchema = z.looseObject({
     })
     .nullish()
 })
+const ownerItemSchema = z.object({
+  automationId: z.string().min(1),
+  selector: ownerSelectorSchema,
+  // An unreadable summary reads as none, as on desktop, so it never costs the row.
+  usageSummary: salvagedOptional(
+    'usageSummary',
+    z.object({ lastRunStatus: z.string().nullish(), lastRunAt: z.number().nullish() }).nullable()
+  )
+})
+// Read row by row like the desktop reader: a row this build can't read is left out, never the list.
 export const automationListSchema = z
   .object({
-    automations: z.array(automationSchema),
-    items: z.array(
-      z.object({
-        automationId: z.string().min(1),
-        selector: ownerSelectorSchema,
-        usageSummary: z
-          .object({ lastRunStatus: z.string().nullish(), lastRunAt: z.number().nullish() })
-          .nullish()
-      })
-    )
+    automations: salvagingArray(automationSchema),
+    items: salvagingArray(ownerItemSchema)
   })
-  .transform((reply, ctx) => {
-    const owners = new Map(reply.items.map((item) => [item.automationId, item]))
-    if (
-      owners.size !== reply.items.length ||
-      reply.automations.some((entry) => !owners.has(entry.id))
-    ) {
-      ctx.addIssue({ code: 'custom', message: 'Automation ownership is missing or ambiguous' })
-      return z.NEVER
+  .transform((reply) => {
+    // Only exactly one readable owner attributes a row to this host; duplicates leave the row out.
+    const owners = new Map<string, z.output<typeof ownerItemSchema> | null>()
+    for (const item of reply.items) {
+      owners.set(item.automationId, owners.has(item.automationId) ? null : item)
     }
-    return reply.automations.map((automation) => ({
-      automation,
-      // The check above proves presence without attributing an unqualified row to this host.
-      item: owners.get(automation.id)!
-    }))
+    return reply.automations.flatMap((automation) => {
+      const item = owners.get(automation.id)
+      return item ? [{ automation, item }] : []
+    })
   })
 export const runSchema = z.looseObject({
   id: z.string().min(1),
@@ -104,19 +102,24 @@ export const runSchema = z.looseObject({
     .object({ stdout: z.string(), stderr: z.string(), command: z.string() })
     .nullable(),
   usage: z.object({ unavailableMessage: z.string().nullish() }).nullable(),
-  runContext: z.object({ hostId, repoId: z.string(), path: z.string() }).nullish()
+  // Display-only, so a newer host kind shows by its id instead of costing the run.
+  runContext: z.object({ hostId: z.string(), repoId: z.string(), path: z.string() }).nullish()
 })
-export const runsPageSchema = z.object({
-  runs: z.array(runSchema),
-  nextCursor: z.string().nullish()
-})
+const readableRuns = salvagingArray(runSchema)
+export const runsPageSchema = z
+  .object({ runs: z.array(z.unknown()), nextCursor: z.string().nullish() })
+  .transform(({ runs, nextCursor }) => {
+    const readable = readableRuns.parse(runs)
+    // Derived on decode: a run this build can't read is still in the host's history.
+    return { runs: readable, nextCursor, unreadableRuns: runs.length - readable.length }
+  })
 export const projectInventorySchema = z.object({
-  projects: z.array(
+  projects: salvagingArray(
     z.object({ id: z.string(), displayName: z.string(), kind: z.string().optional() })
   )
 })
 export const setupInventorySchema = z.object({
-  setups: z.array(
+  setups: salvagingArray(
     z.object({
       id: z.string(),
       projectId: z.string(),
@@ -139,7 +142,7 @@ export const workspaceSchema = z.object({
   isArchived: z.boolean().optional()
 })
 export const sshInventorySchema = z.object({
-  targets: z.array(
+  targets: salvagingArray(
     z.object({
       id: z.string(),
       label: z.string(),

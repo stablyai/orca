@@ -1,5 +1,5 @@
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
-import { AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 

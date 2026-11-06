@@ -4,7 +4,7 @@ import {
   findSelfInitiatedTreeKills,
   resetSelfInitiatedTreeKillLogForTest
 } from '../crash-reporting/self-initiated-tree-kill-log'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { terminateProviderProcessTree as terminateWithEvidence } from './provider-process-teardown'
 
 async function terminateProviderProcessTree(...args: Parameters<typeof terminateWithEvidence>) {

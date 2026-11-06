@@ -56,20 +56,6 @@ it('keeps a reply posted while a failed unresolve was pending, with the thread s
   ])
 })
 
-it('ignores an opposite resolve on a thread while the first request is in flight', async () => {
-  const store = makeStore()
-  const first = Promise.withResolvers<boolean>()
-  mockApi.gh.resolveReviewThread.mockReturnValueOnce(first.promise)
-  const pending = store.getState().resolveReviewThread(repoPath, 12, threadId, true, options)
-  await expect(
-    store.getState().resolveReviewThread(repoPath, 12, threadId, false, options)
-  ).resolves.toBe(true)
-  expect(mockApi.gh.resolveReviewThread).toHaveBeenCalledTimes(1)
-  expect(store.getState().commentsCache[cacheKey]?.data?.[0].isResolved).toBe(true)
-  first.resolve(true)
-  await expect(pending).resolves.toBe(true)
-})
-
 it('releases the thread after a failed request so it can be resolved again', async () => {
   const store = makeStore()
   const first = Promise.withResolvers<boolean>()

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { readSvgIntrinsicSize, svgMarkupDataUri } from '../../../src/shared/svg-document'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileLoadErrorState } from './MobileLoadErrorState'
+import { MobileLoadErrorState } from './MobileStateView'
 import { MobilePanZoomImage } from './MobilePanZoomImage'
 import { MobilePreviewSourceTabs, type MobilePreviewMode } from './MobilePreviewSourceTabs'
 
@@ -26,7 +26,7 @@ export function MobileSvgPreview({ markup, title, renderSource, notice }: Props)
   const preview =
     failedUri === uri ? (
       <MobileLoadErrorState
-        message={t('components.svgPreview.drawFailed', 'Unable to draw this SVG')}
+        error={t('components.svgPreview.drawFailed', 'Unable to draw this SVG')}
       />
     ) : (
       <MobilePanZoomImage

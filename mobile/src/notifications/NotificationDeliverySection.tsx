@@ -1,10 +1,9 @@
-import { Text, View } from 'react-native'
+import { ListRow } from '../components/list/ListGroup'
+import { MobileSwitch } from '../components/MobileSwitch'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { SettingsSection } from '../settings/settings-screen-frame'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationDeliveryPreferences } from './notification-delivery-preferences'
-import { MobileSwitch } from '../components/MobileSwitch'
 
 type Props = {
   value: NotificationDeliveryPreferences
@@ -15,13 +14,13 @@ type Props = {
 export function NotificationDeliverySection({ value, disabled, onChange }: Props) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const row = (key: keyof NotificationDeliveryPreferences, label: string, hint?: string) => {
-    return (
-      <View key={key} style={[styles.row, disabled && styles.disabled]}>
-        <View style={styles.labelGroup}>
-          <Text style={styles.label}>{label}</Text>
-          {hint && <Text style={styles.hint}>{hint}</Text>}
-        </View>
+  const row = (key: keyof NotificationDeliveryPreferences, label: string, hint?: string) => (
+    <ListRow
+      key={key}
+      title={label}
+      subtitle={hint}
+      disabled={disabled}
+      accessory={
         <MobileSwitch
           accessibilityLabel={label}
           testID={`notification-${key}`}
@@ -29,62 +28,47 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
           disabled={disabled}
           onValueChange={(enabled) => onChange({ ...value, [key]: enabled })}
         />
-      </View>
-    )
-  }
+      }
+    />
+  )
   return (
-    <>
-      <View style={styles.section}>
-        {row(
-          'onlyWhenDesktopAway',
-          t(
-            'notifications.notificationDeliverySection.onlyWhenAway',
-            'Only when away from desktop'
-          ),
-          t(
-            'notifications.notificationDeliverySection.onlyWhenAwayHint',
-            'After 3 minutes without keyboard or mouse activity, or when locked.'
-          )
-        )}
-        {row('sound', t('notifications.notificationDeliverySection.sound', 'Notification sound'))}
-        {row(
-          'suppressWhileViewing',
-          t(
-            'notifications.notificationDeliverySection.suppressWhileFocused',
-            'Suppress while focused'
-          ),
-          t(
-            'notifications.notificationDeliverySection.suppressWhileFocusedHint',
-            'Skip alerts for the workspace open on this phone.'
-          )
-        )}
-      </View>
-      <Text style={styles.footer}>
-        {t(
-          'notifications.notificationDeliverySection.footer',
-          'Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.'
-        )}
-      </Text>
-    </>
+    <SettingsSection
+      footer={t(
+        'notifications.notificationDeliverySection.footer',
+        'Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.'
+      )}
+    >
+      {row(
+        'onlyWhenDesktopAway',
+        t('notifications.notificationDeliverySection.onlyWhenAway', 'Only when away from desktop'),
+        t(
+          'notifications.notificationDeliverySection.onlyWhenAwayHint',
+          'After 3 minutes without keyboard or mouse activity, or when locked.'
+        )
+      )}
+      {row(
+        'onlyWhenAgentNeedsInput',
+        t(
+          'notifications.notificationDeliverySection.onlyWhenAgentNeedsInput',
+          'Only when an agent needs me'
+        ),
+        t(
+          'notifications.notificationDeliverySection.onlyWhenAgentNeedsInputHint',
+          'Permission requests and questions. Skips finished agents.'
+        )
+      )}
+      {row('sound', t('notifications.notificationDeliverySection.sound', 'Notification sound'))}
+      {row(
+        'suppressWhileViewing',
+        t(
+          'notifications.notificationDeliverySection.suppressWhileFocused',
+          'Suppress while focused'
+        ),
+        t(
+          'notifications.notificationDeliverySection.suppressWhileFocusedHint',
+          'Skip alerts for the workspace open on this phone.'
+        )
+      )}
+    </SettingsSection>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden',
-    marginTop: spacing.md
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
-  labelGroup: { flex: 1, gap: spacing.xs },
-  label: { fontSize: typography.bodySize, fontWeight: '500', color: colors.textPrimary },
-  hint: { fontSize: typography.metaSize, color: colors.textMuted },
-  disabled: { opacity: 0.5 },
-  footer: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.sm
-  }
-}))

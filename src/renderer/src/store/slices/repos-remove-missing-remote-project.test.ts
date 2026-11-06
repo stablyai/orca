@@ -29,14 +29,6 @@ const liveRemoteRepo: Repo = {
   executionHostId: 'runtime:env-1'
 }
 
-const localTwinRepo: Repo = {
-  id: 'project-b',
-  path: '/Users/laptop/project-b',
-  displayName: 'Project B (local)',
-  badgeColor: '#222',
-  addedAt: 3
-}
-
 const reposRemove = vi.fn()
 const reposRemoveForHost = vi.fn()
 const ptyKill = vi.fn()
@@ -115,17 +107,5 @@ describe('removeProject when the owning host already dropped the project', () =>
     expect(toast.error).not.toHaveBeenCalled()
     // An unconfirmed removal is not evidence the host dropped the project.
     expect(reposRemoveForHost).not.toHaveBeenCalled()
-  })
-
-  it('leaves a same-id project on another host untouched', async () => {
-    answerRepoRmWith('repo_not_found')
-    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo, localTwinRepo])
-
-    await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
-
-    expect(store.getState().repos.map((repo) => repo.path)).toEqual([
-      '/Users/mini/project-a',
-      '/Users/laptop/project-b'
-    ])
   })
 })

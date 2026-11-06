@@ -1,18 +1,18 @@
 /** Registers the `browser-cookies` rewrite store against the app's real browser sessions. */
 import { BrowserWindow } from 'electron'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { WSL_MOVE_BROWSER_COOKIES_STORE_ID } from '../../../shared/wsl-move/wsl-move-browser-cookie-copy'
 import {
   copyBrowserPartitionCookies,
   flushBrowserPartitionCookies
-} from '../../browser/browser-partition-cookie-copy'
-import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/browser-route-partition-binding-runtime'
-import { browserSessionRegistry } from '../../browser/browser-session-registry'
-import { browserSessionsInitialized } from '../../browser/browser-session-startup'
+} from '../../browser/cookies/browser-partition-cookie-copy'
+import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
+import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
+import { browserSessionsInitialized } from '../../browser/sessions/browser-session-startup'
 import {
   bindWslHostBrowserRoutePartition,
   wslHostBrowserRouteStorage
-} from '../../browser/wsl-host-browser-route-partition'
+} from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import {
   runWslMoveBrowserCookieCopy,
   type WslMoveBrowserCookieCopyDependencies

@@ -1,6 +1,6 @@
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
-import { shouldProbeGitRemote } from '../git/remote-name-listing'
+import { shouldProbeGitRemote } from '../git/remotes/remote-name-listing'
 import {
   getOwnerRepoForRemote,
   type LocalGitExecOptions,

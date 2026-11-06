@@ -1,6 +1,11 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
 import type { WslHostOffer } from './wsl-host-offer-actions'
@@ -16,7 +21,14 @@ export function wslHostOfferProjectRef(path: string): WslMoveRowRef | null {
   const folder = selectFolderWorkspaces(state).find(
     (entry) => normalizeRuntimePathForComparison(entry.folderPath) === wanted
   )
-  return folder ? { kind: 'folder', id: folder.id } : null
+  if (folder) {
+    return { kind: 'folder', id: folder.id }
+  }
+  // A subfolder add is stored as its git toplevel; the innermost enclosing repo is the one added.
+  const enclosing = state.repos
+    .filter((entry) => isPathInsideOrEqual(entry.path, path))
+    .sort((a, b) => b.path.length - a.path.length)[0]
+  return enclosing ? { kind: 'repo', id: enclosing.id } : null
 }
 
 /** Opens the move with only the offered project checked; the user's Move is what moves it. */
@@ -24,5 +36,13 @@ export function moveWslHostOfferProject(offer: WslHostOffer): void {
   const only = wslHostOfferProjectRef(offer.path)
   if (only) {
     openWslMoveDialogFor(offer.distro, only)
+    return
   }
+  toast.error(
+    translate(
+      'sidebar.wslHostOffer.projectNotFound',
+      'Could not find the added project to move. Use "Move to {{distro}} host…" on the project in the sidebar.',
+      { distro: offer.distro }
+    )
+  )
 }

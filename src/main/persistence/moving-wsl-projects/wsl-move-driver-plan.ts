@@ -12,7 +12,7 @@ import {
   WSL_MOVE_CUTOVER_PHASES,
   wslMoveJournalKey
 } from '../../../shared/wsl-move/wsl-move-cutover'
-import { wslHostsAcceptNewWork } from '../../wsl/wsl-host-gate'
+import { wslHostsAcceptNewWork } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { listWslMoveCutoverChain } from './wsl-move-cutover-journal'
 import type { WslMovePlan } from './wsl-move-delta-plan'
 import { planWslMove } from './wsl-move-delta-plan'

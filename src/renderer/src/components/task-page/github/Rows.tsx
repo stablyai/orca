@@ -1,3 +1,4 @@
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
@@ -23,7 +24,6 @@ import { cn } from '@/lib/utils'
 import {
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,
-  getTaskPageRepoSourceContext,
   formatRelativeTime
 } from '../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'

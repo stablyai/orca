@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 import type { DiscoveryStatusEmitted } from './onboarding-state-types'
-import type { PathSource, ShellHydrationFailureReason } from './shell-path-hydration-types'
+import type {
+  PathSource,
+  ShellHydrationFailureReason
+} from './shell/launch/shell-path-hydration-types'
 import { agentKindSchema, featureWallTourDepthStepSchema } from './telemetry-property-schemas'
 import {
   cohortSchema,

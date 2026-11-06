@@ -12,9 +12,15 @@ import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
-import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
-import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
-import { isSettledWrite, type WriteSettlement } from '../../../shared/pty-write-settlement'
+import {
+  submitOrchestrationMailboxPointer,
+  type OrchestrationMailboxPointerSubmitTarget
+} from './mailbox-pointer-submit'
+
+import {
+  isSettledWrite,
+  type WriteSettlement
+} from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>

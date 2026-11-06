@@ -9,12 +9,12 @@ import {
   OrcadDeclareClientParamsSchema,
   OrcadPeerDesktopsParamsSchema
 } from '../../../../shared/orcad-peer-desktops-contract'
-import { RegisterDeviceKeyParamsSchema } from '../../../../shared/device-key-registration-contract'
-import { REGISTER_DEVICE_KEY_METHOD } from '../../../../shared/device-key-capability'
+import { RegisterDeviceKeyParamsSchema } from '../../../../shared/remote-runtime/pairing/device-key-registration-contract'
+import { REGISTER_DEVICE_KEY_METHOD } from '../../../../shared/remote-runtime/pairing/device-key-capability'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
-} from '../../../../shared/mobile-relay-credential-contract'
+} from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 export const PAIRING_METHODS = [
   defineMethod({

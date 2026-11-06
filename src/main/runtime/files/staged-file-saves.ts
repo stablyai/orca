@@ -15,8 +15,8 @@ import { writeSecureFile } from '../../../shared/secure-file'
 import { restrictWindowsDirectory } from '../../../shared/secure-path-windows-acl'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/staged-file-save'
 import { writeLocalTextFileWithDiskPrecondition } from '../../ipc/filesystem/local-disk-write-precondition'
-import { inspectProcessLiveness } from '../../daemon/daemon-process-inspection'
-import type { ProcessLivenessVerdict } from '../../daemon/daemon-incarnation-evidence-types'
+import { inspectProcessLiveness } from '../../daemon/endpoint/identity/daemon-process-inspection'
+import type { ProcessLivenessVerdict } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 
 type StagedSave = {
   owner: string

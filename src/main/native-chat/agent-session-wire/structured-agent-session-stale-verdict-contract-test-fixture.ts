@@ -1,11 +1,9 @@
 import { vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { plannedBatchThrough } from './structured-agent-session-settlement-double.test-fixture'
 import { turnVerdictFromDeathEvidence } from './structured-agent-session-stale-turn-verdict'
@@ -96,11 +94,13 @@ export function journalWith(items: AgentJournalRenderItem[]) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the settle reads only these journal members.
   const journal = {
     snapshot: () => ({ items }),
+    statusRead: () => ({ items }),
     itemFence: () => 1,
     lastProviderActivityAt: () => undefined,
     stopMarks: { latest: () => null },
     cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
     submissions: () => [],
+    inputOrder: { recoverableSubmissions: () => [] },
     appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
   } as unknown as AgentSessionJournal
   return { journal, appendLifecycleBatch }

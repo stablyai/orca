@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'

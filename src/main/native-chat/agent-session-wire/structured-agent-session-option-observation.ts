@@ -1,4 +1,4 @@
-import type { AgentSessionOptionResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionResult } from '../../../shared/agent-session/agent-session-wire'
 
 /** A same-build caller in this process reads as the RPC gate treats one: it takes no model. */
 export const IN_PROCESS_OPTIONS_READER = {

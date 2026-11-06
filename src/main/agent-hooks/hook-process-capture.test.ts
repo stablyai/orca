@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { buildHookProcessCapture } from './hook-process-capture'
-import { readAgentProcessIdentity } from '../../shared/agent-process-presence'
-import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import { readAgentProcessIdentity } from '../../shared/agent-status/process/agent-process-presence'
+import { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 
 describe('Claude outer hook process capture', () => {
   it.skipIf(process.platform === 'win32').each([undefined, 'Asia/Tokyo'])(

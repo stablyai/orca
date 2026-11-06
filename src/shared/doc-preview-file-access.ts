@@ -74,7 +74,7 @@ function docPreviewBinaryMimeType(filePath: string): string | undefined {
   return DOC_PREVIEW_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
 }
 
-async function openAuthorizedDocPreviewTarget(
+export async function openAuthorizedDocPreviewTarget(
   request: DocPreviewFileTarget
 ): Promise<{ handle: FileHandle; canonicalTarget: string; stats: Stats }> {
   const [canonicalBoundary, canonicalEntry, canonicalTarget, canonicalImplicitRoot] =

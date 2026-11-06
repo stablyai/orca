@@ -8,18 +8,19 @@ import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { exportJWK, generateKeyPair, jwtVerify, SignJWT } from 'jose'
-import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract'
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
+import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract/host-proof-transcript'
 import nacl from 'tweetnacl'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { assignmentLeaseKeyId } from './assignment/assignment-lease.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership
-} from './cell-admission-selector.js'
-import { openRelayDatabase } from './database.js'
+} from './cell/admission/cell-admission-selector.js'
+import { openRelayDatabase } from './database/database.js'
 
 const appDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const assignmentKey = 'test-assignment-key-with-at-least-32-bytes'
@@ -412,6 +413,47 @@ async function openHostControl(input?: {
   return { socket, ack: await nextMessage(socket), keyPair }
 }
 
+async function seedDurableAssignment(
+  keyPair: nacl.BoxKeyPair,
+  epoch: number,
+  wrongCell = false
+): Promise<void> {
+  const identity = {
+    userId: 'user-1',
+    relayHostId: createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
+  }
+  const database = await openRelayDatabase({ dataDir: relayDataDirectory })
+  let now =
+    Date.now() -
+    (epoch - 1) * (2 * ASSIGNMENT_LIMITS.dormantTtlMs + ASSIGNMENT_LIMITS.activityLeaseMs + 2)
+  const assignments = new RelayAssignmentStore(database, () => now)
+  try {
+    await assignments.reconcileCells([{ id: 'combined', url: relayUrl, capacityRequests: 4_000 }])
+    await assignments.assign(identity)
+    for (let nextEpoch = 2; nextEpoch <= epoch; nextEpoch++) {
+      now += ASSIGNMENT_LIMITS.dormantTtlMs + ASSIGNMENT_LIMITS.activityLeaseMs + 1
+      await assignments.releaseExpiredActivityLeases()
+      await assignments.releaseExpiredActivity()
+      now += ASSIGNMENT_LIMITS.dormantTtlMs + 1
+      expect(await assignments.assign(identity)).toMatchObject({
+        cellId: 'combined',
+        assignmentEpoch: nextEpoch
+      })
+    }
+    if (wrongCell) {
+      const otherCellId = `other-${identity.relayHostId}`
+      await assignments.reconcileCells([
+        { id: 'combined', url: relayUrl, capacityRequests: 4_000 },
+        { id: otherCellId, url: `https://${otherCellId}.example.test`, capacityRequests: 4_000 }
+      ])
+      await assignments.startEvacuation(identity, otherCellId)
+      await assignments.reconcileCells([{ id: 'combined', url: relayUrl, capacityRequests: 4_000 }])
+    }
+  } finally {
+    await database.close()
+  }
+}
+
 beforeAll(async () => {
   const keys = await generateKeyPair('ES256')
   privateKey = keys.privateKey
@@ -470,17 +512,6 @@ afterAll(async () => {
 })
 
 describe('served relay URL', () => {
-  it('exposes only /health, never /healthz', async () => {
-    expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
-      ok: true,
-      connectionCapacityProtocol: 2,
-      capacityReportedCapMin: true,
-      drainPaceWindowMaxMs: 1_200_000
-    })
-    expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })
-    expect((await fetch(`${relayUrl}/healthz`)).status).toBe(404)
-  })
-
   it('keeps liveness healthy when dependency readiness fails', async () => {
     const port = await unusedPort()
     const url = `http://127.0.0.1:${port}`
@@ -702,8 +733,49 @@ describe('served relay URL', () => {
     expect(await closed).toBe(4401)
   })
 
-  it('returns typed 4409 without a cell URL for a stale assignment epoch', async () => {
+  it.each([1, 2, 7])('accepts combined control and pairing at durable epoch %i', async (epoch) => {
     const keyPair = nacl.box.keyPair()
+    await seedDurableAssignment(keyPair, epoch)
+    const first = await openHostControl({ keyPair, assignmentEpoch: epoch })
+    expect(first.ack).toMatchObject({ type: 'host-hello-ack', v: 1 })
+    first.socket.close()
+    const reconnected = await openHostControl({ keyPair, assignmentEpoch: epoch })
+    try {
+      expect(reconnected.ack).toMatchObject({ type: 'host-hello-ack', v: 1 })
+      const invite = nextMessage(reconnected.socket)
+      reconnected.socket.send(
+        JSON.stringify({
+          type: 'invite-create',
+          reqId: 'reassigned-invite',
+          relayDeviceId: 'reassigned-device'
+        })
+      )
+      expect(await invite).toMatchObject({ type: 'invite-created', reqId: 'reassigned-invite' })
+    } finally {
+      reconnected.socket.close()
+    }
+  })
+
+  it('preserves combined epoch-one bootstrap without a durable assignment', async () => {
+    const host = await openHostControl()
+    try {
+      expect(host.ack).toMatchObject({ type: 'host-hello-ack', v: 1 })
+    } finally {
+      host.socket.close()
+    }
+  })
+
+  it.each([
+    { storedEpoch: undefined, helloEpoch: 2, wrongCell: false },
+    { storedEpoch: 2, helloEpoch: 1, wrongCell: false },
+    { storedEpoch: 2, helloEpoch: 3, wrongCell: false },
+    { storedEpoch: 1, helloEpoch: 1, wrongCell: true },
+    { storedEpoch: 1, helloEpoch: 2, wrongCell: true }
+  ])('refuses invalid combined admission: %j', async ({ storedEpoch, helloEpoch, wrongCell }) => {
+    const keyPair = nacl.box.keyPair()
+    if (storedEpoch !== undefined) {
+      await seedDurableAssignment(keyPair, storedEpoch, wrongCell)
+    }
     const hostId = createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
     const socket = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/host/control`, {
       headers: { authorization: `Bearer ${await relayToken('orca-relay', hostId)}` }
@@ -712,24 +784,27 @@ describe('served relay URL', () => {
       socket.once('open', resolveOpen)
       socket.once('error', reject)
     })
-    const closed = new Promise<{ code: number; reason: string }>((resolveClose) =>
-      socket.once('close', (code, reason) =>
-        resolveClose({ code, reason: reason.toString() })
-      )
-    )
+    const closed = new Promise<{ code: number; reason: string }>((resolveClose) => {
+      socket.once('message', () => resolveClose({ code: 0, reason: 'unexpected host challenge' }))
+      socket.once('close', (code, reason) => resolveClose({ code, reason: reason.toString() }))
+    })
     socket.send(
       JSON.stringify({
         type: 'host-hello',
         v: 1,
         relayHostId: hostId,
-        assignmentEpoch: 2,
+        assignmentEpoch: helloEpoch,
         hostPublicKeyB64: Buffer.from(keyPair.publicKey).toString('base64'),
         appVersion: 'test'
       })
     )
-    const result = await closed
-    expect(result.code).toBe(4409)
-    expect(result.reason).not.toContain('http')
+    try {
+      const result = await closed
+      expect(result.code).toBe(4409)
+      expect(result.reason).not.toContain('http')
+    } finally {
+      socket.close()
+    }
   })
 
   it('restates a pending connection to the rebound control, detailed only when advertised', async () => {

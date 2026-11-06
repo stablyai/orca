@@ -1,42 +1,65 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,
   sendEncryptedWsRequest
-} from '../runtime-rpc-mobile-ws-test-harness'
-import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
+} from '../rpc/server/runtime-rpc-mobile-ws-test-harness'
+import { makeStore } from '../rpc/server/runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
-vi.mock('../../git/worktree', () => {
-  const worktrees = [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
   return {
-    listWorktrees: vi.fn().mockResolvedValue(worktrees),
-    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: listings.listWorktrees
   }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const listings = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listings.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  function createWorktreeListingMocks() {
+    const worktrees = [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    return {
+      listWorktrees: vi.fn().mockResolvedValue(worktrees),
+      listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+    }
+  }
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
 type Contact = 'live' | 'unreachable'

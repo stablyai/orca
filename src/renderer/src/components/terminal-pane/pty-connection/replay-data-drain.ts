@@ -1,4 +1,4 @@
-import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../shared/terminal-mode-reset-profiles'
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -178,8 +178,6 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!isCurrentPayload()) {
         continue
       }
-      // Rebuild WebGL after replay parses so an atlas attached to an empty buffer gains current glyphs.
-      session.manager.rebuildPaneWebgl(session.pane.id)
       appliedCurrentPayload = true
     }
     return appliedCurrentPayload
