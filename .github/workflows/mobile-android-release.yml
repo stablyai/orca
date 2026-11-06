@@ -37,6 +37,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Fail before any build work: without these the APK would fall back to Expo's public debug key.
+      - name: Check release signing configuration
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+          ORCA_ANDROID_RELEASE_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD ORCA_ANDROID_RELEASE_CERT_SHA256; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Android release signing is not configured. Missing secrets or variables: ${missing[*]}. See "Android Release Signing" in mobile/README.md."
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -67,8 +88,50 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
+      - name: Decode release keystore
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ORCA_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orca-release.keystore"
+
       - name: Build Android release APK
+        env:
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: 'true'
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/orca-release.keystore
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
         run: cd android && ./gradlew assembleRelease
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/orca-release.keystore"
+
+      # Why pin the certificate: a regenerated or swapped key would make every installed copy refuse the update.
+      - name: Verify APK signing certificate
+        id: signer
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          # Expo template debug keystore, public in expo-template-bare-minimum.
+          debug_cert="fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          certs="$("$apksigner" verify --print-certs "${apks[0]}" | sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' | sort -u)"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
+          if [ "$certs" = "$debug_cert" ]; then
+            echo "::error::The APK is signed with the public Expo debug key."
+            exit 1
+          fi
+          if [ "$certs" != "$expected" ]; then
+            echo "::error::The APK signing certificate ($certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
+            exit 1
+          fi
+          echo "cert_sha256=$(printf '%s' "$certs" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_OUTPUT"
+          echo "APK signing certificate SHA-256: $certs"
 
       # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK
@@ -130,8 +193,8 @@ jobs:
           # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
           # Both platforms' commands are named because a reader on macOS has no sha256sum.
           verification_section() {
-            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
-              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}'
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n- Signing certificate SHA-256: `%s`\n\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}' '${{ steps.signer.outputs.cert_sha256 }}'
           }
 
           # Verification is last; replace from heading to EOF, accepting API-roundtripped CRLFs.
