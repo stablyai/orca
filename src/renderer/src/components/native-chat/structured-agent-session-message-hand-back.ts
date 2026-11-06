@@ -6,6 +6,7 @@ import {
   structuredAgentSessionDraftScopeKey,
   unavailableNativeChatComposerDraftImage
 } from './native-chat-composer-draft-store'
+import type { NativeChatDraftHandbackContribution } from './native-chat-composer-draft-handback'
 import { promptMarkersToImageReferences } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { promptTextContent, seedPromptSkillReferences } from './native-chat-prompt-document-text'
 
@@ -13,9 +14,9 @@ export function structuredAgentSessionMessageText(body: AgentJournalMessageItem)
   return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
 }
 
-/** Append returned input without replacing later typing; return true once durable. */
-export function returnMessageToComposer(
-  composerScopeKey: string,
+/** Returned input as a draft contribution: its `[Image #k]` markers become chips for its k-th
+ *  image, by stable ids under `attachmentIdPrefix`. */
+export function returnedMessageContribution(
   /** Unique to this message, so its images never collide with ones already attached. */
   attachmentIdPrefix: string,
   blocks: AgentJournalMessageItem['blocks'],
@@ -24,8 +25,7 @@ export function returnMessageToComposer(
   /** Uploads the host no longer stores: their chips come back asking to be attached again. */
   expiredUploadIds?: ReadonlySet<string>,
   skills?: AgentJournalMessageItem['skills']
-): boolean {
-  // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
+): NativeChatDraftHandbackContribution {
   const imageIds = blocks.flatMap((block, index) =>
     block.type === 'image-ref' ? [`${attachmentIdPrefix}-${index}`] : []
   )
@@ -49,17 +49,36 @@ export function returnMessageToComposer(
     structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
     imageIds
   )
-  if (text === '' && images.length === 0) {
-    return true
-  }
-  // Stable image ids make repeated hand-back idempotent despite later typing.
-  return appendToNativeChatComposerDraft(composerScopeKey, {
+  return {
     text,
     images,
     ...(skills?.length
       ? { document: seedPromptSkillReferences(promptTextContent(text), skills) }
       : {})
-  })
+  }
+}
+
+/** Append returned input without replacing later typing; return true once durable. */
+export function returnMessageToComposer(
+  composerScopeKey: string,
+  attachmentIdPrefix: string,
+  blocks: AgentJournalMessageItem['blocks'],
+  imageConnectionIds?: readonly (string | null)[],
+  expiredUploadIds?: ReadonlySet<string>,
+  skills?: AgentJournalMessageItem['skills']
+): boolean {
+  const addition = returnedMessageContribution(
+    attachmentIdPrefix,
+    blocks,
+    imageConnectionIds,
+    expiredUploadIds,
+    skills
+  )
+  if (addition.text === '' && !addition.images?.length) {
+    return true
+  }
+  // Stable image ids make repeated hand-back idempotent despite later typing.
+  return appendToNativeChatComposerDraft(composerScopeKey, addition)
 }
 
 /** Return unaccepted input to its conversation draft even when unmounted; true means durable. */

@@ -6,6 +6,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { StructuredAgentLaunchPersistedRecord } from './agent-session/launch/structured-agent-session-launch-record'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
@@ -18,7 +19,8 @@ import {
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   readStructuredAgentLaunchRecords,
-  resetStructuredAgentLaunchPersistenceForTests
+  resetStructuredAgentLaunchPersistenceForTests,
+  writeStructuredAgentLaunchRecord
 } from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
   retryStructuredAgentSessionLaunch,
@@ -593,6 +595,18 @@ describe('folder catalogs settling over many held launches', () => {
   // once: at most 2 + 2B per host. Every other host's debt goes unread.
   const ownDebtBound = (buckets: number): number => 2 + 2 * buckets
 
+  /** One effective change to the saved rows, as a launch's own save makes, read from storage so
+   *  no earlier measurement's counters see it. */
+  function reviseSavedLaunch(): void {
+    const [row] = JSON.parse(
+      localStorage.getItem(LAUNCHES)!
+    ) as StructuredAgentLaunchPersistedRecord[]
+    writeStructuredAgentLaunchRecord({
+      ...row!,
+      payloadFingerprint: `${row!.payloadFingerprint}-2`
+    })
+  }
+
   it('does nothing for drawn chats as the same catalog settles again', async () => {
     for (const count of [3, 30]) {
       const work = await settleCost(count, refreshHostFolders)
@@ -603,6 +617,27 @@ describe('folder catalogs settling over many held launches', () => {
       // Each saved row and tab read a bounded number of times: linear, never rows times tabs.
       expect(work.rowReads).toBeLessThanOrEqual(2 * count)
       expect(work.tabProbes).toBeLessThanOrEqual(2 * count)
+    }
+  })
+
+  it('rebuilds its saved index once per saved change, then settles as warm', async () => {
+    for (const count of [3, 30]) {
+      await settleCost(count, async () => {})
+      reviseSavedLaunch()
+      const cold = await measureWork(refreshHostFolders)
+      const warm = await measureWork(refreshHostFolders)
+      for (const work of [cold, warm]) {
+        expect(work).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+        expect(work).toMatchObject({ allDebtWalks: 0 })
+        expect(Object.keys(work.debt)).toEqual(['runtime:env-1'])
+        expect(work.tabProbes).toBeLessThanOrEqual(2 * count)
+      }
+      // The rebuild reads each of the S = N saved rows once and looks up its host's debt for
+      // every row after that host's first; the settle then costs what a warm one does.
+      expect(cold.rowReads).toBeLessThanOrEqual(count + 2 * count)
+      expect(cold.debt['runtime:env-1']).toBeLessThanOrEqual(count - 1 + ownDebtBound(count))
+      expect(warm.rowReads).toBeLessThanOrEqual(2 * count)
+      expect(warm.debt['runtime:env-1']).toBeLessThanOrEqual(ownDebtBound(count))
     }
   })
 
@@ -701,6 +736,23 @@ describe('folder catalogs settling over many held launches', () => {
         expect(local.debt[host]).toBeLessThanOrEqual(ownDebtBound(1))
       }
       expect(readStructuredAgentLaunchRecords()).toHaveLength(count + 3)
+
+      // After one saved change, all N + 1 answering catalogs share one rebuild that reads the
+      // S = N + 3 saved rows once, then each pays only its warm reads: two per paired row and
+      // four per local partition row. Rebuilding per answering host would read (N + 1) * S.
+      const saved = count + 3
+      reviseSavedLaunch()
+      const coldAll = await measureWork(loadAllHostFolders)
+      expect(coldAll).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+      expect(coldAll.allDebtWalks).toBe(0)
+      expect(Object.keys(coldAll.debt).sort()).toEqual([...debtHosts].sort())
+      expect(coldAll.rowReads).toBeLessThanOrEqual(saved + 2 * count + 4 * 2)
+      // One paired catalog after a saved change: the one rebuild, then its own row alone.
+      reviseSavedLaunch()
+      const coldOne = await measureWork(() => refreshHostFolders(hosts.at(-1)))
+      expect(coldOne).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+      expect(Object.keys(coldOne.debt)).toEqual([`runtime:${hosts.at(-1)}`])
+      expect(coldOne.rowReads).toBeLessThanOrEqual(saved + 2)
 
       // A tab lost without its launch ending still comes back with its host's next catalog.
       const lost = hosts.at(-1)!

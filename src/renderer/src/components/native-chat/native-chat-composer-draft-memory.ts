@@ -16,11 +16,16 @@ export {
 import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
 import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 import { reconcileNativeChatStagedDraft } from './native-chat-draft-attachment-staging'
+import {
+  draftCustody,
+  pruneNativeChatDraftSourcePaths,
+  restoreNativeChatDraftSourcePaths
+} from './native-chat-composer-draft-custody'
+import { restoredImageChecks } from './native-chat-composer-draft-restored-images'
 // Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
 
 import type {
   NativeChatComposerDraft,
-  NativeChatComposerDraftImage,
   NativeChatComposerDraftOwner,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
@@ -79,6 +84,7 @@ export function installNativeChatDraftRecord(
   } else {
     records.delete(scope)
   }
+  pruneNativeChatDraftSourcePaths(scope, draft)
   reconcileNativeChatStagedDraft(scope, draft)
 }
 
@@ -89,45 +95,13 @@ export const unconfirmed = new Map<string, UnconfirmedDraftChange>()
 export const deferredRemovals = new Map<string, { destinationScope: string; savedAt: number }>()
 // Drafts whose last write storage refused; shown so the user knows they are held in memory only.
 export const refusedScopes = new Set<string>()
-export type DraftImageCheck = {
-  image: NativeChatComposerDraftImage
-  /** The object itself is the current attempt token. */
-  attempt?: { authority: string }
-}
-export const restoredImageChecks = new Map<string, readonly DraftImageCheck[]>()
-export const NO_IMAGE_CHECKS: readonly DraftImageCheck[] = []
-
-export function restoredImageKey(image: NativeChatComposerDraftImage): string {
-  return JSON.stringify([image.id, image.path, image.connectionId])
-}
-
-/** Ordinary edits prune work; restore boundaries register only newly introduced tuples. */
-export function reconcileRestoredImageChecks(
-  scopeKey: string,
-  images: readonly NativeChatComposerDraftImage[],
-  previous: readonly NativeChatComposerDraftImage[] = images
-): void {
-  const current = restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS
-  const held = new Set(
-    images
-      .filter((image) => image.path && image.unavailableName === undefined)
-      .map(restoredImageKey)
-  )
-  const before = new Set(previous.map(restoredImageKey))
-  const next = current.filter((entry) => held.has(restoredImageKey(entry.image)))
-  for (const image of images) {
-    if (held.has(restoredImageKey(image)) && !before.has(restoredImageKey(image))) {
-      next.push({ image })
-    }
-  }
-  if (next.length !== current.length || next.some((entry, index) => entry !== current[index])) {
-    if (next.length) {
-      restoredImageChecks.set(scopeKey, next)
-    } else {
-      restoredImageChecks.delete(scopeKey)
-    }
-  }
-}
+export {
+  NO_IMAGE_CHECKS,
+  reconcileRestoredImageChecks,
+  restoredImageChecks,
+  restoredImageKey,
+  type DraftImageCheck
+} from './native-chat-composer-draft-restored-images'
 export const scopeListeners = new Map<string, Set<() => void>>()
 
 export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft-load'
@@ -298,6 +272,8 @@ export function resolveNativeChatComposerDraftOwner(
 export type DraftSubmission = {
   scopeKey: string
   draft: (NativeChatComposerDraft & { owner?: NativeChatComposerDraftOwner }) | undefined
+  /** Provenance the submitted input carried, returned with it on recovery. */
+  sourcePaths: readonly string[]
   stopObserving: () => void
 }
 export const submissions = new Map<string, Set<DraftSubmission>>()
@@ -312,6 +288,7 @@ export function captureNativeChatComposerSubmission(scopeKey: string) {
       ...(current ?? { text: '', images: [] }),
       owner: current?.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
     },
+    sourcePaths: [...(draftCustody.get(scopeKey)?.sourcePaths ?? [])],
     stopObserving: () => {}
   }
   const scoped = submissions.get(scopeKey) ?? new Set<DraftSubmission>()
@@ -320,9 +297,17 @@ export function captureNativeChatComposerSubmission(scopeKey: string) {
   return submission
 }
 
-export function releaseNativeChatComposerSubmission(scopeKey: string, submission: DraftSubmission) {
+/** `recover` returns the submission's provenance with it, before its input is given back. */
+export function releaseNativeChatComposerSubmission(
+  scopeKey: string,
+  submission: DraftSubmission,
+  recover = false
+) {
   scopeKey = submission.scopeKey
   const draft = submission.draft
+  if (recover && draft) {
+    restoreNativeChatDraftSourcePaths(scopeKey, submission.sourcePaths)
+  }
   submission.draft = undefined
   submission.stopObserving()
   submission.stopObserving = () => {}

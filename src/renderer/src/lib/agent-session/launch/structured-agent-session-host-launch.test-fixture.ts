@@ -1,10 +1,22 @@
 // @vitest-environment happy-dom
 /** The host side of a held host launch as the window reads it, and the launches these tests start. */
 import { vi } from 'vitest'
+import {
+  nativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
+import {
+  clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { mocks, target } from '../../structured-agent-session-launch-create-message.test-fixture'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch-registry'
+import {
+  getStructuredAgentSessionLaunchLifecycle,
+  resetStructuredAgentLaunchRegistryForTests
+} from './structured-agent-session-launch-registry'
 import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import type {
@@ -202,4 +214,24 @@ export function startRichReleaseLaunch(
       }
     }
   })
+}
+
+/** Whether the composer's draft store (and so any return to the chat's composer) can save, as a
+ *  full disk refuses it. Launch rows are refused separately, through localStorage. */
+export function refuseDraftWrites(refuse: boolean): void {
+  const drafts = nativeChatComposerDraftStorage()
+  if ('refuseWrites' in drafts) {
+    drafts.refuseWrites = refuse
+  }
+}
+
+/** The renderer starts again: draft memory, its load and save bookkeeping and the launch registry
+ *  go; the stored drafts, the draft journal and the saved launch rows stay. */
+export async function coldReload(): Promise<void> {
+  const backend = nativeChatComposerDraftStorage()
+  clearNativeChatComposerDraftsForTests()
+  setNativeChatComposerDraftStorageForTests(backend)
+  resetStructuredAgentLaunchRegistryForTests()
+  resetStructuredAgentLaunchPersistenceForTests()
+  await hydrateNativeChatComposerDrafts()
 }

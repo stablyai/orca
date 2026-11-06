@@ -27,11 +27,15 @@ import {
 import { makeWorktree } from '../../store-test-helpers'
 import type * as HostOwnershipModule from '../listing/worktree-host-ownership'
 import type * as RetirementModule from './purged-structured-launch-retirement'
+import type * as AttributionModule from '../../../repos/repo-removal-host-twin-attribution'
 
 /** Work at the purge's own boundaries: listing matches attributing publishers, and each keyed
  *  lookup, host check or scan of the membership the whole removal hands its launch retirement. */
 const work = vi.hoisted(() => {
   const counts = { listingMatches: 0, lookups: 0, hostChecks: 0, scans: 0 }
+  // The inherited per-host collector: its calls, the twin ids they cover, and whether a publisher
+  // read happens inside one.
+  const collector = { calls: 0, twins: 0, depth: 0 }
   class CountedHosts<T> extends Set<T> {
     override has(value: T): boolean {
       counts.hostChecks++
@@ -68,7 +72,25 @@ const work = vi.hoisted(() => {
     new CountedRemoval(
       [...removal].map(([id, entry]) => [id, { ...entry, hosts: new CountedHosts(entry.hosts) }])
     ) as unknown as Map<K, V>
-  return { counts, counted }
+  return { counts, counted, collector }
+})
+vi.mock('../../../repos/repo-removal-host-twin-attribution', async (original) => {
+  const actual = await original<typeof AttributionModule>()
+  return {
+    ...actual,
+    collectRemovedHostTwinState: (
+      ...args: Parameters<typeof actual.collectRemovedHostTwinState>
+    ) => {
+      work.collector.calls++
+      work.collector.twins += args[1].size
+      work.collector.depth++
+      try {
+        return actual.collectRemovedHostTwinState(...args)
+      } finally {
+        work.collector.depth--
+      }
+    }
+  }
 })
 vi.mock('../listing/worktree-host-ownership', async (original) => {
   const actual = await original<typeof HostOwnershipModule>()
@@ -455,6 +477,19 @@ describe("one removal of many hosts' copies of the same workspace id", () => {
       }),
       makeWorktree({ id: EXCLUSIVE, repoId: 'repo-1', hostId: ENV_1 })
     ]
+    // Every read of a publisher's id, wherever the purge makes it, and those inside the collector.
+    const idReads = { all: 0, inherited: 0 }
+    for (const publisher of publishers) {
+      const { id } = publisher
+      Object.defineProperty(publisher, 'id', {
+        enumerable: true,
+        get: () => {
+          idReads.all++
+          idReads.inherited += work.collector.depth > 0 ? 1 : 0
+          return id
+        }
+      })
+    }
     useAppStore.setState({ worktreesByRepo: { 'repo-1': publishers } })
     const targets = [
       ...gone.map((hostId) => countedTarget(SAME, hostId)),
@@ -464,6 +499,8 @@ describe("one removal of many hosts' copies of the same workspace id", () => {
       countedTarget('repo-1::/only')
     ]
     Object.assign(work.counts, { listingMatches: 0, lookups: 0, hostChecks: 0, scans: 0 })
+    Object.assign(work.collector, { calls: 0, twins: 0 })
+    Object.assign(idReads, { all: 0, inherited: 0 })
     const purge = () => useAppStore.getState().purgeWorktreeTerminalState(targets)
     const saves = countSaves(purge)
 
@@ -505,6 +542,18 @@ describe("one removal of many hosts' copies of the same workspace id", () => {
     expect(work.counts.lookups).toBe(1 + rows.length - 1)
     expect(work.counts.hostChecks).toBeLessThanOrEqual(work.counts.lookups)
     expect(work.counts.scans).toBe(0)
+
+    // The collector this PR inherits runs as before for this input with no removed surfaces: in
+    // the edit flush and again in the purge, once per removed host with a surviving copy (the N
+    // same-id hosts, the SSH copy behind the proxy and the proxied SSH copy), on its one twin id.
+    expect(work.collector).toMatchObject({ calls: 2 * (count + 2), twins: 2 * (count + 2) })
+    // Each such call reads listing ids up to its copy's row: i + 1 for the i-th same-id host
+    // (from 0), N + 3 for the SSH alias and N + 5 for the proxied copy. So
+    // these two passes read 2 * (N(N + 1)/2 + (N + 3) + (N + 5)) = N^2 + 5N + 16 publisher ids,
+    // and the whole public purge stays quadratic in N: a main residual, tracked by the owner.
+    expect(idReads.inherited).toBe(count * count + 5 * count + 16)
+    // Outside it, this PR's attribution reads each publisher's id once per listing derivation.
+    expect(idReads.all - idReads.inherited).toBeLessThanOrEqual(2 * publishers.length)
 
     // The same removal again ends and saves nothing.
     expect(countSaves(purge).mutations).toEqual([])

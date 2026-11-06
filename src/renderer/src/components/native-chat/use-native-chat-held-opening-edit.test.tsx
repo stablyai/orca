@@ -19,10 +19,18 @@ import {
   host,
   hostAnswers,
   hostHistory,
+  SAVED,
+  coldReload,
   savedFirstTurn,
   windowCalls
 } from '@/lib/agent-session/launch/structured-agent-session-host-launch.test-fixture'
-import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
+import {
+  retryStructuredAgentSessionLaunch,
+  startStructuredAgentLaunch
+} from '@/lib/agent-session/launch/structured-agent-session-launch'
+import { markStructuredAgentSessionLaunchPublished } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
+import { sendStructuredAgentSessionMessage } from './structured-agent-session-message-sender'
+import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { replaceHeldHostLaunchOpening } from '@/lib/agent-session/launch/structured-agent-session-host-launch-opening-edit'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -40,6 +48,7 @@ import {
 import {
   captureNativeChatStagedInput,
   hasNativeChatStagedFiles,
+  releaseNativeChatStagedFiles,
   stageNativeChatDraftFile
 } from './native-chat-draft-attachment-staging'
 import {
@@ -103,7 +112,7 @@ afterEach(() => {
 })
 
 /** A paired host's held launch whose image never reached it: parked with its notice. */
-async function parkedPairedLaunch() {
+async function parkedPairedLaunch(sessionId = SESSION_ID) {
   const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
     requestId: newAgentLaunchRequestId(),
     executionHostId: 'runtime:server-1',
@@ -113,7 +122,7 @@ async function parkedPairedLaunch() {
     draftFromScope: SOURCE_SCOPE,
     hostLaunch: {
       operationId: OPERATION_ID,
-      sessionId: SESSION_ID,
+      sessionId,
       protocol: 'release',
       opening: {
         clientMessageId: MESSAGE_ID,
@@ -133,7 +142,7 @@ async function parkedPairedLaunch() {
       }
     }
   })
-  const view = renderHook(() => useNativeChatProvisionalLaunch('workspace-1', SESSION_ID))
+  const view = renderHook(() => useNativeChatProvisionalLaunch('workspace-1', sessionId))
   await vi.waitFor(() => expect(host.status).toHaveBeenCalledTimes(2))
   view.rerender()
   expect(view.result.current.lifecycle).toBe('failed')
@@ -341,3 +350,176 @@ it('gives a file not yet sent back with its message, still usable from the chat 
   expect(hasNativeChatStagedFiles(source)).toBe(false)
   expect(host.release).not.toHaveBeenCalled()
 })
+
+it.each([3, 30])(
+  'keeps no returned file once %i edited openings come back unsent and their drafts are cleared',
+  async (count) => {
+    const upload = await import('./native-chat-attachment-upload')
+    const refusal = vi
+      .spyOn(upload, 'uploadNativeChatSessionAttachmentPaths')
+      .mockRejectedValue(new Error('upload refused'))
+    const held: { token: string; scope: string }[] = []
+    for (let cycle = 0; cycle < count; cycle++) {
+      cleanup()
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      parkedRead = deferred<AgentLaunchReleasePhaseStatusResult>()
+      host.status.mockReset()
+      host.status.mockResolvedValueOnce(AWAITING).mockReturnValueOnce(parkedRead.promise)
+      updateNativeChatComposerDraft(
+        SOURCE_SCOPE,
+        { text: 'Also run lint', images: [] },
+        'immediate'
+      )
+      const sessionId = `codex_returned_${count}_${cycle}`
+      const destination = structuredAgentSessionDraftScopeKey(sessionId)
+      const { launch, view, scope } = await parkedPairedLaunch(sessionId)
+      const [token] = holdBrowserAttachmentFiles([
+        new File(['usable bytes'], 'held.png', { type: 'image/png' })
+      ])
+      act(() => {
+        stageNativeChatDraftFile(scope, token!)
+        updateNativeChatComposerDraft(scope, { images: [{ id: 'new', path: token! }] }, 'immediate')
+      })
+      act(() => view.result.current.openingEdit!.editSession.save())
+      // The upload is refused: the launch keeps the file for a Retry.
+      await vi.waitFor(() => expect(refusal).toHaveBeenCalledTimes(cycle + 1))
+      await act(async () => {})
+      expect(readBrowserAttachmentFile(token!)).not.toBeNull()
+      // The chat already exists on the host: the edited message comes back, its file usable.
+      parkedRead.resolve({ state: 'failed', code: 'agent_launch_session_already_exists' })
+      await launch.launchResult.catch(() => undefined)
+      await act(async () => {})
+      const back = readNativeChatComposerDraft(destination)
+      expect(back.text).toContain('Also run lint')
+      expect(back.images.map(({ path }) => path)).toContain(token)
+      expect(readBrowserAttachmentFile(token!)).not.toBeNull()
+      expect(hasNativeChatStagedFiles(destination)).toBe(true)
+      // The user clears it; nothing else needs the file.
+      act(() => updateNativeChatComposerDraft(destination, { text: '', images: [] }, 'immediate'))
+      view.unmount()
+      held.push({ token: token!, scope: destination })
+    }
+    refusal.mockRestore()
+    expect(held.filter(({ token }) => readBrowserAttachmentFile(token) !== null)).toEqual([])
+    expect(held.filter(({ scope }) => hasNativeChatStagedFiles(scope))).toEqual([])
+    expect(host.release).not.toHaveBeenCalled()
+  }
+)
+
+it('sends a reloaded opening’s client file to its host only after uploading it, after a reload', async () => {
+  const path = '/client/durable.png'
+  Object.assign(window, { api: { fs: { pathExists: async () => true } } })
+  // A launch from before the reload, its first turn still being edited, its file never sent.
+  localStorage.setItem(
+    SAVED,
+    JSON.stringify([
+      {
+        sessionId: SESSION_ID,
+        executionHostId: 'runtime:server-1',
+        agent: 'codex',
+        lifecycle: 'visibility-unknown',
+        clientOperationId: 'original-op',
+        payloadFingerprint: 'original-fingerprint',
+        expectedRuntimeFence: null,
+        hostLaunchOperationId: OPERATION_ID,
+        surfaceAddress: { worktreeId: 'workspace-1', precedingTabIds: [] },
+        firstMessage: {
+          clientMessageId: MESSAGE_ID,
+          body: structuredAgentSessionSendBody('Durable rich B', [{ path, previewUri: '' }])
+        },
+        hostLaunchFirstTurn: { phase: 'editing', options: {}, selection: {}, staged: [path] }
+      }
+    ])
+  )
+  resetStructuredAgentLaunchRegistryForTests()
+  resetStructuredAgentLaunchPersistenceForTests()
+  updateNativeChatComposerDraft(DRAFT_A, { text: 'Independent A', images: [] }, 'immediate')
+  host.status.mockReset()
+  host.status.mockResolvedValue({ state: 'unknown' })
+  expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+  await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+  expect(readNativeChatComposerDraft(DRAFT_A).text).toBe('Independent A\n\nDurable rich B')
+
+  // Reloaded again: the draft alone says its file still needs to reach the host.
+  await coldReload()
+  releaseNativeChatStagedFiles(DRAFT_A)
+  await coldReload()
+  expect(hasNativeChatStagedFiles(DRAFT_A)).toBe(true)
+  const back = readNativeChatComposerDraft(DRAFT_A)
+  expect(back.images.map((image) => image.path)).toEqual([path])
+
+  // The host lists the chat; the user sends what came back, through the chat's own composer.
+  expect(
+    markStructuredAgentSessionLaunchPublished('workspace-1', SESSION_ID, 'runtime:server-1')
+  ).toBe(true)
+  Object.assign(await import('@/runtime/runtime-rpc-client'), {
+    ensureRuntimeEnvironmentCompatible: async () => {}
+  })
+  mocks.call.mockImplementation(async (_target, method) =>
+    method === 'agentSession.history' ? hostHistory() : new Promise(() => {})
+  )
+  const provisional = renderHook(() => useNativeChatProvisionalLaunch('workspace-1', SESSION_ID))
+  expect(provisional.result.current.transportEnabled).toBe(true)
+  const send = vi.fn(
+    (text: string, images: readonly { path: string }[], request?: Record<string, unknown>) =>
+      provisional.result.current.sendThroughLaunch(text, true, () =>
+        Boolean(
+          sendStructuredAgentSessionMessage({
+            sessionId: SESSION_ID,
+            target: { kind: 'environment', environmentId: 'server-1' },
+            text,
+            attachments: images.map((image) => ({ path: image.path, previewUri: '' })),
+            ...request
+          })
+        )
+      )
+  )
+  const transport = {
+    sessionId: SESSION_ID,
+    runtimeEnvironmentId: 'server-1',
+    runtime: 'remote',
+    capturePresentation: () => () => true,
+    send,
+    dispatchCommand: async () => ({ handled: false, accepted: false }),
+    onError: vi.fn(),
+    optionsSurface: {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    },
+    optionSnapshot: []
+  }
+  const composer = renderHook(() =>
+    useNativeChatStructuredComposerSend({
+      agent: 'codex',
+      draftScopeKey: DRAFT_A,
+      imageAttachments: back.images,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fields the send path reads.
+      structuredTransport: transport as unknown as Parameters<
+        typeof useNativeChatStructuredComposerSend
+      >[0]['structuredTransport'],
+      isComposing: () => false,
+      clearSkillOrigin: () => {},
+      setDraft: () => {},
+      setCaret: () => {}
+    })
+  )
+  await act(async () => {
+    await composer.result.current(back.text, back.images)
+  })
+  await vi.waitFor(() =>
+    expect(mocks.call.mock.calls.some(([, method]) => method === 'agentSession.send')).toBe(true)
+  )
+  const wire = mocks.call.mock.calls.find(([, method]) => method === 'agentSession.send')?.[2]
+  expect(JSON.stringify(wire)).toContain('/host/store/durable.png')
+  expect(JSON.stringify(wire)).not.toContain(path)
+  expect(host.release).not.toHaveBeenCalled()
+  expect(host.prepare).not.toHaveBeenCalled()
+})
+
+function savedRow(): Record<string, unknown> | undefined {
+  const rows: Record<string, unknown>[] = JSON.parse(localStorage.getItem(SAVED) ?? '[]')
+  return rows.find((row) => row.sessionId === SESSION_ID)
+}

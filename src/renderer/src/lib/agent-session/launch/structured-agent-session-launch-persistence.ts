@@ -67,6 +67,14 @@ function writeRecords(): void {
   saveRecords()
 }
 
+// The records revision the saved journal last held: a launch retired only in memory is not retired.
+let savedRecordsRevision = 0
+
+/** Whether every launch record change so far reached the saved journal. */
+export function structuredAgentLaunchRecordsSaved(): boolean {
+  return savedRecordsRevision === recordsRevision
+}
+
 function saveRecords(): void {
   if (typeof localStorage === 'undefined') {
     return
@@ -77,6 +85,7 @@ function saveRecords(): void {
     } else {
       localStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify([...records.values()]))
     }
+    savedRecordsRevision = recordsRevision
   } catch {
     // Recovery bookkeeping must never prevent launch.
     console.warn('[structured-agent-launch] could not persist launch state')
@@ -299,6 +308,7 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
   records.clear()
   recordsRevision += 1
+  savedRecordsRevision = recordsRevision
   batchSlotIndex = undefined
   tombstones.clear()
   remoteTombstoneCancelledAt.clear()

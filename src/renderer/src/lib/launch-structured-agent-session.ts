@@ -7,6 +7,7 @@ import type {
   StructuredHostLaunchHandoff
 } from './agent-session/launch/structured-agent-session-host-launch'
 import type { StructuredLaunchCreateParams } from './agent-session/launch/structured-agent-session-launch-opening'
+import { restoredHostLaunchSources } from './agent-session/launch/structured-agent-session-host-launch-sources'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
@@ -267,7 +268,19 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
           hostLaunch: {
             operationId: args.hostLaunchOperationId,
             sessionId: args.sessionId,
-            ...(firstTurn ? { protocol: 'release' as const, firstTurn } : {})
+            ...(firstTurn ? { protocol: 'release' as const, firstTurn } : {}),
+            // A first turn still being edited holds its files again from the start, not only once
+            // the host awaits it: they may come back to the chat before then.
+            ...(firstTurn?.phase === 'editing' && firstTurn.staged?.length && args.firstMessage
+              ? {
+                  stagedSources: firstTurn.staged,
+                  sources: restoredHostLaunchSources(
+                    args.sessionId,
+                    firstTurn.staged,
+                    args.firstMessage.body
+                  )
+                }
+              : {})
           }
         }
       : {}),

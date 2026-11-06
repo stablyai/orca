@@ -27,6 +27,8 @@ import {
 import { subscribeToNativeChatPendingAttachments } from './native-chat-pending-attachment-cache'
 import {
   captureNativeChatStagedInput,
+  moveNativeChatStagedFiles,
+  reconcileNativeChatStagedDraft,
   nativeChatStagedInputPaths,
   stageNativeChatDraftFile
 } from './native-chat-draft-attachment-staging'
@@ -209,6 +211,12 @@ export function useNativeChatHeldOpeningEdit(
     // Only a refused save's own new lease ends here; the launch keeps whatever it held.
     if (!replaced) {
       staged?.sources.release()
+    } else if (staged) {
+      // Its files live with the chat's own draft from now, where they stay if they come back; the
+      // launch's lease holds them until then, not the edit's closed draft.
+      const chatScope = structuredAgentSessionDraftScopeKey(sessionId)
+      moveNativeChatStagedFiles(edit.draft.scopeKey, chatScope)
+      reconcileNativeChatStagedDraft(chatScope, readNativeChatComposerDraft(chatScope))
     }
     setEdit(null)
   }, [edit, sessionId, worktreeId])

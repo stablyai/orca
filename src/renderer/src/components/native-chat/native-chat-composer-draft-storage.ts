@@ -27,9 +27,20 @@ export type NativeChatComposerDraftOwner = {
   readonly executionHostId: ExecutionHostId
 }
 
+/** A launch's complete held input visibly adopted into this draft; never a copy of that input. */
+export type NativeChatDraftHandbackReceipt = {
+  readonly operationId: string
+  readonly clientMessageId: string
+  readonly sessionId?: string
+}
+
 export type StoredNativeChatComposerDraft = NativeChatComposerDraft & {
   readonly savedAt: number
   readonly owner?: NativeChatComposerDraftOwner
+  /** Adoptions whose source may still hold the input; text '' with none of these is no record. */
+  readonly handbacks?: readonly NativeChatDraftHandbackReceipt[]
+  /** Client-origin paths the draft still references that must be prepared before a Send. */
+  readonly sourcePaths?: readonly string[]
 }
 
 /** Resolve writes/removals only after commit; reject refused persistence. */
@@ -165,14 +176,32 @@ export function parseStoredNativeChatComposerDraft(
       )
     : undefined
   const owner = parseOwner(value.owner)
+  const handbacks = Array.isArray(value.handbacks)
+    ? value.handbacks.flatMap((receipt) => parseHandbackReceipt(receipt) ?? [])
+    : []
+  const sourcePaths = Array.isArray(value.sourcePaths)
+    ? value.sourcePaths.filter((path): path is string => typeof path === 'string' && path !== '')
+    : []
   return {
     text,
     ...(pastedTextFiles ? { pastedTextFiles } : {}),
     ...(isEditorDocument(document) ? { document } : {}),
     images: images.flatMap((image) => parseImage(image) ?? []),
     savedAt,
-    ...(owner ? { owner } : {})
+    ...(owner ? { owner } : {}),
+    ...(handbacks.length ? { handbacks } : {}),
+    ...(sourcePaths.length ? { sourcePaths } : {})
   }
+}
+
+export function parseHandbackReceipt(value: unknown): NativeChatDraftHandbackReceipt | null {
+  if (!isRecord(value)) {
+    return null
+  }
+  const { operationId, clientMessageId, sessionId } = value
+  return typeof operationId === 'string' && typeof clientMessageId === 'string'
+    ? { operationId, clientMessageId, ...(typeof sessionId === 'string' ? { sessionId } : {}) }
+    : null
 }
 
 const LEGACY_LOCAL_STORAGE_PREFIX = 'orca:nativeChatComposerDraft:v1:'

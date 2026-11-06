@@ -47,6 +47,10 @@ import {
   seedCatalog,
   startRichReleaseLaunch,
   windowCalls,
+  refuseDraftWrites,
+  coldReload,
+  startReleaseLaunch,
+  HELD,
   type HostLaunchPrepare
 } from './structured-agent-session-host-launch.test-fixture'
 
@@ -83,7 +87,10 @@ beforeEach(() => {
   seedCatalog()
   updateNativeChatComposerDraft(SOURCE_SCOPE, { text: 'Also run lint', images: [] }, 'immediate')
 })
-afterEach(() => cleanupCreateMessageFixture(restore))
+afterEach(() => {
+  refuseDraftWrites(false)
+  cleanupCreateMessageFixture(restore)
+})
 
 describe('a prepared launch whose reads go unanswered', () => {
   it.each([
@@ -162,9 +169,11 @@ describe('a prepared launch whose reads go unanswered', () => {
       const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
         throw new DOMException('full', 'QuotaExceededError')
       })
+      refuseDraftWrites(true)
       await vi.advanceTimersByTimeAsync(2_500)
       await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
       full.mockRestore()
+      refuseDraftWrites(false)
       expect(getStructuredLaunchStateBySessionId(SESSION_ID)?.intent.opening?.clientMessageId).toBe(
         MESSAGE_ID
       )
@@ -414,4 +423,82 @@ describe('a parked launch’s observer', () => {
       }
     }
   )
+})
+
+describe('a plain opening given back to the composer', () => {
+  const DRAFT = `agent-session:${SESSION_ID}`
+  const full = () =>
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+
+  /** Released, then the host can no longer say: the opening comes back to the composer. */
+  async function endedAfterRelease(independent = 'Also run lint') {
+    updateNativeChatComposerDraft(SOURCE_SCOPE, { text: independent, images: [] }, 'immediate')
+    const parent = deferred<AgentLaunchReleasePhaseStatusResult>()
+    host.status.mockResolvedValueOnce(AWAITING).mockReturnValue(parent.promise)
+    host.release.mockResolvedValue({ operationId: OPERATION_ID, state: 'running' })
+    startReleaseLaunch()
+    await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+    return parent
+  }
+
+  it('lands once across refused storage, later typing, Retry and a cold reload', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = await endedAfterRelease()
+    const launchRows = full()
+    refuseDraftWrites(true)
+    parent.resolve({ state: 'unknown' })
+    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+    // Shown, not saved: the launch still owes it.
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
+    updateNativeChatComposerDraft(
+      DRAFT,
+      { text: `${draft(SESSION_ID)}\nAnd run tests` },
+      'immediate'
+    )
+    launchRows.mockRestore()
+    refuseDraftWrites(false)
+
+    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+    const once = `Also run lint\n\n${HELD}\nAnd run tests`
+    expect(draft(SESSION_ID)).toBe(once)
+    await coldReload()
+    expect(draft(SESSION_ID)).toBe(once)
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(host.release).toHaveBeenCalledOnce()
+    expect(windowCalls()).not.toContain('agentSession.create')
+    expect(windowCalls()).not.toContain('agentSession.send')
+    warn.mockRestore()
+  })
+
+  it('keeps an independent draft equal to the opening beside it', async () => {
+    const parent = await endedAfterRelease(HELD)
+    parent.resolve({ state: 'unknown' })
+    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+    expect(draft(SESSION_ID)).toBe(`${HELD}\n\n${HELD}`)
+  })
+
+  it('does not bring it back after a reload when only the launch row could not be saved', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = await endedAfterRelease()
+    // The composer saves the message; the launch's own row cannot drop it.
+    const launchRows = full()
+    parent.resolve({ state: 'unknown' })
+    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    launchRows.mockRestore()
+    expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
+
+    await coldReload()
+    host.status.mockReset()
+    host.status.mockResolvedValue({ state: 'unknown' })
+    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+    expect(draft(SESSION_ID)).toBe(`Also run lint\n\n${HELD}`)
+    expect(host.release).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
 })

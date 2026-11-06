@@ -5,9 +5,13 @@ import {
 } from './native-chat-composer-draft-store'
 import {
   deferredRemovals,
+  hasLocalChange,
+  nextSavedAt,
   records,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
+import { draftCustody, moveNativeChatDraftCustody } from './native-chat-composer-draft-custody'
+import { persistNativeChatComposerDraft } from './native-chat-composer-draft-persistence'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftOwner
@@ -37,13 +41,26 @@ export function moveNativeChatComposerDraft(
       operation.scopeKey = destinationScope
     }
   }
-  if (source.text !== '' || source.images.length > 0) {
-    const durable = appendToNativeChatComposerDraft(destinationScope, source, owner, position)
-    const destination = records.get(destinationScope)
-    if (!durable && destination) {
-      deferredRemovals.set(sourceScope, { destinationScope, savedAt: destination.savedAt })
-    }
+  // Receipts travel before the content so the destination's next write carries both.
+  const receipts = moveNativeChatDraftCustody(sourceScope, destinationScope, nextSavedAt())
+  const hasContent = source.text !== '' || source.images.length > 0
+  const durable =
+    hasContent && appendToNativeChatComposerDraft(destinationScope, source, owner, position)
+  if (receipts && !hasLocalChange(destinationScope)) {
+    persistNativeChatComposerDraft(destinationScope, 'immediate')
+  }
+  // Only a destination write holding the moved receipts lets the source record go.
+  const savedAt = Math.max(
+    records.get(destinationScope)?.savedAt ?? 0,
+    draftCustody.get(destinationScope)?.savedAt ?? 0
+  )
+  if ((hasContent && !durable) || receipts) {
+    deferredRemovals.set(sourceScope, { destinationScope, savedAt })
   }
   reconcileNativeChatStagedDraft(destinationScope, records.get(destinationScope))
   deleteNativeChatComposerDraft(sourceScope)
+  if (receipts && !hasContent) {
+    // Its receipt-only record is still saved; it goes once the destination's write lands.
+    persistNativeChatComposerDraft(sourceScope, 'immediate')
+  }
 }

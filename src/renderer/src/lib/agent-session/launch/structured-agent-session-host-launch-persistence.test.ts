@@ -32,6 +32,7 @@ import { structuredAgentSessionSendBody } from '../../../../../shared/agent-sess
 import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
 import { markStructuredAgentSessionLaunchesPublished } from './structured-agent-session-launch-publication'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { refuseDraftWrites } from './structured-agent-session-host-launch.test-fixture'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { readNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
@@ -173,7 +174,10 @@ beforeEach(() => {
   mocks.call.mockResolvedValue(hostHistory())
   updateNativeChatComposerDraft(SOURCE_SCOPE, { text: 'Also run lint', images: [] }, 'immediate')
 })
-afterEach(() => cleanupCreateMessageFixture(restore))
+afterEach(() => {
+  refuseDraftWrites(false)
+  cleanupCreateMessageFixture(restore)
+})
 
 describe('one host launch settling beside many others', () => {
   it.each([
@@ -279,6 +283,7 @@ describe('one host launch settling beside many others', () => {
     const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new DOMException('full', 'QuotaExceededError')
     })
+    refuseDraftWrites(true)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       // The host refuses while nothing can be saved: the refusal still shows.
@@ -288,6 +293,7 @@ describe('one host launch settling beside many others', () => {
       await vi.runOnlyPendingTimersAsync()
     } finally {
       full.mockRestore()
+      refuseDraftWrites(false)
       warn.mockRestore()
     }
     // Every word is back in front of the user, beside the separate draft...
@@ -322,10 +328,12 @@ describe('a rich opening its host never acknowledged', () => {
     [SKILL]
   )
   // Inside a work count, whose own spy is the one storage calls reach.
-  const quota = () =>
+  const quota = () => {
+    refuseDraftWrites(true)
     vi.mocked(localStorage.setItem).mockImplementation(() => {
       throw new DOMException('full', 'QuotaExceededError')
     })
+  }
 
   /** Ours, rich and released after Setup, beside `count - 1` held launches. */
   async function releasedRich(count: number, ending: Promise<AgentLaunchReleasePhaseStatusResult>) {
@@ -422,6 +430,7 @@ describe('a rich opening its host never acknowledged', () => {
       expect(savedRow()).toMatchObject({ firstMessage: held })
 
       // A reload finds it saved still, as its last save could record it.
+      refuseDraftWrites(false)
       resetStructuredAgentLaunchRegistryForTests()
       resetStructuredAgentLaunchPersistenceForTests()
       expect(savedRow()).toMatchObject({ firstMessage: held })
@@ -446,4 +455,140 @@ describe('a rich opening its host never acknowledged', () => {
       )
     }
   )
+
+  describe('preparing and saving only what each step of its custody changes', () => {
+    // Test-owned envelopes of the rows each necessary journal snapshot holds. Generated values
+    // stand in at their fixed formats: a ms timestamp and uuid hex, a SHA-256 hex, a ms time.
+    const OPERATION = `${'0'.repeat(13)}-${'0'.repeat(32)}`
+    const FINGERPRINT = '0'.repeat(64)
+    const FAILED_AT = 1_700_000_000_000
+    const row = (sessionId: string, hostOperationId: string) => ({
+      sessionId,
+      executionHostId: 'local',
+      agent: 'codex',
+      clientOperationId: OPERATION,
+      payloadFingerprint: FINGERPRINT,
+      expectedRuntimeFence: null,
+      hostLaunchOperationId: hostOperationId
+    })
+    const others = (count: number) =>
+      Array.from({ length: count - 1 }, (_, index) => ({
+        ...row(`codex_held_${count}_${index + 1}`, `${OPERATION_ID}-${index + 1}`),
+        lifecycle: 'pending',
+        firstMessage: {
+          clientMessageId: `${MESSAGE_ID}-${index + 1}`,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: HELD }] }
+        }
+      }))
+    /** Ours as submitted after Setup: still holding its host-readable message or not, failed or not. */
+    const ours = (held: boolean, failed: boolean) => ({
+      ...row(SESSION_ID, OPERATION_ID),
+      lifecycle: failed ? 'failed' : 'pending',
+      hostLaunchFirstTurn: { phase: 'submitted', options: {}, selection: {} },
+      ...(held
+        ? {
+            firstMessage: {
+              clientMessageId: MESSAGE_ID,
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [
+                  { type: 'text', text: HELD },
+                  { type: 'image-ref', path: '/host/shot.png' }
+                ]
+              }
+            }
+          }
+        : {}),
+      ...(failed ? { failedAt: FAILED_AT } : {})
+    })
+    const snapshot = (count: number, own?: ReturnType<typeof ours>) =>
+      JSON.stringify(own ? [...others(count), own] : others(count)).length
+
+    async function countOwnWork(run: () => Promise<void>) {
+      const work = await countWork(run)
+      const own = vi
+        .mocked(structuredAgentLaunchRecordFor)
+        .mock.calls.filter(([intent]) => intent.sessionId === SESSION_ID).length
+      return { ...work, own }
+    }
+
+    it.each([3, 30])('from receipt to a shown chat beside %i launches', async (count) => {
+      const ending = Promise.withResolvers<AgentLaunchReleasePhaseStatusResult>()
+      const launch = await releasedRich(count, ending.promise)
+      const work = await countOwnWork(async () => {
+        ending.resolve(CHAT_STARTED)
+        await launch.launchResult
+        await vi.runOnlyPendingTimersAsync()
+      })
+      expect(savedRow()).toBeUndefined()
+      expect(draft(SESSION_ID)).toBe('Also run lint')
+      // The receipt ends custody (the message leaves our row), the launch settles (our row
+      // saved once more), and the shown chat removes the row: two preparations of ours, three
+      // journal writes of N, N and N-1 rows, and a few status publications, none per launch.
+      expect(work).toMatchObject({ preparedOthers: 0 })
+      expect(work.own).toBeLessThanOrEqual(2)
+      expect(work.mutations).toBeLessThanOrEqual(3)
+      expect(work.published).toBeLessThanOrEqual(4)
+      expect(work.savedRows).toBeLessThanOrEqual(3 * count - 1)
+      const released = ours(false, false)
+      expect(work.savedBytes).toBeLessThanOrEqual(2 * snapshot(count, released) + snapshot(count))
+    })
+
+    it.each([3, 30])(
+      'through a refusal and the publications that re-read it beside %i launches',
+      async (count) => {
+        const ending = Promise.withResolvers<AgentLaunchReleasePhaseStatusResult>()
+        const launch = await releasedRich(count, ending.promise)
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const refused = await countOwnWork(async () => {
+          quota()
+          ending.resolve({ state: 'failed', code: 'agent_launch_session_already_exists' })
+          await launch.launchResult.catch(() => undefined)
+          await vi.waitFor(() => expect(lifecycle()).toBe('failed'))
+          await vi.runOnlyPendingTimersAsync()
+        })
+        // The refusal is one transition: our row, failed and still holding its message, one
+        // attempted write of all N rows that storage refuses.
+        expect(refused).toMatchObject({ preparedOthers: 0 })
+        expect(refused.own).toBeLessThanOrEqual(1)
+        expect(refused.mutations).toBeLessThanOrEqual(1)
+        expect(refused.published).toBeLessThanOrEqual(1)
+        expect(refused.savedRows).toBeLessThanOrEqual(count)
+        expect(refused.savedBytes).toBeLessThanOrEqual(snapshot(count, ours(true, true)))
+
+        const reads = host.status.mock.calls.length
+        host.status.mockResolvedValue({
+          state: 'failed',
+          code: 'agent_launch_session_already_exists'
+        })
+        const listed = await countOwnWork(async () => {
+          quota()
+          markStructuredAgentSessionLaunchesPublished('local', [
+            { worktreeId: 'workspace-1', sessionId: SESSION_ID }
+          ])
+          await vi.runOnlyPendingTimersAsync()
+          await vi.waitFor(() => expect(host.status.mock.calls.length).toBeGreaterThan(reads))
+          await vi.waitFor(() => expect(lifecycle()).toBe('failed'))
+        })
+        warn.mockRestore()
+        // Its own host listing the chat re-reads the launch (pending again, message held), the
+        // read settles (saved again, message held), the return to the composer is attempted (its
+        // draft store refuses too, so the message stays in our row) and the failure shows again:
+        // at most four own steps, each one attempted write of N rows and one publication, all
+        // refused by storage so the saved row keeps the message.
+        expect(listed).toMatchObject({ preparedOthers: 0 })
+        expect(listed.own).toBeLessThanOrEqual(4)
+        expect(listed.mutations).toBeLessThanOrEqual(4)
+        expect(listed.published).toBeLessThanOrEqual(4)
+        expect(listed.savedRows).toBeLessThanOrEqual(4 * count)
+        expect(listed.savedBytes).toBeLessThanOrEqual(
+          2 * snapshot(count, ours(true, false)) +
+            snapshot(count, ours(false, false)) +
+            snapshot(count, ours(false, true))
+        )
+        expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
+      }
+    )
+  })
 })

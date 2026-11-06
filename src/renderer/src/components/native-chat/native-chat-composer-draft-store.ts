@@ -115,7 +115,7 @@ export function finishNativeChatComposerSubmission(
   recover = false
 ): void {
   scopeKey = submission.scopeKey
-  const draft = releaseNativeChatComposerSubmission(scopeKey, submission)
+  const draft = releaseNativeChatComposerSubmission(scopeKey, submission, recover)
   if (recover && draft) {
     appendToNativeChatComposerDraft(
       scopeKey,
@@ -193,11 +193,11 @@ export function updateNativeChatComposerDraft(
   if (isNativeChatMemoryOnlyDraft(scopeKey)) {
     return
   }
-  persistNativeChatComposerDraft(scopeKey, persist, append)
   if (!load.hydrated) {
-    // Why: a window whose startup never started the load still gets its saved drafts.
+    // Why first: a window whose startup never started the load still reads its saved drafts (and their receipts) before this write.
     void hydrateNativeChatComposerDrafts()
   }
+  persistNativeChatComposerDraft(scopeKey, persist, append)
 }
 
 /** Replay additions over late hydration without duplicates; true means durable hand-back, allowing deletion of its source copy. */

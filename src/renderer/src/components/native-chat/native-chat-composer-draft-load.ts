@@ -3,15 +3,20 @@
 import {
   dirtyScopes,
   isNativeChatSetupDraft,
-  installNativeChatDraftRecord,
   load,
   nextSavedAt,
   nativeChatDraftPositions,
   notifyScope,
   records,
-  reconcileRestoredImageChecks,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
+import {
+  draftCustody,
+  referencedNativeChatDraftPaths,
+  scopeCustody,
+  withHandbackReceipts
+} from './native-chat-composer-draft-custody'
+import { installStoredNativeChatComposerDraft } from './native-chat-composer-draft-restore'
 import {
   flushNativeChatComposerDrafts,
   installNativeChatComposerDraftBroadcast
@@ -106,6 +111,9 @@ function applyLoaded(
   }
   for (const [scopeKey, stored] of drafts) {
     if (load.editedBeforeLoad.has(scopeKey)) {
+      if (stored && keepStoredCustody(scopeKey, stored)) {
+        dirtyScopes.add(scopeKey)
+      }
       continue
     }
     if (!stored || load.deletionsBeforeLoad.some((matches) => matches(scopeKey, stored))) {
@@ -114,13 +122,13 @@ function applyLoaded(
       continue
     }
     const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
-    reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
-    installNativeChatDraftRecord(
+    const restaged = installStoredNativeChatComposerDraft(
       scopeKey,
       draft,
+      stored.handbacks ?? [],
       position ?? (changed ? undefined : { at: 'start', pending: true })
     )
-    if (changed) {
+    if (changed || restaged) {
       dirtyScopes.add(scopeKey)
     }
     notifyScope(scopeKey)
@@ -130,6 +138,25 @@ function applyLoaded(
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
   flushNativeChatComposerDrafts()
+}
+
+/** An edit made before the load replaces stored content, never the receipts and provenance stored with it. */
+function keepStoredCustody(scopeKey: string, stored: StoredNativeChatComposerDraft): boolean {
+  const referenced = referencedNativeChatDraftPaths(records.get(scopeKey))
+  const sourcePaths = (stored.sourcePaths ?? []).filter((path) => referenced.has(path))
+  if (!stored.handbacks?.length && !sourcePaths.length) {
+    return false
+  }
+  const custody = scopeCustody(scopeKey, nextSavedAt())
+  const before = custody.handbacks.length + custody.sourcePaths.length
+  custody.handbacks = withHandbackReceipts(custody.handbacks, stored.handbacks ?? [])
+  custody.sourcePaths = [...new Set([...custody.sourcePaths, ...sourcePaths])]
+  custody.owner ??= stored.owner
+  if (custody.handbacks.length + custody.sourcePaths.length === before) {
+    return false
+  }
+  custody.savedAt = nextSavedAt()
+  return true
 }
 
 function retryLater(error: unknown): void {
@@ -187,4 +214,5 @@ export function resetNativeChatComposerDraftLoadForTests(): void {
   }
   hydration = null
   failedLoads = 0
+  draftCustody.clear()
 }

@@ -17,13 +17,15 @@ type StagedFiles = {
   draftPaths: Set<string>
   heldInputs: Set<Set<string>>
   leases: Set<Set<string>>
-  draft?: NativeChatComposerDraft
+  /** The draft last reconciled; `unreconciled` until one is, so even an absent draft prunes. */
+  draft?: NativeChatComposerDraft | typeof UNRECONCILED
   referenceText?: string
   textReferences: Set<string>
   movedTo?: StagedFiles
   uploads: Map<string, Map<string, Promise<string>>>
 }
 const staged = new Map<string, StagedFiles>()
+const UNRECONCILED = Symbol('unreconciled')
 
 function currentFiles(files: StagedFiles): StagedFiles {
   return files.movedTo ? currentFiles(files.movedTo) : files
@@ -58,6 +60,7 @@ function scopeFiles(scope: string): StagedFiles {
       draftPaths: new Set(),
       heldInputs: new Set(),
       leases: new Set(),
+      draft: UNRECONCILED,
       textReferences: new Set(),
       uploads: new Map()
     }
@@ -107,7 +110,7 @@ export function moveNativeChatStagedFiles(from: string, to: string): void {
   }
   staged.set(to, files)
   staged.delete(from)
-  files.draft = undefined
+  files.draft = UNRECONCILED
 }
 
 function pruneFiles(files: StagedFiles): void {
@@ -134,7 +137,7 @@ export function reconcileNativeChatStagedDraft(
   const previous = files.draft
   files.draft = draft
   if (
-    previous &&
+    typeof previous === 'object' &&
     draft &&
     previous.text === draft.text &&
     previous.images === draft.images &&
@@ -219,13 +222,13 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
   }
   return {
     release,
-    /** Hands the leased files to `scope`'s draft, which owns them from now; none is released. */
+    /** Files kept in another scope's draft are that draft's from now: this lease no longer frees
+     *  them. In the lease's own scope its draft and the lease both hold them. */
     transfer: (scope: string): void => {
       const owner = files && currentFiles(files)
       if (owner && scopeFiles(scope) !== owner) {
         lease.forEach((path) => owner.paths.delete(path) && stageNativeChatDraftFile(scope, path))
       }
-      release()
     },
     /** `launchOperationId`: the prepared launch that founds a chat not yet on its host. */
     prepare: async <T extends NativeChatStagedInput>(

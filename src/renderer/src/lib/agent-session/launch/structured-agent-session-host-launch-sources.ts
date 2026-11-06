@@ -8,6 +8,7 @@ import { structuredAgentSessionSendBody } from '../../../../../shared/agent-sess
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { captureNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
 import { restoreNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 
 type Body = StructuredAgentSessionFirstMessage['body']
@@ -54,8 +55,9 @@ export function restoredHostLaunchSources(
   staged: readonly string[],
   opening: Body
 ): HostLaunchSources {
+  // Held in the chat's own draft scope, where its draft keeps them if they come back to it.
   const lease = restoreNativeChatStagedInput(
-    `host-launch:${sessionId}`,
+    structuredAgentSessionDraftScopeKey(sessionId),
     staged,
     hostLaunchOpeningInput(opening)
   )
@@ -71,13 +73,4 @@ export function retireHostLaunchSources(intent: StructuredAgentSessionLaunchInte
     intent.hostLaunch = rest
     sources.release()
   }
-}
-
-/** The composer took the opening back before its files went to the host: its draft keeps them. */
-export function handHostLaunchSourcesTo(
-  intent: StructuredAgentSessionLaunchIntent,
-  scope: string
-): void {
-  intent.hostLaunch?.sources?.transfer?.(scope)
-  retireHostLaunchSources(intent)
 }

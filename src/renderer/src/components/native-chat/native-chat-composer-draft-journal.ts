@@ -2,13 +2,17 @@
 
 import type { UnconfirmedDraftChange } from './native-chat-composer-draft-memory'
 import {
+  withIndependentNativeChatComposerDraft,
   withNativeChatComposerDraftAddition,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
 import {
+  parseHandbackReceipt,
   parseStoredNativeChatComposerDraft,
+  type NativeChatDraftHandbackReceipt,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
+import { hasHandbackReceipt, withHandbackReceipts } from './native-chat-composer-draft-custody'
 
 const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
 // Cap whole drafts and additions separately to protect localStorage quota; always retain tiny removal entries to prevent sent drafts returning.
@@ -20,7 +24,15 @@ const THIS_RUN = `${Date.now()}-${Math.random()}`
 
 type EntryBase = { readonly scopeKey: string; readonly at: number; readonly run?: string }
 type DraftEntry = EntryBase & { readonly draft: StoredNativeChatComposerDraft | null }
-type AdditionEntry = EntryBase & { readonly addition: NativeChatComposerDraftAddition }
+/** An identified hand-back: applied once as an independent contribution, with its receipt. */
+export type NativeChatDraftJournalCustody = {
+  readonly handback: NativeChatDraftHandbackReceipt
+  readonly sourcePaths?: readonly string[]
+}
+type AdditionEntry = EntryBase & {
+  readonly addition: NativeChatComposerDraftAddition
+  readonly custody?: NativeChatDraftJournalCustody
+}
 type JournalEntry = DraftEntry | AdditionEntry
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -50,12 +62,18 @@ function parseEntry(entry: unknown): JournalEntry[] {
     images: Array.isArray(addition.images) ? addition.images : [],
     savedAt: at
   })
+  const handback = isRecord(entry.custody) ? parseHandbackReceipt(entry.custody.handback) : null
+  const sourcePaths =
+    isRecord(entry.custody) && Array.isArray(entry.custody.sourcePaths)
+      ? entry.custody.sourcePaths.filter((path): path is string => typeof path === 'string')
+      : []
   return parsed
     ? [
         {
           scopeKey,
           at,
           run,
+          ...(handback ? { custody: { handback, sourcePaths } } : {}),
           addition: {
             text: parsed.text,
             images: parsed.images,
@@ -126,33 +144,53 @@ export function replayNativeChatComposerDraftJournal(
     changed.add(entry.scopeKey)
   }
   const additions = entries.filter(isAddition).sort((left, right) => left.at - right.at)
-  for (const { scopeKey, at, addition } of additions) {
+  for (const { scopeKey, at, addition, custody } of additions) {
     const base = drafts.get(scopeKey) ?? null
     if ((base?.savedAt ?? removedAt.get(scopeKey) ?? 0) >= at) {
       pruneNativeChatComposerDraftJournal(scopeKey, at)
       continue
     }
+    // Its receipt, not its text, says whether the draft already holds an identified hand-back.
+    if (custody && hasHandbackReceipt(base?.handbacks, custody.handback)) {
+      continue
+    }
     const from = base ?? { text: '', images: [], savedAt: 0 }
-    const next = withNativeChatComposerDraftAddition(from, addition)
-    drafts.set(scopeKey, {
-      ...from,
-      ...next,
-      savedAt: at
-    })
+    drafts.set(
+      scopeKey,
+      custody
+        ? {
+            ...from,
+            ...withIndependentNativeChatComposerDraft(from, addition),
+            handbacks: withHandbackReceipts(from.handbacks, [custody.handback]),
+            sourcePaths: [
+              ...new Set([...(from.sourcePaths ?? []), ...(custody.sourcePaths ?? [])])
+            ],
+            savedAt: at
+          }
+        : { ...from, ...withNativeChatComposerDraftAddition(from, addition), savedAt: at }
+    )
     changed.add(scopeKey)
   }
   return changed
 }
 
-/** Preserve other windows’ entries and journal unconfirmed changes within the whole-draft cap; omitted writes still go to storage. */
+/** Preserve other windows’ entries and journal unconfirmed changes within the whole-draft cap; omitted writes still go to storage. Returns the scopes actually written. */
 export function journalNativeChatComposerDraftChanges(
   changes: ReadonlyMap<string, UnconfirmedDraftChange>
-): void {
+): Set<string> {
+  const written = new Set<string>()
   if (changes.size === 0) {
-    return
+    return written
   }
-  const kept = readEntries().filter((entry) => isAddition(entry) || !changes.has(entry.scopeKey))
-  let used = JSON.stringify(kept.filter((entry) => !isAddition(entry) && entry.draft)).length
+  const entries = readEntries()
+  let used = JSON.stringify(
+    entries.filter(
+      (entry) =>
+        !isAddition(entry) &&
+        entry.draft &&
+        (!changes.has(entry.scopeKey) || entry.draft.handbacks?.length)
+    )
+  ).length
   const added: JournalEntry[] = []
   const bySize = [...changes]
     .map(([scopeKey, change]) => ({ scopeKey, ...change, run: THIS_RUN }))
@@ -169,18 +207,31 @@ export function journalNativeChatComposerDraftChanges(
     added.push(entry)
     used += size
   }
-  if (added.length > 0) {
-    writeEntries([...kept, ...added])
+  const replaced = new Set(added.map((entry) => entry.scopeKey))
+  // A capped-out change leaves its scope's last receipt-bearing copy: it may be the only proof.
+  const kept = entries.filter(
+    (entry) =>
+      isAddition(entry) ||
+      !changes.has(entry.scopeKey) ||
+      (!replaced.has(entry.scopeKey) && Boolean(entry.draft?.handbacks?.length))
+  )
+  if (added.length > 0 && writeEntries([...kept, ...added])) {
+    replaced.forEach((scopeKey) => written.add(scopeKey))
   }
+  return written
 }
 
 /** Journal additions immediately; false means they need storage confirmation before their source can be deleted. */
 export function journalNativeChatComposerDraftAddition(
   scopeKey: string,
   addition: NativeChatComposerDraftAddition,
-  at: number
+  at: number,
+  custody?: NativeChatDraftJournalCustody
 ): boolean {
-  const entries: JournalEntry[] = [...readEntries(), { scopeKey, at, run: THIS_RUN, addition }]
+  const entries: JournalEntry[] = [
+    ...readEntries(),
+    { scopeKey, at, run: THIS_RUN, addition, ...(custody ? { custody } : {}) }
+  ]
   const additions = JSON.stringify(entries.filter(isAddition)).length
   return additions <= MAX_JOURNAL_ADDITIONS_CHARS && writeEntries(entries)
 }
