@@ -136,41 +136,31 @@ const ENTRY_CHUNK_NAME = 'entry'
 const ROUTE_MANIFEST_MODULE = /web-entry[\\/]route-manifest(\.ts)?$/
 const ROUTE_ENTRY_NAMESPACE = 'orca-route-entry'
 
-// The entry's own value imports, as written in it, minus the manifest (a route importing it would be an output cycle).
-async function entryImportSpecifiers() {
+// The entry's static imports as written, minus the manifest: a route importing it would be an output cycle.
+async function entryImportAnchors() {
   const scan = await esbuild.build({
     entryPoints: [entryPoint],
-    bundle: true,
     write: false,
     metafile: true,
-    format: 'esm',
     outdir: 'scan',
-    jsx: 'automatic',
-    logLevel: 'silent',
-    plugins: [
-      {
-        name: 'orca-entry-import-scan',
-        setup(build) {
-          build.onResolve({ filter: /.*/ }, (args) =>
-            args.kind === 'entry-point' ? undefined : { path: args.path, external: true }
-          )
-        }
-      }
-    ]
+    logLevel: 'silent'
   })
-  return Object.values(scan.metafile.inputs)
-    .flatMap(({ imports }) =>
-      imports.filter(({ kind }) => kind === 'import-statement').map(({ path }) => path)
+  const [{ imports }] = Object.values(scan.metafile.outputs)
+  return imports
+    .filter(
+      ({ kind, path }) =>
+        kind === 'import-statement' && !ROUTE_MANIFEST_MODULE.test(join(dirname(entryPoint), path))
     )
-    .filter((specifier) => !ROUTE_MANIFEST_MODULE.test(join(dirname(entryPoint), specifier)))
+    .map(({ path }) => `import ${JSON.stringify(path)}\n`)
+    .join('')
 }
 
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 // Keep typed route-manifest file for TS/Metro resolution; replace only its body for web.
-// esbuild groups modules by the set of entry points reaching them, so modules the entry already loads split into
-// one tiny chunk per subset of routes sharing them. Each route imports the entry's imports first, collapsing them.
+// Routes import the entry's imports first, so esbuild keeps those modules in one chunk instead of one per route subset.
 function routeManifestPlugin(manifestSource, routes) {
-  const routeModules = new Set(routes.map((route) => route.module))
-  let entryImports
+  let anchors
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,
     setup(build) {
@@ -179,18 +169,21 @@ function routeManifestPlugin(manifestSource, routes) {
         loader: 'js',
         resolveDir: mobileDir
       }))
-      build.onResolve({ filter: /.*/ }, (args) =>
-        args.kind === 'dynamic-import' && routeModules.has(args.path)
+      if (routes.length === 0) {
+        return
+      }
+      const routeImport = new RegExp(
+        `^(?:${routes.map(({ module }) => escapeRegExp(module)).join('|')})$`
+      )
+      build.onResolve({ filter: routeImport }, (args) =>
+        args.kind === 'dynamic-import'
           ? { path: args.path, namespace: ROUTE_ENTRY_NAMESPACE }
           : undefined
       )
       build.onLoad({ filter: /.*/, namespace: ROUTE_ENTRY_NAMESPACE }, async (args) => {
-        entryImports ??= entryImportSpecifiers()
-        const anchors = (await entryImports).map(
-          (specifier) => `import ${JSON.stringify(specifier)}`
-        )
+        anchors ??= entryImportAnchors()
         return {
-          contents: `${anchors.join('\n')}\nexport { default } from ${JSON.stringify(args.path)}\n`,
+          contents: `${await anchors}export { default } from ${JSON.stringify(args.path)}\n`,
           loader: 'js',
           resolveDir: dirname(entryPoint)
         }
@@ -451,27 +444,30 @@ function localeCatalogOutputs(metafile) {
   )
 }
 
-// esbuild keeps a whole namespace once it is used as a value, and zod's `z` is one: `import { z }` or `z.core`
-// ships ~200 KB of locale tables the page never reads. Only the default English table should reach it.
-const ZOD_LOCALE_TABLE_INPUT = /[\\/]zod[\\/]v4[\\/]locales[\\/](?!en\.js$)[^\\/]+$/
+// esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
+const ZOD_LOCALE_TABLE_INPUT = /\/zod\/v4\/locales\/(?!en\.js$)[^/]+$/
+
+function assertNoZodLocaleTables(metafile) {
+  const leaked = Object.values(metafile.outputs).flatMap(({ inputs }) =>
+    Object.entries(inputs)
+      .filter(
+        ([input, { bytesInOutput }]) => bytesInOutput > 0 && ZOD_LOCALE_TABLE_INPUT.test(input)
+      )
+      .map(([input]) => input)
+  )
+  if (leaked.length > 0) {
+    throw new Error(
+      `[build-mobile-web-app-bundle] ${String(leaked.length)} zod locale tables reached the page (${leaked[0]}, …); ` +
+        "use `import * as z from 'zod'`, and import nested namespaces like `z.core` directly"
+    )
+  }
+}
 
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
   const result = await esbuild.build(mobileWebAppBuildOptions(routes))
-  // Output inputs, not metafile.inputs: esbuild lists every module it parsed, shaken out or not.
-  const zodLocaleTables = Object.values(result.metafile.outputs).flatMap(({ inputs }) =>
-    Object.entries(inputs).filter(
-      ([input, { bytesInOutput }]) => bytesInOutput > 0 && ZOD_LOCALE_TABLE_INPUT.test(input)
-    )
-  )
-  if (zodLocaleTables.length > 0) {
-    throw new Error(
-      `[build-mobile-web-app-bundle] ${String(zodLocaleTables.length)} of zod's locale tables reached the page: ` +
-        "import zod as `import * as z from 'zod'`, never `import { z }`, and read nested namespaces like " +
-        '`z.core` through their own import'
-    )
-  }
+  assertNoZodLocaleTables(result.metafile)
   const entryOutputPath = Object.keys(result.metafile.outputs).find(
     (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
   )
