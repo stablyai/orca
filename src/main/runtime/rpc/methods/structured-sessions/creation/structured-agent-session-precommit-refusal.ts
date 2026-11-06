@@ -39,7 +39,12 @@ const PRECOMMIT_REFUSAL_MESSAGE = 'Orca cannot open a structured agent chat for 
 function precommitRefusal(error: unknown, agent?: string): AgentSessionWireRefusal {
   // A refusal the host raised keeps its situation; a bare code names none.
   if (isAgentSessionRefusalError(error)) {
-    return agentSessionRefusalFromReference(error.refusal, PRECOMMIT_REFUSAL_MESSAGE)
+    return agentSessionRefusalFromReference(
+      error.refusal,
+      error.refusal.message === error.refusal.code
+        ? PRECOMMIT_REFUSAL_MESSAGE
+        : error.refusal.message
+    )
   }
   const code = wireRefusalCode(error)
   if (code) {

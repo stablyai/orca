@@ -333,18 +333,13 @@ it('refuses a journal fork on store failure after native success, while terminal
   const read = vi
     .spyOn(reader, 'readOpenCodeForkCoverageViaWorker')
     .mockRejectedValue(new Error('database read failed'))
-  const failure = await test.prepare().catch((error: unknown) => error)
-  expect(failure).toMatchObject({
-    refusal: { message: expect.stringMatching(/OpenCode.*try again/) }
-  })
-  const result = await resolveUncommittedStructuredCreate(async () => {
-    throw failure
-  })
+  const result = await resolveUncommittedStructuredCreate(test.prepare)
   expect(test.fork).toHaveBeenCalledOnce()
   expect(result).toMatchObject({
     refusal: {
       code: 'agent_session_identity_required',
-      details: { reason: 'transcriptUnreadable' }
+      details: { reason: 'transcriptUnreadable' },
+      message: expect.stringMatching(/OpenCode.*try again/)
     }
   })
   expect(test.destination.store.getRecord(test.sessionId)).toBeNull()
