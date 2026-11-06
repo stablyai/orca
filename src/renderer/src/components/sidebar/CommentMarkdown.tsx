@@ -28,8 +28,7 @@ import {
   type FileLinkExists
 } from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
-import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
-import { COMMENT_MARKDOWN_TAG_NAMES } from './comment-markdown-tag-names'
+import { htmlRendersAsText, remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
   MemoizedMarkdown,
@@ -87,7 +86,7 @@ export function remarkGitHubReferences(
 
 const commentMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
-  tagNames: [...COMMENT_MARKDOWN_TAG_NAMES],
+  tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'sub', 'sup', 'ins', 'kbd'],
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
@@ -121,13 +120,12 @@ const commentMarkdownSanitizeSchema: SanitizeSchema = {
   }
 }
 
+const allowedTagNames: ReadonlySet<string> = new Set(
+  (commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase())
+)
 // Escape HTML before remark-breaks so newlines inside it still break.
-const unknownHtmlAsTextRemarkPlugins = [
-  remarkUnknownHtmlAsText(
-    new Set((commentMarkdownSanitizeSchema.tagNames ?? []).map((name) => name.toLowerCase()))
-  ),
-  ...remarkPlugins
-]
+const unknownHtmlAsTextRemarkPlugins = [remarkUnknownHtmlAsText(allowedTagNames), ...remarkPlugins]
+const unknownHtmlRendersAsText = (html: string): boolean => htmlRendersAsText(html, allowedTagNames)
 
 // GitHub comments use raw HTML; parse it then sanitize before rendering.
 const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
@@ -233,7 +231,14 @@ const CommentMarkdown = React.memo(
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
     }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
-    const blocks = useMarkdownBlocks(content, growing, math, activeRemarkPlugins, extension)
+    const blocks = useMarkdownBlocks(
+      content,
+      growing,
+      math,
+      activeRemarkPlugins,
+      extension,
+      unknownHtmlAsText ? unknownHtmlRendersAsText : undefined
+    )
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)

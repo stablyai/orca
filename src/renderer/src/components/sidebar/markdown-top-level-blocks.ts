@@ -1,11 +1,10 @@
-// Reparse unsettled blocks; cross-block definitions or open HTML require the whole document.
+// Reparse unsettled blocks; cross-block definitions or HTML require the whole document.
 
 import type { Nodes, Root } from 'mdast'
 import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { remarkChatMath } from './chat-markdown-math'
 import { chatMathCodeFences } from './chat-markdown-math-nodes'
-import { COMMENT_MARKDOWN_TAG_NAMES } from './comment-markdown-tag-names'
 import { unified } from 'unified'
 
 export type MarkdownBlock = {
@@ -35,58 +34,23 @@ const UNSETTLED_BLOCKS = 2
 const blockParser = unified().use(remarkParse).use(remarkGfm)
 const mathBlockParser = blockParser().use(remarkChatMath)
 
-/** Elements that cannot hold anything, so cannot hold a later block. */
-const VOID_TAGS = new Set([
-  'area',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'source',
-  'track',
-  'wbr'
-])
-/** Rendering escapes or unwraps any other tag, so only these can wrap a later block. */
-const CONTAINER_TAGS = new Set(COMMENT_MARKDOWN_TAG_NAMES.filter((name) => !VOID_TAGS.has(name)))
-const HTML_TAG_PATTERN =
-  /<!--[\s\S]*?(?:-->|$)|<(\/?)([A-Za-z][A-Za-z0-9-]*)(?:[^"'<>]|"[^"]*"|'[^']*')*>/g
+/** Tags that cannot hold anything, so cannot hold a later block. */
+const VOID_TAG_PATTERN = /^<(?:br|hr|wbr|img)\b[^>]*>$/i
 
-function hasDefinition(node: Nodes): boolean {
-  return (
-    node.type === 'definition' ||
-    node.type === 'footnoteDefinition' ||
-    ('children' in node && node.children.some(hasDefinition))
-  )
-}
+/** HTML that rendering turns into text, such as Vec<T> in prose, never reaches the HTML parser. */
+export type HtmlRendersAsText = (html: string) => boolean
 
-function collectHtml(node: Nodes, values: string[]): string[] {
+/** References and non-void HTML can affect other blocks and require whole-document parsing. */
+function reachesAcrossBlocks(node: Nodes, rendersAsText?: HtmlRendersAsText): boolean {
+  if (node.type === 'definition' || node.type === 'footnoteDefinition') {
+    return true
+  }
   if (node.type === 'html') {
-    values.push(node.value)
-  } else if ('children' in node) {
-    node.children.forEach((child) => collectHtml(child, values))
+    return !VOID_TAG_PATTERN.test(node.value.trim()) && !rendersAsText?.(node.value)
   }
-  return values
-}
-
-/** A kept tag still open at its block's end wraps the blocks after it. */
-function leavesTagOpen(block: Nodes): boolean {
-  const depth = new Map<string, number>()
-  for (const html of collectHtml(block, [])) {
-    for (const [, closing, rawName] of html.matchAll(HTML_TAG_PATTERN)) {
-      const name = rawName?.toLowerCase()
-      if (name && CONTAINER_TAGS.has(name)) {
-        depth.set(name, Math.max(0, (depth.get(name) ?? 0) + (closing ? -1 : 1)))
-      }
-    }
-  }
-  return [...depth.values()].some((open) => open > 0)
-}
-
-/** References and a kept tag left open can affect other blocks and require whole-document parsing. */
-function reachesAcrossBlocks(tree: Root): boolean {
-  return tree.children.some((block) => hasDefinition(block) || leavesTagOpen(block))
+  return (
+    'children' in node && node.children.some((child) => reachesAcrossBlocks(child, rendersAsText))
+  )
 }
 
 function hasLiteralMath(node: Nodes | undefined): boolean {
@@ -109,10 +73,14 @@ export function splitMarkdownTopLevelBlocks(
   previous: MarkdownBlockSplit | null,
   math = false,
   parseTree?: (source: string) => Root,
-  canReuse: (tail: string) => boolean = () => !source.includes('\uFEFF')
+  canReuse: (tail: string) => boolean = () => !source.includes('\uFEFF'),
+  rendersAsText?: HtmlRendersAsText
 ): MarkdownBlockSplit {
   let parse = parseTree
   const grewFromPrevious = previous !== null && source.startsWith(previous.source)
+  if (grewFromPrevious && previous.whole && !math) {
+    return wholeDocument(source)
+  }
   // A sliced, indented opener must retain the original discovery context.
   const last = grewFromPrevious ? previous.blocks.at(-1) : undefined
   let unsettled =
@@ -138,7 +106,7 @@ export function splitMarkdownTopLevelBlocks(
   if (math) {
     chatMathCodeFences(tree, tail)
   }
-  if (reachesAcrossBlocks(tree)) {
+  if (reachesAcrossBlocks(tree, rendersAsText)) {
     const whole = wholeDocument(source, math && hasLiteralMath(tree))
     return parse && base === 0 ? { ...whole, blocks: [{ ...whole.blocks[0], tree }] } : whole
   }

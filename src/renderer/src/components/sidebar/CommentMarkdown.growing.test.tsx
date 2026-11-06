@@ -87,6 +87,51 @@ describe('growing comment markdown', () => {
     expect(renderCodeBlock.mock.calls.length).toBe(afterFence)
   })
 
+  it('keeps a finished block when a reply mentions a type like Vec<T>', () => {
+    const renderCodeBlock = vi.fn<DocumentCodeBlockRenderer>(({ children }) => (
+      <pre>{children}</pre>
+    ))
+    const start = 'A Vec<T> holds one type.\n\n```ts\nconst a = 1\n```\n\nNext'
+    const view = render(
+      <CommentMarkdown
+        content={start}
+        variant="document"
+        renderCodeBlock={renderCodeBlock}
+        unknownHtmlAsText
+        growing
+      />
+    )
+    const afterFence = renderCodeBlock.mock.calls.length
+    let content = start
+    for (const more of [' paragraph', ' keeps', ' growing.\n\nAnd another.']) {
+      content += more
+      view.rerender(
+        <CommentMarkdown
+          content={content}
+          variant="document"
+          renderCodeBlock={renderCodeBlock}
+          unknownHtmlAsText
+          growing
+        />
+      )
+    }
+    expect(renderCodeBlock.mock.calls.length).toBe(afterFence)
+    expect(view.container.textContent).toContain('A Vec<T> holds one type.')
+  })
+
+  it('does not remount earlier text when a kept tag closes', () => {
+    const props = { variant: 'document', unknownHtmlAsText: true, growing: true } as const
+    const view = render(<CommentMarkdown content={'Intro.\n\nPress <kbd>Ctrl'} {...props} />)
+    const press = view.container.querySelectorAll('p')[1]
+    for (const content of [
+      'Intro.\n\nPress <kbd>Ctrl</kbd> to copy.',
+      'Intro.\n\nPress <kbd>Ctrl</kbd> to copy.\n\nTail.'
+    ]) {
+      view.rerender(<CommentMarkdown content={content} {...props} />)
+      expect(view.container.querySelectorAll('p')[1]).toBe(press)
+    }
+  })
+
   it('links a path in an earlier block once the host confirms it', () => {
     const content = 'Edited src/a.ts.\n\nThen more text'
     const view = render(
