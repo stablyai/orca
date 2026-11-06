@@ -177,7 +177,7 @@ export function useNativeChatSubagentPage(
     }
   }
   return {
-    messages: page.messages,
+    messages: page.loading ? null : page.messages,
     loading: page.loading,
     hasMore: page.hasMore,
     loadingEarlier: page.loadingEarlier,
