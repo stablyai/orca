@@ -38,6 +38,13 @@ export function useMobileNativeChatSkills(args: {
   // The scan runs once a menu asks for it; a scan this document already holds shows at once.
   const [demanded, setDemanded] = useState(false)
   const demandedRef = useRef(false)
+  // A host that stops supporting the scan (a reconnect re-probes it) rescans on the next demand, not on its return.
+  useLayoutEffect(() => {
+    if (!supported) {
+      demandedRef.current = false
+      setDemanded(false)
+    }
+  }, [supported])
   const scan = useHostQuery(skillDiscoveryQuery, { hostId, client }, target, NO_INPUT, {
     enabled: supported && demanded
   })

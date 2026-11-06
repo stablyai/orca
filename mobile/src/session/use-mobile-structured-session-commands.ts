@@ -86,10 +86,10 @@ export function useMobileStructuredSessionCommands(args: {
     { enabled: reads }
   )
   const { data: published } = commandsQuery
-  const commandsQueryRef = useRef(commandsQuery)
+  const commandsQueryRef = useRef({ query: commandsQuery, reads })
   useLayoutEffect(() => {
-    commandsQueryRef.current = commandsQuery
-  }, [commandsQuery])
+    commandsQueryRef.current = { query: commandsQuery, reads }
+  }, [commandsQuery, reads])
 
   useEffect(() => {
     if (!commandsOnRequest || !menuOpen || !enabled || !client || !hostId || !sessionId) {
@@ -137,23 +137,23 @@ export function useMobileStructuredSessionCommands(args: {
     if (!reads) {
       return
     }
-    const { data, isFetching, refetch } = commandsQueryRef.current
+    const { data, isFetching, refetch } = commandsQueryRef.current.query
     // Without data TanStack joins the read in flight, which may predate a newly installed skill: read once more after it.
     void (data === undefined && isFetching
-      ? refetch().then(() => refetch({ cancelRefetch: false }))
+      ? refetch().then(() =>
+          commandsQueryRef.current.reads ? refetch({ cancelRefetch: false }) : undefined
+        )
       : refetch())
   }, [reads])
 
   return {
-    commands: commandsOnRequest
-      ? reported?.client === client &&
-        reported.hostId === hostId &&
-        reported.sessionId === sessionId
+    // A menu-read answer outlives the capability flag, which resets while a reconnect re-probes the host.
+    commands:
+      reported?.client === client && reported.hostId === hostId && reported.sessionId === sessionId
         ? reported.commands
-        : undefined
-      : hostId && sessionId
-        ? (published ?? undefined)
-        : undefined,
+        : !commandsOnRequest && hostId && sessionId
+          ? (published ?? undefined)
+          : undefined,
     refresh,
     setMenuOpen,
     invalidate
