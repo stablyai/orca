@@ -147,12 +147,13 @@ describe('MobileNativeChatMessage status notices', () => {
         }
         const text = renderNotice(body, { hostName: null, agentName: 'OpenCode' })
         const tree = renderer!
-        // An old host's stored advice gives way to desktop's sentence from the fact.
-        expect(text.props.children).toEqual(
-          hasReset
-            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
-            : 'OpenCode hit its usage limit.'
-        )
+        // An old host's stored advice gives way to the headline from the fact; the reset sits below it.
+        expect(text.props.children).toBe('OpenCode hit its usage limit.')
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .some((node) => /^Resets at \S/u.test(String(node.props.children)))
+        ).toBe(hasReset)
         expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
         expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
           colors.statusAmber

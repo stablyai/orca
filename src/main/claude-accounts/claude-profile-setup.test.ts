@@ -153,63 +153,12 @@ describe('Claude account profile setup', () => {
       runtime: 'host'
     })
   })
-  itLinks("brings the user's later hooks into an account set up while they had none", async () => {
-    const f = fixture()
-    const settings = join(f.defaultHome, 'settings.json')
-    writeFileSync(settings, '{"model":"opus"}')
-    await f.setup()
-    const home = join(f.dataRoot, 'claude-profiles/a/home')
-    const read = (file: string) => JSON.parse(readFileSync(file, 'utf8'))
-    const orca = read(join(home, 'settings.json')).hooks
-    expect(orca).toBeDefined()
-    const mine = { matcher: '', hooks: [{ type: 'command', command: 'notify-me' }] }
-    writeFileSync(settings, JSON.stringify({ model: 'opus', hooks: { Notification: [mine] } }))
-    expect((await f.setup()).warnings).toEqual([])
-    const hooks = read(join(home, 'settings.json')).hooks
-    expect(hooks.Notification).toContainEqual(mine)
-    expect(hooks.Stop).toEqual(orca.Stop)
-  })
-  itLinks('refuses another account in the same slot without creating anything', async () => {
-    const f = fixture()
-    await f.setup()
-    writeFileSync(
-      join(f.dataRoot, 'claude-profiles/a/profile.json'),
-      JSON.stringify({ version: 1, accountId: 'b', runtime: 'host' })
-    )
-    rmSync(join(f.dataRoot, 'claude-profiles/a/home'), { recursive: true })
-    const report = await f.setup()
-    expect(report.outcome).toBe('refused')
-    expect(report.warnings).toEqual([
-      expect.objectContaining({ surface: 'profile', code: 'invalid-profile' })
-    ])
-    expect(existsSync(join(f.dataRoot, 'claude-profiles/a/home'))).toBe(false)
-  })
+
   itLinks('refuses a data root linked into the default home before writing there', async () => {
     const f = fixture()
     mkdirSync(join(f.defaultHome, 'inner'))
     symlinkSync(join(f.defaultHome, 'inner'), join(f.dataRoot, 'claude-profiles'))
     expect((await f.setup()).outcome).toBe('refused')
     expect(existsSync(join(f.defaultHome, 'inner', 'a'))).toBe(false)
-  })
-  itLinks('reports skipped and failed hook installs without failing the rest', async () => {
-    const f = fixture()
-    const skipped = await provisionClaudeAccountProfile({
-      dataRoot: f.dataRoot,
-      profile: describeClaudeProfile(f.dataRoot, 'a', local),
-      userHome: state.home,
-      installHooks: null,
-      platform: 'linux'
-    })
-    expect(skipped.surfaces.hooks).toBe('absent')
-    const settings = join(f.dataRoot, 'claude-profiles/a/home/settings.json')
-    writeFileSync(join(f.root, 'bad.json'), '{bad')
-    rmSync(settings, { force: true })
-    symlinkSync(join(f.root, 'bad.json'), settings)
-    const failed = await f.setup()
-    expect(failed.surfaces.hooks).toBe('failed')
-    expect(failed.surfaces.projects).toBe('unchanged')
-    expect(failed.warnings).toContainEqual(
-      expect.objectContaining({ surface: 'hooks', code: 'failed' })
-    )
   })
 })

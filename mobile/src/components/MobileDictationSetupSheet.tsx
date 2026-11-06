@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './bottom-drawer/BottomDrawer'
@@ -103,11 +103,13 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
     intervalMs: POLL_INTERVAL_MS
   })
 
-  useEffect(() => {
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
       setError(null)
     }
-  }, [visible])
+  }
 
   const handleDownload = useCallback(
     async (model: MobileSpeechModel) => {

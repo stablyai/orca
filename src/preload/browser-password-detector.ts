@@ -31,6 +31,9 @@ import { createBrowserPasswordSubmitTracker } from './browser-password-submit-tr
 const TYPED_DEBOUNCE_MS = 300
 const DOM_CHECK_DELAY_MS = 500
 const PENDING_ADDED_NODE_LIMIT = 200
+// Why: a page that keeps adding past the limit (feeds, dashboards) would otherwise walk the whole
+// document every check; typing or focus still discovers a field's shadow roots right away.
+const FULL_DOCUMENT_WALK_INTERVAL_MS = 5000
 const OBSERVER_OPTIONS: MutationObserverInit = {
   subtree: true,
   childList: true,
@@ -132,10 +135,13 @@ function startDetector(port: BrowserPasswordGuestPort, reportsPageForms: boolean
         if (record.attributeName === 'type' && record.target instanceof HTMLInputElement) {
           scanner.noteTypeChange(record.target, record.oldValue)
         }
+      } else if (addedNodesOverflowed) {
+        // The pending whole-document walk already covers these.
       } else if (pendingAddedNodes.length + record.addedNodes.length <= PENDING_ADDED_NODE_LIMIT) {
         pendingAddedNodes.push(...record.addedNodes)
       } else {
         addedNodesOverflowed = true
+        pendingAddedNodes.length = 0
       }
     }
     // Why not re-armed per batch: a page that never stops mutating would otherwise never be checked.
@@ -146,16 +152,37 @@ function startDetector(port: BrowserPasswordGuestPort, reportsPageForms: boolean
       observer.observe(root, OBSERVER_OPTIONS)
     }
   }
-  function runDomCheck(): void {
-    domCheckTimer = null
-    const added = addedNodesOverflowed ? [document] : pendingAddedNodes.splice(0)
-    pendingAddedNodes.length = 0
+  let lastFullDocumentWalkAt = Date.now()
+  let fullDocumentWalkTimer: ReturnType<typeof setTimeout> | null = null
+  const walkWholeDocument = (): void => {
+    if (fullDocumentWalkTimer !== null) {
+      clearTimeout(fullDocumentWalkTimer)
+      fullDocumentWalkTimer = null
+    }
     addedNodesOverflowed = false
-    for (const node of added) {
-      if (node === document || (node.isConnected && node.nodeType === Node.ELEMENT_NODE)) {
+    lastFullDocumentWalkAt = Date.now()
+    observeShadowRoots(document)
+  }
+  const discoverAddedShadowRoots = (): void => {
+    if (addedNodesOverflowed) {
+      const wait = lastFullDocumentWalkAt + FULL_DOCUMENT_WALK_INTERVAL_MS - Date.now()
+      if (wait <= 0) {
+        walkWholeDocument()
+      } else {
+        // Own timer, so form-gone and page-form checks keep their cadence meanwhile.
+        fullDocumentWalkTimer ??= setTimeout(walkWholeDocument, wait)
+      }
+      return
+    }
+    for (const node of pendingAddedNodes.splice(0)) {
+      if (node.isConnected && node.nodeType === Node.ELEMENT_NODE) {
         observeShadowRoots(node)
       }
     }
+  }
+  function runDomCheck(): void {
+    domCheckTimer = null
+    discoverAddedShadowRoots()
     submits.checkFormGone()
     snapshotPageForms()
   }

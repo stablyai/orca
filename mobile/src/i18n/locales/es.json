@@ -578,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} alcanzó su límite de uso.",
       "reachedNamed": "{{agent}} alcanzó su límite {{window}}.",
-      "resetsAt": "Próximo restablecimiento: {{when}}.",
       "theAgent": "El agente",
       "windowCredits": "de uso adicional",
       "windowSession": "de sesión",
       "windowWeekly": "semanal",
-      "windowWeeklyModel": "semanal del modelo"
+      "windowWeeklyModel": "semanal del modelo",
+      "switchAccount": "Cambiar de cuenta",
+      "autoContinueCancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
+      "autoContinueCancel": "No continuar",
+      "statusResetAt": "Se restableció a las {{time}}",
+      "statusResetsAt": "Se restablece a las {{time}}",
+      "statusContinuesShortly": "Orca continuará en breve",
+      "statusContinuesThen": "Orca continuará entonces",
+      "statusWontContinue": "Orca no continuará automáticamente"
     },
     "useImageUpload": {
       "attachFailed": "No se pudo adjuntar",
@@ -656,6 +663,8 @@
     }
   },
   "common": {
+    "details": "Detalles",
+    "hideDetails": "Ocultar detalles",
     "back": "Atrás",
     "cancel": "Cancelar",
     "close": "Cerrar",
@@ -888,6 +897,13 @@
       "openImage": "Abrir imagen",
       "wrapLines": "Ajustar líneas",
       "disableLineWrap": "Desactivar ajuste de línea"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"
@@ -3366,7 +3382,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "No hay elementos en el proyecto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} más"
     },
     "githubProjectPickers": {
       "add": "Agregar",
