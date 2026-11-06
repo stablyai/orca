@@ -24,6 +24,9 @@ import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
 import { useNativeImageActions } from '../platform/native-image-actions'
+import { processDeviceStore } from '../device-store/device-store'
+import { serveDeviceStoreVerb } from './device-store-verb-server'
+import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-location-on-fold'
@@ -145,7 +148,9 @@ export function MobileWebShellScreen({
         ? servePdfView(params)
         : verb === 'native.image.act'
           ? serveImageAction(params)
-          : serveDeviceVerb(verb, params)
+          : verb === BRIDGE_STORE_VERB
+            ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
+            : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
