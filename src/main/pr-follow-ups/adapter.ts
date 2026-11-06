@@ -32,12 +32,14 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { prepareFollowUpLaunch } from './launch'
 import { followUpSessionLive, followUpSessionWorking } from './adapter-activity'
+import { subscribeFollowUpInventory } from './adapter-inventory'
 
 export function installPrFollowUpAdapter(
   runtime: OrcaRuntimeService,
   store: RuntimeStore,
-  catalog: { worktrees(): readonly Worktree[]; worktree(id: string): Worktree | undefined }
+  catalog: { worktrees(): readonly Worktree[]; load(): Promise<unknown> }
 ): () => Promise<void> {
+  const worktree = (id: string) => catalog.worktrees().find((row) => row.id === id)
   const settings = () => store.getSettings() as GlobalSettings
   let availability: readonly AgentSessionAgentAvailability[] = []
   let workspaces: readonly FollowUpWorkspace[] = []
@@ -155,7 +157,7 @@ export function installPrFollowUpAdapter(
       })
   }
   const recipeFor = (item: FollowUpTarget) => {
-    const repo = repoFor(catalog.worktree(item.worktreeId)!)
+    const repo = repoFor(worktree(item.worktreeId)!)
     if (!repo) {
       throw new Error('Repository unavailable')
     }
@@ -189,7 +191,7 @@ export function installPrFollowUpAdapter(
     workspaces: () => workspaces,
     targets: () => targets,
     target: (id) => {
-      const row = catalog.worktree(id)
+      const row = worktree(id)
       const previous = runtime.prFollowUps?.target(id)
       const observation = previous && runtime.prFollowUps?.observation(previous.prKey)
       return row && observation ? target(row, observation) : undefined
@@ -200,7 +202,7 @@ export function installPrFollowUpAdapter(
       new Set(Object.values(store.getAllWorktreeMeta()).flatMap((row) => row.instanceId ?? [])),
     subscribeInventory: (listener) => {
       listeners.add(listener)
-      const releaseStore = store.onStateWritten?.(() => changed())
+      const releaseInventory = subscribeFollowUpInventory(runtime, store, catalog, changed)
       const releaseAvailability = runtime.subscribeStructuredAgentAvailability((agents) => {
         if (JSON.stringify(availability) === JSON.stringify(agents)) {
           return
@@ -212,19 +214,10 @@ export function installPrFollowUpAdapter(
             console.error('[pr-follow-ups] availability reconciliation failed', error)
           )
       })
-      const releaseClient = runtime.onClientEvent(
-        (event) => {
-          if (event.type === 'worktreesChanged' || event.type === 'reposChanged') {
-            changed()
-          }
-        },
-        { consumesTerminalSideEffects: false }
-      )
       return () => {
         listeners.delete(listener)
-        releaseStore?.()
+        releaseInventory()
         releaseAvailability()
-        releaseClient()
       }
     },
     recipe: (item) => {

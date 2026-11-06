@@ -190,7 +190,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     if (!this.followUpHost) {
       installPrFollowUpAdapter(this, this.requireStore(), {
         worktrees: () => this.projectCachedWorktrees().worktrees,
-        worktree: (id) => this.buildResolvedWorktreeFromId(id) ?? undefined
+        load: () => this.listResolvedWorktrees()
       })
     }
     super.startPullRequestWatches()
