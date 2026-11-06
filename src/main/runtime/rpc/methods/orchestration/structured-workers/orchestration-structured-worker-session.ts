@@ -8,11 +8,11 @@ import {
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import { readAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureDetailText,
-  readAgentSessionFailureFact
-} from '../../../../../../shared/agent-session/failures/agent-session-failure'
-import { quotedProviderDetail } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
+  quotedProviderDetail
+} from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission

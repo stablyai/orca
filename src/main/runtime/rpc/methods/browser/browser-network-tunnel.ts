@@ -10,12 +10,13 @@ import {
 } from '../../../../browser/network/execution-routes/browser-network-execution-route'
 import { resolveBrowserNetworkExecutionRoute } from '../../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
 import { BrowserNetworkTunnelAttachParams } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import '../../../../../shared/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../../core'
 

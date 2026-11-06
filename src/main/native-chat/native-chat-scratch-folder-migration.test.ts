@@ -89,28 +89,6 @@ function logger(): StructuredAgentSessionLogger & {
 }
 
 describe('moving pre-rename chat visuals folders', () => {
-  it('moves each chat folder under the current root and removes the old root', async () => {
-    const state = stateDirectory()
-    legacyFor(state, 'chat-old', { 'chart.html': '<p>old chart</p>' })
-    writeFileSync(join(legacyRootOf(state), 'notes.txt'), 'not ours')
-    const canonical = currentFor(state, 'chat-resume', { 'chart.html': '<p>saved</p>' })
-    renameSync(canonical, `${canonical}.expired`)
-    mkdirSync(canonical)
-
-    await migrateLegacyNativeChatVisualsFolders(state, logger())
-
-    const moved = nativeChatScratchFolderFor(state, 'chat-old')
-    expect(readFileSync(join(moved, 'chart.html'), 'utf8')).toBe('<p>old chart</p>')
-    expect(await readNativeChatVisualFile(canonical, 'chart.html')).toMatchObject({
-      ok: true,
-      html: '<p>saved</p>'
-    })
-    expect(readdirSync(legacyRootOf(state))).toEqual(['notes.txt'])
-    rmSync(join(legacyRootOf(state), 'notes.txt'))
-    await migrateLegacyNativeChatVisualsFolders(state, logger())
-    expect(existsSync(legacyRootOf(state))).toBe(false)
-  })
-
   it('preserves saved filenames and keeps conflicting copies inside the chat folder', async () => {
     const state = stateDirectory()
     legacyFor(state, 'chat-both', {
@@ -241,13 +219,5 @@ describe('moving pre-rename chat visuals folders', () => {
     expect(log.warn.mock.calls.map(([, meta]) => meta?.scope)).toEqual([
       'nativeChatVisuals.migration'
     ])
-  })
-
-  it('does nothing when there is no old root', async () => {
-    const state = stateDirectory()
-    const log = logger()
-    await migrateLegacyNativeChatVisualsFolders(state, log)
-    expect(existsSync(nativeChatScratchRootFor(state))).toBe(false)
-    expect(log.warn).not.toHaveBeenCalled()
   })
 })

@@ -1,11 +1,12 @@
 import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import '../../../../../shared/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { BrowserHostLease } from '../../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../../orca-runtime'

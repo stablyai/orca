@@ -156,7 +156,8 @@ export function nativeChatSubagentSectionSlots({
       roster: NativeChatSubagentRosterState | undefined,
       turnKey: string | undefined
     ): void {
-      if (!roster?.open) {
+      // No child has rows yet (a reveal before first activity): the roster row draws every entry.
+      if (!roster?.open || roster.sections.size === 0) {
         return
       }
       for (const group of subagentGroupBlocks(message.blocks)) {

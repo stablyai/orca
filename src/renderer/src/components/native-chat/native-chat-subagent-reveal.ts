@@ -48,8 +48,8 @@ export function nativeChatSubagentPlace({
   sections: NativeChatSubagentSections
   roster: StructuredAgentSubagentRoster | undefined
   slots: readonly NativeChatTranscriptSlot[]
-  /** The sequence the transcript's history starts from (its latest `/clear`); 0 for none. */
-  historyFloor: number
+  /** The sequence the transcript's history starts from (its latest `/clear`); 0 for none. Read only when nothing loaded names the agent. */
+  historyFloor: () => number
 }): NativeChatSubagentPlace {
   const first = sections.rows.get(agentId)?.[0]
   if (first !== undefined) {
@@ -66,7 +66,7 @@ export function nativeChatSubagentPlace({
     return { kind: 'stop' }
   }
   // A spawn before the latest /clear is outside this conversation: no page reaches it.
-  return named.rosterPosition.sequence < historyFloor ? { kind: 'stop' } : { kind: 'page' }
+  return named.rosterPosition.sequence < historyFloor() ? { kind: 'stop' } : { kind: 'page' }
 }
 
 export type NativeChatSubagentLanding = {
