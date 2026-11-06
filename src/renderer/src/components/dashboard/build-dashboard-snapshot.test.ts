@@ -131,6 +131,45 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('omits an unstamped structured preview when two hosts publish the same workspace', () => {
+    const local = {
+      id: 'r1',
+      path: '/r1',
+      displayName: 'Repo One',
+      badgeColor: '#000',
+      addedAt: NOW,
+      executionHostId: 'local' as const
+    }
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [local],
+        worktreesByRepo: { r1: [worktree(), { ...worktree(), hostId: 'runtime:server-a' }] },
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        unifiedTabsByWorktree: {
+          w1: [
+            {
+              id: TAB_ID,
+              entityId: 'chat-1',
+              groupId: 'group',
+              worktreeId: 'w1',
+              contentType: 'agent-session',
+              agentSessionAgent: 'claude',
+              label: 'Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        ptyIdsByTabId: { [TAB_ID]: [] }
+      }),
+      NOW
+    )
+    expect(snapshot.cards[0]).toBeDefined()
+    expect(snapshot.cards.map((card) => card.chatSession)).toEqual([undefined, undefined])
+  })
+
   it('routes structured previews to the tab session and its recorded runtime', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

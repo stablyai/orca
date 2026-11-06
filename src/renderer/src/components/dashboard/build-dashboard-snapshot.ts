@@ -2,7 +2,7 @@ import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecyc
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
@@ -217,11 +217,7 @@ export function buildDashboardSnapshot(
             (tab) => tab.id === tabId && isStructuredTab(tab)
           )
         : undefined
-      const chatTarget = chatTab
-        ? structuredAgentSessionTargetForHost(
-            chatTab.executionHostId ?? hostMetadata?.executionHostId
-          )
-        : null
+      const chatTarget = chatTab ? structuredAgentSessionTargetForTab(state, chatTab) : null
 
       cards.push({
         paneKey: row.paneKey,
