@@ -53,6 +53,7 @@ import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { isRelayDatabaseTransientError } from './database.js'
 import {
+  EDGE_CELL_ID,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
   EdgeMoveBusyError,
   inEdgeCohort,
@@ -463,7 +464,17 @@ export function createRelayApp(
         selectedRegion: assignment.region,
         fallback: placed && assignment.region !== targetRegion
       })
-    const signAssignment = async (assignment: RelayAssignment) =>
+    // Set when this ask took the host's data back from the relay edge: the first answer elsewhere
+    // fences the edge (its phones then get WRONG_CELL).
+    let leftEdge = false
+    const signAssignment = async (assignment: RelayAssignment) => {
+      if (leftEdge && assignment.cellId !== EDGE_CELL_ID) {
+        leftEdge = false
+        await operations.edgeAssignments?.fenceAway(identity, assignment.cellId, assignment.assignmentEpoch)
+      }
+      return await signLease(assignment)
+    }
+    const signLease = async (assignment: RelayAssignment) =>
       await new SignJWT({
         purpose: 'cell-assignment',
         cellId: assignment.cellId,
@@ -481,11 +492,28 @@ export function createRelayApp(
     // Relay edge: a host in the cohort is moved (or kept) there before any other lane, since the
     // sticky and reserve lanes would read the edge row as not live and re-place the host.
     const edge = operations.edgeAssignments
-    if (
-      edge?.ready &&
+    const toEdge =
+      edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
       inEdgeCohort(edge.config, claims.relayHostId, requestedRegion)
-    ) {
+    if (edge?.pushes && !toEdge) {
+      // Any lane below may re-place a host whose row is on the edge; its devices come back first.
+      try {
+        leftEdge = await edge.leaveEdge(identity)
+      } catch (error) {
+        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error
+        logAssignmentRejection({
+          route: 'assign',
+          lane: 'none',
+          hinted: Boolean(body.data.reconnect),
+          relayHostId: claims.relayHostId,
+          reason: operationError(error)
+        })
+        context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+        return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+      }
+    }
+    if (edge && toEdge) {
       let moved: RelayAssignment
       try {
         moved = await edge.moveToEdge(
@@ -493,7 +521,8 @@ export function createRelayApp(
           Math.max(
             mapEpochFloor(operations.shadowSeats, identity, Date.now()),
             operations.reservePlacement?.rowEpochFloor(identity) ?? 0
-          )
+          ),
+          requestedRegion
         )
       } catch (error) {
         if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error

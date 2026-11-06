@@ -4,6 +4,13 @@ import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contra
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database.js'
+import { z } from 'zod'
+import {
+  EdgeAdminUnavailableError,
+  edgeLocationHint,
+  type EdgeAdmin,
+  type EdgeDeviceRow
+} from './edge-admin-client.js'
 
 // Hosts the director has moved to the relay edge carry this cell id on their assignment row. The
 // relay_cells row exists only so cells resolve the row (a phone of a moved host gets WRONG_CELL,
@@ -13,6 +20,8 @@ export const EDGE_CELL_ID = 'edge'
 
 export type EdgeRelayConfig = {
   cellUrl: string
+  // Present: phase 2 (host data in the edge's objects); director → edge admin calls use it.
+  adminSigningKey?: Uint8Array
   // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100.
   rolloutPercent: number
   allowHosts: ReadonlySet<string>
@@ -67,14 +76,59 @@ export function mapEpochFloor(source: EpochSource | undefined, identity: Identit
   return Math.max(0, ...known)
 }
 
+const DEVICE_COLUMNS = [
+  'user_id',
+  'relay_host_id',
+  'relay_device_id',
+  'current_hash',
+  'current_version',
+  'current_expires_at',
+  'grace_hash',
+  'grace_version',
+  'grace_expires_at',
+  'revoked_at',
+  'updated_at'
+] as const
+const NUMERIC_DEVICE_COLUMNS = new Set([
+  'current_version',
+  'current_expires_at',
+  'grace_version',
+  'grace_expires_at',
+  'revoked_at',
+  'updated_at'
+])
+const millis = z.number().int().nonnegative()
+const ExportedDeviceSchema = z
+  .object({
+    user_id: z.string().min(1),
+    relay_host_id: z.string(),
+    relay_device_id: z.string().min(1).max(128),
+    current_hash: z.string().min(1).max(256),
+    current_version: millis,
+    current_expires_at: millis,
+    grace_hash: z.string().min(1).max(256).nullable(),
+    grace_version: millis.nullable(),
+    grace_expires_at: millis.nullable(),
+    revoked_at: millis.nullable(),
+    updated_at: millis
+  })
+  .strict()
+
 export class EdgeAssignments {
   private seeded = false
 
+  // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
+  // host's devices before the answer, and every move off exports them back first.
   constructor(
     private readonly database: RelayDatabase,
     readonly config: EdgeRelayConfig,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly admin?: EdgeAdmin
   ) {}
+
+  get pushes(): boolean {
+    return this.admin !== undefined
+  }
 
   // The override answers nothing until the edge row is registered; before that a moved host's
   // phones would find no cell row and be told HOST_OFFLINE forever.
@@ -133,7 +187,7 @@ export class EdgeAssignments {
 
   // The host's own ask: moves its row to the edge, minting a strictly newer epoch only when the cell
   // changes (phones accept a move only with a newer epoch; re-asks must not flap the epoch).
-  async moveToEdge(identity: Identity, mapFloor: number): Promise<RelayAssignment> {
+  async moveToEdge(identity: Identity, mapFloor: number, region?: RelayRegion): Promise<RelayAssignment> {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
     return await this.database.transaction(async (transaction) => {
@@ -163,7 +217,10 @@ export class EdgeAssignments {
            RETURNING assignment_epoch`,
           [identity.userId, identity.relayHostId, EDGE_CELL_ID, epoch, leaseExpiresAt, now]
         )
-        if (inserted.length === 1) return this.answer(identity, epoch, leaseExpiresAt)
+        if (inserted.length === 1) {
+          const pushed = await this.pushOnto(transaction, identity, epoch, region)
+          return this.answer(identity, pushed, leaseExpiresAt)
+        }
         const winner = (
           await transaction.query(
             `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
@@ -190,15 +247,123 @@ export class EdgeAssignments {
          WHERE user_id = ? AND relay_host_id = ?`,
         [EDGE_CELL_ID, epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
       )
+      // Still under the row lock: the row commits only once the edge holds the host's data.
+      const pushed = await this.pushOnto(transaction, identity, epoch, region)
       console.warn(
         JSON.stringify({
           event: 'orca_relay_edge_moved',
           fromCellId: text(row, 'cell_id'),
-          assignmentEpoch: epoch
+          assignmentEpoch: pushed
         })
       )
-      return this.answer(identity, epoch, leaseExpiresAt)
+      return this.answer(identity, pushed, leaseExpiresAt)
     })
+  }
+
+  // Pushes the row just written (epoch `epoch`, still uncommitted) with the host's devices. An edge
+  // that already holds a newer or different epoch (an earlier push whose move never committed)
+  // names it; the row is re-minted above it once. Any failure rolls the move back (503, retry).
+  private async pushOnto(
+    transaction: RelayDatabase,
+    identity: Identity,
+    epoch: number,
+    region: RelayRegion | undefined
+  ): Promise<number> {
+    if (!this.admin) return epoch
+    const devices = (
+      await transaction.query(
+        `SELECT ${DEVICE_COLUMNS.join(', ')} FROM relay_devices
+         WHERE user_id = ? AND relay_host_id = ? ORDER BY relay_device_id`,
+        [identity.userId, identity.relayHostId]
+      )
+    ).map(deviceRow)
+    let assignmentEpoch = epoch
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let result
+      try {
+        result = await this.admin.assign({
+          ...identity,
+          cellId: EDGE_CELL_ID,
+          assignmentEpoch,
+          devices,
+          locationHint: edgeLocationHint(region)
+        })
+      } catch (error) {
+        if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveBusyError()
+        throw error
+      }
+      if (result.outcome === 'applied' || result.outcome === 'unchanged') return assignmentEpoch
+      assignmentEpoch = Math.max(assignmentEpoch, result.assignmentEpoch) + 1
+      await transaction.query(
+        `UPDATE relay_assignments SET assignment_epoch = ? WHERE user_id = ? AND relay_host_id = ?`,
+        [assignmentEpoch, identity.userId, identity.relayHostId]
+      )
+    }
+    throw new EdgeMoveBusyError()
+  }
+
+  // A host on the edge is about to be placed elsewhere (cohort off, rollback): first take its
+  // devices back. The edge refuses while the desktop is connected and otherwise freezes the host
+  // (30 s), so nothing changes after the snapshot. Returns false when the host is not on the edge.
+  async leaveEdge(identity: Identity): Promise<boolean> {
+    if (!this.seeded || !this.admin) return false
+    const row = (
+      await this.database.query(
+        `SELECT cell_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return false
+    let exported
+    try {
+      exported = await this.admin.exportHost(identity.relayHostId)
+    } catch (error) {
+      if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveBusyError()
+      throw error
+    }
+    if (exported.outcome === 'busy') throw new EdgeMoveBusyError()
+    // An object with no assignment never held this host's data (or was erased): keep Postgres.
+    if (!exported.assignment) return true
+    const devices = exported.devices.map((device) => {
+      const parsed = ExportedDeviceSchema.parse(device)
+      if (parsed.user_id !== identity.userId || parsed.relay_host_id !== identity.relayHostId) {
+        throw new Error('relay_edge_export_foreign_device')
+      }
+      return parsed
+    })
+    // The edge is the source of truth while the host is there: replace, so revokes carry over.
+    await this.database.transaction(async (transaction) => {
+      await transaction.query(`DELETE FROM relay_devices WHERE user_id = ? AND relay_host_id = ?`, [
+        identity.userId,
+        identity.relayHostId
+      ])
+      for (const device of devices) {
+        await transaction.query(
+          `INSERT INTO relay_devices (${DEVICE_COLUMNS.join(', ')})
+           VALUES (${DEVICE_COLUMNS.map(() => '?').join(', ')})`,
+          DEVICE_COLUMNS.map((column) => device[column])
+        )
+      }
+    })
+    console.warn(JSON.stringify({ event: 'orca_relay_edge_exported', devices: devices.length }))
+    return true
+  }
+
+  // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
+  // rather than HOST_OFFLINE. Best effort; until it lands the edge's freeze does the same, and after
+  // that its phones see HOST_OFFLINE until the next move.
+  async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
+    if (!this.admin) return true
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await this.admin.assign({ ...identity, cellId, assignmentEpoch })
+        if (result.outcome !== 'conflict') return true
+      } catch (error) {
+        if (!(error instanceof EdgeAdminUnavailableError)) throw error
+      }
+    }
+    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', cellId, assignmentEpoch }))
+    return false
   }
 
   private answer(identity: Identity, assignmentEpoch: number, leaseExpiresAt: number): RelayAssignment {
@@ -221,6 +386,20 @@ function requestUnits(row: SqlRow): number {
     integer(row, 'pending_confirmations') +
     integer(row, 'migration_leases')
   )
+}
+
+function deviceRow(row: SqlRow): EdgeDeviceRow {
+  const out: Record<string, unknown> = {}
+  for (const column of DEVICE_COLUMNS) {
+    const value = row[column]
+    out[column] =
+      value === null || value === undefined
+        ? null
+        : NUMERIC_DEVICE_COLUMNS.has(column)
+          ? integer(row, column)
+          : value
+  }
+  return out as EdgeDeviceRow
 }
 
 function integer(row: SqlRow, field: string): number {

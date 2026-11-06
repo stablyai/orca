@@ -165,6 +165,12 @@ const EnvSchema = z.object({
   ORCA_RELAY_EDGE_ALLOW_HOSTS: z.string().default(''),
   ORCA_RELAY_EDGE_DENY_HOSTS: z.string().default(''),
   ORCA_RELAY_EDGE_REGIONS: z.string().default(RELAY_DEFAULT_REGION),
+  // Set: the edge keeps host data in its objects, so moves push and export it (signed with this
+  // key, never the assignment lease key). Never unset while rows are on the edge.
+  ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(32).optional()
+  ),
   DATABASE_URL: z.string().optional(),
   ORCA_RELAY_DATA_DIR: z.string().default('./data/relay')
 })
@@ -454,8 +460,13 @@ function parseEdgeConfig(
     .map((region) => region.trim())
     .filter((region) => region.length > 0)
     .map((region) => RelayRegionSchema.parse(region))
+  const adminKey = parsed.ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY
+  if (adminKey !== undefined && adminKey === parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
+    throw new Error('ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY must differ from the assignment signing key')
+  }
   return {
     cellUrl,
+    ...(adminKey ? { adminSigningKey: new TextEncoder().encode(adminKey) } : {}),
     rolloutPercent: parsed.ORCA_RELAY_EDGE_ROLLOUT_PERCENT,
     allowHosts: hostIdList(parsed.ORCA_RELAY_EDGE_ALLOW_HOSTS, 'ORCA_RELAY_EDGE_ALLOW_HOSTS'),
     denyHosts: hostIdList(parsed.ORCA_RELAY_EDGE_DENY_HOSTS, 'ORCA_RELAY_EDGE_DENY_HOSTS'),
