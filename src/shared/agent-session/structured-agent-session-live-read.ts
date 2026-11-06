@@ -57,6 +57,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   hydrate?: (shouldStop: () => boolean) => Promise<void>
   sessionId: string
   subscribe: StructuredAgentSessionLiveSubscribe
+  /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
+  coalesceMs?: number
   /** Whether the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY; opens wait for it. */
   textAppend?: Promise<boolean>
   readCurrentRequests: (
@@ -89,7 +91,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     if (!shouldStopCoalescedEvent()) {
       args.applyEvent(event)
     }
-  })
+  }, args.coalesceMs)
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()
