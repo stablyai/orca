@@ -7,6 +7,8 @@ export type JournalSqlPrimitiveTable = {
   id: string
   value: string
   counter: string
+  /** The value column holds the entry's saved payload rather than a scalar. */
+  payload?: boolean
   group?: { column: string; value: string | number; counterTable: string }
 }
 
@@ -53,9 +55,11 @@ export class JournalSqlPrimitiveFact {
       .prepare(`SELECT ${this.table.value} AS value FROM ${this.table.table}
         WHERE ${this.where} AND ${this.table.id}=?`)
       .get(...this.prefix, JSON.parse(location.key))
-    return (
-      row && { value_json: JSON.stringify({ data: [this.scope.examined(row).value], refs: [] }) }
-    )
+    if (!row) {
+      return undefined
+    }
+    const { value } = this.scope.examined(row)
+    return { value_json: this.table.payload ? value : JSON.stringify({ data: [value], refs: [] }) }
   }
 
   counters(added: boolean, _replaced: boolean) {
@@ -86,7 +90,7 @@ export class JournalSqlPrimitiveFact {
 
   store(
     location: JournalSqlValueLocation,
-    _json: string,
+    json: string,
     value: unknown,
     _current: boolean,
     ordinal: number
@@ -100,7 +104,7 @@ export class JournalSqlPrimitiveFact {
         ...this.prefix,
         JSON.parse(location.key),
         ordinal,
-        ...(column === id ? [] : [this.scalar(value)])
+        ...(column === id ? [] : [this.table.payload ? json : this.scalar(value)])
       )
   }
 
@@ -109,11 +113,12 @@ export class JournalSqlPrimitiveFact {
     return value as string | number
   }
 
-  update(location: JournalSqlValueLocation, _json: string, value: unknown): boolean {
+  update(location: JournalSqlValueLocation, json: string, value: unknown): boolean {
     return !!this.scope.db
       .prepare(`UPDATE ${this.table.table} SET ${this.table.value}=?
         WHERE ${this.where} AND ${this.table.id}=?`)
-      .run(this.scalar(value), ...this.prefix, JSON.parse(location.key)).changes
+      .run(this.table.payload ? json : this.scalar(value), ...this.prefix, JSON.parse(location.key))
+      .changes
   }
 
   delete(_key: string): void {

@@ -129,6 +129,18 @@ CREATE TABLE IF NOT EXISTS journal_proj_domain_counters (
   settlements_ordinal INTEGER NOT NULL DEFAULT 0,
   normalized_handoffs_count INTEGER NOT NULL DEFAULT 0,
   normalized_handoffs_ordinal INTEGER NOT NULL DEFAULT 0,
+  item_echoes_count INTEGER NOT NULL DEFAULT 0,
+  item_echoes_ordinal INTEGER NOT NULL DEFAULT 0,
+  stopped_carried_count INTEGER NOT NULL DEFAULT 0,
+  stopped_carried_ordinal INTEGER NOT NULL DEFAULT 0,
+  handoff_places_count INTEGER NOT NULL DEFAULT 0,
+  handoff_places_ordinal INTEGER NOT NULL DEFAULT 0,
+  original_acceptances_count INTEGER NOT NULL DEFAULT 0,
+  original_acceptances_ordinal INTEGER NOT NULL DEFAULT 0,
+  carrier_coverage_count INTEGER NOT NULL DEFAULT 0,
+  carrier_coverage_ordinal INTEGER NOT NULL DEFAULT 0,
+  link_ids_count INTEGER NOT NULL DEFAULT 0,
+  link_ids_ordinal INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, epoch)
 ) WITHOUT ROWID;
 `

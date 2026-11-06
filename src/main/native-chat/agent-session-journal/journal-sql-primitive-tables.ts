@@ -194,6 +194,48 @@ const FACTS = {
     value: 'settlement_id',
     counter: 'settlements'
   },
+  itemEchoes: {
+    table: 'journal_proj_item_echoes',
+    id: 'item_id',
+    value: 'payload_json',
+    counter: 'item_echoes',
+    payload: true
+  },
+  stoppedHistoryCarried: {
+    table: 'journal_proj_stopped_carried',
+    id: 'input_id',
+    value: 'payload_json',
+    counter: 'stopped_carried',
+    payload: true
+  },
+  queuedHandOffPlaces: {
+    table: 'journal_proj_handoff_places',
+    id: 'input_id',
+    value: 'payload_json',
+    counter: 'handoff_places',
+    payload: true
+  },
+  'order.originals': {
+    table: 'journal_proj_original_acceptances',
+    id: 'input_id',
+    value: 'payload_json',
+    counter: 'original_acceptances',
+    payload: true
+  },
+  'evidence.carrierCoverage': {
+    table: 'journal_proj_carrier_coverage',
+    id: 'input_id',
+    value: 'payload_json',
+    counter: 'carrier_coverage',
+    payload: true
+  },
+  'links.ids': {
+    table: 'journal_proj_link_ids',
+    id: 'input_id',
+    value: 'payload_json',
+    counter: 'link_ids',
+    payload: true
+  },
   normalizedHandOffs: {
     table: 'journal_proj_normalized_handoffs',
     id: 'input_id',

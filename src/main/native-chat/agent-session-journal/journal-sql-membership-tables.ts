@@ -19,6 +19,13 @@ const MEMBERS = [
     table: 'journal_proj_input_coverers',
     group: 'input_id',
     id: 'carrier_id'
+  },
+  { name: 'phase:', table: 'journal_proj_phase_members', group: 'phase', id: 'input_id' },
+  {
+    name: 'link-family:',
+    table: 'journal_proj_link_family_members',
+    group: 'family_id',
+    id: 'input_id'
   }
 ] as const
 
@@ -30,7 +37,9 @@ export function journalSqlMemberIds(scope: JournalSqlScope, collection: string) 
   return new JournalSqlPrimitiveFact(scope, {
     table: family.table,
     id: family.id,
-    value: family.id,
+    ...(family.name === 'phase:' || family.name === 'link-family:'
+      ? { value: 'payload_json', payload: true }
+      : { value: family.id }),
     counter: 'members',
     group: {
       column: family.group,

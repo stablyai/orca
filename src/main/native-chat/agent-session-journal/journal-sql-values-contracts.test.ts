@@ -165,11 +165,8 @@ it('preserves undefined entries, membership, reinsert order and change-record or
   const reloaded = new JournalSqlKeyedMap<string, unknown>(f.context(), 'itemEchoes')
   expect([reloaded.has('a'), reloaded.get('a')]).toEqual([true, undefined])
   expect(
-    f.db
-      .prepare(`SELECT entry_key FROM journal_proj_values
-    WHERE collection='itemEchoes' ORDER BY ordinal`)
-      .all()
-  ).toEqual([{ entry_key: '"b"' }, { entry_key: '"a"' }])
+    f.db.prepare(`SELECT item_id FROM journal_proj_item_echoes ORDER BY ordinal`).all()
+  ).toEqual([{ item_id: 'b' }, { item_id: 'a' }])
 })
 
 it('materializes indexed cards through their source incarnation across commands', () => {

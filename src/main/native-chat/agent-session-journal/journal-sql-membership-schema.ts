@@ -117,5 +117,43 @@ CREATE TABLE IF NOT EXISTS journal_proj_input_coverers_counters (
   members_ordinal INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS journal_proj_phase_members (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  input_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  PRIMARY KEY (session_id, epoch, phase, input_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_proj_phase_members_order
+  ON journal_proj_phase_members(session_id, epoch, phase, ordinal);
+CREATE TABLE IF NOT EXISTS journal_proj_phase_members_counters (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  members_count INTEGER NOT NULL DEFAULT 0,
+  members_ordinal INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, epoch, phase)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS journal_proj_link_family_members (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  family_id TEXT NOT NULL,
+  input_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  PRIMARY KEY (session_id, epoch, family_id, input_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_proj_link_family_members_order
+  ON journal_proj_link_family_members(session_id, epoch, family_id, ordinal);
+CREATE TABLE IF NOT EXISTS journal_proj_link_family_members_counters (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  family_id TEXT NOT NULL,
+  members_count INTEGER NOT NULL DEFAULT 0,
+  members_ordinal INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, epoch, family_id)
+) WITHOUT ROWID;
 `
 }
