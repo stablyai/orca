@@ -302,6 +302,7 @@ export function useMobileNativeChatController(args: {
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
-    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
+    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
+    nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null
   }
 }

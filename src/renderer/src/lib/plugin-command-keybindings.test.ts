@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import {
@@ -47,6 +47,11 @@ describe('plugin command keybindings', () => {
 })
 
 describe('globalShortcutTargetYields', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+  })
+
   function editable(inNativeChat: boolean): HTMLElement {
     const root = document.createElement('div')
     if (inNativeChat) {
@@ -54,11 +59,15 @@ describe('globalShortcutTargetYields', () => {
     }
     const field = root.appendChild(document.createElement('div'))
     field.contentEditable = 'true'
+    if (inNativeChat) {
+      field.dataset.nativeChatPromptEditor = ''
+    }
     document.body.appendChild(root)
     return field
   }
 
-  it('lets only the default rename chord through a native chat text field', () => {
+  it('lets rename through the chat prompt while protecting ordinary fields and editing chords', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
     const yields = (letter: string, inNativeChat: boolean, overrides?: KeybindingOverrides) =>
       globalShortcutTargetYields(
         {

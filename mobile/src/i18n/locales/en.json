@@ -1327,6 +1327,13 @@
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap"
     },
+    "markdownCallout": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"
     },
@@ -3111,7 +3118,14 @@
       "windowCredits": "extra usage",
       "reachedNamed": "{{agent}} hit its {{window}} limit.",
       "reached": "{{agent}} hit its usage limit.",
-      "resetsAt": "It resets at {{when}}."
+      "switchAccount": "Switch Account",
+      "autoContinueCancelFailed": "Couldn't cancel automatic continuation. Try again.",
+      "autoContinueCancel": "Don't continue",
+      "statusResetAt": "Reset at {{time}}",
+      "statusResetsAt": "Resets at {{time}}",
+      "statusContinuesShortly": "Orca continues shortly",
+      "statusContinuesThen": "Orca continues then",
+      "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
       "reconnecting": "Reconnecting…",
@@ -3895,7 +3909,8 @@
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields",
       "loading": "Loading project…",
-      "noMatches": "No project items match."
+      "noMatches": "No project items match.",
+      "linkedPullRequestsOverflow": "+{{count}} more"
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",

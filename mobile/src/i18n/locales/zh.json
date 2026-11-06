@@ -539,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}} 已达到使用上限。",
       "reachedNamed": "{{agent}} 已达到{{window}}上限。",
-      "resetsAt": "将在 {{when}} 重置。",
       "theAgent": "智能体",
       "windowCredits": "额外用量",
       "windowSession": "会话",
       "windowWeekly": "每周",
-      "windowWeeklyModel": "模型每周"
+      "windowWeeklyModel": "模型每周",
+      "switchAccount": "切换账号",
+      "autoContinueCancelFailed": "无法取消自动继续。请重试。",
+      "autoContinueCancel": "不要继续",
+      "statusResetAt": "已于 {{time}} 重置",
+      "statusResetsAt": "将于 {{time}} 重置",
+      "statusContinuesShortly": "Orca 即将继续",
+      "statusContinuesThen": "届时 Orca 将继续",
+      "statusWontContinue": "Orca 不会自动继续"
     },
     "useImageUpload": {
       "attachFailed": "添加失败",
@@ -848,6 +855,13 @@
       "openImage": "打开图片",
       "wrapLines": "自动换行",
       "disableLineWrap": "关闭自动换行"
+    },
+    "markdownCallout": {
+      "note": "备注",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
@@ -3273,7 +3287,8 @@
       "moreFields_one": "+{{count}} 个字段",
       "moreFields_other": "+{{count}} 个字段",
       "noItems": "没有项目条目",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "另有 {{count}} 个"
     },
     "githubProjectPickers": {
       "add": "添加",
