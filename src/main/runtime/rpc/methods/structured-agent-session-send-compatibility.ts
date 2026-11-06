@@ -8,6 +8,7 @@ import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/age
 import type { RpcContext } from '../core'
 import { requireStructuredSessionHost, structuredCallerFor } from './structured-agent-session-gate'
 import { readsQueuedImageCards } from './structured-agent-session-queued-image-capability'
+import { recordMobileChatSend } from '../../../telemetry/mobile-client-telemetry'
 
 /** Older clients wait past acceptance until handoff/rejection because they cannot show later failure.
  * Command-queued replies avoid request timeout; clients predating pending replies still wait for provider response. */
@@ -22,6 +23,7 @@ export async function sendStructuredAgentSessionForClient(
     userSend: true,
     queuedImageCards: readsQueuedImageCards(context)
   })
+  recordMobileChatSend(context.clientKind, host.sessionAgent(params.envelope.sessionId), result)
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||
