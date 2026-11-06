@@ -90,7 +90,8 @@ export function NavBar({
 
 // Sits on the bar's bottom edge so the title, subtitle and accessory never move.
 function NavBarRefreshLine() {
-  const reducedMotion = useReducedMotionEnabled() === true
+  // Unknown counts as reduced, like LoadingSpinner.
+  const reducedMotion = useReducedMotionEnabled() !== false
   const sweep = useWorkingSweep(!reducedMotion)
   return (
     <View

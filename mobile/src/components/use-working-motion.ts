@@ -60,6 +60,7 @@ const SWEEP_END = 3.6
 
 /** A busy line's segment sweeping across its track; transforms can't animate percents natively, so it measures itself. */
 export function useWorkingSweep(active: boolean): WorkingMotion<{
+  opacity: number
   transform: { translateX: Animated.AnimatedInterpolation<number> }[]
 }> & { onLayout: ((event: LayoutChangeEvent) => void) | undefined } {
   const progress = useRef(new Animated.Value(0)).current
@@ -87,7 +88,8 @@ export function useWorkingSweep(active: boolean): WorkingMotion<{
   })
   return {
     ref: noRef,
-    style: { transform: [{ translateX }] },
+    // Unmeasured, it would sit still at the left edge for a frame.
+    style: { opacity: segmentWidth === 0 ? 0 : 1, transform: [{ translateX }] },
     onLayout: (event) => setSegmentWidth(event.nativeEvent.layout.width)
   }
 }
