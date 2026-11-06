@@ -35,7 +35,6 @@ export function DictationController() {
   const dictationStateRef = useRef(dictationState)
   dictationStateRef.current = dictationState
   const dictationRunRef = useRef(0)
-  const holdGestureActiveRef = useRef(false)
   const insertionTargetRef = useRef<DictationInsertionTarget | null>(null)
   const activeSessionIdRef = useRef<string | null>(null)
   const stoppedSessionIdsRef = useRef(new Set<string>())
@@ -43,7 +42,6 @@ export function DictationController() {
   const stopRequestedDuringStartRef = useRef(false)
   const finalTranscriptReceivedRef = useRef(false)
   const erroredSessionIdsRef = useRef(new Set<string>())
-  const intentionalTargetCancellationRef = useRef(false)
   const insertedFinalTranscriptRef = useRef('')
   // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
@@ -81,7 +79,6 @@ export function DictationController() {
       insertionTargetRef.current = null
       finalTranscriptReceivedRef.current = false
       insertedFinalTranscriptRef.current = ''
-      intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
       if (activeSessionIdRef.current === sessionId) {
         activeSessionIdRef.current = null
@@ -131,7 +128,6 @@ export function DictationController() {
     finalTranscriptReceivedRef.current = false
     erroredSessionIdsRef.current.clear()
     insertedFinalTranscriptRef.current = ''
-    intentionalTargetCancellationRef.current = false
     dictationStateRef.current = 'starting'
     setDictationState('starting')
 
@@ -225,7 +221,6 @@ export function DictationController() {
       discardBufferedAudio()
       const message = String(err)
       insertionTargetRef.current = null
-      intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
       finalTranscriptReceivedRef.current = false
       erroredSessionIdsRef.current.clear()
@@ -332,9 +327,6 @@ export function DictationController() {
 
   useHoldDictationGesture({
     dictationStateRef,
-    holdGestureActiveRef,
-    insertionTargetRef,
-    intentionalTargetCancellationRef,
     keybindings,
     settings,
     startDictation,
@@ -363,7 +355,7 @@ export function DictationController() {
         )
         insertText(textToInsert, target)
         insertedFinalTranscriptRef.current += textToInsert
-      } else if (!intentionalTargetCancellationRef.current) {
+      } else {
         toast.message(
           translate(
             'auto.components.dictation.DictationController.7afff43472',
@@ -400,7 +392,6 @@ export function DictationController() {
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
         insertionTargetRef.current = null
-        intentionalTargetCancellationRef.current = false
         stopRequestedDuringStartRef.current = false
         finalTranscriptReceivedRef.current = false
         insertedFinalTranscriptRef.current = ''

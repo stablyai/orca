@@ -11,6 +11,7 @@ import type {
   AntigravityAccountTarget
 } from '../../../../../../shared/antigravity-account-types'
 import type { ProviderRateLimits, RateLimitState } from '../../../../../../shared/rate-limit-types'
+import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Badge } from '../../../ui/badge'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
@@ -32,6 +33,20 @@ function formatUsageReading(usage: ProviderRateLimits): string {
       weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
     }
   )
+}
+
+function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget): boolean {
+  if (target.runtime === 'host' || target.wslDistro) {
+    return (
+      provenance ===
+      localAccountRuntimeTargetKey({
+        runtime: target.runtime,
+        wslDistro: target.wslDistro ?? null
+      })
+    )
+  }
+  // The host names the default distro; this client does not know it.
+  return provenance.startsWith('wsl:')
 }
 
 export function AntigravityAccountsSection({
@@ -123,8 +138,16 @@ export function AntigravityAccountsSection({
         ) {
           throw new Error('The native account changed while reading usage. Refresh usage again.')
         }
+        const usage = snapshot.rateLimits.antigravity
+        const provenance = usage?.usageMetadata?.authProvenance
+        // Usage follows the Accounts location; a reading from another runtime is another login's.
+        if (provenance && !usageMatchesTarget(provenance, target)) {
+          throw new Error(
+            'Antigravity usage was read from a different location. Refresh usage again.'
+          )
+        }
         if (mounted.current) {
-          setUsage(snapshot.rateLimits.antigravity)
+          setUsage(usage)
         }
       } else {
         const next = await callAntigravityAccounts(owner, target, action, accountId)
@@ -229,7 +252,7 @@ export function AntigravityAccountsSection({
             <Button
               variant="ghost"
               size="sm"
-              disabled={busy || !state.currentAccount || target.runtime === 'wsl'}
+              disabled={busy || !state.currentAccount}
               onClick={() => void run('Usage')}
             >
               {translate('accounts.antigravity.usage', 'Refresh usage')}

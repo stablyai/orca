@@ -2268,6 +2268,7 @@
         "cb55b0390f": "管理",
         "4f9313984d": "審查人",
         "02cbe2de44": "管線",
+        "itemLoadFailed": "無法載入此項目。請重新整理以再試一次。",
         "be3d291837": "檔案",
         "c996e2962c": "對話",
         "b3c156dd51": "重新整理",
@@ -17397,6 +17398,8 @@
           "noRunUsageYet": "尚無執行用量",
           "noWorkspace": "無工作區",
           "latestSavedOutput": "最近儲存的輸出",
+          "fullOutputUnavailable": "無法載入完整輸出。",
+          "retryFullOutput": "重試",
           "backToList": "全部自動化",
           "tableName": "名稱",
           "tableProject": "專案",
@@ -19103,6 +19106,7 @@
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
       },
       "composer": {
+        "planMode": "規劃",
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
         "previewQueue": "加入佇列",

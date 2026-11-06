@@ -695,10 +695,6 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
-        "changedFilesSummary": "Changed files summary",
-        "changedFilesSummaryDescription": "Shows the files each turn changed, with line counts, below the reply.",
-        "changedFilesSummaryKeywordDiff": "diff",
-        "changedFilesSummaryKeywordEdits": "edits",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -2542,6 +2538,7 @@
         "cb55b0390f": "Manage",
         "4f9313984d": "Reviewers",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Could not load this item. Refresh to try again.",
         "be3d291837": "Files",
         "c996e2962c": "Conversation",
         "b3c156dd51": "Refresh",
@@ -18045,6 +18042,8 @@
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
+          "fullOutputUnavailable": "Couldn't load the full output.",
+          "retryFullOutput": "Retry",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
@@ -19865,9 +19864,7 @@
         "changedFiles_other": "{{count}} changed files",
         "showMoreFiles": "Show {{count}} more",
         "hide": "Hide",
-        "hidden": "Hidden",
-        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI.",
-        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat UI</settings>"
+        "hidden": "Orca won't show turn diffs anymore"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -19906,6 +19903,9 @@
       },
       "composer": {
         "send": "Send",
+        "planMode": "Plan",
+        "moreControls": "More chat controls",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
         "previewQueue": "Queue",
         "previewSteer": "Steer",
@@ -20689,14 +20689,14 @@
         }
       },
       "cardKindHidden": {
-        "title": "We won't show these anymore.",
         "description": "You can change this anytime in",
-        "settingsLink": "Settings › Chat",
-        "failed": "Could not save that setting."
+        "settingsLink": "Settings > Chat UI > Turn activity",
+        "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
       },
       "openedPullRequests": {
         "one": "Opened {{name}}",
         "hide": "Don't show opened pull requests",
+        "hidden": "Orca won't show opened pull requests anymore",
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       }
@@ -21139,10 +21139,15 @@
         "idleStopSearchTimeout": "timeout",
         "idleStopSearchKeepAlive": "keep alive",
         "idleStopNever": "Never",
-        "openedPullRequestsTitle": "Show pull requests the agent opens",
-        "openedPullRequestsCopy": "A card under the turn that opened a pull request, with its title and changed lines.",
+        "openedPullRequestsTitle": "Opened pull requests",
+        "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
         "openedPullRequestsSearchPr": "PR",
-        "openedPullRequestsSearchCard": "pull request card"
+        "openedPullRequestsSearchCard": "pull request card",
+        "turnActivityTitle": "Turn activity",
+        "turnDiffsTitle": "Turn diffs",
+        "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
+        "turnDiffsSearchChangedFiles": "changed files",
+        "turnDiffsSearchEdits": "edits"
       }
     },
     "agentChildRow": {

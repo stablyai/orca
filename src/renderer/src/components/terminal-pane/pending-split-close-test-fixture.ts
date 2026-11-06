@@ -3,7 +3,7 @@ import type { AppState } from '@/store/types'
 import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-retirement'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyConnectResult, PtyTransport } from './pty-transport-types'
+import type { PtyConnectResult, PtyTransport } from './pty-transport/pty-transport-types'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
@@ -68,7 +68,7 @@ export async function preparePendingSplitClose(
   requestedPtyId = 'pty-restored',
   worktreeId = 'workspace'
 ) {
-  const { createIpcPtyTransport } = await import('./pty-transport')
+  const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
   const { useTerminalPaneLayoutBindings } = await import('./use-terminal-pane-layout-bindings')
   const { useTerminalPaneCloseActions } = await import('./use-terminal-pane-close-actions')
   const { createTerminalPaneClosedHandler } = await import('./terminal-pane-pane-closed')

@@ -1,7 +1,7 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneCwdMap } from '../../resolve-split-cwd'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
 import { splitTerminalPaneWithInheritedCwd } from '../../terminal-pane-split-with-inherited-cwd'
 import {

@@ -3982,6 +3982,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "원래 에이전트 창을 사용할 수 없습니다. 저장된 출력은 여기에 유지됩니다.",
       "openAgent": "에이전트 열기",
       "retryHistory": "기록 다시 불러오기",
+      "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+      "retryFullOutput": "다시 시도",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "불러온 기록에 일치하는 실행이 없습니다. 계속하려면 더 불러오세요.",
       "noMatchingRunsYet": "아직 일치하는 실행이 없습니다.",
       "runSummary": "{{title}}, {{status}}, {{date}}",

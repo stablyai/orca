@@ -1,7 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import { TERMINAL_KITTY_SHIFT_ENTER_INPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { PaneCwdMap } from '../../resolve-split-cwd'
 import type { MacOptionAsAlt } from './terminal-option-shortcut-policy'
 import type {

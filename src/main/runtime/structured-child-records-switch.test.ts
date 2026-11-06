@@ -121,7 +121,8 @@ describe('the chat strip and the session list read the same host child records',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      // Side reads (at-rest `/` commands) spawn the CLI directly; a missing binary keeps them off the real codex.
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection),
       statusSink

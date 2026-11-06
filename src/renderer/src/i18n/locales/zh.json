@@ -1859,6 +1859,7 @@
         "cb55b0390f": "管理",
         "4f9313984d": "评审人",
         "02cbe2de44": "管道",
+        "itemLoadFailed": "无法加载此项目。请刷新后重试。",
         "be3d291837": "文件",
         "c996e2962c": "对话",
         "b3c156dd51": "刷新",
@@ -16974,6 +16975,8 @@
           "noRunUsageYet": "尚无运行用量",
           "noWorkspace": "无工作区",
           "latestSavedOutput": "最近保存的输出",
+          "fullOutputUnavailable": "无法加载完整输出。",
+          "retryFullOutput": "重试",
           "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",
@@ -18586,6 +18589,7 @@
         "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "composer": {
+        "planMode": "规划",
         "send": "发送",
         "alternateSteerHint": "{{shortcut}} 立即发送",
         "previewQueue": "加入队列",
