@@ -44,7 +44,6 @@ export class DeviceRegistryWriter {
   private quarantinedUntilWritten = false
   /** Stat identity of the file when this process last read it; null forces the next re-read. */
   private readStamp: string | null = null
-  /** Monotonic time of the last external-edit stat. */
   private checkedAt = Number.NEGATIVE_INFINITY
 
   constructor(private readonly registryPath: string) {}
@@ -63,10 +62,9 @@ export class DeviceRegistryWriter {
 
   /**
    * `current` merged over the file when another writer changed it since this process last read it,
-   * else null. Stats at most once per interval, so another process's edit (an admin removing a row)
-   * is seen within a second; our own saves clear the stamp and are re-read at the next check. An
-   * unreadable or corrupt file, or our own quarantine's absence, proves nothing about removals, so
-   * it changes nothing.
+   * else null. Stats at most once per interval, except right after our own save. An unreadable or
+   * corrupt file, or our own quarantine's absence, proves nothing about removals, so it changes
+   * nothing.
    */
   adoptExternalEdits(current: readonly DeviceEntry[]): DeviceEntry[] | null {
     if (this.quarantinedUntilWritten) {
