@@ -88,6 +88,8 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
   }): Promise<void> {
     const restorePtyId = session.transport.getPtyId()
     const restoreGeneration = session.hiddenOutputRestoreGeneration
+    // Why: the replay clears scrollback (normal buffer) or swaps buffers (TUI), which shifts or drops an in-progress drag selection and eats a mouse-mode TUI's drag reports; the validity check below drops a replay that went stale while parked.
+    await session.terminalSelectionFitGuard?.whenInactive()
     if (session.hiddenOutputSnapshotScrollRestore) {
       session.cancelSnapshotScrollRestore()
     }
@@ -102,6 +104,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     const rowsBeforeReplay = session.pane.terminal.rows
     const hasSnapshotDimensions = hasPositiveTerminalDimensions(snapshot.cols, snapshot.rows)
     let skippedAltFrame = false
+    let parkedForDrag = false
     try {
       await session.structuralReplayCoordinator.run(
         async () => {
@@ -111,6 +114,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             session.transport.getPtyId() !== scrollRestore.ptyId ||
             session.hiddenOutputRestoreGeneration !== scrollRestore.generation
           ) {
+            return
+          }
+          // Why: a drag can start while this task waits behind another replay; re-park without holding the presentation lock.
+          if (session.terminalSelectionFitGuard?.isActive()) {
+            parkedForDrag = true
             return
           }
           scrollRestore.started = true
@@ -200,6 +208,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
         },
         {
           shouldRestore: () =>
+            !parkedForDrag &&
             scrollRestore.valid &&
             !session.disposed &&
             session.transport.getPtyId() === scrollRestore.ptyId &&
@@ -278,6 +287,15 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
       if (session.hiddenOutputSnapshotScrollRestore === scrollRestore) {
         session.hiddenOutputSnapshotScrollRestore = null
       }
+    }
+    if (
+      parkedForDrag &&
+      scrollRestore.valid &&
+      !session.disposed &&
+      session.transport.getPtyId() === restorePtyId &&
+      session.hiddenOutputRestoreGeneration === restoreGeneration
+    ) {
+      await session.applyMainBufferSnapshot(snapshot)
     }
   }
 }
