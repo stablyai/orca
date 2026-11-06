@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, type GestureResponderEvent } from 'react-native'
 import type {
   AgentSmartKey,
   AgentSmartKeyName,
@@ -53,14 +53,14 @@ export function MobileSessionSmartKeys({
   keySet: AgentSmartKeySet
   disabled: boolean
   onPressIn: (key: AgentSmartKey) => void
-  onPress: (key: AgentSmartKey) => void
+  onPress: (key: AgentSmartKey, event: GestureResponderEvent) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
     <>
       <View style={styles.smartGroup}>
-        <MobileAgentIcon agentId={keySet.agent} size={13} />
+        <MobileAgentIcon agentId={keySet.agentId} size={13} />
         {keySet.keys.map((key) => {
           const word = key.name ? smartKeyWord(t, key.name) : null
           return (
@@ -75,7 +75,7 @@ export function MobileSessionSmartKeys({
               disabled={disabled}
               hitSlop={TERMINAL_KEY_HIT_SLOP}
               onPressIn={() => onPressIn(key)}
-              onPress={() => onPress(key)}
+              onPress={(event) => onPress(key, event)}
               accessibilityRole="button"
               accessibilityLabel={
                 word

@@ -47,6 +47,8 @@ export type AgentSmartKey = {
 }
 
 export type AgentSmartKeySet = {
+  /** The tab's own agent, e.g. openclaude, for its icon; `agent` is the TUI whose keys apply. */
+  readonly agentId: string
   readonly agent: AgentSmartKeyAgent
   readonly state: AgentSmartKeyState
   readonly keys: readonly AgentSmartKey[]
@@ -148,23 +150,20 @@ export function resolveAgentSmartKeys(
     return null
   }
   const agent: AgentSmartKeyAgent = transcriptAgent
+  const withKeys = (
+    state: AgentSmartKeyState,
+    keys: readonly AgentSmartKey[] | null | undefined
+  ): AgentSmartKeySet | null =>
+    agentId && keys && keys.length > 0 ? { agentId, agent, state, keys } : null
   const phase = hookRowAgentPhase(row)
   if (phase === 'working') {
-    return withKeys(agent, 'working', STATE_KEYS[agent].working)
+    return withKeys('working', STATE_KEYS[agent].working)
   }
   if (phase !== 'needs-you') {
-    return withKeys(agent, 'idle', STATE_KEYS[agent].idle)
+    return withKeys('idle', STATE_KEYS[agent].idle)
   }
   if (parseNativeChatApprovalEnvelope(row.interactivePrompt, agent)) {
-    return withKeys(agent, 'permission', STATE_KEYS[agent].permission)
+    return withKeys('permission', STATE_KEYS[agent].permission)
   }
-  return agent === 'claude' ? withKeys(agent, 'question', questionKeys(row)) : null
-}
-
-function withKeys(
-  agent: AgentSmartKeyAgent,
-  state: AgentSmartKeyState,
-  keys: readonly AgentSmartKey[] | null | undefined
-): AgentSmartKeySet | null {
-  return keys && keys.length > 0 ? { agent, state, keys } : null
+  return agent === 'claude' ? withKeys('question', questionKeys(row)) : null
 }

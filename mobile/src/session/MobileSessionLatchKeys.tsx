@@ -1,4 +1,4 @@
-import { Pressable, Text } from 'react-native'
+import { Pressable, Text, type GestureResponderEvent } from 'react-native'
 import type { TerminalShortcutModifier } from '../terminal/terminal-accessory-keys'
 import type { StickyModifiers } from '../terminal/terminal-sticky-modifiers'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -21,7 +21,7 @@ export function MobileSessionLatchKeys({
   modifiers: StickyModifiers
   disabled: boolean
   onPressIn: () => void
-  onPress: (modifier: TerminalShortcutModifier) => void
+  onPress: (modifier: TerminalShortcutModifier, event: GestureResponderEvent) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -46,7 +46,7 @@ export function MobileSessionLatchKeys({
         disabled={disabled}
         hitSlop={TERMINAL_KEY_HIT_SLOP}
         onPressIn={onPressIn}
-        onPress={() => onPress(id)}
+        onPress={(event) => onPress(id, event)}
         accessibilityRole="button"
         accessibilityLabel={names[id]}
         accessibilityState={{ selected: latch !== 'off' }}

@@ -28,7 +28,7 @@ import type { TerminalAccessoryKey } from '../terminal/terminal-accessory-keys'
 import { resolveMobileTerminalTabSmartKeys, sameSmartKeySet } from './mobile-terminal-tab-agent'
 import { MobileSessionSmartKeys } from './MobileSessionSmartKeys'
 import { MobileSessionLatchKeys } from './MobileSessionLatchKeys'
-import { useTerminalKeyRowTouch } from './use-terminal-key-row-touch'
+import { isAccessibilityClick, useTerminalKeyRowTouch } from './use-terminal-key-row-touch'
 
 type PreparedPress = ReturnType<MobileSessionController['prepareAccessoryPress']>
 
@@ -129,7 +129,9 @@ export function MobileSessionAccessoryKeys({
       modifiers={dockKeys.modifiers}
       disabled={!canSend}
       onPressIn={() => touch.arm('latch')}
-      onPress={(modifier) => touch.fire('latch', () => dockKeys.tapModifier(modifier))}
+      onPress={(modifier, event) =>
+        touch.fire('latch', event, () => dockKeys.tapModifier(modifier))
+      }
     />
   )
   return (
@@ -175,7 +177,7 @@ export function MobileSessionAccessoryKeys({
             keySet={smartKeys}
             disabled={!canSend}
             onPressIn={(key) => touch.arm(`smart:${key.id}`)}
-            onPress={(key) => touch.fire(`smart:${key.id}`, () => sendSmartKey(key))}
+            onPress={(key, event) => touch.fire(`smart:${key.id}`, event, () => sendSmartKey(key))}
           />
         ) : null}
         <Pressable
@@ -183,8 +185,8 @@ export function MobileSessionAccessoryKeys({
           disabled={!canSend}
           hitSlop={TERMINAL_KEY_HIT_SLOP}
           onPressIn={() => touch.arm('displayMode')}
-          onPress={() =>
-            touch.fire('displayMode', () => {
+          onPress={(event) =>
+            touch.fire('displayMode', event, () => {
               if (activeHandle) {
                 void toggleDisplayMode(activeHandle)
               }
@@ -209,7 +211,7 @@ export function MobileSessionAccessoryKeys({
             disabled={!canSend}
             hitSlop={TERMINAL_KEY_HIT_SLOP}
             onPressIn={() => touch.arm('paste')}
-            onPress={() => touch.fire('paste', () => void handlePaste())}
+            onPress={(event) => touch.fire('paste', event, () => void handlePaste())}
             accessibilityRole="button"
             accessibilityLabel={t(
               'session.accessoryKeys.pasteFromClipboard',
@@ -247,15 +249,13 @@ export function MobileSessionAccessoryKeys({
             }}
             onPress={(event) => {
               // Accessibility clicks have no touch-down to prepare a sender.
-              const accessibilityClick =
-                event.type === 'click' &&
-                'detail' in event.nativeEvent &&
-                event.nativeEvent.detail === 0
               const prepared =
-                (key.repeatable && !accessibilityClick && accessoryPresses.current.get(key.id)) ||
+                (key.repeatable &&
+                  !isAccessibilityClick(event) &&
+                  accessoryPresses.current.get(key.id)) ||
                 prepareBuiltInPress(key)
               accessoryPresses.current.delete(key.id)
-              touch.fire(key.id, () => {
+              touch.fire(key.id, event, () => {
                 if (prepared.chord) {
                   dockKeys.takeModifiers()
                 }
@@ -292,7 +292,9 @@ export function MobileSessionAccessoryKeys({
             disabled={!canSend}
             hitSlop={TERMINAL_KEY_HIT_SLOP}
             onPressIn={() => touch.arm(key.id)}
-            onPress={() => touch.fire(key.id, () => void handleAccessoryKey({ bytes: key.bytes }))}
+            onPress={(event) =>
+              touch.fire(key.id, event, () => void handleAccessoryKey({ bytes: key.bytes }))
+            }
             onLongPress={() => {
               triggerMediumImpact()
               setDeleteKeyTarget(key)
@@ -312,7 +314,7 @@ export function MobileSessionAccessoryKeys({
           style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
           hitSlop={TERMINAL_KEY_HIT_SLOP}
           onPressIn={() => touch.arm('addKey')}
-          onPress={() => touch.fire('addKey', () => setShowCustomKeyModal(true))}
+          onPress={(event) => touch.fire('addKey', event, () => setShowCustomKeyModal(true))}
           accessibilityRole="button"
           accessibilityLabel={t('session.accessoryKeys.addCustomShortcut', 'Add custom shortcut')}
         >
