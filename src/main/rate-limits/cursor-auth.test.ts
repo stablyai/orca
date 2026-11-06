@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const keychainState = vi.hoisted<{ token: string | null; error: Error | null }>(() => ({
+const keychainState = vi.hoisted<{
+  token: string | null
+  error: Error | null
+  safeStoragePassword: string | null
+  safeStorageError: Error | null
+}>(() => ({
   token: null,
-  error: null
+  error: null,
+  safeStoragePassword: null,
+  safeStorageError: null
 }))
 const files = vi.hoisted<() => Map<string, string | Error>>(() => {
   const map = new Map<string, string | Error>()
@@ -13,7 +20,13 @@ const desktopState = vi.hoisted<{
 }>(() => ({ result: { status: 'missing' } }))
 
 vi.mock('../macos-keychain/generic-password', () => ({
-  readKeychainPassword: async () => {
+  readKeychainPassword: async (service: string) => {
+    if (service === 'Cursor Safe Storage') {
+      if (keychainState.safeStorageError) {
+        throw keychainState.safeStorageError
+      }
+      return keychainState.safeStoragePassword
+    }
     if (keychainState.error) {
       throw keychainState.error
     }
@@ -39,6 +52,7 @@ vi.mock('../foreign-sqlite-readers/foreign-sqlite-reader-spawn', () => ({
   readCursorDesktopProfile: async () => desktopState.result
 }))
 
+import { createCipheriv, pbkdf2Sync } from 'node:crypto'
 import { readCursorAuthSession, readCursorCliIdentity } from './cursor-auth'
 
 type JwtSegment = Record<string, unknown>
@@ -53,6 +67,25 @@ function jwt(sub: string): string {
   const encode = (value: JwtSegment): string =>
     Buffer.from(JSON.stringify(value)).toString('base64url')
   return `${encode({ alg: 'RS256' })}.${encode({ sub, exp: 2_000_000_000 })}.signature`
+}
+
+function safeStorageEncrypt(token: string, password: string): string {
+  const key = pbkdf2Sync(password, 'saltysalt', 1003, 16, 'sha1')
+  const cipher = createCipheriv('aes-128-cbc', key, Buffer.alloc(16, ' '))
+  const payload = Buffer.concat([Buffer.from('v10'), cipher.update(token), cipher.final()])
+  return `cursor-safe-storage:v1:${payload.toString('base64')}`
+}
+
+function desktopProfile(accessToken: string): { status: string; profile: unknown } {
+  return {
+    status: 'ok',
+    profile: {
+      accessToken,
+      email: 'ide@example.com',
+      membershipType: 'ultra',
+      subscriptionStatus: 'active'
+    }
+  }
 }
 
 const CLI_AUTH = '/cli/auth.json'
@@ -75,6 +108,8 @@ beforeEach(() => {
   setPlatform('darwin')
   keychainState.token = null
   keychainState.error = null
+  keychainState.safeStoragePassword = null
+  keychainState.safeStorageError = null
   files().clear()
   desktopState.result = { status: 'missing' }
 })
@@ -205,6 +240,40 @@ describe('readCursorAuthSession', () => {
 
   it('skips a stored token that carries no subject', async () => {
     keychainState.token = 'not-a-jwt'
+    expect(await readCursorAuthSession(options)).toEqual({ status: 'missing' })
+  })
+})
+
+describe('readCursorAuthSession with an encrypted Cursor IDE token', () => {
+  it('decrypts the IDE token Cursor 3.x encrypts at rest', async () => {
+    keychainState.safeStoragePassword = 'cursor-key'
+    desktopState.result = desktopProfile(safeStorageEncrypt(jwt('github|user_ide'), 'cursor-key'))
+    const result = await readCursorAuthSession(options)
+    expect(result.status === 'ok' && result.session.source).toBe('desktop')
+    expect(result.status === 'ok' && result.session.token.subject).toBe('github|user_ide')
+  })
+
+  it('explains a denied Cursor Safe Storage keychain read instead of reporting signed out', async () => {
+    keychainState.safeStorageError = new Error('User canceled the operation')
+    desktopState.result = desktopProfile(safeStorageEncrypt(jwt('github|user_ide'), 'cursor-key'))
+    expect(await readCursorAuthSession(options)).toEqual({
+      status: 'error',
+      error: 'Unable to read the Cursor IDE encryption key from the macOS Keychain'
+    })
+  })
+
+  it('reports an undecryptable IDE token as an error', async () => {
+    keychainState.safeStoragePassword = 'other-key'
+    desktopState.result = desktopProfile(safeStorageEncrypt(jwt('github|user_ide'), 'cursor-key'))
+    expect(await readCursorAuthSession(options)).toEqual({
+      status: 'error',
+      error: 'Unable to decrypt the Cursor IDE login'
+    })
+  })
+
+  it('keeps reporting signed out off macOS, where the key is not read yet', async () => {
+    setPlatform('linux')
+    desktopState.result = desktopProfile(safeStorageEncrypt(jwt('github|user_ide'), 'cursor-key'))
     expect(await readCursorAuthSession(options)).toEqual({ status: 'missing' })
   })
 })
