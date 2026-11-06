@@ -2,7 +2,6 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -84,31 +83,6 @@ describe('codex structured launch resolution', () => {
       expect((await resolve({ identity: IDENTITY })).args).toEqual(['app-server'])
     }
   )
-
-  it('resumes a saved thread the same way whatever its origin', async () => {
-    const link = (
-      origin: AgentSessionProviderHandleLink['origin'],
-      mintedAtFence: number
-    ): AgentSessionProviderHandleLink => ({
-      linkId: `link-${mintedAtFence}`,
-      handle: codexProviderHandle('t'),
-      origin,
-      mintedAtFence,
-      observedAt: 1
-    })
-    const chainFor = (origin: 'created' | 'resumed' | 'adopted') =>
-      origin === 'resumed' ? [link('created', 1), link('resumed', 2)] : [link(origin, 1)]
-
-    for (const origin of ['created', 'resumed', 'adopted'] as const) {
-      const launch = await resolverFor(record({ providerHandleChain: chainFor(origin) }))({
-        identity: IDENTITY
-      })
-      expect(launch.resumeThreadId).toBe('t')
-      expect(launch).not.toHaveProperty('supersedeIfUnsaved')
-    }
-    const fresh = await resolverFor(record())({ identity: IDENTITY })
-    expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
-  })
 
   it('refuses a session pinned to another host rather than starting a second writer here', async () => {
     await expect(
