@@ -5,6 +5,7 @@ import type {
   EmulatorSelectionRequired
 } from '../../shared/emulator-opening-preferences'
 import type { EmulatorDevice } from './backends/emulator-backend'
+import { findBootedWorkspaceDevice } from './emulator-default-attach-device'
 
 type Settings = Pick<
   GlobalSettings,
@@ -43,8 +44,13 @@ export function rememberEmulatorDevice(
 
 export function resolveEmulatorOpeningPreference(
   settings: Settings,
-  devices: EmulatorDevice[]
+  devices: EmulatorDevice[],
+  current?: string
 ): { device: string } | { selectionRequired: EmulatorSelectionRequired } {
+  const currentDevice = findBootedWorkspaceDevice(devices, current)
+  if (currentDevice) {
+    return { device: currentDevice.id }
+  }
   const mode = getEmulatorOpeningMode(settings)
   if (mode === 'ask') {
     return { selectionRequired: 'ask' }

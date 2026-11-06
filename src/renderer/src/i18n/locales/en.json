@@ -23834,6 +23834,21 @@
     }
   },
   "emulator": {
+    "opening": {
+      "when": "When opening",
+      "description": "Applies to new emulator tabs on this computer. Existing workspace sessions stay connected.",
+      "lastUsed": "Last used",
+      "ask": "Ask every time",
+      "specific": "Specific device",
+      "fixed": "Default device",
+      "fixedDescription": "Choose an existing device. A missing or unavailable device prompts for another selection instead of starting a different platform.",
+      "choose": "Choose device",
+      "notFound": "Not found",
+      "missing": "The saved device is no longer on this computer. Choose another device.",
+      "unavailable": "The saved device runtime is unavailable. Choose another device or install its runtime.",
+      "askPrompt": "Choose a device to open.",
+      "firstUse": "Choose your first device. Orca will remember successful selections on this computer."
+    },
     "errors": {
       "disabled": "Mobile Emulator is disabled in Settings.",
       "notAvailable": "Mobile Emulator is not available.",
@@ -23867,21 +23882,6 @@
     },
     "settings": {
       "availabilityCheckFailed": "Could not check emulator availability."
-    },
-    "opening": {
-      "when": "When opening",
-      "description": "Applies to new emulator tabs on this computer. Existing workspace sessions stay connected.",
-      "lastUsed": "Last used",
-      "ask": "Ask every time",
-      "specific": "Specific device",
-      "fixed": "Default device",
-      "fixedDescription": "Choose an existing device. A missing or unavailable device prompts for another selection instead of starting a different platform.",
-      "choose": "Choose device",
-      "notFound": "Not found",
-      "missing": "The saved device is no longer on this computer. Choose another device.",
-      "unavailable": "The saved device runtime is unavailable. Choose another device or install its runtime.",
-      "askPrompt": "Choose a device to open.",
-      "firstUse": "Choose your first device. Orca will remember successful selections on this computer."
     }
   },
   "ephemeralVm": {

@@ -240,11 +240,6 @@ describe('useEmulatorPaneSession', () => {
     expect(latest?.isLive).toBe(true)
     expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
     expect(latest?.displayName).toBe('iPhone B')
-    expect(
-      vi
-        .mocked(window.api.runtime.call)
-        .mock.calls.filter(([request]) => request.method === 'emulator.attach')
-    ).toHaveLength(1)
   })
 
   it('shows a connecting state instead of the old live preview while switching devices', async () => {

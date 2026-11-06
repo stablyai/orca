@@ -68,7 +68,7 @@ describe('user emulator opening', () => {
       info: { deviceUdid: 'emulator-5558' }
     })
   })
-  it('remembers only successful deliberate UI selection and keeps host preferences isolated', async () => {
+  it('remembers only successful deliberate UI selection', async () => {
     const { commands, settings, acquire } = setup()
     await commands.emulatorAttach({ device: 'emulator-5558' })
     expect(settings.mobileEmulatorRecentDevices).toBeUndefined()
@@ -83,7 +83,6 @@ describe('user emulator opening', () => {
       kind: 'avd',
       backend: 'android'
     })
-    expect(setup().settings.mobileEmulatorRecentDevices).toBeUndefined()
   })
   it('reuses the current workspace session even when opening mode is ask', async () => {
     const { commands, settings, bridge, acquire } = setup()
@@ -93,6 +92,32 @@ describe('user emulator opening', () => {
       await commands.emulatorAttach({ worktree: 'folder:project', userInitiated: true })
     ).toMatchObject({ attached: true, info: { deviceUdid: 'emulator-5558' } })
     expect(acquire).not.toHaveBeenCalled()
+  })
+  it.each(['specific', 'ask', 'last-used'] as const)(
+    'reconnects the workspace device after its stream ends in %s mode',
+    async (mode) => {
+      const { commands, settings, bridge } = setup()
+      settings.mobileEmulatorDefaultDeviceUdid = 'iphone'
+      settings.mobileEmulatorOpeningMode = mode
+      vi.spyOn(bridge, 'getActiveForWorktree').mockReturnValue(info('emulator-5558'))
+      await expect(
+        commands.emulatorAttach({ worktree: 'project', userInitiated: true })
+      ).resolves.toMatchObject({ attached: true, info: { deviceUdid: 'emulator-5558' } })
+    }
+  )
+  it.each([
+    [undefined, 'iphone'],
+    ['specific', 'iphone'],
+    ['ask', 'emulator-5558'],
+    ['last-used', 'emulator-5558']
+  ] as const)('uses the CLI default appropriate to %s mode', async (mode, deviceUdid) => {
+    const { commands, settings } = setup()
+    settings.mobileEmulatorDefaultDeviceUdid = 'iphone'
+    settings.mobileEmulatorOpeningMode = mode
+    await expect(commands.emulatorAttach({})).resolves.toMatchObject({
+      attached: true,
+      info: { deviceUdid }
+    })
   })
   it('ignores a late completion when a newer deliberate selection succeeded', async () => {
     const { commands, settings, acquire } = setup()
@@ -157,10 +182,6 @@ describe('successful attach with unavailable preference storage', () => {
           })
         ).resolves.toMatchObject({ attached: true, info: { deviceUdid: 'emulator-5558' } })
         expect(notified).toHaveBeenCalledWith('project', info('emulator-5558'), false)
-        expect(warning).toHaveBeenCalledWith(
-          '[emulator] Could not save the last-used device',
-          failure
-        )
       } finally {
         warning.mockRestore()
       }

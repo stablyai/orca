@@ -8,7 +8,10 @@ import {
 } from '../emulator/emulator-opening-preference'
 import type { RuntimeEmulatorCommandHost } from './orca-runtime-emulator'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
-import type { EmulatorSelectionRequired } from '../../shared/emulator-opening-preferences'
+import {
+  getEmulatorOpeningMode,
+  type EmulatorSelectionRequired
+} from '../../shared/emulator-opening-preferences'
 
 export type RuntimeEmulatorAttachParams = {
   device?: string
@@ -91,7 +94,11 @@ export class RuntimeEmulatorAttach {
         const devices = await bridge.listAllDevices()
         assertCurrent()
         if (!device) {
-          const selection = resolveEmulatorOpeningPreference(settings, devices)
+          const selection = resolveEmulatorOpeningPreference(
+            settings,
+            devices,
+            worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined
+          )
           if ('selectionRequired' in selection) {
             return { attached: false, ...selection }
           }
@@ -110,7 +117,10 @@ export class RuntimeEmulatorAttach {
       } else {
         device ??= await resolveDefaultAttachDevice(bridge, {
           current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
-          configured: settings.mobileEmulatorDefaultDeviceUdid ?? undefined
+          configured:
+            getEmulatorOpeningMode(settings) === 'specific'
+              ? (settings.mobileEmulatorDefaultDeviceUdid ?? undefined)
+              : undefined
         })
       }
       if (!device) {

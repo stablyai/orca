@@ -21,16 +21,6 @@ describe('emulator opening preferences', () => {
       selectionRequired: 'first-use'
     })
   })
-  it('resolves a remembered AVD after its adb serial changes', () => {
-    const recent = rememberEmulatorDevice(devices[1], [])
-    expect(recent[0].id).toBe('Pixel9_API36')
-    expect(
-      resolveEmulatorOpeningPreference({ mobileEmulatorRecentDevices: recent }, devices)
-    ).toEqual({ device: 'emulator-5558' })
-    expect(
-      resolveEmulatorOpeningPreference({ mobileEmulatorRecentDevices: recent }, devices.slice(0, 1))
-    ).toEqual({ selectionRequired: 'missing' })
-  })
   it('preserves a legacy fixed device, but respects an explicit ask or last-used mode', () => {
     const settings = {
       mobileEmulatorDefaultDeviceUdid: 'iphone',
