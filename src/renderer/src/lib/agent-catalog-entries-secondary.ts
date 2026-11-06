@@ -153,6 +153,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'aiwork',
+      label: translate('auto.lib.agent.catalog.aiwork_label', 'AiWork'),
+      cmd: 'aiwork',
+      homepageUrl: 'https://aiwork.dtagi.cn/home'
     }
   ]
 }

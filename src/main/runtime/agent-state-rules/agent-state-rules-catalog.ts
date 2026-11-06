@@ -1,4 +1,5 @@
 import { AgentStateRulesFileSchema, type AgentStateRulesFile } from './agent-state-rules-schema'
+import aiwork from './aiwork.json'
 import antigravity from './antigravity.json'
 import claude from './claude.json'
 import cline from './cline.json'
@@ -34,6 +35,7 @@ export function parseAgentStateRuleFiles(files: readonly unknown[]): AgentStateR
 
 /** The checked-in rule files exactly as bundled; the catalog test validates them against the schema. */
 export const RAW_BUNDLED_AGENT_STATE_RULE_FILES: readonly unknown[] = [
+  aiwork,
   antigravity,
   claude,
   cline,

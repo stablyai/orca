@@ -449,6 +449,25 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     }
   )
 
+  it.each(['--yes', '--dangerously-skip-permissions'])(
+    'keeps AiWork alias %s under Full instead of adding a second -y',
+    (value) => {
+      const before: AgentLaunchSettingsSource = { agentPermissionDefault: 'full-access' }
+      const updates = agentLaunchSettingsMutationUpdates(
+        before,
+        { type: 'user-arguments', agent: 'aiwork', value },
+        'linux'
+      )
+      const loaded = migrateAgentPermissionChoice(
+        JSON.parse(JSON.stringify({ ...before, ...updates })),
+        'linux'
+      )
+      // `aiwork tui` refuses `-y --yes`: the switch may be given only once.
+      expect(resolveTuiAgentLaunchArgs('aiwork', loaded)).toBe(value)
+      expect(agentArgsSetPermission('aiwork', value)).toBe(true)
+    }
+  )
+
   it.each(
     (['linux', 'win32'] as const).flatMap((platform) =>
       [20, 200].map((n) => [platform, n] as const)
