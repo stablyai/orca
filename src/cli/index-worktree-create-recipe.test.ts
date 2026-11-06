@@ -45,7 +45,7 @@ import { buildWorktree, okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
-import { WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY } from '../shared/worktree-recipe-create-capability'
+import { WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY } from '../shared/host-runtime-capabilities'
 
 describe('CLI worktree create --recipe', () => {
   useWorktreeAwarenessEnvironment({

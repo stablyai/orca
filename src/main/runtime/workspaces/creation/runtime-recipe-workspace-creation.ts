@@ -38,12 +38,7 @@ export abstract class RuntimeRecipeWorkspaceCreation extends RuntimeProvisionedW
     const recorded = this.recordCreatedWorktreeLineage(result.worktree, lineage)
     this.notifyReposChanged()
     this.notifyWorktreesChanged(result.worktree.repoId)
-    this.emitWorktreeLifecycle({
-      kind: 'created',
-      worktreeId: result.worktree.id,
-      path: result.worktree.path,
-      branch: result.worktree.branch
-    })
+    // No lifecycle event: plugin events carry `path` as a path on this machine, and this one is inside the VM.
     if (params.activate === true) {
       this.notifyActivateWorktree(result.worktree.repoId, result.worktree.id)
     }

@@ -156,7 +156,19 @@ export async function createProvisionedRecipeWorkspace(
       ...(warning ? { warning } : {})
     }
   } catch (error) {
-    await ports.cleanup(runtimeId).catch(() => undefined)
-    throw error
+    const cleanupFailure = await ports.cleanup(runtimeId).then(
+      () => null,
+      (cleanupError: unknown) => cleanupError
+    )
+    if (cleanupFailure === null) {
+      throw error
+    }
+    // Why: a failed destroy leaves a billed machine; the caller must hear about it, not just the first error.
+    const original = error instanceof Error ? error.message : String(error)
+    const cleanup =
+      cleanupFailure instanceof Error ? cleanupFailure.message : String(cleanupFailure)
+    throw new Error(
+      `${original} The VM (runtime ${runtimeId}) may still be running because its cleanup failed: ${redactEphemeralVmRecipeDiagnosticText(cleanup)}. Retry cleanup from the VM runtimes in Orca settings.`
+    )
   }
 }

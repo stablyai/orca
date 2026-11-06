@@ -1,5 +1,5 @@
 import type { RuntimeStatus, RuntimeWorktreeCreateResult } from '../../shared/runtime-types'
-import { WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY } from '../../shared/worktree-recipe-create-capability'
+import { WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY } from '../../shared/host-runtime-capabilities'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import {
   callAgentLaunch,

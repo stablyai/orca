@@ -68,7 +68,8 @@ export async function createCliRecipeWorkspace(args: {
             branch: branchName,
             ref: params.baseBranch
           },
-          pluginRecipes
+          pluginRecipes,
+          { repo }
         ),
       call: (environmentId, method, payload) =>
         callRuntimeEnvironment(userDataPath, `id:${environmentId}`, method, payload, 600_000),
@@ -82,7 +83,10 @@ export async function createCliRecipeWorkspace(args: {
           recipe,
           runtimeId
         })
-        if (cleaned.ok) {
+        if (!cleaned.ok) {
+          throw new Error(cleaned.error)
+        }
+        try {
           await releaseEphemeralVmRuntimeEnvironments(
             userDataPath,
             cleaned.runtime,
@@ -95,12 +99,14 @@ export async function createCliRecipeWorkspace(args: {
               )
             }
           )
-          await removeEphemeralVmRuntimeSshTarget({
-            userDataPath,
-            runtime: cleaned.runtime,
-            removeTarget: removeRuntimeOwnedSshTarget
-          })
+        } catch {
+          // The provider resources are gone; a stale local environment row must not block removing the SSH target.
         }
+        await removeEphemeralVmRuntimeSshTarget({
+          userDataPath,
+          runtime: cleaned.runtime,
+          removeTarget: removeRuntimeOwnedSshTarget
+        })
       }
     }
   )

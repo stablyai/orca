@@ -1,4 +1,5 @@
 import type { Store } from '../persistence/loading-store/store'
+import type { Repo } from '../../shared/repo-types'
 import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
 import {
   getEphemeralVmRecipeResultWarnings,
@@ -72,12 +73,16 @@ export async function provisionRecipeEnvironment(
   args: RecipeEnvironmentProvisionArgs,
   pluginRecipes: readonly OrcaVmRecipe[],
   options: {
+    /** A caller that already resolved the repo by host passes it; an id lookup could pick another host's twin. */
+    repo?: Repo
     signal?: AbortSignal
     onStdout?: (chunk: string) => void
     onStderr?: (chunk: string) => void
   } = {}
 ): Promise<EphemeralVmProvisionIpcResult> {
-  const repo = getRecipeRepo(store, args.repoId)
+  const repo = options.repo
+    ? ({ ok: true, repo: options.repo } as const)
+    : getRecipeRepo(store, args.repoId)
   if (!repo.ok) {
     return provisionFailure(repo.failure)
   }

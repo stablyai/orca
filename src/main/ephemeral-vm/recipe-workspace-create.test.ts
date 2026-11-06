@@ -141,7 +141,7 @@ describe('CLI provisioned-root recipe workspace creation', () => {
     expect(ports.cleanup).toHaveBeenCalledWith('vm')
     expect(ports.attach).not.toHaveBeenCalled()
   })
-  it('destroys after adoption fails and preserves the original error when cleanup also fails', async () => {
+  it('destroys after adoption fails and reports both errors when cleanup also fails', async () => {
     const failed = {
       ...ports,
       call: vi.fn(ports.call).mockImplementationOnce(async () => ({
@@ -154,7 +154,7 @@ describe('CLI provisioned-root recipe workspace creation', () => {
       })
     }
     await expect(createProvisionedRecipeWorkspace(request(), failed)).rejects.toThrow(
-      'Remote host unavailable'
+      /Remote host unavailable.*runtime vm\) may still be running.*Destroy failed/
     )
     expect(failed.cleanup).toHaveBeenCalledWith('vm')
     expect(ports.attach).not.toHaveBeenCalled()
