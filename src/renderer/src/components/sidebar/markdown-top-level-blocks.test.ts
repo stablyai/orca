@@ -74,6 +74,27 @@ describe('splitMarkdownTopLevelBlocks', () => {
     expect(streamed(source, 2)).toEqual([source])
   })
 
+  it.each([
+    ['a type parameter', 'A `Vec` is a Vec<T> of items.\n\nAfter.\n'],
+    ['an unknown tag block', '<example>\n\nInside.\n\n</example>\n'],
+    ['a closed inline tag', 'Before <sub>low</sub>.\n\nAfter.\n'],
+    ['a void tag', 'Line<br>break.\n\nAfter.\n']
+  ])('keeps cutting a document with %s, which cannot wrap a later block', (_name, source) => {
+    expect(streamed(source, 2)).toEqual(cut(source))
+    expect(cut(source).length).toBeGreaterThan(1)
+  })
+
+  it('cuts again once an open tag closes within its block', () => {
+    const open = splitMarkdownTopLevelBlocks('One.\n\nTwo <b>bold', null, true)
+    expect(open.whole).toBe(true)
+    const closed = splitMarkdownTopLevelBlocks('One.\n\nTwo <b>bold</b>.\n\nThree.', open, true)
+    expect(closed.blocks.map((block) => block.text)).toEqual([
+      'One.\n\n',
+      'Two <b>bold</b>.\n\n',
+      'Three.'
+    ])
+  })
+
   it('starts over when the source is replaced rather than appended to', () => {
     const first = splitMarkdownTopLevelBlocks('one\n\ntwo\n', null)
     expect(cut('other\n\ntext\n', first)).toEqual(['other\n\n', 'text\n'])

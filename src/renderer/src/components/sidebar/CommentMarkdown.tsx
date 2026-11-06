@@ -29,6 +29,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
+import { COMMENT_MARKDOWN_TAG_NAMES } from './comment-markdown-tag-names'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
   MemoizedMarkdown,
@@ -86,7 +87,7 @@ export function remarkGitHubReferences(
 
 const commentMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'sub', 'sup', 'ins', 'kbd'],
+  tagNames: [...COMMENT_MARKDOWN_TAG_NAMES],
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
