@@ -78,7 +78,6 @@ export async function createSharedControlTestServer(
   servers.push(wss)
 
   wss.on('connection', (ws) => {
-    connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false
     ws.on('message', (data, isBinary) => {
@@ -87,7 +86,13 @@ export async function createSharedControlTestServer(
       }
       const frame = data.toString()
       if (!sharedKey) {
-        const hello = JSON.parse(frame) as { publicKeyB64: string }
+        const hello: { publicKeyB64?: string } = JSON.parse(frame)
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
+        connectionCount += 1
         sharedKey = deriveSharedKey(
           serverKeyPair.secretKey,
           publicKeyFromBase64(hello.publicKeyB64)
