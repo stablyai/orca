@@ -1,4 +1,4 @@
-import { resolveOrcadBindHost } from '../../main/orcad/orcad-bind-address'
+import { resolveOrcadBindHost } from '../../shared/orcad-bind-address'
 import { getPresentStringFlag } from '../flags'
 import { RuntimeClientError } from './types'
 

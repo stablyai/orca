@@ -2,7 +2,7 @@ import {
   getServeFlagTypoError,
   getServeOptionValidationError
 } from '../../shared/serve-option-validation'
-import { resolveOrcadBindHost } from '../orcad/orcad-bind-address'
+import { resolveOrcadBindHost } from '../../shared/orcad-bind-address'
 
 export type ServeOptions = {
   json: boolean
