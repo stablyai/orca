@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { getConfigPath, type ClaudeCompatibleHookSettings } from './hook-settings'
 

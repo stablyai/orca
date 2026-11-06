@@ -1,4 +1,4 @@
-import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
@@ -85,6 +85,9 @@ function formatCpu(cpu: number): string {
 }
 
 function formatProcessMemoryMetric(metric: MemorySnapshot['processMemoryMetric']): string {
+  if (metric === 'footprint') {
+    return 'summed memory footprint (Activity Monitor); includes graphics memory'
+  }
   return metric === 'working-set'
     ? 'summed working set; shared pages may repeat'
     : 'summed RSS; shared or aliased pages may repeat'

@@ -1,16 +1,17 @@
 import { useMemo } from 'react'
 import {
   runningStructuredAgentSessionTurnId,
-  structuredAgentSessionHostSaysWorking
-} from '../../../../shared/structured-agent-session-live-turn'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
-import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
-import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
+  structuredAgentSessionHostSaysWorking,
+  structuredAgentSessionQueueSendsNext
+} from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
+import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { structuredSessionForegroundCommands } from '../../../../shared/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []
@@ -43,9 +44,10 @@ export function useStructuredAgentSessionTransportState(
   const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
     isStructuredAgentSessionMainAgentWorking(turnId, current.submissions, fence)
   )
-  const nextQueuedMessageId = (enabled ? state.nextQueuedMessageId : null) ?? null
-  // Keep working through the gap between turn-end/Resume and the host’s next queued-send update.
-  const queueSendsNext = nextQueuedMessageId !== null && !isWorking
+  const queueSendsNext = structuredAgentSessionQueueSendsNext(
+    enabled ? state.nextQueuedMessageId : null,
+    isWorking
+  )
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
     [enabled, journalItems, state.activity, turnId]

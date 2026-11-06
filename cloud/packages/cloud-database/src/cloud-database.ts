@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import pg from 'pg'
 import { parseIntoClientConfig } from 'pg-connection-string'
-import { applyPostgresSchema } from '@orca-cloud/postgres-schema'
+import { applyPostgresSchema, schemaLockTarget } from '@orca-cloud/postgres-schema'
 
 const POSTGRES_LOCK_TIMEOUT_MS = 1_000
 const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
@@ -109,7 +109,7 @@ class SqliteDatabase extends SqliteTransaction {
 class PostgresTransaction implements CloudDatabase {
   readonly dialect = 'postgres' as const
 
-  constructor(private readonly client: pg.PoolClient) {}
+  constructor(private readonly client: pg.ClientBase) {}
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
     const result = await this.client.query(postgresSql(sql), params)
@@ -142,6 +142,22 @@ class PostgresTransaction implements CloudDatabase {
   }
 
   async close(): Promise<void> {}
+}
+
+// One transaction on a caller's own connection, such as the one holding a session lock.
+export async function runClientTransaction<T>(
+  client: pg.ClientBase,
+  operation: (transaction: CloudDatabase) => Promise<T>
+): Promise<T> {
+  try {
+    await client.query('BEGIN')
+    const result = await operation(new PostgresTransaction(client))
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined)
+    throw error
+  }
 }
 
 function retryablePostgresTransactionError(error: unknown): boolean {
@@ -177,12 +193,8 @@ class PostgresDatabase implements CloudDatabase {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
       const client = await this.pool.connect()
       try {
-        await client.query('BEGIN')
-        const result = await operation(new PostgresTransaction(client))
-        await client.query('COMMIT')
-        return result
+        return await runClientTransaction(client, operation)
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined)
         if (
           !retryablePostgresTransactionError(error) ||
           attempt === POSTGRES_TRANSACTION_ATTEMPTS
@@ -224,9 +236,22 @@ class PostgresDatabase implements CloudDatabase {
   }
 }
 
+// SQLite has no ADD COLUMN IF NOT EXISTS: run it as a plain ADD COLUMN only while the column is missing.
 async function applySchema(database: CloudDatabase, statements: string[]): Promise<void> {
   for (const statement of statements) {
-    await database.query(statement)
+    const target = schemaLockTarget(statement)
+    if (target?.kind !== 'column') {
+      await database.query(statement)
+      continue
+    }
+    // SQLite names: quotes stripped, compared without case.
+    const [present] = await database.query(
+      'SELECT 1 FROM pragma_table_info(?) WHERE lower(name) = lower(?)',
+      [target.table.replace(/^"|"$/g, ''), target.name.replace(/^"|"$/g, '')]
+    )
+    if (!present) {
+      await database.query(statement.replace(/\bADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b/i, 'ADD COLUMN'))
+    }
   }
 }
 

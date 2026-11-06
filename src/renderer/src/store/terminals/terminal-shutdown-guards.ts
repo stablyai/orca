@@ -1,5 +1,5 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers

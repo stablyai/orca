@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import type { RpcContext } from '../core'
 
 // Return a deterministic transcript with an oversized tool result to verify client-specific clipping.

@@ -26,6 +26,8 @@ const store = vi.hoisted(() => {
 
 vi.mock('@/store', () => ({ useAppStore: store }))
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+const callRuntimeRpc = vi.hoisted(() => vi.fn(async () => ({ started: true })))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
 
 const PANE_KEY = 'tab-1:leaf-1'
 
@@ -36,7 +38,7 @@ function session(): ConnectPanePtySession {
     disposed: false,
     waitTeardowns: [],
     pane: { id: 1, leafId: 'leaf-1' },
-    deps: { tabId: 'tab-1', onPtyErrorRef: { current: vi.fn() } }
+    deps: { tabId: 'tab-1', worktreeId: 'wt-1', onPtyErrorRef: { current: vi.fn() } }
   } as unknown as ConnectPanePtySession
 }
 
@@ -45,53 +47,80 @@ describe('waitsForMainPaneStart', () => {
     store.setStarts({})
   })
 
-  it('runs every waiter once main’s start ends', async () => {
+  // Main held background work on a stopped distro (E9): the pane shows the shared Start card.
+  it("shows main's stopped-distro hold as the Start card, which asks main to start it", async () => {
     const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
+    const { wslDistroStoppedHoldStore, startHeldPanesForWslDistro } =
+      await import('../wsl-distro-stopped-hold-state')
     const pane = session()
     store.setStarts({ [PANE_KEY]: { status: 'starting' } })
-    const first = vi.fn()
-    const second = vi.fn()
 
-    expect(waitsForMainPaneStart(pane, first)).toBe(true)
-    expect(waitsForMainPaneStart(pane, second)).toBe(true)
+    waitsForMainPaneStart(pane, vi.fn(), vi.fn())
+    store.setStarts({
+      [PANE_KEY]: { status: 'failed', reason: 'terminal_held_wsl_distro_stopped:Ubuntu' }
+    })
+
+    expect(pane.deps.onPtyErrorRef?.current).not.toHaveBeenCalled()
+    expect(wslDistroStoppedHoldStore.getState().panes[PANE_KEY]).toMatchObject({
+      distro: 'Ubuntu',
+      state: 'stopped'
+    })
+    startHeldPanesForWslDistro('Ubuntu')
+    expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.startWslHeldPanes', {
+      panes: [{ worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1' }]
+    })
+    expect(wslDistroStoppedHoldStore.getState().panes[PANE_KEY]).toBeUndefined()
+  })
+
+  it("clears the card once main's start ends another way", async () => {
+    const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
+    const { wslDistroStoppedHoldStore } = await import('../wsl-distro-stopped-hold-state')
+    const pane = session()
+    store.setStarts({ [PANE_KEY]: { status: 'starting' } })
+    const connect = vi.fn()
+
+    waitsForMainPaneStart(pane, connect)
+    store.setStarts({
+      [PANE_KEY]: { status: 'failed', reason: 'terminal_held_wsl_distro_stopped:Ubuntu' }
+    })
     store.setStarts({})
 
-    expect(first).toHaveBeenCalledOnce()
-    expect(second).toHaveBeenCalledOnce()
+    expect(connect).toHaveBeenCalledOnce()
+    expect(wslDistroStoppedHoldStore.getState().panes[PANE_KEY]).toBeUndefined()
   })
 
-  it('tells each waiter when main shows the start failed', async () => {
+  it('carries an unchecked distro to the card as unverifiable', async () => {
     const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
+    const { wslDistroStoppedHoldStore } = await import('../wsl-distro-stopped-hold-state')
     const pane = session()
     store.setStarts({ [PANE_KEY]: { status: 'starting' } })
-    const failedFirst = vi.fn()
-    const failedLater = vi.fn()
 
-    waitsForMainPaneStart(pane, vi.fn(), failedFirst)
-    store.setStarts({ [PANE_KEY]: { status: 'failed', reason: 'spawn exploded' } })
-    waitsForMainPaneStart(pane, vi.fn(), failedLater)
+    waitsForMainPaneStart(pane, vi.fn(), vi.fn())
+    store.setStarts({
+      [PANE_KEY]: { status: 'failed', reason: 'terminal_held_wsl_distro_unverifiable:Ubuntu' }
+    })
 
-    expect(failedFirst).toHaveBeenCalledOnce()
-    expect(failedLater).toHaveBeenCalledOnce()
-    expect(pane.deps.onPtyErrorRef?.current).toHaveBeenCalledWith(
-      1,
-      'The terminal could not start: spawn exploded'
-    )
+    expect(wslDistroStoppedHoldStore.getState().panes[PANE_KEY]).toMatchObject({
+      distro: 'Ubuntu',
+      state: 'unverifiable'
+    })
+    expect(pane.deps.onPtyErrorRef?.current).not.toHaveBeenCalled()
   })
-  // A start main could not bind shows its reason through this wait.
-  it('shows terminal_not_started from main through the wait', async () => {
-    const { waitsForMainPaneStart } = await import('./main-pane-start-wait')
+
+  it('shows the Start card when the refusal carries the readable sentence, not the code', async () => {
+    const { showPaneStartFailure } = await import('./main-pane-start-wait')
+    const { wslDistroStoppedHoldStore } = await import('../wsl-distro-stopped-hold-state')
     const pane = session()
-    store.setStarts({ [PANE_KEY]: { status: 'starting' } })
-    const failed = vi.fn()
 
-    waitsForMainPaneStart(pane, vi.fn(), failed)
-    store.setStarts({ [PANE_KEY]: { status: 'failed', reason: 'terminal_not_started' } })
-
-    expect(failed).toHaveBeenCalledOnce()
-    expect(pane.deps.onPtyErrorRef?.current).toHaveBeenCalledWith(
-      1,
-      'The terminal could not start: terminal_not_started'
+    showPaneStartFailure(
+      pane,
+      "The WSL distro Debian is stopped, so Orca didn't start this terminal. Start the distro, then try again."
     )
+
+    expect(wslDistroStoppedHoldStore.getState().panes[PANE_KEY]).toMatchObject({
+      distro: 'Debian',
+      state: 'stopped'
+    })
+    expect(pane.deps.onPtyErrorRef?.current).not.toHaveBeenCalled()
   })
 })

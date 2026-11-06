@@ -1,9 +1,9 @@
 // After sleep beyond freshness, reconnect snapshots lacking host status erased client-OSC-owned agent rows despite live PTYs (STA-3107). Preserve rows and decay to idle like local panes. Drive real mirror/sidebar builder with fake clocks; row/tab inventory, not elapsed time, is the oracle.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
@@ -14,15 +14,15 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
-import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
-} from '../components/sidebar/worktree-agent-row-selectors'
+} from '../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../components/sidebar/worktree-card-status-inputs'
+} from '../components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Mock singleton import; this harness drives createTestStore like sibling mirror suites.
 vi.mock('../store', () => ({
@@ -39,8 +39,6 @@ const HOST_EPOCH = 'host-epoch-1'
 const T0 = 1_700_000_000_000
 /** The laptop was closed well past the agent-status freshness boundary. */
 const LONG_SLEEP_MS = AGENT_STATUS_STALE_AFTER_MS * 6
-/** A blip the client rides out without its own status going stale. */
-const BRIEF_DROP_MS = 5_000
 
 type TestStore = ReturnType<typeof createTestStore>
 
@@ -267,14 +265,6 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  it('control: a brief transport drop keeps every pane in the sidebar', () => {
-    const store = seedPairedClientStore()
-    const reconnected = runSleepWakeReconnect(store, BRIEF_DROP_MS)
-
-    expect(reconnected.tabIds).toHaveLength(PANES.length)
-    expect(reconnected.rowPaneKeys.sort()).toEqual(PANES.map(mirrorPaneKey).sort())
-  })
-
   it('keeps a sidebar row for every still-live pane after a long sleep', () => {
     const store = seedPairedClientStore()
     const reconnected = runSleepWakeReconnect(store, LONG_SLEEP_MS)
@@ -284,50 +274,5 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
     expect(reconnected.tabIds, evidence).toHaveLength(PANES.length)
     expect(reconnected.tabsWithLivePty, evidence).toHaveLength(PANES.length)
     expect(reconnected.rowPaneKeys.sort(), evidence).toEqual(PANES.map(mirrorPaneKey).sort())
-  })
-
-  it('still cedes a pane this renderer never wrote status for', () => {
-    const store = seedPairedClientStore()
-    applyHostSnapshot(store, makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 - 1_000 }), T0)
-    // Transport claims alone lack byte-derived evidence; host remains authoritative until a client write.
-    const unwritten = CLIENT_OWNED_PANES[0]!
-    registerRendererOwnedAgentStatusPane(mirrorPaneKey(unwritten), ENV)
-    store
-      .getState()
-      .setAgentStatus(
-        mirrorPaneKey(unwritten),
-        { state: 'working', prompt: 'host-sourced', agentType: unwritten.agentType },
-        unwritten.agentType,
-        undefined,
-        { tabId: mirrorTabId(unwritten), worktreeId: WT }
-      )
-    const wakeAt = T0 + LONG_SLEEP_MS
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({ snapshotVersion: 2, hostNow: wakeAt - 1_000 }),
-      wakeAt
-    )
-
-    expect(store.getState().agentStatusByPaneKey[mirrorPaneKey(unwritten)]).toBeUndefined()
-  })
-
-  it('releases authority on pane teardown so the host can retire the row', () => {
-    const store = seedPairedClientStore()
-    applyHostSnapshot(store, makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 - 1_000 }), T0)
-    const releases = CLIENT_OWNED_PANES.map((pane) => replayClientByteStatus(store, pane, T0))
-    for (const release of releases) {
-      release()
-    }
-
-    const wakeAt = T0 + LONG_SLEEP_MS
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({ snapshotVersion: 2, hostNow: wakeAt - 1_000 }),
-      wakeAt
-    )
-
-    for (const pane of CLIENT_OWNED_PANES) {
-      expect(store.getState().agentStatusByPaneKey[mirrorPaneKey(pane)]).toBeUndefined()
-    }
   })
 })

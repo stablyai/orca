@@ -1,7 +1,9 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
+import { displayIpcErrorMessage } from '@/lib/ipc-error'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { isFileTooLargeMessage } from '../../../../shared/file-write-disk-precondition'
 import {
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,
   WORKTREE_HOST_UNRESOLVED_CODE,
@@ -54,7 +56,7 @@ export function shouldRetryFileLoadError(message: string, code?: string): boolea
     !lower.includes('access denied') &&
     !lower.includes('enoent') &&
     !lower.includes('no such file') &&
-    !lower.includes('file too large')
+    !isFileTooLargeMessage(displayIpcErrorMessage(message) ?? message)
   )
 }
 

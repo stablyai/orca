@@ -3,9 +3,9 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
-import type { WorktreeDragUnitGroup } from '../../worktree-drag-units'
-import type { WorktreeSidebarDropPreview } from '../../worktree-sidebar-drop-preview'
+import type { WorktreeDragGroup } from './worktree-manual-order'
+import type { WorktreeDragUnitGroup } from './worktree-drag-units'
+import type { WorktreeSidebarDropPreview } from './worktree-sidebar-drop-preview'
 import type { WorktreeStatusDropRequest } from './use-session'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
@@ -29,7 +29,8 @@ export type ShouldShowWorkspaceBoardDropIndicator = (
 export type WorktreeReorderArgs = {
   groups: readonly WorktreeDragGroup[]
   sourceGroupKey: string
-  draggedIds: readonly string[]
+  /** Host identities, as the sidebar's drag groups key their members. */
+  draggedKeys: readonly string[]
   dropIndex: number
   draggedCopies?: DraggedWorktreeCopies
 }
@@ -46,9 +47,12 @@ export type WorktreeDropCommitContext = {
   refreshWorktreeDragSession: () => boolean
   getEligibleLineageDropTarget: (
     target: WorktreeSidebarLineageDropTarget,
-    draggedIds: readonly string[]
+    pickedCopies: DraggedWorktreeCopies
   ) => WorktreeSidebarLineageDropTarget
-  commitWorktreeLineageParentDrop: (draggedIds: readonly string[], parentId: string) => boolean
+  commitWorktreeLineageParentDrop: (
+    pickedCopies: DraggedWorktreeCopies,
+    parentIdentity: string
+  ) => boolean
   clearReorderedWorktreeParents: (args: {
     draggedIds: readonly string[]
     sourceGroupKey: string

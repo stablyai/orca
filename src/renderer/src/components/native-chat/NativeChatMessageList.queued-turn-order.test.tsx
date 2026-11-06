@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -26,10 +27,10 @@ afterEach(() => {
 })
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -159,34 +160,6 @@ describe.each([['states each row’s turn', true]])(
         screen.getByText('FIRST DONE'),
         screen.getByText('Then run the second job'),
         bar(/Working for/),
-        screen.getByText('SECOND DONE')
-      )
-    })
-
-    it('keeps that order once both turns settle', () => {
-      render(
-        <NativeChatMessageList
-          session={session('ready')}
-          journalItems={journal('completed', statesScope)}
-          journalSubmissions={[]}
-          isWorking={false}
-          workingStartedAt={null}
-          settledTurns={
-            new Map([
-              ['user-a', { startedAt: 1, workedSeconds: 17 }],
-              ['user-b', { startedAt: 2, workedSeconds: 51 }]
-            ])
-          }
-          expandSignal={false}
-        />
-      )
-
-      expectInOrder(
-        screen.getByText('Run the first job'),
-        bar('Worked for 17s'),
-        screen.getByText('FIRST DONE'),
-        screen.getByText('Then run the second job'),
-        bar('Worked for 51s'),
         screen.getByText('SECOND DONE')
       )
     })

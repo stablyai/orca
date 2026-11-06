@@ -1,4 +1,4 @@
-import { getMaxTerminalPasteBytesForIngestMs } from './agent-prompt-injection'
+import { getMaxTerminalPasteBytesForIngestMs } from './agent-launch/startup/agent-prompt-injection'
 import {
   AGENT_PROMPT_EFFECT_TIMEOUT_MS,
   ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
@@ -7,7 +7,7 @@ import {
   isTerminalInputTooLargeWithYield,
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
-} from './terminal-input'
+} from './terminal/input/terminal-input'
 
 const WORKER_START_PROMPT_INGEST_BUDGET_MS =
   ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - AGENT_PROMPT_EFFECT_TIMEOUT_MS

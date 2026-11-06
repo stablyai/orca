@@ -8,7 +8,7 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -46,9 +46,10 @@ function displayTimestamp(card: DashboardCard): number {
 }
 
 function formatSubagentCount(count: number): string {
-  return count === 1
-    ? translate('dashboardPopout.card.subagents_one', '{{count}} subagent', { count })
-    : translate('dashboardPopout.card.subagents_other', '{{count}} subagents', { count })
+  return translate('dashboardPopout.card.subagents', '{{count}} subagents', {
+    count,
+    defaultValue_one: '{{count}} subagent'
+  })
 }
 
 function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {
@@ -86,6 +87,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.bucket === b.bucket &&
     a.dotState === b.dotState &&
     a.workingMode === b.workingMode &&
+    a.verdict === b.verdict &&
     a.task === b.task &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&

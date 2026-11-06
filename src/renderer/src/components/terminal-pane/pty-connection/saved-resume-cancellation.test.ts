@@ -1,5 +1,6 @@
+import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata
@@ -22,7 +23,7 @@ const fixture = vi.hoisted(() => ({
   paste: vi.fn(),
   parsed: vi.fn(async () => {})
 }))
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => fixture.state, setState: fixture.setState }
 }))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
@@ -335,6 +336,8 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       agentStatusByPaneKey: counted(population('tab:leaf', status)),
       tabsByWorktree: { wt: tabs }
     })
+    const accepted = vi.fn()
+    const disposeAccepted = store.getState().subscribeAgentStatusChanges(accepted)
     const context = captureTerminalLaunchContext(session, startup)
     const successor = { ...startup, resumeSource: { cancelled: false } }
     const successorRegistration = { ...registration, registeredAt: 2 }
@@ -363,6 +366,13 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
     try {
       expect(applyTerminalLaunchResult(session, result, context, 'creator')).toBe(true)
       expect(source.cancelled).toBe(true)
+      if (newer) {
+        expect(accepted).not.toHaveBeenCalled()
+      } else {
+        expect(accepted).toHaveBeenCalledExactlyOnceWith([
+          { paneKey: 'tab:leaf', previous: status, current: undefined }
+        ])
+      }
       // Four independent whole-map spreads, once each; this is work per result, not a latency bound.
       expect([enumerated, copied, notifications, tabVisits]).toEqual(
         newer ? [0, 0, 0, 0] : [4 * size, 4 * size, 4, size]
@@ -390,7 +400,138 @@ it.each([10, 100])('counts real saved-startup cancellation map work at %i entrie
       applyTerminalLaunchResult(session, result, context, 'creator')
       expect([enumerated, copied, notifications, tabVisits]).toEqual([0, 0, 0, 0])
     } finally {
+      disposeAccepted()
       unsubscribe()
     }
   }
+})
+
+it.each(['canonical', 'legacy', 'live'] as const)(
+  'does not recreate a confirmed-exited cold-restore source (%s)',
+  (kind) => {
+    const store = createTestStore()
+    fixture.state = store.getState()
+    const unsubscribe = store.subscribe((state) => {
+      fixture.state = state
+    })
+    const paneKey = 'tab:leaf'
+    const record = {
+      paneKey: kind === 'legacy' ? 'tab:1' : paneKey,
+      tabId: 'tab',
+      worktreeId: 'wt',
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'C' },
+      prompt: '',
+      state: 'done' as const,
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    store.getState().rememberSleepingAgentSession(record)
+    const startup: ColdRestoreAgentResumeStartup = {
+      agent: 'codex',
+      command: 'codex resume C',
+      launchToken: 'token',
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+      resumeProviderSession: record.providerSession,
+      resumeOrigin: 'saved',
+      resumeSource: {
+        cancelled: false,
+        record,
+        expectedStatus: { paneKey, receivedAt: 1, stateStartedAt: 1 }
+      },
+      useLiveEntry: kind === 'live',
+      hasSleepingRecord: kind !== 'live',
+      sleepingRecordEntry: kind === 'live' ? null : { paneKey: record.paneKey, record }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only binding and retention run; all their accessed members are supplied.
+    const session = {
+      cacheKey: paneKey,
+      deps: { tabId: 'tab', worktreeId: 'wt' },
+      pane: { id: 1, leafId: 'leaf' },
+      manager: {},
+      paneStartup: null
+    } as unknown as ConnectPanePtySession
+    installSleepingRecordAccess(session)
+    bindDeferredColdRestoreAndSnapshot(session)
+    store.getState().clearSleepingAgentSession(record.paneKey)
+    session.keepResumeRecordAfterColdRestoreSpawn(startup)
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    unsubscribe()
+  }
+)
+
+it.each([
+  {
+    liveId: 'C',
+    savedId: 'C',
+    savedHost: 'ssh-A',
+    liveHost: undefined,
+    expected: 'ssh-A',
+    host: 'ssh:ssh-A'
+  },
+  {
+    liveId: 'D',
+    savedId: 'C',
+    savedHost: 'ssh-A',
+    liveHost: undefined,
+    expected: undefined,
+    host: 'ssh:ssh-A'
+  },
+  { liveId: 'C', savedId: 'C', savedHost: null, liveHost: null, expected: null, host: 'local' }
+])('retains only matching captured host evidence ($liveId, $savedHost, $liveHost)', (testCase) => {
+  const store = createTestStore()
+  fixture.state = store.getState()
+  const unsubscribe = store.subscribe((state) => {
+    fixture.state = state
+  })
+  const paneKey = 'tab:leaf'
+  store.setState({
+    agentStatusByPaneKey: {
+      [paneKey]: {
+        paneKey,
+        agentType: 'codex',
+        state: 'working',
+        prompt: '',
+        updatedAt: 1,
+        stateStartedAt: 1,
+        stateHistory: [],
+        connectionId: testCase.liveHost,
+        providerSession: { key: 'session_id', id: testCase.liveId }
+      }
+    },
+    sleepingAgentSessionsByPaneKey: {
+      [paneKey]: {
+        paneKey,
+        worktreeId: 'wt',
+        agent: 'codex',
+        state: 'working',
+        prompt: '',
+        updatedAt: 1,
+        capturedAt: 1,
+        connectionId: testCase.savedHost,
+        providerSession: { key: 'session_id', id: testCase.savedId }
+      }
+    }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only startup construction and retention run; all accessed session members are supplied.
+  const session = {
+    cacheKey: paneKey,
+    deps: { tabId: 'tab', worktreeId: 'wt' },
+    pane: { id: 1, leafId: 'leaf' },
+    manager: {},
+    paneStartup: null,
+    worktree: { path: '/tmp' },
+    executionHostId: testCase.host,
+    transport: { getRuntimeEnvironmentId: () => null }
+  } as unknown as ConnectPanePtySession
+  installSleepingRecordAccess(session)
+  bindBuildColdRestoreAgentResumeStartup(session)
+  bindDeferredColdRestoreAndSnapshot(session)
+  const startup = session.buildColdRestoreAgentResumeStartup()
+  expect(startup).not.toBeNull()
+  session.keepResumeRecordAfterColdRestoreSpawn(startup)
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]?.connectionId).toBe(
+    testCase.expected
+  )
+  unsubscribe()
 })

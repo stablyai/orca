@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { terminalComposerDraftSchema } from '../terminal/terminal-reply-schema'
 import {
   detectedAgentsSchema,
   markdownTabDocumentSchema,
@@ -8,9 +9,20 @@ import {
   sessionForwardedReplySchema,
   sessionTerminalInventorySchema,
   sessionWorktreeRecordSchema,
+  skillDiscoveryReplySchema,
   terminalQuickCommandsSchema,
   workspaceFilePathsSchema
 } from './session-read-reply-schema'
+
+export const nativeChatTerminalDraftRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.native-chat-draft',
+    method: 'terminal.read',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-composer-draft', terminalComposerDraftSchema)
+  })
+)
 
 // Skip refused inventories as no news; an empty list would erase the existing strip.
 export const sessionTerminalListRead = bindDeferredRpcOperation(
@@ -161,5 +173,16 @@ export const markdownTabRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('markdown-tab-doc', markdownTabDocumentSchema)
+  })
+)
+
+// Mobile names the workspace and lets the host resolve and scan it; see SKILL_DISCOVER_WORKSPACE_CAPABILITY.
+export const nativeChatSkillDiscoveryRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'skills.discover-or-skip',
+    method: 'skills.discover',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('skill-discovery', skillDiscoveryReplySchema)
   })
 )

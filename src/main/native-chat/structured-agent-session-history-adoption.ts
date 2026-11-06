@@ -1,19 +1,20 @@
 // Resolve credential homes and transcripts from host-owned facts, never client-supplied paths.
 
 import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionOperationRow } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   AgentSessionProviderHandle,
   AgentSessionProviderHandleLink,
   StructuredAgentId
-} from '../../shared/agent-session-provider-handle'
-import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionOwnerObservation } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
@@ -21,7 +22,7 @@ export type StructuredAgentSessionAdoptionOwnership = {
   /** Any chat may own the conversation; only agents with importers can adopt it. */
   provider: StructuredAgentId
   providerSessionId: string
-  lease: AgentSessionLease
+  ownerObservation: AgentSessionOwnerObservation
   role: 'head' | 'earlier'
 }
 
@@ -33,13 +34,13 @@ export type StructuredAgentSessionAdoption = {
 
 export type CommittedStructuredAgentSessionAdoptionReplay = {
   record: AgentSessionRecord
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionProviderHandle | null
 }
 
 /** Attach still validates the committed operation’s fingerprint. */
 export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   agent: StructuredAgentId
-  providerSessionId: string
+  providerSessionId?: string
   rowSessionId: (link: AgentSessionProviderHandleLink) => string
   selfSessionId: string
   callerKey: string
@@ -58,18 +59,16 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   }
   const record = input.record
   const adopted = record?.providerHandleChain[0]
+  if (!record || record.sessionId !== input.selfSessionId || record.provider !== input.agent) {
+    return null
+  }
   if (
-    !record ||
-    record.sessionId !== input.selfSessionId ||
-    record.provider !== input.agent ||
-    adopted?.origin !== 'adopted'
+    input.providerSessionId !== undefined &&
+    (adopted?.origin !== 'adopted' || input.rowSessionId(adopted) !== input.providerSessionId)
   ) {
     return null
   }
-  if (input.rowSessionId(adopted) !== input.providerSessionId) {
-    return null
-  }
-  return { record, providerHandle: adopted.handle }
+  return { record, providerHandle: adopted?.origin === 'adopted' ? adopted.handle : null }
 }
 
 /** Codex does not lock threads: concurrent writers silently diverge, so host ownership must reject them.
@@ -96,7 +95,7 @@ export function structuredAdoptionConflictError(
   ownership: StructuredAgentSessionAdoptionOwnership
 ): Error {
   return agentSessionRefusalError(
-    agentSessionLeaseAdmitsWriter(ownership.lease)
+    agentSessionOwnerObservationIsLive(ownership.ownerObservation)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown',
     {
@@ -111,6 +110,7 @@ export function structuredAdoptionConflictError(
 export async function resolveStructuredAgentSessionAdoption(input: {
   providerSessionId: string
   candidateAccountHomes: readonly AgentSessionAccountHome[]
+  exhaustionReason?: 'transcriptNotFound' | 'transcriptUnreadable'
   resolveTranscript: (args: {
     providerSessionId: string
     accountHome: AgentSessionAccountHome
@@ -138,6 +138,6 @@ export async function resolveStructuredAgentSessionAdoption(input: {
   }
   // Wrong-home fallback silently turns resume into a blank chat under the old name.
   throw agentSessionRefusalError('agent_session_identity_required', {
-    reason: 'transcriptNotFound'
+    reason: input.exhaustionReason ?? 'transcriptNotFound'
   })
 }

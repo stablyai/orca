@@ -1,10 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import React from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-
-const CAPPED_STATUS_RETRY_TIMEOUT_MS = 15_000
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { StatusRetryButton } from './status-retry-button'
 
 export function TooManyChangesBanner({
   limit,
@@ -18,59 +16,6 @@ export function TooManyChangesBanner({
   onStageAll?: () => Promise<void>
   isStageAllDisabled?: boolean
 }): React.JSX.Element {
-  const [isRetrying, setIsRetrying] = useState(false)
-  const [showSpinner, setShowSpinner] = useState(false)
-  const retryControllerRef = useRef<AbortController | null>(null)
-  const isMountedRef = useRef(false)
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      retryControllerRef.current?.abort()
-    }
-  }, [])
-  useEffect(() => {
-    if (!isRetrying) {
-      setShowSpinner(false)
-      return
-    }
-    const timer = window.setTimeout(() => setShowSpinner(true), 1_000)
-    return () => window.clearTimeout(timer)
-  }, [isRetrying])
-
-  const handleRetry = async (): Promise<void> => {
-    if (isRetrying) {
-      return
-    }
-    const controller = new AbortController()
-    retryControllerRef.current = controller
-    const timeout = window.setTimeout(() => controller.abort(), CAPPED_STATUS_RETRY_TIMEOUT_MS)
-    setIsRetrying(true)
-    try {
-      await onRetry(controller.signal)
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return
-      }
-      // Report retry failures without leaving the warning unusable through an unhandled click rejection.
-      console.warn('[SourceControl] capped status retry failed', error)
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.SourceControl.97e7124eac',
-          'Could not refresh Source Control. Try again.'
-        )
-      )
-    } finally {
-      window.clearTimeout(timeout)
-      if (retryControllerRef.current === controller) {
-        retryControllerRef.current = null
-      }
-      if (isMountedRef.current) {
-        setIsRetrying(false)
-      }
-    }
-  }
-
   return (
     <div
       data-testid="too-many-changes-banner"
@@ -81,8 +26,8 @@ export function TooManyChangesBanner({
         <span className="min-w-0 flex-1 text-xs text-foreground">
           {translate(
             'auto.components.right.sidebar.SourceControl.tooManyChanges',
-            'Too many changes detected. Only the first {{value0}} are shown.',
-            { value0: limit.toLocaleString() }
+            'Too many changes detected. Only the first {{value0}} changes are shown.',
+            { value0: limit.toLocaleString(getIntlLocale()) }
           )}
         </span>
       </div>
@@ -101,16 +46,7 @@ export function TooManyChangesBanner({
             )}
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={isRetrying}
-          onClick={() => void handleRetry()}
-        >
-          {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
-          {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
-        </Button>
+        <StatusRetryButton onRetry={onRetry} />
       </div>
     </div>
   )

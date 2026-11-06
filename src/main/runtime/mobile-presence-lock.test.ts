@@ -1,33 +1,58 @@
+import { mobilePresenceStore as store } from './orca-runtime-test-mocks/mobile-presence-store'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
+import * as inputAdmission from './terminal/input/terminal-input-admission'
 import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { listWorktrees } from '../git/worktree'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
-vi.mock('../hooks', () => ({
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
+vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
-vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
+vi.mock('../workspace-hooks/worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
-vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
+const repoBranchConflictMock = vi.hoisted(() => vi.fn().mockResolvedValue(null))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
+    getBranchConflictKind: repoBranchConflictMock
   }
 })
 
@@ -35,36 +60,6 @@ vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
-
-const store = {
-  getRepo: () => ({
-    id: 'repo-1',
-    path: '/tmp/repo',
-    displayName: 'repo',
-    badgeColor: 'blue',
-    addedAt: 1
-  }),
-  getRepos: () => [store.getRepo()],
-  addRepo: () => {},
-  updateRepo: () => undefined as never,
-  getAllWorktreeMeta: () => ({}),
-  getWorktreeMeta: () => undefined,
-  getGitHubCache: () => ({ pr: {}, issue: {} }),
-  setWorktreeMeta: () => undefined as never,
-  removeWorktreeMeta: () => {},
-  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
-  addRetiredWorktreeName: () => {},
-  mergeRetiredWorktreeNames: () => false,
-  getSettings: () => ({
-    workspaceDir: '/tmp/workspaces',
-    nestWorkspaces: false,
-    refreshLocalBaseRefOnWorktreeCreate: false,
-    branchPrefix: 'none',
-    branchPrefixCustom: '',
-    // Legacy restore tests need a finite 5s; production defaults to indefinite hold.
-    mobileAutoRestoreFitMs: 5_000
-  })
-}
 
 // #7588 held-modal cases need per-test indefinite hold without mutating the shared default.
 function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
@@ -141,8 +136,9 @@ describe('mobile presence lock — driver state machine', () => {
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
   })
 
-  it('stops a preview paste when mobile claims the floor between chunks', async () => {
+  it('finishes an admitted preview paste then pauses the next action after phone takeover', async () => {
     const { runtime, controller, writes } = createRuntime()
+    const admission = vi.spyOn(inputAdmission, 'createTerminalInputReservation')
     runtime.setMobileDisplayMode('pty-1', 'desktop')
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
@@ -167,10 +163,14 @@ describe('mobile presence lock — driver state machine', () => {
 
       expect(floorClaim.current).not.toBeNull()
       expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
-      await expect(result).resolves.toBe(false)
-      expect(writes).toHaveLength(1)
-      expect(Buffer.byteLength(writes[0]!, 'utf8')).toBe(16 * 1024)
+      await expect(result).resolves.toBe(true)
+      expect(writes).toHaveLength(2)
+      expect(writes.join('')).toBe('x'.repeat(32 * 1024))
+      expect(await runtime.writeTerminalPreviewInput('pty-1', 'next')).toBe(false)
+      expect(admission).toHaveBeenCalledWith(runtime, 'desktop', undefined)
+      expect(writes).toHaveLength(2)
     } finally {
+      admission.mockRestore()
       floorClaim.current?.rollback()
     }
   })
@@ -976,3 +976,8 @@ describe('mobile presence lock — desktop take-back survives automatic resubscr
     expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
   })
 })
+
+vi.mock('../git/repo-branch-conflict', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: repoBranchConflictMock
+}))

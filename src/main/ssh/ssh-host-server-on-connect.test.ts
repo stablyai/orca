@@ -11,6 +11,7 @@ import {
 } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
 import { unservedServerStatus } from './ssh-host-unserved-status'
+import { sshHostServerSetupRemedy } from '../../shared/ssh-host-server-setup-remedy'
 import { admitSshManagedServerStatus } from '../../shared/ssh-managed-server-status-admission'
 
 // Read the final callback because retry eligibility is decided under lifecycle lock.
@@ -30,6 +31,18 @@ describe('which server an SSH host runs on connect', () => {
     })
     expect(d.ensureTunnel).toHaveBeenCalledWith('env-9')
     expect(d.convert).not.toHaveBeenCalled()
+  })
+
+  it("says when a converted host's server kept moved automations off", async () => {
+    const d = deps({
+      managedEnvironmentId: () => 'env-9',
+      retainCommittedSource: vi.fn(async () => 2)
+    })
+    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
+      route: 'managed',
+      environmentId: 'env-9',
+      automationsLeftDisabled: 2
+    })
   })
 
   it('checks the server behind the tunnel on every connect to a converted host', async () => {
@@ -387,6 +400,35 @@ describe('which server an SSH host runs on connect', () => {
     await expect(resolveHostServerOnConnect(target, d)).resolves.toMatchObject({
       reason: 'failed'
     })
+    warn.mockRestore()
+  })
+
+  it('publishes the code setup stopped on, so only a cause a retry clears says to retry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const remedyFor = async (code: string) => {
+      const decision = await resolveHostServerOnConnect(
+        target,
+        deps({
+          isEmptyHost: () => true,
+          deploy: async () => ({
+            outcome: 'deferred' as const,
+            candidateVersion: '1.0.0',
+            code,
+            reason: `host said ${code}`
+          })
+        })
+      )
+      const { managedServer } = admitSshManagedServerStatus(
+        decision.route === 'unserved' ? unservedServerStatus(decision) : null
+      )
+      expect(managedServer).toMatchObject({ reason: 'deferred', code, detail: `host said ${code}` })
+      return sshHostServerSetupRemedy(managedServer?.kind === 'relay' ? managedServer.code : '')
+    }
+
+    expect(await remedyFor('orcad_activation_fence_busy')).toBe('retry')
+    expect(await remedyFor('orcad_snapshot_space_insufficient')).toBe('free-host-space')
+    // Thrown errors and older hosts publish no code.
+    expect(sshHostServerSetupRemedy(undefined)).toBe('retry')
     warn.mockRestore()
   })
 

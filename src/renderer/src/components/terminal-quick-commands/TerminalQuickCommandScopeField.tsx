@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/terminal-quick-command-types'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { Label } from '@/components/ui/label'
 import {
   Select,

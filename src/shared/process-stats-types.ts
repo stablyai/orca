@@ -14,7 +14,8 @@ export type UsageValues = {
   privateMemory?: number
 }
 
-export type ProcessMemoryMetric = 'rss' | 'working-set'
+/** `footprint` is macOS phys_footprint (Activity Monitor's Memory): private pages plus GPU memory, shared pages excluded. */
+export type ProcessMemoryMetric = 'rss' | 'working-set' | 'footprint'
 
 /** Windows private commit charge (PageFileUsage/Private Bytes) includes paged-out memory, unlike working set.
  * It can reveal paging pressure even as resident memory shrinks. Unix snapshots omit this metric. */
@@ -72,7 +73,7 @@ export type MemorySnapshot = {
   processCommitMetric?: ProcessCommitMetric
   /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
   totalCpu: number
-  /** Sum of per-process samples. Shared pages may repeat, so this can exceed host.totalMemory. */
+  /** Sum of per-process samples. With rss/working-set, shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
   /** App plus tracked-worktree committed bytes, present exactly with processCommitMetric; exceeding physical RAM is meaningful. */
   totalPrivateMemory?: number

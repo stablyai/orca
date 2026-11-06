@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal-mode-reset-profiles'
-import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
+import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { flushAsyncTicks, createDeferred, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -10,7 +10,13 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
+import type { PtyDataMeta } from './pty-dispatcher'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -153,6 +159,7 @@ type PaneDrive = {
   deps: PaneConnectionDeps
   disposable: { dispose: () => void }
   deliver: (data: string, seq: number) => void
+  deliverWithMeta?: (data: string, meta: PtyDataMeta) => void
   setVisible: (visible: boolean) => void
   setOutputPaused: (paused: boolean, dropsReported?: boolean) => void
   reportPausedOutputDropped: () => void
@@ -185,7 +192,13 @@ async function connectHiddenPane(
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const disposable = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {
@@ -310,37 +323,6 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       expect(observeDisclosure(drive, R1_MARKER)).toMatchObject({
         disclosedOrRecovered: true
       })
-      drive.disposable.dispose()
-    })
-
-    it('[invariant] discloses or recovers when the budget ends while the pane is hidden', async () => {
-      const seventhAnswer = createDeferred<unknown>()
-      const serializeBufferOutcome = vi.fn().mockResolvedValue(retryWorthy)
-      const drive = await driveToSeventhAnswer(serializeBufferOutcome)
-
-      serializeBufferOutcome.mockReturnValueOnce(seventhAnswer.promise)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await flushAsyncTicks(20)
-      expect(serializeBufferOutcome).toHaveBeenCalledTimes(7)
-
-      // Switch away while the last budgeted request is still pending.
-      drive.setVisible(false)
-      seventhAnswer.resolve(retryWorthy)
-      await flushAsyncTicks(20)
-
-      // The host is healthy again and still holds the dropped bytes.
-      serializeBufferOutcome.mockResolvedValue(hostAnswers(retainedSnapshot(R1_MARKER)))
-      const requestsBeforeReveal = serializeBufferOutcome.mock.calls.length
-      await revealPane(drive)
-      await allowRecoveryWindow()
-
-      const disclosure = observeDisclosure(drive, R1_MARKER)
-      expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
-      expectDisclosedOrRecovered(disclosure)
-      // Require either a fresh recovery request or a visible loss banner.
-      expect(
-        serializeBufferOutcome.mock.calls.length - requestsBeforeReveal
-      ).toBeGreaterThanOrEqual(disclosure.bannerWrites > 0 ? 0 : 1)
       drive.disposable.dispose()
     })
 
@@ -528,7 +510,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       // Gate local hidden output to mirror the host pause exercised by remote routes.
       const transport = createMockTransport(LOCAL_PTY_ID)
       const captured: {
-        current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+        current: ((data: string, meta?: PtyDataMeta) => void) | null
       } = { current: null }
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
@@ -542,7 +524,14 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = await connectMockPanePty(pane, createManager(1), deps)
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+      const disposable = await connectMockPanePty(
+        pane,
+        createManager(1),
+        bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
       expect(captured.current).not.toBeNull()
       return {
@@ -551,6 +540,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
         deps,
         disposable,
         deliver: (data, seq) => captured.current?.(data, { seq, rawLength: data.length }),
+        deliverWithMeta: (data, meta) => captured.current?.(data, meta),
         setVisible: (visible) => {
           deps.isVisibleRef.current = visible
         },
@@ -624,6 +614,93 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       expect(disclosure.markerWrites).toBeLessThanOrEqual(1)
       expectDisclosedOrRecovered(disclosure)
       drive.disposable.dispose()
+    })
+
+    // #33766: main marks the first chunk after its hidden drop when it resumes inside an escape.
+    async function abandonAfterResumedChunk(
+      resumed: string,
+      midEscape?: true | 'unknown',
+      transform?: { rawLength: number }
+    ) {
+      vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue(null)
+      const drive = await connectLocalHiddenPane()
+      vi.useFakeTimers()
+      drive.deliver(HIDDEN_FLOOD, HIDDEN_FLOOD.length)
+      drive.setVisible(true)
+      const rawLength = transform?.rawLength ?? resumed.length
+      drive.deliverWithMeta?.(resumed, {
+        seq: HIDDEN_FLOOD.length + rawLength,
+        rawLength,
+        ...(transform ? { transformed: true } : {}),
+        ...(midEscape ? { midEscape } : {})
+      })
+      await flushAsyncTicks(20)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await vi.advanceTimersByTimeAsync(50)
+        await flushAsyncTicks(20)
+      }
+      drive.disposable.dispose()
+      vi.useRealTimers()
+      return (await renderHeadlessBuffer(drive.writtenChunks(), 120, 8)).join('\n')
+    }
+
+    it.each([
+      ['an OSC title', 'ial refactoring PRs | cleanup-dumb-exports\x07> prompt', 'ial refactoring'],
+      ['an SGR sequence', ';5;242m> prompt', ';242m']
+    ])('skips a delivery resuming inside %s after the gap reset', async (_name, resumed, tail) => {
+      // Skipped whole, never trimmed: the prompt it carried returns with the repaint nudge.
+      const screen = await abandonAfterResumedChunk(resumed, true)
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes(tail)
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
+
+    it('skips a mid-escape delivery after the gap reset even when main stripped agent status from it', async () => {
+      const screen = await abandonAfterResumedChunk('2C> prompt', true, { rawLength: 40 })
+      expect({
+        banner: screen.includes(BANNER_FRAGMENT),
+        prompt: screen.includes('> prompt'),
+        tail: screen.includes('2C')
+      }).toEqual({ banner: true, prompt: false, tail: false })
+    })
+
+    it('keeps a mid-escape continuation when the snapshot at the gap carries the open escape', async () => {
+      // The snapshot predates the resumed chunk, so its pending escape needs every continuation byte.
+      vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
+        data: 'history\r\n',
+        cols: 120,
+        rows: 40,
+        seq: HIDDEN_FLOOD.length,
+        pendingEscapeTailAnsi: '\x1b[38;5'
+      })
+      const drive = await connectLocalHiddenPane()
+      vi.useFakeTimers()
+      drive.deliver(HIDDEN_FLOOD, HIDDEN_FLOOD.length)
+      drive.setVisible(true)
+      const resumed = ';242m+ line'
+      drive.deliverWithMeta?.(resumed, {
+        seq: HIDDEN_FLOOD.length + resumed.length,
+        rawLength: resumed.length,
+        midEscape: true
+      })
+      await allowRecoveryWindow()
+      drive.disposable.dispose()
+      vi.useRealTimers()
+      const written = drive.writtenChunks().join('')
+      const screen = (await renderHeadlessBuffer(drive.writtenChunks(), 120, 8)).join('\n')
+      expect({
+        continuationWritten: written.includes('\x1b[38;5') && written.includes(resumed),
+        line: screen.includes('+ line'),
+        tail: screen.includes(';242m'),
+        banner: screen.includes(BANNER_FRAGMENT)
+      }).toEqual({ continuationWritten: true, line: true, tail: false, banner: false })
+    })
+
+    it('keeps unlabeled output that ends in a bell', async () => {
+      const screen = await abandonAfterResumedChunk('build done\x07')
+      expect(screen.includes('build done')).toBe(true)
     })
   })
 

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'
 import { buildRgArgsForQuickOpen, normalizeQuickOpenRgLine } from '../../shared/quick-open-filter'
 import { buildRgArgs, createAccumulator, ingestRgJsonLine } from '../../shared/text-search'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../runtime/files/paths/runtime-relative-paths'
 
 async function capture(root: string, args: string[]): Promise<string> {
   const child = spawnBundledRipgrep(args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })

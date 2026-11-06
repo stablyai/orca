@@ -48,12 +48,18 @@ export const sessionWorktreeRecordSchema = z
         id: salvagedOptional('id', z.string()),
         displayName: salvagedOptional('displayName', z.string().nullable()),
         repo: salvagedOptional('repo', z.string().nullable()),
+        path: salvagedOptional('path', z.string()),
+        hostId: salvagedOptional('hostId', z.string()),
         diffComments: z.unknown().optional()
       })
     )
   })
   .transform(
-    (reply): (WorktreeDisplayNameSource & { diffComments?: unknown }) | undefined => reply.worktree
+    (
+      reply
+    ):
+      | (WorktreeDisplayNameSource & { path?: string; hostId?: string; diffComments?: unknown })
+      | undefined => reply.worktree
   )
 
 // Require editor content/version/dirty state; host capability and truncation metadata remain optional for compatibility.
@@ -69,3 +75,37 @@ export const markdownTabDocumentSchema = z.looseObject({
 
 // Keep generic tab snapshots and legacy error/window history unions opaque until callers can select their shape.
 export const sessionForwardedReplySchema = z.unknown()
+
+const skillProviders = z.array(z.enum(['codex', 'claude', 'agent-skills']))
+const skillSourceKind = z.enum(['home', 'repo', 'bundled', 'plugin'])
+
+// Rows a newer host shapes differently drop alone; the rest of the scan still lists.
+export const skillDiscoveryReplySchema = z.looseObject({
+  skills: salvagingArray(
+    z.looseObject({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      providers: skillProviders,
+      sourceKind: skillSourceKind,
+      sourceLabel: z.string(),
+      rootPath: z.string(),
+      rootPaths: z.array(z.string()).optional(),
+      directoryPath: z.string(),
+      skillFilePath: z.string(),
+      installed: z.boolean(),
+      updatedAt: z.number().nullable()
+    })
+  ),
+  sources: salvagingArray(
+    z.looseObject({
+      id: z.string(),
+      label: z.string(),
+      path: z.string(),
+      sourceKind: skillSourceKind,
+      providers: skillProviders,
+      owner: z.string().nullable(),
+      exists: z.boolean()
+    })
+  )
+})

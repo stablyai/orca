@@ -1,7 +1,7 @@
 // The window uses bare file paths or owner-qualified IDs for contested, floating or moved files.
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 import type { LayoutEditorFile } from './workspace-layout-model'
 
 type FileOwner = Pick<LayoutEditorFile, 'filePath' | 'runtimeEnvironmentId'>

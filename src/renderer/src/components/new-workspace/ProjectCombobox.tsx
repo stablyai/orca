@@ -1,8 +1,9 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronDown, FolderPlus } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import {
@@ -10,7 +11,7 @@ import {
   rankProjectOptions,
   sectionProjectOptions
 } from './project-combobox-matching'
-import { ProjectOptionDetail, ProjectOptionMark, ProjectOptionRow } from './ProjectComboboxRow'
+import { ProjectOptionMark, ProjectOptionRow } from './ProjectComboboxRow'
 import { useRecentProjectIds } from './use-recent-project-ids'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
@@ -42,6 +43,7 @@ export default function ProjectCombobox({
   invalid = false,
   describedBy
 }: ProjectComboboxProps): React.JSX.Element {
+  const [tooltipOpen, setTooltipOpen] = useState(false)
   const recentIds = useRecentProjectIds()
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
   const deriveRowKeys = useCallback(
@@ -129,89 +131,91 @@ export default function ProjectCombobox({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverAnchor asChild>
-        <div
-          data-project-combobox-root="true"
-          onClick={() => {
-            inputRef.current?.focus()
-            setOpen(true)
-          }}
-          className={cn(
-            COMBOBOX_FIELD_SHELL,
-            invalid && 'border-destructive ring-destructive/20 dark:ring-destructive/40',
-            triggerClassName
-          )}
-        >
-          <span className="flex w-4 shrink-0 items-center justify-center">
-            {committed && selected ? <ProjectOptionMark option={selected} /> : null}
-          </span>
-          <div className="relative min-w-0 flex-1 overflow-hidden">
-            <ImeInput
-              ref={inputRef}
-              type="text"
-              role="combobox"
+      <Tooltip open={tooltipOpen && committed && !open} onOpenChange={setTooltipOpen}>
+        <PopoverAnchor asChild>
+          <TooltipTrigger asChild>
+            <div
               data-project-combobox-root="true"
-              aria-label={translate(
-                'auto.components.new.workspace.ProjectCombobox.label',
-                'Project'
-              )}
-              aria-expanded={open}
-              aria-controls={listId}
-              aria-autocomplete="list"
-              aria-activedescendant={open && armedKey ? `${listId}-armed` : undefined}
-              aria-invalid={invalid ? true : undefined}
-              aria-describedby={describedBy}
-              value={query}
-              placeholder={committed ? '' : placeholder}
-              onChange={(event) => {
-                setQuery(event.target.value)
+              onClick={() => {
+                inputRef.current?.focus()
                 setOpen(true)
               }}
-              onFocus={() => setOpen(true)}
-              onKeyDown={handleKeyDown}
               className={cn(
-                'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',
-                committed && 'text-transparent caret-foreground'
+                COMBOBOX_FIELD_SHELL,
+                invalid && 'border-destructive ring-destructive/20 dark:ring-destructive/40',
+                triggerClassName
               )}
-            />
-            {/* Overlay name/path separately so they can shrink at different rates. */}
-            {committed && selected ? (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 flex items-center text-sm"
-              >
-                {/* Baseline-align mixed text sizes; centering would lift the smaller detail. */}
-                <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                  <span className="min-w-0 max-w-[50%] shrink truncate">
-                    {selected.displayName}
-                  </span>
-                  <ProjectOptionDetail
-                    detail={selected.detail}
-                    className="min-w-0 flex-1 shrink-[999] justify-end text-right text-xs text-muted-foreground"
-                  />
-                </div>
+            >
+              <span className="flex w-4 shrink-0 items-center justify-center">
+                {committed && selected ? <ProjectOptionMark option={selected} /> : null}
+              </span>
+              <div className="relative min-w-0 flex-1 overflow-hidden">
+                <ImeInput
+                  ref={inputRef}
+                  type="text"
+                  role="combobox"
+                  data-project-combobox-root="true"
+                  aria-label={translate(
+                    'auto.components.new.workspace.ProjectCombobox.label',
+                    'Project'
+                  )}
+                  aria-expanded={open}
+                  aria-controls={listId}
+                  aria-autocomplete="list"
+                  aria-activedescendant={open && armedKey ? `${listId}-armed` : undefined}
+                  aria-invalid={invalid ? true : undefined}
+                  aria-describedby={describedBy}
+                  value={query}
+                  placeholder={committed ? '' : placeholder}
+                  onChange={(event) => {
+                    setQuery(event.target.value)
+                    setOpen(true)
+                  }}
+                  onFocus={() => setOpen(true)}
+                  onKeyDown={handleKeyDown}
+                  className={cn(
+                    'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',
+                    committed && 'text-transparent caret-foreground'
+                  )}
+                />
+                {committed && selected ? (
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 flex min-w-0 items-center text-sm"
+                  >
+                    <span className="truncate">{selected.displayName}</span>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={translate(
-              'auto.components.new.workspace.ProjectCombobox.browse',
-              'Browse projects'
-            )}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={(event) => {
-              event.stopPropagation()
-              inputRef.current?.focus()
-              setOpen(!open)
-            }}
-            className="-mr-1 flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
-          </button>
-        </div>
-      </PopoverAnchor>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={translate(
+                  'auto.components.new.workspace.ProjectCombobox.browse',
+                  'Browse projects'
+                )}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  inputRef.current?.focus()
+                  setOpen(!open)
+                }}
+                className="-mr-1 flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <ChevronDown
+                  className={cn('size-3.5 transition-transform', open && 'rotate-180')}
+                />
+              </button>
+            </div>
+          </TooltipTrigger>
+        </PopoverAnchor>
+        {committed && selected ? (
+          <TooltipContent side="top" sideOffset={4} className="max-w-96 break-all">
+            <div className="font-medium">{selected.displayName}</div>
+            <div>{selected.detail}</div>
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
       {/* Closing must remove the selector before a nested dialog takes focus. */}
       {open ? (
         <PopoverContent
@@ -305,11 +309,13 @@ export default function ProjectCombobox({
                 onMouseMove={() => arm(ADD_PROJECT_KEY)}
                 onClick={() => commit(ADD_PROJECT_KEY)}
                 className={cn(
-                  'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-2 text-sm',
+                  'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-3 text-sm',
                   armedKey === ADD_PROJECT_KEY && 'bg-accent text-accent-foreground'
                 )}
               >
-                <FolderPlus className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="flex w-4 shrink-0 items-center justify-center">
+                  <FolderPlus className="size-3.5 text-muted-foreground" />
+                </span>
                 <span className="truncate">
                   {translate(
                     'auto.components.new.workspace.ProjectCombobox.addProject',

@@ -1,22 +1,22 @@
-import { BrowserWindow } from 'electron'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { getRuntimeDesktopSurface } from '../../runtime/runtime-desktop-surface'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { managedOrcadRefusalNeedingUserCode } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
-import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
+import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   runtimeHostStatusError,
   runtimeHostStatusFailure,
   type RuntimeHostStatusResponse
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   getAcceptedRuntimeEnvironmentCapabilityOutcome,
@@ -47,8 +47,9 @@ async function answerRefusedPairing(
   try {
     outcome = await recovery
   } catch (error) {
-    return error instanceof OrcadManagedPairingRepairFailedError
-      ? runtimeHostStatusFailure('unauthorized', error.message)
+    const code = managedOrcadRefusalNeedingUserCode(error)
+    return code && error instanceof Error
+      ? runtimeHostStatusFailure(code, error.message)
       : runtimeHostStatusError(error)
   }
   // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
@@ -78,8 +79,9 @@ export function createRuntimeEnvironmentStatusOwner(
         try {
           await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
         } catch (error) {
-          if (error instanceof OrcadManagedPairingRepairFailedError) {
-            return runtimeHostStatusFailure('unauthorized', error.message)
+          const code = managedOrcadRefusalNeedingUserCode(error)
+          if (code && error instanceof Error) {
+            return runtimeHostStatusFailure(code, error.message)
           }
           throw error
         }
@@ -140,16 +142,7 @@ export function createRuntimeEnvironmentStatusOwner(
       return capable && active
     },
     publish: (snapshot) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (window.isDestroyed()) {
-          continue
-        }
-        try {
-          window.webContents.send(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
-        } catch {
-          /* A renderer can close during publication. */
-        }
-      }
+      getRuntimeDesktopSurface().sendToRenderers?.(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
       for (const listener of statusListeners) {
         listener()
       }

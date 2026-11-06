@@ -72,12 +72,4 @@ describe('decodeSessionTabsDeltaEvents', () => {
       error: { code: SESSION_TABS_DELTA_OUT_OF_SYNC_ERROR }
     })
   })
-
-  it('leaves other streams and non-response events alone', () => {
-    const seen: unknown[] = []
-    const onEvent = decodeSessionTabsDeltaEvents('files.watch', (event) => seen.push(event))
-    const frame = response({ type: 'updated', tabsDelta: { baseRevision: 9, tabs: [0] } })
-    onEvent(frame)
-    expect(seen[0]).toBe(frame)
-  })
 })

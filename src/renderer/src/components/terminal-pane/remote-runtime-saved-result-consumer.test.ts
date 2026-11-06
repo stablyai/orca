@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import type { TerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import type { AgentLaunchConfigRegistryEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { bindCaptureTransportOutputCallbacks } from './pty-connection/transport-output-callbacks'
+import { bindReplacedProcessInputModes } from './pty-connection/replaced-process-input-modes'
 import { bindSettlePaneSerializer } from './pty-connection/pane-serializer-settle'
 import { applyTerminalLaunchResult } from './pty-connection/terminal-launch-result-policy'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { installSavedResumeStartupCancellation } from './pty-connection/saved-resume-startup-cancellation'
 import {
   createRemoteRuntimeTransportMocks,
@@ -128,6 +129,7 @@ it.each([
       showSessionRestoredBanner: note,
       reportRemoteRendererSerializerReady: callbacksReady,
       syncHiddenRendererPtyDelivery: vi.fn(),
+      catchUpMode2031: vi.fn(),
       handleRemoteOutputPauseChanged: vi.fn(),
       markHiddenOutputRestoreNeeded: vi.fn(),
       beginReattachLiveDataDeferralIfUnowned: vi.fn(),
@@ -136,6 +138,7 @@ it.each([
     } as unknown as ConnectPanePtySession
     installSavedResumeStartupCancellation(session)
     bindSettlePaneSerializer(session)
+    bindReplacedProcessInputModes(session)
     session.reportRemoteRendererSerializerReady = callbacksReady
     bindCaptureTransportOutputCallbacks(session)
     const output = session.captureTransportOutputCallbacks(vi.fn(), null)

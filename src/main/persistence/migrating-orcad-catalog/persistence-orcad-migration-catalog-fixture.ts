@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Automation, AutomationRun } from '../../../shared/automations-types'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
@@ -65,6 +65,8 @@ export const DORMANT_AUTOMATION: Automation = {
   prompt: 'Run tests',
   precheck: null,
   agentId: 'codex',
+  launchPreferences: { model: null, options: { speed: 'fast' } },
+  agentArgs: '--search --add-dir docs',
   runContext: {
     kind: 'workspace-run',
     projectId: 'repo:repo-1',

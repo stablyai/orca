@@ -18,12 +18,23 @@ Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
-Add-Type -TypeDefinition @"
+Add-Type -ReferencedAssemblies @(
+    'System.dll',
+    [Windows.Automation.AutomationElement].Assembly.Location,
+    [Windows.Automation.AutomationIdentifier].Assembly.Location
+) -TypeDefinition @"
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 public static class OrcaDesktopWin32 {
+    // Default proxy discovery needs a typed caller before PowerShell's dynamic stack frames.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    public static void InitializeAutomation() {
+        System.Windows.Automation.ClientSettings.RegisterClientSideProviders(
+            new System.Windows.Automation.ClientSideProviderDescription[0]);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT {
         public int Left;
@@ -77,7 +88,7 @@ public static class OrcaDesktopWin32 {
     [DllImport("user32.dll")]
     public static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "PostMessageW")]
     public static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
@@ -144,6 +155,8 @@ public static class OrcaDesktopWin32 {
     }
 }
 "@
+
+[OrcaDesktopWin32]::InitializeAutomation()
 
 $MaxNodes = 1200
 $MaxDepth = 64
@@ -355,6 +368,17 @@ function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation) {
     throw "window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window"
 }
 
+function Assert-OrcaPointerFocus([IntPtr]$WindowHandle) {
+    if (Wait-OrcaWindowFocused $WindowHandle 500) { return }
+    throw "window_not_focused: window activation did not focus the target window; no pointer input was sent"
+}
+
+function Restore-OrcaPointerWindow($Process, $RootElement) {
+    Restore-OrcaWindow $Process
+    Assert-OrcaPointerFocus ([IntPtr]$Process.MainWindowHandle)
+    Get-OrcaWindowFrame $Process $RootElement
+}
+
 function Get-OrcaElementFrame($Element, $WindowFrame) {
     try {
         $bounds = $Element.Current.BoundingRectangle
@@ -547,6 +571,8 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         maxDepth = $MaxDepth
         maxDepthReached = $false
     }
+    # Tab compaction shrinks records mid-walk, so $records.Count would reuse retained indexes.
+    $nextIndex = [ref]0
 
     function Visit-OrcaNode($Node, [int]$Depth) {
         if ($records.Count -ge $MaxNodes -or $Depth -gt $MaxDepth) {
@@ -557,7 +583,7 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         $identity = try { (@($Node.GetRuntimeId()) -join ".") } catch { [Guid]::NewGuid().ToString() }
         if (-not $seen.Add($identity)) { return }
 
-        $record = New-OrcaElementRecord $Node $records.Count $WindowFrame
+        $record = New-OrcaElementRecord $Node $nextIndex.Value $WindowFrame
         $children = @()
         try {
             $children = @($Node.FindAll([Windows.Automation.TreeScope]::Children, [Windows.Automation.Condition]::TrueCondition))
@@ -581,6 +607,7 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         }
 
         $records.Add($record)
+        $nextIndex.Value++
 
         $line = "$($record.index) $role $(Format-OrcaSnapshotText $title)".TrimEnd()
         $line += Format-OrcaValueSegment $roleKey $title $record.value
@@ -1001,8 +1028,7 @@ function Get-OrcaElementScreenPoint($Element) {
     $null
 }
 
-function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count, [string]$Modifiers) {
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+function Send-OrcaMouseClick([int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count, [string]$Modifiers) {
     [void][OrcaDesktopWin32]::SetCursorPos($ScreenX, $ScreenY)
     $buttonName = if ([string]::IsNullOrWhiteSpace($Button)) { "left" } else { $Button.ToLowerInvariant() }
     switch ($buttonName) {
@@ -1032,8 +1058,7 @@ function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY
     }
 }
 
-function Send-OrcaDrag([IntPtr]$WindowHandle, $From, $To) {
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+function Send-OrcaDrag($From, $To) {
     $startX = [int]$From.x
     $startY = [int]$From.y
     $endX = [int]$To.x
@@ -1102,18 +1127,25 @@ function Get-OrcaClickModifierVirtualKeys([string]$Modifiers) {
     @($parts | ForEach-Object { Get-OrcaModifierVirtualKey $_ })
 }
 
-function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
+function ConvertTo-OrcaSendKeysHotkey([string]$KeySpec) {
     $parts = @($KeySpec.Split("+") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($parts.Count -eq 0) { throw "Unsupported key: $KeySpec" }
     $key = $parts[$parts.Count - 1]
     $prefix = ""
     if ($parts.Count -gt 1) {
+        # SendKeys adds Shift for an uppercase letter, turning Ctrl+A into Ctrl+Shift+A.
+        if ($key.Length -eq 1) { $key = $key.ToLowerInvariant() }
         foreach ($modifier in $parts[0..($parts.Count - 2)]) {
             $prefix += ConvertTo-OrcaSendKeysModifier $modifier
         }
     }
+    $prefix + (ConvertTo-OrcaSendKeysKey $key)
+}
+
+function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
+    $keys = ConvertTo-OrcaSendKeysHotkey $KeySpec
     [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
-    [System.Windows.Forms.SendKeys]::SendWait($prefix + (ConvertTo-OrcaSendKeysKey $key))
+    [System.Windows.Forms.SendKeys]::SendWait($keys)
 }
 
 function ConvertTo-OrcaSendKeysText([string]$Text) {
@@ -1213,9 +1245,6 @@ function Invoke-OrcaOperation($Operation) {
 
     switch ($Operation.tool) {
         "click" {
-            # Why: agents expect a click into a target app to make the next
-            # keyboard action safe, even when UI Automation handles the click.
-            Restore-OrcaWindow $process
             $handledByPattern = $false
             $clickCount = Get-OrcaPositiveInteger $Operation.click_count "click_count"
             $hasModifiers = -not [string]::IsNullOrWhiteSpace([string]$Operation.modifiers)
@@ -1223,9 +1252,11 @@ function Invoke-OrcaOperation($Operation) {
                 $handledByPattern = Invoke-OrcaPrimaryAction $element
             }
             if (-not $handledByPattern) {
+                # Why: mouse input lands on whichever window is on top at the point; UIA patterns need no focus.
+                $windowFrame = Restore-OrcaPointerWindow $process $root
                 $point = Get-OrcaElementScreenPoint $element
                 if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-                Send-OrcaMouseClick $handle $point.x $point.y $Operation.mouse_button $clickCount $Operation.modifiers
+                Send-OrcaMouseClick $point.x $point.y $Operation.mouse_button $clickCount $Operation.modifiers
                 $action = [pscustomobject]@{ path = "synthetic"; actionName = $null; fallbackReason = "actionUnsupported" }
             } else {
                 $action = [pscustomobject]@{ path = "accessibility"; actionName = "primaryAction"; fallbackReason = $null }
@@ -1251,14 +1282,15 @@ function Invoke-OrcaOperation($Operation) {
             } elseif ($Operation.direction -ne "up") {
                 throw "unsupported scroll direction: $($Operation.direction)"
             }
+            $windowFrame = Restore-OrcaPointerWindow $process $root
             $point = Get-OrcaElementScreenPoint $element
             if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-            [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
             [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
             [OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $null }
         }
         "drag" {
+            $windowFrame = Restore-OrcaPointerWindow $process $root
             $from = Get-OrcaElementScreenPoint $fromElement
             if ($null -eq $from -and $null -ne $Operation.fromElement) { throw "stale element frame; run get-app-state again and use a fresh element index" }
             if ($null -eq $from) {
@@ -1275,7 +1307,7 @@ function Invoke-OrcaOperation($Operation) {
                     y = $windowFrame.y + (Get-OrcaRequiredNumber $Operation.to_y "to_y")
                 }
             }
-            Send-OrcaDrag $handle $from $to
+            Send-OrcaDrag $from $to
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "drag"; fallbackReason = $null }
         }
         "type_text" {

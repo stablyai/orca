@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { nextAutomationOccurrenceAfter } from './automation-schedule-occurrences'
+import {
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from './automation-schedule-occurrences'
 import {
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
@@ -89,9 +92,25 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
     expect(new Date(second).getHours()).toBe(1)
     expect(second - first).toBe(60 * 60 * 1000)
 
-    // Pin existing DST ambiguity (#20154): flooring 01:30 rebuilds earlier EDT and scans into repeated EST, not tomorrow.
     expect(
-      nextAutomationOccurrenceAfter('30 1 * * *', new Date(2026, 0, 1).getTime(), second)
-    ).toBe(second)
+      nextAutomationOccurrenceAfter('30 1 * * *', new Date(2026, 0, 1).getTime(), second + 5_000)
+    ).toBe(new Date(2026, 10, 2, 1, 30).getTime())
+  })
+
+  it('advances hourly schedules through both passes of the fall-back hour', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    const dtstart = new Date(2026, 0, 1).getTime()
+    const firstPass = new Date('2026-11-01T01:30:00-04:00').getTime()
+    const secondPass = new Date('2026-11-01T01:30:00-05:00').getTime()
+
+    expect(nextAutomationOccurrenceAfter('FREQ=HOURLY;BYMINUTE=30', dtstart, firstPass)).toBe(
+      secondPass
+    )
+    expect(nextAutomationOccurrenceAfter('FREQ=HOURLY;BYMINUTE=30', dtstart, secondPass)).toBe(
+      secondPass + 60 * 60 * 1000
+    )
+    expect(
+      latestAutomationOccurrenceAtOrBefore('FREQ=HOURLY;BYMINUTE=30', dtstart, secondPass + 5_000)
+    ).toBe(secondPass)
   })
 })

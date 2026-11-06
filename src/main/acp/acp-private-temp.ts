@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { unixSocketPathFits } from '../../shared/unix-socket-path-limit'
-import { ensureOwnedPrivateDir } from '../daemon/daemon-socket-endpoint-path'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { ensureOwnedPrivateDir } from '../daemon/endpoint/publication/daemon-socket-endpoint-path'
+import { launchPreparationFailure } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpStructuredConnection, ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -71,7 +71,7 @@ export async function acpPrivateTempConnect<
   // Why: runs from before the /tmp root left their folders (about 1 GB each) in the data root.
   await wipeRootOnce(dataRoot, deps.logger)
   const folder = await acpRunFolder(root, deps.logger).catch((error: unknown) => {
-    throw new AgentSessionPreSpawnError(error)
+    throw launchPreparationFailure(error)
   })
   return (launch, options) => {
     try {

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { localizeTextGenerationResult } from '@/lib/text-generation-error-copy'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
@@ -34,7 +35,17 @@ export async function generateRuntimeJiraIssueSummary(
         )
       }
     }
-    return callRuntimeRpc(target, 'jira.generateIssueSummary', args, { timeoutMs: 75_000, signal })
+    return localizeTextGenerationResult(
+      await callRuntimeRpc<JiraIssueSummaryGenerationResult>(
+        target,
+        'jira.generateIssueSummary',
+        args,
+        {
+          timeoutMs: 75_000,
+          signal
+        }
+      )
+    )
   }
   if (signal.aborted) {
     return {
@@ -43,7 +54,7 @@ export async function generateRuntimeJiraIssueSummary(
       canceled: true
     }
   }
-  return window.api.jira.generateIssueSummary(args)
+  return localizeTextGenerationResult(await window.api.jira.generateIssueSummary(args))
 }
 
 export async function cancelRuntimeJiraIssueSummary(

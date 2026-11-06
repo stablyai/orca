@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as environmentStore from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import * as environmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 
 const { handleMock, getPathMock, sendRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: vi.fn()
 }))
@@ -87,7 +87,8 @@ describe('runtimeEnvironments:repairFromPairingCode', () => {
       getSettings: () => ({ activeRuntimeEnvironmentId: null }),
       updateSettings: vi.fn(),
       removeWorkspaceSessionHost: vi.fn(),
-      setRemoteLayoutSnapshot: vi.fn()
+      setRemoteLayoutSnapshot: vi.fn(),
+      setHostRepoCatalogSnapshot: vi.fn()
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The registrar only reads the fixture's settings and workspace-session methods.
     registerRuntimeEnvironmentHandlers(store as never)

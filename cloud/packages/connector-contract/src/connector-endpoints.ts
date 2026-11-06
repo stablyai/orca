@@ -14,6 +14,7 @@ export const CONNECTOR_PATHS = {
 export const CONNECTOR_ERROR_CODES = [
   'invalid_token',
   'hello_required',
+  'request_too_large',
   'client_too_old',
   'not_this_hosts_thread'
 ] as const

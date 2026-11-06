@@ -15,6 +15,10 @@ import {
   writeEditorBuffer
 } from '../buffers/editor-buffer-record'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import {
+  captureEditorFileOperationProvenance,
+  isSameEditorFileOperationIdentity
+} from '@/lib/editor-file-operation-owner'
 import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
 
 function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {
@@ -31,13 +35,48 @@ export function createOpenFileMutations(
 ): Pick<
   EditorSlice,
   | 'setActiveFile'
+  | 'acquireEditorFileOperationProvenance'
   | 'markFileDirty'
   | 'setExternalMutation'
   | 'setLastKnownDiskSignature'
+  | 'setTerminalArtifactGrant'
   | 'clearSelfMoveEcho'
   | 'clearUntitled'
 > {
   return {
+    acquireEditorFileOperationProvenance: (file, selected) => {
+      let captured: ReturnType<EditorSlice['acquireEditorFileOperationProvenance']> | undefined
+      set((state) => {
+        const live = state.openFiles.find((candidate) => candidate.id === file.id)
+        if (!live || !isSameEditorFileOperationIdentity(file, live)) {
+          throw new Error(
+            "Couldn't verify which host owns this file. Reopen the file after the connection settles."
+          )
+        }
+        const provenance =
+          live.operationProvenance ??
+          selected ??
+          captureEditorFileOperationProvenance(
+            state,
+            live.worktreeId,
+            live.runtimeEnvironmentId,
+            live.runtimeEnvironmentId !== undefined
+          )
+        const accepted = { ...live, operationProvenance: provenance }
+        captured = accepted
+        return live.operationProvenance
+          ? state
+          : {
+              openFiles: state.openFiles.map((candidate) =>
+                candidate === live ? accepted : candidate
+              )
+            }
+      })
+      if (!captured) {
+        throw new Error('File owner is unavailable.')
+      }
+      return captured
+    },
     setActiveFile: (fileId, targetWorktreeId) => {
       if (!get().openFiles.some((file) => file.id === fileId)) {
         return
@@ -152,6 +191,16 @@ export function createOpenFileMutations(
 
     setLastKnownDiskSignature: (fileId, signature) =>
       set((s) => updateEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })),
+
+    // Why: never touches readOnly, which also guards transcripts and keeps dirty drafts out of sessions.
+    setTerminalArtifactGrant: (fileId, grantId) =>
+      set((s) => ({
+        openFiles: s.openFiles.map((f) =>
+          f.id === fileId && f.terminalArtifactGrantId !== grantId
+            ? { ...f, terminalArtifactGrantId: grantId }
+            : f
+        )
+      })),
 
     clearSelfMoveEcho: (fileId) =>
       set((s) => {

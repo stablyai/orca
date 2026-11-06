@@ -12,7 +12,7 @@ const FORCE_KILL_WAIT_MS = 2_000
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms)
+    const timeout = setTimeout<[]>(resolve, ms)
     timeout.unref?.()
   })
 }
@@ -31,7 +31,7 @@ function releaseExitedProcessPipes(proc: ChildProcess): void {
   }
 }
 
-function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+export function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
   if (hasExited(proc)) {
     return Promise.resolve(true)
   }
@@ -49,7 +49,7 @@ function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
       resolve(exited)
     }
     const onExit = (): void => finish(true)
-    const timeout = setTimeout(() => finish(false), timeoutMs)
+    const timeout = setTimeout<[]>(() => finish(false), timeoutMs)
     timeout.unref?.()
     proc.once('exit', onExit)
     proc.once('close', onExit)
@@ -62,7 +62,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
     return await Promise.race([
       promise,
       new Promise<never>((_, reject) => {
-        timeout = setTimeout(() => reject(new Error(message)), timeoutMs)
+        timeout = setTimeout<[]>(() => reject(new Error(message)), timeoutMs)
         timeout.unref?.()
       })
     ])

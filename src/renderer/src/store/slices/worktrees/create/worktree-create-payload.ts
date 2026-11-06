@@ -1,19 +1,26 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
-import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
+import type {
+  ClientAutomationWorkspaceProvenance,
+  WorkspaceLinkedItem
+} from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
+  branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+  /** This desktop's own run, offered to a runtime host that records it as a label. */
+  clientAutomationProvenance?: ClientAutomationWorkspaceProvenance
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
@@ -53,6 +60,8 @@ export type WorktreeCreateAttempt = {
   name: string
   branchNameOverride?: string
   parentWorkspace?: WorkspaceKey
+  /** A parent on another machine, named by its own store before the first attempt. */
+  crossStoreParent?: CrossStoreParentRef
   manualOrder?: number
 }
 
@@ -68,6 +77,7 @@ function sharedCreateFields(
     baseBranch: request.baseBranch,
     ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {}),
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
+    ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,
@@ -96,6 +106,7 @@ function sharedCreateFields(
       : {}),
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
+    ...(attempt.crossStoreParent ? { crossStoreParent: attempt.crossStoreParent } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined
@@ -111,9 +122,6 @@ function sharedCreateFields(
     ...(options?.linkedWorkItem !== undefined ? { linkedWorkItem: options.linkedWorkItem } : {}),
     ...(options?.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: options.linkedTaskSourceContext }
-      : {}),
-    ...(options?.automationProvenanceRequest
-      ? { automationProvenanceRequest: options.automationProvenanceRequest }
       : {})
   }
 }
@@ -126,7 +134,11 @@ export function buildLocalWorktreeCreateArgs(
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
-    ...(request.creationId ? { creationId: request.creationId } : {})
+    ...(request.creationId ? { creationId: request.creationId } : {}),
+    // Why local only: this desktop's main minted the dispatch token, so a runtime host must reject it.
+    ...(request.options?.automationProvenanceRequest
+      ? { automationProvenanceRequest: request.options.automationProvenanceRequest }
+      : {})
   }
 }
 
@@ -139,8 +151,10 @@ export function buildRuntimeWorktreeCreateParams(
   return {
     repo: request.repoId,
     ...sharedCreateFields(request, attempt),
-    // Why: the host defaults a bare `parentWorkspace` to CLI provenance; app picks are manual.
-    ...(attempt.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
+    // Why: the host defaults a bare parent (same- or cross-store) to CLI provenance; app picks are manual.
+    ...(attempt.parentWorkspace || attempt.crossStoreParent
+      ? { parentWorkspaceOrigin: 'manual' }
+      : {}),
     // Switch point: a host lists the window's creation under its id only on the dark path.
     ...(ORCA_SIDEBAR_INPUTS_IS_MAIN && request.creationId
       ? { creationId: request.creationId }

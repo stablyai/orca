@@ -11,6 +11,7 @@ import {
   createMigrationJournalDirectory,
   orderMigrationJournalChain
 } from '../migrating-orcad-catalog/migration-journal-directory'
+import { assertWslMoveManifestFits } from './wsl-move-manifest-budget'
 import {
   isWslMoveDesktopRewriteRegistryComplete,
   pendingWslMoveDesktopRewriteStores
@@ -37,6 +38,7 @@ const journals = createMigrationJournalDirectory({
   maxFileBytes: 16 * 1024 * 1024,
   parse: parseVerifiedWslMoveCutover,
   unreadable: (detail) => new WslMoveJournalUnreadableError(detail),
+  sweepOrphanedTemporaries: true,
   onChange: (userDataPath) => {
     for (const listener of changeListeners) {
       listener(userDataPath)
@@ -102,6 +104,13 @@ export function writeWslMoveCutover(userDataPath: string, cutover: WslMoveCutove
   if (!existing && parsed.rewrittenStores.length > 0) {
     throw new Error('wsl_move_ledger_changed')
   }
+  if (!existing && parsed.terminalRestoreHints !== undefined) {
+    throw new Error('wsl_move_restore_hints_changed')
+  }
+  if (!existing) {
+    // New moves only: a record already on disk must stay resumable whatever its size.
+    assertWslMoveManifestFits(parsed.manifest)
+  }
   if (existing) {
     assertWslMoveUpdate(existing, parsed, head)
   } else if (!head) {
@@ -142,9 +151,43 @@ function assertWslMoveUpdate(
     throw new Error('wsl_move_superseded')
   }
   assertWslMoveLedgerUpdate(existing, next)
+  assertWslMoveRestoreHintsUpdate(existing, next)
+  assertWslMoveAutomationsUpdate(existing, next)
 }
 
-/** Append-only during destination-committed; leaving requires every store in a complete registry. */
+/** Written once, with the `quiesced` record that captured them, and never changed after. */
+/** Part of the move's binding: written with the record and never changed. */
+function assertWslMoveAutomationsUpdate(existing: WslMoveCutover, next: WslMoveCutover): void {
+  if (
+    JSON.stringify(existing.automationsToReenable) !== JSON.stringify(next.automationsToReenable)
+  ) {
+    throw new Error('wsl_move_binding_changed')
+  }
+}
+
+function assertWslMoveRestoreHintsUpdate(existing: WslMoveCutover, next: WslMoveCutover): void {
+  const before = existing.terminalRestoreHints
+  const after = next.terminalRestoreHints
+  if (before === undefined && after === undefined) {
+    return
+  }
+  if (before !== undefined) {
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      throw new Error('wsl_move_restore_hints_changed')
+    }
+    return
+  }
+  if (existing.phase !== 'source-fenced' || next.phase !== 'quiesced') {
+    throw new Error('wsl_move_restore_hints_changed')
+  }
+}
+
+/**
+ * The rewrite ledger, and the seeded host workspaces beside it, only grow, and only while the
+ * desktop rewrites (`destination-committed`):
+ * append-only and without duplicates, so a stale writer cannot drop another's entry. Leaving that
+ * phase needs a complete registry and every registered store recorded.
+ */
 function assertWslMoveLedgerUpdate(existing: WslMoveCutover, next: WslMoveCutover): void {
   const before = existing.rewrittenStores
   const after = next.rewrittenStores
@@ -155,6 +198,15 @@ function assertWslMoveLedgerUpdate(existing: WslMoveCutover, next: WslMoveCutove
   if (
     after.length > before.length &&
     (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed')
+  ) {
+    throw new Error('wsl_move_ledger_changed')
+  }
+  const seededBefore = existing.seededHostWorkspaceIds ?? []
+  const seededAfter = new Set(next.seededHostWorkspaceIds ?? [])
+  if (
+    !seededBefore.every((id) => seededAfter.has(id)) ||
+    (seededAfter.size > seededBefore.length &&
+      (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed'))
   ) {
     throw new Error('wsl_move_ledger_changed')
   }
@@ -186,5 +238,58 @@ export function removeWslMoveCutover(userDataPath: string, migrationId: string):
   ) {
     throw new Error('wsl_move_in_flight')
   }
-  journals.remove(userDataPath, migrationId)
+  removeNewestInChain(userDataPath, record)
+}
+
+/**
+ * Only the newest move of a distro goes: a later move names this one as what it supersedes, so
+ * removing it would break the chain and leave every project of that distro unreadable.
+ */
+function removeNewestInChain(userDataPath: string, record: WslMoveCutover | undefined): void {
+  if (!record) {
+    return
+  }
+  if (
+    listWslMoveCutoverChain(userDataPath, record.journalKey).at(-1)?.migrationId !==
+    record.migrationId
+  ) {
+    throw new Error('wsl_move_superseded')
+  }
+  journals.remove(userDataPath, record.migrationId)
+}
+
+/**
+ * Resets a move that never reached `destination-committed`; the caller has proved the destination
+ * holds no commit of it (wsl-move-reset). Its fence and session freeze lift with the record.
+ */
+export function removeUncommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
+  const record = listWslMoveCutovers(userDataPath).find(
+    (entry) => entry.migrationId === migrationId
+  )
+  if (
+    record &&
+    WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) >=
+      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+  ) {
+    throw new Error('wsl_move_committed')
+  }
+  removeNewestInChain(userDataPath, record)
+}
+
+/**
+ * "Use on this computer again": drops a committed move so its retained source rows show again as
+ * they were before it. Its fence, retained marks (reconcile) and stale-window re-apply end with it.
+ */
+export function removeCommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
+  const record = listWslMoveCutovers(userDataPath).find(
+    (entry) => entry.migrationId === migrationId
+  )
+  if (
+    record &&
+    WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) <
+      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+  ) {
+    throw new Error('wsl_move_not_committed')
+  }
+  removeNewestInChain(userDataPath, record)
 }

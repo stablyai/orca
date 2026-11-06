@@ -45,20 +45,29 @@ export function captureHostIdentityFence(route: HostRoute): HostIdentityFence {
   }
 }
 
+/** The same machine, across reconnects: only a re-pair to a different machine changes it. */
+export function isHostIdentityContinued(fence: HostIdentityFence): boolean {
+  const { route } = fence
+  if (route.target.kind !== 'environment') {
+    return true
+  }
+  const { environmentId } = route.target
+  // Why continuity: a re-pair proven to be the same machine keeps the identity.
+  return (
+    resolveContinuedRuntimeEnvironmentRevision(environmentId, fence.pairingRevision) ===
+    getRuntimeEnvironmentRevision(environmentId)
+  )
+}
+
 export function isHostIdentityFenceCurrent(fence: HostIdentityFence): boolean {
   const { route } = fence
-  if (route.target.kind === 'environment') {
-    const { environmentId } = route.target
-    // Why continuity: a re-pair proven to be the same machine keeps the identity.
-    if (
-      resolveContinuedRuntimeEnvironmentRevision(environmentId, fence.pairingRevision) !==
-        getRuntimeEnvironmentRevision(environmentId) ||
-      getRuntimeEnvironmentConnectionGeneration(environmentId) !== fence.runtimeConnectionGeneration
-    ) {
-      return false
-    }
-  }
-  return sshTargetConnectionGeneration(route) === fence.sshTargetConnectionGeneration
+  return (
+    isHostIdentityContinued(fence) &&
+    (route.target.kind !== 'environment' ||
+      getRuntimeEnvironmentConnectionGeneration(route.target.environmentId) ===
+        fence.runtimeConnectionGeneration) &&
+    sshTargetConnectionGeneration(route) === fence.sshTargetConnectionGeneration
+  )
 }
 
 export type HostCatalogKind = 'repos' | 'project-groups' | 'folder-workspaces'
@@ -119,12 +128,12 @@ export function isHostCatalogFenceCurrent(
   )
 }
 
-async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[]> {
+async function listRuntimeEnvironmentsForAllHostLoad(): Promise<{ id: string }[] | null> {
   try {
     return (await window.api.runtimeEnvironments.list()) ?? []
   } catch (err) {
     console.warn('Failed to list runtime environments for all-host load:', err)
-    return []
+    return null
   }
 }
 
@@ -136,11 +145,17 @@ export async function loadRuntimeHostCatalogs(
     target: Extract<RuntimeClientTarget, { kind: 'environment' }>,
     fence: HostCatalogFence
   ) => Promise<void>,
-  isCurrentLoad: () => boolean = () => true
+  isCurrentLoad: () => boolean = () => true,
+  /** Called only when the environment list itself answered, so absence from it is authoritative. */
+  onListed?: (environmentIds: readonly string[]) => void
 ): Promise<void> {
-  const environments = await listRuntimeEnvironmentsForAllHostLoad()
+  const listed = await listRuntimeEnvironmentsForAllHostLoad()
   if (!isCurrentLoad()) {
     return
+  }
+  const environments = listed ?? []
+  if (listed) {
+    onListed?.(listed.map((environment) => environment.id))
   }
   await Promise.all(
     environments.map((environment) => {

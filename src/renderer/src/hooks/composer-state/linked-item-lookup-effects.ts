@@ -29,6 +29,7 @@ type LinkedItemLookupEffectsInput = Pick<
 import { canUseRepoBackedComposerSources } from '@/lib/new-workspace-ssh-gate'
 import { useEffect } from 'react'
 import { PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
+import { getDefaultSetupDecision } from '../../../../shared/orca-hook-setup-config'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
@@ -99,19 +100,9 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
   ])
 
   useEffect(() => {
-    if (shouldWaitForSetupCheck) {
-      setSetupDecision(null)
-      return
-    }
-    if (!setupConfig) {
-      setSetupDecision(null)
-      return
-    }
-    if (setupPolicy === 'ask') {
-      setSetupDecision(null)
-      return
-    }
-    setSetupDecision(setupPolicy === 'run-by-default' ? 'run' : 'skip')
+    setSetupDecision(
+      shouldWaitForSetupCheck ? null : getDefaultSetupDecision(Boolean(setupConfig), setupPolicy)
+    )
   }, [setupConfig, setupPolicy, shouldWaitForSetupCheck, setSetupDecision])
 
   useEffect(() => {

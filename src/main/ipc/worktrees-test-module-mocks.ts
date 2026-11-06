@@ -1,4 +1,5 @@
 import { type Mock, vi } from 'vitest'
+import type { describeCreatedWorktree } from '../git/worktrees/catalog/worktree-listing'
 import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 
@@ -30,7 +31,7 @@ export const findExistingWorktreeSymlinkPathsMock: ModuleMock = vi.fn()
 export const handleMock: Mock<(channel: string, handler: HandlerMap[string]) => void> = vi.fn()
 export const removeHandlerMock: ModuleMock = vi.fn()
 export const listWorktreesMock: StringArgMock = vi.fn()
-export const describeCreatedWorktreeMock: ModuleMock = vi.fn()
+export const describeCreatedWorktreeMock = vi.fn<typeof describeCreatedWorktree>()
 export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]> = vi.fn(
   (output: string) =>
     output
@@ -52,7 +53,6 @@ export const forceDeleteLocalBranchMock: ModuleMock = vi.fn()
 export const resolveLocalGitUsernameMock: ModuleMock = vi.fn()
 export const getBaseRefDefaultMock: ModuleMock = vi.fn()
 export const resolveDefaultBaseRefWithLocalGitMock: ModuleMock = vi.fn()
-export const resolveDefaultBaseRefViaExecMock: ModuleMock = vi.fn()
 export const getDefaultRemoteMock: ModuleMock = vi.fn()
 export const getBranchConflictKindMock: RepoBranchMock = vi.fn()
 export const getPRForBranchMock: RepoBranchMock = vi.fn()
@@ -122,7 +122,6 @@ export const gitRunnerModuleMock = (): {
 export const gitRepoModuleMock = () => ({
   getBaseRefDefault: getBaseRefDefaultMock,
   resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: async (
     repoPath: string,

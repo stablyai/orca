@@ -8,7 +8,7 @@ export type LaunchFunnelSettings = {
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
   terminalWindowsShell?: string
-  experimentalNativeChat?: boolean
+  nativeChatProviders?: Record<string, boolean>
   experimentalStructuredNativeChat?: boolean
   openAgentTabsInChatByDefault?: boolean
   nativeChatSessionOptions?: Record<
@@ -122,7 +122,9 @@ export function queuedStartupCommand(store: LaunchFunnelStore): string | undefin
 
 export function queuedStartupPayload(
   store: LaunchFunnelStore
-): { command?: string; [key: string]: unknown } | undefined {
+):
+  | { command?: string; launchConfig?: { agentArgs?: string | null }; [key: string]: unknown }
+  | undefined {
   const options: { pendingStartup?: { command?: string; agentLaunch?: unknown } } =
     store.createTab.mock.calls[0]?.[3] ?? {}
   return options.pendingStartup?.agentLaunch ? undefined : options.pendingStartup

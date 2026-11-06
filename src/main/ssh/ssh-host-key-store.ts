@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { withSidecarSnapshotQueue, writeSidecarSnapshot } from '../sidecar-snapshot-file'
+import { withSidecarSnapshotQueue, writeSidecarSnapshot } from '../filesystem/sidecar-snapshot-file'
 import {
   formatHostKeyFingerprint,
   readHostKeyType,

@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/update-status-types'
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
+import { linuxPackageCommandUnavailableText } from '@/lib/updater-message-copy'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 function copiedNote(packageFileName: string): string {
@@ -91,7 +92,7 @@ export function LinuxPackageInstallRecoveryCard({
       if (!instructions.ok) {
         if (isCurrentRecovery()) {
           setCommandUnavailable(true)
-          setActionError(instructions.message)
+          setActionError(linuxPackageCommandUnavailableText(instructions))
         }
         return
       }

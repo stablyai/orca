@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -35,11 +35,13 @@ export function HostRenameDialog({
   const [value, setValue] = useState(currentOverride ?? '')
 
   // Seed persisted names on every open so canceled drafts cannot reappear.
-  useEffect(() => {
+  const [seededFor, setSeededFor] = useState({ open, currentOverride })
+  if (seededFor.open !== open || seededFor.currentOverride !== currentOverride) {
+    setSeededFor({ open, currentOverride })
     if (open) {
       setValue(currentOverride ?? '')
     }
-  }, [open, currentOverride])
+  }
 
   const submit = (): void => {
     void updateSettings({ hostSettingOverrides: applyHostRename(settings, hostId, value) })

@@ -1,8 +1,11 @@
 import { z } from 'zod'
 import { parseExecutionHostId } from '../execution-host'
-import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT
+} from '../ai-vault/contracts/ai-vault-types'
 import { OptionalBoolean } from './rpc-param-primitives'
-import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../ai-vault-session-title'
+import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../ai-vault/contracts/ai-vault-session-title'
 
 // Bound discovery input; scopePaths are host-local match prefixes, never traversal paths.
 export const AI_VAULT_SCOPE_PATH_MAX_LENGTH = 4096
@@ -89,4 +92,11 @@ export const AiVaultSessionTitlesParams = z.object({
       })
     )
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
+})
+
+// The host revalidates the path against its own roots; no host id travels because the host deletes only its own files.
+export const AiVaultDeleteSessionParams = z.object({
+  agent: z.enum(AI_VAULT_AGENTS),
+  sessionId: z.string().min(1).max(512).optional(),
+  filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)
 })

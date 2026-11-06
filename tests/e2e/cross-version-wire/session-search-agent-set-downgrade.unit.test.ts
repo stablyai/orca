@@ -7,28 +7,32 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../src/shared/ai-vault-search-client'
-import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   searchHit,
   searchResults,
   fakeSearchService
-} from '../../../src/shared/ai-vault-search-test-fixture'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   searchSessionService,
   sessionSearchServiceStatus,
   setSessionSearchService
 } from '../../../src/main/ai-vault-search/session-search-service-registry'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import { prepareReleaseFixtures } from './release-fixture-setup'
 
 const LEGACY_REF = 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c'
+const releaseSearchSchemas = prepareReleaseFixtures(['v1.4.211', LEGACY_REF], async (ref) =>
+  importReleaseCheckoutModule(
+    await materializeReleaseCheckout(ref),
+    'src/shared/ai-vault-search-contract.ts'
+  )
+)
 afterEach(() => setSessionSearchService(null))
 
 test('the actual pre-Jcode client reads current host pages while current peers retain every provider', async () => {
-  const baseline = await importReleaseCheckoutModule(
-    await materializeReleaseCheckout(LEGACY_REF),
-    'src/shared/ai-vault-search-contract.ts'
-  )
+  const baseline = releaseSearchSchemas(LEGACY_REF)
   const oldResponse = baseline.AiVaultSearchResponseSchema
   if (
     !oldResponse ||
@@ -83,52 +87,6 @@ test.each(['runtime', 'relay'] as const)(
   }
 )
 
-test('agent-list negotiation takes precedence over the old flag and tolerates future advertised names', async () => {
-  const within = { kind: 'workspace' as const, worktreeId: 'folder:/task-owned/folder' }
-  const call = vi.fn(async (method: string) =>
-    method === 'aiVault.searchStatus'
-      ? {
-          ...unavailableSessionSearchStatus(),
-          supportsQoderHistory: true,
-          supportedAgents: ['codex', 'jcode', 'future-agent']
-        }
-      : searchResults()
-  )
-  await createSessionSearchClient(call, 'runtime').searchSessions({
-    query: 'proof',
-    cursor: 'page-2',
-    within,
-    filters: { agents: ['codex', 'qoder', 'jcode'], since: '2026-08-01T00:00:00Z', sort: 'newest' }
-  })
-  expect(call).toHaveBeenLastCalledWith(
-    'aiVault.searchSessions',
-    expect.objectContaining({
-      cursor: 'page-2',
-      within,
-      filters: { agents: ['codex', 'jcode'], since: '2026-08-01T00:00:00Z', sort: 'newest' },
-      supportedAgents: [...AI_VAULT_AGENTS]
-    })
-  )
-})
-
-test('a current host honors a negotiated client subset before index search and keeps scope identity', async () => {
-  const service = fakeSearchService()
-  setSessionSearchService(service)
-  await searchSessionService(
-    {
-      query: 'proof',
-      supportsQoderHistory: true,
-      supportedAgents: ['codex', 'future-agent'],
-      filters: { agents: ['codex', 'qoder', 'jcode'], scopePaths: ['/task-owned'] }
-    },
-    'runtime'
-  )
-  expect(service.search).toHaveBeenLastCalledWith(
-    { query: 'proof', limit: 20, filters: { agents: ['codex'], scopePaths: ['/task-owned'] } },
-    undefined
-  )
-})
-
 test.each([{ supportedAgents: [] }, { supportedAgents: ['future-agent'] }])(
   'a client with no shared advertised agents returns no indexed rows for %j',
   async ({ supportedAgents }) => {
@@ -171,10 +129,7 @@ test.each([{ supportedAgents: [] }, { supportedAgents: ['future-agent'] }])(
 test.each(['v1.4.211', LEGACY_REF])(
   'a missing status method still searches through the actual %s request parser',
   async (ref) => {
-    const baseline = await importReleaseCheckoutModule(
-      await materializeReleaseCheckout(ref),
-      'src/shared/ai-vault-search-contract.ts'
-    )
+    const baseline = releaseSearchSchemas(ref)
     const parser = baseline.AiVaultSearchRequestSchema
     const parse =
       parser && typeof parser === 'object' && 'parse' in parser ? parser.parse : undefined

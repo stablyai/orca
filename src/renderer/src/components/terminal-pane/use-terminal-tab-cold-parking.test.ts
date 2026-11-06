@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { selectColdParkedTerminalTabs } from './terminal-hidden-view-parking'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const mocks = vi.hoisted(() => ({
   storeState: {
@@ -75,6 +74,7 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 }))
 
 import {
+  type selectColdParkedTerminalTabs,
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   TERMINAL_TAB_HOT_RETAIN_MS
 } from './terminal-hidden-view-parking'

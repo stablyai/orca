@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -13,12 +13,10 @@ import {
   inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
 import {
-  claudeLaunchAccountId,
-  findMovableClaudeSessions,
-  findQueuedClaudeRestartsOnAccount,
-  isClaudePaneMidTurn,
-  resolveClaudeSessionAccountId
+  findClaudeSwitchSessions,
+  findQueuedClaudeRestartsOnAccount
 } from './claude-session-account-move'
+import type { ClaudeHostFolders } from './claude-pane-account-folder'
 
 const laneByPtyId: Record<string, string> = {}
 let projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -87,7 +85,8 @@ function makeTab(n: number): TerminalTab {
 }
 
 function providerSession(pane: SeededPane): AgentStatusEntry['providerSession'] {
-  const id = pane.sessionId ?? SESSION_ID
+  // Why per pane: panes naming one session are a distinct case, seeded explicitly.
+  const id = pane.sessionId ?? `${SESSION_ID.slice(0, -1)}${pane.n}`
   const configDir = pane.configDir === undefined ? FOLDER_A : pane.configDir
   return configDir
     ? { key: 'session_id', id, transcriptPath: `${configDir}/projects/-repo/${id}.jsonl` }
@@ -132,19 +131,22 @@ function seedPanes(panes: SeededPane[]): void {
       ])
     ),
     agentStatusByPaneKey: statuses,
+    paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     pendingPaneAccountRestarts: {}
   })
 }
 
-const movable = async (
+const scan = (
   fromAccountId: string | null = 'acct-a',
-  target: { runtime: 'host' | 'wsl'; wslDistro?: string } = HOST
-) =>
-  (await findMovableClaudeSessions({ owner: LOCAL, target, fromAccountId })).map(
-    (pane) => pane.ptyId
-  )
+  target: { runtime: 'host' | 'wsl'; wslDistro?: string } = HOST,
+  host?: ClaudeHostFolders,
+  toAccountId: string | null = 'acct-c'
+) => findClaudeSwitchSessions({ owner: LOCAL, target, fromAccountId, toAccountId, host })
+
+const movable = async (...args: Parameters<typeof scan>) =>
+  (await scan(...args)).onAccount.map((pane) => pane.ptyId)
 
 beforeEach(() => {
   projectRuntime = undefined
@@ -163,17 +165,6 @@ describe('findMovableClaudeSessions', () => {
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('claude')
   })
 
-  it('finds resumable Claude panes and skips other agents and session-less panes', async () => {
-    seedPanes([
-      { n: 1, agentType: 'claude' },
-      { n: 2, agentType: 'codex' },
-      { n: 3, agentType: 'claude', sessionId: null },
-      { n: 4 }
-    ])
-
-    expect(await movable()).toEqual([ptyId(1)])
-  })
-
   it('counts only sessions running on the outgoing account', async () => {
     seedPanes([
       { n: 1, agentType: 'claude', configDir: FOLDER_A },
@@ -184,6 +175,75 @@ describe('findMovableClaudeSessions', () => {
 
     expect(await movable('acct-a')).toEqual([ptyId(1)])
     expect(await movable(null)).toEqual([ptyId(3)])
+  })
+
+  it('keeps every live pane of a shared session running, even one already on the new account', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
+      { n: 2, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
+      { n: 3, agentType: 'claude', configDir: FOLDER_A, sessionId: `${SESSION_ID.slice(0, -1)}9` },
+      { n: 4, agentType: 'claude', configDir: FOLDER_B, sessionId: `${SESSION_ID.slice(0, -1)}9` },
+      { n: 5, agentType: 'claude', configDir: FOLDER_A }
+    ])
+    const onShared = vi.fn()
+
+    const found = await findClaudeSwitchSessions({
+      owner: LOCAL,
+      target: HOST,
+      fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
+      onShared
+    })
+
+    expect(found.onAccount.map((pane) => pane.ptyId)).toEqual([ptyId(5)])
+    expect(found.cantMove).toEqual(
+      [1, 2, 3].map((n) => expect.objectContaining({ ptyId: ptyId(n), reason: 'shared-session' }))
+    )
+    expect(onShared.mock.calls[0]?.[0]).toHaveLength(3)
+  })
+
+  it("keeps a shared session running after the other pane's sidebar row was dismissed", async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID }, { n: 2 }])
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: {
+          paneKey: makePaneKey(tabId(2), leafId(2)),
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    const found = await scan()
+
+    expect(found.onAccount).toEqual([])
+    expect(found.cantMove).toEqual([
+      expect.objectContaining({ ptyId: ptyId(1), reason: 'shared-session' })
+    ])
+  })
+
+  it('moves a session once the other pane is back at its shell', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
+      { n: 2, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID }
+    ])
+    vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => ({
+      foregroundProcess: id === ptyId(2) ? 'zsh' : 'claude',
+      hasChildProcesses: id !== ptyId(2)
+    }))
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('zsh')
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: { agent: null, shellForeground: true }
+      }
+    })
+
+    expect(await movable()).toEqual([ptyId(1)])
   })
 
   it('keeps a host switch off WSL panes and a WSL switch on its own distro', async () => {
@@ -202,25 +262,15 @@ describe('findMovableClaudeSessions', () => {
   it('never offers a move for a remote-server switch or SSH panes', async () => {
     seedPanes([{ n: 1, agentType: 'claude' }])
     expect(
-      await findMovableClaudeSessions({
+      await findClaudeSwitchSessions({
         owner: { kind: 'environment', environmentId: 'env-1' },
         target: HOST,
-        fromAccountId: 'acct-a'
+        fromAccountId: 'acct-a',
+        toAccountId: 'acct-b'
       })
-    ).toEqual([])
+    ).toEqual({ onAccount: [], elsewhere: [], cantMove: [] })
 
     laneByPtyId[ptyId(1)] = 'ssh-connection'
-    expect(await movable()).toEqual([])
-  })
-
-  it('skips a pane where Claude has exited to the shell', async () => {
-    seedPanes([{ n: 1, agentType: 'claude' }])
-    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
-    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('zsh')
-
     expect(await movable()).toEqual([])
   })
 
@@ -261,14 +311,15 @@ describe('findMovableClaudeSessions', () => {
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue(null)
     const onUnchecked = vi.fn()
 
-    const found = await findMovableClaudeSessions({
+    const found = await findClaudeSwitchSessions({
       owner: LOCAL,
       target: HOST,
       fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
       onUnchecked
     })
 
-    expect(found).toEqual([])
+    expect(found.onAccount).toEqual([])
     expect(onUnchecked.mock.calls[0][0].map((pane: { ptyId: string }) => pane.ptyId)).toEqual([
       ptyId(1)
     ])
@@ -323,47 +374,6 @@ describe('findMovableClaudeSessions', () => {
   })
 })
 
-describe('resolveClaudeSessionAccountId', () => {
-  const accounts = [account('acct-a', FOLDER_A)]
-
-  it('reads the account from the transcript folder, with System default as the rest', () => {
-    expect(resolveClaudeSessionAccountId(`${FOLDER_A}/projects/-repo/s.jsonl`, accounts)).toBe(
-      'acct-a'
-    )
-    expect(
-      resolveClaudeSessionAccountId(`${SYSTEM_FOLDER}/projects/-repo/s.jsonl`, accounts)
-    ).toBeNull()
-    expect(resolveClaudeSessionAccountId(undefined, accounts)).toBeUndefined()
-  })
-
-  it('matches Windows paths whatever their separators', () => {
-    const windowsAccounts = [account('acct-w', 'C:\\Users\\dev\\claude\\acct-w')]
-    expect(
-      resolveClaudeSessionAccountId(
-        'C:\\Users\\dev\\claude\\acct-w\\projects\\-repo\\s.jsonl',
-        windowsAccounts
-      )
-    ).toBe('acct-w')
-  })
-})
-
-describe('isClaudePaneMidTurn', () => {
-  it('waits on a reply, a permission prompt or a question, not on an idle session', () => {
-    seedPanes([
-      { n: 1, agentType: 'claude', state: 'working' },
-      { n: 2, agentType: 'claude', state: 'blocked' },
-      { n: 3, agentType: 'claude', state: 'waiting' },
-      { n: 4, agentType: 'claude', state: 'done' }
-    ])
-    const state = useAppStore.getState()
-    const midTurn = [1, 2, 3, 4].map((n) =>
-      isClaudePaneMidTurn(state, makePaneKey(tabId(n), leafId(n)))
-    )
-
-    expect(midTurn).toEqual([true, true, true, false])
-  })
-})
-
 describe('findQueuedClaudeRestartsOnAccount', () => {
   it('lists queued Claude restarts in the lane whose session already runs on the account', () => {
     seedPanes([
@@ -385,15 +395,86 @@ describe('findQueuedClaudeRestartsOnAccount', () => {
       findQueuedClaudeRestartsOnAccount({ owner: LOCAL, target: HOST, accountId: 'acct-b' })
     ).toEqual([ptyId(1)])
   })
+
+  it("cancels a System default session's queued restart when switching back to the login it holds", () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: SYSTEM_FOLDER }])
+    useAppStore.setState({ pendingPaneAccountRestarts: { [ptyId(1)]: 'claude' } })
+    const queuedOn = (accountId: string, host: ClaudeHostFolders) =>
+      findQueuedClaudeRestartsOnAccount({ owner: LOCAL, target: HOST, accountId, host })
+
+    expect(queuedOn('acct-a', hostFolders())).toEqual([ptyId(1)])
+    expect(queuedOn('acct-b', hostFolders())).toEqual([])
+  })
 })
 
-describe('claudeLaunchAccountId', () => {
-  it('reads an account System default covers as System default, where its sessions run', () => {
-    const covered = { ...account('acct-a', FOLDER_A), runsOnSystemDefault: true as const }
-    const own = account('acct-b', FOLDER_B)
+/** System default signed in to acct-a's login, as an older Orca's copy left it. */
+function hostFolders(overrides: Partial<ClaudeHostFolders> = {}): ClaudeHostFolders {
+  const summary = (id: string, organizationUuid: string | null) => ({
+    ...account(id, ''),
+    organizationUuid,
+    home: `/data/claude-profiles/${id}/home`
+  })
+  return {
+    accounts: [summary('acct-a', 'org-a'), summary('acct-b', 'org-b')],
+    systemDefaultHome: SYSTEM_FOLDER,
+    systemDefaultEmail: 'ACCT-A@example.com',
+    systemDefaultOrganizationUuid: 'org-a',
+    ...overrides
+  }
+}
 
-    expect(claudeLaunchAccountId({ accounts: [covered, own] }, 'acct-a')).toBeNull()
-    expect(claudeLaunchAccountId({ accounts: [covered, own] }, 'acct-b')).toBe('acct-b')
-    expect(claudeLaunchAccountId({ accounts: [covered, own] }, null)).toBeNull()
+describe('a switch away from the login System default holds', () => {
+  beforeEach(() => {
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true
+    })
+  })
+
+  it('moves System default sessions with that exact login, and never compares managed folders', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A },
+      { n: 2, agentType: 'claude', configDir: SYSTEM_FOLDER },
+      { n: 3, agentType: 'claude', configDir: FOLDER_B }
+    ])
+    const sameLoginB = hostFolders({
+      accounts: hostFolders().accounts.map((entry) => ({
+        ...entry,
+        email: 'acct-a@example.com',
+        organizationUuid: 'org-a'
+      }))
+    })
+
+    expect(await movable('acct-a', HOST, hostFolders())).toEqual([ptyId(1), ptyId(2)])
+    expect(await movable('acct-a', HOST, sameLoginB)).toEqual([ptyId(1), ptyId(2)])
+  })
+
+  it.each([
+    ['another organization', { systemDefaultOrganizationUuid: 'org-other' }],
+    ['no organization', { systemDefaultOrganizationUuid: undefined }],
+    ['a WSL switch', null]
+  ])('leaves System default sessions alone for %s', async (_, overrides) => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: SYSTEM_FOLDER }])
+    laneByPtyId[ptyId(1)] = overrides ? 'host' : 'wsl:Ubuntu'
+    const target = overrides ? HOST : ({ runtime: 'wsl', wslDistro: 'Ubuntu' } as const)
+
+    const found = await scan('acct-a', target, hostFolders(overrides ?? {}))
+
+    expect(found.onAccount).toEqual([])
+    expect(found.elsewhere).toEqual([expect.objectContaining({ ptyId: ptyId(1), accountId: null })])
+  })
+
+  it("lists a session in the user's own folder as one a restart cannot move", async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: '/home/dev/my-claude' }])
+
+    expect((await scan(null, HOST, hostFolders())).cantMove).toEqual([
+      expect.objectContaining({ ptyId: ptyId(1), reason: 'own-folder' })
+    ])
+  })
+
+  it("finds a legacy account's sessions in the folder its launches use now", async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: '/data/claude-profiles/acct-a/home' }])
+
+    expect(await movable('acct-a', HOST, hostFolders())).toEqual([ptyId(1)])
   })
 })

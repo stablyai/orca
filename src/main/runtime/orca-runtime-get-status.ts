@@ -1,60 +1,62 @@
-import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
-import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
-  runtimeBrowserCommandsFactoryIsHeadless,
-  runtimeBrowserCommandsFactorySupportsClientHosting,
-  runtimeBrowserUnavailableCause
-} from './runtime-browser-commands-factory'
-import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
-import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
-import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
-import { advertisedOrcadMigrationBlobCapabilities } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
-import type { RuntimeCapability } from '../../shared/protocol-version'
-import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
-import {
+  BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
-  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
-  MANAGED_SERVER_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
+} from '../../shared/browser-runtime-capabilities'
+import {
+  runtimeBrowserCommandsFactoryIsHeadless,
+  runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
+  runtimeBrowserCommandsFactorySupportsClientHosting,
+  runtimeBrowserUnavailableCause
+} from './browser/installation/runtime-browser-commands-factory'
+import { isBrowserIdentityModeStoreInitialized } from '../browser/identity/browser-identity-mode-store'
+import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
+import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
+import { advertisedOrcadMigrationDestinationCapabilities } from '../orcad/orcad-migration-destination-capabilities'
+import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
+import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
-  RUNTIME_PROTOCOL_VERSION,
-  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../shared/protocol-version'
+
+import {
+  MANAGED_SERVER_RUNTIME_CAPABILITY,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/host-runtime-capabilities'
+import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../shared/session-tabs-runtime-capabilities'
+import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import type { RuntimeDegradation } from '../../shared/runtime-capability-degradation'
+
 import {
+  type RuntimeStatus,
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
-} from '../../shared/runtime-types'
+} from '../../shared/runtime-session-contracts'
+import {
+  TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY,
+  TERMINAL_PERSISTENCE_UNAVAILABLE_CODE,
+  TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
+} from '../../shared/runtime-capability-degradation'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { loadBundledMobileWebBundle } from './bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
-import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
-import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type {
-  AutomaticWorkResumeOutcome,
-  AutomaticWorkStatus
-} from '../../shared/host-spawn-admission'
-import type { RuntimeNotifier } from './runtime-notifier-contract'
-import type {
-  AutomationsChangedPayload,
-  RuntimeClientEvent
-} from '../../shared/runtime-client-events'
-import { parsePaneKey } from '../../shared/stable-pane-id'
-import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
-import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
+import { WORKTREE_CREATE_RESULT_TTL_MS } from './workspaces/creation/worktree-create-idempotency'
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from './hosts/platform-probe/runtime-machine-name'
 import { getManagedServerActions } from './managed-server-actions-registry'
-import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
 import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
 import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
+import { supportsDurableTerminalPromptDelivery } from './durable-terminal-prompt-delivery-support'
+import { RuntimeWorkspaceChangeEvents } from './workspaces/catalog/runtime-workspace-change-events'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -65,18 +67,7 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
-function supportsDurableTerminalPromptDelivery(): boolean {
-  if (typeof process.getBuiltinModule !== 'function') {
-    return false
-  }
-  try {
-    return process.getBuiltinModule('node:sqlite') !== undefined
-  } catch {
-    return false
-  }
-}
-
-export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -92,8 +83,10 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     // TEMPORARY compatibility field: older clients otherwise re-probe WSL capabilities indefinitely.
     const windowsProcessStartTimeAvailable =
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
-    const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
+    const capabilities: NonNullable<RuntimeStatus['capabilities']> = RUNTIME_CAPABILITIES.filter(
       (capability) =>
+        (capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY ||
+          runtimeBrowserCommandsFactorySupportsGoogleCookieClear()) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
         (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
@@ -125,7 +118,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       capabilities.push(ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY)
     }
     // Advertise only installed blob kinds; senders refuse unsupported kinds instead of silently losing staged data.
-    capabilities.push(...advertisedOrcadMigrationBlobCapabilities())
+    capabilities.push(...advertisedOrcadMigrationDestinationCapabilities())
     // Certificate proceed belongs to whichever process hosts the page, renderer or offscreen.
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
@@ -158,6 +151,14 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     if (terminalDegradation) {
       degradations.push(terminalDegradation)
     }
+    // Hosts that never wire this check default to true and claim nothing.
+    if (!this.canRecoverPersistentLocalPtysFn()) {
+      degradations.push({
+        code: TERMINAL_PERSISTENCE_UNAVAILABLE_CODE,
+        capability: TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY,
+        message: TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
+      })
+    }
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -185,34 +186,13 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     return this.machineName.read()
   }
 
+  readPairedDeviceName(deviceId: string): string | null {
+    return this.getPairedDeviceNameFn(deviceId)
+  }
+
   /** Bound machine-name lookup; slow lookups temporarily publish hostname, then their result on the next read. */
   machineNameReady(): Promise<void> {
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
-  }
-
-  setPtyController(controller: RuntimePtyController | null): void {
-    // Write through the main-owned PTY registry so renderer reloads cannot drift handle/process identity.
-    this.ptyController = controller
-  }
-
-  /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
-  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
-    return (await this.ptyController?.getAutomaticWorkStatus?.()) ?? null
-  }
-
-  async resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
-    return (await this.ptyController?.resumeAutomaticWork?.()) ?? null
-  }
-
-  setNotifier(notifier: RuntimeNotifier | null): void {
-    this.notifier = notifier
-    if (notifier) {
-      this.repositoryForkBackfill.start()
-    }
-  }
-
-  protected countTerminalSideEffectConsumingClientEventListeners(): number {
-    return this.clientEvents.countTerminalSideEffectConsumers()
   }
 
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
@@ -256,75 +236,5 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       }
     }
     return events
-  }
-
-  protected resolveNativeChatLaunchDraftOwner(
-    handle: string
-  ): { tabId: string; worktreeId: string } | null {
-    const record = this.handles.get(handle)
-    if (!record) {
-      return null
-    }
-    if (!record.tabId.startsWith('pty:')) {
-      return { tabId: record.tabId, worktreeId: record.worktreeId }
-    }
-    const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
-    const pane = this.paneOfPty(pty)
-    const tabId =
-      pane.tabId && !pane.tabId.startsWith('pty:')
-        ? pane.tabId
-        : parsePaneKey(pane.paneKey ?? '')?.tabId
-    if (!pty || !tabId || tabId.startsWith('pty:')) {
-      return null
-    }
-    return { tabId, worktreeId: pty.worktreeId }
-  }
-
-  notifyWorktreesChanged(
-    repoId: string,
-    options?: {
-      invalidateGitScans?: boolean
-      sortOrderOnly?: boolean
-      sortOrders?: WorktreeSortOrderUpdate[]
-    }
-  ): void {
-    if (options?.invalidateGitScans !== false) {
-      runWorktreeChangeInvalidators(repoId)
-    }
-    if (options) {
-      const { sortOrders: _sortOrders, ...notifierOptions } = options
-      this.notifier?.worktreesChanged(repoId, undefined, notifierOptions)
-    } else {
-      this.notifier?.worktreesChanged(repoId)
-    }
-    this.emitClientEvent({
-      type: 'worktreesChanged',
-      repoId,
-      ...(options?.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
-      ...(options?.sortOrderOnly === true && options.sortOrders
-        ? { sortOrders: options.sortOrders }
-        : {})
-    })
-  }
-
-  /** Unlike coarse repoId-only changes, lifecycle events name the workspace; removals resolve only id/path before teardown. */
-  onWorktreeLifecycle(listener: (event: RuntimeWorktreeLifecycleEvent) => void): () => void {
-    return this.worktreeLifecycleEvents.on(listener)
-  }
-
-  protected emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
-    this.worktreeLifecycleEvents.emit(event)
-  }
-
-  protected notifyReposChanged(): void {
-    wakeFolderRepoGitUpgradeWatch()
-    this.notifier?.reposChanged()
-    this.emitClientEvent({ type: 'reposChanged' })
-  }
-
-  // Automation/IPC writes need a public stream entry; older clients drop this unknown event without negotiation.
-  notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
-    this.notifier?.automationsChanged?.(payload)
-    this.emitClientEvent({ type: 'automationsChanged', ...payload })
   }
 }

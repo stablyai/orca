@@ -4,7 +4,9 @@ import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
+  getNextTerminalCycleTab,
   getNextTabWithinActiveType,
+  getPreviousRecentTab,
   type TabCycleType,
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
@@ -88,7 +90,10 @@ function getFloatingWorkspaceVisibleTabs(
         .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
         .map((file) => file.id)
     ),
-    new Set((store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id))
+    new Set(
+      (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    ),
+    new Set(groupTabs.filter((tab) => tab.contentType === 'simulator').map((tab) => tab.id))
   )
 }
 
@@ -148,7 +153,7 @@ export function resolveFloatingWorkspaceBrowserWorkspaceId(
   )
 }
 
-function activateFloatingWorkspaceCyclableTab(
+export function activateFloatingWorkspaceCyclableTab(
   store: FloatingWorkspaceTabSwitchStore,
   next: TypeCyclableTab
 ): void {
@@ -168,26 +173,6 @@ function activateFloatingWorkspaceCyclableTab(
       void window.api.browser.notifyActiveTabChanged({ browserPageId: workspace.activePageId })
     }
   }
-}
-
-function getNextFloatingWorkspaceTerminalTab(
-  visibleTabs: readonly TypeCyclableTab[],
-  active: TypeCyclableTab,
-  direction: number
-): TypeCyclableTab | null {
-  const terminalTabs = visibleTabs.filter((tab) => tab.type === 'terminal')
-  if (terminalTabs.length === 0) {
-    return null
-  }
-  const currentIndex = terminalTabs.findIndex((tab) => tab.id === active.id)
-  if (terminalTabs.length === 1 && currentIndex === 0 && active.type === 'terminal') {
-    return null
-  }
-  const normalizedCurrentIndex =
-    currentIndex === -1 && direction > 0 ? -1 : currentIndex === -1 ? 0 : currentIndex
-  return terminalTabs[
-    (normalizedCurrentIndex + direction + terminalTabs.length) % terminalTabs.length
-  ]
 }
 
 export function isFloatingWorkspacePanelFocused(
@@ -279,7 +264,7 @@ export function switchFloatingWorkspaceTab(
 
   const next =
     mode === 'terminal'
-      ? getNextFloatingWorkspaceTerminalTab(visibleTabs, active, direction)
+      ? getNextTerminalCycleTab(visibleTabs, active, direction)
       : mode === 'all-types'
         ? getNextTabAcrossAllTypes({
             tabs: visibleTabs,
@@ -298,6 +283,22 @@ export function switchFloatingWorkspaceTab(
     return false
   }
 
+  activateFloatingWorkspaceCyclableTab(store, next)
+  return true
+}
+
+export function switchFloatingWorkspaceRecentTab(store: FloatingWorkspaceTabSwitchStore): boolean {
+  const group = getActiveFloatingWorkspaceGroup(store)
+  const next = group
+    ? getPreviousRecentTab(
+        getFloatingWorkspaceVisibleTabs(store, group),
+        group.recentTabIds,
+        group.activeTabId
+      )
+    : null
+  if (!next) {
+    return false
+  }
   activateFloatingWorkspaceCyclableTab(store, next)
   return true
 }

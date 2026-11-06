@@ -35,14 +35,25 @@ describe('mobile-file-preview-navigation', () => {
     expect(events).toEqual(['push', 'schedule', 'close'])
   })
 
-  it.each(['mp4', 'MOV', 'm4v', 'webm', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'flac', 'opus'])(
-    'opens %s files from the explorer',
-    (extension) => {
-      expect(
-        canPreviewMobileFileRow({ kind: 'binary', relativePath: `media/demo.${extension}` })
-      ).toBe(true)
-    }
-  )
+  it.each([
+    'mp4',
+    'MOV',
+    'm4v',
+    'webm',
+    'mp3',
+    'wav',
+    'm4a',
+    'aac',
+    'ogg',
+    'oga',
+    'flac',
+    'opus',
+    'pdf'
+  ])('opens %s files from the explorer', (extension) => {
+    expect(
+      canPreviewMobileFileRow({ kind: 'binary', relativePath: `media/demo.${extension}` })
+    ).toBe(true)
+  })
 
   it('keeps non-image binary rows disabled while previewing text and raster images', () => {
     expect(canPreviewMobileFileRow({ kind: 'text', relativePath: 'src/app.ts' })).toBe(true)

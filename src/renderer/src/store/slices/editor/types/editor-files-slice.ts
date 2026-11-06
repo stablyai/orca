@@ -1,5 +1,5 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
+import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
   CombinedDiffAlternate,
   ConflictReviewEntry,
@@ -10,8 +10,8 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type {
   BranchCompareLike,
@@ -85,6 +85,19 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  acquireEditorFileOperationProvenance: (
+    file: OpenFile,
+    selected?: OpenFile['operationProvenance']
+  ) => OpenFile & {
+    operationProvenance: NonNullable<OpenFile['operationProvenance']>
+  }
+  /** Creates a plugin's new-file type at the active workspace root and opens it. */
+  openNewPluginFileInActiveWorkspace: (
+    newFile: { pluginKey: string; id: string; title: string; extension: string },
+    groupId?: string
+  ) => Promise<void>
+  /** Opens an empty `untitled<extension>` at the active workspace root. */
+  openBlankFileInActiveWorkspace: (extension: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -106,7 +119,7 @@ export type EditorFilesSlice = {
       | 'runtimeEnvironmentId'
       | 'externalSshTargetId'
     > &
-      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly'>>,
+      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly' | 'operationProvenance'>>,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
@@ -131,6 +144,8 @@ export type EditorFilesSlice = {
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   /** `undefined` un-records a baseline a failed operation stamped provisionally. */
   setLastKnownDiskSignature: (fileId: string, signature: string | undefined) => void
+  /** Host grant for a file outside every workspace; grants lapse, so reads and saves renew them. */
+  setTerminalArtifactGrant: (fileId: string, grantId: string) => void
   clearSelfMoveEcho: (fileId: string) => void
   /** Atomically migrate path/ID-keyed editor state without close/reopen; stale/colliding moves leave state unchanged. */
   rekeyOpenFilesForPathChange: (args: {
@@ -147,7 +162,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
   ) => void
   openBranchDiff: (
     worktreeId: string,

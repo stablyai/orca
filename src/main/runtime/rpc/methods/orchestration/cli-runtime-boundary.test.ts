@@ -27,6 +27,9 @@ describe('orchestration CLI/runtime boundary', () => {
     h.cleanup()
     restoreTerminalHandle()
     vi.doUnmock('../../../../../cli/format')
+    vi.doUnmock('../../../../../cli/runtime-client')
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     vi.resetModules()
   })
 
@@ -88,6 +91,72 @@ describe('orchestration CLI/runtime boundary', () => {
     ])
     expect(db.getTask(child.id)?.status).toBe('dispatched')
     expect(db.getDispatchContext(child.id)?.assignee_handle).toBe('term_worker')
+  })
+
+  it('CLI argv preserves worker commands', async () => {
+    ;({ db, ctx } = h.setup())
+    const { runtime } = ctx
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    vi.stubEnv('ORCA_PAIRING_CODE', '')
+    vi.stubEnv('ORCA_ENVIRONMENT', '')
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', '')
+    vi.doMock('../../../../../cli/runtime-client', async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      RuntimeClient: client
+    }))
+    const output = vi.fn()
+    vi.doMock('../../../../../cli/format', () => ({ printResult: output }))
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+      handle === 'term_worker'
+        ? {
+            runtimeId: runtime.getRuntimeId(),
+            terminalHandle: handle,
+            ptyId: 'pty_worker',
+            worktreeId: 'wt_worker',
+            paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            processIncarnation: 'worker:1',
+            launchTokenHash: null,
+            hostScope: { kind: 'local', hostId: 'local' }
+          }
+        : null
+    )
+    vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    const delivered = vi
+      .spyOn(runtime, 'sendTerminalAgentPrompt')
+      .mockResolvedValue({ handle: 'term_worker', accepted: true, bytesWritten: 1 })
+    const task = db.createTask({ spec: 'complete work and report the outcome' })
+    const cliPath = '../../../../../cli/index'
+    const { main }: { main(argv: string[]): Promise<void> } = await import(cliPath)
+    await main([
+      'orchestration',
+      'dispatch',
+      '--task',
+      task.id,
+      '--to',
+      'term_worker',
+      '--inject',
+      '--return-preamble',
+      '--json',
+      '--full'
+    ])
+    expect(output).toHaveBeenCalledOnce()
+    const result = output.mock.calls[0][0].result
+    expect(result.injected).toBe(true)
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(delivered).toHaveBeenCalledExactlyOnceWith(
+      'term_worker',
+      result.preamble,
+      expect.anything()
+    )
+    for (const command of [
+      '--type worker_done',
+      '--outcome succeeded',
+      '--outcome failed',
+      'orchestration ask --from',
+      '--type escalation'
+    ]) {
+      expect(result.preamble).toContain(command)
+    }
   })
 
   function taskBySpec(spec: string) {

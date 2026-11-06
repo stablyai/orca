@@ -1,31 +1,48 @@
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
+import type { PipedChildProcess as Bridge } from '@orca/process-host/process-spec'
 import { OrcadStdioBridgeUnavailableError } from '../orcad/orcad-host-unavailable'
 import { checkOrcadStdioBridge, type OrcadStdioBridge } from './orcad-stdio-bridge'
-import { orcadBashStdioBridgeCommand } from '../managed-server/lifecycle/orcad-stdio-bridge-script'
+import {
+  ORCAD_STDIO_BRIDGE_NO_NODE,
+  ORCAD_STDIO_BRIDGE_READY,
+  ORCAD_STDIO_BRIDGE_REFUSED,
+  orcadBashStdioBridgeCommand
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
 import { OrcadStdioBridgeDecoder } from '../managed-server/lifecycle/orcad-stdio-bridge-stream'
 import {
   spawnLocalBridgeChannel,
   startEchoServer
 } from '../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import type { OrcadHostTransport } from './orcad-host-transport'
+import {
+  bashSupportsRelay,
+  guestHome,
+  isAlive,
+  NO_DEV_TCP_EDIT,
+  OLD_BASH_EDIT,
+  pathWithEditedBash,
+  pathWithoutBash,
+  processTree,
+  treeRssMb
+} from './orcad-bash-stdio-bridge-test-host'
 
-function bashSupportsRelay(): boolean {
-  const probe = spawnSync('bash', ['-c', 'echo "${BASH_VERSINFO[0]} ${BASH_VERSINFO[1]}"'], {
-    encoding: 'utf8'
-  })
-  const [major, minor] = (probe.stdout ?? '').trim().split(' ').map(Number)
-  return probe.status === 0 && (major > 4 || (major === 4 && minor >= 3))
-}
-
+const POSIX = process.platform !== 'win32'
 // macOS ships bash 3.2, which takes the Node fallback this suite checks separately.
-const RELAY = process.platform !== 'win32' && bashSupportsRelay()
-const PAYLOAD = Buffer.from(Array.from({ length: 256 * 1024 }, (_, index) => index % 256))
+const RELAY = POSIX && bashSupportsRelay()
+// Every byte value, repeated into a multi-megabyte frame.
+const PAYLOAD = Buffer.from(Array.from({ length: 4 * 1024 * 1024 }, (_, index) => index % 256))
+// More than every pipe and socket buffer on the path can hold, so a stalled side must push back.
+const FLOOD_CHUNK = Buffer.from(Array.from({ length: 1024 * 1024 }, (_, index) => index % 256))
+const FLOOD_BYTES = 128 * FLOOD_CHUNK.length
+const STALL_MS = 1_000
+// A Node bridge holds ~45-50 MB; the relay is bash plus two cats.
+const RELAY_RSS_CEILING_MB = 15
 
 let echo: { server: Server; port: number }
 let scratch: string
@@ -40,42 +57,51 @@ afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function home(withRuntime: boolean): string {
-  const dir = mkdtempSync(join(scratch, 'home-'))
-  if (withRuntime) {
-    const bin = join(dir, '.orca-remote', 'runtimes', 'node-abc', 'bin')
-    mkdirSync(bin, { recursive: true })
-    symlinkSync(process.execPath, join(bin, 'node'))
-  }
-  return dir
+function spawnBridge(port: number, env: Partial<NodeJS.ProcessEnv> = {}): Bridge {
+  return spawnProcess({
+    program: '/bin/sh',
+    args: ['-c', orcadBashStdioBridgeCommand(port)],
+    env: { ...process.env, HOME: guestHome(scratch, false), ...env }
+  })
 }
 
-/** A PATH that has `cat` but no `bash`, so the command must take its Node fallback. */
-function pathWithoutBash(): string {
-  const bin = mkdtempSync(join(scratch, 'bin-'))
-  const cat = spawnSync('sh', ['-c', 'command -v cat'], { encoding: 'utf8' }).stdout.trim()
-  symlinkSync(cat, join(bin, 'cat'))
-  return bin
+function realCat(): string {
+  return spawnSync('sh', ['-c', 'command -v cat'], { encoding: 'utf8' }).stdout.trim()
 }
 
-function spawnBridge(port: number, env: NodeJS.ProcessEnv) {
-  return spawnProcess({ program: '/bin/sh', args: ['-c', orcadBashStdioBridgeCommand(port)], env })
+function exitOf(child: Bridge): Promise<number | null> {
+  return new Promise((resolve) => child.once('exit', (code) => resolve(code)))
 }
 
-function ready(stream: NodeJS.ReadableStream): Promise<string> {
+function firstLine(stream: NodeJS.ReadableStream): Promise<string> {
+  let text = ''
+  return new Promise((resolve) => {
+    const onData = (chunk: Buffer): void => {
+      text += chunk.toString('latin1')
+      const end = text.indexOf('\n')
+      if (end !== -1) {
+        stream.off('data', onData)
+        resolve(text.slice(0, end))
+      }
+    }
+    stream.on('data', onData)
+  })
+}
+
+/** Decodes the bridge's stdout, discarding payload bytes; resolves `ready` on the sentinel. */
+function decode(stream: NodeJS.ReadableStream) {
   const decoder = new OrcadStdioBridgeDecoder('raw')
   stream.pipe(decoder)
+  const ready = new Promise<string>((resolve) => decoder.once('signal', resolve))
   decoder.resume()
-  return new Promise((resolve) => decoder.once('signal', resolve))
+  return { decoder, ready }
 }
 
-/** Resolves with every byte after the sentinel once `expected` bytes arrived. */
-function readAfterReady(stream: NodeJS.ReadableStream, expected: number): Promise<Buffer> {
-  const decoder = new OrcadStdioBridgeDecoder('raw')
-  stream.pipe(decoder)
+/** Resolves with the payload once `expected` bytes arrived; collecting a flood would copy quadratically. */
+function received(decoder: OrcadStdioBridgeDecoder, expected: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let length = 0
-  return new Promise((resolve, reject) => {
+  return new Promise<Buffer>((resolve, reject) => {
     decoder.on('error', reject)
     decoder.on('data', (chunk: Buffer) => {
       chunks.push(chunk)
@@ -87,40 +113,35 @@ function readAfterReady(stream: NodeJS.ReadableStream, expected: number): Promis
   })
 }
 
-function exitOf(child: ReturnType<typeof spawnProcess>): Promise<number | null> {
-  return new Promise((resolve) => child.once('exit', (code) => resolve(code)))
-}
-
-/** Linux RSS of a process and all its descendants, in MB. */
-function treeRssMb(rootPid: number): number {
-  const parents = new Map<number, number>()
-  for (const entry of readdirSync('/proc')) {
-    if (!/^\d+$/.test(entry)) {
-      continue
-    }
-    try {
-      const stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
-      parents.set(Number(entry), Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]))
-    } catch {
-      // Exited while listing.
-    }
-  }
-  const tree = new Set([rootPid])
-  for (let grew = true; grew;) {
-    grew = false
-    for (const [pid, parent] of parents) {
-      if (tree.has(parent) && !tree.has(pid)) {
-        tree.add(pid)
-        grew = true
+/** Writes like the desktop listener: one chunk at a time, waiting for drain. */
+function flood(stream: NodeJS.WritableStream): { accepted: () => number; done: Promise<void> } {
+  let accepted = 0
+  const done = (async () => {
+    while (accepted < FLOOD_BYTES) {
+      const more = stream.write(FLOOD_CHUNK)
+      accepted += FLOOD_CHUNK.length
+      if (!more) {
+        await new Promise((resolve) => stream.once('drain', resolve))
       }
     }
+  })()
+  return { accepted: () => accepted, done }
+}
+
+/** Counts flood bytes and checks each one against its position, without holding the flood. */
+function floodCheck() {
+  let count = 0
+  let intact = true
+  return {
+    push: (chunk: Buffer): void => {
+      for (let index = 0; index < chunk.length; index += 1) {
+        intact &&= chunk[index] === (count + index) % 256
+      }
+      count += chunk.length
+    },
+    count: () => count,
+    intact: () => intact
   }
-  let kb = 0
-  for (const pid of tree) {
-    const status = readFileSync(`/proc/${pid}/status`, 'utf8')
-    kb += Number(/VmRSS:\s+(\d+)/.exec(status)?.[1] ?? 0)
-  }
-  return kb / 1024
 }
 
 async function listen(server: Server): Promise<number> {
@@ -132,47 +153,154 @@ async function listen(server: Server): Promise<number> {
   return address.port
 }
 
+async function expectNoSurvivors(pids: readonly number[]): Promise<void> {
+  await expect.poll(() => pids.filter(isAlive), { timeout: 5_000 }).toEqual([])
+}
+
 const bridge = (port: number): OrcadStdioBridge => ({
   command: orcadBashStdioBridgeCommand(port),
   mode: 'raw',
   wrapCommand: true
 })
 
-function transportRunning(env: NodeJS.ProcessEnv): OrcadHostTransport {
+function transportRunning(env: Partial<NodeJS.ProcessEnv>): OrcadHostTransport {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check calls only exec.
   return {
-    exec: async (command: string) => spawnLocalBridgeChannel('/bin/sh', ['-c', command], env)
+    exec: async (command: string) =>
+      spawnLocalBridgeChannel('/bin/sh', ['-c', command], { ...process.env, ...env })
   } as unknown as OrcadHostTransport
 }
 
 describe.runIf(RELAY)('the bash stdio bridge', () => {
-  it('relays every byte both ways without starting Node', async () => {
-    const child = spawnBridge(echo.port, { ...process.env, HOME: home(false) })
-    const received = readAfterReady(child.stdout, PAYLOAD.length)
+  it('announces itself with the unchanged ready sentinel', async () => {
+    const child = spawnBridge(echo.port)
+    await expect(firstLine(child.stdout)).resolves.toBe(ORCAD_STDIO_BRIDGE_READY)
+    child.stdin.end()
+    await exitOf(child)
+  })
+
+  it('carries every byte value both ways in a multi-megabyte frame, without Node', async () => {
+    const child = spawnBridge(echo.port)
+    const { decoder, ready } = decode(child.stdout)
+    const bytes = received(decoder, PAYLOAD.length)
+    await ready
+    const pids = processTree(child.pid!)
     child.stdin.write(PAYLOAD)
-    expect((await received).equals(PAYLOAD)).toBe(true)
+    expect((await bytes).equals(PAYLOAD)).toBe(true)
     if (process.platform === 'linux') {
-      // A Node bridge holds ~45-50 MB; the relay is bash plus two cats.
-      expect(treeRssMb(child.pid!)).toBeLessThan(15)
+      expect(treeRssMb(pids)).toBeLessThan(RELAY_RSS_CEILING_MB)
     }
     const exited = exitOf(child)
     child.stdin.end()
     await expect(exited).resolves.toBe(0)
+    await expectNoSurvivors(pids)
   })
 
-  it('exits 0 when orcad closes the socket while the desktop still holds stdin', async () => {
+  it('holds the desktop back, without buffering, while the desktop reads slowly', async () => {
+    const child = spawnBridge(echo.port)
+    const { decoder, ready } = decode(child.stdout)
+    await ready
+    decoder.pause()
+    const writer = flood(child.stdin)
+    // ast-grep-ignore: test-no-real-time-wait -- backpressure is an absence of progress; only a bounded stall shows it
+    await new Promise((resolve) => setTimeout(resolve, STALL_MS))
+    expect(writer.accepted()).toBeLessThan(FLOOD_BYTES)
+    if (process.platform === 'linux') {
+      expect(treeRssMb(processTree(child.pid!))).toBeLessThan(RELAY_RSS_CEILING_MB)
+    }
+    const check = floodCheck()
+    decoder.on('data', check.push)
+    decoder.resume()
+    await writer.done
+    await expect.poll(check.count, { timeout: 30_000 }).toBe(FLOOD_BYTES)
+    expect(check.intact()).toBe(true)
+    child.stdin.end()
+    await exitOf(child)
+  })
+
+  it('holds the desktop back while orcad reads slowly, then delivers everything', async () => {
+    let accepted: Socket | null = null
+    const check = floodCheck()
+    const server = createServer((socket) => {
+      accepted = socket
+      socket.pause()
+      socket.on('data', check.push)
+    })
+    const port = await listen(server)
+    try {
+      const child = spawnBridge(port)
+      await decode(child.stdout).ready
+      const writer = flood(child.stdin)
+      await expect.poll(() => accepted).not.toBeNull()
+      // ast-grep-ignore: test-no-real-time-wait -- backpressure is an absence of progress; only a bounded stall shows it
+      await new Promise((resolve) => setTimeout(resolve, STALL_MS))
+      expect(writer.accepted()).toBeLessThan(FLOOD_BYTES)
+      accepted!.resume()
+      await writer.done
+      await expect.poll(check.count, { timeout: 30_000 }).toBe(FLOOD_BYTES)
+      expect(check.intact()).toBe(true)
+      child.stdin.end()
+      await exitOf(child)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('exits 0 and leaves nothing running when orcad closes while the desktop holds stdin', async () => {
     let accepted: Socket | null = null
     const server = createServer((socket) => {
       accepted = socket
     })
     const port = await listen(server)
     try {
-      const child = spawnBridge(port, { ...process.env, HOME: home(false) })
+      const child = spawnBridge(port)
       const exited = exitOf(child)
-      await expect(ready(child.stdout)).resolves.toBe('ready')
+      await decode(child.stdout).ready
+      const pids = processTree(child.pid!)
       await expect.poll(() => accepted).not.toBeNull()
-      accepted!.end()
+      accepted!.destroy()
       await expect(exited).resolves.toBe(0)
+      await expectNoSurvivors(pids)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('waits for the cat it kills before exiting, so no zombie is left for the session init', async () => {
+    // WSL's per-session init never reaps orphans; a zombie there kept an idle distro running (R40).
+    // The stub cats mark when their TERM trap is in place, and the one the relay kills takes a
+    // moment to die and leaves a mark: the relay may exit only after that mark exists.
+    const dir = mkdtempSync(join(scratch, 'reap-'))
+    const bin = join(dir, 'bin')
+    mkdirSync(bin)
+    writeFileSync(
+      join(bin, 'cat'),
+      '#!/bin/sh\n' +
+        `trap 'kill $c 2>/dev/null; sleep 0.3; : > "${join(dir, 'killed')}"; exit 0' TERM\n` +
+        // POSIX gives a background job /dev/null as stdin even under `<&0`, so hand it over on fd 5
+        // as the relay does: the socket reader ends with orcad, the stdin reader blocks until killed.
+        `exec 5<&0\n${realCat()} "$@" <&5 & c=$!\nexec 5<&-\n` +
+        `: > "${join(dir, 'trap')}.$$"\nwait $c\n`,
+      { mode: 0o755 }
+    )
+    const trapsSet = (): number =>
+      readdirSync(dir).filter((name) => name.startsWith('trap.')).length
+    let accepted: Socket | null = null
+    const server = createServer((socket) => {
+      accepted = socket
+    })
+    const port = await listen(server)
+    try {
+      const child = spawnBridge(port, { PATH: `${bin}:${process.env.PATH}` })
+      const exited = exitOf(child)
+      await decode(child.stdout).ready
+      await expect.poll(() => accepted).not.toBeNull()
+      // Hang up only once both cats can take the relay's kill on their trap.
+      await expect.poll(trapsSet, { timeout: 10_000 }).toBe(2)
+      // orcad hangs up: the socket reader ends, the relay kills the stdin reader.
+      accepted!.destroy()
+      await expect(exited).resolves.toBe(0)
+      expect(existsSync(join(dir, 'killed'))).toBe(true)
     } finally {
       server.close()
     }
@@ -188,45 +316,91 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
     })
     const port = await listen(server)
     try {
-      const child = spawnBridge(port, { ...process.env, HOME: home(false) })
-      await expect(ready(child.stdout)).resolves.toBe('ready')
+      const child = spawnBridge(port)
+      await decode(child.stdout).ready
+      const pids = processTree(child.pid!)
       child.stdin.end()
       await ended
+      await expectNoSurvivors(pids)
     } finally {
       server.close()
     }
   })
+
+  it('leaves nothing running when the desktop side vanishes and orcad stays silent', async () => {
+    const server = createServer((socket) => socket.resume())
+    const port = await listen(server)
+    try {
+      const child = spawnBridge(port)
+      await decode(child.stdout).ready
+      const pids = processTree(child.pid!)
+      // wsl.exe dying closes both pipes without signalling the guest.
+      child.stdin.destroy()
+      child.stdout.destroy()
+      await expectNoSurvivors(pids)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('falls back to Node when bash was built without /dev/tcp', async () => {
+    const child = spawnBridge(echo.port, { PATH: pathWithEditedBash(scratch, NO_DEV_TCP_EDIT) })
+    await expect(firstLine(child.stdout)).resolves.toBe(ORCAD_STDIO_BRIDGE_NO_NODE)
+    await expect(exitOf(child)).resolves.toBe(127)
+  })
 })
 
-describe.runIf(process.platform !== 'win32')('the bash stdio bridge’s Node fallback', () => {
-  it('relays through the pinned Node on a host without bash', async () => {
+describe.runIf(POSIX)('the bash stdio bridge’s Node fallback', () => {
+  it('relays every byte through the pinned Node on a host without bash', async () => {
     const child = spawnBridge(echo.port, {
-      ...process.env,
-      HOME: home(true),
-      PATH: pathWithoutBash()
+      HOME: guestHome(scratch, true),
+      PATH: pathWithoutBash(scratch)
     })
-    const received = readAfterReady(child.stdout, PAYLOAD.length)
+    const { decoder, ready } = decode(child.stdout)
+    const bytes = received(decoder, PAYLOAD.length)
+    await expect(ready).resolves.toBe('ready')
     child.stdin.write(PAYLOAD)
-    expect((await received).equals(PAYLOAD)).toBe(true)
+    expect((await bytes).equals(PAYLOAD)).toBe(true)
+    const exited = exitOf(child)
     child.stdin.end()
-    child.kill()
+    await exited
+  })
+
+  it('takes the Node bridge on bash older than 4.3', async () => {
+    const child = spawnBridge(echo.port, { PATH: pathWithEditedBash(scratch, OLD_BASH_EDIT) })
+    await expect(firstLine(child.stdout)).resolves.toBe(ORCAD_STDIO_BRIDGE_NO_NODE)
+    await expect(exitOf(child)).resolves.toBe(127)
+  })
+
+  it('reports a refused dial with the unchanged refusal sentinel', async () => {
+    const closed = await startEchoServer()
+    closed.server.close()
+    const child = spawnBridge(closed.port, { HOME: guestHome(scratch, true) })
+    await expect(firstLine(child.stdout)).resolves.toBe(
+      `${ORCAD_STDIO_BRIDGE_REFUSED} ECONNREFUSED`
+    )
+    await expect(exitOf(child)).resolves.toBe(0)
   })
 
   it('still proves the bridge runs when orcad refuses the dial', async () => {
     const closed = await startEchoServer()
     closed.server.close()
-    const env = { ...process.env, HOME: home(true) }
-    await expect(checkOrcadStdioBridge(transportRunning(env), bridge(closed.port))).resolves.toBe(
-      'running'
-    )
+    await expect(
+      checkOrcadStdioBridge(
+        transportRunning({ HOME: guestHome(scratch, true) }),
+        bridge(closed.port)
+      )
+    ).resolves.toBe('running')
   })
 
   it('reports a refused dial with no pinned Node as a bridge that cannot run', async () => {
     const closed = await startEchoServer()
     closed.server.close()
-    const env = { ...process.env, HOME: home(false) }
     await expect(
-      checkOrcadStdioBridge(transportRunning(env), bridge(closed.port))
+      checkOrcadStdioBridge(
+        transportRunning({ HOME: guestHome(scratch, false) }),
+        bridge(closed.port)
+      )
     ).rejects.toBeInstanceOf(OrcadStdioBridgeUnavailableError)
   })
 })

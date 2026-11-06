@@ -11,8 +11,8 @@ import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace-session-host-hydration'
 import { collectFolderWorkspaceKeysFromSession } from '@/lib/workspace-session-hydration-keys'
@@ -84,7 +84,8 @@ export async function bootWindowFromPartitions(
       ...options,
       runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey,
       contestedHostWorkspaceSessions: sessionRead.contestedHostWorkspaceSessions,
-      contestedPrimaryHostBySessionKey: sessionRead.contestedPrimaryHostBySessionKey
+      contestedPrimaryHostBySessionKey: sessionRead.contestedPrimaryHostBySessionKey,
+      hydratedRuntimeSessionHostIds: sessionRead.hydratedRuntimeSessionHostIds
     })
     actions.hydrateTabsSession(sessionRead.session, options)
     actions.hydrateEditorSession(sessionRead.session, options)

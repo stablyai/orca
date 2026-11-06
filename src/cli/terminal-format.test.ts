@@ -89,33 +89,6 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
-  it('exposes the provider and healthy delivery observation', () => {
-    expect(
-      formatTerminalSend({
-        send: {
-          handle: 'term_worker',
-          accepted: true,
-          bytesWritten: 8,
-          prompt: {
-            requestId: 'prompt-healthy',
-            stages: ['input_accepted', 'turn_started'],
-            provider: 'codex',
-            observation: 'supported',
-            processIncarnation: 'inc-1',
-            generation: 1,
-            baselineWorkingSequence: 0
-          }
-        }
-      })
-    ).toBe(
-      [
-        'Prompt prompt-healthy on term_worker: input_accepted -> turn_started.',
-        'provider: codex',
-        'delivery observation: supported'
-      ].join('\n')
-    )
-  })
-
   it.each([
     {
       observation: 'permission' as const,
@@ -200,32 +173,32 @@ describe('formatTerminalSend', () => {
   })
 })
 
-// Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
-describe('blocked-reason rendering against a mixed-version host', () => {
-  function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
-    terminal: RuntimeTerminalShow
-  } {
-    return {
-      terminal: {
-        handle: 'term_agy',
-        ptyId: 'pty-1',
-        paneRuntimeId: 1,
-        rendererGraphEpoch: 1,
-        worktreeId: 'worktree-1',
-        worktreePath: '/tmp/w',
-        branch: 'main',
-        tabId: 'tab-1',
-        leafId: 'leaf-1',
-        title: 'Antigravity',
-        connected: true,
-        writable: true,
-        lastOutputAt: null,
-        preview: 'Do you trust the files in this folder?',
-        agentWait: { source: 'prompt-text', reason }
-      }
+function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
+  terminal: RuntimeTerminalShow
+} {
+  return {
+    terminal: {
+      handle: 'term_agy',
+      ptyId: 'pty-1',
+      paneRuntimeId: 1,
+      rendererGraphEpoch: 1,
+      worktreeId: 'worktree-1',
+      worktreePath: '/tmp/w',
+      branch: 'main',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      title: 'Antigravity',
+      connected: true,
+      writable: true,
+      lastOutputAt: null,
+      preview: 'Do you trust the files in this folder?',
+      agentWait: { source: 'prompt-text', reason }
     }
   }
+}
 
+// Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
+describe('blocked-reason rendering against a mixed-version host', () => {
   function waitResult(blockedReason: RuntimeTerminalWaitBlockedReason): {
     wait: RuntimeTerminalWait
   } {

@@ -16,7 +16,7 @@ type HostFinalization = {
 
 // Keep the host-only type graph out of the renderer typecheck.
 const { finalizeRuntimeMobileSessionTabsResult } = await vi.importActual<HostFinalization>(
-  '../../../../main/runtime/runtime-mobile-session-result-finalization'
+  '../../../../main/runtime/session-lifecycle/projection/runtime-mobile-session-result-finalization'
 )
 
 /** Run terminal fixtures through the host's retirement filter before the renderer consumes them. */

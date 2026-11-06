@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -139,6 +143,7 @@ function stubMainBufferSnapshot(
 
 async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(SSH_PTY_ID)
   const capturedDataCallback: {
     current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -153,7 +158,11 @@ async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
-  const disposable = connectPanePty(pane as never, manager as never, deps as never)
+  const disposable = connectPanePty(
+    pane as never,
+    manager as never,
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
   return {

@@ -1,5 +1,5 @@
 import type { TerminalOutputMeta } from '../../terminal-output-frame-chunks'
-import { TERMINAL_OUTPUT_BATCH_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_OUTPUT_BATCH_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
 
 const TERMINAL_OUTPUT_FLUSH_MS = 5

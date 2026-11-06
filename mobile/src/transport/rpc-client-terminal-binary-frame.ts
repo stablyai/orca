@@ -4,8 +4,9 @@ import {
   decodeTerminalStreamJson,
   decodeTerminalStreamText,
   readTerminalStreamFrameId
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import type { TerminalUnreadableFrameResets } from './terminal-unreadable-frame-resets'
+import { translate } from '../i18n/mobile-i18n'
 
 export type TerminalSnapshotState = {
   streamId: number
@@ -145,7 +146,11 @@ function reportUnreadableTerminalFrame(
     listener({
       type: 'error',
       streamId,
-      message: `Unsupported terminal stream frame (opcode ${opcode}).`
+      message: translate(
+        'connection.rpcClientTerminalBinaryFrame.unsupportedFrame',
+        'Unsupported terminal stream frame (opcode {{opcode}}).',
+        { opcode }
+      )
     })
   })
 }

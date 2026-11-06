@@ -1,15 +1,18 @@
 import type { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentTurnEndedUncleanly } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/terminal-tab-types'
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import { getProviderSessionClaimKey } from '../../../shared/sleeping-record-legacy-pane-key'
-import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import { isPaneResumingInPlace, isPaneSpawnDeferred } from './pane-spawn-deferral-registry'

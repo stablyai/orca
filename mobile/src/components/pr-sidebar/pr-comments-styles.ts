@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prCommentsStyles = StyleSheet.create({
+export const prCommentsStyles = themedStyleSheet(() => ({
   noDescription: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
@@ -11,7 +12,7 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1
   },
@@ -24,7 +25,7 @@ export const prCommentsStyles = StyleSheet.create({
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.control,
     backgroundColor: colors.bgBase,
     padding: 2,
     gap: 2
@@ -36,7 +37,7 @@ export const prCommentsStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radii.row - 2
+    borderRadius: concentricRadius(radii.control, 2)
   },
   audienceTabActive: {
     backgroundColor: colors.bgRaised
@@ -58,7 +59,7 @@ export const prCommentsStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   showMoreText: {
@@ -72,7 +73,7 @@ export const prCommentsStyles = StyleSheet.create({
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     overflow: 'hidden'
   },
@@ -94,7 +95,7 @@ export const prCommentsStyles = StyleSheet.create({
   avatar: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   },
   author: {
@@ -120,7 +121,7 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1
   },
@@ -154,7 +155,7 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   reactionText: {
     color: colors.textPrimary,
@@ -168,7 +169,7 @@ export const prCommentsStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   resolvedHeaderText: {
@@ -180,7 +181,7 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xl,
     color: colors.textSecondary,
@@ -199,7 +200,7 @@ export const prCommentsStyles = StyleSheet.create({
     gap: 4,
     minHeight: 28,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -223,4 +224,4 @@ export const prCommentsStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   }
-})
+}))

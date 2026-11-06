@@ -1,6 +1,6 @@
-import type * as ClientReducer from '../../../src/shared/structured-agent-session-reducer'
-import type * as ClientProjection from '../../../src/shared/structured-agent-session-projection'
-import type * as ClientSchemas from '../../../src/shared/agent-session-journal-schemas'
+import type * as ClientReducer from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import type * as ClientProjection from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import type * as ClientSchemas from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'
 import {
   importReleaseCheckoutModule,
@@ -134,7 +134,7 @@ type SendAdmissionModules = {
     plan: unknown
     envelope: SentMessage['envelope']
     journal: () => undefined
-    store: { getRecord: () => null }
+    store: { getRecord: () => null; selectWritableRecord: () => { kind: 'missing' } }
   }) => Promise<unknown>
 }
 
@@ -149,7 +149,7 @@ async function admitSend(
     plan: build.sendPlan(sent),
     envelope: sent.envelope,
     journal: () => undefined,
-    store: { getRecord: () => null }
+    store: { getRecord: () => null, selectWritableRecord: () => ({ kind: 'missing' }) }
   })
 }
 
@@ -177,9 +177,9 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
     methodNames: registeredMethodNames(methods),
     clientProjection: async () => {
       const [reducer, projection, schemas] = await Promise.all([
-        import('../../../src/shared/structured-agent-session-reducer'),
-        import('../../../src/shared/structured-agent-session-projection'),
-        import('../../../src/shared/agent-session-journal-schemas')
+        import('../../../src/shared/agent-session/structured-agent-session-reducer'),
+        import('../../../src/shared/agent-session/view/structured-agent-session-projection'),
+        import('../../../src/shared/agent-session/journal/agent-session-journal-schemas')
       ])
       return { ...reducer, ...projection, ...schemas }
     },

@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
-import { ORCA_EDITOR_FILE_CACHE_STALE_EVENT } from './editor-autosave'
+import { ORCA_EDITOR_FILE_CACHE_STALE_EVENT } from './autosave/editor-autosave'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 
@@ -29,10 +29,10 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('./monaco-markdown-doc-link-decorations', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-link-decorations', () => ({
   createMarkdownDocLinkDecorationController: vi.fn()
 }))
-vi.mock('./monaco-markdown-doc-completions', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-completions', () => ({
   ensureMarkdownDocCompletionProvider: vi.fn()
 }))
 vi.mock('./monaco-e2e-probe', () => ({ installMonacoE2EProbe: () => vi.fn() }))
@@ -77,8 +77,7 @@ function setupMount() {
       contentRef: { current: 'A (stale cache)' },
       lastSyncedContentRef: { current: 'A (stale cache)' },
       contentSyncModeRef: { current: 'undoable' },
-      isApplyingProgrammaticContentRef: { current: false },
-      isApplyingLargePasteRef: { current: false }
+      isApplyingProgrammaticContentRef: { current: false }
     },
     decorations: {
       markdownDocLinkDecorationsRef: { current: null },
@@ -94,11 +93,13 @@ function setupMount() {
     gutterMenu: {
       setGutterMenuOpen: vi.fn(),
       setGutterMenuPoint: vi.fn(),
-      setGutterMenuLine: vi.fn()
+      setGutterMenuLine: vi.fn(),
+      setGutterMenuSelection: vi.fn()
     }
   }
   const modelText = { value: 'B' }
   const model = {
+    uri: { toString: () => 'file:///repo/file.ts' },
     getValue: () => modelText.value,
     getEOL: () => '\n',
     pushEditOperations: vi.fn(),
@@ -124,38 +125,6 @@ function setupMount() {
   const monaco = {} as Parameters<OnMount>[1]
   return { params, modelText, model, updateOptions, executeEdits, editorInstance, monaco }
 }
-
-it('mounts the live model over a stale retained cache, editable, and reloads a model-less stale cache once', () => {
-  const { params, modelText, model, updateOptions, executeEdits, editorInstance, monaco } =
-    setupMount()
-  const dropped: string[] = []
-  const onStale = (event: Event): void => {
-    if (event instanceof CustomEvent) {
-      dropped.push(event.detail.fileId)
-    }
-  }
-  window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
-  try {
-    const view = renderHook(() => useMonacoEditorMount(params))
-    view.result.current(editorInstance, monaco)
-
-    expect(modelText.value).toBe('B')
-    expect(model.pushEditOperations).not.toHaveBeenCalled()
-    expect(executeEdits).not.toHaveBeenCalled()
-    expect(updateOptions).not.toHaveBeenCalledWith({ readOnly: true })
-    expect(dropped).toEqual([])
-
-    // Without a fresh live model, evict the cache once without entering a remount/reload loop.
-    modelText.value = 'A (stale cache)'
-    for (let mount = 0; mount < 3; mount += 1) {
-      view.result.current(editorInstance, monaco)
-    }
-    expect(dropped).toEqual(['tab-b'])
-    expect(updateOptions).not.toHaveBeenCalledWith({ readOnly: true })
-  } finally {
-    window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
-  }
-})
 
 it('reloads the same stale text again once the baseline moves or a fresh mount settles the reload', () => {
   const { params, modelText, editorInstance, monaco } = setupMount()

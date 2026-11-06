@@ -66,9 +66,11 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     menuPoint: { x: 0, y: 0 },
     menuOpenedAtRef: { current: 0 },
     canClosePane: true,
+    closePaneLabel: 'Close Pane',
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),
+    addToChat: null,
     onSelectAll: vi.fn(),
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),
@@ -205,6 +207,23 @@ describe('TerminalContextMenu', () => {
     ).toBe(false)
   })
 
+  it('uses nominal primary toggle labels, including default and unbound', () => {
+    for (const [bindings, label] of [
+      [undefined, 'Ctrl+⇧+F11'],
+      [['Mod+Alt+Y', 'Mod+Alt+K'], 'Ctrl+Alt+Y'],
+      [[], null]
+    ] as const) {
+      shortcuts.list = []
+      renderMenu({
+        canToggleNativeChat: true,
+        keybindings: bindings === undefined ? {} : { 'terminal.toggleNativeChat': [...bindings] }
+      })
+      expect(shortcuts.list.filter((value) => /(J|Y|F11)$/.test(value))).toEqual(
+        label ? [label] : []
+      )
+    }
+  })
+
   it('shows one shortcut per terminal menu action on Windows', () => {
     vi.stubGlobal('navigator', {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -218,11 +237,11 @@ describe('TerminalContextMenu', () => {
 
     renderMenu({ keybindings })
 
-    expect(shortcuts.list).toContain('Ctrl+Shift+C')
-    expect(shortcuts.list).toContain('Ctrl+Shift+A')
+    expect(shortcuts.list).toContain('Ctrl+⇧+C')
+    expect(shortcuts.list).toContain('Ctrl+⇧+A')
     expect(shortcuts.list).toContain('Ctrl+V')
-    expect(shortcuts.list).toContain('Ctrl+Shift+D')
-    expect(shortcuts.list).toContain('Alt+Shift+D')
+    expect(shortcuts.list).toContain('Ctrl+⇧+D')
+    expect(shortcuts.list).toContain('Alt+⇧+D')
     expect(shortcuts.list.some((shortcut) => shortcut.includes(','))).toBe(false)
   })
 
@@ -283,12 +302,13 @@ describe('TerminalContextMenu', () => {
           label: 'Local Mac',
           repoCommands: [{ id: 'repo', label: 'Repo command', command: 'repo', appendEnter: true }],
           globalCommands: [
-            { id: 'global', label: 'Global command', command: 'global', appendEnter: true }
+            { id: 'global', label: 'Global command', command: 'global', appendEnter: false }
           ]
         }
       ]
     })
 
+    expect(rendered).toContain('Insert')
     expect(rendered).toContain('Orca')
     expect(rendered).toContain('Global')
     expect(rendered).not.toContain('Local Mac')

@@ -1,0 +1,108 @@
+[
+  {
+    "name": "stale-default",
+    "configContent": "{\"model\": \"opencode/big-pickle\", \"default_agent\": \"qa-stale-missing\", \"agents\": {\"reviewer\": {\"mode\": \"primary\", \"model\": \"opencode/big-pickle\", \"system\": \"Review the requested change.\"}}}",
+    "model": "opencode/mimo-v2.6-flash-free",
+    "initial": {
+      "location": {
+        "directory": "/qa/project"
+      },
+      "data": []
+    },
+    "settled": {
+      "location": {
+        "directory": "/qa/project"
+      },
+      "data": [
+        {
+          "id": "build",
+          "mode": "primary",
+          "hidden": false
+        },
+        {
+          "id": "general",
+          "mode": "subagent",
+          "hidden": false
+        },
+        {
+          "id": "explore",
+          "mode": "subagent",
+          "hidden": false
+        },
+        {
+          "id": "compaction",
+          "mode": "primary",
+          "hidden": true
+        },
+        {
+          "id": "title",
+          "mode": "primary",
+          "hidden": true
+        },
+        {
+          "id": "summary",
+          "mode": "primary",
+          "hidden": true
+        },
+        {
+          "id": "plan",
+          "mode": "primary",
+          "hidden": false
+        },
+        {
+          "id": "reviewer",
+          "mode": "primary",
+          "hidden": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "disabled-build",
+    "configContent": "{\"model\": \"opencode/big-pickle\", \"agents\": {\"build\": {\"disabled\": true}}}",
+    "model": "opencode/mimo-v2.6-flash-free",
+    "initial": {
+      "location": {
+        "directory": "/qa/project"
+      },
+      "data": []
+    },
+    "settled": {
+      "location": {
+        "directory": "/qa/project"
+      },
+      "data": [
+        {
+          "id": "plan",
+          "mode": "primary",
+          "hidden": false
+        },
+        {
+          "id": "general",
+          "mode": "subagent",
+          "hidden": false
+        },
+        {
+          "id": "explore",
+          "mode": "subagent",
+          "hidden": false
+        },
+        {
+          "id": "compaction",
+          "mode": "primary",
+          "hidden": true
+        },
+        {
+          "id": "title",
+          "mode": "primary",
+          "hidden": true
+        },
+        {
+          "id": "summary",
+          "mode": "primary",
+          "hidden": true
+        }
+      ]
+    }
+  }
+]

@@ -1,6 +1,7 @@
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { translate } from '@/i18n/i18n'
 import type { MentionOption } from '../page-types'
 
 export function buildMentionOptions({
@@ -38,15 +39,32 @@ export function buildMentionOptions({
     byLogin.set(key, { login, source, avatarUrl, name })
   }
 
-  add(item.author, item.type === 'pr' ? 'PR author' : 'Issue author')
+  add(
+    item.author,
+    item.type === 'pr'
+      ? translate('auto.components.PullRequestPage.mentionSource.prAuthor', 'PR author')
+      : translate('auto.components.PullRequestPage.mentionSource.issueAuthor', 'Issue author')
+  )
+  const commenter = translate(
+    'auto.components.PullRequestPage.mentionSource.commenter',
+    'Commenter'
+  )
   for (const comment of comments) {
-    add(comment.author, 'Commenter', comment.authorAvatarUrl)
+    add(comment.author, commenter, comment.authorAvatarUrl)
   }
+  const participant = translate(
+    'auto.components.PullRequestPage.mentionSource.participant',
+    'Participant'
+  )
   for (const user of participants) {
-    add(user.login, 'Participant', user.avatarUrl, user.name)
+    add(user.login, participant, user.avatarUrl, user.name)
   }
+  const teamMember = translate(
+    'auto.components.PullRequestPage.mentionSource.teamMember',
+    'Team member'
+  )
   for (const user of assignableUsers) {
-    add(user.login, 'Team member', user.avatarUrl, user.name)
+    add(user.login, teamMember, user.avatarUrl, user.name)
   }
 
   return Array.from(byLogin.values())

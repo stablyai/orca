@@ -1,10 +1,13 @@
-import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
+import type { AgentChildWorkOutcome } from '../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
-} from '../../shared/agent-status-child-work-evidence'
+} from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from './claude-background-task-frames'
-import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type {
+  ClaudeSession,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
 import {
   claudeRecord,
@@ -12,7 +15,7 @@ import {
   claudeToolUses,
   readClaudeMessageEnvelope,
   type ClaudeToolUse
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
 
 export type ClaudeTaskFacts = {
   toolName?: string

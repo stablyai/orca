@@ -11,7 +11,8 @@ afterEach(() => {
   expect(appStore.getState).not.toHaveBeenCalled()
 })
 
-import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks

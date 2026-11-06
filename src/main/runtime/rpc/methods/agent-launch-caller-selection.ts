@@ -2,11 +2,15 @@
  * Existing/folder targets select the tab; worktree creates provision setup/default tabs in the background.
  * In-process callers retain host navigation; folder creation activates nothing. */
 
-import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
-import type { AgentLaunchPublishedSurface } from '../../../agent-launch/agent-launch-executor'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type {
+  AgentLaunchTarget,
+  AgentLaunchResult as AgentLaunchPublishedSurface
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
+import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 
 /** The paired client whose view this launch should move, or null when it moves the host's. */
 export function agentLaunchCallerNavigationId(
@@ -48,4 +52,21 @@ export function selectAgentLaunchTabForCaller(
   } catch (error) {
     console.warn('[agent-launch] the launch ran; selecting its tab for the caller did not', error)
   }
+}
+
+/**
+ * `agent.launch.v2` was defined when Claude and Codex were the only chats, so it vouches for those
+ * two. Any other agent's chat needs the client to say it reads it, by the rule tabs and restart
+ * offers use; a client that does not gets that agent as a terminal.
+ */
+export function callerRendersLaunchedChat(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
+  agent: string
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    agent === 'claude' ||
+    agent === 'codex' ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
+  )
 }

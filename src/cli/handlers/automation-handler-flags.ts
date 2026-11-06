@@ -3,14 +3,14 @@ import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../shared/task-source-context'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
 } from '../../shared/automation-precheck'
 import { buildAutomationRrule } from '../../shared/automation-schedule-occurrences'
 import { isValidAutomationSchedule } from '../../shared/automation-schedule-parsing'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

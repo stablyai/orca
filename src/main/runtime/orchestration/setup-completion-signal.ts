@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
@@ -36,8 +36,9 @@ export function buildObservedSetupCommand(
     }
   }
 
+  // Why no `( … )`: this is typed into the user's line editor, where autopair widgets corrupt it (#18059).
   const script = [
-    `( ${resolution.command} )`,
+    resolution.command,
     'status=$?',
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'

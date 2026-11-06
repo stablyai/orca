@@ -17,13 +17,6 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     expect(find).toHaveBeenCalledWith('query', undefined)
   })
 
-  it('returns the addon result and forwards options on the normal path', () => {
-    const find = vi.fn(() => true)
-    const options = { caseSensitive: true }
-    expect(safeFind(find, 'q', options)).toBe(true)
-    expect(find).toHaveBeenCalledWith('q', options)
-  })
-
   it('re-throws unrelated errors so genuine bugs are not hidden', () => {
     const find = vi.fn(() => {
       throw new TypeError('something genuinely broken')

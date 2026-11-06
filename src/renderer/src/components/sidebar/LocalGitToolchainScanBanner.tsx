@@ -99,9 +99,12 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
           { value0: block.repos[0].displayName }
         )
       : translate(
-          'auto.components.sidebar.LocalGitToolchainScanBanner.affectedMany',
-          'Worktree scan paused for {{value0}} projects',
-          { value0: block.repos.length }
+          'auto.components.sidebar.LocalGitToolchainScanBanner.affectedProjects',
+          'Worktree scan paused for {{count}} projects',
+          {
+            count: block.repos.length,
+            defaultValue_one: 'Worktree scan paused for {{count}} project'
+          }
         )
 
   return (

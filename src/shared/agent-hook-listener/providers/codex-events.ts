@@ -1,14 +1,16 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
+  normalizeOptionalField
+} from '../../agent-status/contracts/agent-status-field-normalization'
+import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
-import { normalizeOptionalField } from '../../agent-status-field-normalization'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+} from '../../agent-status/contracts/agent-status-types'
+
 import {
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
-} from '../../agent-lead-status-fold'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   codexRosterToSnapshots,
   enrichCodexSubagentIdentity,
@@ -29,6 +31,7 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
+  codexHookEventState,
   codexMainAgentStatusForPayload,
   codexLeadOutcomeForEvent,
   getOrCreateCodexSubagentRoster,
@@ -160,21 +163,10 @@ export function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
-  // Auto-allowed request_user_input still blocks on PreToolUse (Codex0.145+).
-  const isUserInputPreTool =
-    eventName === 'PreToolUse' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
-  const stateName =
-    eventName === 'SessionStart' ||
-    eventName === 'UserPromptSubmit' ||
-    (eventName === 'PreToolUse' && !isUserInputPreTool) ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'PermissionRequest' || isUserInputPreTool
-        ? 'waiting'
-        : eventName === 'Stop' || eventName === 'Interrupt'
-          ? 'done'
-          : null
+  const stateName = codexHookEventState(
+    eventName,
+    readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+  )
   if (!stateName) {
     return null
   }

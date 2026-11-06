@@ -6,7 +6,11 @@ import {
   getTabEntryOptions,
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
-import { findMatchingTabAgentLaunchOptions } from './tab-agent-launch-options'
+import {
+  configuredAgentPickerLaunchOption,
+  findMatchingTabAgentLaunchOptions,
+  matchingAgentPickerLaunchOptions
+} from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
@@ -24,6 +28,7 @@ import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-re
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
+import { useFileListWorktree } from '@/store/selectors'
 import { isQuickOpenQueryTooLarge } from '../quick-open-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'
@@ -42,6 +47,7 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
+  agentPickerEntries,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
@@ -91,9 +97,7 @@ function TabBarCreateEntrySession({
   )
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
   // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
-  const worktreePath = useAppStore((state) =>
-    menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
-  )
+  const worktreePath = useFileListWorktree(menuOpen ? worktreeId : null)?.path ?? null
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   const searchEngine = useAppStore(
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
@@ -148,8 +152,11 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : findMatchingTabAgentLaunchOptions(query, agentOptions),
-    [agentOptions, query, terminalQueryMode]
+        : [
+            ...matchingAgentPickerLaunchOptions(agentPickerEntries ?? [], query),
+            ...findMatchingTabAgentLaunchOptions(query, agentOptions)
+          ],
+    [agentOptions, agentPickerEntries, query, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -189,7 +196,7 @@ function TabBarCreateEntrySession({
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
-      return
+      return false
     }
     const selectedOption = option ?? selectedActiveOption ?? null
     if (!selectedOption) {
@@ -230,15 +237,15 @@ function TabBarCreateEntrySession({
     }
     if (selectedOption.kind === 'agent') {
       if (selectedOption.option.disabled) {
-        return
+        return false
       }
-      if (onLaunchAgentOption) {
-        onLaunchAgentOption(selectedOption.option)
-      } else {
-        onLaunchAgent?.(selectedOption.option.agent)
+      const accepted = onLaunchAgentOption
+        ? onLaunchAgentOption(selectedOption.option)
+        : onLaunchAgent?.(selectedOption.option.agent)
+      if (accepted !== false) {
+        onDidOpenEntry?.()
       }
-      onDidOpenEntry?.()
-      return
+      return accepted
     }
     // Route history through typed-URL navigation to preserve workspace targeting and SSH resolution.
     const classification: TabEntryActionClassification =
@@ -307,7 +314,7 @@ function TabBarCreateEntrySession({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="-mx-1 flex items-center px-3">
+      <div className="tab-entry-omnibox relative -mx-1 flex items-center px-3 text-xs text-foreground">
         <Input
           ref={inputRef}
           value={query}
@@ -377,6 +384,15 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
+                onUseAgent={
+                  option.kind === 'agent' && option.option.pickerEntry
+                    ? (draft) =>
+                        submitOption({
+                          kind: 'agent',
+                          option: configuredAgentPickerLaunchOption(option.option, draft)
+                        })
+                    : undefined
+                }
                 disabled={
                   disabled ||
                   pending ||

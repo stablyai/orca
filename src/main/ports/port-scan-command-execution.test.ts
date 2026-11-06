@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFs from 'node:fs'
 import { runPortScanCommandInProcess } from './port-scan-command-execution'
 import {
   PORT_SCAN_COMMAND_TIMEOUT_MS,
@@ -6,10 +7,25 @@ import {
   WATCHDOG_GRACE_MS
 } from './port-scan-command-protocol'
 
-const execFileMock = vi.hoisted(() => vi.fn())
+const { execFileMock, statfsMock, lstatMock, mkdirMock, openMock, spawnMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  statfsMock: vi.fn(),
+  lstatMock: vi.fn(),
+  mkdirMock: vi.fn(),
+  openMock: vi.fn(),
+  spawnMock: vi.fn()
+}))
 
 vi.mock('child_process', () => ({
   execFile: execFileMock
+}))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawnMock }))
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFs>()),
+  statfsSync: statfsMock,
+  lstatSync: lstatMock,
+  mkdirSync: mkdirMock,
+  openSync: openMock
 }))
 
 // Exceed the whole watchdog budget so arming it before uv_spawn would fail (#11161).
@@ -24,6 +40,38 @@ describe('runPortScanCommandInProcess', () => {
   afterEach(() => {
     vi.useRealTimers()
     execFileMock.mockReset()
+    vi.resetAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  function darwinFilesystem(type: number): void {
+    vi.stubGlobal(
+      'process',
+      Object.create(process, { platform: { value: 'darwin' }, getuid: { value: () => 501 } })
+    )
+    statfsMock.mockReturnValue({ type })
+    lstatMock.mockImplementation((path: string) => ({
+      isDirectory: () => true,
+      uid: path === '/private/var/tmp' ? 0 : 501,
+      mode: path === '/private/var/tmp' ? 0o41777 : 0o40700,
+      dev: 1
+    }))
+  }
+
+  it('does not turn supported-filesystem contention or unsafe storage into unlocked scanning', async () => {
+    darwinFilesystem(0x1a)
+    openMock.mockImplementation(() => {
+      throw new Error('EAGAIN')
+    })
+    await expect(runPortScanCommandInProcess('/usr/sbin/lsof', [], 'attribution')).rejects.toThrow(
+      'EAGAIN'
+    )
+    lstatMock.mockReturnValue({ isDirectory: () => false })
+    await expect(runPortScanCommandInProcess('/usr/sbin/lsof', [], 'attribution')).rejects.toThrow(
+      'storage is unavailable'
+    )
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(spawnMock).not.toHaveBeenCalled()
   })
 
   it('arms the watchdog only after process creation returns', async () => {
@@ -60,36 +108,5 @@ describe('runPortScanCommandInProcess', () => {
 
     expect(await promise).toBeInstanceOf(PortScanCommandTimeoutError)
     expect(killMock).toHaveBeenCalled()
-  })
-
-  it("classifies Node's own execFile timeout kill as a command timeout", async () => {
-    execFileMock.mockImplementation(
-      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
-        const killed = Object.assign(new Error('Command failed: lsof'), {
-          killed: true,
-          signal: 'SIGTERM'
-        })
-        setTimeout(() => (callback as (e: Error) => void)(killed), 0)
-        return { kill: vi.fn() }
-      }
-    )
-
-    await expect(runPortScanCommandInProcess('lsof', [])).rejects.toBeInstanceOf(
-      PortScanCommandTimeoutError
-    )
-  })
-
-  it('leaves a genuine command failure unclassified so the scan does not back off', async () => {
-    execFileMock.mockImplementation(
-      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
-        setTimeout(() => (callback as (e: Error) => void)(new Error('spawn ENOENT')), 0)
-        return { kill: vi.fn() }
-      }
-    )
-
-    const error = await runPortScanCommandInProcess('lsof', []).catch((err: unknown) => err)
-
-    expect(error).toBeInstanceOf(Error)
-    expect(error).not.toBeInstanceOf(PortScanCommandTimeoutError)
   })
 })

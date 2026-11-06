@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -10,7 +10,8 @@ import {
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
@@ -142,20 +143,43 @@ export function getFolderWorkspaceCatalogReplacementIdentities(
   return replacedIdentities
 }
 
+/**
+ * Drops a restored owner once its own host settles it. Folder ids can repeat across hosts, so a
+ * copy on another host proves nothing; only the owner's copy or the owner's hydrated catalog does.
+ */
 export function clearRestoredFolderWorkspaceSessionOwners(
   owners: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] | undefined,
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>,
+  settled: {
+    hydratedHostIds: ReadonlySet<ExecutionHostId>
+    /** Runtime hosts the environment list named; null when it didn't answer. */
+    listedRuntimeHostIds: ReadonlySet<ExecutionHostId> | null
+  }
 ): AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] {
   const next: AppState['restoredRuntimeHostIdByWorkspaceSessionKey'] = {}
+  const resolveHostId = createFolderWorkspaceHostResolver(state.projectGroups)
   for (const [key, hostId] of Object.entries(owners ?? {})) {
     const scope = parseWorkspaceKey(key)
     if (scope?.type !== 'folder') {
       next[key] = hostId
       continue
     }
-    const workspace = state.folderWorkspaces.find((entry) => entry.id === scope.folderWorkspaceId)
-    if (workspace && !state.projectGroups.some((group) => group.id === workspace.projectGroupId)) {
-      // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
+    const ownCopy = state.folderWorkspaces.find(
+      (entry) => entry.id === scope.folderWorkspaceId && resolveHostId(entry) === hostId
+    )
+    if (ownCopy) {
+      if (!state.projectGroups.some((group) => group.id === ownCopy.projectGroupId)) {
+        // Why: ownership resolves via the project group; if that catalog is still missing, keep the restored host owner so a session write doesn't move runtime tabs local.
+        next[key] = hostId
+      }
+      continue
+    }
+    const ownerSettled =
+      [...settled.hydratedHostIds].some((hydrated) => catalogOwnsHost(hydrated, hostId)) ||
+      (settled.listedRuntimeHostIds !== null &&
+        parseExecutionHostId(hostId)?.kind === 'runtime' &&
+        !settled.listedRuntimeHostIds.has(hostId))
+    if (!ownerSettled) {
       next[key] = hostId
     }
   }

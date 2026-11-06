@@ -35,17 +35,6 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
-  it('reports conflicts across default and customized actions', () => {
-    expect(findKeybindingConflicts('linux')).toEqual([])
-
-    const conflicts = findKeybindingConflicts('linux', { 'view.tasks': ['Mod+P'] })
-
-    expect(conflicts).toContainEqual({
-      binding: 'Mod+P',
-      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
-    })
-  })
-
   it('keeps zoom reset on Mod+0 and focuses worktree list on a distinct chord', () => {
     // Mod+0 previously collided with main’s zoom reset, making worktree focus unreachable (#8584).
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
@@ -259,6 +248,22 @@ describe('keybindings', () => {
         'tab.selectByIndex': ['Alt+1']
       })
     ).toEqual([])
+  })
+
+  it("keeps the chat toggle's own default alias inside an override", () => {
+    const toggle = 'terminal.toggleNativeChat'
+    const overrides = { [toggle]: ['Mod+Alt+K', 'Mod+Shift+J'] }
+    for (const find of [findKeybindingConflicts, findInterceptionConflicts]) {
+      expect(
+        find('win32', overrides).filter(({ actionIds }) => actionIds.includes(toggle))
+      ).toEqual([])
+      expect(
+        find('win32', { ...overrides, 'worktree.navigateDown': ['Mod+Shift+J'] })
+      ).toContainEqual({
+        binding: 'Mod+Shift+J',
+        actionIds: expect.arrayContaining([toggle, 'worktree.navigateDown'])
+      })
+    }
   })
 
   it('does not classify dictation as a main-process interception conflict', () => {

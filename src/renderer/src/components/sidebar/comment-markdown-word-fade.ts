@@ -1,7 +1,7 @@
 // Keep existing word elements stable while streams append so only newly mounted words fade.
 
 import type { Element, Root } from 'hast'
-import { SPACELESS_SCRIPT_RANGES } from '../../../../shared/native-chat-text-reveal'
+import { SPACELESS_SCRIPT_RANGES } from '../../../../shared/native-chat/transcript/native-chat-text-reveal'
 
 /** Elements whose renderers read their text, or that are faded in as a whole. */
 const UNSPLIT_TAGS = new Set(['a', 'code', 'pre', 'kbd', 'svg', 'math'])
@@ -29,7 +29,11 @@ function splitWords(node: Root | Element): void {
         properties: { dataWordGroup: '' },
         children: [{ type: 'text', value: child.value }]
       }
-    } else if (child.type === 'element' && !UNSPLIT_TAGS.has(child.tagName)) {
+    } else if (
+      child.type === 'element' &&
+      !UNSPLIT_TAGS.has(child.tagName) &&
+      !(Array.isArray(child.properties.className) && child.properties.className.includes('katex'))
+    ) {
       splitWords(child)
     }
   }

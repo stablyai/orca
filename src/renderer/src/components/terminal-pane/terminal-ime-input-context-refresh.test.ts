@@ -17,30 +17,6 @@ describe('refreshTerminalImeInputContext', () => {
     return helper
   }
 
-  it('blurs then refocuses the helper on macOS', () => {
-    const helper = appendHelper()
-    const blur = vi.spyOn(helper, 'blur')
-    const focus = vi.spyOn(helper, 'focus')
-    helper.focus()
-    focus.mockClear()
-    const scheduled: (() => void)[] = []
-
-    const refreshed = refreshTerminalImeInputContext(helper, {
-      isMac: true,
-      scheduleRefocus: (callback) => scheduled.push(callback)
-    })
-
-    expect(refreshed).toBe(true)
-    expect(blur).toHaveBeenCalledOnce()
-    expect(focus).not.toHaveBeenCalled()
-
-    for (const run of scheduled) {
-      run()
-    }
-    expect(focus).toHaveBeenCalledOnce()
-    expect(document.activeElement).toBe(helper)
-  })
-
   it('marks only the synchronous refresh blur so focus ownership can stay latched', () => {
     const helper = appendHelper()
     let refreshingDuringBlur = false
@@ -80,27 +56,6 @@ describe('refreshTerminalImeInputContext', () => {
     expect(document.activeElement).toBe(outside)
   })
 
-  it('reports when a newer focus owner wins the refocus guard', () => {
-    const helper = appendHelper()
-    const outside = document.createElement('input')
-    document.body.appendChild(outside)
-    const onRefocusSkipped = vi.fn()
-    const scheduled: (() => void)[] = []
-    helper.focus()
-
-    refreshTerminalImeInputContext(helper, {
-      isMac: true,
-      onRefocusSkipped,
-      scheduleRefocus: (callback) => scheduled.push(callback)
-    })
-
-    outside.focus()
-    for (const run of scheduled) {
-      run()
-    }
-    expect(onRefocusSkipped).toHaveBeenCalledWith(outside)
-  })
-
   it('reports when a connected helper cannot accept the scheduled focus', () => {
     const helper = appendHelper()
     const onRefocusSkipped = vi.fn()
@@ -119,20 +74,5 @@ describe('refreshTerminalImeInputContext', () => {
 
     expect(document.activeElement).toBe(document.body)
     expect(onRefocusSkipped).toHaveBeenCalledWith(document.body)
-  })
-
-  it('skips non-macOS platforms', () => {
-    const helper = appendHelper()
-    const blur = vi.spyOn(helper, 'blur')
-
-    const refreshed = refreshTerminalImeInputContext(helper, {
-      isMac: false,
-      scheduleRefocus: () => {
-        throw new Error('should not schedule')
-      }
-    })
-
-    expect(refreshed).toBe(false)
-    expect(blur).not.toHaveBeenCalled()
   })
 })

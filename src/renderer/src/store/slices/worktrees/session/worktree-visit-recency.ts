@@ -1,5 +1,6 @@
 import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
+import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
@@ -19,29 +20,52 @@ export function createMarkWorktreeVisited(
   _get: WorktreeSliceGet
 ): WorktreeSlice['markWorktreeVisited'] {
   return (worktreeId, visitedAt, executionHostId) => {
-    // Cmd+J needs user-focus recency independent of PTY activity; racing CLI/IPC timestamps must not regress (cmd-j-empty-query-ordering.md).
     set((s) => {
-      const now = visitedAt ?? Date.now()
-      const ownerHostId =
-        executionHostId ??
-        (s.activeWorktreeId === worktreeId ? s.activeWorkspaceExecutionHostId : undefined) ??
-        s.getKnownWorktreeById(worktreeId, executionHostId)?.hostId
-      const visitKey = getWorktreeVisitKey(worktreeId, ownerHostId)
-      const prev =
-        getWorktreeVisitTimestamp(s.lastVisitedAtByWorktreeId, {
-          id: worktreeId,
-          hostId: ownerHostId
-        }) ?? 0
-      if (!(now > prev)) {
-        return s
-      }
-      return {
-        lastVisitedAtByWorktreeId: {
-          ...s.lastVisitedAtByWorktreeId,
-          [visitKey]: now
-        }
-      }
+      const lastVisitedAtByWorktreeId = stampWorktreeVisit(
+        s,
+        worktreeId,
+        visitedAt,
+        executionHostId
+      )
+      return lastVisitedAtByWorktreeId === s.lastVisitedAtByWorktreeId
+        ? s
+        : { lastVisitedAtByWorktreeId }
     })
+  }
+}
+
+type WorktreeVisitStampState = Pick<
+  AppState,
+  | 'lastVisitedAtByWorktreeId'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'getKnownWorktreeById'
+>
+
+/** Returns the visit map with `worktreeId` stamped, or the same map when the stamp would not advance. */
+export function stampWorktreeVisit(
+  s: WorktreeVisitStampState,
+  worktreeId: string,
+  visitedAt?: number,
+  executionHostId?: ExecutionHostId
+): AppState['lastVisitedAtByWorktreeId'] {
+  // Cmd+J needs user-focus recency independent of PTY activity; racing CLI/IPC timestamps must not regress (cmd-j-empty-query-ordering.md).
+  const now = visitedAt ?? Date.now()
+  const ownerHostId =
+    executionHostId ??
+    (s.activeWorktreeId === worktreeId ? s.activeWorkspaceExecutionHostId : undefined) ??
+    s.getKnownWorktreeById(worktreeId, executionHostId)?.hostId
+  const prev =
+    getWorktreeVisitTimestamp(s.lastVisitedAtByWorktreeId, {
+      id: worktreeId,
+      hostId: ownerHostId
+    }) ?? 0
+  if (!(now > prev)) {
+    return s.lastVisitedAtByWorktreeId
+  }
+  return {
+    ...s.lastVisitedAtByWorktreeId,
+    [getWorktreeVisitKey(worktreeId, ownerHostId)]: now
   }
 }
 

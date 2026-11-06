@@ -36,6 +36,7 @@ export async function addHostCreatedSplitWorktree(
   const created = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
     repo: `id:${added.result.repo.id}`,
     name: 'parity-setup',
+    branchNameOverride: 'parity-setup',
     noParent: true,
     activate: false,
     setupDecision: 'skip'

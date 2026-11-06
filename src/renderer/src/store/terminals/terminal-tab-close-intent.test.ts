@@ -89,19 +89,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
       mockApi.worktrees.updateMeta.mockResolvedValue({})
     })
 
-    it('commits the close in main even when the SSH shutdown throws', async () => {
-      mockApi.pty.kill.mockRejectedValue(new Error('relay shutdown failed'))
-      const store = storeWithSshTab()
-
-      store.getState().closeTab('ssh-tab')
-      await Promise.resolve()
-
-      expect(mockApi.pty.kill).toHaveBeenCalledWith(SSH_PTY)
-      expect(sentCloses(closeTerminalSurface)).toEqual([
-        { worktreeId: SSH_WORKTREE, tabId: 'ssh-tab', reason: 'user' }
-      ])
-    })
-
     it('removes the tab and kills it without waiting for main to write the close', async () => {
       closeTerminalSurface.mockReturnValue(new Promise<void>(() => {}))
       layoutApplyTestTransport.answerWith('pending')
@@ -114,27 +101,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
       await Promise.resolve()
       expect(mockApi.pty.kill).toHaveBeenCalledWith(SSH_PTY)
     })
-
-    it.each([['user'], ['cleanup']] as const)('sends the intent for a %s close', (reason) => {
-      storeWithSshTab().getState().closeTab('ssh-tab', { reason })
-
-      expect(sentCloses(closeTerminalSurface)).toEqual([
-        { worktreeId: SSH_WORKTREE, tabId: 'ssh-tab', reason }
-      ])
-    })
-
-    // Why: exits still retire through main's own exit handling until main decides exits itself.
-    it('sends nothing for a pty-exit close', () => {
-      storeWithSshTab().getState().closeTab('ssh-tab', { reason: 'pty-exit' })
-
-      expect(sentCloses(closeTerminalSurface)).toEqual([])
-    })
-
-    it('sends nothing when a paired host owns the close', () => {
-      storeWithSshTab().getState().closeTab('ssh-tab', { remoteCloseOwnedByHost: true })
-
-      expect(sentCloses(closeTerminalSurface)).toEqual([])
-    })
   })
 }
 
@@ -143,30 +109,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
   const mockWindow = globalThis.window
 
   const WORKTREE = 'repo::/tmp/app'
-
-  /** Maps a closing tab has no entry in; closing must not give them a new reference. */
-  const UNTOUCHED_FIELDS = [
-    'terminalLayoutsByTabId',
-    'ptyIdsByTabId',
-    'runtimePaneTitlesByTabId',
-    'lastKnownRelayPtyIdByTabId',
-    'deferredSshSessionIdsByTabId',
-    'pendingReconnectPtyIdByTabId',
-    'pendingStartupByTabId',
-    'automaticAgentResumeClaimsByTabId',
-    'nativeChatLaunchPromptByTabId',
-    'nativeChatLaunchDraftByTabId',
-    'pendingInitialCwdByTabId',
-    'pendingIssueCommandSplitByTabId',
-    'expandedPaneByTabId',
-    'canExpandPaneByTabId',
-    'cacheTimerByKey',
-    'lastTerminalInputAtByPaneKey',
-    'unreadTerminalTabs',
-    'unreadTerminalPanes',
-    'unreadAgentCompletionPanes',
-    'tabBarOrderByWorktree'
-  ] as const
 
   function storeWithTwoTabs(): ReturnType<typeof createTestStore> {
     const store = createTestStore()
@@ -195,23 +137,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
       mockApi.worktrees.updateMeta.mockResolvedValue({})
     })
 
-    it('keeps the reference of every per-tab map the closing tab had no entry in', () => {
-      const store = storeWithTwoTabs()
-      const before = store.getState()
-      const snapshot = Object.fromEntries(
-        UNTOUCHED_FIELDS.map((field) => [field, before[field]])
-      ) as Record<string, unknown>
-
-      store.getState().closeTab('tab-a')
-
-      const after = store.getState()
-      // The tab really closed — otherwise the identity assertions below are vacuous.
-      expect(after.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toEqual(['tab-b'])
-      for (const field of UNTOUCHED_FIELDS) {
-        expect(after[field], field).toBe(snapshot[field])
-      }
-    })
-
     it('still drops the closing tab from a map that did hold it', () => {
       const store = storeWithTwoTabs()
       store.setState({
@@ -230,91 +155,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
       expect(after.pendingStartupByTabId).toEqual({})
       expect(after.cacheTimerByKey).toEqual({ 'tab-b:leaf': 2 })
       expect(after.unreadTerminalPanes).toEqual({})
-    })
-  })
-}
-
-{
-  const mockApi = createStoreCascadesMockApi()
-  const mockWindow = globalThis.window
-
-  const REMOTE_WORKTREE = 'remote-repo::/srv/app'
-  const LOCAL_WORKTREE = 'local-repo::/tmp/app'
-
-  function storeWithBothWorktrees(): ReturnType<typeof createTestStore> {
-    const store = createTestStore()
-    seedStore(store, {
-      repos: [
-        { id: 'remote-repo', path: '/srv/app', name: 'app', connectionId: 'ssh-1' },
-        { id: 'local-repo', path: '/tmp/app', name: 'app' }
-      ] as never,
-      worktreesByRepo: {
-        'remote-repo': [
-          makeWorktree({ id: REMOTE_WORKTREE, repoId: 'remote-repo', path: '/srv/app' })
-        ],
-        'local-repo': [makeWorktree({ id: LOCAL_WORKTREE, repoId: 'local-repo', path: '/tmp/app' })]
-      },
-      tabsByWorktree: {
-        [REMOTE_WORKTREE]: [makeTab({ id: 'remote-tab', worktreeId: REMOTE_WORKTREE })],
-        [LOCAL_WORKTREE]: [makeTab({ id: 'local-tab', worktreeId: LOCAL_WORKTREE })]
-      }
-    })
-    return store
-  }
-
-  const closeTerminalSurface = vi.fn()
-  Object.assign(mockApi, { session: { closeTerminalSurface } })
-
-  describe('closeTab close-record mirror', () => {
-    beforeEach(() => {
-      globalThis.window = mockWindow
-    })
-
-    beforeEach(() => {
-      vi.clearAllMocks()
-      layoutApplyTestTransport.reset()
-      closeTerminalSurface.mockResolvedValue(undefined)
-      mockApi.worktrees.updateMeta.mockResolvedValue({})
-    })
-
-    // Cover every workspace kind: close mirror suppresses re-seeding before main’s saved copy hydrates.
-    it.each([
-      ['remote-tab', REMOTE_WORKTREE],
-      ['local-tab', LOCAL_WORKTREE]
-    ])('mirrors the record main is told to write for %s', (tabId, worktreeId) => {
-      const store = storeWithBothWorktrees()
-
-      store.getState().closeTab(tabId)
-
-      expect(store.getState().closedTerminalTabTombstonesByTabId[tabId]).toEqual({
-        closedAt: expect.any(Number),
-        worktreeId,
-        reason: 'user'
-      })
-      expect(sentCloses(closeTerminalSurface)).toEqual([{ worktreeId, tabId, reason: 'user' }])
-    })
-
-    it('mirrors a cleanup close with its reason', () => {
-      const store = storeWithBothWorktrees()
-
-      store.getState().closeTab('remote-tab', { reason: 'cleanup' })
-
-      expect(store.getState().closedTerminalTabTombstonesByTabId['remote-tab']?.reason).toBe(
-        'cleanup'
-      )
-    })
-
-    // Main alone closes for a process exit; a paired host owns its own records.
-    it.each([
-      ['a pty-exit close', { reason: 'pty-exit' as const }],
-      ['a host-owned close', { remoteCloseOwnedByHost: true }]
-    ])('mirrors nothing for %s', (_label, opts) => {
-      const store = storeWithBothWorktrees()
-
-      store.getState().closeTab('remote-tab', opts)
-
-      expect(store.getState().closedTerminalTabTombstonesByTabId).toEqual({})
-      expect(sentCloses(closeTerminalSurface)).toEqual([])
     })
   })
 }

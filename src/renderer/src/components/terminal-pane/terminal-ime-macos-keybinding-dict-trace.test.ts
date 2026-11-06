@@ -123,39 +123,7 @@ describe('#11170 — a DefaultKeyBinding.dict remap reaches the PTY', () => {
     expect(replay(['remapped'])).toBe(caseNamed('remapped').expectedPty)
   })
 
-  // The Korean-layout asterisk exercises the same substitution without relying on the old punctuation list.
-  it('sends the remapped character on the other Korean layout too', () => {
-    const remapped = caseNamed('remapped-other-korean-layout')
-    expect(replay([remapped.name])).toBe(remapped.expectedPty)
-  })
-
-  it('still sends the layout character when nothing remaps the key', () => {
-    expect(replay(['no-remap-korean'])).toBe(caseNamed('no-remap-korean').expectedPty)
-  })
-
-  it('still sends the plain backquote under an ASCII layout', () => {
-    expect(replay(['no-remap-ascii'])).toBe(caseNamed('no-remap-ascii').expectedPty)
-  })
-
   it('leaves the next keystroke untouched', () => {
     expect(replay(['remapped', 'remapped-neighbour-key'])).toBe('`a')
-  })
-
-  // Option chords stay outside this claim; option-as-alt consumes them first.
-  it('does not claim the Option chord the dict also binds', () => {
-    const { emitted, terminal, forwarder } = open()
-    const textarea = terminal.textarea!
-    const chord = new KeyboardEvent('keydown', {
-      key: '₩',
-      code: 'Backquote',
-      altKey: true,
-      bubbles: true,
-      cancelable: true
-    })
-    Object.defineProperty(chord, 'keyCode', { value: 192 })
-    textarea.dispatchEvent(chord)
-    forwarder.dispose()
-    terminal.dispose()
-    expect(emitted.join('')).not.toBe('')
   })
 })

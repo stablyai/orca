@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const SSH_SELECTOR = { kind: 'ssh', targetId: 'ssh-1' } as const
 

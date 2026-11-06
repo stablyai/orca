@@ -1,3 +1,4 @@
+import { nativeChatComposerDestination } from './native-chat-composer-destination'
 import {
   useCallback,
   useEffect,
@@ -20,7 +21,7 @@ const revealedChatRoots = new Set<HTMLElement>()
 /** Route revealed-pane typing/dictation to its input when focus is unowned or within that chat. */
 export function useNativeChatRootInputRouting(
   args: Omit<NativeChatComposerRevealFocusArgs, 'scheduleFrame'> & {
-    questionAnswerInputRef: RefObject<HTMLInputElement | null>
+    questionAnswerInputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
   }
 ): {
   onPointerDownCapture: (event: ReactPointerEvent) => void
@@ -42,13 +43,17 @@ export function useNativeChatRootInputRouting(
       !hasVisibleOverlay({ ignoreDismissed: true })
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.target !== root && ownsUnfocusedInput(event.target)) {
-        routeNativeChatRootKeyToInput(event, composerRef.current, questionAnswerInputRef.current)
+        routeNativeChatRootKeyToInput(
+          event,
+          nativeChatComposerDestination(rootRef.current, composerRef.current),
+          questionAnswerInputRef.current
+        )
       }
     }
     const onDictationFocusInput = (): void => {
       const active = root.ownerDocument.activeElement
       if (root.contains(active) || ownsUnfocusedInput(active)) {
-        composerRef.current?.focus()
+        nativeChatComposerDestination(rootRef.current, composerRef.current)?.focus()
       }
     }
     revealedChatRoots.add(root)
@@ -77,7 +82,11 @@ export function useNativeChatRootInputRouting(
     (event: ReactKeyboardEvent) => {
       // Portaled menus/dialogs still bubble through React; require a target inside this DOM root.
       if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
-        routeNativeChatRootKeyToInput(event, composerRef.current, questionAnswerInputRef.current)
+        routeNativeChatRootKeyToInput(
+          event,
+          nativeChatComposerDestination(rootRef.current, composerRef.current),
+          questionAnswerInputRef.current
+        )
       }
     },
     [composerRef, questionAnswerInputRef, rootRef]

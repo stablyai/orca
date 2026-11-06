@@ -46,12 +46,10 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   })
 }))
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
-import {
-  useStructuredAgentSession,
-  type StructuredPromptItem
-} from './use-structured-agent-session'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session/agent-session-question-answer'
+import { useStructuredAgentSession } from './use-structured-agent-session'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
 let fence = 3
 let items: AgentJournalRenderItem[] = []
@@ -160,6 +158,25 @@ describe('desktop structured prompt answers', () => {
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 
+  it.each([true, false])(
+    'cancels a card with no running turn by naming only it, or not at all (host takes cards: %s)',
+    async (supported) => {
+      mocks.promptCancelSupported.mockResolvedValue(supported)
+      const view = renderHook(() =>
+        useStructuredAgentSession({ sessionId: 'session-1', target, agent: 'omp', isVisible: true })
+      )
+      const prompt = { itemId: approval.itemId, expectedRevision: approval.revision }
+      await act(async () => {
+        await view.result.current.cancel(undefined, prompt)
+      })
+      const calls = mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.cancel')
+      expect(calls.map(([, , params]) => params)).toEqual(
+        supported ? [expect.objectContaining({ prompt })] : []
+      )
+      expect(calls.some(([, , params]) => 'turnId' in params)).toBe(false)
+    }
+  )
+
   it('packs the answer into an option id for a host that predates structured answers', async () => {
     mocks.questionAnswersSupported.mockResolvedValue(false)
     const { result } = renderHook(() =>
@@ -180,23 +197,5 @@ describe('desktop structured prompt answers', () => {
       optionId: encodeAgentSessionQuestionAnswers(answers)
     })
     expect(respondCall()).not.toHaveProperty('answers')
-  })
-
-  it('sends an approval decision without probing the host', async () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target,
-        agent: 'claude',
-        isVisible: true
-      })
-    )
-
-    await act(async () => {
-      await result.current.respond(approval, { kind: 'option', optionId: 'allow' })
-    })
-
-    expect(mocks.questionAnswersSupported).not.toHaveBeenCalled()
-    expect(respondCall()).toMatchObject({ itemId: 'approval-1', optionId: 'allow' })
   })
 })

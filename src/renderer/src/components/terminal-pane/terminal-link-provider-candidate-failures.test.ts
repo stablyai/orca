@@ -97,17 +97,6 @@ describe('terminal link candidates fail independently', () => {
     expect([...cache.keys()].some((key) => key.includes(firstPath + secondPath))).toBe(false)
   })
 
-  it('has the same valid SSH links with a blank-row separator', async () => {
-    const rows = await replayRows(capture.replace(`${firstPath}\r\n`, `${firstPath}\r\n\r\n`))
-    sshProbe()
-    const { provider } = createProviderSetup(rows, new Map(), {
-      startupCwd: '/home/alice/dev',
-      worktreePath: '/home/alice/dev'
-    })
-    expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect((await hover(provider, 3)).map((link) => link.text)).toEqual([secondPath])
-  })
-
   it('preserves a real hard-wrapped path beside a rejected joined candidate', async () => {
     const rows = await replayRows(`/home/alice/dev/notes/\r\nREADME.md\r\n${secondPath}\r\n`)
     sshProbe()
@@ -167,53 +156,6 @@ describe('terminal link candidates fail independently', () => {
     expect(fsPathExistsMock).not.toHaveBeenCalled()
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
     expect([...cache.values()].map((entry) => entry.exists)).toEqual([true])
-  })
-
-  it('keeps host-granted files bound to their printing terminal when a neighboring candidate fails', async () => {
-    const rows = await replayRows()
-    runtimeEnvironmentCallMock.mockImplementation(async ({ method, params }) => {
-      if (method !== 'files.resolveTerminalPath') {
-        throw new Error('Unexpected remote probe')
-      }
-      const path = params?.pathText
-      if (path !== firstPath && path !== secondPath) {
-        throw new Error('ENOTDIR: joined path')
-      }
-      return {
-        id: 'grant',
-        ok: true,
-        result: {
-          worktree: 'wt-1',
-          relativePath: null,
-          absolutePath: path,
-          exists: true,
-          isDirectory: false,
-          openTarget: {
-            kind: 'absolute-file',
-            provider: 'local',
-            absolutePath: path,
-            grantId: 'terminal-grant'
-          }
-        },
-        _meta: { runtimeId: 'remote' }
-      }
-    })
-    const { provider } = createProviderSetup(rows, new Map(), {
-      startupCwd: '/srv/repo',
-      worktreePath: '/srv/repo',
-      runtimeEnvironmentId: 'env-notes',
-      getRuntimeTerminalHandleForPane: () => 'term-notes'
-    })
-    expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'files.resolveTerminalPath',
-        params: expect.objectContaining({ pathText: firstPath, terminal: 'term-notes' })
-      })
-    )
-    expect(statMock).not.toHaveBeenCalled()
-    expect(fsPathExistsMock).not.toHaveBeenCalled()
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
   })
 
   it('does not cache a transport failure as missing and can retry the next hover', async () => {

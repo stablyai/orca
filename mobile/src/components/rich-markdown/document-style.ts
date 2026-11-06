@@ -1,11 +1,12 @@
-import { colors } from '../../theme/mobile-theme'
+import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
 // Read theme at build time; native embeds sheet, page scopes it to editor host.
+// #editor scrolls itself: iOS WebKit stops drawing selection ~2 screens into an editable scrolled by a separate box (#34472).
 // Bind size to text-input seam: native body size, web>=16px floor prevents iOS focus zoom that keyboard seam mistakes for no keyboard; one binding keeps both hosts aligned.
 export function richMarkdownEditorStyle(): string {
   return `    :root {
-      color-scheme: dark;
+      color-scheme: ${getMobileColorScheme()};
       --background: ${colors.bgBase};
       --editor-surface: ${colors.bgBase};
       --foreground: ${colors.textPrimary};
@@ -26,11 +27,11 @@ export function richMarkdownEditorStyle(): string {
       background: var(--editor-surface);
       color: var(--foreground);
       font-family: var(--font-sans);
-      overscroll-behavior: contain;
     }
-    body { overflow: auto; }
     #editor {
-      min-height: 100vh;
+      height: 100%;
+      overflow: auto;
+      overscroll-behavior: contain;
       padding: 18px 16px 112px;
       outline: none;
       font-size: ${TEXT_INPUT_FONT_SIZE}px;
@@ -63,7 +64,7 @@ export function richMarkdownEditorStyle(): string {
     ul { list-style: disc; }
     ol { list-style: decimal; }
     li { margin: 0.15em 0; }
-    li > p { margin: 0; }
+    li > p, ul[data-type="taskList"] > li > div > p { margin: 0; }
     ul[data-type="taskList"] {
       padding-left: 0;
       list-style: none;
@@ -123,17 +124,24 @@ export function richMarkdownEditorStyle(): string {
       color: var(--muted-foreground);
       background: color-mix(in srgb, var(--foreground) 2%, transparent);
     }
+    /* Block table scrolls sideways instead of squeezing columns to fit the phone (#36412). */
     table {
-      width: 100%;
+      display: block;
+      overflow-x: auto;
       margin: 1em 0;
       border-collapse: collapse;
       font-size: 0.95em;
     }
+    /* break-word and keep-all size columns to whole words, CJK runs too (#editor's anywhere wraps letters); max-width caps unbreakable runs like URLs; 1% cells still stretch a narrow table to full width. */
     th, td {
+      width: 1%;
+      max-width: 16em;
       padding: 8px 14px;
       border: 1px solid var(--border);
       text-align: left;
       vertical-align: top;
+      overflow-wrap: break-word;
+      word-break: keep-all;
     }
     th {
       font-weight: 600;

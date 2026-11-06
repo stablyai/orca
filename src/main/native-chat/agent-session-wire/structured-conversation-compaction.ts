@@ -2,11 +2,11 @@ import type { AgentSessionConversationCommandResult } from '../../../shared/agen
 import {
   agentSessionFailureFact,
   readAgentSessionFailureFact
-} from '../../../shared/agent-session-failure'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   runStructuredAgentSessionMutation,
@@ -46,7 +46,7 @@ export async function runStructuredCompaction(
   const { sessionId, clientOperationId } = params.envelope
   // Legacy operation records must replay rather than execute again.
   const priorRecord = (): AgentSessionConversationCommandResult | null => {
-    const prior = context.deps.store.getRecord(sessionId)?.conversationCommand
+    const prior = context.deps.store.getConversation(sessionId)?.conversationCommand
     if (prior?.operationId !== clientOperationId || prior.callerKey !== caller.callerKey) {
       return null
     }
@@ -88,7 +88,7 @@ export async function runStructuredCompaction(
     value: compactionReply(
       settled && 'submission' in settled.value ? settled.value.submission : undefined,
       {
-        ...structuredAgentSessionFailureWordsContext(context.deps.store.getRecord(sessionId)),
+        ...structuredAgentSessionFailureWordsContext(context.deps.store.getConversation(sessionId)),
         command: 'compact'
       }
     )
@@ -137,6 +137,7 @@ function acceptStructuredConversationCommand(
 ): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
   const plan = conversationCommandPlan({
     envelope: params.envelope,
+    ...(params.instructions ? { instructions: params.instructions } : {}),
     ...(params.delivery ? { delivery: params.delivery } : {}),
     priorRecord
   })
@@ -163,7 +164,7 @@ function acceptUnderSerialize(
         // Queue first so commands obey the same holds as sends before active-work admission.
         const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, {
           envelope: params.envelope,
-          body: structuredAgentSessionCompactBody(),
+          body: structuredAgentSessionCompactBody(params.instructions),
           ...(params.userSend ? { userSend: params.userSend } : {}),
           ...(params.delivery ? { delivery: params.delivery } : {})
         })
@@ -180,7 +181,7 @@ function acceptUnderSerialize(
                 : { clientMessageId: value.submission.clientMessageId }
           }
         }
-        const record = context.deps.store.getRecord(ctx.sessionId)
+        const record = context.deps.store.requireWritableRecord(ctx.sessionId)
         const refusal =
           record &&
           conversationCommandBlocked(

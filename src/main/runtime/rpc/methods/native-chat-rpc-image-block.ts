@@ -1,4 +1,4 @@
-import type { NativeChatImageRefBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
 
 // Image refs are labels over RPC; inline bytes stay local and metadata cannot consume the frame.
 const NATIVE_CHAT_RPC_IMAGE_METADATA_CAP = 512

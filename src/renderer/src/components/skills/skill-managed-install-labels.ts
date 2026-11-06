@@ -1,16 +1,17 @@
 import type { SkillCloudVersion } from '../../../../shared/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
 import { groupInstallState, type SkillManagedInstallGroup } from './skill-managed-install-groups'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
+const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
+}
 
 function formatDate(value: string): string | null {
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : dateFormatter.format(parsed)
+  return Number.isNaN(parsed.getTime()) ? null : uiDateTimeFormat(DATE_OPTIONS).format(parsed)
 }
 
 /** Before a bundle package loads, derive its title from the skills installed on disk. */

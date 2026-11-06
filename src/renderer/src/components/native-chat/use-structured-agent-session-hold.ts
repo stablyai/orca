@@ -1,7 +1,7 @@
 // Older hosts need surface hold/release to retire providers on close/hide; chain release after hold to avoid leaking late holds. Keep until the minimum host version ignores both.
 
 import { useEffect, useRef } from 'react'
-import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
+import { structuredAgentSessionHolderId } from '../../../../shared/agent-session/view/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 

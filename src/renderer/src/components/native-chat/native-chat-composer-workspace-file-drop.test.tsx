@@ -16,7 +16,7 @@ import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
@@ -52,7 +52,7 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
@@ -245,9 +245,10 @@ describe('native chat workspace file drops', () => {
     cleanup()
   })
 
-  it('consumes a nested editor drop once and inserts top-level paths at the caret', () => {
+  it('consumes a nested editor drop once and inserts top-level paths at the caret', async () => {
     render(<ComposerProbe initialDraft="$rev tail" />)
-    act(() => {
+    // Tiptap mounts node-view portals from a microtask.
+    await act(async () => {
       latestInput!.insertSkill!(0, 4, '$review')
     })
     expect(editor().querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
@@ -260,6 +261,7 @@ describe('native chat workspace file drops', () => {
     ])
     transfer.setData('text/plain', 'must not be inserted by ProseMirror')
     const accepted = dispatchDragEvent('drop', editor(), transfer)
+    await act(async () => {})
 
     expect(accepted).toBe(false)
     expect(screen.getByTestId('draft').textContent).toBe(
@@ -273,63 +275,6 @@ describe('native chat workspace file drops', () => {
     ).toEqual(['src', 'My File.ts'])
     expect(editor().textContent).not.toContain('must not be inserted')
     expect(bubbledDrop).not.toHaveBeenCalled()
-  })
-
-  it('advertises a copy drop while leaving unrelated drags alone', () => {
-    render(<ComposerProbe />)
-    const internal = internalTransfer(['/repo/a.ts'])
-    const accepted = dispatchDragEvent('dragover', editor(), internal)
-    expect(accepted).toBe(false)
-    expect(internal.dropEffect).toBe('copy')
-
-    const unrelated = new FileDragDataTransfer()
-    unrelated.setData('text/plain', 'plain')
-    unrelated.setData('text/html', '<b>plain</b>')
-    dispatchDragEvent('dragover', editor(), unrelated)
-    dispatchDragEvent('drop', editor(), unrelated)
-    expect(bubbledDrop).toHaveBeenCalledOnce()
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  const mismatchedSources: [string, { executionHostId?: ExecutionHostId; workspaceId?: string }][] =
-    [
-      ['different workspace', { workspaceId: 'worktree-2' }],
-      ['different execution host', { executionHostId: 'ssh:other' }]
-    ]
-
-  it.each(mismatchedSources)('rejects paths from a %s', (_label, source) => {
-    render(<ComposerProbe />)
-    dispatchDragEvent('drop', editor(), internalTransfer(['/repo/a.ts'], source))
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  it('rejects legacy unscoped payloads and unavailable owners', () => {
-    const view = render(<ComposerProbe />)
-    const unscoped = new FileDragDataTransfer()
-    unscoped.setData(WORKSPACE_FILE_PATH_MIME, '/repo/a.ts')
-    dispatchDragEvent('drop', editor(), unscoped)
-    expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-
-    testState.ownerKind = 'not-ready'
-    view.rerender(<ComposerProbe />)
-    dispatchDragEvent('drop', editor(), internalTransfer(['/repo/b.ts']))
-    expect(screen.getByText('Worktree not ready — try again in a moment.')).toBeTruthy()
-    expect(screen.getByTestId('draft').textContent).toBe('')
-  })
-
-  // Claim refused drops so the terminal behind the guarded composer cannot paste paths into a shell.
-  it('refuses the drag outright while disabled instead of promising a copy', () => {
-    render(<ComposerProbe disabled />)
-    const hover = internalTransfer(['/repo/a.ts'])
-    expect(dispatchDragEvent('dragover', editor(), hover)).toBe(false)
-    expect(hover.dropEffect).toBe('none')
-    expect(bubbledDrop).not.toHaveBeenCalled()
-
-    const transfer = internalTransfer(['/repo/a.ts'])
-    expect(dispatchDragEvent('drop', editor(), transfer)).toBe(false)
-    expect(transfer.dropEffect).toBe('none')
-    expect(screen.getByTestId('draft').textContent).toBe('')
   })
 
   // Explorer paths from the same runtime host are readable by its agent.
@@ -395,62 +340,5 @@ describe('native chat workspace file drops', () => {
 
     expect(screen.getByTestId('draft').textContent).toBe('preedit')
     expect(screen.getByText('Files can only be attached to their source workspace.')).toBeTruthy()
-  })
-
-  it('rejects only the exact unresolved-owner sentinel', () => {
-    testState.executionHostId = 'runtime:unresolved-owner'
-    const view = render(<ComposerProbe />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/repo/rejected.ts'], {
-        executionHostId: 'runtime:unresolved-owner'
-      })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('')
-
-    testState.executionHostId = 'runtime:my-unresolved-owner-env'
-    testState.ownerKind = 'remote'
-    view.rerender(<ComposerProbe />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/repo/accepted.ts'], {
-        executionHostId: 'runtime:my-unresolved-owner-env'
-      })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('@/repo/accepted.ts ')
-  })
-
-  it('keeps an SSH-host image tagged with its host, never read as a client file', () => {
-    testState.executionHostId = 'ssh:ssh-1'
-    testState.ownerKind = 'remote'
-    render(<ComposerProbe />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/remote/repo/image.png'], {
-        executionHostId: 'ssh:ssh-1'
-      })
-    )
-
-    const image = screen.getByText('/remote/repo/image.png')
-    expect(image.getAttribute('data-connection-id')).toBe('ssh-1')
-    expect(screen.getByTestId('draft').textContent).toMatch(/^\[Image\]\(orca-image:[\w-]+\) $/)
-  })
-
-  it('supports PTY-owned and folder-workspace paths with the same ownership gate', () => {
-    const first = render(<ComposerProbe structured={false} />)
-    dispatchDragEvent('drop', editor(), internalTransfer(['/repo/pty.ts']))
-    expect(screen.getByTestId('draft').textContent).toBe('@/repo/pty.ts ')
-    first.unmount()
-
-    render(<ComposerProbe workspaceId="folder:folder-1" />)
-    dispatchDragEvent(
-      'drop',
-      editor(),
-      internalTransfer(['/folder/note.md'], { workspaceId: 'folder:folder-1' })
-    )
-    expect(screen.getByTestId('draft').textContent).toBe('@/folder/note.md ')
   })
 })

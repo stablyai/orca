@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
+import type { NativeChatDefaultSettings } from '../../../shared/structured-native-chat-launch-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
 import { restoreLocalStructuredSessionTabsOnce } from './local-structured-session-tabs-sync/inventory-refresh'
@@ -67,17 +66,27 @@ export function useLocalStructuredAgentSessionsHeld(): boolean {
   )
 }
 
-type StructuredChatSettings = Pick<GlobalSettings, 'experimentalNativeChat'> | null
+type StructuredChatSettings = NativeChatDefaultSettings | null
 
-function chatsInUse(settings: StructuredChatSettings | undefined, holds: boolean): boolean {
-  return !isWebClientLocation() && (isNativeChatEnabled(settings) || holds)
+/** Either the default or an explicit exception can open new chats. */
+export function newAgentLaunchesMayOpenChats(
+  settings: StructuredChatSettings | undefined
+): boolean {
+  return (
+    settings?.agentDefaultSurface === 'chat' ||
+    Object.values(settings?.nativeChatProviders ?? {}).some((on) => on === true)
+  )
 }
 
-/** Structured chats can exist on this machine: the setting launches them, or the runtime holds some. */
+function chatsInUse(launchesChats: boolean, holds: boolean): boolean {
+  return !isWebClientLocation() && (launchesChats || holds)
+}
+
+/** Structured chats can exist on this machine: new launches open them, or the runtime holds some. */
 export function useLocalStructuredChatsInUse(): boolean {
   const holds = useLocalStructuredAgentSessionsHeld()
-  const setting = useAppStore((state) => isNativeChatEnabled(state.settings))
-  return chatsInUse({ experimentalNativeChat: setting }, holds)
+  const launchesChats = useAppStore((state) => newAgentLaunchesMayOpenChats(state.settings))
+  return chatsInUse(launchesChats, holds)
 }
 
 /** The same answer for one-shot startup work, asked of the host rather than read from the renderer. */
@@ -87,12 +96,15 @@ export async function localStructuredChatsInUse(
   if (isWebClientLocation()) {
     return false
   }
-  return chatsInUse(settings, await readLocalStructuredAgentSessionsHeld())
+  return chatsInUse(
+    newAgentLaunchesMayOpenChats(settings),
+    await readLocalStructuredAgentSessionsHeld()
+  )
 }
 
 /**
- * Startup's restore of this machine's chats. Existing chats come back whatever the chat setting
- * says; a machine that holds none, or the browser client, runs no session-tab census for them.
+ * Startup's restore of this machine's chats. Existing chats come back whatever the Chat | CLI
+ * choices say; a machine that holds none, or the browser client, runs no session-tab census for them.
  */
 export async function restoreLocalStructuredChatsAtStartup(
   settings: StructuredChatSettings | undefined,

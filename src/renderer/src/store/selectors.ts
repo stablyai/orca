@@ -1,7 +1,7 @@
 import { useAppStore } from './index'
 import { useShallow } from 'zustand/react/shallow'
 import type { Repo } from '../../../shared/repo-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -18,9 +18,11 @@ import {
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
 import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
+import { getSelectedFolderTwinHostId } from '@/lib/folder-workspace-runtime-owner'
 import { selectWorktreesByRepo } from './workspace-record-selectors'
 import { worktreeCopyOwnerKey } from './slices/worktrees/metadata/worktree-copy-review-clear'
 import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
+import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -207,6 +209,23 @@ export function selectRepoByIdForActiveWorkspace(
 
 export const useRepoById = (repoId: string | null) =>
   useAppStore((s) => selectRepoByIdForActiveWorkspace(s, repoId))
+
+export function selectReviewRepositoryForWorkspace(
+  state: ActiveWorkspaceRepoState,
+  workspace: Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'> | null
+): Repo | null {
+  if (!workspace) {
+    return null
+  }
+  const selectedRepo = selectRepoByIdForActiveWorkspace(state, workspace.repoId)
+  return resolveReviewRepository(
+    state.repos,
+    workspace,
+    selectedRepo && reviewRepositoryMatchesWorkspace(selectedRepo, workspace)
+      ? selectedRepo
+      : undefined
+  )
+}
 export const useProjectHostSetupProjection = () =>
   useAppStore((s) => getProjectHostSetupProjectionFromState(s))
 
@@ -251,9 +270,18 @@ export function selectKnownWorktreeById(
 }
 export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
   useAppStore((s) => selectKnownWorktreeById(s, worktreeId, executionHostId))
-// File-list callers resolve operation ownership separately from the UI's active host.
-export const useKnownWorktreeById = (worktreeId: string | null) =>
-  useAppStore((s) => (worktreeId ? (findKnownWorktreeById(s, worktreeId) ?? null) : null))
+/** File lists keep host-less git ownership; a folder twin resolves on the copy the user selected. */
+export function selectFileListWorktree(
+  state: WorktreeLookupHostState & Parameters<typeof findKnownWorktreeById>[0],
+  worktreeId: string | null
+): NonNullable<ReturnType<typeof findKnownWorktreeById>> | null {
+  return worktreeId
+    ? (findKnownWorktreeById(state, worktreeId, getSelectedFolderTwinHostId(state, worktreeId)) ??
+        null)
+    : null
+}
+export const useFileListWorktree = (worktreeId: string | null) =>
+  useAppStore((s) => selectFileListWorktree(s, worktreeId))
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
   return useAppStore((s) =>

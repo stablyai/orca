@@ -1,3 +1,4 @@
+import { deleteProjectChatDrafts } from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -25,6 +26,7 @@ import {
   prepareProjectHostSetupMutation,
   upsertProjectHostSetup
 } from './project-host-routing'
+import { toastProjectAddFailure } from './project-add-failure-toast'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -93,11 +95,7 @@ export function createProjectHostSetupActions(
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
-          description: message,
-          duration: ERROR_TOAST_DURATION
-        })
+        toastProjectAddFailure(err)
         return null
       }
     },
@@ -212,6 +210,9 @@ export function createProjectHostSetupActions(
           ? adoptFromEndpoint(target, { kind: 'repo', row: result.repo })
           : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+        if (repo && repoHostId) {
+          deleteProjectChatDrafts(repo.id, repoHostId)
+        }
         const removedSetup = adoptFromEndpoint(target, {
           kind: 'projectHostSetup',
           row: result.setup
@@ -284,11 +285,7 @@ export function createProjectHostSetupActions(
         })
       } catch (err) {
         console.error('Failed to clone project on host:', err)
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
-          description: message,
-          duration: ERROR_TOAST_DURATION
-        })
+        toastProjectAddFailure(err)
         return null
       }
     }

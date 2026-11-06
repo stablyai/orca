@@ -1,10 +1,11 @@
+import { encodePosixPrintfRecords } from '../../shared/posix-printf-encoding'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   REMOTE_COMMAND_DECODER_UNAVAILABLE,
   REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT,
@@ -19,6 +20,21 @@ function shimDir(tools: Record<string, string>): string {
   }
   return bin
 }
+
+it.skipIf(process.platform === 'win32')(
+  'keeps incremental printf records byte-bounded and lossless at escape/codepoint boundaries',
+  () => {
+    const controls = Array.from({ length: 128 }, (_, index) => String.fromCharCode(index)).join('')
+    const text = `${'x'.repeat(1023)}🌊${controls}\\c\\012\uFEFF'!%$\`\ud800`.repeat(4)
+    const chunks = [...encodePosixPrintfRecords(text)]
+    expect(chunks.every((chunk) => Buffer.byteLength(chunk) <= 1024)).toBe(true)
+    expect(chunks.every((chunk) => !chunk.includes('\n') && !chunk.includes('\0'))).toBe(true)
+    const result = spawnSync('/bin/sh', ['-c', 'printf "%b" "$@"', 'fixture', ...chunks])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toEqual(Buffer.from(text))
+    expect([...encodePosixPrintfRecords('')]).toEqual([''])
+  }
+)
 
 describe('wrapRemoteCommandForPosixShell', () => {
   it('emits one physical line without requiring a remote decoder binary', () => {
