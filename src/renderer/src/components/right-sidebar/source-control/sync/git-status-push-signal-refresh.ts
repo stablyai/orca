@@ -7,26 +7,33 @@ import {
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
 import type { GitStatusMetadataChangedEvent } from '../../../../../../shared/worktree/types'
-import { isGitStatusSignalForWorktree } from './git-status-signal-attribution'
-
-export function getRepoWorktreePathsForSignal(repoId: string): readonly string[] {
-  return (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
-    (worktree) => worktree.path
-  )
-}
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { gitStatusSignalRecipientTest } from './git-status-signal-attribution'
 
 type UseGitStatusPushSignalRefreshParams = {
   activeRepoId: string | null
   activeWorktreeId: string | null
   activeWorktreePath: string | null
   enabled: boolean
+  /** Keep stable: a change re-registers the observer. */
   fetchStatus: () => void
-  /** Keep stable with fetchStatus: either change re-registers the observer. */
-  getRepoWorktreePaths: (repoId: string) => readonly string[]
 }
 
-type Observer = UseGitStatusPushSignalRefreshParams
+type Observer = {
+  repoId: string | null
+  worktreeId: string | null
+  /** Normalized once at registration so each dispatch is a set lookup. */
+  normalizedPath: string | null
+  fetchStatus: () => void
+}
 const observers = new Set<Observer>()
+
+// Fresh membership per signal: the catalog is the only source, so no cache needs invalidating.
+function knownRepoWorktreePaths(repoId: string): readonly string[] {
+  return (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
+    (worktree) => worktree.path
+  )
+}
 let disposeSignals: (() => void) | null = null
 function subscribeSignals(): () => void {
   const repoSignal = ({ repoId }: { repoId: string }) => {
@@ -34,24 +41,19 @@ function subscribeSignals(): () => void {
       return
     }
     for (const observer of observers) {
-      if (observer.activeRepoId === repoId) {
+      if (observer.repoId === repoId) {
         observer.fetchStatus()
       }
     }
   }
+  // One catalog read and K + A normalizations per signal, then a set lookup per observer.
   const metadataSignal = (signal: GitStatusMetadataChangedEvent) => {
     if (!isWindowVisible()) {
       return
     }
+    const isRecipient = gitStatusSignalRecipientTest(signal, knownRepoWorktreePaths)
     for (const observer of observers) {
-      if (
-        observer.activeRepoId === signal.repoId &&
-        isGitStatusSignalForWorktree(
-          signal,
-          observer.activeWorktreePath,
-          observer.getRepoWorktreePaths(signal.repoId)
-        )
-      ) {
+      if (observer.repoId === signal.repoId && isRecipient(observer.normalizedPath)) {
         observer.fetchStatus()
       }
     }
@@ -62,7 +64,7 @@ function subscribeSignals(): () => void {
     }
     const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
     for (const observer of observers) {
-      if (detail?.worktreeId === observer.activeWorktreeId) {
+      if (detail?.worktreeId === observer.worktreeId) {
         observer.fetchStatus()
       }
     }
@@ -84,19 +86,18 @@ export function useGitStatusPushSignalRefresh({
   activeRepoId,
   activeWorktreeId,
   activeWorktreePath,
-  fetchStatus,
-  getRepoWorktreePaths
+  fetchStatus
 }: UseGitStatusPushSignalRefreshParams): void {
   useEffect(() => {
     if (!enabled) {
       return
     }
-    const observer = {
-      enabled,
-      activeRepoId,
-      activeWorktreeId,
-      activeWorktreePath,
-      getRepoWorktreePaths,
+    const observer: Observer = {
+      repoId: activeRepoId,
+      worktreeId: activeWorktreeId,
+      normalizedPath: activeWorktreePath
+        ? normalizeRuntimePathForComparison(activeWorktreePath)
+        : null,
       fetchStatus
     }
     observers.add(observer)
@@ -108,12 +109,5 @@ export function useGitStatusPushSignalRefresh({
         disposeSignals = null
       }
     }
-  }, [
-    enabled,
-    activeRepoId,
-    activeWorktreeId,
-    activeWorktreePath,
-    fetchStatus,
-    getRepoWorktreePaths
-  ])
+  }, [enabled, activeRepoId, activeWorktreeId, activeWorktreePath, fetchStatus])
 }

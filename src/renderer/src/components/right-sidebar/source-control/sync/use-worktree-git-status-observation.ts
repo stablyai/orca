@@ -15,10 +15,7 @@ import {
 } from '@/lib/passive-macos-app-data-access'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
-import {
-  getRepoWorktreePathsForSignal,
-  useGitStatusPushSignalRefresh
-} from './git-status-push-signal-refresh'
+import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
 import {
   admissionTierForGitStatusRefreshReason,
@@ -318,8 +315,7 @@ export function useWorktreeGitStatusObservation(
     activeWorktreeId,
     activeWorktreePath: worktreePath,
     enabled: canFetchActiveWorktreeGitStatus,
-    fetchStatus: fetchStatusOnChangeSignal,
-    getRepoWorktreePaths: getRepoWorktreePathsForSignal
+    fetchStatus: fetchStatusOnChangeSignal
   })
 
   return useCallback(() => {
