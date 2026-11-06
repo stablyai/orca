@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
+import type { AgentSessionRewindSupport } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
@@ -15,6 +16,7 @@ import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-
 
 // Matches the transcripts this view retains per chat.
 const MAX_RETAINED_CHAT_READERS = 32
+const UNSUPPORTED_REWIND: AgentSessionRewindSupport = { supported: false, reason: 'unsupported' }
 
 export function useMobileStructuredOptionState(args: {
   client: RpcClient | null
@@ -116,7 +118,7 @@ export function useMobileStructuredOptionState(args: {
     [contextKey, client]
   )
   // Projected once per accepted answer so consumers keep stable references between answers.
-  const { conversationSupport, imageSupport } = useMemo(
+  const { conversationSupport, imageSupport, threadGoalSupport, rewindSupport } = useMemo(
     () =>
       support && support.sessionId !== null
         ? {
@@ -130,9 +132,26 @@ export function useMobileStructuredOptionState(args: {
               sessionId: support.sessionId,
               acceptsImages: support.result.acceptsImages,
               statesPermissionMode: support.result.current?.permissionMode !== undefined
+            },
+            threadGoalSupport: {
+              sessionId: support.sessionId,
+              support: support.result.threadGoal,
+              reported: support.result.reportedThreadGoal
+            },
+            rewindSupport: {
+              sessionId: support.sessionId,
+              fence: support.fence,
+              support: support.result.rewind ?? UNSUPPORTED_REWIND,
+              contextFloor:
+                support.result.contextUsage?.contextFloor ?? support.result.threadGoal?.contextFloor
             }
           }
-        : { conversationSupport: null, imageSupport: null },
+        : {
+            conversationSupport: null,
+            imageSupport: null,
+            threadGoalSupport: null,
+            rewindSupport: null
+          },
     [support]
   )
   useEffect(
@@ -203,6 +222,10 @@ export function useMobileStructuredOptionState(args: {
     projectRuntimeReports,
     conversationSupport,
     imageSupport,
+    threadGoalSupport,
+    rewindSupport,
+    /** The host's in-doubt rewind latch, from its status feed. */
+    rewindBlockedReason: summary?.rewindBlockedReason ?? undefined,
     controller,
     reread,
     receiveCatalog,

@@ -4769,7 +4769,7 @@
       "providers": ["local", "daemon", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. Supervisor settlement coverage prevents a late handoff-completion failure from rearming termination after the replacement child exits. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1589 removes mock-only CLI forwarding, canned provisioning/catalog/error projections and private inventories without equivalent replacement coverage. Retained cases exercise actual local markdown/paste/reconciliation, stream framing/backpressure/output-drain, temporary directory cleanup and persisted handoff with injected host/provider/process boundaries. No real Jira, provisioning, remote launch, native pipe/process-tree authority or deployed provider catalog proof. Assertion references use the surviving handoff registration titles; changed-selector historical receipts are retired and unaffected receipts remain unchanged. Historical scope before this audit: Deterministic unit coverage exercises activation gating, single-instance ownership, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. Supervisor settlement coverage prevents a late handoff-completion failure from rearming termination after the replacement child exits. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected. Audit1383: src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8457",
         "https://github.com/stablyai/orca/issues/9563"
@@ -4812,10 +4812,10 @@
         {
           "file": "src/cli/runtime/launch.test.ts",
           "assertions": [
-            "the CLI parent remains alive after the old serving child exits instead of letting launchd respawn it",
-            "an atomic app-bundle replacement starts one target-version serve child with the original arguments",
-            "handoff completes only after the replacement reports target-version runtime readiness",
-            "a replacement version mismatch or readiness timeout is persisted and exits without an in-process retry loop"
+            "waits past startup status lines for valid recipe JSON",
+            "preserves UTF-8 recipe JSON split across Buffer chunks",
+            "rejects when the server exits without valid recipe JSON",
+            "accepts valid recipe JSON at exit without a trailing newline"
           ]
         },
         {
@@ -4910,6 +4910,7 @@
         "Add an Electron SSH promotion journey in addition to the deterministic identity-transfer unit contract."
       ],
       "knownGaps": [
+        "Audit1589 removes mock-only CLI forwarding, canned provisioning/catalog/error projections and private inventories without equivalent replacement coverage. Retained cases exercise actual local markdown/paste/reconciliation, stream framing/backpressure/output-drain, temporary directory cleanup and persisted handoff with injected host/provider/process boundaries. No real Jira, provisioning, remote launch, native pipe/process-tree authority or deployed provider catalog proof. Assertion references use the surviving handoff registration titles; changed-selector historical receipts are retired and unaffected receipts remain unchanged.",
         "The Electron journey uses an isolated development bundle rather than the installed application so it cannot disturb a real user session.",
         "The live ShipIt/LaunchAgent canary used a disposable minimal Electron bundle plus the compiled production supervisor; a full packaged Orca update has not yet been run.",
         "Linux and Windows single-instance activation have unit coverage but no live Electron evidence yet.",
@@ -12952,7 +12953,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Focused units cover CLI intent, fresh Claude/Codex foreground identity, framing bytes, stale-agent shell fallback, and exact legacy behavior for every other configured agent. SSH, daemon, and remote-runtime remain explicit gaps. Audit1312 removes low-value imported specs from aggregate test drivers; old whole-driver execution receipts are archived. Retained registrations are unchanged. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/rpc/terminal-agent-prompt-send.test.ts reduced. Lose mocked successful routing, fallback args and signal identity forwarding. Retained fake PTY write sink observes no output; no actual shell/provider claimed. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1586 removes mock-only terminal prompt forwarding and capability assertions without equivalent replacement coverage. Retained CLI tests cover unverified close failures and a missing prompt receipt after preflight using injected host responses; they do not establish actual PTY delivery, host restart or durable replay. Assertion references selecting removed alarms are retired; unaffected execution receipts remain unchanged. Historical scope before this audit: Source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Focused units cover CLI intent, fresh Claude/Codex foreground identity, framing bytes, stale-agent shell fallback, and exact legacy behavior for every other configured agent. SSH, daemon, and remote-runtime remain explicit gaps. Audit1312 removes low-value imported specs from aggregate test drivers; old whole-driver execution receipts are archived. Retained registrations are unchanged. No equivalent replacement coverage is claimed. Audit1383: src/main/runtime/rpc/terminal-agent-prompt-send.test.ts reduced. Lose mocked successful routing, fallback args and signal identity forwarding. Retained fake PTY write sink observes no output; no actual shell/provider claimed. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts reduced. Lose command-list/receipt/default/background activation matrices whose provider spawn returns canned IDs. Retained test proves actual tab allocation separation, not terminal startup. No equivalent replacement coverage is claimed. Existing exact unaffected receipts and their platform/provider/budget claims remain scoped to unchanged selectors. Changed optional selectors have no new execution result. Audit1401: src/main/runtime/orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec.ts removed. Loses listing-on-already-repaired-data alarm; it never established runtime repair invocation. src/main/runtime/orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec.ts removed. Loses actual mobile split sibling shell versus recorded-agent resume command alarms; no equivalent coverage asserted. src/main/runtime/orca-runtime-tests/worktree-native-chat-setup.spec.ts removed. Loses separate setup/startup tab result in that manually assembled path. src/main/runtime/orca-runtime.test.ts reduced. Driver registration/import of a whole-deleted selected spec is removed; directly authored cases remain unchanged. No extra authored removal credit. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4328",
         "https://github.com/stablyai/orca/issues/14525"
@@ -12975,13 +12976,6 @@
         "tests/tools/repro-terminal-send-submit.mjs"
       ],
       "assertionRefs": [
-        {
-          "file": "src/cli/handlers/terminal.test.ts",
-          "assertions": [
-            "combined text and Enter carries explicit agent-prompt intent",
-            "text-only and bare Enter remain direct terminal input"
-          ]
-        },
         {
           "file": "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
           "assertions": [
@@ -13041,6 +13035,7 @@
         "Retain mixed-version evidence that old hosts strip the optional intent and new hosts accept old clients without a protocol bump."
       ],
       "knownGaps": [
+        "Audit1586 removes mock-only terminal prompt forwarding and capability assertions without equivalent replacement coverage. Retained CLI tests cover unverified close failures and a missing prompt receipt after preflight using injected host responses; they do not establish actual PTY delivery, host restart or durable replay. Assertion references selecting removed alarms are retired; unaffected execution receipts remain unchanged.",
         "Live SSH/daemon/remote-runtime evidence is not yet attached.",
         "Only Claude and Codex opt into settlement; every other agent retains the legacy behavior until independently validated.",
         "A new CLI talking to an old host safely loses the optional field and therefore keeps the old timing behavior until the host updates.",
@@ -17664,21 +17659,20 @@
       "providers": ["wsl1", "wsl2"],
       "coveredPlatforms": ["windows"],
       "coveredProviders": ["wsl1"],
-      "coverageNotes": "Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
+      "coverageNotes": "Remove synthetic WSL participation-verifier tests. The real WSL1 receipt and partial protection remain; WSL2 is still untested. Historical scope before this audit: Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34030832614"],
       "invariant": "An agent launched into WSL runs in the guest; keyboard paste reaches exactly one owning PTY and preserves Linux content even after the default shell changes.",
       "oracle": "Run the existing real WSL launch and two paste cases three times; require nine passes and zero skipped, unexpected, or flaky results in the Playwright JSON report.",
       "commands": [
         "gh workflow run windows-wsl-e2e.yml",
         "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
         "gh run view 34031806291 --log"
       ],
       "testFiles": [
         "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
         "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
-        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs",
-        "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs"
+        "config/scripts/workflow/source-routing/wsl-e2e-lane-contract.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -17691,10 +17685,6 @@
             "requires exact Linux pasted content and exactly one PTY write",
             "retains WSL paste ownership after changing the default shell"
           ]
-        },
-        {
-          "file": "config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.test.mjs",
-          "assertions": ["rejects skipped, missing, substituted and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -17730,6 +17720,7 @@
         "Collect repeated CI history before adding this experimental lane to required verification."
       ],
       "knownGaps": [
+        "Remove synthetic WSL participation-verifier tests. The real WSL1 receipt and partial protection remain; WSL2 is still untested.",
         "WSL2 is not provisioned.",
         "No SSH, folder-only workspace, packaged mixed-version, or live-service claim.",
         "The new PR lane is outside verify until reliability is established."
@@ -17748,7 +17739,7 @@
       "providers": ["paired-runtime"],
       "coveredPlatforms": ["linux"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
+      "coverageNotes": "Audit1579 removes workflow/manifest/regex/private binary-header and diagnostic metric inventories, fixture selectors, injected forwarding/platform/signature/process examples, unproven overlap and internal churn counters without equivalent replacement coverage. Retains actual Git trust/diffs; filesystem hash/ELF-region/native discovery; child CLI module repair; compiler/lock/publication/rollback and synthetic Electron install/cache ownership; executable shell quoting/exit; controlled notary/timer cleanup; local patched extractor file/AST freshness; real Chromium/WebKit CSP/sandbox/HTTPS image/referrer/link/preservation controls under parsed Android headers. Five unchanged setup-pnpm/VM request-cleanup definitions reviewed and not rerun. GitHub, installer/archive, OS metric, client, native delegate, compressor, builder and Apple boundaries injected or absent where recorded. No actual native PTY, shipped full/native app, real Actions/cache/npm signature authority, downloaded Electron archive, real objdump/linker/native CLI/AppImage, signing/NSIS/notary/upload/updater or live freeze proof. Historical scope before this audit: Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
       "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34069063016"],
       "invariant": "A paired client and host without client-hosted browser capabilities retain server-hosted browser placement across supported version skew.",
       "oracle": "Require both existing named browser placement scenarios to pass three times with one attempt, zero skips, zero failures, and no report errors.",
@@ -17756,12 +17747,9 @@
         "gh workflow run packaged-browser-e2e.yml",
         "pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3 --retries=0",
         "gh run view 34069063016 --log",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs --maxWorkers=2 --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=2 --reporter=dot"
       ],
-      "testFiles": [
-        "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
-        "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs"
-      ],
+      "testFiles": ["tests/e2e/packaged-mixed-version-browser-placement.spec.ts"],
       "assertionRefs": [
         {
           "file": "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
@@ -17769,10 +17757,6 @@
             "old client and old host lack client-host and browser-tunnel capabilities",
             "browser contents remain owned by the server and the expected snapshot marker is readable"
           ]
-        },
-        {
-          "file": "config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.test.mjs",
-          "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -17807,6 +17791,7 @@
         "Collect repeated scheduled history before making this required."
       ],
       "knownGaps": [
+        "Audit1579 removes workflow/manifest/regex/private binary-header and diagnostic metric inventories, fixture selectors, injected forwarding/platform/signature/process examples, unproven overlap and internal churn counters without equivalent replacement coverage. Retains actual Git trust/diffs; filesystem hash/ELF-region/native discovery; child CLI module repair; compiler/lock/publication/rollback and synthetic Electron install/cache ownership; executable shell quoting/exit; controlled notary/timer cleanup; local patched extractor file/AST freshness; real Chromium/WebKit CSP/sandbox/HTTPS image/referrer/link/preservation controls under parsed Android headers. Five unchanged setup-pnpm/VM request-cleanup definitions reviewed and not rerun. GitHub, installer/archive, OS metric, client, native delegate, compressor, builder and Apple boundaries injected or absent where recorded. No actual native PTY, shipped full/native app, real Actions/cache/npm signature authority, downloaded Electron archive, real objdump/linker/native CLI/AppImage, signing/NSIS/notary/upload/updater or live freeze proof.",
         "Linux1.4.188 only; no macOS or Windows packaged coverage.",
         "No folder workspace, SSH execution host or live-service coverage.",
         "Other released version pairs remain untested; not a required PR check."

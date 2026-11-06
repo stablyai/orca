@@ -40,7 +40,8 @@ const fsAllowances: Record<string, readonly string[]> = {
   ],
   // Stores Claude config folder paths only.
   'claude-accounts/claude-observed-config-dirs.ts': ['writeFileAtomically'],
-  'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
+  // Invalidates a validated owned completion marker before rebuilding a missing home.
+  'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'unlinkSync', 'writeFileAtomically'],
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],
   // This write targets process stdin, not a file.

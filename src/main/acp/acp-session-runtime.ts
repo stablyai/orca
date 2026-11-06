@@ -28,6 +28,7 @@ import {
   SetSessionModelResponseSchema,
   SetSessionConfigOptionResponseSchema,
   SessionIdSchema,
+  type ClientCapabilities,
   type InitializeRequest,
   type InitializeResponse,
   type AuthenticateResponse,
@@ -51,6 +52,7 @@ export type AcpSessionRuntimeOptions = {
   /** OMP's typed busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
   clientInfo?: InitializeRequest['clientInfo']
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
   /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
@@ -115,7 +117,11 @@ export class AcpSessionRuntime {
       'initialize',
       {
         protocolVersion: ACP_PROTOCOL_VERSION,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+          ...this.options.clientCapabilities
+        },
         ...(this.options.clientInfo === undefined ? {} : { clientInfo: this.options.clientInfo })
       } satisfies InitializeRequest,
       InitializeResponseSchema

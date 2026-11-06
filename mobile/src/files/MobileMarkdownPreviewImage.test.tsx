@@ -18,6 +18,9 @@ vi.mock('../components/MobileStateView', () => ({ MobileLoadErrorState: 'LoadErr
 vi.mock('../session/native-chat/visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
+vi.mock('../session/native-chat/visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
+}))
 const loader = vi.hoisted(() => vi.fn())
 vi.mock('./mobile-markdown-image-source', () => ({ loadMarkdownPreviewImage: loader }))
 let tree: ReactTestRenderer | null = null

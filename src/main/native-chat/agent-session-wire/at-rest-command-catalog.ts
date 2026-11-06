@@ -1,10 +1,7 @@
 import { AtRestCommandDemand } from './at-rest-command-demand'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
-import {
-  requireLegacyAgentSessionAccountHome,
-  type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type {
   AtRestCommandChange,
@@ -166,9 +163,7 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
     return JSON.stringify([
       record.provider,
       // A selected account changes through retireContext, not per chat.
-      this.source.resolveAccountHome
-        ? null
-        : requireLegacyAgentSessionAccountHome(record.accountHome).path,
+      this.source.resolveAccountHome ? null : record.accountHome,
       record.location.workspaceId,
       agentSessionPinnedLaunchDirectory(record)
     ])
