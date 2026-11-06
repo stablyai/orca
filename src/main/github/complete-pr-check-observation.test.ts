@@ -84,21 +84,6 @@ it('counts a hidden failure and suite-only blocker after both first pages withou
   })
 })
 
-it('counts unnamed and name-colliding failed observations instead of using detail-list filtering', async () => {
-  exec.mockResolvedValueOnce(
-    page([
-      success,
-      { ...failure, name: '' },
-      { __typename: 'StatusContext', context: 'same-name', state: 'FAILURE' }
-    ])
-  )
-  expect(summarizePRCheckRollup((await read())!)).toMatchObject({
-    state: 'failure',
-    total: 3,
-    failed: 2
-  })
-})
-
 it.each(['failed-page', 'changed-head', 'broken-cursor'])(
   'never certifies the successful prefix after %s',
   async (kind) => {

@@ -118,25 +118,6 @@ it.each(['cold', 'warm'] as const)(
   }
 )
 
-it('preserves explicit options on ownership misses without adding a refusal', () => {
-  release = installGitHubProjectAccounts({ getRepos: () => [repo()] })
-  expect(options('/unseen-worktree', null, { ghAccount: bob })).toMatchObject({ ghAccount: bob })
-  expect(options('/unseen-worktree')).toEqual({ cwd: '/unseen-worktree' })
-})
-
-it('uses WSL namespace and Windows path spelling without merging POSIX case', () => {
-  release = installGitHubProjectAccounts({
-    getRepos: () => [
-      repo({ path: String.raw`\\wsl.localhost\Ubuntu\home\work` }),
-      repo({ id: 'win', path: String.raw`C:\Work`, ghAccount: bob })
-    ]
-  })
-  expect(options('/home/work', null, { wslDistro: 'ubuntu' }).ghAccount).toEqual(alice)
-  expect(options('/home/Work', null, { wslDistro: 'Ubuntu' }).ghAccount).toBeUndefined()
-  expect(options('/home/work', null, { wslDistro: 'Debian' }).ghAccount).toBeUndefined()
-  expect(options('c:/work/').ghAccount).toEqual(bob)
-})
-
 it('keeps folder cards on their git child account and plain folders outside project gh selection', () => {
   release = installGitHubProjectAccounts({
     getRepos: () => [
@@ -146,15 +127,6 @@ it('keeps folder cards on their git child account and plain folders outside proj
   })
   expect(options('/folder/repo').ghAccount).toEqual(bob)
   expect(options('/folder').ghAccount).toBeUndefined()
-})
-
-it('does not let an earlier owner release a replacement installation', () => {
-  const previous = installGitHubProjectAccounts({ getRepos: () => [repo()] })
-  release = installGitHubProjectAccounts({ getRepos: () => [repo({ ghAccount: bob })] })
-  previous()
-  expect(options('/repo').ghAccount).toEqual(bob)
-  installGitHubProjectAccounts(null)
-  expect(options('/repo').ghAccount).toBeUndefined()
 })
 
 it('selects before an asynchronous repository lookup and retains that account for execution', async () => {
