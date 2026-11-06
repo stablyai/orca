@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
 import type { SourceControlLaunchActionId } from '../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
-  hostRefusesOtherRuntimeWorkspace,
-  loadMobileAgentLaunchContext
-} from '../session/mobile-new-tab-agent-loader'
+  agentLaunchContextOf,
+  useMobileAgentLaunchQueries
+} from '../session/mobile-agent-launch-queries'
+import { useRouteHostId } from '../session/use-mobile-launch-agent-label'
 import { resolveMobileSourceControlLaunchAgent } from '../session/mobile-source-control-launch-agent'
 
 /**
@@ -21,35 +21,19 @@ export function useMobileSourceControlAgentName(args: {
   actionId: SourceControlLaunchActionId | null
 }): string | null {
   const { client, connState, worktreeId, hostCapabilities, actionId } = args
-  const [resolved, setResolved] = useState<{ key: string; name: string | null } | null>(null)
-  const refusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(hostCapabilities)
-  const key = actionId ? `${worktreeId}\0${actionId}` : null
-
-  useEffect(() => {
-    if (!key || !actionId || !client || connState !== 'connected') {
-      return
-    }
-    let active = true
-    void loadMobileAgentLaunchContext({
+  const context = agentLaunchContextOf(
+    useMobileAgentLaunchQueries({
+      hostId: useRouteHostId(),
       client,
       worktreeId,
-      hostRefusesOtherRuntime: refusesOtherRuntime
+      hostCapabilities,
+      enabled: actionId !== null && connState === 'connected'
     })
-      .then((context) => {
-        const agent = resolveMobileSourceControlLaunchAgent(context, actionId)
-        if (active) {
-          setResolved({
-            key,
-            name: agent.kind === 'agent' ? tuiAgentDisplayName(agent.agent) : null
-          })
-        }
-      })
-      // The button still works without a name; the launch reports its own failure.
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [actionId, client, connState, key, refusesOtherRuntime, worktreeId])
-
-  return resolved && resolved.key === key ? resolved.name : null
+  )
+  if (!actionId || !context) {
+    return null
+  }
+  // The button still works without a name; the launch reports its own failure.
+  const agent = resolveMobileSourceControlLaunchAgent(context, actionId)
+  return agent.kind === 'agent' ? tuiAgentDisplayName(agent.agent) : null
 }

@@ -6,14 +6,19 @@ export function newTabAgentMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'settings.new-tab-agents': ({ client }) => {
-      const load = modules.load<typeof import('../../../session/mobile-new-tab-agent-loader')>(
+      const loader = modules.load<typeof import('../../../session/mobile-new-tab-agent-loader')>(
         'mobile/src/session/mobile-new-tab-agent-loader.ts'
-      ).loadMobileNewTabAgentOptions
+      )
       return {
         action: (_name, args) =>
-          load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }).then(
-            ({ options }) => options
-          ),
+          loader
+            .loadMobileAgentLaunchContext({
+              client,
+              worktreeId: String(args.workspace ?? 'repo-1::/folder')
+            })
+            .then(({ settings, detectedAgents }) =>
+              loader.newTabAgentOptionsFrom(settings, detectedAgents)
+            ),
         state: () => ({}),
         dispose: () => {}
       }
