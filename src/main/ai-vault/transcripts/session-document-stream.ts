@@ -13,6 +13,7 @@ export async function readStreamedSessionDocument<T>(args: {
   create: () => T
   consume: (state: T, value: unknown) => void
   signal?: AbortSignal
+  drain?: () => Promise<void>
 }): Promise<{ record: Record<string, unknown>; state: T } | null> {
   const record: Record<string, unknown> = Object.create(null)
   const fields = new Set(args.fields)
@@ -125,6 +126,7 @@ export async function readStreamedSessionDocument<T>(args: {
   for await (const chunk of args.bytes) {
     throwIfAiVaultScanCancelled(args.signal)
     parser.write(decoder.write(chunk))
+    await args.drain?.()
     await yieldToEventLoop()
   }
   const tail = decoder.end()
@@ -132,6 +134,7 @@ export async function readStreamedSessionDocument<T>(args: {
     parser.write(tail)
   }
   parser.end()
+  await args.drain?.()
   throwIfAiVaultScanCancelled(args.signal)
   if (consumeFailure) {
     throw consumeFailure.error

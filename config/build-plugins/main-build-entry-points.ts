@@ -18,6 +18,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
+  'session-search-worker-entry': resolve('src/main/ai-vault-search/session-search-worker-entry.ts'),
   'foreign-sqlite-reader-entry': resolve(
     'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
   ),

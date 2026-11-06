@@ -109,11 +109,14 @@ export async function parseAgentSessionFileCached(
   platform: NodeJS.Platform,
   stats?: SessionParseStats,
   requireRead?: SessionParseReadRequirement,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  indexing = false
 ): Promise<AiVaultSession | null> {
   // Serialize lookup/read/store because overlapping parses share a resume point and message channel.
-  return inSessionParseFileLane(candidate.file.path, () =>
-    parseCachedInLane(candidate, platform, stats, requireRead, signal)
+  return inSessionParseFileLane(
+    candidate.file.path,
+    () => parseCachedInLane(candidate, platform, stats, requireRead, signal, indexing),
+    signal
   )
 }
 
@@ -151,7 +154,8 @@ async function parseCachedInLane(
   platform: NodeJS.Platform,
   stats?: SessionParseStats,
   requireRead?: SessionParseReadRequirement,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  indexing = false
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
   const key = sessionParseCacheKey(candidate.agent, file.path)
@@ -205,7 +209,8 @@ async function parseCachedInLane(
       stateFactory,
       stats,
       signal,
-      sessionForConsumers
+      sessionForConsumers,
+      indexing
     })
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,
@@ -228,6 +233,7 @@ async function parseCachedInLane(
     stats,
     signal,
     sessionForConsumers,
+    indexing,
     onSkippedRecords: (records) => {
       skippedRecords = mergeSkippedTranscriptRecords([], records)
     }

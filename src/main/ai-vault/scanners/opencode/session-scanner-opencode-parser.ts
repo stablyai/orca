@@ -100,6 +100,7 @@ export async function consumeOpenCodeMessages(
   for (const message of await readOpenCodeMessagesInOrder(
     join(storageRoot, 'message', sessionId)
   )) {
+    await accumulator.messages.drain?.()
     const role = extractString(message.role)
     if (role === 'user' || role === 'assistant') {
       accumulator.messageCount++

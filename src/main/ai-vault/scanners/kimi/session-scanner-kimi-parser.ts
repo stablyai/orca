@@ -37,7 +37,10 @@ export async function parseKimiSessionFile(
     )
   } catch (error) {
     // Propagate WSL refusal so an unreachable state file is not cached as no session.
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw error
     }
     return null
@@ -83,6 +86,7 @@ async function consumeKimiWireTranscript(
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
+      await accumulator.messages.drain?.()
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -107,7 +111,10 @@ async function consumeKimiWireTranscript(
     }
   } catch (error) {
     // Metadata-only sessions may list, but WSL refusal must propagate so missing wire content remains retryable.
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw error
     }
   } finally {
@@ -116,6 +123,7 @@ async function consumeKimiWireTranscript(
     input.destroy()
   }
   flushAssistant()
+  await accumulator.messages.drain?.()
 }
 
 function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown): void {

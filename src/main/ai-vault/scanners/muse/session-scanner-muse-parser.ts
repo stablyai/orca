@@ -219,13 +219,19 @@ export async function parseMuseSessionFile(
   platform: NodeJS.Platform = process.platform,
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  return parseMuseSessionContent(
+  const content = await wslGatedReadFile(file.path, 'utf-8', 'scan')
+  const accumulator = createAccumulator({
+    agent: 'muse',
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
-    platform,
-    {},
+    sessionId: museSessionIdFromFilePath(file.path),
     messages
-  )
+  })
+  const dedupe: MuseDedupeState = { text: null, ms: null }
+  for (const line of content.split('\n')) {
+    foldMuseLines(accumulator, [line], dedupe)
+    await messages?.drain?.()
+  }
+  return finalizeSession(accumulator, platform)
 }
 
 export function parseMuseSessionContent(

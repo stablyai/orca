@@ -1,0 +1,115 @@
+import './session-search-worker.test-fixture'
+import { mkdtemp, writeFile, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it } from 'vitest'
+import { SessionSearchWorkerStore } from './session-search-worker-store'
+import { SessionSearchReaders } from './session-search-readers'
+import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
+import { syntheticCandidate } from './session-search-index-test-fixture'
+import { readWholeTranscript } from '../ai-vault/transcripts/session-transcript-reader'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
+import { createHash } from 'node:crypto'
+import SyncDatabase from '../sqlite/sync-database'
+
+let root: string | undefined
+let store: SessionSearchWorkerStore | undefined
+let readers: SessionSearchReaders | undefined
+
+afterEach(async () => {
+  resetTranscriptConsumersForTests()
+  store?.close()
+  await Promise.all([store?.retired(), readers?.close()])
+  if (root) {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+// Real workers import the parser graph; allow cold module loading plus SQLite publication.
+it('indexes a non-JSONL pass larger than transfer credits without losing rows or original-message hashes', async () => {
+  root = await mkdtemp(join(tmpdir(), 'ss-worker-flow-'))
+  const path = join(root, 'index.sqlite')
+  const file = join(root, 'conversation.json')
+  const text = 'observable payload '.repeat(7000)
+  await writeFile(
+    file,
+    JSON.stringify({
+      id: 'worker-session',
+      working_dir: root,
+      messages: [
+        ...Array.from({ length: 40 }, () => ({ role: 'user', content: text })),
+        { role: 'assistant', content: 'workerneedle reached the end' }
+      ]
+    })
+  )
+  const info = await stat(file)
+  const candidate = {
+    ...syntheticCandidate({ path: file, mtimeMs: info.mtimeMs, sizeBytes: info.size }),
+    agent: 'jcode' as const
+  }
+  store = new SessionSearchWorkerStore(path, (error) => {
+    throw error
+  })
+  await store.prepare()
+  registerSessionSearchIndexConsumer(store)
+  const listed = await readWholeTranscript({ candidate, platform: process.platform })
+  await store.flush()
+  expect(listed?.messageCount).toBe(41)
+  expect(store.stateCounts()).toMatchObject({ current: 0, due: 0, failed: 0, messages: 0 })
+  expect(store.coversTranscript(candidate)).toBe(false)
+  await readWholeTranscript({ candidate, platform: process.platform, indexing: true })
+  await store.flush()
+  readers = new SessionSearchReaders(path, null)
+  expect((await readers.query({ query: 'workerneedle' })).result).toMatchObject({
+    kind: 'results',
+    hits: [{ sessionId: 'worker-session' }]
+  })
+  expect(store.coversTranscript(candidate)).toBe(true)
+  expect(store.stateCounts().failed).toBe(0)
+  const db = new SyncDatabase(path, { readonly: true })
+  try {
+    let digest = ''
+    for (let i = 0; i < 8; i++) {
+      digest = createHash('sha256').update(digest).update('\0user\0').update(text).digest('hex')
+    }
+    expect(db.prepare('SELECT content_hash, content_hash_count FROM sessions').get()).toMatchObject(
+      { content_hash: digest, content_hash_count: 8 }
+    )
+  } finally {
+    db.close()
+  }
+}, 30_000)
+
+it('cancels a dead writer handle and lets a fresh pass recover without failing the transcript', async () => {
+  root = await mkdtemp(join(tmpdir(), 'ss-worker-recovery-'))
+  const path = join(root, 'index.sqlite')
+  class RestartableStore extends SessionSearchWorkerStore {
+    stopWriter(): void {
+      this.client.stop()
+    }
+  }
+  const subject = new RestartableStore(path, (error) => {
+    throw error
+  })
+  store = subject
+  await subject.prepare()
+  const candidate = syntheticCandidate()
+  const interrupted = subject.beginWrite(candidate, 'replace', 0, undefined, true)!
+  interrupted.add({ role: 'user', text: 'interrupted payload', timestamp: null })
+  subject.stopWriter()
+  await expect(interrupted.drain!()).rejects.toMatchObject({ name: 'AbortError' })
+  expect(interrupted.cancelled?.()).toBe(true)
+  await subject.prepare()
+  expect(subject.stateCounts().failed).toBe(0)
+  const recovered = subject.beginWrite(candidate, 'replace', 0, undefined, true)!
+  recovered.add({ role: 'user', text: 'recoveredneedle', timestamp: null })
+  const { syntheticSession } = await import('./session-search-index-test-fixture')
+  recovered.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })
+  await subject.flush()
+  readers = new SessionSearchReaders(path, null)
+  expect((await readers.query({ query: 'recoveredneedle' })).result).toMatchObject({
+    kind: 'results',
+    hits: [{ sessionId: 'fixture' }]
+  })
+  expect(subject.stateCounts().failed).toBe(0)
+})

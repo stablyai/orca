@@ -49,12 +49,18 @@ export async function parseJcodeSessionFile(
   platform: NodeJS.Platform = process.platform,
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  return parseJcodeSessionContent(
+  const fold = foldJcodeSessionContent(
     file,
     await wslGatedReadFile(file.path, 'utf-8', 'scan'),
     platform,
-    messages ? { messages } : undefined
+    { messages }
   )
+  let step = fold.next()
+  while (!step.done) {
+    await messages?.drain?.()
+    step = fold.next()
+  }
+  return step.value
 }
 
 export function parseJcodeSessionContent(
@@ -63,6 +69,20 @@ export function parseJcodeSessionContent(
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {}
 ): AiVaultSession | null {
+  const fold = foldJcodeSessionContent(file, content, platform, options)
+  let step = fold.next()
+  while (!step.done) {
+    step = fold.next()
+  }
+  return step.value
+}
+
+function* foldJcodeSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions
+): Generator<void, AiVaultSession | null> {
   let parsed: unknown
   try {
     parsed = JSON.parse(content)
@@ -94,6 +114,7 @@ export function parseJcodeSessionContent(
   // Ignore the live journal: its appends do not change the document signature used by the parse cache.
   for (const message of arrayValue(record.messages)) {
     consumeJcodeMessage(accumulator, message)
+    yield
   }
 
   return finalizeSession(accumulator, platform, options)

@@ -141,6 +141,7 @@ export async function parseKiroSessionFile(
     const { trailingPartialLine, skippedRecords } = await consumeCompleteJsonlLines({
       path: kiroTranscriptPathForMetadata(file.path),
       start: 0,
+      drain: () => messages?.drain?.() ?? Promise.resolve(),
       onLine: (line) => consumeKiroTranscriptLine(accumulator, line)
     })
     onSkippedRecords?.(skippedRecords)

@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
 import { utimes } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -28,7 +29,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  instance?.close()
+  await instance?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()
@@ -71,7 +72,7 @@ it('constructs nothing and touches no disk while the setting is off', async () =
     kind: 'unavailable',
     reason: 'disabled'
   })
-  expect(subject.status()).toMatchObject({ enabled: false, phase: 'idle', generation: 0 })
+  expect(await subject.status()).toMatchObject({ enabled: false, phase: 'idle', generation: 0 })
   expect(errors).toEqual([])
 })
 
@@ -110,14 +111,14 @@ it('removes the database on clear and rebuilds only while consent stands', async
   await subject.settled()
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 
-  subject.clear()
+  await subject.clear()
   expect(subject.running).toBe(true)
   expect(existsSync(harness.databasePath)).toBe(true)
   await subject.settled()
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 
   subject.apply({ enabled: false, historyDays: null })
-  subject.clear()
+  await subject.clear()
   expect(subject.running).toBe(false)
   expect(existsSync(harness.databasePath)).toBe(false)
   expect(errors).toEqual([])
@@ -135,9 +136,9 @@ it('refuses a page cursor minted before clear even when the rebuilt generation m
     throw new Error('expected a paged result')
   }
 
-  subject.clear()
+  await subject.clear()
   await subject.settled()
-  expect(subject.status().generation).toBe(first.generation)
+  expect((await subject.status()).generation).toBe(first.generation)
   expect(
     await subject.search({ query: 'shared clear fence', limit: 1, cursor: first.page.cursor })
   ).toMatchObject({ kind: 'stale-cursor', generation: first.generation })

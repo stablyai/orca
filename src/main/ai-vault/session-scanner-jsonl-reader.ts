@@ -29,6 +29,7 @@ export async function consumeCompleteJsonlLines(args: {
   path: string
   start: number
   onLine: (line: string) => void
+  drain?: () => Promise<void>
   onLineBytes?: (line: Buffer) => void
   /** Covers [0, start); extended through each complete line and returned for the new end. */
   prefixHash?: Hash | null
@@ -129,6 +130,7 @@ export async function consumeCompleteJsonlLines(args: {
         remainderLength = chunkEnd - consumedThrough
       }
     }
+    await args.drain?.()
     chunkStart = chunkEnd
   }
 

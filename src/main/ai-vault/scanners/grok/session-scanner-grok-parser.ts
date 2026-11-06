@@ -67,6 +67,7 @@ async function consumeGrokChatHistory(
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
+      await accumulator.messages.drain?.()
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -102,7 +103,10 @@ async function consumeGrokChatHistory(
     }
   } catch (error) {
     // Summary-only sessions can list; WSL refusal must propagate so incomplete history is not cached as current.
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
       throw error
     }
   } finally {

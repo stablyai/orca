@@ -1,3 +1,4 @@
+import { traceSessionSearch } from './session-search-trace'
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   registerTranscriptConsumer,
@@ -10,7 +11,7 @@ import {
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
-import type { SessionSearchResumableCursor, SessionSearchStore } from './session-search-store'
+import type { SessionSearchResumableCursor, SessionSearchIndexStore } from './session-search-store'
 
 export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   claude: true,
@@ -40,9 +41,9 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   kiro: false // A .jsonl sidecar supplies messages.
 } satisfies Record<AiVaultAgent, boolean>
 
-/** Persist index progress independently: declined appends become due, failed reads retry against their stat. */
+/** Proven index gaps need whole reads; declined transfers leave committed coverage unchanged. */
 export class SessionSearchIndexConsumer implements TranscriptConsumer {
-  constructor(private readonly store: SessionSearchStore) {}
+  constructor(private readonly store: SessionSearchIndexStore) {}
 
   resumableOffset(candidate: SessionFileCandidate): number | null {
     return this.store.resumableCursor(candidate)?.byteOffset ?? null
@@ -50,6 +51,9 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
+    if (this.store.acceptingReads === false) {
+      return null
+    }
     // A fully covered self-contained transcript has nothing new to publish, even under another agent’s fold.
     if (
       SELF_CONTAINED_TRANSCRIPT_AGENTS[candidate.agent] &&
@@ -69,10 +73,23 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
     // A restart dropped the parser's resume point; append past our cursor once the reread proves the prefix.
     const resume = start.mode === 'replace' ? this.provableCursor(start) : null
     const write = resume
-      ? this.store.beginWrite(candidate, 'append', resume.byteOffset, start.identity)
-      : this.store.beginWrite(candidate, start.mode, start.previousByteOffset, start.identity)
+      ? this.store.beginWrite(
+          candidate,
+          'append',
+          resume.byteOffset,
+          start.identity,
+          start.indexing,
+          start.signal
+        )
+      : this.store.beginWrite(
+          candidate,
+          start.mode,
+          start.previousByteOffset,
+          start.identity,
+          start.indexing,
+          start.signal
+        )
     if (!write) {
-      this.store.setFileState(candidate.file.path, 'due')
       return null
     }
     return new SessionSearchReadConsumer(this.store, start, write, resume)
@@ -92,11 +109,15 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   private prefixProven = false
 
   constructor(
-    private readonly store: SessionSearchStore,
+    private readonly store: SessionSearchIndexStore,
     private readonly start: TranscriptReadStart,
     private readonly write: SessionSearchFileWrite,
     private readonly resume: SessionSearchResumableCursor | null = null
   ) {}
+
+  async drain(): Promise<void> {
+    await this.write.drain?.()
+  }
 
   prefixReached(offset: number, digest: string): void {
     if (this.resume?.byteOffset === offset) {
@@ -120,7 +141,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   }
 
   finish(outcome: TranscriptReadOutcome): void {
-    if (outcome.cancelled) {
+    if (outcome.cancelled || this.write.cancelled?.()) {
       // Cancellation must not count toward the failure limit for a healthy file.
       this.write.discard()
       return
@@ -129,7 +150,12 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     if (this.resume && !this.prefixProven && !outcome.incomplete) {
       // A rewritten or unreached prefix leaves stale rows; the next pass replaces them.
       this.write.discard()
-      this.store.setFileState(candidate.file.path, 'due')
+      traceSessionSearch('commit', () => this.store.setFileState(candidate.file.path, 'due'), {
+        append: 0,
+        replace: 0,
+        rescueRejections: 1,
+        rescueRejection: 'prefix-mismatch-or-unreached'
+      })
       return
     }
     let committed = false
@@ -150,6 +176,6 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   }
 }
 
-export function registerSessionSearchIndexConsumer(store: SessionSearchStore): () => void {
+export function registerSessionSearchIndexConsumer(store: SessionSearchIndexStore): () => void {
   return registerTranscriptConsumer(new SessionSearchIndexConsumer(store))
 }

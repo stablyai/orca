@@ -1,3 +1,17 @@
+import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
+import type {
+  SessionSearchFileRow,
+  SessionSearchFileState,
+  SessionSearchResumableCursor,
+  SessionSearchStateCounts
+} from './session-search-store-types'
+export type {
+  SessionSearchFileRow,
+  SessionSearchFileState,
+  SessionSearchResumableCursor,
+  SessionSearchStateCounts,
+  SessionSearchIndexStore
+} from './session-search-store-types'
 import type SyncDatabase from '../sqlite/sync-database'
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
@@ -15,30 +29,6 @@ import {
 import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
 
-/** Due files need a full reread; failed reads track counts and mtime to bound retries. */
-export type SessionSearchFileState = 'current' | 'due' | 'failed'
-
-export type SessionSearchFileRow = {
-  path: string
-  identity: SessionSearchFileIdentity
-  mtimeMs: number
-  sizeBytes: number | null
-  state: SessionSearchFileState
-  failCount: number
-  failedMtimeMs: number | null
-}
-
-export type SessionSearchResumableCursor = { byteOffset: number; prefixHash: string }
-
-export type SessionSearchStateCounts = {
-  current: number
-  due: number
-  failed: number
-  /** Session counts distinguish indexed content from files that have only been discovered. */
-  sessionsByAgent: Record<string, number>
-  messages: number
-}
-
 export class SessionSearchStore {
   private readonly db: SyncDatabase
   private readonly writer: SessionSearchIndexWriter
@@ -54,11 +44,16 @@ export class SessionSearchStore {
       console.warn(
         '[ai-vault-search] index write failed:',
         error instanceof Error ? error.name : 'IndexError'
-      )
+      ),
+    private readonly onMessagesChanged: (delta: number) => void = () => undefined
   ) {
     this.db = openSessionSearchDatabase(path)
-    this.writer = new SessionSearchIndexWriter(this.db, SESSION_SEARCH_COMMIT_CHARS, () =>
-      this.scheduleOrphanDrain()
+    ensureSessionSearchQuerySchema(this.db)
+    this.writer = new SessionSearchIndexWriter(
+      this.db,
+      SESSION_SEARCH_COMMIT_CHARS,
+      () => this.scheduleOrphanDrain(),
+      onMessagesChanged
     )
   }
 
@@ -77,7 +72,7 @@ export class SessionSearchStore {
     try {
       while (this.drainRequested && !this.closed) {
         this.drainRequested = false
-        await drainOrphanedMessages(this.db, () => this.closed)
+        await drainOrphanedMessages(this.db, () => this.closed, undefined, this.onMessagesChanged)
       }
     } catch (error) {
       if (!this.closed) {
@@ -183,7 +178,9 @@ export class SessionSearchStore {
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
     previousByteOffset: number,
-    identity?: () => TranscriptSessionIdentity | null
+    identity?: () => TranscriptSessionIdentity | null,
+    _indexing?: boolean,
+    _signal?: AbortSignal
   ): SessionSearchFileWrite | null {
     if (this.closed || !this.withinRetention(candidate)) {
       return null
@@ -314,7 +311,9 @@ export class SessionSearchStore {
       await deleteExpiredSearchFiles(
         this.db,
         cutoffMs,
-        () => this.closed || signal?.aborted === true
+        () => this.closed || signal?.aborted === true,
+        undefined,
+        this.onMessagesChanged
       )
     } catch (error) {
       if (!this.closed) {

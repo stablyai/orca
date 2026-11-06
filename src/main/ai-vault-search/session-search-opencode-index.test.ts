@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
@@ -75,7 +76,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  indexer?.close()
+  await indexer?.close()
   for (const db of engineDbs) {
     db.close()
   }

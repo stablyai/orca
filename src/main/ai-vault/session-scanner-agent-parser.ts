@@ -66,6 +66,7 @@ async function readOpenCodeSqliteCandidate(
   for (const message of result.messages) {
     throwIfSignalAborted(signal)
     messages.push(message)
+    await messages.drain?.()
   }
   throwIfSignalAborted(signal)
   return result.session

@@ -1,18 +1,30 @@
+import {
+  abandonRemoteSessionScanOnCancel,
+  throwIfAiVaultScanCancelled
+} from '../ai-vault-scan-cancellation'
+
 const pending = new Map<string, Promise<unknown>>()
 
 /** Serialize by path: overlapping reads corrupt shared message consumers and can rewind the cached cursor. */
-export async function inSessionParseFileLane<T>(path: string, parse: () => Promise<T>): Promise<T> {
+export function inSessionParseFileLane<T>(
+  path: string,
+  parse: () => Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
   const previous = pending.get(path)
   const run = (async () => {
     await previous?.catch(() => undefined)
+    throwIfAiVaultScanCancelled(signal)
     return parse()
   })()
   pending.set(path, run)
-  try {
-    return await run
-  } finally {
-    if (pending.get(path) === run) {
-      pending.delete(path)
-    }
-  }
+  // Why: cancelling the caller must retain its chain link until the holder exits.
+  void run
+    .finally(() => {
+      if (pending.get(path) === run) {
+        pending.delete(path)
+      }
+    })
+    .catch(() => undefined)
+  return abandonRemoteSessionScanOnCancel(run, signal)
 }

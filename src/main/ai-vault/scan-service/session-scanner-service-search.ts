@@ -20,22 +20,27 @@ type SearchOperation = Extract<
 
 /** Keep indexing with transcript readers; callers access the database through service IPC. */
 export class SessionScannerServiceSearch {
+  private transition = Promise.resolve()
   private instance: SessionSearchInstance | null = null
   private databasePath: string | null = null
   private roots: SessionSearchScanRoots | null = null
 
   constructor(private readonly resolveRoots?: SessionSearchIndexerOptions['resolveRoots']) {}
 
-  apply(init: AiVaultSessionSearchInit): void {
+  apply(init: AiVaultSessionSearchInit): Promise<void> {
+    return (this.transition = this.transition.then(() => this.applySettings(init)))
+  }
+
+  private async applySettings(init: AiVaultSessionSearchInit): Promise<void> {
     if (!sessionSearchSqliteAvailable()) {
       return
     }
     if (this.instance && this.databasePath !== init.databasePath) {
-      this.close()
+      await this.closeInstance()
     }
     if (this.instance && this.roots && !sameSessionSearchRoots(this.roots, init.roots)) {
       // Refresh fallback roots for callers without a resolver.
-      this.close()
+      await this.closeInstance()
     }
     this.databasePath = init.databasePath
     this.roots = init.roots
@@ -44,7 +49,7 @@ export class SessionScannerServiceSearch {
       roots: init.roots,
       resolveRoots: this.resolveRoots
     })
-    this.instance.apply(init.settings)
+    await this.instance.apply(init.settings)
   }
 
   handles(request: AiVaultServiceRequest): request is SearchOperation {
@@ -56,12 +61,16 @@ export class SessionScannerServiceSearch {
     )
   }
 
-  async execute(request: SearchOperation): Promise<AiVaultServiceResultValue> {
+  async execute(
+    request: SearchOperation,
+    signal?: AbortSignal
+  ): Promise<AiVaultServiceResultValue> {
+    await this.transition
     const instance = this.instance
     if (request.operation === 'searchStatus') {
       return {
         operation: 'searchStatus',
-        value: instance?.status() ?? unavailableSessionSearchStatus()
+        value: (await instance?.status()) ?? unavailableSessionSearchStatus()
       }
     }
     if (request.operation === 'searchReconcile') {
@@ -72,7 +81,7 @@ export class SessionScannerServiceSearch {
       if (!instance) {
         throw new Error('Agent Session History search is not available.')
       }
-      instance.clear()
+      await instance.clear()
       return { operation: 'searchClear', value: null }
     }
     return {
@@ -80,16 +89,22 @@ export class SessionScannerServiceSearch {
       value: instance
         ? await instance.search(
             AiVaultSearchRequestSchema.parse(request.request),
-            request.hostScope
+            request.hostScope,
+            signal
           )
         : { kind: 'unavailable', reason: 'disabled' }
     }
   }
 
-  close(): void {
-    this.instance?.close()
+  close(): Promise<void> {
+    return (this.transition = this.transition.then(() => this.closeInstance()))
+  }
+
+  private async closeInstance(): Promise<void> {
+    const retired = this.instance?.close()
     this.instance = null
     this.databasePath = null
     this.roots = null
+    await retired
   }
 }

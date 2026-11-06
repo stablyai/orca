@@ -105,6 +105,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   emit({ type: 'sessionSearch', init: searchInit(false) })
+  await searchStatus()
   process.send = originalSend
   await harness.cleanup()
 })

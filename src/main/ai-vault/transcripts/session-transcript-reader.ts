@@ -18,6 +18,7 @@ import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
 
 type TranscriptSessionEnrichment = {
   /** Complete consumer metadata before committing; the returned fold stays unmodified. */
+  indexing?: boolean
   sessionForConsumers?: (session: AiVaultSession | null) => Promise<AiVaultSession | null>
 }
 
@@ -89,6 +90,8 @@ export async function readResumableTranscript(
     !canResume && prefixHash ? nonEmpty(transcriptResumableOffsets(args.candidate)) : undefined
   channel.beginRead({
     candidate: args.candidate,
+    indexing: args.indexing,
+    signal: args.signal,
     mode: canResume ? 'append' : 'replace',
     previousByteOffset: startOffset,
     identity: () => state.identity?.() ?? null,
@@ -104,6 +107,7 @@ export async function readResumableTranscript(
         reached: (offset, digest) => channel.prefixReached(offset, digest)
       },
       onLine: (line) => state.consumeLine(line),
+      drain: () => channel.drain(),
       // Preserve `this` for parsers that implement these hooks as methods.
       onLineBytes: state.consumeLineBytes?.bind(state),
       shouldStop: state.shouldStop?.bind(state),
@@ -155,7 +159,8 @@ export async function readResumableTranscript(
       session: null,
       byteOffset: startOffset,
       incomplete: true,
-      cancelled: args.signal?.aborted === true
+      cancelled:
+        args.signal?.aborted === true || (error instanceof Error && error.name === 'AbortError')
     })
     throw error
   }
@@ -177,7 +182,13 @@ export async function readWholeTranscript(
     args.stats.bytesRead += file.sizeBytes ?? 0
   }
   const channel = new TranscriptMessageChannel()
-  channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
+  channel.beginRead({
+    candidate: args.candidate,
+    mode: 'replace',
+    previousByteOffset: 0,
+    indexing: args.indexing,
+    signal: args.signal
+  })
   try {
     const session = await parseAgentSessionFile(
       args.candidate,
@@ -201,7 +212,8 @@ export async function readWholeTranscript(
       session: null,
       byteOffset: 0,
       incomplete: true,
-      cancelled: args.signal?.aborted === true
+      cancelled:
+        args.signal?.aborted === true || (error instanceof Error && error.name === 'AbortError')
     })
     throw error
   }
