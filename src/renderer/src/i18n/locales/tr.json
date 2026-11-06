@@ -3108,6 +3108,8 @@
         "loadGitHubWorkFailed": "GitHub işleri yüklenemedi.",
         "gitlabViewIssues": "Sorunlar",
         "gitlabViewMrs": "MR'ler",
+        "gitlabInvolvementEveryone": "Herkes",
+        "gitlabInvolvementReviewing": "İncelemelerim",
         "gitlabViewTodos": "Yapılacaklarım",
         "startWorkspaceFromMr": "MR {{number}} üzerinden çalışma alanı başlat",
         "startWorkspaceFromIssue": "Sorun {{number}} üzerinden çalışma alanı başlat",
@@ -19350,6 +19352,9 @@
       "composer": {
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
+        "previewQueue": "Sıraya al",
+        "previewSteer": "Yönlendir",
+        "previewSteerQueued": "Sıradakini yönlendir",
         "alternateQueueHint": "Sıraya almak için {{shortcut}}",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",
