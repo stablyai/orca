@@ -15,6 +15,7 @@ import {
   parseCodexTrustKey as parseTrustKey
 } from '../identity/codex-trust-identity'
 import { getCodexHookTrustSignature } from '../../hooks/definitions/codex-hook-identity'
+import { CODEX_MANAGED_HOOK_STATUS_MESSAGE } from '../../hooks/definitions/codex-hook-definition'
 import {
   readCodexTrustGrantLedgerHome,
   removeCodexTrustGrantLedgerHome,
@@ -43,6 +44,11 @@ function getCodexLedgerTrustedHash(
     : null
 }
 
+// Keep recognizing approvals granted before Orca named its hook.
+function withAndWithoutOrcaStatusMessage(entry: CodexTrustEntry): CodexTrustEntry[] {
+  return [entry, { ...entry, statusMessage: CODEX_MANAGED_HOOK_STATUS_MESSAGE }]
+}
+
 function addLedgerRecognizedHashes(
   hashes: Set<string>,
   ledgerHomes: readonly (CodexTrustGrantLedgerHome | null)[],
@@ -50,9 +56,11 @@ function addLedgerRecognizedHashes(
   expectedEntry: CodexTrustEntry
 ): void {
   for (const ledgerHome of ledgerHomes) {
-    const hash = getCodexLedgerTrustedHash(ledgerHome, key, expectedEntry)
-    if (hash) {
-      hashes.add(hash)
+    for (const entry of withAndWithoutOrcaStatusMessage(expectedEntry)) {
+      const hash = getCodexLedgerTrustedHash(ledgerHome, key, entry)
+      if (hash) {
+        hashes.add(hash)
+      }
     }
   }
 }
@@ -118,10 +126,12 @@ function getCodexManagedHookTrustEntryKeys(
       command: options.command,
       timeoutSec: options.timeoutSec
     }
-    const recognizedHashes = new Set([
-      computeTrustedHash(expectedEntry),
-      computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-    ])
+    const recognizedHashes = new Set(
+      withAndWithoutOrcaStatusMessage(expectedEntry).flatMap((entry) => [
+        computeTrustedHash(entry),
+        computeTrustedHash({ ...entry, timeoutSec: undefined })
+      ])
+    )
     addLedgerRecognizedHashes(recognizedHashes, [ledgerHome], key, expectedEntry)
     if (isAlias) {
       // The ledger records grants under the primary path spelling only.
@@ -197,10 +207,12 @@ export function removeStaleWslCodexManagedHookTrustEntries(options: {
       command: options.buildManagedCommand(linuxRuntimeHome),
       timeoutSec: options.timeoutSec
     }
-    const recognizedHashes = new Set([
-      computeTrustedHash(expectedEntry),
-      computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
-    ])
+    const recognizedHashes = new Set(
+      withAndWithoutOrcaStatusMessage(expectedEntry).flatMap((entry) => [
+        computeTrustedHash(entry),
+        computeTrustedHash({ ...entry, timeoutSec: undefined })
+      ])
+    )
     addLedgerRecognizedHashes(recognizedHashes, ledgerHomes, key, expectedEntry)
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ownedKeys.push(key)

@@ -107,7 +107,8 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: hook.timeout
+      timeoutSec: hook.timeout,
+      statusMessage: hook.statusMessage
     })
   }
 
