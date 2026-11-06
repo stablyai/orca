@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import {
-  gitGraphScope,
+  useGitGraphScope,
   gitGraphSupport,
   gitGraphUpdateMessage,
   openGitGraph,
@@ -13,8 +13,13 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
-  const status = useAppStore((state) => state.runtimeStatusByEnvironmentId)
-  const owner = useAppStore(() => JSON.stringify([worktreeId, gitGraphScope(worktreeId)?.route]))
+  const scope = useGitGraphScope(worktreeId)
+  const owner = JSON.stringify([worktreeId, scope?.route])
+  const status = useAppStore((state) =>
+    scope?.route.runtimeEnvironmentId
+      ? state.runtimeStatusByEnvironmentId[scope.route.runtimeEnvironmentId]
+      : undefined
+  )
   const [probe, setProbe] = useState<{ owner: string; support: boolean | null }>()
   const support = probe?.owner === owner ? probe.support : null
   useEffect(() => {

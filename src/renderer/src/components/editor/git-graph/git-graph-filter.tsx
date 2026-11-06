@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { getRuntimeGitRefs } from '@/runtime/runtime-git-status-client'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { GIT_HISTORY_REFS_CAPABILITY } from '../../../../../shared/source-control/runtime/git-graph-capabilities'
-import { gitGraphScope } from '@/lib/git-graph-tab'
+import { gitGraphScope, useGitGraphScope } from '@/lib/git-graph-tab'
 import { getConnectionId } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -25,12 +25,21 @@ export function GitGraphFilter({
   supported: boolean | undefined
   onChange: (refs: GitHistoryRefs) => void
 }) {
+  const requests = useRef<{ running: boolean; pending?: () => Promise<void> }>({ running: false })
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [refs, setRefs] = useState<GitHistoryItemRef[]>([])
+  const [search, setSearch] = useState<{
+    owner: string
+    query: string
+    refs?: GitHistoryItemRef[]
+    error?: string
+  }>()
   const [probe, setProbe] = useState<{ owner: string | undefined; capable: boolean | null }>()
-  const [error, setError] = useState<string>()
-  const owner = JSON.stringify(gitGraphScope(worktreeId)?.route)
+  const scope = useGitGraphScope(worktreeId)
+  const owner = JSON.stringify([worktreeId, scope?.route, scope?.worktree.path])
+  const refs = open && search?.owner === owner && search.query === query ? (search.refs ?? []) : []
+  const error = open && search?.owner === owner && search.query === query ? search.error : undefined
+  const chosen = useMemo(() => new Set(Array.isArray(filter) ? filter : []), [filter])
   const capable = probe?.owner === owner ? probe?.capable : null
   useEffect(() => {
     let live = true
@@ -61,36 +70,66 @@ export function GitGraphFilter({
       return
     }
     let live = true
-    const scope = gitGraphScope(worktreeId)
-    if (scope) {
-      void getRuntimeGitRefs(
-        {
-          target: scope.target,
-          worktreeId,
-          worktreePath: scope.worktree.path,
-          connectionId: getConnectionId(worktreeId) ?? undefined
-        },
-        query
-      )
-        .then((rows) => {
-          if (live) {
-            setRefs(rows)
-            setError(undefined)
-          }
-        })
-        .catch((cause) => {
-          if (live) {
-            setError(String(cause))
-          }
-        })
+    const queue = requests.current
+    const drain = async () => {
+      if (queue.running) {
+        return
+      }
+      queue.running = true
+      try {
+        while (queue.pending) {
+          const next = queue.pending
+          queue.pending = undefined
+          await next()
+        }
+      } finally {
+        queue.running = false
+      }
     }
+    const timeout = setTimeout(() => {
+      queue.pending = async () => {
+        const scope = gitGraphScope(worktreeId)
+        if (!live || !scope) {
+          return
+        }
+        try {
+          const rows = await getRuntimeGitRefs(
+            {
+              target: scope.target,
+              worktreeId,
+              worktreePath: scope.worktree.path,
+              connectionId: getConnectionId(worktreeId) ?? undefined
+            },
+            query
+          )
+          if (live) {
+            setSearch({ owner, query, refs: rows })
+          }
+        } catch (cause) {
+          if (live) {
+            setSearch({ owner, query, error: String(cause) })
+          }
+        }
+      }
+      void drain()
+    }, 150)
     return () => {
       live = false
+      queue.pending = undefined
+      clearTimeout(timeout)
     }
   }, [worktreeId, owner, query, open, capable])
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (!next) {
+            setSearch(undefined)
+          }
+        }}
+      >
         <PopoverTrigger asChild>
           <Button size="sm" variant="outline" disabled={!supported || capable !== true}>
             {supported === false || filter === 'head'
@@ -136,10 +175,15 @@ export function GitGraphFilter({
                 className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent"
               >
                 <Checkbox
-                  checked={Array.isArray(filter) && filter.includes(ref.id)}
+                  checked={chosen.has(ref.id)}
                   onCheckedChange={(checked) => {
-                    const chosen = Array.isArray(filter) ? filter : []
-                    onChange(checked ? [...chosen, ref.id] : chosen.filter((id) => id !== ref.id))
+                    const next = new Set(chosen)
+                    if (checked) {
+                      next.add(ref.id)
+                    } else {
+                      next.delete(ref.id)
+                    }
+                    onChange(next.size ? [...next].sort() : 'all')
                   }}
                 />
                 <span className="truncate">{ref.name}</span>

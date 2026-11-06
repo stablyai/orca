@@ -1,3 +1,4 @@
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
@@ -124,7 +125,9 @@ export function useSourceControlCommitAction({
         }
         if (!options?.target) {
           void refreshBranchCompareRef.current()
-          window.dispatchEvent(new Event('orca:git-graph-refresh'))
+          window.dispatchEvent(
+            new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: target.worktreeId })
+          )
           void refreshGitHistoryRef.current()
         }
         return true
@@ -202,7 +205,7 @@ export function useSourceControlCommitAction({
       )
     }
     void refreshBranchCompareRef.current()
-    window.dispatchEvent(new Event('orca:git-graph-refresh'))
+    window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: activeWorktreeId }))
     void refreshGitHistoryRef.current()
   }, [
     activeRepoTarget,

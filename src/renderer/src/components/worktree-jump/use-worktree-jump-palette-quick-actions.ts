@@ -1,5 +1,5 @@
 import {
-  gitGraphScope,
+  useGitGraphScope,
   gitGraphSupport,
   gitGraphUpdateMessage,
   probeGitGraphSupport
@@ -69,12 +69,8 @@ export function useWorktreeJumpPaletteQuickActions({
   deferredQuery,
   settingsResults
 }: WorktreeJumpPaletteQuickActionsInput) {
-  const graphOwner = useAppStore(() =>
-    JSON.stringify([
-      activeWorktreeId,
-      activeWorktreeId ? gitGraphScope(activeWorktreeId)?.route : null
-    ])
-  )
+  const graphScope = useGitGraphScope(activeWorktreeId ?? '')
+  const graphOwner = JSON.stringify([activeWorktreeId, graphScope?.route])
   const [graphProbe, setGraphProbe] = useState<{ owner: string; support: boolean | null }>()
   const graphSupport = graphProbe?.owner === graphOwner ? graphProbe.support : null
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import {
 import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-history'
 import { GitGraphFilter } from './git-graph-filter'
 import { GitGraphDetails } from './git-graph-details'
-import { GitGraphRefMenu } from './git-graph-ref-menu'
+import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -24,6 +24,7 @@ const sameGroup = () => undefined
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const history = useGitGraphHistory(worktreeId)
   const { result, scope } = history
+  const workspaces = useGitGraphWorkspaces(worktreeId)
   const rows = useMemo(
     () =>
       result
@@ -51,17 +52,19 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const scroll = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
     count: rows.length,
+    initialOffset: () => history.controller.scrollOffset,
     getScrollElement: () => scroll.current,
     estimateSize: () => 24,
     overscan: 12,
     getItemKey: (index) => rows[index]!.historyItem.id
   })
-  const [selectedId, setSelectedId] = useState<string>()
-  if (!selectedId && result?.items[0]) {
-    setSelectedId(result.items[0].id)
-  }
+  const { selectedId, revealId, controller } = history
   const selected = result?.items.find((item) => item.id === selectedId) ?? result?.items[0]
-  const [revealId, setRevealId] = useState<string>()
+  useLayoutEffect(() => {
+    if (scroll.current) {
+      scroll.current.scrollTop = controller.scrollOffset
+    }
+  }, [controller])
   useLayoutEffect(() => {
     if (!revealId) {
       return
@@ -69,20 +72,15 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     const index = rows.findIndex((row) => row.historyItem.id === revealId)
     if (index !== -1) {
       virtualizer.scrollToIndex(index)
-      setRevealId(undefined)
+      controller.clearReveal()
     }
-  }, [rows, revealId, virtualizer])
+  }, [rows, revealId, virtualizer, controller])
   const actions = useGitHistoryCommitActions({
     activeWorktreeId: worktreeId,
     worktreePath: scope?.worktree.path ?? null,
     activeRepoTarget: scope?.target ?? null,
     resolveSplitTargetGroupId: sameGroup
   })
-  const selectParent = async (id: string) => {
-    await history.reveal(id)
-    setSelectedId(id)
-    setRevealId(id)
-  }
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
@@ -127,6 +125,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
             onScroll={() => {
               const element = scroll.current
+              if (element) {
+                controller.scrollOffset = element.scrollTop
+              }
               if (
                 element &&
                 element.scrollHeight - element.scrollTop - element.clientHeight < 200 &&
@@ -156,23 +157,21 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                           gridTemplateColumns: columns
                         }}
                         data-current={selected?.id === item.id}
-                        onClick={() => setSelectedId(item.id)}
+                        onClick={() => controller.select(item.id)}
                       >
                         <div className="flex min-w-0 gap-1 overflow-hidden pr-2">
-                          {item.references?.map((ref) => (
-                            <GitGraphRefMenu
-                              key={ref.id}
-                              itemRef={ref}
-                              worktreeId={worktreeId}
-                              current={result?.currentRef?.id === ref.id}
-                            />
-                          ))}
+                          <GitGraphRefs
+                            workspaces={workspaces}
+                            references={item.references ?? []}
+                            onSwitch={controller.switchToWorkspace}
+                            currentRefId={result?.currentRef?.id}
+                          />
                         </div>
                         <GitHistoryGraphSvg viewModel={viewModel} />
                         <button
                           className="min-w-0 truncate pr-3 text-left"
                           title={item.message}
-                          onClick={() => setSelectedId(item.id)}
+                          onClick={() => controller.select(item.id)}
                           onDoubleClick={() => void actions.openHistoryCommitDiff(item)}
                         >
                           {item.subject}
@@ -215,7 +214,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
               key={selected.id}
               item={selected}
               actions={actions}
-              onParent={(id) => void selectParent(id)}
+              onParent={(id) => void history.reveal(id)}
             />
           )}
         </aside>

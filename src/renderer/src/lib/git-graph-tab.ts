@@ -1,11 +1,17 @@
+import { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
 import { useAppStore } from '@/store'
 import {
   findFirstIndexedWorktree,
+  findIndexedRepoOwnerForHost,
   findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import {
+  resolveWorktreeOperationRoute,
+  type WorktreeOperationRouteState
+} from './worktree-operation-route'
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
@@ -15,14 +21,43 @@ import {
   runtimeEnvironmentSupportsCapability
 } from '@/runtime/runtime-rpc-client'
 
-export function gitGraphScope(worktreeId: string) {
-  const state = useAppStore.getState()
+export const GIT_GRAPH_REFRESH_EVENT = 'orca:git-graph-refresh'
+
+type ScopeState = WorktreeOperationRouteState &
+  Pick<ReturnType<typeof useAppStore.getState>, 'repos' | 'worktreesByRepo'>
+
+export function gitGraphScopeInputs(state: ReturnType<typeof useAppStore.getState>) {
+  return {
+    repos: state.repos,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    settings: state.settings,
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId
+  }
+}
+
+export function useGitGraphScope(worktreeId: string) {
+  const inputs = useAppStore(useShallow(gitGraphScopeInputs))
+  return useMemo(() => gitGraphScope(worktreeId, inputs), [worktreeId, inputs])
+}
+
+export function gitGraphScope(worktreeId: string, state: ScopeState = useAppStore.getState()) {
   const worktrees = selectWorktreesByRepo(state)
-  const route = resolveWorktreeOperationRoute({ ...state, worktreesByRepo: worktrees }, worktreeId)
+  const route = resolveWorktreeOperationRoute(state, worktreeId)
   const worktree = route?.executionHostId
     ? findIndexedWorktreeOwnerForHost(worktrees, worktreeId, route.executionHostId)
     : findFirstIndexedWorktree(worktrees, worktreeId)
-  const repo = worktree && state.repos.find((entry) => entry.id === worktree.repoId)
+  const repo =
+    worktree &&
+    route?.executionHostId &&
+    findIndexedRepoOwnerForHost(state.repos, worktree.repoId, route.executionHostId)
   return worktree && route && repo?.kind !== 'folder'
     ? { worktree, route, target: runtimeTargetForOwnerEnvironment(route.runtimeEnvironmentId) }
     : null

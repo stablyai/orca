@@ -98,7 +98,7 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
 /** Compares collection fields by value so hydration does not produce redundant persistence writes from new identities. */
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'gitGraphFiltersByWorktree') {
-    return JSON.stringify(a) === JSON.stringify(b)
+    return a === b || JSON.stringify(a) === JSON.stringify(b)
   }
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])

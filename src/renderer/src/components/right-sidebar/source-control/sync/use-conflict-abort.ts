@@ -128,6 +128,7 @@ export function useSourceControlConflictAbort({
       } finally {
         setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
         refreshSourceControlAfterRemoteAction({
+          worktreeId: activeWorktreeId,
           refreshGitStatus: refreshActiveGitStatusAfterMutation,
           refreshBranchCompare: refreshBranchCompareRef.current,
           refreshGitHistory: refreshGitHistoryRef.current

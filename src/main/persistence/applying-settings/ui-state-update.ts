@@ -191,9 +191,10 @@ export function updatePersistedUI(
         : normalizeExplorerDisplayRootByWorktree(
             operations.state.ui?.explorerDisplayRootByWorktree
           ),
-    gitGraphFiltersByWorktree: normalizeGitGraphFilters(
-      sanitizedUpdates.gitGraphFiltersByWorktree ?? operations.state.ui?.gitGraphFiltersByWorktree
-    ),
+    gitGraphFiltersByWorktree:
+      sanitizedUpdates.gitGraphFiltersByWorktree !== undefined
+        ? normalizeGitGraphFilters(sanitizedUpdates.gitGraphFiltersByWorktree)
+        : operations.state.ui?.gitGraphFiltersByWorktree,
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)

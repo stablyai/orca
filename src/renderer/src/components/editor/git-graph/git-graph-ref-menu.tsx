@@ -1,115 +1,127 @@
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
-import { useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { ArrowUpRight } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { gitGraphScope } from '@/lib/git-graph-tab'
-import { getRuntimeGitRefs } from '@/runtime/runtime-git-status-client'
-import { getConnectionId } from '@/lib/connection-context'
+import { useGitGraphScope } from '@/lib/git-graph-tab'
+import { gitGraphWorkspaceCatalog } from './git-graph-workspace-navigation'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-history-types'
-import { getWorktreeExecutionHostId } from '../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { cn } from '@/lib/utils'
 
-export function GitGraphRefMenu({
-  itemRef,
-  worktreeId,
-  current
+export function useGitGraphWorkspaces(worktreeId: string) {
+  const scope = useGitGraphScope(worktreeId)
+  const worktrees = useAppStore(selectWorktreesByRepo)
+  const repos = useAppStore((state) => state.repos)
+  return useMemo(
+    () =>
+      new Map(
+        gitGraphWorkspaceCatalog(scope, { repos, worktreesByRepo: worktrees }).map((row) => [
+          row.branch.startsWith('refs/heads/') ? row.branch : `refs/heads/${row.branch}`,
+          row
+        ])
+      ),
+    [scope, worktrees, repos]
+  )
+}
+
+export function GitGraphRefs({
+  references,
+  currentRefId,
+  workspaces,
+  onSwitch
 }: {
-  itemRef: GitHistoryItemRef
-  worktreeId: string
-  current: boolean
+  references: GitHistoryItemRef[]
+  currentRefId?: string
+  workspaces: Map<string, Worktree>
+  onSwitch: (refId: string) => Promise<void>
 }) {
-  const [workspace, setWorkspace] = useState<Worktree>()
-  const generation = useRef(0)
-  const readWorkspace = async () => {
-    const request = ++generation.current
-    setWorkspace(undefined)
-    const scope = gitGraphScope(worktreeId)
-    if (!scope || !itemRef.id.startsWith('refs/heads/')) {
-      return
-    }
-    try {
-      const refs = await getRuntimeGitRefs(
-        {
-          target: scope.target,
-          worktreeId,
-          worktreePath: scope.worktree.path,
-          connectionId: getConnectionId(worktreeId) ?? undefined
-        },
-        itemRef.id
-      )
-      const path = refs.find((ref) => ref.id === itemRef.id)?.worktreePath
-      if (request !== generation.current) {
-        return
-      }
-      const state = useAppStore.getState()
-      const worktrees = Object.values(selectWorktreesByRepo(state)).flat()
-      setWorkspace(
-        worktrees.find(
-          (row) =>
-            path !== undefined &&
-            normalizeRuntimePathForComparison(row.path) ===
-              normalizeRuntimePathForComparison(path) &&
-            row.id !== worktreeId &&
-            getWorktreeExecutionHostId(
-              row,
-              state.repos.find((repo) => repo.id === row.repoId)
-            ) === scope.route.executionHostId
-        )
-      )
-    } catch {
-      /* A failed refresh cannot offer navigation to a stale checkout. */
-    }
+  const [open, setOpen] = useState(false)
+  const [menuRef, setMenuRef] = useState<GitHistoryItemRef>()
+  const inline = references.slice(0, 2)
+  const current = references.find((ref) => ref.id === currentRefId)
+  if (current && !inline.includes(current)) {
+    inline[1] = current
   }
+  const badge = (ref: GitHistoryItemRef) => (
+    <span
+      key={ref.id}
+      onContextMenu={() => setMenuRef(ref)}
+      className={cn(
+        'inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 text-2xs text-muted-foreground',
+        ref.id === currentRefId && 'bg-accent font-medium text-foreground'
+      )}
+    >
+      <span className="truncate" title={ref.name}>
+        {ref.name}
+      </span>
+      {workspaces.has(ref.id) && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              aria-label={translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+              onClick={(event) => {
+                event.stopPropagation()
+                void onSwitch(ref.id)
+              }}
+            >
+              <ArrowUpRight className="size-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </span>
+  )
   return (
     <ContextMenu
       onOpenChange={(open) => {
-        if (open) {
-          void readWorkspace()
-        } else {
-          generation.current++
+        if (!open) {
+          setMenuRef(undefined)
         }
       }}
     >
       <ContextMenuTrigger asChild>
-        <span
-          className={cn(
-            'inline-block max-w-full truncate rounded-full border px-1.5 text-2xs text-muted-foreground',
-            current && 'bg-accent font-medium text-foreground'
+        <div className="flex min-w-0 gap-1">
+          {inline.map(badge)}
+          {references.length > inline.length && (
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <button className="shrink-0 text-2xs text-muted-foreground">
+                  +{references.length - inline.length}
+                </button>
+              </PopoverTrigger>
+              {open && (
+                <PopoverContent className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
+                  {references.filter((ref) => !inline.includes(ref)).map(badge)}
+                </PopoverContent>
+              )}
+            </Popover>
           )}
-          title={itemRef.name}
-        >
-          {itemRef.name}
-        </span>
+        </div>
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(itemRef.name)}>
-          {translate('gitGraph.copyBranch', 'Copy branch name')}
-        </ContextMenuItem>
-        {workspace && (
-          <ContextMenuItem
-            onSelect={() => {
-              const state = useAppStore.getState()
-              state.setActiveWorktree(
-                workspace.id,
-                getWorktreeExecutionHostId(
-                  workspace,
-                  state.repos.find((repo) => repo.id === workspace.repoId)
-                )
-              )
-            }}
-          >
-            {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+      {menuRef && (
+        <ContextMenuContent>
+          <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>
+            {translate('gitGraph.copyBranch', 'Copy branch name')}
           </ContextMenuItem>
-        )}
-      </ContextMenuContent>
+          {workspaces.has(menuRef.id) && (
+            <ContextMenuItem onSelect={() => void onSwitch(menuRef.id)}>
+              {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
+      )}
     </ContextMenu>
   )
 }
