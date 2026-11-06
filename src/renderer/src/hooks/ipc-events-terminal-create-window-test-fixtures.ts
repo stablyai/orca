@@ -97,6 +97,7 @@ export function buildTerminalCreateWindow(args: {
         replyTerminalCreate,
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
+        onApplyAgentPaneActivity: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
         onLaunchRecipe: () => () => {},
         onSplitTerminal: () => () => {},

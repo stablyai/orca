@@ -11,6 +11,9 @@ export const EXECUTION_HOST_METHODS = [
   'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
+  // Read state lives with the host whose worktree.ps reports it.
+  'agentActivity.clear',
+  'agentActivity.setRead',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
   'automation.list',

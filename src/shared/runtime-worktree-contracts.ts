@@ -6,6 +6,7 @@ import type {
 } from './agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
+import type { AgentListVerdict } from './agent-status/presentation/agent-list-status'
 import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
@@ -63,6 +64,8 @@ export type RuntimeWorktreeAgentRow = {
   hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
+  /** How the desktop Agents list shows this agent. Omitted with no desktop window, by old hosts, and for a turn newer than the window's last verdicts. */
+  activity?: AgentListVerdict
 }
 
 export type RuntimeWorktreePsSummary = {

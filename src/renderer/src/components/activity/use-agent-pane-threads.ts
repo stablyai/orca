@@ -36,7 +36,7 @@ import type {
 } from '../../../../shared/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
-export type AgentPaneThreadsStoreData = Pick<
+export type AllAgentPaneThreadsStoreData = Pick<
   AppState,
   | 'agentStatusByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
@@ -59,50 +59,18 @@ export type AgentPaneThreadsStoreData = Pick<
   worktreeMap: ReturnType<typeof getWorktreeMapFromState>
   repoMap: ReturnType<typeof getRepoMapFromState>
   generatedTitlesEnabled: boolean
+}
+
+export type AgentPaneThreadsStoreData = AllAgentPaneThreadsStoreData & {
   /** Focused-host fallback for hostless worktrees, shared by the scope filter and the row actions. */
   defaultHostId: ExecutionHostId
 }
 
-/** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */
-export function useAgentPaneThreads(args: {
-  query: string
-  readFilter: ThreadReadFilter
-  groupBy: ActivityGroupBy
-  selectedPaneKey: string | null
-  showChildAgents?: boolean
-}): {
-  storeData: AgentPaneThreadsStoreData
+/** Every Activity thread before any view filter: store data to events and threads. */
+export function useAllAgentPaneThreads(): {
+  storeData: AllAgentPaneThreadsStoreData
   allThreads: AgentPaneThread[]
-  selectedPaneKeyIsLive: boolean
-  effectiveSelectedPaneKey: string | null
-  /** Every active view filter applies here; destructive Clear completed must not touch hidden rows. */
-  visibleThreads: AgentPaneThread[]
-  /** Badge-coherent threads after child classification; ignore transient search/scope/read filters so Mark all read can clear the badge. */
-  markAllReadThreads: AgentPaneThread[]
-  visibleThreadGroups: ActivityThreadGroup[]
 } {
-  const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
-  const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
-  const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
-  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
-  const hideAutomationGeneratedWorkspaces = useAppStore(
-    (s) => s.agentsHideAutomationGeneratedWorkspaces
-  )
-  const hideCliCreatedWorkspaces = useAppStore((s) => s.agentsHideCliCreatedWorkspaces)
-  // Why gated selectors: runtime status churns, and only the other-device filter reads it.
-  const runtimeEnvironments = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
-  )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
-  )
-  const pairedDeviceIdsByEnvironment = useMemo(
-    () =>
-      runtimeEnvironments && runtimeStatusByEnvironmentId
-        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
-        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    [runtimeEnvironments, runtimeStatusByEnvironmentId]
-  )
   // Keep original native tabs for owner-qualified names; preserve terminal projections across focus writes.
   const tabProjectionRef = useRef<{
     raw: AppState['unifiedTabsByWorktree'] | null
@@ -136,8 +104,7 @@ export function useAgentPaneThreads(args: {
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
       unacknowledgeAgents: s.unacknowledgeAgents,
-      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true,
-      defaultHostId: getSettingsFocusedExecutionHostId(s.settings)
+      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
     }))
   )
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
@@ -192,6 +159,56 @@ export function useAgentPaneThreads(args: {
         threadReuseCacheRef.current
       ),
     [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled]
+  )
+
+  return { storeData, allThreads }
+}
+
+/** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */
+export function useAgentPaneThreads(args: {
+  query: string
+  readFilter: ThreadReadFilter
+  groupBy: ActivityGroupBy
+  selectedPaneKey: string | null
+  showChildAgents?: boolean
+}): {
+  storeData: AgentPaneThreadsStoreData
+  allThreads: AgentPaneThread[]
+  selectedPaneKeyIsLive: boolean
+  effectiveSelectedPaneKey: string | null
+  /** Every active view filter applies here; destructive Clear completed must not touch hidden rows. */
+  visibleThreads: AgentPaneThread[]
+  /** Badge-coherent threads after child classification; ignore transient search/scope/read filters so Mark all read can clear the badge. */
+  markAllReadThreads: AgentPaneThread[]
+  visibleThreadGroups: ActivityThreadGroup[]
+} {
+  const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
+  const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
+  const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
+  const hideAutomationGeneratedWorkspaces = useAppStore(
+    (s) => s.agentsHideAutomationGeneratedWorkspaces
+  )
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.agentsHideCliCreatedWorkspaces)
+  // Why gated selectors: runtime status churns, and only the other-device filter reads it.
+  const runtimeEnvironments = useAppStore((s) =>
+    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
+  )
+  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
+  )
+  const pairedDeviceIdsByEnvironment = useMemo(
+    () =>
+      runtimeEnvironments && runtimeStatusByEnvironmentId
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    [runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
+  const { storeData: allStoreData, allThreads } = useAllAgentPaneThreads()
+  const defaultHostId = useAppStore((s) => getSettingsFocusedExecutionHostId(s.settings))
+  const storeData = useMemo(
+    () => ({ ...allStoreData, defaultHostId }),
+    [allStoreData, defaultHostId]
   )
 
   const selectedPaneKeyIsLive =
