@@ -20,6 +20,10 @@ import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/ap
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
+import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  normalizeOrchestrationWorkerPreferenceUpdates
+} from '../../../shared/orchestration-worker-model-settings'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
@@ -113,6 +117,15 @@ export function updateSettings(
     }
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
+  if ('orchestrationDefaultWorkerAgent' in updates) {
+    sanitizedUpdates.orchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+      updates.orchestrationDefaultWorkerAgent
+    )
+  }
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerPreferenceUpdates(updates, operations.state.settings)
+  )
   if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {
     Object.assign(
       sanitizedUpdates,

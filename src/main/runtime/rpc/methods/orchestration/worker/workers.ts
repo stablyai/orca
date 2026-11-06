@@ -18,6 +18,7 @@ import {
 } from './worker-start-authority'
 import { parseTaskDeps } from './task-deps-argument'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { resolveOrchestrationWorkerLaunchDefaults } from './worker-launch-preferences'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -165,6 +166,21 @@ export async function startWorker(
     followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
+  const resolvedDefaults = resolveOrchestrationWorkerLaunchDefaults({
+    terminal: params.terminal,
+    agent: params.agent,
+    model: params.model,
+    effort: params.effort,
+    defaults: runtime.getOrchestrationWorkerLaunchDefaults()
+  })
+  params = {
+    ...params,
+    ...(resolvedDefaults.agent !== undefined ? { agent: resolvedDefaults.agent } : {}),
+    ...(resolvedDefaults.model !== undefined ? { model: resolvedDefaults.model } : {}),
+    ...(resolvedDefaults.effort !== undefined ? { effort: resolvedDefaults.effort } : {})
+  }
+  // Why: the stored worker agent decides whether a structured session exists at all;
+  // judging the bare flags would downgrade every launch that omits --agent.
   const mode = decideWorkerStartMode({
     params,
     settings: readWorkerStartModeSettings(runtime)
@@ -179,7 +195,8 @@ export async function startWorker(
       task: existingTask,
       taskDeps,
       orchestrationMutation,
-      callerSession: orchestrationCaller
+      callerSession: orchestrationCaller,
+      defaultsApplied: resolvedDefaults.applied
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
