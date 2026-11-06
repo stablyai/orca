@@ -44,6 +44,7 @@ function Probe(props: {
   activeRepoTarget?: RuntimeClientTarget
   worktreeId?: string | null
   worktreePath?: string
+  branchName?: string
   compareBaseRef?: string | null
   isFolder?: boolean
   isBranchVisible?: boolean
@@ -55,6 +56,7 @@ function Probe(props: {
     activeRepoTarget: props.activeRepoTarget ?? { kind: 'local' },
     activeWorktreeId: props.worktreeId === undefined ? 'A' : props.worktreeId,
     worktreePath: props.worktreePath ?? '/a',
+    branchName: props.branchName ?? 'main',
     compareBaseRef: props.compareBaseRef === undefined ? 'origin/main' : props.compareBaseRef,
     isFolder: props.isFolder ?? false,
     isBranchVisible: props.isBranchVisible ?? true,
@@ -77,6 +79,19 @@ afterEach(() => {
   unmountProbes()
   vi.clearAllMocks()
   latest = null
+})
+
+describe('useSourceControlGitHistory branch switch', () => {
+  it('reloads the open list when the same workspace switches branches', async () => {
+    const root = await mount({ branchName: 'main' })
+    await flush()
+    await act(async () => {
+      root.render(<Probe branchName="feature" />)
+    })
+    await flush()
+
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('useSourceControlGitHistory stale completion', () => {

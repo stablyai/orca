@@ -111,15 +111,12 @@ export class RuntimeGitStatusCommands {
             admissionTier: 'interactive',
             includeLineStats: false
           }),
+        checkout: () => provider.checkoutBranch(worktreePath, branch),
         getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(worktreePath) ?? null,
         onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
       }
     )
-    return {
-      ok: true,
-      branch: result.branch,
-      ...(result.leftoverPaths.length > 0 ? { leftoverPaths: result.leftoverPaths } : {})
-    }
+    return { ok: true, branch: result.branch }
   }
 
   async listRuntimeGitLocalBranches(worktreeSelector: string): Promise<RuntimeGitLocalBranches> {

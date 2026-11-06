@@ -4,11 +4,8 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import {
-  BranchSwitchRefusedError,
-  switchBranchGuarded,
-  type BranchSwitchDeps
-} from './branch-switch'
+import { switchBranchGuarded, type BranchSwitchDeps } from './branch-switch'
+import { checkoutBranch } from './checkout'
 import { getStatus } from './source-control/status-read'
 
 let directory: string
@@ -24,6 +21,7 @@ async function git(...args: string[]): Promise<string> {
 function deps(agentBlocker: string | null = null): BranchSwitchDeps {
   return {
     getStatus: () => getStatus(directory, { includeLineStats: false }),
+    checkout: () => checkoutBranch(directory, 'feature'),
     getAgentBlocker: async () => agentBlocker
   }
 }
@@ -54,7 +52,7 @@ describe('switchBranchGuarded', () => {
   it('switches a clean checkout and reports the branch it left', async () => {
     const result = await switchBranchGuarded(directory, 'feature', {}, deps())
 
-    expect(result).toEqual({ branch: 'feature', previousBranch: 'main', leftoverPaths: [] })
+    expect(result).toEqual({ branch: 'feature', previousBranch: 'main' })
     expect(await currentBranch()).toBe('feature')
   })
 
@@ -75,7 +73,7 @@ describe('switchBranchGuarded', () => {
     await expect(git('revert', '--no-edit', 'HEAD~1')).rejects.toThrow()
 
     await expect(switchBranchGuarded(directory, 'feature', {}, deps())).rejects.toThrow(
-      BranchSwitchRefusedError
+      'Finish or abort the revert in progress before switching branches.'
     )
     expect(await currentBranch()).toBe('main')
   })

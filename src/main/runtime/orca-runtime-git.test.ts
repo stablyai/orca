@@ -177,6 +177,12 @@ describe('RuntimeGitCommands', () => {
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
     mocks.checkoutBranch.mockResolvedValue(undefined)
+    mocks.getStatus.mockResolvedValue({
+      entries: [],
+      conflictOperation: 'unknown',
+      branch: 'refs/heads/main',
+      head: 'abc123'
+    })
 
     await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
       ok: true,

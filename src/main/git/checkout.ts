@@ -1,6 +1,7 @@
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
+import { gitEnvWithoutYesNoPrompt } from './command-runner/git-no-prompt-env'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 /** Reject empty and option-like names here too: relay callers can bypass RPC schema validation. */
@@ -18,7 +19,11 @@ export async function checkoutBranch(
 ): Promise<void> {
   assertValidBranchName(branch)
   await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['checkout', branch, '--'], gitOptionsForWorktree(worktreePath, options))
+    gitExecFileAsync(['checkout', branch, '--'], {
+      ...gitOptionsForWorktree(worktreePath, options),
+      // A locked file must fail the checkout, not open a prompt while the switch lock is held.
+      ...gitEnvWithoutYesNoPrompt()
+    })
   )
 }
 

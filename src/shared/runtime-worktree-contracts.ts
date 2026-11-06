@@ -164,8 +164,6 @@ export type RuntimeSpeechSetupState = {
 export type RuntimeGitCheckoutResult = {
   ok: true
   branch: string
-  /** Files git left differing from the new branch (e.g. held open on Windows); older hosts omit it. */
-  leftoverPaths?: string[]
 }
 
 /** A linked PR the host has no cached state for: it shows a badge but, like desktop, sits in the In progress lane. */

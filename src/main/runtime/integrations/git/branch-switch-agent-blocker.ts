@@ -9,6 +9,7 @@ type AgentRow = Pick<
   AgentStatusIpcPayload,
   | 'paneKey'
   | 'tabId'
+  | 'terminalHandle'
   | 'worktreeId'
   | 'connectionId'
   | 'state'
@@ -26,7 +27,7 @@ type BlockerArgs = {
   readRows: () => readonly AgentRow[]
   pathOfWorktree: (worktreeId: string) => string | undefined
   /** Whether a terminal row's pane or tab still has a connected terminal on this host. */
-  hasLiveTerminal: (row: Pick<AgentRow, 'paneKey' | 'tabId'>) => boolean
+  hasLiveTerminal: (row: Pick<AgentRow, 'paneKey' | 'tabId' | 'terminalHandle'>) => boolean
   probeProcess: ((paneKey: string) => Promise<AgentProcessVerdict | null>) | null
   now?: () => number
 }
@@ -55,7 +56,7 @@ function isRecent(row: AgentRow, now: number): boolean {
       updatedAt: row.receivedAt,
       evidenceObservedAt: row.evidenceObservedAt,
       restoredUnconfirmed: row.restoredUnconfirmed,
-      structuredHostOwned: row.structuredHost === 'owned'
+      ...(row.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
     },
     now
   )
