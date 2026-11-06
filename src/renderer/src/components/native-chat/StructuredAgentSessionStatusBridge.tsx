@@ -293,11 +293,8 @@ function installStatusProjection(): () => void {
                 selected.add(member)
               }
             }
-            for (const member of owed) {
-              if (member.group === created && members.get(member.paneKey) === member) {
-                selected.add(member)
-              }
-            }
+            // Reconcile prunes superseded members, so the debt holds only current tabs.
+            owed.forEach((member) => member.group === created && selected.add(member))
             capture(selected)
           })
         )
@@ -327,8 +324,11 @@ function installStatusProjection(): () => void {
       group.members = []
       group.membersBySession = new Map()
     }
-    for (const member of retired) {
-      owed.delete(member)
+    // A rebound pane gets a new member without retiring the old one; drop every superseded identity.
+    for (const member of owed) {
+      if (next.get(member.paneKey) !== member) {
+        owed.delete(member)
+      }
     }
     for (const [key, member] of next) {
       members.set(key, member)

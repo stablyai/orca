@@ -12,16 +12,21 @@ export function watchResumeRunStatus(
   target: RuntimeClientTarget = { kind: 'local' }
 ): () => void {
   const feed = getStructuredAgentSessionStatusFeed(target)
-  // Run entries are fixed per run object, so their ids are built once rather than per host tick.
-  const runIds = new WeakMap<ResumeRun, Set<string>>()
+  // A run's chats are fixed when it starts; progress replaces the run object, so key the ids by its start.
+  let runIds: { startedAt: number; ids: ReadonlySet<string> } | null = null
   const notice = (change: StructuredAgentSessionStatusChange) => {
     const run = current()
     if (!run) {
       return
     }
     if (change !== null) {
-      const ids = runIds.get(run) ?? new Set(run.entries.map((entry) => entry.candidate.sessionId))
-      runIds.set(run, ids)
+      if (runIds?.startedAt !== run.startedAt) {
+        runIds = {
+          startedAt: run.startedAt,
+          ids: new Set(run.entries.map((entry) => entry.candidate.sessionId))
+        }
+      }
+      const { ids } = runIds
       if (![...change].some((sessionId) => ids.has(sessionId))) {
         return
       }

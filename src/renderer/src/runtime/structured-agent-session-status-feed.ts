@@ -90,7 +90,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
         moved?.forEach((sessionId) => touched.add(sessionId))
         namingActiveSessionIds = next
       }
-      for (const note of event.conversationNames ?? []) {
+      // Paired-host frames are unchecked; the names fold ignores a malformed list, so must this.
+      for (const note of Array.isArray(event.conversationNames) ? event.conversationNames : []) {
         if (typeof note?.sessionId === 'string') {
           touched.add(note.sessionId)
         }

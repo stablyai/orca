@@ -17,7 +17,10 @@ export function createStructuredAgentSessionStatusDispatch(): {
       const keyed: [Set<() => void>, () => void][] = []
       for (const registered of change === null
         ? sessionListeners.values()
-        : Array.from(change, (sessionId) => sessionListeners.get(sessionId) ?? new Set())) {
+        : Array.from(
+            change,
+            (sessionId) => sessionListeners.get(sessionId) ?? new Set<() => void>()
+          )) {
         for (const listener of registered) {
           keyed.push([registered, listener])
         }

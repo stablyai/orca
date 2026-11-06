@@ -132,17 +132,20 @@ export function runtimePermissionReport(
     return NO_RUNTIME_PERMISSION_REPORT
   }
   const report = summary.runtimePermission
-  const valid =
-    typeof report === 'object' &&
-    report !== null &&
-    'fence' in report &&
-    Number.isSafeInteger(report.fence) &&
-    typeof report.fence === 'number' &&
-    report.fence >= 0 &&
-    report.fence === fence &&
-    'mode' in report &&
-    (report.mode === null || typeof report.mode === 'string')
-  return valid ? report.mode : undefined
+  if (
+    typeof report !== 'object' ||
+    report === null ||
+    !('fence' in report) ||
+    !Number.isSafeInteger(report.fence) ||
+    typeof report.fence !== 'number' ||
+    report.fence < 0 ||
+    report.fence !== fence ||
+    !('mode' in report)
+  ) {
+    return undefined
+  }
+  const mode = report.mode
+  return mode === null || typeof mode === 'string' ? mode : undefined
 }
 
 /** Absent producers retain options fallback; present evidence owns the description, even cleared. */
@@ -153,4 +156,12 @@ export function applyRuntimePermissionReport<T extends { reportedPermissionMode?
   return report === NO_RUNTIME_PERMISSION_REPORT
     ? state
     : { ...state, reportedPermissionMode: report }
+}
+
+export function projectRuntimePermission<T extends { reportedPermissionMode?: string | null }>(
+  state: T,
+  summary: unknown,
+  fence: number | null
+): T {
+  return applyRuntimePermissionReport(state, runtimePermissionReport(summary, fence))
 }
