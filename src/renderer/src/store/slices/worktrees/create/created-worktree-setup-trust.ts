@@ -13,7 +13,11 @@ import type {
   RunApprovedWorktreeSetupResult
 } from '../../../../../../shared/worktree/create-types'
 
-/** The host skipped setup because the created branch's commands differ; ask about the real ones. */
+/**
+ * The host created the workspace but skipped setup because its branch's commands differ from the
+ * approved ones. Show those commands; approving runs them in the workspace, declining leaves a
+ * toast that reopens the review.
+ */
 export function reviewSetupTrustMismatch(
   getState: () => AppState,
   repoId: string,
@@ -25,32 +29,83 @@ export function reviewSetupTrustMismatch(
   if (!mismatch) {
     return
   }
-  toast.warning(
-    translate(
-      'worktree.setupTrust.createdBranchSkipped',
-      "Setup didn't run: this branch's orca.yaml setup commands differ from the ones you approved."
-    )
+  reviewCreatedWorktreeSetup(
+    { getState, repoId, hostId, worktreeId: result.worktree.id, target },
+    mismatch.scriptContent
   )
+}
+
+type CreatedWorktreeSetupReview = {
+  getState: () => AppState
+  repoId: string
+  hostId: ExecutionHostId | undefined
+  worktreeId: string
+  target: RuntimeClientTarget
+}
+
+function reviewCreatedWorktreeSetup(
+  review: CreatedWorktreeSetupReview,
+  scriptContent: string
+): void {
   void (async () => {
     const approval = await confirmCreatedWorktreeSetupContent(
-      getState,
-      repoId,
-      mismatch.scriptContent,
-      hostId
+      review.getState,
+      review.repoId,
+      scriptContent,
+      review.hostId
     )
     if (approval.decision !== 'run' || approval.approvedContentHash === undefined) {
+      showSetupSkippedToast(review, scriptContent)
       return
     }
-    const outcome = await runApprovedWorktreeSetup(target, {
-      worktreeId: result.worktree.id,
+    const outcome = await runApprovedWorktreeSetup(review.target, {
+      worktreeId: review.worktreeId,
       approvedSetupHash: approval.approvedContentHash
     })
-    showApprovedSetupOutcome(outcome)
+    if (outcome.status === 'mismatch') {
+      // The file changed again after the review; offer the new content rather than run the old.
+      showSetupSkippedToast(review, outcome.setupTrustMismatch.scriptContent, 'changed-again')
+    } else if (outcome.status === 'unsupported') {
+      toast.warning(
+        translate(
+          'worktree.setupTrust.hostUnsupported',
+          'Approved. Update Orca on the workspace host to run setup for an existing workspace.'
+        )
+      )
+    }
   })().catch((error: unknown) => {
     console.error('Failed to run the approved workspace setup:', error)
     toast.error(translate('worktree.setupTrust.runFailed', 'Could not start setup.'))
   })
 }
+
+function showSetupSkippedToast(
+  review: CreatedWorktreeSetupReview,
+  scriptContent: string,
+  reason: 'declined' | 'changed-again' = 'declined'
+): void {
+  toast.warning(
+    reason === 'changed-again'
+      ? translate(
+          'worktree.setupTrust.changedAgain',
+          "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it."
+        )
+      : translate(
+          'worktree.setupTrust.createdBranchSkipped',
+          "Setup didn't run: this workspace's branch has different orca.yaml setup commands than the ones you approved."
+        ),
+    {
+      duration: SETUP_SKIPPED_TOAST_MS,
+      action: {
+        label: translate('worktree.setupTrust.reviewAction', 'Review setup'),
+        onClick: () => reviewCreatedWorktreeSetup(review, scriptContent)
+      }
+    }
+  )
+}
+
+// Long enough to reach the action; the workspace itself is already usable.
+const SETUP_SKIPPED_TOAST_MS = 15_000
 
 async function runApprovedWorktreeSetup(
   target: RuntimeClientTarget,
@@ -70,22 +125,4 @@ async function runApprovedWorktreeSetup(
   }
   const run = window.api.worktrees.runApprovedSetup
   return run ? run(args) : { status: 'unsupported' }
-}
-
-function showApprovedSetupOutcome(outcome: RunApprovedWorktreeSetupResult): void {
-  if (outcome.status === 'mismatch') {
-    toast.warning(
-      translate(
-        'worktree.setupTrust.changedAgain',
-        "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it."
-      )
-    )
-  } else if (outcome.status === 'unsupported') {
-    toast.warning(
-      translate(
-        'worktree.setupTrust.hostUnsupported',
-        'Approved. Update Orca on the workspace host to run setup for an existing workspace.'
-      )
-    )
-  }
 }

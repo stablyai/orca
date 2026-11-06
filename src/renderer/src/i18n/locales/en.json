@@ -22436,10 +22436,14 @@
   },
   "worktree": {
     "setupTrust": {
-      "createdBranchSkipped": "Setup didn't run: this branch's orca.yaml setup commands differ from the ones you approved.",
+      "createdBranchSkipped": "Setup didn't run: this workspace's branch has different orca.yaml setup commands than the ones you approved.",
       "runFailed": "Could not start setup.",
       "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
-      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace."
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "reviewAction": "Review setup",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersBody": "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>.",
+      "branchSetupScript": "Branch's setup script"
     },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",

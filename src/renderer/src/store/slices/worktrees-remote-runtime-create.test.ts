@@ -360,6 +360,44 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
+  it('keeps the workspace when setup is declined and offers the review again from the toast', async () => {
+    const store = createRepoTestStore()
+    const openModal = vi.fn()
+    store.setState({ openModal })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({ id: 'repo1::/path/kept', repoId: 'repo1', path: '/path/kept' }),
+      setupTrustMismatch: { contentHash: 'branch-hash', scriptContent: 'pnpm build' }
+    })
+
+    const result = await store.getState().createWorktree('repo1', 'kept', 'origin/main', 'run')
+    expect(result.worktree.id).toBe('repo1::/path/kept')
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledOnce())
+    openModal.mock.calls[0][1].onResolve('skip')
+
+    await vi.waitFor(() => expect(vi.mocked(toast.warning)).toHaveBeenCalled())
+    const [message, options] = vi.mocked(toast.warning).mock.calls.at(-1) ?? []
+    expect(message).toBe(
+      "Setup didn't run: this workspace's branch has different orca.yaml setup commands than the ones you approved."
+    )
+    expect(mockApi.worktrees.runApprovedSetup).not.toHaveBeenCalled()
+
+    mockApi.worktrees.runApprovedSetup.mockResolvedValue({ status: 'started' })
+    const toastOptions: unknown = options
+    expect(toastOptions).toMatchObject({ action: { label: 'Review setup' } })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: matched above as the toast's action, whose handler ignores the click event.
+    const { action } = toastOptions as { action: { onClick: () => void } }
+    action.onClick()
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledTimes(2))
+    expect(openModal.mock.calls[1][1]).toMatchObject({ scriptContent: 'pnpm build' })
+    openModal.mock.calls[1][1].onResolve('run')
+    await vi.waitFor(() =>
+      expect(mockApi.worktrees.runApprovedSetup).toHaveBeenCalledWith({
+        worktreeId: 'repo1::/path/kept',
+        approvedSetupHash: createHash('sha256').update('pnpm build').digest('hex')
+      })
+    )
+  })
+
   it('keeps setup skipped on a host that predates running approved setup', async () => {
     const status = createCompatibleRuntimeStatusResponse('runtime-remote')
     if (status.ok) {
