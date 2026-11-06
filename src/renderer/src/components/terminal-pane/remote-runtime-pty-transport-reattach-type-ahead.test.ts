@@ -361,7 +361,10 @@ describe('remote reattach type-ahead', () => {
 
   // A remount shows the pane's terminal id before its deferred attach starts; keys typed then are real.
   describe('a remounted pane attaching its terminal', () => {
-    async function attachRemountedPane(options: Record<string, unknown> = {}) {
+    async function attachRemountedPane(
+      options: Record<string, unknown> = {},
+      beforeAttachCompletes?: () => void
+    ) {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
@@ -374,6 +377,7 @@ describe('remote reattach type-ahead', () => {
       transport.attach({ existingPtyId: ORIGINAL_ID, cols: 80, rows: 24, callbacks: {} })
       expect(transport.sendInput('ho hi\r', 'driving')).toBe(true)
       expect(inputFrameTexts()).toEqual([])
+      beforeAttachCompletes?.()
       await completeAttach()
       return transport
     }
@@ -399,6 +403,101 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).toBe('ho hi\rlive')
+      transport.destroy?.()
+    })
+
+    it('drops that typing when startup work appears during the attach', async () => {
+      let startupWork = false
+      const transport = await attachRemountedPane(
+        { releasePreconnectInput: () => !startupWork },
+        () => {
+          startupWork = true
+        }
+      )
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('live')
+      transport.destroy?.()
+    })
+
+    it('delivers an acknowledged interrupt typed during the attach in order', async () => {
+      const sends: string[] = []
+      const call = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(
+        async (request: { method: string; params?: { text?: string } }) => {
+          if (request.method !== 'terminal.send') {
+            return call?.(request)
+          }
+          sends.push(request.params?.text ?? '')
+          return { ok: true, result: { send: { accepted: true } } }
+        }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        bufferInputUntilConnect: true
+      })
+      expect(transport.sendInput('sleep 9', 'driving')).toBe(true)
+      transport.attach({ existingPtyId: ORIGINAL_ID, cols: 80, rows: 24, callbacks: {} })
+      const interrupt = transport.sendInputAccepted?.('\x03', 'driving')
+      expect(transport.sendInput('ls\r', 'driving')).toBe(true)
+      await completeAttach()
+      await expect(interrupt).resolves.toBe(true)
+      expect(sends).toEqual(['sleep 9\x03'])
+      await vi.waitFor(() => expect(inputFrameTexts()).toEqual(['ls\r']))
+      transport.destroy?.()
+    })
+
+    it('drops that typing when the attach fails without binding a terminal', async () => {
+      const call = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) => {
+        if (request.method === 'terminal.resolvePane') {
+          throw new Error('no_connected_pty')
+        }
+        return call?.(request)
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        bufferInputUntilConnect: true
+      })
+      const accepted = transport.sendInputAccepted?.('echo hi\r', 'driving')
+      transport.attach({ existingPtyId: ORIGINAL_ID, cols: 80, rows: 24, callbacks: {} })
+      await expect(accepted).resolves.toBe(false)
+      transport.destroy?.()
+    })
+
+    it('never delivers that typing to a terminal a later fresh connect creates', async () => {
+      const resolution = createDeferred<void>()
+      const call = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) => {
+        if (request.method === 'terminal.resolvePane') {
+          await resolution.promise
+        }
+        if (request.method === 'terminal.create') {
+          return { ok: true, result: { terminal: { handle: 'terminal-new' } } }
+        }
+        return call?.(request)
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        bufferInputUntilConnect: true
+      })
+      expect(transport.sendInput('rm -rf build\r', 'driving')).toBe(true)
+      transport.attach({ existingPtyId: ORIGINAL_ID, cols: 80, rows: 24, callbacks: {} })
+      await transport.connect({ url: '', callbacks: {} })
+      await completeAttach()
+      resolution.resolve()
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('live')
       transport.destroy?.()
     })
   })
