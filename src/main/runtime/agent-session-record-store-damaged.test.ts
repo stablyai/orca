@@ -1,4 +1,4 @@
-import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../native-chat/structured-agent-session-history-adoption'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,7 +17,7 @@ import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-test-harness'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000
 const NATIVE: AgentSessionExecutionLocation = {

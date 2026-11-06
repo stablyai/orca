@@ -77,7 +77,7 @@ import { openTestAgentSessionRecordStore } from '../../agent-session/records/age
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { runtimeStub, setAgentLaunchRecordStore } from './agent-launch.test-fixture'
 import { RuntimeWorktreeLineageController } from '../../workspaces/lineage/runtime-worktree-lineage-controller'
 import type { RuntimeManagedWorktreeCreateArgs } from '../../workspaces/creation/runtime-managed-worktree-create-types'

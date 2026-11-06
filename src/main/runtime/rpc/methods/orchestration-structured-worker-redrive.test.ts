@@ -3,15 +3,15 @@ import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import { withChatTabChanges } from '../../agent-session/agent-session-tab-layout'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import * as historyPages from '../../../native-chat/agent-session-wire/agent-session-history-page'
-import * as subscriberFrames from '../../../native-chat/agent-session-wire/agent-session-subscriber-frame-fields'
-import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { createTestParams } from '../../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+import * as historyPages from '../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import * as subscriberFrames from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
+import { hostTestState } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { createTestParams } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredWorkerIdentities,
   type StructuredWorkerIdentity

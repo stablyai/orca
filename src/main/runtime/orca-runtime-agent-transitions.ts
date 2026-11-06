@@ -15,7 +15,7 @@ import { TerminalWorkerTurnStops } from './orchestration/terminal-worker-turn-st
 import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
 import { resolveStructuredWorkerIdentity } from './orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { chatStatusInTurn, terminalPhaseInTurn } from './orchestration/worker-auto-release-activity'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels

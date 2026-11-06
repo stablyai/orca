@@ -1,7 +1,7 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
+import type { JournalReplacementItem } from '../agent-session-journal/context-epochs/journal-epoch-replacement'
 
 /** Rows below a clear floor survive unchanged; replacement rows keep their actual correspondence. */
 export function remapForkChildBoundary(

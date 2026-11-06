@@ -10,8 +10,8 @@ import type {
   AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
-import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
-import type { HistoryReader } from './agent-session-history-page-bounds'
+import { CLIENT_HISTORY_READER } from './publication/history/agent-session-item-wire-form'
+import type { HistoryReader } from './publication/history/agent-session-history-page-bounds'
 
 export type ForkMarker = { forkedFrom: AgentSessionForkedFrom; sourceName: string }
 export const FORK_MARKER_ITEM_ID = agentJournalItemKey({

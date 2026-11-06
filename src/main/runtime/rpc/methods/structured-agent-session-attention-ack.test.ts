@@ -7,7 +7,7 @@ import type { StructuredAttentionOrigin } from '../../../../shared/agent-session
 import {
   getStructuredAgentSessionHost,
   setStructuredAgentSessionHost
-} from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import {
   call,

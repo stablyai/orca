@@ -17,7 +17,8 @@ import {
 import { CodexUsageApiKeyAuthError } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import { defineMethod } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'
-import { OptionsParams } from './structured-agent-session-schemas'
+import './structured-agent-session-schemas'
+import { OptionsParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
 
 export function sessionAccountUsageOffer(
   record: AgentSessionRecord,

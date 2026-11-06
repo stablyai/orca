@@ -1,7 +1,8 @@
 /** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
-import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import '../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
+import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type {
   StructuredMailboxPointerHost,
   StructuredMailSendState

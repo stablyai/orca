@@ -23,8 +23,8 @@ import {
   structuredAgentSessionAdoptAttach
 } from '../runtime/agent-session/structured-agent-session-create-adoption'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
-import type { StructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-host'
-import type { AgentSessionAttachParams } from './agent-session-wire/structured-agent-session-attach'
+import type { StructuredAgentSessionHost } from './agent-session-wire/host/structured-agent-session-host'
+import type { AgentSessionAttachParams } from './agent-session-wire/acquisition/structured-agent-session-attach'
 
 export async function prepareStructuredAgentSessionFork(input: {
   host: StructuredAgentSessionHost

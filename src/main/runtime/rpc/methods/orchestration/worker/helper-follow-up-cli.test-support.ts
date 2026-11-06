@@ -13,8 +13,8 @@ import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-s
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
-} from '../../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

@@ -11,7 +11,7 @@ import {
   requireStructuredAgentAudience,
   structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
-import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
+import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import type { AttachParams, CreateParams } from './structured-agent-session-schemas'
 import {
   commitStructuredAgentSessionCreate,

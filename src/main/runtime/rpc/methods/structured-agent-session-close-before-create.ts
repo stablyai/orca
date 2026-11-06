@@ -4,7 +4,7 @@ import {
   type AgentSessionWireRefusal,
   refuseUnclassified
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../core'
 import {
   type StructuredSessionSurface,

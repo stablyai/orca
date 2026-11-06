@@ -3,8 +3,8 @@ import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { agentSessionSendSubmission } from '../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-send-settlement'
 import type { RpcContext } from '../core'
 import { requireStructuredSessionHost, structuredCallerFor } from './structured-agent-session-gate'
 import { readsQueuedImageCards } from './structured-agent-session-queued-image-capability'

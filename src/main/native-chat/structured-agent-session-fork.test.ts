@@ -3,7 +3,7 @@ import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import type { AcpStructuredConnection } from '../acp/acp-structured-connection'
 import { PI_CWD_BUCKET_LAYOUT } from '../ai-vault/session-cwd-bucket-layouts'
 import { handleStructuredAgentSessionCreate } from '../runtime/rpc/methods/structured-agent-session-create-handler'
-import type { StructuredAgentSessionAdapter } from './agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from './agent-session-wire/providers/structured-agent-session-adapter'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { appendFile, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -15,19 +15,19 @@ import {
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { prepareStructuredAgentSessionFork } from './structured-agent-session-fork'
-import type { StructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from './agent-session-wire/host/structured-agent-session-host'
 import {
   createRestTestRig,
   type RestTestRig
-} from './agent-session-wire/structured-agent-session-rest-test-rig'
+} from './agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import { structuredAgentSessionCreateParams } from '../../shared/agent-session/structured-agent-session-create'
 import { prepareStructuredAgentSessionCreateForWorktree } from '../runtime/rpc/methods/structured-agent-session-create'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { setStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from './agent-session-wire/host/structured-agent-session-registry'
 import {
   hostTestMessage,
   hostTestOperationId
-} from './agent-session-wire/structured-agent-session-host-test-data'
+} from './agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { resolveStructuredAgentSessionAdoptionForCreate } from '../runtime/agent-session/structured-agent-session-create-adoption'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
