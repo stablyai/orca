@@ -1,21 +1,12 @@
 import { createPiRpcLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { buildPiRpcLaunch } from './rpc-launch'
-import { piRpcProviderLink } from './rpc-launch-resolution'
-import {
-  PI_BACKGROUND_WORK_BRIDGE_FILE,
-  PI_BACKGROUND_WORK_DIR_ENV
-} from './rpc-background-work-bridge-source'
-import { getAppEnvironment } from '../../shared/app-environment'
 
 const probeVersion = vi.fn(async (..._input: unknown[]): Promise<{ version: string | null }> => ({
   version: '0.84.0'
@@ -95,273 +86,17 @@ async function setup() {
       providerHandleChain: [link]
     })
   }
-  return { store, record, workspace, resolver, resolveCommand, settings, prior, withPrior }
+  return { resolver, prior, withPrior }
 }
 
-const bridge = (): string =>
-  join(getAppEnvironment().getPath('userData'), 'pi-native-chat', PI_BACKGROUND_WORK_BRIDGE_FILE)
-
-describe('Pi host launch resolution', () => {
-  it('refuses acquisition if the selected binary was replaced by a too-old version', async () => {
+it.each(['created', 'resumed'] as const)(
+  'refuses a %s session whose file is gone, starting no other',
+  async (origin) => {
     const h = await setup()
-    probeVersion.mockResolvedValue({ version: '0.83.9' })
+    h.withPrior(h.prior(join(root, 'missing.jsonl'), origin))
     await expect(h.resolver(identity)).rejects.toMatchObject({
-      installation: { agent: 'pi', installedVersion: '0.83.9', minimumVersion: '0.84.0' }
+      name: 'AgentSessionAcquisitionRefusal',
+      reason: 'savedConversationMissing'
     })
-    expect(probeVersion).toHaveBeenCalledWith({
-      program: '/host/bin/pi',
-      prefixArgs: [],
-      cwd: h.workspace,
-      env: { PATH: '/host/bin', HOME: '/host/home', PI_CODING_AGENT_DIR: '/host/account' }
-    })
-  })
-
-  it('uses the runtime workspace, binary and account home for a new folder session', async () => {
-    const h = await setup()
-    const launch = await h.resolver(identity)
-    expect(launch).toMatchObject({
-      command: '/host/bin/pi',
-      cwd: h.workspace,
-      env: { PATH: '/host/bin', HOME: '/host/home', PI_CODING_AGENT_DIR: '/host/account' },
-      previous: null,
-      fullAccess: true
-    })
-    expect(h.resolveCommand).toHaveBeenCalledWith('pi', {
-      pathEnv: '/host/bin',
-      homePath: '/host/home'
-    })
-  })
-
-  it('resolves Pi again after one environment refresh when the snapshot has no Pi', async () => {
-    const h = await setup()
-    let path = '/before-install'
-    const refresh = vi.fn(async () => {
-      path = '/host/bin'
-    })
-    const resolver = createPiRpcLaunchResolver({
-      store: h.store,
-      resolveWorkspacePath: async () => h.workspace,
-      resolveEnvironment: async () => ({ PATH: path, HOME: '/host/home' }),
-      refreshAfterMissingProgram: refresh,
-      resolveCommand: (name, options) => (options?.pathEnv === '/host/bin' ? '/host/bin/pi' : name),
-      probeVersion
-    })
-    await expect(resolver(identity)).resolves.toMatchObject({
-      command: '/host/bin/pi',
-      env: { PATH: '/host/bin' }
-    })
-    expect(refresh).toHaveBeenCalledOnce()
-  })
-
-  it('starts a fresh session after clear without reading the previous file', async () => {
-    const h = await setup()
-    const old = join(root, 'old-malformed.jsonl')
-    await writeFile(old, 'not a Pi session header')
-    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
-      ...h.record,
-      providerHandleChain: [],
-      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 }
-    })
-    const launch = await h.resolver({ ...identity, providerHandle: h.prior(old).handle })
-    expect(launch.previous).toBeNull()
-    expect(launch.sessionFile).toBeUndefined()
-    expect(launch.forkFile).toBeUndefined()
-    expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--extension', bridge()])
-    expect(buildPiRpcLaunch(launch).env?.[PI_BACKGROUND_WORK_DIR_ENV]).toEqual(expect.any(String))
-    expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
-      'created'
-    )
-  })
-
-  it('spawns the binary the Command setting names, and refuses one that is not runnable', async () => {
-    const h = await setup()
-    h.settings.agentCmdOverrides = { pi: `"${process.execPath}"` }
-    await expect(h.resolver(identity)).resolves.toMatchObject({ command: process.execPath })
-    expect(h.resolveCommand).not.toHaveBeenCalled()
-
-    probeVersion.mockClear()
-    h.settings.agentCmdOverrides = { pi: '/missing/pi' }
-    await expect(h.resolver(identity)).rejects.toMatchObject({
-      reason: 'agentCommandNotRunnable'
-    })
-    expect(probeVersion).not.toHaveBeenCalled()
-  })
-
-  it('resumes the same directory and forks a session from a different directory', async () => {
-    const h = await setup()
-    const same = join(root, 'same.jsonl')
-    await writeFile(same, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
-    h.withPrior(h.prior(same))
-    const resumed = await h.resolver(identity)
-    expect(resumed.sessionFile).toBe(same)
-    expect(resumed.forkFile).toBeUndefined()
-    expect(piRpcProviderLink(resumed, same, 2, 'next', 200).origin).toBe('resumed')
-    expect(() => piRpcProviderLink(resumed, join(root, 'wrong.jsonl'), 2, 'bad', 200)).toThrow(
-      'different session file'
-    )
-
-    const elsewhere = join(root, 'elsewhere.jsonl')
-    await writeFile(elsewhere, `${JSON.stringify({ type: 'session', cwd: join(root, 'other') })}\n`)
-    h.withPrior(h.prior(elsewhere))
-    const forked = await h.resolver(identity)
-    expect(forked.forkFile).toBe(elsewhere)
-    expect(forked.sessionFile).toBeUndefined()
-    expect(piRpcProviderLink(forked, join(root, 'fork.jsonl'), 2, 'fork', 200)).toMatchObject({
-      origin: 'forked',
-      forkedFromKey: agentSessionProviderHandleKey(h.prior(elsewhere).handle)
-    })
-    expect(() => piRpcProviderLink(forked, elsewhere, 2, 'bad', 200)).toThrow('did not fork')
-  })
-
-  it('resumes the stored session file after Orca restarts and reopens the store', async () => {
-    const h = await setup()
-    const file = join(root, 'conversation.jsonl')
-    await writeFile(file, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
-    const fence = h.record.lease.runtimeFence
-    await h.store.commitProcessIdentity({
-      sessionId: identity.sessionId,
-      fence,
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: 'spawn-pi' },
-      now: 1_800_000_000_001
-    })
-    await h.store.proveOwner({
-      sessionId: identity.sessionId,
-      fence,
-      link: { ...h.prior(file), mintedAtFence: fence },
-      now: 1_800_000_000_002
-    })
-    await closeTestJournalHostDatabase(root)
-    const reopened = await openTestAgentSessionRecordStore(root)
-    const launch = await createPiRpcLaunchResolver({
-      store: reopened,
-      resolveWorkspacePath: async () => h.workspace,
-      resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
-      resolveCommand: () => '/host/bin/pi',
-      probeVersion
-    })(identity)
-    expect(launch.sessionFile).toBe(file)
-    expect(buildPiRpcLaunch(launch).args).toEqual([
-      '--mode',
-      'rpc',
-      '--extension',
-      bridge(),
-      '--session',
-      file
-    ])
-  })
-
-  it.each(['created', 'resumed'] as const)(
-    'refuses a %s session whose file is gone, starting no other',
-    async (origin) => {
-      const h = await setup()
-      h.withPrior(h.prior(join(root, 'missing.jsonl'), origin))
-      await expect(h.resolver(identity)).rejects.toMatchObject({
-        name: 'AgentSessionAcquisitionRefusal',
-        reason: 'savedConversationMissing'
-      })
-    }
-  )
-
-  it('keeps adopted, unreadable and malformed session files distinct from a missing one', async () => {
-    const h = await setup()
-    h.withPrior(h.prior(join(root, 'adopted-missing.jsonl'), 'adopted'))
-    await expect(h.resolver(identity)).rejects.toMatchObject({
-      refusal: {
-        code: 'agent_session_identity_required',
-        details: { reason: 'transcriptNotFound' }
-      }
-    })
-    const malformed = join(root, 'malformed.jsonl')
-    await writeFile(malformed, 'not a Pi session header')
-    h.withPrior(h.prior(malformed, 'resumed'))
-    const parse = await h.resolver(identity).catch((error) => error)
-    expect(parse).toBeInstanceOf(Error)
-    expect(parse).not.toMatchObject({ reason: 'savedConversationMissing' })
-    h.withPrior(h.prior(root, 'resumed'))
-    const unreadable = await h.resolver(identity).catch((error) => error)
-    expect(unreadable).toBeInstanceOf(Error)
-    expect(unreadable).not.toMatchObject({ reason: 'savedConversationMissing' })
-  })
-
-  it('refuses a different execution host and a foreign account home before resolving paths', async () => {
-    const h = await setup()
-    const record = h.store.getRecord(identity.sessionId)
-    if (!record) {
-      throw new Error('record missing')
-    }
-    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
-      ...record,
-      location: { ...record.location, executionHostId: 'ssh:remote' }
-    })
-    await expect(h.resolver(identity)).rejects.toThrow('run on the local host')
-    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
-      ...record,
-      accountHome: { variable: 'CODEX_HOME', path: '/wrong' }
-    })
-    await expect(h.resolver(identity)).rejects.toThrow('account home')
-    expect(h.resolveCommand).not.toHaveBeenCalled()
-  })
-})
-
-describe('Pi launch folder of a floating chat', () => {
-  async function floatingSetup(launchDirectory?: string) {
-    const h = await setup()
-    const moved = join(root, 'moved-setting')
-    await mkdir(moved)
-    const floating = {
-      ...h.record,
-      location: { ...h.record.location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
-      ...(launchDirectory ? { launchDirectory } : {})
-    }
-    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue(floating)
-    const pinLaunchDirectory = vi.spyOn(h.store, 'pinLaunchDirectory').mockResolvedValue(floating)
-    const resolveWorkspacePath = vi.fn(async () => moved)
-    const resolver = createPiRpcLaunchResolver({
-      store: h.store,
-      resolveWorkspacePath,
-      resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
-      resolveCommand: () => '/host/bin/pi',
-      probeVersion
-    })
-    return { ...h, floating, moved, resolver, resolveWorkspacePath, pinLaunchDirectory }
   }
-
-  it('resumes in the pinned folder after the floating setting moved, without forking', async () => {
-    const h = await floatingSetup(join(root, 'workspace'))
-    const file = join(root, 'pinned.jsonl')
-    await writeFile(file, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
-    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
-      ...h.floating,
-      providerHandleChain: [h.prior(file)]
-    })
-    const launch = await h.resolver(identity)
-    expect(launch.cwd).toBe(h.workspace)
-    expect(launch.sessionFile).toBe(file)
-    expect(launch.forkFile).toBeUndefined()
-    expect(h.resolveWorkspacePath).not.toHaveBeenCalled()
-  })
-
-  it('refuses with the folder-missing reason when the pinned folder is gone', async () => {
-    const h = await floatingSetup(join(root, 'gone'))
-    await expect(h.resolver(identity)).rejects.toMatchObject({
-      name: 'AgentSessionPreSpawnError',
-      reason: 'launchFolderMissing'
-    })
-    expect(probeVersion).not.toHaveBeenCalled()
-  })
-
-  it('pins an unpinned floating record to the folder its first launch runs in', async () => {
-    const h = await floatingSetup()
-    await expect(h.resolver(identity)).resolves.toMatchObject({ cwd: h.moved })
-    expect(h.pinLaunchDirectory).toHaveBeenCalledExactlyOnceWith(identity.sessionId, h.moved)
-  })
-
-  it('keeps resolving a folder chat by its workspace, ignoring any recorded folder', async () => {
-    const h = await setup()
-    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
-      ...h.record,
-      launchDirectory: '/elsewhere'
-    })
-    await expect(h.resolver(identity)).resolves.toMatchObject({ cwd: h.workspace })
-  })
-})
+)

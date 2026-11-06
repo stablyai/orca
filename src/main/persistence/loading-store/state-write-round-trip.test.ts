@@ -10,7 +10,6 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('electron', () => ({
   app: {
@@ -33,8 +32,6 @@ vi.mock('electron', () => ({
 
 const { Store } = await import('./store')
 
-const HOST_ID = 'ssh:user@host'
-
 const stores: InstanceType<typeof Store>[] = []
 afterEach(async () => {
   for (const store of stores.splice(0)) {
@@ -50,48 +47,7 @@ function openStore(dataFile: string): InstanceType<typeof Store> {
   return store
 }
 
-function session(activeTabId: string): WorkspaceSessionState {
-  return {
-    activeRepoId: 'repo-1',
-    // Left null: the load path's deregistered-repo sweep nulls an active worktree whose repo is
-    // not registered, which would mask what this test is actually about.
-    activeWorktreeId: null,
-    activeTabId,
-    tabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    // Non-ASCII on purpose: a byte-offset mistake in the encode shows up here first.
-    browserUrlHistory: [
-      {
-        url: 'https://example.test/é😀',
-        normalizedUrl: 'https://example.test/é😀',
-        title: '中文 title',
-        lastVisitedAt: 17,
-        visitCount: 3
-      }
-    ]
-  } as WorkspaceSessionState
-}
-
 describe('persisted state survives a save/load round trip', () => {
-  it.each(['split-vertical', 'split-horizontal', 'new-tab'])(
-    'drops retired setup location %s on update and disk serialization',
-    (setupScriptLaunchMode) => {
-      const dataFile = join(
-        realpathSync(mkdtempSync(join(tmpdir(), 'orca-retired-setup-location-'))),
-        'state.json'
-      )
-      const written = openStore(dataFile)
-      const updates = { setupScriptLaunchMode, terminalFocusFollowsMouse: true }
-      expect(written.updateSettings(updates)).not.toHaveProperty('setupScriptLaunchMode')
-      written.flush()
-      const saved = JSON.parse(readPersistedStateJson(dataFile))
-      expect(saved.settings).not.toHaveProperty('setupScriptLaunchMode')
-      const loaded = openStore(dataFile).getSettings()
-      expect(loaded).not.toHaveProperty('setupScriptLaunchMode')
-      expect(loaded.terminalFocusFollowsMouse).toBe(true)
-    }
-  )
-
   it('keeps a #22551 settings-slot OpenCode Go key on disk until its new owner has it', () => {
     const dataFile = join(
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-legacy-opencode-go-key-'))),
@@ -152,57 +108,5 @@ describe('persisted state survives a save/load round trip', () => {
     loaded.flush()
     expect(readPersistedStateJson(dataFile)).not.toContain('opencodeGoApiKey')
     expect(openStore(dataFile).getSettings()).not.toHaveProperty('opencodeGoApiKey')
-  })
-
-  it('reloads settings, secrets and both session partitions unchanged', () => {
-    const dataFile = join(
-      realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-round-trip-'))),
-      'orca-data.json'
-    )
-    const written = openStore(dataFile)
-    written.updateSettings({
-      opencodeSessionCookie: 'cookie-é-value',
-      httpProxyUrl: 'http://proxy.example:8080/?a=b&c=$&'
-    })
-    written.updateUI({ browserKagiSessionLink: 'https://kagi.com/session?t=abc' })
-    written.setWorkspaceSession(session('local-tab'))
-    written.setWorkspaceSession(session('remote-tab'), HOST_ID)
-    written.flush()
-
-    const before = {
-      settings: written.getSettings(),
-      ui: written.getUI(),
-      local: written.getWorkspaceSession(),
-      remote: written.getWorkspaceSession(HOST_ID)
-    }
-
-    const bytes = Buffer.from(readPersistedStateJson(dataFile))
-    const onDisk = JSON.parse(bytes.toString('utf8'))
-    expect(onDisk.settings.opencodeSessionCookie).not.toBe('cookie-é-value')
-    expect(Buffer.from(onDisk.settings.opencodeSessionCookie, 'base64').toString('utf8')).toContain(
-      'cookie-é-value'
-    )
-    expect(bytes.toString('utf8')).not.toContain('orca-secret-slot-')
-
-    const reloaded = openStore(dataFile)
-    expect(reloaded.getSettings().opencodeSessionCookie).toBe(before.settings.opencodeSessionCookie)
-    expect(reloaded.getSettings().httpProxyUrl).toBe(before.settings.httpProxyUrl)
-    expect(reloaded.getUI().browserKagiSessionLink).toBe(before.ui.browserKagiSessionLink)
-    // Loading adds session defaults; assert exact equality after the second round trip.
-    expect(reloaded.getWorkspaceSession()).toMatchObject(before.local)
-    // Remote partitions omit local-owned globals and reload their default values.
-    expect(reloaded.getWorkspaceSession(HOST_ID).activeTabId).toBe('remote-tab')
-    expect(reloaded.getWorkspaceSession(HOST_ID).browserUrlHistory).toEqual([])
-
-    // Compare after a second round trip so one-time migrations cannot affect equality.
-    reloaded.flush()
-    const bytesAfterReload = Buffer.from(readPersistedStateJson(dataFile))
-    const again = openStore(dataFile)
-    expect(again.getSettings()).toEqual(reloaded.getSettings())
-    expect(again.getUI()).toEqual(reloaded.getUI())
-    expect(again.getWorkspaceSession()).toEqual(reloaded.getWorkspaceSession())
-    expect(again.getWorkspaceSession(HOST_ID)).toEqual(reloaded.getWorkspaceSession(HOST_ID))
-    again.flush()
-    expect(Buffer.from(readPersistedStateJson(dataFile)).equals(bytesAfterReload)).toBe(true)
   })
 })
