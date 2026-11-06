@@ -18267,6 +18267,9 @@
           "cancel": "取消",
           "add": "添加目录",
           "body": "有链接请求显示此目录中的 {{value0}}。请只添加你信任的人的目录。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },

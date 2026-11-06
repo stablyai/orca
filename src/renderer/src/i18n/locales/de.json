@@ -18925,6 +18925,9 @@
           "cancel": "Abbrechen",
           "add": "Katalog hinzufügen",
           "body": "Ein Link möchte {{value0}} aus diesem Katalog anzeigen. Füge Kataloge nur von Personen hinzu, denen du vertraust."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
