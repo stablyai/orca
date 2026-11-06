@@ -41,11 +41,13 @@ export function useGitHistoryCommitActions({
   activeWorktreeId,
   worktreePath,
   activeRepoTarget,
+  ownerConnectionId,
   resolveSplitTargetGroupId
 }: {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
   activeRepoTarget: RuntimeClientTarget | null
+  ownerConnectionId?: string | null
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
 }): GitHistoryCommitActions {
   const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
@@ -68,7 +70,10 @@ export function useGitHistoryCommitActions({
       if (cached) {
         return cached.entries
       }
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const connectionId =
+        ownerConnectionId === undefined
+          ? (getConnectionId(activeWorktreeId) ?? undefined)
+          : (ownerConnectionId ?? undefined)
       const result = await getRuntimeGitCommitCompare(
         {
           // Compare on the repo owner, which may differ from the focused host.
@@ -91,7 +96,7 @@ export function useGitHistoryCommitActions({
       commitCompareCacheRef.current.set(item.id, result)
       return result.entries
     },
-    [activeRepoTarget, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, worktreePath, ownerConnectionId]
   )
 
   const openHistoryCommitDiff = useCallback(
@@ -191,7 +196,10 @@ export function useGitHistoryCommitActions({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+            connectionId:
+              ownerConnectionId === undefined
+                ? (getConnectionId(activeWorktreeId) ?? undefined)
+                : (ownerConnectionId ?? undefined)
           },
           { sha: item.id }
         )
@@ -243,7 +251,7 @@ export function useGitHistoryCommitActions({
       }
       void explainCommitWithDefaultAgent(activeWorktreeId, item)
     },
-    [activeRepoTarget, activeWorktreeId, copyCommitText, worktreePath]
+    [activeRepoTarget, activeWorktreeId, copyCommitText, worktreePath, ownerConnectionId]
   )
 
   return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }

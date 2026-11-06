@@ -14,8 +14,8 @@ export function gitGraphFilterSupported(result?: GitHistoryResult): boolean | un
 
 export function useGitGraphHistory(worktreeId: string) {
   const filter = useAppStore((state) => state.gitGraphFiltersByWorktree?.[worktreeId] ?? 'all')
-  const scope = useGitGraphScope(worktreeId)
   const controller = gitGraphHistoryForTab(worktreeId)
+  const scope = useGitGraphScope(worktreeId, controller.executionHostId)
   const view = useStore(controller.view)
   useEffect(() => controller.attach(), [controller])
   const changeFilter = (refs: GitHistoryRefs) =>

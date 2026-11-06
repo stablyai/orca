@@ -22950,6 +22950,7 @@
     "oldServer": "이 서버의 Orca 버전은 현재 브랜치만 표시합니다",
     "copyBranch": "브랜치 이름 복사",
     "switchWorkspace": "워크스페이스로 전환",
+    "workspaceClosed": "이 브랜치는 더 이상 다른 작업 공간에 열려 있지 않습니다.",
     "refresh": "커밋 새로 고침",
     "branchTag": "브랜치 / 태그",
     "graph": "그래프",

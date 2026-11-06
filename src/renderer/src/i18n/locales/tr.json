@@ -23215,6 +23215,7 @@
     "oldServer": "Bu sunucunun Orca sürümü yalnızca geçerli dalı gösterir",
     "copyBranch": "Dal adını kopyala",
     "switchWorkspace": "Çalışma alanına geç",
+    "workspaceClosed": "Bu dal artık başka bir çalışma alanında açık değil.",
     "refresh": "Commitleri yenile",
     "branchTag": "Dal / Etiket",
     "graph": "Grafik",

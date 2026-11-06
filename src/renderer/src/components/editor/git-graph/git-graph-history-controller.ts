@@ -4,12 +4,12 @@ import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
 import { gitGraphScope, gitGraphScopeInputs, GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
-import { getConnectionId } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
 import type {
   GitHistoryRefs,
   GitHistoryResult
 } from '../../../../../shared/git/history/git-history-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
 type HistoryView = {
   result?: GitHistoryResult
@@ -42,6 +42,8 @@ export class GitGraphHistoryController {
   scrollOffset = 0
   private scope: ReturnType<typeof gitGraphScope>
   private filter: GitHistoryRefs
+  readonly executionHostId: ExecutionHostId | undefined
+  private navigation = 0
   private generation = 0
   private dirty = true
   private initial = true
@@ -51,7 +53,13 @@ export class GitGraphHistoryController {
   private unsubscribe?: () => void
 
   constructor(readonly worktreeId: string) {
-    this.scope = gitGraphScope(worktreeId)
+    const state = useAppStore.getState()
+    const file = state.openFiles.find((file) => file.id === `${worktreeId}::git-graph`)
+    this.executionHostId =
+      file?.operationProvenance?.generation.route.executionHostId ??
+      gitGraphScope(worktreeId, state)?.route.executionHostId ??
+      undefined
+    this.scope = gitGraphScope(worktreeId, state, this.executionHostId)
     this.filter = filterFor(worktreeId)
   }
 
@@ -80,7 +88,7 @@ export class GitGraphHistoryController {
   }
 
   private synchronize(): void {
-    const scope = gitGraphScope(this.worktreeId)
+    const scope = gitGraphScope(this.worktreeId, useAppStore.getState(), this.executionHostId)
     const filter = filterFor(this.worktreeId)
     if (
       gitGraphOwnerKey(scope) === gitGraphOwnerKey(this.scope) &&
@@ -118,10 +126,11 @@ export class GitGraphHistoryController {
   }
 
   switchToWorkspace = (refId: string): Promise<void> =>
-    switchGitGraphWorkspace(this.worktreeId, refId, () => !this.disposed)
+    switchGitGraphWorkspace(this.scope, refId, () => !this.disposed)
 
   select = (selectedId: string): void => {
-    this.view.setState({ selectedId })
+    this.navigation++
+    this.view.setState({ selectedId, revealId: undefined })
   }
   clearReveal = (): void => {
     this.view.setState({ revealId: undefined })
@@ -135,15 +144,19 @@ export class GitGraphHistoryController {
 
   reveal = async (id: string): Promise<number> => {
     const generation = this.generation
+    const navigation = ++this.navigation
+    this.clearReveal()
+    const current = () =>
+      !this.disposed && generation === this.generation && navigation === this.navigation
     await this.pending
-    if (this.disposed || generation !== this.generation) {
+    if (!current()) {
       return -1
     }
     let result = this.view.getState().result
     if (!result?.items.some((item) => item.id === id) && result?.hasMore) {
-      result = await this.retrieve(true, false, id)
+      result = await this.retrieve(true, false, id, navigation)
     }
-    if (this.disposed || generation !== this.generation) {
+    if (!current()) {
       return -1
     }
     const index = result?.items.findIndex((item) => item.id === id) ?? -1
@@ -156,7 +169,8 @@ export class GitGraphHistoryController {
   private retrieve(
     append = false,
     wakeWslDistro = false,
-    revealId?: string
+    revealId?: string,
+    navigation?: number
   ): Promise<GitHistoryResult | undefined> {
     if (this.disposed) {
       return Promise.resolve(undefined)
@@ -191,7 +205,7 @@ export class GitGraphHistoryController {
               target: context.target,
               worktreeId: this.worktreeId,
               worktreePath: context.worktree.path,
-              connectionId: getConnectionId(this.worktreeId) ?? undefined
+              connectionId: context.connectionId ?? undefined
             },
             {
               refs: filter,
@@ -227,7 +241,13 @@ export class GitGraphHistoryController {
             }
           }
           accumulated = { ...page, items }
-          if (!revealId || ids.has(revealId) || !page.hasMore || items.length === count) {
+          if (
+            !revealId ||
+            navigation !== this.navigation ||
+            ids.has(revealId) ||
+            !page.hasMore ||
+            items.length === count
+          ) {
             break
           }
         } while (current())

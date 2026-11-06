@@ -22900,6 +22900,7 @@
     "oldServer": "此伺服器的 Orca 版本僅顯示目前分支",
     "copyBranch": "複製分支名稱",
     "switchWorkspace": "切換至工作區",
+    "workspaceClosed": "此分支已不再於其他工作區中開啟。",
     "refresh": "重新整理提交",
     "branchTag": "分支 / 標籤",
     "graph": "圖",

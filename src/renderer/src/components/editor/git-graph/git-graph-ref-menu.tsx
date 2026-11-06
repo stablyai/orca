@@ -10,15 +10,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { useGitGraphScope } from '@/lib/git-graph-tab'
+import type { gitGraphScope } from '@/lib/git-graph-tab'
 import { gitGraphWorkspaceCatalog } from './git-graph-workspace-navigation'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-history-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { cn } from '@/lib/utils'
 
-export function useGitGraphWorkspaces(worktreeId: string) {
-  const scope = useGitGraphScope(worktreeId)
+export function useGitGraphWorkspaces(scope: ReturnType<typeof gitGraphScope>) {
   const worktrees = useAppStore(selectWorktreesByRepo)
   const repos = useAppStore((state) => state.repos)
   return useMemo(
@@ -52,36 +51,40 @@ export function GitGraphRefs({
     inline[1] = current
   }
   const badge = (ref: GitHistoryItemRef) => (
-    <span
-      key={ref.id}
-      onContextMenu={() => setMenuRef(ref)}
-      className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 text-2xs text-muted-foreground',
-        ref.id === currentRefId && 'bg-accent font-medium text-foreground'
-      )}
-    >
-      <span className="truncate" title={ref.name}>
-        {ref.name}
+    <ContextMenuTrigger asChild key={ref.id}>
+      <span
+        onContextMenu={(event) => {
+          event.stopPropagation()
+          setMenuRef(ref)
+        }}
+        className={cn(
+          'inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 text-2xs text-muted-foreground',
+          ref.id === currentRefId && 'bg-accent font-medium text-foreground'
+        )}
+      >
+        <span className="truncate" title={ref.name}>
+          {ref.name}
+        </span>
+        {workspaces.has(ref.id) && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                aria-label={translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void onSwitch(ref.id)
+                }}
+              >
+                <ArrowUpRight className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </span>
-      {workspaces.has(ref.id) && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              aria-label={translate('gitGraph.switchWorkspace', 'Switch to workspace')}
-              onClick={(event) => {
-                event.stopPropagation()
-                void onSwitch(ref.id)
-              }}
-            >
-              <ArrowUpRight className="size-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </span>
+    </ContextMenuTrigger>
   )
   return (
     <ContextMenu
@@ -91,25 +94,23 @@ export function GitGraphRefs({
         }
       }}
     >
-      <ContextMenuTrigger asChild>
-        <div className="flex min-w-0 gap-1">
-          {inline.map(badge)}
-          {references.length > inline.length && (
-            <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger asChild>
-                <button className="shrink-0 text-2xs text-muted-foreground">
-                  +{references.length - inline.length}
-                </button>
-              </PopoverTrigger>
-              {open && (
-                <PopoverContent className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
-                  {references.filter((ref) => !inline.includes(ref)).map(badge)}
-                </PopoverContent>
-              )}
-            </Popover>
-          )}
-        </div>
-      </ContextMenuTrigger>
+      <div className="flex min-w-0 gap-1">
+        {inline.map(badge)}
+        {references.length > inline.length && (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <button className="shrink-0 text-2xs text-muted-foreground">
+                +{references.length - inline.length}
+              </button>
+            </PopoverTrigger>
+            {open && (
+              <PopoverContent className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
+                {references.filter((ref) => !inline.includes(ref)).map(badge)}
+              </PopoverContent>
+            )}
+          </Popover>
+        )}
+      </div>
       {menuRef && (
         <ContextMenuContent>
           <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>

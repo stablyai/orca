@@ -22950,6 +22950,7 @@
     "oldServer": "このサーバーのOrcaは現在のブランチのみ表示します",
     "copyBranch": "ブランチ名をコピー",
     "switchWorkspace": "ワークスペースに切り替え",
+    "workspaceClosed": "このブランチは別のワークスペースで開かれていません。",
     "refresh": "コミットを更新",
     "branchTag": "ブランチ / タグ",
     "graph": "グラフ",

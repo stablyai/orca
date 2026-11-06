@@ -24,7 +24,7 @@ const sameGroup = () => undefined
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const history = useGitGraphHistory(worktreeId)
   const { result, scope } = history
-  const workspaces = useGitGraphWorkspaces(worktreeId)
+  const workspaces = useGitGraphWorkspaces(scope)
   const rows = useMemo(
     () =>
       result
@@ -79,6 +79,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     activeWorktreeId: worktreeId,
     worktreePath: scope?.worktree.path ?? null,
     activeRepoTarget: scope?.target ?? null,
+    ownerConnectionId: scope?.connectionId,
     resolveSplitTargetGroupId: sameGroup
   })
   return (
@@ -86,6 +87,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
       <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
         <GitGraphFilter
           worktreeId={worktreeId}
+          executionHostId={history.controller.executionHostId}
           filter={history.filter}
           supported={gitGraphFilterSupported(result)}
           onChange={history.changeFilter}
@@ -95,7 +97,6 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              disabled={history.loading}
               aria-label={translate('gitGraph.refresh', 'Refresh commits')}
               onClick={() => void history.refresh()}
             >

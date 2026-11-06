@@ -23232,6 +23232,7 @@
     "oldServer": "Diese Orca-Version auf dem Server zeigt nur den aktuellen Branch",
     "copyBranch": "Branch-Namen kopieren",
     "switchWorkspace": "Zum Workspace wechseln",
+    "workspaceClosed": "Dieser Branch ist nicht mehr in einem anderen Workspace geöffnet.",
     "refresh": "Commits aktualisieren",
     "branchTag": "Branch / Tag",
     "graph": "Graph",

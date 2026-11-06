@@ -23950,6 +23950,7 @@
     "oldServer": "This server's Orca version shows only the current branch",
     "copyBranch": "Copy branch name",
     "switchWorkspace": "Switch to workspace",
+    "workspaceClosed": "This branch isn't open in another workspace anymore.",
     "refresh": "Refresh commits",
     "branchTag": "Branch / Tag",
     "graph": "Graph",

@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
 import { getWorktreeExecutionHostId } from '../../../../../shared/execution-host'
 import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
@@ -5,7 +7,6 @@ import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { useAppStore } from '@/store'
 import { gitGraphScope } from '@/lib/git-graph-tab'
 import { getRuntimeGitRefs } from '@/runtime/runtime-git-status-client'
-import { getConnectionId } from '@/lib/connection-context'
 
 export const gitGraphOwnerKey = (scope: ReturnType<typeof gitGraphScope>) =>
   JSON.stringify([scope?.route, scope?.worktree.path])
@@ -32,26 +33,30 @@ export function gitGraphWorkspaceCatalog(
 }
 
 export async function switchGitGraphWorkspace(
-  worktreeId: string,
+  scope: ReturnType<typeof gitGraphScope>,
   refId: string,
   isLive: () => boolean
 ): Promise<void> {
-  const scope = gitGraphScope(worktreeId)
   const hostId = scope?.route.executionHostId
   if (!scope || !hostId || !isLive()) {
     return
   }
+  const worktreeId = scope.worktree.id
   try {
     const refs = await getRuntimeGitRefs(
       {
         target: scope.target,
         worktreeId: worktreeId,
         worktreePath: scope.worktree.path,
-        connectionId: getConnectionId(worktreeId) ?? undefined
+        connectionId: scope.connectionId ?? undefined
       },
       refId
     )
-    if (!isLive() || gitGraphOwnerKey(scope) !== gitGraphOwnerKey(gitGraphScope(worktreeId))) {
+    if (
+      !isLive() ||
+      gitGraphOwnerKey(scope) !==
+        gitGraphOwnerKey(gitGraphScope(worktreeId, useAppStore.getState(), hostId))
+    ) {
       return
     }
     const path = refs.find((ref) => ref.id === refId)?.worktreePath
@@ -63,6 +68,13 @@ export async function switchGitGraphWorkspace(
       )
     if (workspace) {
       useAppStore.getState().setActiveWorktree(workspace.id, hostId)
+    } else {
+      toast.message(
+        translate(
+          'gitGraph.workspaceClosed',
+          "This branch isn't open in another workspace anymore."
+        )
+      )
     }
   } catch {
     /* A failed lookup cannot navigate to a stale checkout. */
