@@ -201,7 +201,9 @@ export function AutomationRunDetails(props: {
           {error}
         </Text>
       ) : null}
-      {!run.terminalPaneKey || !run.workspaceId ? (
+      {(!run.terminalPaneKey || !run.workspaceId) &&
+      run.status !== 'pending' &&
+      run.status !== 'dispatching' ? (
         <Text style={styles.meta}>
           {t(
             'automations.mobile.theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere',
