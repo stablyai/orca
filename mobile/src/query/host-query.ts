@@ -4,6 +4,7 @@ import {
   notifyManager,
   queryOptions,
   skipToken,
+  useQueries,
   useQuery,
   type QueryClient,
   type UseQueryOptions,
@@ -105,4 +106,27 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
     return enabled ? fetchOptions : { ...fetchOptions, queryFn: skipToken }
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({ ...queryOptions, subscribed: options?.subscribed })
+}
+
+// One query per input (e.g. one per open folder), combined into one value; keep `combine` stable so the value is memoized.
+export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>(
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient | null },
+  target: HostQueryTarget,
+  inputs: readonly TInput[],
+  combine: (results: UseQueryResult<TData>[]) => TCombined
+): TCombined {
+  const { hostId, client } = host
+  useHostConnectionInvalidation(hostId, client)
+  const keyHash = hashKey([target, inputs])
+  const queries = useMemo(
+    (): UseQueryOptions<TData, Error, TData, HostQueryKey>[] =>
+      inputs.map((input) =>
+        client
+          ? hostQueryOptions(query, client, hostId, target, input)
+          : { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
+      ),
+    [query, client, hostId, keyHash]
+  )
+  return useQueries({ queries, combine })
 }
