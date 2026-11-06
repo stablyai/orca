@@ -175,7 +175,7 @@ it.each([20, 200])('shares one sign-in operation across %i row actions', async (
   expect(unrelatedRender).not.toHaveBeenCalled()
   expect(remoteCreate).not.toHaveBeenCalled()
   expect(state.createTab).not.toHaveBeenCalled()
-  const buttons = view.getAllByRole('button') as HTMLButtonElement[]
+  const buttons = view.getAllByRole('button')
   expect(buttons).toHaveLength(count)
   await act(async () => {
     for (const button of buttons) {
@@ -186,11 +186,15 @@ it.each([20, 200])('shares one sign-in operation across %i row actions', async (
   expect(remoteCreate).toHaveBeenCalledOnce()
   expect(unrelatedRender).not.toHaveBeenCalled()
   expect(eligibleRender).toHaveBeenCalledTimes(count)
-  expect(buttons.every((button) => button.disabled)).toBe(true)
+  expect(buttons.every((button) => button instanceof HTMLButtonElement && button.disabled)).toBe(
+    true
+  )
   eligibleRender.mockClear()
   await act(async () => pending.resolve({ status: 'created' }))
   expect(eligibleRender).toHaveBeenCalledTimes(count)
   expect(unrelatedRender).not.toHaveBeenCalled()
-  expect(buttons.every((button) => !button.disabled)).toBe(true)
+  expect(buttons.every((button) => button instanceof HTMLButtonElement && !button.disabled)).toBe(
+    true
+  )
   expect(remoteCreate).toHaveBeenCalledOnce()
 })
