@@ -12,7 +12,6 @@ export type MobileNativeChatComposerFieldProps = Omit<
   onKeyboardSubmit?: () => void
   /** The page's DOM paste event; native fields have none. */
   onWebPaste?: (event: ClipboardEvent) => void
-  allocationMaxHeight?: number
   // Dictation heard so far, shown between the draft's halves without becoming part of its value.
   dictationPreview?: { before: string; text: string; after: string } | null
   ref?: RefObject<TextInput | null>

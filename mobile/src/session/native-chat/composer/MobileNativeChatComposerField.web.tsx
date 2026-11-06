@@ -44,7 +44,6 @@ export function MobileNativeChatComposerField({
   onKeyboardSubmit,
   onKeyPress,
   onWebPaste,
-  allocationMaxHeight,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
@@ -75,12 +74,10 @@ export function MobileNativeChatComposerField({
   const keyboardHeight = useKeyboardOcclusion()
   // RN Web already shrinks browser dimensions; shell WebViews report the keyboard separately.
   const visibleHeight = Math.min(windowHeight, window.innerHeight - keyboardHeight)
+  const shareMaxHeight = Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
   const sizing = {
     height: Math.max(contentHeight ?? 0, placeholderHeight ?? 0) || undefined,
-    maxHeight:
-      allocation?.fieldMaxHeight ??
-      allocationMaxHeight ??
-      Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
+    maxHeight: Math.min(shareMaxHeight, allocation?.fieldMaxHeight ?? shareMaxHeight)
   }
   const copied = Boolean(skillToken || dictationPreview)
   // Keep one tree so adding/removing a skill or dictation cannot remount the field and drop focus.
