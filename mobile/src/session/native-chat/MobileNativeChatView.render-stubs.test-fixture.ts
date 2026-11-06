@@ -2,7 +2,13 @@ import { vi } from 'vitest'
 
 const scrollToEnd = vi.hoisted(() => vi.fn())
 const scrollToOffset = vi.hoisted(() => vi.fn())
-const platform = vi.hoisted(() => ({ OS: 'ios' }))
+const platform = vi.hoisted(() => {
+  const OS: string = 'ios'
+  return {
+    OS,
+    select: (specifics: { ios?: unknown; default?: unknown }) => specifics.ios ?? specifics.default
+  }
+})
 const pageScroller = vi.hoisted(() => ({
   scrollTop: 0,
   scrollHeight: 0,

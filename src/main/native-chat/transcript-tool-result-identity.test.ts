@@ -191,6 +191,30 @@ describe('provider transcript result identity', () => {
     ])
   })
 
+  it('stamps a synchronous Claude Agent result onto the tool result', async () => {
+    const messages = await load(
+      [
+        {
+          type: 'user',
+          uuid: 'sync-result',
+          timestamp: '2026-10-09T10:01:00.000Z',
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'toolu_agent', content: 'Fixed it.' }]
+          },
+          toolUseResult: { status: 'completed', agentId: 'agent-1', agentType: 'Explore' }
+        }
+      ],
+      'claude'
+    )
+    expect(messages[0]?.blocks[0]).toMatchObject({
+      type: 'tool-result',
+      callId: 'toolu_agent',
+      output: 'Fixed it.',
+      subagent: { id: 'agent-1', state: 'completed' }
+    })
+  })
+
   it.each(['claude', 'codex'] as const)(
     'keeps historical %s results without IDs positional',
     async (agent) => {

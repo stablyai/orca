@@ -14,7 +14,7 @@ import {
   readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
-import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
+import { readNativeChatLiveTail as readNativeChatTranscriptTailFile } from './transcript-live-tail'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'

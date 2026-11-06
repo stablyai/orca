@@ -186,6 +186,10 @@ function drawn(
   if (member === undefined) {
     return keys.placement(key) === unit.placed ? rows.get(key) : undefined
   }
+  // A collapsed run header moves with a folded roster. Tool lines still follow a row whose id changed.
+  if (member === 'run' && keys.placement(key) !== unit.placed) {
+    return undefined
+  }
   const row = rows.get(member === 'run' ? key : (keys.current(key) ?? ''))
   const paired = member.startsWith('result:') ? `call:${member.slice('result:'.length)}` : member
   return row && tagged(row, MEMBER).find((m) => m.id === member || m.id === paired)?.node

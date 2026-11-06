@@ -604,6 +604,14 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     } as unknown as RpcClient
     await mountAt(client, 'session-a')
 
+    expect(client.subscribe).toHaveBeenCalledWith(
+      'nativeChat.subscribe',
+      expect.objectContaining({
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 }
+      }),
+      expect.any(Function)
+    )
+
     await act(async () =>
       emitFrame({ type: 'appended', messages: [message('early-a'), message('early-b')] })
     )

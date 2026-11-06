@@ -2898,6 +2898,31 @@
       "unchanged": "Tasks unchanged",
       "showAll": "Full task list"
     },
+    "activity": {
+      "subagentPill": "{{count}} subagent",
+      "subagentsPill": "{{count}} subagents",
+      "openSubagents": "Subagents, {{label}}",
+      "subagentsTitle": "Subagents",
+      "dismissSubagent": "Dismiss {{name}}",
+      "dismissAllFailed": "Dismiss all failed or unavailable",
+      "completedSubagents": "Completed ({{count}})",
+      "openSubagent": "Open {{name}}",
+      "viewingSubagent": "Viewing {{name}}",
+      "composerStays": "The composer still sends to the main agent.",
+      "backToMain": "Main agent",
+      "backToConversation": "Back to the conversation",
+      "noActivity": "No activity yet",
+      "noMessages": "No messages from this subagent yet",
+      "transcriptUnavailable": "Transcript unavailable",
+      "state": {
+        "working": "Working",
+        "completed": "Completed",
+        "idle": "Idle",
+        "failed": "Failed",
+        "stopped": "Stopped",
+        "unavailable": "Status unavailable"
+      }
+    },
     "sessionOptionCopy": {
       "ultracode": "Ultracode",
       "on": "On",

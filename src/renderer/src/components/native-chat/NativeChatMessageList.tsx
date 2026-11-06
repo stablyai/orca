@@ -12,17 +12,16 @@ import { nativeChatScrollsToLatestOnSend } from '../../../../shared/native-chat/
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
-import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
+import { useNativeChatTranscriptIndexes } from './use-native-chat-transcript-indexes'
+import { NativeChatActivityBar } from './NativeChatActivityBar'
 import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
+import { useNativeChatSubagentTranscript } from './use-native-chat-subagent-transcript'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
-import {
-  NativeChatDisclosureContext,
-  useNativeChatDisclosures
-} from './native-chat-disclosure-store'
+import { NativeChatTranscriptFrame } from './native-chat-transcript-frame'
 import {
   NativeChatTranscriptItems,
   NativeChatWaitingTranscriptItems
@@ -134,14 +133,9 @@ export function NativeChatMessageList({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
-  const disclosures = useNativeChatDisclosures()
   const toggleExpandedTurn = useCallback((turnKey: string) => {
     setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
   }, [])
-
-  const { hasMore, loadingEarlier, loadEarlier } = session
-  // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
-  const showOlderHistory = hasMore && session.readPhase === 'ready'
 
   const { messages, subagentRows } = useNativeChatTranscriptProjection(
     session,
@@ -149,21 +143,30 @@ export function NativeChatMessageList({
     journalSubmissions,
     latestTurn
   )
+  const view = useNativeChatSubagentTranscript({
+    session,
+    messages,
+    subagentRows,
+    subagentRoster,
+    isWorking,
+    awaitingInput,
+    stopping,
+    activityText: turnActivity?.text
+  })
   const {
     sections: subagentSections,
     subagentRowsInOrder,
     subagentChoices,
     subagentDisclosure,
     openSubagentSections
-  } = useNativeChatSubagentSections(messages, subagentRows, subagentRoster)
+  } = useNativeChatSubagentSections(view.transcriptMessages, view.sectionRows, view.sectionRoster)
   // Folded subagent rows stay loaded, so a reopened reply keeps its reveal.
-  const loadedMessageIds = useMemo(
-    () => new Set([...messages.map(({ id }) => id), ...subagentSections.pathOf.keys()]),
-    [messages, subagentSections]
+  const { loadedMessageIds, taskListPredecessors } = useNativeChatTranscriptIndexes(
+    view.transcriptMessages,
+    subagentSections
   )
-  const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(messages), [messages])
   const turnRows = useNativeChatTurnMembership(
-    messages,
+    view.transcriptMessages,
     journalItems,
     journalSubmissions,
     latestTurn
@@ -178,14 +181,13 @@ export function NativeChatMessageList({
   const turnStatuses = useNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
-    isWorking,
+    isWorking: view.shownWorking,
     workingStartedAt,
     settledTurns,
     thinking
   })
   // Only unshown prompts need a waiting tail row; prompt cards explain their own wait.
-  const tailRow = transcriptTailRow(isWorking, awaitingInput)
-  const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
+  const tailRow = transcriptTailRow(view.shownWorking, view.shownAwaitingInput)
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
   const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
     typography,
@@ -197,15 +199,15 @@ export function NativeChatMessageList({
     turnStatuses,
     turnDiffs,
     expandedTurnKeys: expandedTurnIds,
-    isWorking,
-    lifecycleWorking,
+    isWorking: view.shownWorking,
+    lifecycleWorking: view.shownLifecycleWorking,
     subagentSections,
     subagentChoices,
     line: {
       draws: tailRow === 'activity',
       thinking: turnStatuses.active?.thinking === true,
-      stopping,
-      activityText: turnActivity?.text
+      stopping: view.shownStopping,
+      activityText: view.shownActivityText
     }
   })
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
@@ -214,11 +216,11 @@ export function NativeChatMessageList({
       splitNativeChatSlotsWaitingBehindLiveTurn(
         allSlots,
         journalItems,
-        stopping,
+        view.shownStopping,
         journalSubmissions,
         { latestTurn, ...hostWork }
       ),
-    [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
+    [allSlots, journalItems, view.shownStopping, journalSubmissions, latestTurn, hostWork]
   )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
@@ -232,7 +234,7 @@ export function NativeChatMessageList({
     scrollRef,
     contentRef,
     itemCount: slots.length,
-    isWorking,
+    isWorking: view.shownWorking,
     showsTailRow: tailRow !== null,
     isVisible,
     alignToViewportTop: transcriptWindow.alignToViewportTop,
@@ -246,18 +248,18 @@ export function NativeChatMessageList({
     transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
-    historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
+    historyKey: `${session.agent}:${session.sessionId ?? ''}:${view.activity.focusedSubagentId ?? ''}:${session.olderHistoryGeneration}`,
     isVisible,
-    hasMore: showOlderHistory,
-    loadingEarlier,
-    loadEarlier
+    hasMore: view.history.hasMore,
+    loadingEarlier: view.history.loadingEarlier,
+    loadEarlier: view.history.loadEarlier
   })
   const rail = useNativeChatMessageRail({
     scrollRef,
     slots,
     turnRows,
     virtualItems: transcriptWindow.virtualItems,
-    outline: railOutline
+    outline: view.activity.focusedSubagentId ? null : railOutline
   })
   const requestRailJump = useCallback((item: NativeChatRailItem) => {
     navigationSequence.current += 1
@@ -266,9 +268,9 @@ export function NativeChatMessageList({
   }, [])
   const railHistoryJump = useNativeChatRailHistoryJump({
     items: rail.items,
-    sessionKey: `${session.agent}:${session.sessionId}`,
+    sessionKey: `${session.agent}:${session.sessionId}:${view.activity.focusedSubagentId ?? ''}`,
     isVisible,
-    loadEarlier,
+    loadEarlier: view.history.loadEarlier,
     jumpToLoaded: requestRailJump
   })
   const { start: startHistoryJump, abort: beginNavigation } = railHistoryJump
@@ -351,7 +353,7 @@ export function NativeChatMessageList({
   })
 
   return (
-    <NativeChatDisclosureContext.Provider value={disclosures}>
+    <NativeChatTranscriptFrame open={view.activity.onFocusSubagent}>
       <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
         <div className="relative min-h-0 flex-1">
           <div
@@ -365,10 +367,10 @@ export function NativeChatMessageList({
             // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
             className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           >
-            {showOlderHistory ? (
+            {view.history.hasMore ? (
               <NativeChatOlderHistoryRow
                 olderHistory={olderHistory}
-                loadingEarlier={loadingEarlier}
+                loadingEarlier={view.history.loadingEarlier}
               />
             ) : null}
             <div className={nativeChatTranscriptOuterClass(rail.visible)}>
@@ -404,7 +406,8 @@ export function NativeChatMessageList({
           <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
         </div>
         <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
+        <NativeChatActivityBar key={`activity:${session.sessionId}`} {...view.activity} />
       </div>
-    </NativeChatDisclosureContext.Provider>
+    </NativeChatTranscriptFrame>
   )
 }

@@ -10,6 +10,7 @@ import {
   runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
+import { readNativeChatSubagentActivities } from '../../../../shared/native-chat/input/native-chat-tool-subagents'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
@@ -45,12 +46,20 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) => {
+    readSession: async (agent, sessionId, limit, transcriptPath, options) => {
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath, capabilities: { transcriptSourceOrder: 1 } },
+          {
+            agent,
+            sessionId,
+            limit,
+            transcriptPath,
+            capabilities: { transcriptSourceOrder: 1 },
+            ...(options?.beforeOffset !== undefined ? { beforeOffset: options.beforeOffset } : {}),
+            ...(options?.subagentId ? { subagentId: options.subagentId } : {})
+          },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -99,7 +108,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 sessionId,
                 transcriptPath,
                 limit,
-                capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+                capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 }
               },
               timeoutMs: 15_000
             },
@@ -123,6 +132,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   }
                   return
                 }
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a wire frame; every field is checked before use.
                 const frame = response.result as {
                   type?: string
                   messages?: NativeChatAppendedMessages
@@ -130,6 +140,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   error?: string
                   lifecycle?: unknown
                   pending?: boolean
+                  subagents?: unknown
+                }
+                if (frame?.type === 'task-list') {
+                  onFrame({
+                    type: 'task-list',
+                    subagents: readNativeChatSubagentActivities(frame.subagents)
+                  })
+                  return
                 }
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
                 // Pending frames stop the spinner without claiming a settled initial transcript.
