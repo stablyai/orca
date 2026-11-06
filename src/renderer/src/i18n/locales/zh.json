@@ -22939,5 +22939,29 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 发行版 {{distro}} 已停止，因此 Orca 没有启动此终端。请启动该发行版后重试。",
     "terminalUnverifiable": "Orca 无法确认 WSL 发行版 {{distro}} 是否正在运行，因此没有启动此终端。请启动该发行版后重试。"
+  },
+  "gitGraph": {
+    "copyHash": "复制提交哈希",
+    "parents": "父提交",
+    "files": "文件",
+    "currentBranch": "当前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "选定分支",
+    "searchRefs": "搜索分支和标签",
+    "oldServer": "此服务器的 Orca 版本仅显示当前分支",
+    "copyBranch": "复制分支名称",
+    "switchWorkspace": "切换到工作区",
+    "refresh": "刷新提交",
+    "branchTag": "分支 / 标签",
+    "graph": "图",
+    "message": "消息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "加载更多",
+    "noCommits": "暂无提交",
+    "historyChanged": "历史记录再次发生变化。请刷新 Git 图后重试。",
+    "loadFailed": "无法加载 Git 历史记录",
+    "updateHost": "请更新 {{host}} 上的 Orca 以打开 Git 图",
+    "title": "Git 图"
   }
 }

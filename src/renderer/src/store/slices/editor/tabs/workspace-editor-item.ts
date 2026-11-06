@@ -24,6 +24,15 @@ export function openWorkspaceEditorItem(
   /** Where in its group a reopened tab goes back to. */
   index?: number
 ): string {
+  const graphTab =
+    contentType === 'git-graph'
+      ? state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.contentType === 'git-graph')
+      : undefined
+  if (graphTab) {
+    state.activateTab?.(graphTab.id, { worktreeId })
+    return graphTab.id
+  }
+  const fixedTabId = contentType === 'git-graph' ? `${worktreeId}::git-graph` : undefined
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
@@ -49,7 +58,7 @@ export function openWorkspaceEditorItem(
   }
   const drawHere = (id?: string): Tab | undefined => {
     const file =
-      contentType === 'editor' || contentType === 'check-details'
+      contentType === 'editor' || contentType === 'check-details' || contentType === 'git-graph'
         ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
         : undefined
     return state.createUnifiedTab?.(worktreeId, contentType, {
@@ -68,6 +77,7 @@ export function openWorkspaceEditorItem(
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const sent = openEditorTabThroughLayoutOwner(state, {
       fileId,
+      fixedTabId,
       worktreeId,
       contentType,
       isPreview: isPreview === true,
@@ -80,7 +90,7 @@ export function openWorkspaceEditorItem(
       return sent
     }
   }
-  return drawHere()?.id ?? fileId
+  return drawHere(fixedTabId)?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,

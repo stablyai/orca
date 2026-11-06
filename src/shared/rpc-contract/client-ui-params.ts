@@ -1,3 +1,4 @@
+import { GitHistoryRefName } from './git-params'
 import { z } from 'zod'
 import { isFeatureTipId } from '../feature-tips'
 import {
@@ -166,6 +167,12 @@ export const UiUpdateFields = z
     ...ClientUiWorkspaceFilterFields,
     // Part of App.tsx’s debounced writer; missing fields reject the whole paired-client payload.
     explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
+    gitGraphFiltersByWorktree: z
+      .record(
+        z.string(),
+        z.union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
+      )
+      .optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),

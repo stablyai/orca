@@ -70,7 +70,7 @@ export default function EditorFileTab({
 
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
-  const isCheckDetails = file.mode === 'check-details'
+  const isCheckDetails = file.mode === 'check-details' || file.mode === 'git-graph'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
   // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.

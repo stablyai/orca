@@ -23600,5 +23600,29 @@
   "wslDistroHold": {
     "terminalStopped": "A distribuição WSL {{distro}} está parada, então o Orca não iniciou este terminal. Inicie a distribuição e tente novamente.",
     "terminalUnverifiable": "O Orca não conseguiu verificar se a distribuição WSL {{distro}} está em execução, então não iniciou este terminal. Inicie a distribuição e tente novamente."
+  },
+  "gitGraph": {
+    "copyHash": "Copiar hash do commit",
+    "parents": "Commits pais",
+    "files": "Arquivos",
+    "currentBranch": "Branch atual",
+    "allBranches": "Todas as branches",
+    "chosenBranches": "Branches escolhidas",
+    "searchRefs": "Buscar branches e tags",
+    "oldServer": "Esta versão do Orca no servidor mostra apenas a branch atual",
+    "copyBranch": "Copiar nome da branch",
+    "switchWorkspace": "Mudar para o espaço de trabalho",
+    "refresh": "Atualizar commits",
+    "branchTag": "Branch / Tag",
+    "graph": "Grafo",
+    "message": "Mensagem",
+    "author": "Autor",
+    "date": "Data",
+    "loadMore": "Carregar mais",
+    "noCommits": "Ainda não há commits",
+    "historyChanged": "O histórico mudou novamente. Atualize o grafo do Git para tentar de novo.",
+    "loadFailed": "Não foi possível carregar o histórico do Git",
+    "updateHost": "Atualize o Orca em {{host}} para abrir o grafo do Git",
+    "title": "Grafo do Git"
   }
 }

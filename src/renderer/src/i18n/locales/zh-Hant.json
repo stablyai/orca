@@ -22888,5 +22888,29 @@
     "sameAsTextDefault": "與預設值相同 · {{value0}}",
     "chatChoicesNote": "沒有 CLI 旗標的 {{agent}} 模型或推理力度選項適用於聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度選項包含在模型引數中。"
+  },
+  "gitGraph": {
+    "copyHash": "複製提交雜湊",
+    "parents": "父提交",
+    "files": "檔案",
+    "currentBranch": "目前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "選定分支",
+    "searchRefs": "搜尋分支和標籤",
+    "oldServer": "此伺服器的 Orca 版本僅顯示目前分支",
+    "copyBranch": "複製分支名稱",
+    "switchWorkspace": "切換至工作區",
+    "refresh": "重新整理提交",
+    "branchTag": "分支 / 標籤",
+    "graph": "圖",
+    "message": "訊息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "載入更多",
+    "noCommits": "尚無提交",
+    "historyChanged": "歷史記錄再次變更。請重新整理 Git 圖後重試。",
+    "loadFailed": "無法載入 Git 歷史記錄",
+    "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
+    "title": "Git 圖"
   }
 }

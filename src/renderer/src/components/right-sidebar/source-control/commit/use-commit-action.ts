@@ -124,6 +124,7 @@ export function useSourceControlCommitAction({
         }
         if (!options?.target) {
           void refreshBranchCompareRef.current()
+          window.dispatchEvent(new Event('orca:git-graph-refresh'))
           void refreshGitHistoryRef.current()
         }
         return true
@@ -201,6 +202,7 @@ export function useSourceControlCommitAction({
       )
     }
     void refreshBranchCompareRef.current()
+    window.dispatchEvent(new Event('orca:git-graph-refresh'))
     void refreshGitHistoryRef.current()
   }, [
     activeRepoTarget,

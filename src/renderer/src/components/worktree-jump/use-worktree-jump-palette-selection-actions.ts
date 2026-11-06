@@ -184,6 +184,9 @@ export function useWorktreeJumpPaletteSelectionActions({
   )
   const handleSelectQuickAction = useCallback(
     (action: CmdJActionResult) => {
+      if (action.disabled) {
+        return
+      }
       if (action.sourceQuery !== undefined && liveQueryRef.current.trim() !== action.sourceQuery) {
         return
       }

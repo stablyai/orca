@@ -45,7 +45,8 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   if (
     item.contentType === 'diff' ||
     item.contentType === 'conflict-review' ||
-    item.contentType === 'check-details'
+    item.contentType === 'check-details' ||
+    item.contentType === 'git-graph'
   ) {
     return <GitCompare className={className} />
   }

@@ -22938,5 +22938,29 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
+  },
+  "gitGraph": {
+    "copyHash": "커밋 해시 복사",
+    "parents": "부모 커밋",
+    "files": "파일",
+    "currentBranch": "현재 브랜치",
+    "allBranches": "모든 브랜치",
+    "chosenBranches": "선택한 브랜치",
+    "searchRefs": "브랜치 및 태그 검색",
+    "oldServer": "이 서버의 Orca 버전은 현재 브랜치만 표시합니다",
+    "copyBranch": "브랜치 이름 복사",
+    "switchWorkspace": "워크스페이스로 전환",
+    "refresh": "커밋 새로 고침",
+    "branchTag": "브랜치 / 태그",
+    "graph": "그래프",
+    "message": "메시지",
+    "author": "작성자",
+    "date": "날짜",
+    "loadMore": "더 불러오기",
+    "noCommits": "아직 커밋이 없습니다",
+    "historyChanged": "기록이 다시 변경되었습니다. Git 그래프를 새로 고친 후 다시 시도하세요.",
+    "loadFailed": "Git 기록을 불러오지 못했습니다",
+    "updateHost": "Git 그래프를 열려면 {{host}}의 Orca를 업데이트하세요",
+    "title": "Git 그래프"
   }
 }

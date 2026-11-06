@@ -23203,5 +23203,29 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
+  },
+  "gitGraph": {
+    "copyHash": "Commit karmasını kopyala",
+    "parents": "Üst commitler",
+    "files": "Dosyalar",
+    "currentBranch": "Geçerli dal",
+    "allBranches": "Tüm dallar",
+    "chosenBranches": "Seçilen dallar",
+    "searchRefs": "Dal ve etiket ara",
+    "oldServer": "Bu sunucunun Orca sürümü yalnızca geçerli dalı gösterir",
+    "copyBranch": "Dal adını kopyala",
+    "switchWorkspace": "Çalışma alanına geç",
+    "refresh": "Commitleri yenile",
+    "branchTag": "Dal / Etiket",
+    "graph": "Grafik",
+    "message": "Mesaj",
+    "author": "Yazar",
+    "date": "Tarih",
+    "loadMore": "Daha fazla yükle",
+    "noCommits": "Henüz commit yok",
+    "historyChanged": "Geçmiş yeniden değişti. Tekrar denemek için Git grafiğini yenileyin.",
+    "loadFailed": "Git geçmişi yüklenemedi",
+    "updateHost": "Git grafiğini açmak için {{host}} üzerindeki Orca’yı güncelleyin",
+    "title": "Git Grafiği"
   }
 }

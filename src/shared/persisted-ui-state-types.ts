@@ -1,3 +1,4 @@
+import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
@@ -31,6 +32,7 @@ import type { PersistedAutomationHostFilter } from './automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
 
 export type PersistedUIState = {
+  gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
   /** Paired-server project removals still owed to their server; optional so older builds ignore it. */
   pendingRuntimeRepoRemovals?: PendingRuntimeRepoRemoval[]
   jiraSavedFilterState?: JiraSavedFilterState

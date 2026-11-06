@@ -23938,5 +23938,29 @@
   },
   "checks": {
     "rerunUnsuccessful": "Rerun unsuccessful"
+  },
+  "gitGraph": {
+    "copyHash": "Copy commit hash",
+    "parents": "Parents",
+    "files": "Files",
+    "currentBranch": "Current branch",
+    "allBranches": "All branches",
+    "chosenBranches": "Chosen branches",
+    "searchRefs": "Search branches and tags",
+    "oldServer": "This server's Orca version shows only the current branch",
+    "copyBranch": "Copy branch name",
+    "switchWorkspace": "Switch to workspace",
+    "refresh": "Refresh commits",
+    "branchTag": "Branch / Tag",
+    "graph": "Graph",
+    "message": "Message",
+    "author": "Author",
+    "date": "Date",
+    "loadMore": "Load more",
+    "noCommits": "No commits yet",
+    "historyChanged": "History changed again. Refresh the Git Graph to try again.",
+    "loadFailed": "Failed to load Git history",
+    "updateHost": "Update Orca on {{host}} to open the Git Graph",
+    "title": "Git Graph"
   }
 }

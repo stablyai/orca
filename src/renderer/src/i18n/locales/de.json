@@ -23220,5 +23220,29 @@
     "sameAsTextDefault": "Wie Standard · {{value0}}",
     "chatChoicesNote": "Modell- oder Effort-Auswahlen für {{agent}} ohne CLI-Flag gelten für Chats.",
     "composedChoicesNote": "Effort- und Geschwindigkeitsauswahlen für {{agent}} sind im Modellargument enthalten."
+  },
+  "gitGraph": {
+    "copyHash": "Commit-Hash kopieren",
+    "parents": "Übergeordnete Commits",
+    "files": "Dateien",
+    "currentBranch": "Aktueller Branch",
+    "allBranches": "Alle Branches",
+    "chosenBranches": "Ausgewählte Branches",
+    "searchRefs": "Branches und Tags suchen",
+    "oldServer": "Diese Orca-Version auf dem Server zeigt nur den aktuellen Branch",
+    "copyBranch": "Branch-Namen kopieren",
+    "switchWorkspace": "Zum Workspace wechseln",
+    "refresh": "Commits aktualisieren",
+    "branchTag": "Branch / Tag",
+    "graph": "Graph",
+    "message": "Nachricht",
+    "author": "Autor",
+    "date": "Datum",
+    "loadMore": "Mehr laden",
+    "noCommits": "Noch keine Commits",
+    "historyChanged": "Der Verlauf hat sich erneut geändert. Aktualisiere den Git-Graphen, um es erneut zu versuchen.",
+    "loadFailed": "Git-Verlauf konnte nicht geladen werden",
+    "updateHost": "Aktualisiere Orca auf {{host}}, um den Git-Graphen zu öffnen",
+    "title": "Git-Graph"
   }
 }

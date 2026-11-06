@@ -1,3 +1,4 @@
+import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -190,6 +191,9 @@ export function updatePersistedUI(
         : normalizeExplorerDisplayRootByWorktree(
             operations.state.ui?.explorerDisplayRootByWorktree
           ),
+    gitGraphFiltersByWorktree: normalizeGitGraphFilters(
+      sanitizedUpdates.gitGraphFiltersByWorktree ?? operations.state.ui?.gitGraphFiltersByWorktree
+    ),
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)

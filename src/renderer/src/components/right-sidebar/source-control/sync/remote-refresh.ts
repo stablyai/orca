@@ -30,6 +30,7 @@ export function refreshSourceControlAfterRemoteAction({
   refreshGitHistory: () => Promise<void>
   onError?: (error: unknown) => void
 }): void {
+  window.dispatchEvent(new Event('orca:git-graph-refresh'))
   // Fetch/sync can move the remote base without local file changes; refresh every projection.
   void Promise.all([refreshGitStatus(), refreshBranchCompare(), refreshGitHistory()]).catch(onError)
 }

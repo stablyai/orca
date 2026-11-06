@@ -1,4 +1,10 @@
-import { useCallback, useMemo } from 'react'
+import {
+  gitGraphScope,
+  gitGraphSupport,
+  gitGraphUpdateMessage,
+  probeGitGraphSupport
+} from '@/lib/git-graph-tab'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
@@ -63,6 +69,30 @@ export function useWorktreeJumpPaletteQuickActions({
   deferredQuery,
   settingsResults
 }: WorktreeJumpPaletteQuickActionsInput) {
+  const graphOwner = useAppStore(() =>
+    JSON.stringify([
+      activeWorktreeId,
+      activeWorktreeId ? gitGraphScope(activeWorktreeId)?.route : null
+    ])
+  )
+  const [graphProbe, setGraphProbe] = useState<{ owner: string; support: boolean | null }>()
+  const graphSupport = graphProbe?.owner === graphOwner ? graphProbe.support : null
+  useEffect(() => {
+    let live = true
+    if (activeWorktreeId) {
+      setGraphProbe({ owner: graphOwner, support: gitGraphSupport(activeWorktreeId) })
+      void probeGitGraphSupport(activeWorktreeId)
+        .then((value) => {
+          if (live) {
+            setGraphProbe({ owner: graphOwner, support: value })
+          }
+        })
+        .catch(() => {})
+    }
+    return () => {
+      live = false
+    }
+  }, [activeWorktreeId, graphOwner, runtimeStatusByEnvironmentId])
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
     const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
@@ -152,9 +182,30 @@ export function useWorktreeJumpPaletteQuickActions({
     const context = buildQuickActionContext()
     return {
       context,
-      actionResults: actionResults.filter((action) => action.isAvailable(context).available)
+      actionResults: actionResults
+        .filter(
+          (action) =>
+            (action.id === 'git-graph' &&
+              context.activeWorktree &&
+              repos.find((repo) => repo.id === context.activeWorktree?.repoId)?.kind !==
+                'folder') ||
+            action.isAvailable(context).available
+        )
+        .map((action) =>
+          action.id === 'git-graph'
+            ? {
+                ...action,
+                disabled: graphSupport !== true,
+                description:
+                  graphSupport === false && activeWorktreeId
+                    ? gitGraphUpdateMessage(activeWorktreeId)
+                    : ''
+              }
+            : action
+        )
     }
   }, [
+    graphSupport,
     actionResults,
     buildQuickActionContext,
     activeView,

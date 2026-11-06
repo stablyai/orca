@@ -27,8 +27,14 @@ function harness(epoch?: string) {
       publish = listener
       return {
         snapshot: [
-          { key: 'a', layout: { worktreeId: 'a' } },
-          { key: 'b', layout: { worktreeId: 'b' } }
+          {
+            key: 'a',
+            layout: { worktreeId: 'a', tabs: [], groups: [], editorFiles: [], browserTabs: [] }
+          },
+          {
+            key: 'b',
+            layout: { worktreeId: 'b', tabs: [], groups: [], editorFiles: [], browserTabs: [] }
+          }
         ],
         seq: 4,
         ...(epoch ? { epoch } : {}),
@@ -66,7 +72,12 @@ describe('layout.subscribe', () => {
       {
         type: 'snapshot',
         subscriptionId: expect.any(String),
-        workspaces: [{ key: 'b', layout: { worktreeId: 'b' } }],
+        workspaces: [
+          {
+            key: 'b',
+            layout: { worktreeId: 'b', tabs: [], groups: [], editorFiles: [], browserTabs: [] }
+          }
+        ],
         seq: 4
       }
     ])

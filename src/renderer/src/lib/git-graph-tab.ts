@@ -1,0 +1,102 @@
+import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
+import { useAppStore } from '@/store'
+import {
+  findFirstIndexedWorktree,
+  findIndexedWorktreeOwnerForHost
+} from './worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { translate } from '@/i18n/i18n'
+import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
+import {
+  readCachedRuntimeEnvironmentCapability,
+  runtimeEnvironmentSupportsCapability
+} from '@/runtime/runtime-rpc-client'
+
+export function gitGraphScope(worktreeId: string) {
+  const state = useAppStore.getState()
+  const worktrees = selectWorktreesByRepo(state)
+  const route = resolveWorktreeOperationRoute({ ...state, worktreesByRepo: worktrees }, worktreeId)
+  const worktree = route?.executionHostId
+    ? findIndexedWorktreeOwnerForHost(worktrees, worktreeId, route.executionHostId)
+    : findFirstIndexedWorktree(worktrees, worktreeId)
+  const repo = worktree && state.repos.find((entry) => entry.id === worktree.repoId)
+  return worktree && route && repo?.kind !== 'folder'
+    ? { worktree, route, target: runtimeTargetForOwnerEnvironment(route.runtimeEnvironmentId) }
+    : null
+}
+
+export function gitGraphSupport(worktreeId: string): boolean | null {
+  const scope = gitGraphScope(worktreeId)
+  if (!scope) {
+    return null
+  }
+  return scope.target.kind === 'local'
+    ? true
+    : readCachedRuntimeEnvironmentCapability(scope.target.environmentId, GIT_GRAPH_TAB_CAPABILITY)
+}
+
+export async function probeGitGraphSupport(worktreeId: string): Promise<boolean | null> {
+  const scope = gitGraphScope(worktreeId)
+  if (!scope) {
+    return null
+  }
+  return scope.target.kind === 'local'
+    ? true
+    : runtimeEnvironmentSupportsCapability(scope.target.environmentId, GIT_GRAPH_TAB_CAPABILITY)
+}
+
+export function gitGraphUpdateMessage(worktreeId: string): string {
+  const scope = gitGraphScope(worktreeId)
+  const state = useAppStore.getState()
+  const environmentId =
+    scope?.target.kind === 'environment' ? scope.target.environmentId : undefined
+  const environment =
+    scope?.target.kind === 'environment'
+      ? state.runtimeEnvironments?.find((entry) => entry.id === environmentId)
+      : undefined
+  return translate('gitGraph.updateHost', 'Update Orca on {{host}} to open the Git Graph', {
+    host: environment?.name ?? scope?.route.executionHostId ?? ''
+  })
+}
+
+export async function openGitGraph(worktreeId: string): Promise<void> {
+  const supported = await probeGitGraphSupport(worktreeId)
+  if (!supported) {
+    return
+  }
+  const scope = gitGraphScope(worktreeId)
+  if (!scope) {
+    return
+  }
+  const state = useAppStore.getState()
+  const existing = state.unifiedTabsByWorktree?.[worktreeId]?.find(
+    (tab) => tab.contentType === 'git-graph'
+  )
+  const id = existing?.entityId ?? `${worktreeId}::git-graph`
+  const label = translate('gitGraph.title', 'Git Graph')
+  if (!state.openFiles.some((file) => file.id === id)) {
+    useAppStore.setState({
+      openFiles: [
+        ...state.openFiles,
+        {
+          id,
+          filePath: id,
+          relativePath: label,
+          worktreeId,
+          runtimeEnvironmentId: scope.route.runtimeEnvironmentId,
+          language: 'plaintext',
+          isDirty: false,
+          operationProvenance: {
+            generation: captureWorktreeOperationGenerationSnapshot(scope.route),
+            ownershipProjection: 'explicit'
+          },
+          mode: 'git-graph'
+        }
+      ]
+    })
+  }
+  openWorkspaceEditorItem(useAppStore.getState(), id, worktreeId, label, 'git-graph')
+}

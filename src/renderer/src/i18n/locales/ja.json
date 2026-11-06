@@ -22938,5 +22938,29 @@
   "wslDistroHold": {
     "terminalStopped": "WSL ディストリビューション {{distro}} が停止しているため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。",
     "terminalUnverifiable": "WSL ディストリビューション {{distro}} が実行中か確認できなかったため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。"
+  },
+  "gitGraph": {
+    "copyHash": "コミットハッシュをコピー",
+    "parents": "親コミット",
+    "files": "ファイル",
+    "currentBranch": "現在のブランチ",
+    "allBranches": "すべてのブランチ",
+    "chosenBranches": "選択したブランチ",
+    "searchRefs": "ブランチとタグを検索",
+    "oldServer": "このサーバーのOrcaは現在のブランチのみ表示します",
+    "copyBranch": "ブランチ名をコピー",
+    "switchWorkspace": "ワークスペースに切り替え",
+    "refresh": "コミットを更新",
+    "branchTag": "ブランチ / タグ",
+    "graph": "グラフ",
+    "message": "メッセージ",
+    "author": "作成者",
+    "date": "日付",
+    "loadMore": "さらに読み込む",
+    "noCommits": "コミットはまだありません",
+    "historyChanged": "履歴が再び変更されました。Gitグラフを更新して再試行してください。",
+    "loadFailed": "Git履歴を読み込めませんでした",
+    "updateHost": "Gitグラフを開くには{{host}}のOrcaを更新してください",
+    "title": "Gitグラフ"
   }
 }

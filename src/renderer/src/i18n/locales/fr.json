@@ -23627,5 +23627,29 @@
   "wslDistroHold": {
     "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
     "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
+  },
+  "gitGraph": {
+    "copyHash": "Copier le hash du commit",
+    "parents": "Commits parents",
+    "files": "Fichiers",
+    "currentBranch": "Branche actuelle",
+    "allBranches": "Toutes les branches",
+    "chosenBranches": "Branches choisies",
+    "searchRefs": "Rechercher des branches et des tags",
+    "oldServer": "Cette version d’Orca sur le serveur affiche uniquement la branche actuelle",
+    "copyBranch": "Copier le nom de la branche",
+    "switchWorkspace": "Passer à l’espace de travail",
+    "refresh": "Actualiser les commits",
+    "branchTag": "Branche / Tag",
+    "graph": "Graphe",
+    "message": "Message",
+    "author": "Auteur",
+    "date": "Date",
+    "loadMore": "Charger plus",
+    "noCommits": "Aucun commit pour le moment",
+    "historyChanged": "L’historique a encore changé. Actualisez le graphe Git pour réessayer.",
+    "loadFailed": "Impossible de charger l’historique Git",
+    "updateHost": "Mettez à jour Orca sur {{host}} pour ouvrir le graphe Git",
+    "title": "Graphe Git"
   }
 }

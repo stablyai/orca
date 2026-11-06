@@ -1,0 +1,225 @@
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { GitHistoryCommitContextMenu } from '@/components/right-sidebar/source-control/sync/git-history-commit-context-menu'
+import { GitHistoryGraphSvg } from '@/components/right-sidebar/source-control/sync/git-history-graph-svg'
+import { useGitHistoryCommitActions } from '@/components/right-sidebar/source-control/sync/use-git-history-commit-actions'
+import { formatGitHistoryTimestamp } from '@/components/right-sidebar/source-control/sync/git-history-format'
+import {
+  buildDefaultGitHistoryColorMap,
+  buildGitHistoryViewModels
+} from '../../../../../shared/git/history/git-history-graph'
+import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-history'
+import { GitGraphFilter } from './git-graph-filter'
+import { GitGraphDetails } from './git-graph-details'
+import { GitGraphRefMenu } from './git-graph-ref-menu'
+import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+
+const sameGroup = () => undefined
+
+export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
+  const history = useGitGraphHistory(worktreeId)
+  const { result, scope } = history
+  const rows = useMemo(
+    () =>
+      result
+        ? buildGitHistoryViewModels(
+            result.items,
+            buildDefaultGitHistoryColorMap(result),
+            result.currentRef
+          )
+        : [],
+    [result]
+  )
+  const graphWidth = useMemo(
+    () =>
+      rows.reduce(
+        (width, row) =>
+          Math.max(
+            width,
+            (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length) + 1) * 11
+          ),
+        44
+      ),
+    [rows]
+  )
+  const columns = `160px ${graphWidth}px minmax(200px,1fr) 120px 100px`
+  const scroll = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scroll.current,
+    estimateSize: () => 24,
+    overscan: 12,
+    getItemKey: (index) => rows[index]!.historyItem.id
+  })
+  const [selectedId, setSelectedId] = useState<string>()
+  if (!selectedId && result?.items[0]) {
+    setSelectedId(result.items[0].id)
+  }
+  const selected = result?.items.find((item) => item.id === selectedId) ?? result?.items[0]
+  const [revealId, setRevealId] = useState<string>()
+  useLayoutEffect(() => {
+    if (!revealId) {
+      return
+    }
+    const index = rows.findIndex((row) => row.historyItem.id === revealId)
+    if (index !== -1) {
+      virtualizer.scrollToIndex(index)
+      setRevealId(undefined)
+    }
+  }, [rows, revealId, virtualizer])
+  const actions = useGitHistoryCommitActions({
+    activeWorktreeId: worktreeId,
+    worktreePath: scope?.worktree.path ?? null,
+    activeRepoTarget: scope?.target ?? null,
+    resolveSplitTargetGroupId: sameGroup
+  })
+  const selectParent = async (id: string) => {
+    await history.reveal(id)
+    setSelectedId(id)
+    setRevealId(id)
+  }
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+      <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
+        <GitGraphFilter
+          worktreeId={worktreeId}
+          filter={history.filter}
+          supported={gitGraphFilterSupported(result)}
+          onChange={history.changeFilter}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={history.loading}
+              aria-label={translate('gitGraph.refresh', 'Refresh commits')}
+              onClick={() => void history.refresh()}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{translate('gitGraph.refresh', 'Refresh commits')}</TooltipContent>
+        </Tooltip>
+      </div>
+      {history.error && (
+        <div className="shrink-0 px-3 py-2 text-xs text-destructive">{history.error}</div>
+      )}
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-auto scrollbar-sleek">
+          <div
+            className="grid h-7 shrink-0 items-center border-b border-border px-3 text-2xs text-muted-foreground"
+            style={{ gridTemplateColumns: columns, minWidth: graphWidth + 604 }}
+          >
+            <span>{translate('gitGraph.branchTag', 'Branch / Tag')}</span>
+            <span>{translate('gitGraph.graph', 'Graph')}</span>
+            <span>{translate('gitGraph.message', 'Message')}</span>
+            <span>{translate('gitGraph.author', 'Author')}</span>
+            <span>{translate('gitGraph.date', 'Date')}</span>
+          </div>
+          <div
+            ref={scroll}
+            className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
+            onScroll={() => {
+              const element = scroll.current
+              if (
+                element &&
+                element.scrollHeight - element.scrollTop - element.clientHeight < 200 &&
+                !history.loading
+              ) {
+                void history.loadMore()
+              }
+            }}
+          >
+            <div
+              className="relative min-w-max"
+              style={{ height: virtualizer.getTotalSize(), minWidth: graphWidth + 604 }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const viewModel = rows[virtualRow.index]!
+                const item = viewModel.historyItem
+                return (
+                  <ContextMenu key={item.id}>
+                    <ContextMenuTrigger asChild>
+                      <div
+                        className={cn(
+                          'absolute left-0 top-0 grid h-6 w-full items-center px-3 text-xs hover:bg-accent',
+                          selected?.id === item.id && 'bg-accent'
+                        )}
+                        style={{
+                          transform: `translateY(${virtualRow.start}px)`,
+                          gridTemplateColumns: columns
+                        }}
+                        data-current={selected?.id === item.id}
+                        onClick={() => setSelectedId(item.id)}
+                      >
+                        <div className="flex min-w-0 gap-1 overflow-hidden pr-2">
+                          {item.references?.map((ref) => (
+                            <GitGraphRefMenu
+                              key={ref.id}
+                              itemRef={ref}
+                              worktreeId={worktreeId}
+                              current={result?.currentRef?.id === ref.id}
+                            />
+                          ))}
+                        </div>
+                        <GitHistoryGraphSvg viewModel={viewModel} />
+                        <button
+                          className="min-w-0 truncate pr-3 text-left"
+                          title={item.message}
+                          onClick={() => setSelectedId(item.id)}
+                          onDoubleClick={() => void actions.openHistoryCommitDiff(item)}
+                        >
+                          {item.subject}
+                        </button>
+                        <span className="truncate pr-2 text-muted-foreground">{item.author}</span>
+                        <span className="truncate text-2xs text-muted-foreground">
+                          {formatGitHistoryTimestamp(item.timestamp)}
+                        </span>
+                      </div>
+                    </ContextMenuTrigger>
+                    <GitHistoryCommitContextMenu
+                      item={item}
+                      onAction={actions.handleCommitAction}
+                    />
+                  </ContextMenu>
+                )
+              })}
+            </div>
+            {result?.hasMore && (
+              <Button
+                className="m-2"
+                variant="ghost"
+                size="sm"
+                disabled={history.loading}
+                onClick={() => void history.loadMore()}
+              >
+                {translate('gitGraph.loadMore', 'Load more')}
+              </Button>
+            )}
+            {result && !result.items.length && (
+              <div className="p-4 text-xs text-muted-foreground">
+                {translate('gitGraph.noCommits', 'No commits yet')}
+              </div>
+            )}
+          </div>
+        </div>
+        <aside className="w-80 min-w-64 shrink-0 overflow-y-auto border-l border-border scrollbar-sleek">
+          {selected && (
+            <GitGraphDetails
+              key={selected.id}
+              item={selected}
+              actions={actions}
+              onParent={(id) => void selectParent(id)}
+            />
+          )}
+        </aside>
+      </div>
+    </div>
+  )
+}

@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import type React from 'react'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
@@ -50,6 +50,12 @@ function CommitFileRow({
         <span className="text-foreground">{fileName}</span>
         {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
       </span>
+      <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-added)]">
+        {entry.added !== undefined ? `+${entry.added}` : ''}
+      </span>
+      <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-deleted)]">
+        {entry.removed !== undefined ? `−${entry.removed}` : ''}
+      </span>
       <span
         className="w-4 shrink-0 text-center text-[10px] font-bold"
         style={{ color: STATUS_COLORS[status] }}
@@ -70,17 +76,7 @@ function CommitFilesBody({
   onOpenAll?: () => void
 }): React.JSX.Element {
   if (state.status === 'loading') {
-    return (
-      <div className="flex items-center gap-2 py-1 pl-9 pr-3 text-[11px] text-muted-foreground">
-        <RefreshCw className="size-3 animate-spin" />
-        <span>
-          {translate(
-            'auto.components.right.sidebar.GitHistoryCommitFiles.a1b2c3d4e5',
-            'Loading files…'
-          )}
-        </span>
-      </div>
-    )
+    return <div className="h-6" />
   }
 
   if (state.status === 'error') {
