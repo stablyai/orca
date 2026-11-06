@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import {
+  GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY,
+  GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
 } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
@@ -33,7 +35,23 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
-    listMRs: (args) => route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args),
+    listMRs: async (args) => {
+      if (
+        args.involvement &&
+        !(await transport.supportsCapability(GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY))
+      ) {
+        const perPage = args.perPage ?? 20
+        return {
+          items: [],
+          page: args.page ?? 1,
+          perPage,
+          totalCount: 0,
+          totalPages: 0,
+          error: { type: 'unknown', message: GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE }
+        }
+      }
+      return route<GitLabApiResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args)
+    },
     listWorkItems: (args) =>
       route<GitLabApiResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
     issue: () => Promise.resolve(null),

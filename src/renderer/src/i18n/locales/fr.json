@@ -2876,6 +2876,7 @@
         "loadGitHubWorkFailed": "Impossible de charger le travail GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Tout le monde",
         "gitlabViewTodos": "Mes tâches",
         "startWorkspaceFromMr": "Démarrer un espace de travail depuis la MR {{number}}",
         "startWorkspaceFromIssue": "Démarrer un espace de travail depuis l’issue {{number}}",

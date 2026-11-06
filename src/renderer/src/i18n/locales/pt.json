@@ -15004,6 +15004,7 @@
         "loadGitHubWorkFailed": "Falha ao carregar o trabalho do GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
         "gitlabViewTodos": "Minhas tarefas",
         "startWorkspaceFromMr": "Iniciar espaço de trabalho a partir da MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espaço de trabalho a partir da issue {{number}}",

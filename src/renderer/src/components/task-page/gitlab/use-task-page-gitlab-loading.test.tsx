@@ -13,9 +13,11 @@ vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 
+const supportsCapability = vi.hoisted(() => vi.fn())
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc.call,
-  runtimeEnvironmentSupportsCapability: vi.fn()
+  runtimeEnvironmentSupportsCapability: supportsCapability
 }))
 
 import {
@@ -67,7 +69,8 @@ describe('useTaskPageGitLabLoading', () => {
       gitlabView: view,
       setGitlabTodos: vi.fn(),
       setGitlabTodosLoading: vi.fn(),
-      activeGitlabFilter: 'opened'
+      activeGitlabFilter: 'opened',
+      gitlabMRInvolvement: null
     })
     const model = {
       gitlabItems,
@@ -197,7 +200,8 @@ describe('useTaskPageGitLabLoading', () => {
         gitlabView: 'issues',
         setGitlabTodos: vi.fn(),
         setGitlabTodosLoading: vi.fn(),
-        activeGitlabFilter: 'opened'
+        activeGitlabFilter: 'opened',
+        gitlabMRInvolvement: null
       })
     )
 
@@ -214,6 +218,54 @@ describe('useTaskPageGitLabLoading', () => {
     ])
     expect(setGitlabError).not.toHaveBeenCalledWith(expect.stringContaining('Access denied'))
   })
+
+  it.each([
+    [false, 'requires a newer Orca server'],
+    [true, null]
+  ])(
+    'sends Mine to a server that supports it, else says to update (supported: %s)',
+    async (supported, expectedError) => {
+      supportsCapability.mockResolvedValue(supported)
+      rpc.call.mockResolvedValue({ items: [], page: 1, perPage: 50, totalCount: 0, totalPages: 0 })
+      const setGitlabError = vi.fn()
+      const setGitlabLoading = vi.fn()
+      renderHook(() =>
+        useTaskPageGitLabLoading({
+          selectedRepos: [serverRepo],
+          selectedReposKey: 'server-repo',
+          primaryRepo: serverRepo,
+          taskSource: 'gitlab',
+          setGitlabItems: vi.fn(),
+          setGitlabLoading,
+          setGitlabError,
+          gitlabRefreshNonce: 0,
+          gitlabView: 'mrs',
+          setGitlabTodos: vi.fn(),
+          setGitlabTodosLoading: vi.fn(),
+          activeGitlabFilter: 'merged',
+          gitlabMRInvolvement: 'authored'
+        })
+      )
+
+      await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
+      if (expectedError) {
+        expect(rpc.call).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'gitlab.listMRs',
+          expect.anything(),
+          expect.anything()
+        )
+        expect(setGitlabError).toHaveBeenLastCalledWith(expect.stringContaining(expectedError))
+      } else {
+        expect(rpc.call).toHaveBeenCalledWith(
+          { kind: 'environment', environmentId: 'build-box' },
+          'gitlab.listMRs',
+          expect.objectContaining({ state: 'merged', involvement: 'authored' }),
+          expect.anything()
+        )
+      }
+    }
+  )
 
   it('shows MR rows and refresh errors without fetching the advertised probe page', async () => {
     const items: GitLabWorkItem[] = Array.from({ length: 50 }, (_, index) => ({
@@ -246,7 +298,8 @@ describe('useTaskPageGitLabLoading', () => {
           gitlabView: 'mrs',
           setGitlabTodos: vi.fn(),
           setGitlabTodosLoading: vi.fn(),
-          activeGitlabFilter: 'opened'
+          activeGitlabFilter: 'opened',
+          gitlabMRInvolvement: null
         }),
       { initialProps: { refreshNonce: 0 } }
     )
@@ -302,7 +355,8 @@ describe('useTaskPageGitLabLoading', () => {
         gitlabView: 'issues',
         setGitlabTodos: vi.fn(),
         setGitlabTodosLoading: vi.fn(),
-        activeGitlabFilter: 'opened'
+        activeGitlabFilter: 'opened',
+        gitlabMRInvolvement: null
       })
     )
   }

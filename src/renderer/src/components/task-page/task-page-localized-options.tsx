@@ -15,6 +15,7 @@ import {
   type LinearViewMode
 } from '../../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
+import type { GitLabMRInvolvement } from '../../../../shared/gitlab-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 
@@ -57,6 +58,21 @@ export const getGitLabMRFilters = createLocalizedCatalog(
     { id: 'merged', label: translate('auto.components.TaskPage.37a82eaaf8', 'Merged') },
     { id: 'closed', label: translate('auto.components.TaskPage.d09bf34db7', 'Closed') },
     { id: 'all', label: translate('auto.components.TaskPage.c2268a9982', 'All') }
+  ]
+)
+
+// Who the MR list is narrowed to, chosen alongside its state; null lists everyone's.
+export const getGitLabMRInvolvementFilters = createLocalizedCatalog(
+  (): { id: GitLabMRInvolvement | null; label: string }[] => [
+    {
+      id: null,
+      label: translate('auto.components.TaskPage.gitlabInvolvementEveryone', 'Everyone')
+    },
+    { id: 'authored', label: translate('auto.components.TaskPage.7698af5263', 'Mine') },
+    {
+      id: 'reviewing',
+      label: translate('auto.components.TaskPage.524f095d55', 'Needs review')
+    }
   ]
 )
 

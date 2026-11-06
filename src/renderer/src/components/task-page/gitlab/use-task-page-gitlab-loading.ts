@@ -37,6 +37,7 @@ type GitLabLoadingInput = Pick<
   | 'setGitlabTodos'
   | 'setGitlabTodosLoading'
   | 'activeGitlabFilter'
+  | 'gitlabMRInvolvement'
 >
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
@@ -52,7 +53,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabView,
     setGitlabTodos,
     setGitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    gitlabMRInvolvement
   } = model
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
@@ -118,6 +120,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
               .listMRs({
                 ...selector,
                 state: activeMRFilter ?? 'opened',
+                ...(gitlabMRInvolvement ? { involvement: gitlabMRInvolvement } : {}),
                 page: 1,
                 perPage: 50
               })
@@ -191,6 +194,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     taskSource,
     gitlabView,
     activeGitlabFilter,
+    gitlabMRInvolvement,
     gitlabRefreshNonce,
     selectedReposKey,
     setGitlabError,

@@ -365,7 +365,9 @@ describe('GitLab IPC handlers', () => {
       1,
       undefined,
       'fix login',
-      null
+      null,
+      {},
+      { involvement: undefined }
     )
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
@@ -387,15 +389,8 @@ describe('GitLab IPC handlers', () => {
       query: '   '
     })
 
-    expect(listMergeRequestsMock).toHaveBeenCalledWith(
-      '/local/orca',
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      null
-    )
+    // The sixth argument is the search query.
+    expect(listMergeRequestsMock.mock.lastCall?.[5]).toBeUndefined()
   })
 
   it('rejects source context for a different host', async () => {
@@ -552,7 +547,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      { involvement: undefined }
     )
     expect(issueListResult).toMatchObject({ totalPages: 3 })
     expect(listWorkItemsMock).toHaveBeenCalledWith(
