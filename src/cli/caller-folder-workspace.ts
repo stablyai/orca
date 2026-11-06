@@ -102,14 +102,13 @@ async function readFolderWorkspaceRepos(
  */
 export async function getFolderWorkspaceMissingRepoError(
   client: RuntimeClient,
-  flags: Map<string, string | boolean>
+  flags: Map<string, string | boolean>,
+  resolvedParentWorkspace: string | undefined
 ): Promise<RuntimeClientError | undefined> {
-  const explicitParent = getOptionalStringFlag(flags, 'parent-worktree')?.replace(/^id:/, '')
-  const parsedParent = explicitParent ? parseWorkspaceKey(explicitParent) : null
-  // The terminal's folder is the parent only when the command names none, or names it as active.
-  const namesCaller = !explicitParent || explicitParent === 'active' || explicitParent === 'current'
+  const parsedParent = resolvedParentWorkspace ? parseWorkspaceKey(resolvedParentWorkspace) : null
+  // With no parent flag, create attaches to the terminal's folder.
   const inferredFolder =
-    namesCaller && flags.get('no-parent') !== true && !client.isRemote
+    !flags.has('parent-worktree') && flags.get('no-parent') !== true && !client.isRemote
       ? getCallerFolderWorkspaceKey()
       : undefined
   const folderKey =

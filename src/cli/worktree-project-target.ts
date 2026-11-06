@@ -163,7 +163,8 @@ export type CliRepoTarget = { repo: string; repoHostId?: string }
 export async function getCreateRepoTarget(
   flags: Map<string, string | boolean>,
   cwdParentWorktree: { worktreeId: string } | undefined,
-  client: RuntimeClient
+  client: RuntimeClient,
+  resolvedParentWorkspace?: string
 ): Promise<CliRepoTarget> {
   const projectTarget = await resolveProjectCreateTarget(flags, client)
   if (projectTarget) {
@@ -177,7 +178,11 @@ export async function getCreateRepoTarget(
   if (inferredRepo) {
     return { repo: inferredRepo }
   }
-  const folderError = await getFolderWorkspaceMissingRepoError(client, flags)
+  const folderError = await getFolderWorkspaceMissingRepoError(
+    client,
+    flags,
+    resolvedParentWorkspace
+  )
   if (folderError) {
     throw folderError
   }

@@ -170,7 +170,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const name = getRequiredStringFlag(flags, 'name')
     const repoTarget: CliRepoTarget = cwdContext.repoId
       ? { repo: `id:${cwdContext.repoId}` }
-      : await getCreateRepoTarget(flags, undefined, client)
+      : await getCreateRepoTarget(flags, undefined, client, explicitParentWorkspace)
     await assertGitLabLinkFlagProjectsMatch(flags, client, repoTarget)
     const linkedItems = referenceInputs
       ? await resolveReferenceInputs(context, referenceInputs)
