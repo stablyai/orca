@@ -1,6 +1,4 @@
-import { realpath } from 'node:fs/promises'
-import { resolveGitCommonDirectory } from '../../../../shared/git/metadata/git-common-directory'
-import { runWithGitOperationLock } from '../../../../shared/git/commands/git-operation-lock'
+import { uncertainBranchDeletion } from '../../../../shared/standalone-branch-deletion'
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
@@ -17,6 +15,8 @@ import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree
 import { isBranchCheckedOutInWorktreeError } from '../../../../shared/git/branches/git-branch-delete-refusal'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from '../worktree-operation-options'
 import { gitExecOptions, normalizeLocalBranchRef } from '../worktree-operation-options'
+
+export { runWithRepoAttachmentLock as runWithLocalBranchCleanup } from '../../repo-attachment-lock'
 
 export async function deleteBranchAfterWorktreeRemoval(
   repoPath: string,
@@ -178,11 +178,14 @@ export async function forceDeleteLocalBranch(
           )
         : runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
     )
-  } catch {
+  } catch (error) {
+    if (options.integrationAnchor) {
+      throw uncertainBranchDeletion(
+        `The ref transaction did not return a verified result: ${String(error)}`
+      )
+    }
     throw new Error(
-      options.integrationAnchor
-        ? `Branch deletion transaction failed for "${branchName}". Re-inventory before retrying.`
-        : `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
     )
   }
   try {
@@ -202,9 +205,21 @@ export async function forceDeleteLocalBranch(
         repoPath
       )
     } catch (restoreError) {
+      if (options.integrationAnchor) {
+        throw uncertainBranchDeletion(
+          `Post-delete verification failed: ${String(error)}. Restoration failed: ${String(restoreError)}. The ref may be absent or recreated.`,
+          'failed'
+        )
+      }
       console.warn(
         `[git] Failed to restore local branch "${branchName}" after concurrent checkout`,
         restoreError
+      )
+    }
+    if (options.integrationAnchor) {
+      throw uncertainBranchDeletion(
+        `Post-delete verification failed: ${String(error)}. The original ref was restored, but its current state must be verified.`,
+        'restored'
       )
     }
     throw error
@@ -232,14 +247,4 @@ async function isLocalBranchCheckedOut(
     worktrees.some((worktree) => normalizeLocalBranchRef(worktree.branch) === branchName) ||
     isBranchReservedByWorktreeOperation(repoPath, branchName, worktrees, options)
   )
-}
-
-export async function runWithLocalBranchCleanup<T>(
-  repoPath: string,
-  options: GitWorktreeExecOptions,
-  run: () => Promise<T>
-): Promise<T> {
-  const commonDir = await resolveGitCommonDirectory(repoPath, options).catch(() => null)
-  const key = await realpath(commonDir ?? repoPath).catch(() => repoPath)
-  return runWithGitOperationLock(key, options.signal, run)
 }

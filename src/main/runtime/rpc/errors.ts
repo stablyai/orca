@@ -191,7 +191,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
   if (error instanceof StandaloneBranchDeletionError) {
-    return errorResponse(id, meta, error.code, message)
+    return errorResponse(id, meta, error.code, message, error.data)
   }
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)

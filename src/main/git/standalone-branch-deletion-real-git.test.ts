@@ -1,5 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { createStandaloneBranchRepo } from './standalone-branch-deletion.test-fixture'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,34 +22,7 @@ beforeEach(async () => {
   vi.stubEnv('GIT_CONFIG_COUNT', undefined)
   vi.stubEnv('GIT_CONFIG_PARAMETERS', undefined)
   installRealWorkerThreadChildProcesses()
-  directory = await mkdtemp(join(tmpdir(), 'orca-standalone-delete-'))
-  await git('init', '-q')
-  await git('symbolic-ref', 'HEAD', 'refs/heads/main')
-  await git('config', 'user.name', 'Branch deletion test')
-  await git('config', 'user.email', 'test@example.test')
-  await git('config', 'commit.gpgsign', 'false')
-  await git('config', 'core.hooksPath', '')
-  await writeFile(join(directory, 'file.txt'), 'base\n')
-  await git('add', 'file.txt')
-  await git('commit', '-qm', 'base')
-  await git('branch', 'feature')
-  await git('checkout', '-q', 'feature')
-  await writeFile(join(directory, 'feature.txt'), 'integrated work\n')
-  await git('add', 'feature.txt')
-  await git('commit', '-qm', 'feature')
-  const oid = await git('rev-parse', 'HEAD')
-  await git('checkout', '-q', 'main')
-  await git('merge', '--no-ff', '-qm', 'integrate feature', 'feature')
-  const anchorOid = await git('rev-parse', 'HEAD')
-  await git('remote', 'add', 'upstream', 'https://example.test/team/project.git')
-  await git('update-ref', 'refs/remotes/upstream/main', anchorOid)
-  await git('symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main')
-  request = {
-    ref: 'refs/heads/feature',
-    expectedOid: oid,
-    anchorRef: 'refs/remotes/upstream/main',
-    anchorOid
-  }
+  ;({ directory, request } = await createStandaloneBranchRepo())
 })
 
 afterEach(async () => {

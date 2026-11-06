@@ -1,3 +1,7 @@
+import {
+  StandaloneBranchDeletionError,
+  uncertainBranchDeletion
+} from '../../shared/standalone-branch-deletion'
 import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -59,11 +63,16 @@ export async function deleteStandaloneBranch(
   ) {
     throw new Error('Invalid full local ref, remote integration anchor, or full OID.')
   }
-  const runGit = (args: string[], cwd = repoPath, stdin?: string) =>
-    gitExecFileAsync(args, {
+  let effectPossible = false
+  const runGit = (args: string[], cwd = repoPath, stdin?: string) => {
+    if (args[0] === 'update-ref' && args.includes('--stdin')) {
+      effectPossible = true
+    }
+    return gitExecFileAsync(args, {
       ...gitExecOptions(cwd, options),
       ...(stdin ? { stdin } : {})
     })
+  }
   await runGit(['check-ref-format', ref])
   await runGit(['check-ref-format', anchorRef])
   const commonDir = await resolveGitCommonDirectory(repoPath, options)
@@ -170,11 +179,16 @@ export async function deleteStandaloneBranch(
       })
       const presence = await probeExactRefs((args) => runGit(args), [ref])
       if (!presence.absentRefs.includes(ref)) {
-        throw new Error(
-          'Cannot confirm branch absence after deletion; re-inventory before retrying.'
-        )
+        throw uncertainBranchDeletion('Final verification could not confirm branch absence.')
       }
-      return { deleted: true, ref, oid: expectedOid, anchorRef, anchorOid }
+      return { deleted: true as const, ref, oid: expectedOid, anchorRef, anchorOid }
     })
-  )
+  ).catch((error: unknown) => {
+    if (effectPossible && !(error instanceof StandaloneBranchDeletionError)) {
+      throw uncertainBranchDeletion(
+        `Verification or runtime refresh failed after a ref transaction was attempted: ${String(error)}`
+      )
+    }
+    throw error
+  })
 }

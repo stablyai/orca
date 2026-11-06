@@ -1,4 +1,7 @@
-import { StandaloneBranchDeletionError } from '../../../shared/standalone-branch-deletion'
+import {
+  StandaloneBranchDeletionError,
+  uncertainBranchDeletion
+} from '../../../shared/standalone-branch-deletion'
 import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import {
   deleteStandaloneBranch,
@@ -109,7 +112,13 @@ export class RuntimeRepositorySettingsController {
       getLocalProjectWorktreeGitOptions(store, repo),
       repo.worktreeBaseRef
     )
-    this.deps.invalidateWorktreeScan(repo.id)
+    try {
+      this.deps.invalidateWorktreeScan(repo.id)
+    } catch (error) {
+      throw uncertainBranchDeletion(
+        `The ref was deleted but runtime refresh failed: ${String(error)}`
+      )
+    }
     return result
   }
 

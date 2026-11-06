@@ -62,7 +62,7 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Connect directly to the execution host (use --environment for a paired server); repo-host-id local means local to that server. SSH proxy targets and old hosts refuse this operation.',
       'Requires a configured source remote, verifiable symbolic HEADs for all remotes (maximum 32), complete ungrafted history, exact current OIDs, ancestry integration, and no worktree checkout or rebase/bisect reservation. Default and reserved branches are refused. No force, fetch, remote deletion or stash mutation.',
-      'Caller owns fresh review, protected-main and activity checks. Squash-only integration is refused. Git compares both refs in one transaction; external Git attachments do not honor Orca locks. A detected attachment race attempts compare-and-create restoration and returns an error. After any error or lost reply, re-inventory before retrying.'
+      'Caller owns fresh review, protected-main and activity checks. Squash-only integration is refused. Git compares both refs in one transaction; same-runtime Git attachment mutations share a repository fence, while external Git does not. A detected external attachment race attempts compare-and-create restoration. Failures after a possibly committed transaction return branch_deletion_uncertain with restoration status and require fresh inventory. After any error or lost reply, re-inventory before retrying.'
     ]
   },
   {

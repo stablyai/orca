@@ -1,3 +1,4 @@
+import * as gitRunner from '../../../git/command-runner/git-exec-file'
 import '../unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -112,6 +113,68 @@ function command() {
   return dispatch(parsed.commandPath, { flags: parsed.flags, client, cwd: root, json: true })
 }
 
+async function expectUncertainDeletion(
+  failure:
+    | 'restoration-failure'
+    | 'lost-transaction-result'
+    | 'final-verification-failure'
+    | 'recreated-ref',
+  expectedRestoration: 'failed' | 'not-attempted'
+) {
+  let newOid = ''
+  if (failure === 'recreated-ref') {
+    await git('commit', '--allow-empty', '-qm', 'concurrent unpublished work')
+    newOid = await git('rev-parse', 'HEAD')
+  }
+  const original = gitRunner.gitExecFileAsync
+  let deleted = false
+  vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+    if (
+      deleted &&
+      args[0] === 'worktree' &&
+      args[1] === 'list' &&
+      failure !== 'final-verification-failure'
+    ) {
+      throw new Error('postcheck sentinel')
+    }
+    if (deleted && args[0] === 'update-ref' && failure === 'restoration-failure') {
+      throw new Error('restore sentinel')
+    }
+    if (deleted && args[0] === 'show-ref' && failure === 'final-verification-failure') {
+      throw new Error('absence sentinel')
+    }
+    const result = await original(args, options)
+    if (args[0] === 'update-ref' && args.includes('--stdin')) {
+      deleted = true
+      if (failure === 'lost-transaction-result') {
+        throw new Error('transaction result lost')
+      }
+      if (failure === 'recreated-ref') {
+        await git('update-ref', 'refs/heads/feature', newOid)
+      }
+    }
+    return result
+  })
+  await expect(command()).rejects.toMatchObject({
+    code: 'branch_deletion_uncertain',
+    data: {
+      effect: 'unknown',
+      restoration: expectedRestoration,
+      inventoryRequired: true
+    }
+  })
+  if (failure === 'recreated-ref') {
+    expect(await git('rev-parse', 'feature')).toBe(newOid)
+  } else {
+    const result = await runProcess({
+      program: 'git',
+      args: ['show-ref', '--verify', '--quiet', 'refs/heads/feature'],
+      cwd: root
+    })
+    expect(result.code).toBe(1)
+  }
+}
+
 describe('standalone deletion CLI through a real isolated runtime socket', () => {
   it('advertises capability and deletes through command, RPC schema, routing and Git', async () => {
     const status = await client.call<{ capabilities: string[] }>('status.get')
@@ -168,6 +231,53 @@ describe('standalone deletion CLI through a real isolated runtime socket', () =>
       })
     ).rejects.toMatchObject({ code: 'branch_deletion_failed' })
     expect(await git('rev-parse', 'feature')).toBe(oid)
+  })
+
+  it('exposes failed restoration to its RPC caller while the ref remains absent', async () => {
+    await expectUncertainDeletion('restoration-failure', 'failed')
+  })
+
+  it('exposes a lost transaction result as uncertain even though deletion committed', async () => {
+    await expectUncertainDeletion('lost-transaction-result', 'not-attempted')
+  })
+
+  it('requires fresh inventory when final absence verification fails', async () => {
+    await expectUncertainDeletion('final-verification-failure', 'not-attempted')
+  })
+
+  it('reports failed restoration without overwriting concurrently recreated work', async () => {
+    await expectUncertainDeletion('recreated-ref', 'failed')
+  })
+
+  it('reports uncertainty when the runtime connection closes after deletion commits', async () => {
+    const original = gitRunner.gitExecFileAsync
+    const finalCheck = Promise.withResolvers<void>()
+    let stopping: Promise<void> | undefined
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      try {
+        const result = await original(args, options)
+        if (args[0] === 'update-ref' && args.includes('--stdin')) {
+          stopping = server.stop()
+        }
+        return result
+      } finally {
+        if (args[0] === 'show-ref') {
+          finalCheck.resolve()
+        }
+      }
+    })
+    await expect(command()).rejects.toMatchObject({
+      code: 'branch_deletion_uncertain',
+      data: { effect: 'unknown', restoration: 'not-attempted', inventoryRequired: true }
+    })
+    await stopping
+    await finalCheck.promise
+    const result = await runProcess({
+      program: 'git',
+      args: ['show-ref', '--verify', '--quiet', 'refs/heads/feature'],
+      cwd: root
+    })
+    expect(result.code).toBe(1)
   })
 
   it('refuses old host capabilities before dispatching mutation', async () => {
