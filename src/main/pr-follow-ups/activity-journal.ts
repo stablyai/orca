@@ -58,6 +58,9 @@ export class FollowUpActivityRouter {
             continue
           }
           const keys = map.get(id) ?? new Set<string>()
+          if ((map === this.instances || map === this.workspaces) && value.status === 'accepted') {
+            continue
+          }
           if (add) {
             keys.add(value.actionKey)
             map.set(id, keys)
@@ -86,20 +89,27 @@ export class FollowUpActivityRouter {
     operations: readonly string[] = [],
     workspaces: readonly string[] = []
   ): string[] {
-    const keys = new Set<string>()
-    for (const [map, ids] of [
-      [this.identities, identities],
-      [this.instances, instances],
-      [this.operations, operations],
-      [this.workspaces, workspaces]
-    ] as const) {
-      for (const id of ids) {
-        for (const key of map.get(id) ?? []) {
-          keys.add(this.actions.get(key)!.prKey)
+    const collect = (maps: readonly (readonly [Map<string, Set<string>>, readonly string[]])[]) => {
+      const keys = new Set<string>()
+      for (const [map, ids] of maps) {
+        for (const id of ids) {
+          for (const key of map.get(id) ?? []) {
+            keys.add(this.actions.get(key)!.prKey)
+          }
         }
       }
+      return [...keys]
     }
-    return [...keys]
+    const precise = collect([
+      [this.identities, identities],
+      [this.operations, operations]
+    ])
+    return precise.length
+      ? precise
+      : collect([
+          [this.instances, instances],
+          [this.workspaces, workspaces]
+        ])
   }
 
   activeKeys(): string[] {
@@ -108,22 +118,21 @@ export class FollowUpActivityRouter {
 
   admit(worktreeId: string, identity: string, kind: FollowUpActivityKind, at: number): string[] {
     const owners = new Set<string>()
+    const precise = this.keys([identity])
+    const recipients = new Set<string>()
     // Identity retains its original instance even after its workspace is removed or replaced.
-    for (const key of this.identities.get(identity) ?? []) {
-      owners.add(this.actions.get(key)!.instanceId)
-    }
-    for (const key of this.workspaces.get(worktreeId) ?? []) {
+    const obligations = new Set([
+      ...(this.identities.get(identity) ?? []),
+      ...(this.workspaces.get(worktreeId) ?? [])
+    ])
+    for (const key of obligations) {
       const action = this.actions.get(key)!
-      if (
-        action.status !== 'accepted' ||
-        [action.sessionId, action.paneKey, action.terminalPtyId].includes(identity)
-      ) {
-        owners.add(action.instanceId)
-      }
+      owners.add(action.instanceId)
+      recipients.add(action.prKey)
     }
     for (const owner of owners) {
       this.store.appendActivity(owner, identity, kind, at)
     }
-    return this.keys([], [...owners])
+    return precise.length ? precise : [...recipients]
   }
 }

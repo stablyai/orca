@@ -1,7 +1,7 @@
 import { FollowUpTargetIndex } from './target-index'
 import { evaluateFollowUpObservation } from './observation'
 import { createFollowUpProjectionState, publishFollowUpProjection } from './projection'
-import { FollowUpActivityRouter, followUpActivityIdentity } from './activity-journal'
+import { FollowUpActivityRouter } from './activity-journal'
 import { reconcileFollowUpActions } from './action-lifecycle'
 import type {
   FollowUpObservation,
@@ -205,27 +205,6 @@ export class FollowUpEngine {
       return undefined
     }
     return keys
-  }
-
-  sessionEnded(identity: string, endedAt: number): Promise<void> {
-    const keys = new Set<string>()
-    for (const action of this.deps.store.actionsForIdentity(identity)) {
-      if (action.status === 'accepted' && action.sessionEndedAt === undefined) {
-        action.sessionEndedAt = endedAt
-        this.deps.store.transaction(() => {
-          this.deps.store.appendActivity(
-            action.instanceId,
-            followUpActivityIdentity(action),
-            'terminated',
-            endedAt,
-            action.operationId
-          )
-          this.deps.store.saveAction(action)
-        })
-        keys.add(action.prKey)
-      }
-    }
-    return this.reconcile(keys)
   }
 
   snapshot() {

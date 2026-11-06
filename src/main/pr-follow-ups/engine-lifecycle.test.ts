@@ -34,7 +34,7 @@ describe('follow-up recovery and instance lifecycle', () => {
     ).toHaveLength(2)
     await h.observe(['lint'], 'h2', { state: 'closed' })
     expect(h.store.pr(h.target.prKey)).toBeDefined()
-    await h.engine.sessionEnded('late', h.now)
+    await h.endSessions()
     expect(h.store.pr(h.target.prKey)).toBeUndefined()
   })
 
@@ -173,7 +173,7 @@ describe('follow-up recovery and instance lifecycle', () => {
         .map((row) => row.instance_id)
     ).toEqual(['archived-disconnected', 'replacement'])
     await h.engine.instanceDeleted('i1')
-    await h.engine.sessionEnded('auto-1', h.now)
+    await h.endSessions()
     expect(h.store.pr(h.target.prKey)).toBeDefined()
     await h.engine.instanceDeleted('archived-disconnected')
     expect(h.store.pr(h.target.prKey)).toBeDefined()
@@ -350,3 +350,49 @@ describe('follow-up recovery and instance lifecycle', () => {
     expect(h.store.pr(h.target.prKey)).toBeUndefined()
   })
 })
+
+it.each([false, true])(
+  'cleans a refused action’s abandoned owner through restart and final retirement (shared owner: %s)',
+  async (shared) => {
+    const h = harness()
+    await h.observe([])
+    if (shared) {
+      await h.observe(['earlier'])
+      await h.endSessions()
+      await h.observe([])
+    }
+    const second = { ...h.target, worktreeId: 'w2', instanceId: 'i2', lastActiveAt: 0 }
+    h.controls.targets = [h.target, second]
+    h.engine.refreshInventory()
+    h.launch.mockImplementationOnce(async () => {
+      h.engine.activityObserved('w1', 'not-yet-receipted', true, h.now)
+      return { status: 'absent' }
+    })
+    await h.observe(['unit'])
+    const refused = h.store.latestAction(h.target.prKey)!
+    const rows = (instance: string) =>
+      Number(
+        h.db
+          .prepare('SELECT COUNT(*) AS count FROM followup_activity WHERE instance_id = ?')
+          .get(instance)?.count
+      )
+    expect(rows('i1')).toBeGreaterThan(0)
+    second.lastActiveAt = 10
+    h.engine.targetChanged(second)
+    await h.observe(['unit'])
+    expect(h.store.action(refused.actionKey)).toMatchObject({
+      instanceId: 'i2',
+      status: 'accepted'
+    })
+    expect(rows('i1') > 0).toBe(shared)
+    await h.restart()
+    expect(rows('i1') > 0).toBe(shared)
+    expect(rows('i2')).toBeGreaterThan(0)
+    await h.observe(['unit'], 'h1', { state: 'closed' })
+    await h.endSessions()
+    expect(h.store.pr(h.target.prKey)).toBeUndefined()
+    expect(h.store.actions(h.target.prKey)).toEqual([])
+    expect(rows('i1')).toBe(0)
+    expect(rows('i2')).toBe(0)
+  }
+)

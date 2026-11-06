@@ -55,7 +55,7 @@ export async function reconcileFollowUpActions(
         })
       } else {
         const activity = readFollowUpActivity(deps, action)
-        deps.store.appendActivity(
+        deps.store.reconcileActivity(
           action.instanceId,
           followUpActivityIdentity(action),
           activity.working === 'unknown' ? 'unknown' : activity.working ? 'working' : 'idle',

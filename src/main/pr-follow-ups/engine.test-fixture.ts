@@ -144,6 +144,12 @@ export function harness() {
     get store() {
       return store
     },
+    endSessions: async () => {
+      const before = controls.live
+      controls.live = false
+      await engine.reconcile([target.prKey])
+      controls.live = before
+    },
     advance: (milliseconds: number) => {
       now += milliseconds
     },

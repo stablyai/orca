@@ -93,7 +93,7 @@ describe('automatic failing-check follow-ups', () => {
       })
       h.advance(120000)
       await h.observe(['one'], 'h5', { readComplete: false })
-      await h.engine.sessionEnded('auto-1', 1700000100000)
+      await h.endSessions()
       await h.restart()
       await h.observe(['one'], 'h5')
       expect(h.launch).toHaveBeenCalledTimes(3)
@@ -111,7 +111,10 @@ describe('automatic failing-check follow-ups', () => {
     await h.observe([])
     for (const head of ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7']) {
       await h.observe(['unit'], head)
-      await h.engine.sessionEnded('auto-1', 1700000000000)
+      if (head !== 'h7') {
+        await h.endSessions()
+        await h.observe([], head)
+      }
     }
     expect(h.launch).toHaveBeenCalledTimes(6)
     expect(h.engine.view(h.target.prKey).state).toBe('paused')
@@ -336,7 +339,7 @@ describe('automatic failing-check follow-ups', () => {
     await h.observe([], 'h2')
     expect(h.engine.view(h.target.prKey).state).toBe('armed')
     await h.observe([], 'h1')
-    await h.engine.sessionEnded('auto-1', 1700000100000)
+    await h.endSessions()
     expect(h.engine.view(h.target.prKey).state).toBe('armed')
     h.target.workingAgent = null
     await h.observe(['a'])
@@ -348,7 +351,7 @@ describe('automatic failing-check follow-ups', () => {
     const h = harness()
     await h.observe([], 'h1', { state: 'draft', baseSha: null, mergeable: undefined })
     await h.observe(['unit'], 'h1', { state: 'draft' })
-    await h.engine.sessionEnded('auto-1', h.now)
+    await h.endSessions()
     h.advance(1000)
     await h.observe([], 'h1')
     h.source.pushes = [
@@ -501,7 +504,7 @@ describe('automatic failing-check follow-ups', () => {
     pr.state = 'merged'
     h.store.savePr(pr)
     expect(h.store.retire(pr)).toBe(false)
-    await h.engine.sessionEnded('auto-1', 1700000100000)
+    await h.endSessions()
     pr.state = 'merged'
     h.store.savePr(pr)
     expect(h.store.retire(pr)).toBe(true)
