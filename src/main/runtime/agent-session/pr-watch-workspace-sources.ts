@@ -5,7 +5,7 @@ import { hostedReviewSshConnectionId } from '../../source-control/hosted-review-
 import type { ProjectRuntimeResolutionStore } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { getStoredRepoExecutionHostId } from '../../workspaces/execution-host/repo-execution-host'
-import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
+import type { PRWatchRuntimeDeps } from './pr-watch-runtime'
 
 type WorkspaceSourcesRuntime = {
   resolveRuntimeFileTarget(selector: string): Promise<{
@@ -33,7 +33,7 @@ function repoSource(
 /** A chat's checkout and its project, for the host's CI-line watches. */
 export function prWatchWorkspaceSources(
   runtime: WorkspaceSourcesRuntime
-): NonNullable<StructuredAgentSessionRuntimeDeps['pullRequestWatch']> {
+): Pick<PRWatchRuntimeDeps, 'resolveWorkspace' | 'resolveRepo'> {
   return {
     resolveWorkspace: async (workspaceId) => {
       const { worktree, executionHostId } = await runtime.resolveRuntimeFileTarget(

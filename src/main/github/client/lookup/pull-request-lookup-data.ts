@@ -91,6 +91,8 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
+  /** Bounds check pagination for CI-line watch reads only; absent reads every page. */
+  checkPageLimit?: number
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

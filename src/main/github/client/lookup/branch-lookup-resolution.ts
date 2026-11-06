@@ -134,7 +134,8 @@ export async function resolvePRForBranchOutcome(input: {
       candidates,
       number: linkedPRNumber,
       ghOptions,
-      executionScope
+      executionScope,
+      checkPageLimit: options.checkPageLimit
     })
     data = exactLookup.data
     dataRepo = exactLookup.dataRepo
@@ -213,7 +214,8 @@ export async function resolvePRForBranchOutcome(input: {
       number: fallbackPRNumber,
       ghOptions,
       executionScope,
-      policy: implicitPRPolicy
+      policy: implicitPRPolicy,
+      checkPageLimit: options.checkPageLimit
     })
     data = fallbackLookup.data
     dataRepo = fallbackLookup.dataRepo

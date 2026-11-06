@@ -16,7 +16,8 @@ function sharedPRKey(
   repository: GitHubApiRepository,
   number: number,
   options: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  pageLimit: number | undefined
 ): unknown[] {
   const { cwd: _cwd, signal: _signal, ...account } = options
   return [
@@ -25,20 +26,35 @@ function sharedPRKey(
     (repository.host ?? 'github.com').toLowerCase(),
     repository.owner.toLowerCase(),
     repository.repo.toLowerCase(),
-    number
+    number,
+    // A bounded read may be incomplete, so it never serves an unbounded caller.
+    pageLimit ?? null
   ]
+}
+
+/** A bounded read may join an unbounded one in flight; never the reverse. */
+function sharedRead<T>(
+  probes: CoalescedProbes<T>,
+  key: (pageLimit: number | undefined) => string,
+  pageLimit: number | undefined,
+  read: () => Promise<T>
+): Promise<T> {
+  const unbounded = pageLimit === undefined ? undefined : probes.get(key(undefined))
+  return unbounded?.promise ?? runCoalescedProbe(probes, key(pageLimit), read)
 }
 
 export function readSharedPullRequestSidebarQuery(
   repository: GitHubApiRepository,
   number: number,
   options: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  pageLimit?: number
 ): Promise<PullRequestLookupData | null | undefined> {
-  return runCoalescedProbe(
+  return sharedRead(
     sidebarReads,
-    JSON.stringify(sharedPRKey(repository, number, options, executionScope)),
-    () => readPullRequestSidebarQuery(repository, number, options)
+    (limit) => JSON.stringify(sharedPRKey(repository, number, options, executionScope, limit)),
+    pageLimit,
+    () => readPullRequestSidebarQuery(repository, number, options, pageLimit)
   )
 }
 
@@ -47,11 +63,17 @@ export function readSharedPRCheckObservation(
   number: number,
   headSha: string | undefined,
   options: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  pageLimit?: number
 ): Promise<unknown[] | undefined> {
-  return runCoalescedProbe(
+  return sharedRead(
     checkReads,
-    JSON.stringify([...sharedPRKey(repository, number, options, executionScope), headSha ?? null]),
-    () => readCompletePRCheckObservation(repository, number, headSha, options)
+    (limit) =>
+      JSON.stringify([
+        ...sharedPRKey(repository, number, options, executionScope, limit),
+        headSha ?? null
+      ]),
+    pageLimit,
+    () => readCompletePRCheckObservation(repository, number, headSha, options, pageLimit)
   )
 }

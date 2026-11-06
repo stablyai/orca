@@ -1,4 +1,5 @@
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
+import { PR_CHECK_PAGE_LIMIT } from '../client/check/pr-check-rollup'
 import { readRestPRCheckRollup } from '../client/check/rest-pr-check-pages'
 import {
   ghRepoExecOptions,
@@ -24,7 +25,8 @@ export function readPRHeadCheckRollup(
       headSha,
       ghRepoExecOptions(
         githubRepoContext(candidate.repoPath, candidate.connectionId, localGitOptions)
-      )
+      ),
+      PR_CHECK_PAGE_LIMIT
     )
   )
 }

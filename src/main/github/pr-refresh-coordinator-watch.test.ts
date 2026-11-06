@@ -83,4 +83,27 @@ describe('pr-refresh watch jobs', () => {
     // Aged past one interval, the watch outranks the visible rows that keep the budget full.
     expect(watchReads()).toBeGreaterThanOrEqual(2)
   })
+
+  it('reads a follow-up registration with no chat host, bounding only its own pages', async () => {
+    const { registerPRWatch, attachPRWatchSource } = await import('./pr-watch/pr-watch-seams')
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    registerPRWatch({ repoId: 'repo-9', branch: 'topic', prNumber: 9, reason: 'pr-follow-ups' })
+    attachPRWatchSource({
+      resolveRepo: async () => ({
+        repoId: 'repo-9',
+        repoPath: WATCHED,
+        repoKind: 'git',
+        connectionId: null
+      }),
+      pullRequestActionsFor: () => [],
+      ownerChatFor: () => null
+    })
+    reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(30_000)
+    const options = (repoPath: string) =>
+      getPRForBranchOutcomeMock.mock.calls.find(([path]) => path === repoPath)?.[5]
+    expect(watchReads()).toBe(1)
+    expect(options(WATCHED)).toMatchObject({ checkPageLimit: 10 })
+    expect(options('/repo')?.checkPageLimit).toBeUndefined()
+  })
 })

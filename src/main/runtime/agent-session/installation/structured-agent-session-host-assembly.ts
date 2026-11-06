@@ -25,43 +25,7 @@ import { createStructuredAgentSessionDispatchFollowUps } from '../structured-age
 import type { CatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { PRWatchService } from '../../../github/pr-watch/pr-watch-service'
-import { attachPRWatchSource } from '../../../github/pr-watch/pr-watch-seams'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
-import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-
-/** CI lines for chats in git worktrees; folder workspaces have no checkout to read a PR through. */
-function createPRWatchService(
-  sources: NonNullable<StructuredAgentSessionRuntimeDeps['pullRequestWatch']>,
-  store: AgentSessionRecordStore,
-  database: JournalHostDatabase,
-  host: () => StructuredAgentSessionHost | null,
-  logger: StructuredAgentSessionRuntimeDeps['logger']
-): PRWatchService {
-  return new PRWatchService({
-    database,
-    chatExists: (chatId) => store.getConversation(chatId) != null,
-    chatWorkspace: async (chatId) => {
-      const location = store.getConversation(chatId)?.location
-      return location?.workspaceKind === 'git-worktree'
-        ? sources.resolveWorkspace(location.workspaceId).catch(() => null)
-        : null
-    },
-    resolveRepo: sources.resolveRepo,
-    chatFence: (chatId) => store.getConversation(chatId)?.currentFence ?? null,
-    openJournal: (chatId) => {
-      // The publication feed hands a new observer the chat's open journal, if any, at once.
-      let journal: AgentSessionJournal | null = null
-      host()?.observeConversationPublications(chatId, {
-        next: (hint) => (journal ??= hint.journal),
-        error: () => {}
-      })?.()
-      return journal
-    },
-    logger
-  })
-}
+import { observePRWatchCommittedRows } from '../pr-watch-runtime'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -104,9 +68,6 @@ export async function installOnJournal(
     logger: deps.logger
   })
   const nameProvider = (record: AgentSessionRecord): void => void providerNaming.push(record)
-  const prWatch = deps.pullRequestWatch
-    ? createPRWatchService(deps.pullRequestWatch, store, journalDatabase, () => host, deps.logger)
-    : null
   host = new StructuredAgentSessionHost({
     store,
     adapter,
@@ -122,12 +83,7 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
-    ...(prWatch
-      ? {
-          observeCommittedRows: (...args: Parameters<typeof prWatch.observeCommittedRows>): void =>
-            prWatch.observeCommittedRows(...args)
-        }
-      : {}),
+    observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
@@ -186,26 +142,11 @@ export async function installOnJournal(
     registrations.map(({ adapter }) => adapter.atRestCommands)
   )
   let detachCatalog: (() => void) | undefined
-  let detachPRWatch: (() => void) | undefined
   try {
     detachCatalog = catalogOwner.attach({ store, host })
     void modelCatalog?.prewarm()
     setStructuredAgentSessionHost(host)
-    if (prWatch && deps.pullRequestWatch) {
-      detachPRWatch = attachPRWatchSource({
-        resolveRepo: deps.pullRequestWatch.resolveRepo,
-        pullRequestActionsFor: (prKey) => prWatch.pullRequestActionsFor(prKey),
-        ownerChatFor: (prKey) => prWatch.ownerChatFor(prKey)
-      })
-      void prWatch
-        .start()
-        .catch((error: unknown) =>
-          deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
-        )
-    }
   } catch (error) {
-    detachPRWatch?.()
-    prWatch?.stop()
     detachCatalog?.()
     stopCommands()
     stopVisualsSweep?.()
@@ -218,8 +159,6 @@ export async function installOnJournal(
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
-      detachPRWatch?.()
-      prWatch?.stop()
       const namingStopped = providerNaming.stop()
       detachCatalog?.()
       stopCommands()

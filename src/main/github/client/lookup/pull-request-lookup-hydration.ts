@@ -11,7 +11,8 @@ export async function hydratePullRequestLookupData(
   ownerRepo: OwnerRepo,
   data: PullRequestLookupData,
   ghOptions: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  checkPageLimit?: number
 ): Promise<PullRequestLookupData> {
   const normalized = normalizePullRequestLookupData(data)
   const checks =
@@ -22,7 +23,8 @@ export async function hydratePullRequestLookupData(
           data.number,
           data.headRefOid,
           ghOptions,
-          executionScope
+          executionScope,
+          checkPageLimit
         )
   const hasRichMergeFields =
     'reviewDecision' in data || 'mergeStateStatus' in data || 'autoMergeRequest' in data

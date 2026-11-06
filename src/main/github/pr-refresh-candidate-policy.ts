@@ -7,6 +7,7 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import type { GitHubPRBranchLookupOptions } from './client'
+import { PR_CHECK_PAGE_LIMIT } from './client/check/pr-check-rollup'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -39,6 +40,9 @@ export function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (reason === 'watch') {
+    options.checkPageLimit = PR_CHECK_PAGE_LIMIT
   }
   if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
     options.currentHeadOid = candidate.currentHeadOid.trim()

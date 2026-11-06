@@ -50,4 +50,13 @@ describe('shared PR provider reads', () => {
     void readSharedPRCheckObservation(REPO, 12, 'bbb', { cwd: '/repo' }, SCOPE)
     expect(mocks.checks).toHaveBeenCalledTimes(2)
   })
+
+  it('lets a bounded watch read join a full read, but never serve one', async () => {
+    mocks.sidebar.mockImplementation(() => new Promise(() => {}))
+    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE, 10)
+    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE)
+    void readSharedPullRequestSidebarQuery(REPO, 12, { cwd: '/repo' }, SCOPE, 10)
+    expect(mocks.sidebar).toHaveBeenCalledTimes(2)
+    expect(mocks.sidebar.mock.calls.map((call) => call[3])).toEqual([10, undefined])
+  })
 })

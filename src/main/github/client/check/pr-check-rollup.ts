@@ -7,7 +7,8 @@ import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
 
 type ConnectionKind = 'contexts' | 'suites'
 
-/** Pages per connection; a longer read is incomplete, so it never decides a CI result. */
+/** Pages per connection for CI-line reads; a longer read is incomplete and decides nothing.
+ *  Other callers read every page. */
 export const PR_CHECK_PAGE_LIMIT = 10
 
 /** A suite waiting for approval reads as a blocker, tagged so it is never taken for a real check. */
@@ -111,7 +112,8 @@ const pageSchema = z.object({
 
 export async function collectPRCheckRollup(
   first: CheckPage,
-  readPage: (kind: ConnectionKind, cursor: string) => Promise<CheckPage>
+  readPage: (kind: ConnectionKind, cursor: string) => Promise<CheckPage>,
+  pageLimit = Number.POSITIVE_INFINITY
 ): Promise<unknown[]> {
   const initial = first.commits.nodes[0]?.commit
   if (
@@ -130,7 +132,7 @@ export async function collectPRCheckRollup(
     const cursors = new Set<string>()
     while (page?.pageInfo.hasNextPage) {
       const cursor = page.pageInfo.endCursor
-      if (!cursor || cursors.has(cursor) || cursors.size + 1 >= PR_CHECK_PAGE_LIMIT) {
+      if (!cursor || cursors.has(cursor) || cursors.size + 1 >= pageLimit) {
         throw new Error('Incomplete PR checks continuation')
       }
       cursors.add(cursor)
@@ -227,12 +229,13 @@ export async function readGraphQLPRCheckRollup(
   repository: GitHubApiRepository,
   number: number,
   headSha: string,
-  options: GhExecOptions
+  options: GhExecOptions,
+  pageLimit?: number
 ): Promise<unknown[]> {
   const readPage = createPRCheckRollupPageReader(repository, number, options)
   const first = await readPage()
   if (first.number !== number || first.headRefOid !== headSha) {
     throw new Error('PR head changed before checks observation')
   }
-  return collectPRCheckRollup(first, readPage)
+  return collectPRCheckRollup(first, readPage, pageLimit)
 }
