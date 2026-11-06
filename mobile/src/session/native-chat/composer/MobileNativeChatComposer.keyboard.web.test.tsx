@@ -7,6 +7,10 @@ import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
+vi.mock(
+  './MobileNativeChatComposerAllocation',
+  () => import('./MobileNativeChatComposerAllocation.web')
+)
 vi.mock('./MobileNativeChatComposerField', () => import('./MobileNativeChatComposerField.web'))
 vi.mock('../../../platform/host-os', () => import('../../../platform/host-os.web'))
 vi.mock('../../../platform/keyboard-occlusion', () => ({ useKeyboardOcclusion: () => 0 }))

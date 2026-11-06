@@ -1,3 +1,4 @@
+import { useMobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
@@ -47,6 +48,7 @@ export function MobileNativeChatComposerField({
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
+  const allocation = useMobileNativeChatComposerAllocation()
   const [scrollTop, setScrollTop] = useState(0)
   const [fieldHeight, setFieldHeight] = useState(0)
   const ownRef = useRef<TextInput>(null)
@@ -76,6 +78,7 @@ export function MobileNativeChatComposerField({
   const sizing = {
     height: Math.max(contentHeight ?? 0, placeholderHeight ?? 0) || undefined,
     maxHeight:
+      allocation?.fieldMaxHeight ??
       allocationMaxHeight ??
       Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
   }

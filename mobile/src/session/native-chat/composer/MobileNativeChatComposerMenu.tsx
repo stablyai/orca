@@ -1,3 +1,4 @@
+import { MobileNativeChatComposerMenuReservation } from './MobileNativeChatComposerAllocation'
 import type { RefObject } from 'react'
 import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -21,11 +22,16 @@ export function MobileNativeChatComposerSuggestions({
   onPick: (row: ComposerMenuRow) => void
   nestedScrollEnabled?: boolean
 }) {
-  return props.rows.length > 0 ? (
-    <MobileNativeChatComposerMenuLayer anchorRef={anchorRef}>
-      <MobileNativeChatComposerMenu {...props} />
-    </MobileNativeChatComposerMenuLayer>
-  ) : null
+  return (
+    <>
+      <MobileNativeChatComposerMenuReservation />
+      {props.rows.length > 0 ? (
+        <MobileNativeChatComposerMenuLayer anchorRef={anchorRef}>
+          <MobileNativeChatComposerMenu {...props} />
+        </MobileNativeChatComposerMenuLayer>
+      ) : null}
+    </>
+  )
 }
 
 export function MobileNativeChatComposerMenu({

@@ -13,7 +13,9 @@ export function useTextInputSelectionReveal(input: RefObject<TextInput | null>):
     const caret = document.createElement('span')
     copy.setAttribute('aria-hidden', 'true')
     Object.assign(copy.style, {
-      position: 'absolute',
+      position: 'fixed',
+      height: '0',
+      overflow: 'hidden',
       top: '0',
       left: '0',
       visibility: 'hidden',
