@@ -90,14 +90,17 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     () => hostQueryKey(hostId, gitStatusQuery.family, target, NO_INPUT),
     [hostId, target]
   )
-  // Only reads the screen asked for (opening it, an action, a refresh) settle the action error; foreground and reconnect reads leave it.
-  const screenReadRef = useRef<{ clearActionError: boolean } | null>({ clearActionError: true })
+  const refocusRef = useRef(false)
   // A screen under another one stops observing, so it revalidates when it is back on top rather than while hidden.
   const [focused, setFocused] = useState(true)
   useFocusEffect(
     useCallback(() => {
       setFocused(true)
-      screenReadRef.current = { clearActionError: true }
+      // Coming back retires the last action's error; background reads never clear it, so a newer failure survives them.
+      if (refocusRef.current) {
+        setActionError(null)
+      }
+      refocusRef.current = true
       return () => {
         setFocused(false)
         // Screens above can write (Review stages files), so coming back always revalidates.
@@ -107,7 +110,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           refetchType: 'none'
         })
       }
-    }, [queryClient, statusKey])
+    }, [queryClient, setActionError, statusKey])
   )
   const statusQuery = useHostQuery(gitStatusQuery, { hostId, client }, target, NO_INPUT, {
     enabled: statusEnabled,
@@ -190,22 +193,6 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       })
     }
   })
-  const onStatusRead = useEffectEvent((read: GitStatusRead) => {
-    if (read.kind !== 'ready') {
-      return
-    }
-    compareWith(read)
-    const screenRead = screenReadRef.current
-    if (!screenRead) {
-      return
-    }
-    screenReadRef.current = null
-    if (screenRead.clearActionError) {
-      setActionError(null)
-    }
-    // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
-    onStatusLoadSuccess?.()
-  })
   // Every status read that lands, from focus, foreground, the connected edge or an action, refreshes the compare.
   const statusHash = hashKey(statusKey)
   useEffect(
@@ -216,7 +203,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           event.action.type === 'success' &&
           event.query.queryHash === statusHash
         ) {
-          onStatusRead(event.query.state.data)
+          compareWith(event.query.state.data)
         }
       }),
     [queryClient, statusHash]
@@ -241,21 +228,39 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       }
       const live = hostQueryLiveOptions(gitStatusQuery, client, hostId, target, NO_INPUT)
       try {
-        // A forced read must see what an action just wrote, so it replaces a revalidation already out.
+        // A forced read must see what an action just wrote, so it replaces a read already out; the replaced caller gets false, never old data.
         if (options?.force) {
-          await queryClient.cancelQueries({ queryKey: live.queryKey, exact: true })
+          await queryClient.cancelQueries(
+            { queryKey: live.queryKey, exact: true },
+            { silent: true }
+          )
         }
-        screenReadRef.current = { clearActionError: options?.clearActionErrorOnSuccess !== false }
         const read = await queryClient.query(live)
         // Resolve once observers hold the new status, so callers act on what the screen shows.
         await new Promise<void>((resolve) => notifyManager.schedule(resolve))
-        return read.kind === 'ready'
+        if (read.kind !== 'ready') {
+          return false
+        }
+        if (options?.clearActionErrorOnSuccess !== false) {
+          setActionError(null)
+        }
+        // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
+        onStatusLoadSuccess?.()
+        return true
       } catch {
-        screenReadRef.current = null
         return false
       }
     },
-    [client, hostId, queryClient, reloadSettings, statusEnabled, target]
+    [
+      client,
+      hostId,
+      onStatusLoadSuccess,
+      queryClient,
+      reloadSettings,
+      setActionError,
+      statusEnabled,
+      target
+    ]
   )
 
   const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery

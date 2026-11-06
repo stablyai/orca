@@ -19,10 +19,11 @@ const rowsQuery = defineHostQuery({
 
 let renderer: ReactTestRenderer | null = null
 
-// TanStack notifies observers on a zero-delay timer.
+// TanStack notifies observers on a zero-delay timer it schedules only after the reply's promise chain settles.
 async function step(run: () => unknown): Promise<void> {
   await act(async () => {
     await run()
+    await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 }

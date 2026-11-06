@@ -159,9 +159,19 @@
         }
       }
     },
-    "35cc9e325d08": {
+    "2b017ef94a43": {
       "name": "git.branchCompare#1",
-      "ordinal": 11,
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
+    },
+    "38d7fa10de1a": {
+      "name": "worktree.show#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "423feea10d9e": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -567,6 +577,11 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
+    "9916ac6863ce": {
+      "name": "repo.list#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
     "9cb2ba41c834": {
       "name": "git.status#1",
       "ordinal": 2,
@@ -631,16 +646,6 @@
         "kind": "loading"
       }
     },
-    "a6482f604002": {
-      "name": "source-control.status-load-success",
-      "ordinal": 8,
-      "value": {}
-    },
-    "ad2a2a1df35b": {
-      "name": "worktree.show#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
     "bc1d0b381f25": {
       "name": "repo.list#1",
       "ordinal": 6,
@@ -671,11 +676,6 @@
           "ok": true
         }
       }
-    },
-    "c2212473f0c1": {
-      "name": "repo.list#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "c7a8ab38e974": {
       "name": "repo.list#1",
@@ -712,15 +712,6 @@
         }
       }
     },
-    "d11f484ecaf5": {
-      "name": "source-control.action-error",
-      "ordinal": 7,
-      "value": {
-        "message": {
-          "$rpc": "null"
-        }
-      }
-    },
     "d16c7a42b81c": {
       "name": "git.status#1",
       "ordinal": 2,
@@ -746,11 +737,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "e2d7409ece1c": {
-      "name": "git.branchCompare#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -785,12 +771,12 @@
         "id": "sc-changes-loaded.prelude:compare-pending",
         "observation": {
           "sender": ["891438a18444", "9cb2ba41c834", "6d220bb7b42a", "587de4c7f7fc"],
-          "payloads": ["f648b042d810", "973ac78137f2", "ad2a2a1df35b", "c2212473f0c1"],
+          "payloads": ["f648b042d810", "973ac78137f2", "38d7fa10de1a", "9916ac6863ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -801,20 +787,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "9536c968b88a",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -825,20 +811,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "bc1d0b381f25",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -849,20 +835,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "204b32e0c54e",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -873,20 +859,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "042d01f3263f",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -897,20 +883,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "26929519c12a",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -921,20 +907,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "6b974d7f9507",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -945,20 +931,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "877dcd616e1f",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -969,20 +955,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "6b9dc51089ad",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -993,20 +979,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "c7a8ab38e974",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -1017,20 +1003,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "84280af3ca36",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -1041,20 +1027,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "49197a7eac62",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       }
     ]

@@ -83,6 +83,11 @@
         "message": "Update Orca desktop to use Source Control on mobile."
       }
     },
+    "2b017ef94a43": {
+      "name": "git.branchCompare#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
+    },
     "2d85552daa9e": {
       "name": "git.status#1",
       "ordinal": 2,
@@ -146,9 +151,14 @@
         }
       }
     },
-    "35cc9e325d08": {
+    "38d7fa10de1a": {
+      "name": "worktree.show#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "423feea10d9e": {
       "name": "git.branchCompare#1",
-      "ordinal": 11,
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -558,6 +568,11 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
+    "9916ac6863ce": {
+      "name": "repo.list#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
     "9cb2ba41c834": {
       "name": "git.status#1",
       "ordinal": 2,
@@ -622,25 +637,10 @@
         "kind": "loading"
       }
     },
-    "a6482f604002": {
-      "name": "source-control.status-load-success",
-      "ordinal": 8,
-      "value": {}
-    },
-    "ad2a2a1df35b": {
-      "name": "worktree.show#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
     "adc98b344516": {
       "name": "git.status#2",
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "c2212473f0c1": {
-      "name": "repo.list#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "c969e4e5235e": {
       "name": "git.status#1",
@@ -742,15 +742,6 @@
         }
       }
     },
-    "d11f484ecaf5": {
-      "name": "source-control.action-error",
-      "ordinal": 7,
-      "value": {
-        "message": {
-          "$rpc": "null"
-        }
-      }
-    },
     "d16c7a42b81c": {
       "name": "git.status#1",
       "ordinal": 2,
@@ -776,11 +767,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "e2d7409ece1c": {
-      "name": "git.branchCompare#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -852,12 +838,12 @@
         "id": "sc-changes-loaded.normal:compare-pending",
         "observation": {
           "sender": ["891438a18444", "9cb2ba41c834", "6d220bb7b42a", "587de4c7f7fc"],
-          "payloads": ["f648b042d810", "973ac78137f2", "ad2a2a1df35b", "c2212473f0c1"],
+          "payloads": ["f648b042d810", "973ac78137f2", "38d7fa10de1a", "9916ac6863ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
@@ -868,20 +854,20 @@
             "9cb2ba41c834",
             "8c8e528ca222",
             "9536c968b88a",
-            "35cc9e325d08"
+            "423feea10d9e"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {

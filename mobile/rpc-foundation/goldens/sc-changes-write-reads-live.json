@@ -4,29 +4,26 @@
   "family": "git.changes-load",
   "namedDeltas": [],
   "values": {
-    "0676b719a6d3": {
-      "name": "repo.list#2",
-      "ordinal": 20,
-      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "1cf83b63fb9c": {
-      "name": "worktree.show#2",
-      "ordinal": 15,
+    "07dab9ce5927": {
+      "name": "git.status#2",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
-          "value": "worktree.show"
+          "value": "git.status"
         },
         {
           "name": "params",
           "value": {
+            "admissionTier": "background",
+            "reuseLineStats": true,
             "worktree": "id:repo42::/p"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -34,11 +31,6 @@
         "status": "pending",
         "startedAt": 0
       }
-    },
-    "1d58dcdbd73b": {
-      "name": "git.status#2",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\",\"reuseLineStats\":true,\"admissionTier\":\"background\"}}"
     },
     "215256dcc66d": {
       "branchCompareState": {
@@ -82,6 +74,21 @@
         }
       }
     },
+    "38d7fa10de1a": {
+      "name": "worktree.show#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "4ad21925feec": {
+      "name": "git.status#3",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "55fcd35df38b": {
+      "name": "worktree.show#2",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
     "587de4c7f7fc": {
       "name": "repo.list#1",
       "ordinal": 6,
@@ -108,14 +115,9 @@
         "startedAt": 0
       }
     },
-    "68e3e9823059": {
-      "name": "git.status#3",
-      "ordinal": 14,
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "6d220bb7b42a": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
+    "62537e6d32f8": {
+      "name": "worktree.show#2",
+      "ordinal": 13,
       "args": [
         {
           "name": "method",
@@ -139,15 +141,9 @@
         "startedAt": 0
       }
     },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "88522646e95b": {
+    "62697e79481c": {
       "name": "git.status#2",
-      "ordinal": 11,
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -203,6 +199,43 @@
         }
       }
     },
+    "6d220bb7b42a": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8329dee32b1b": {
+      "name": "repo.list#2",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
     "891438a18444": {
       "name": "settings.get#1",
       "ordinal": 1,
@@ -233,6 +266,11 @@
       "name": "git.status#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "9916ac6863ce": {
+      "name": "repo.list#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "9cb2ba41c834": {
       "name": "git.status#1",
@@ -290,74 +328,9 @@
         }
       }
     },
-    "a6482f604002": {
-      "name": "source-control.status-load-success",
-      "ordinal": 8,
-      "value": {}
-    },
-    "ad2a2a1df35b": {
-      "name": "worktree.show#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "b0f8e731cf5e": {
-      "name": "source-control.status-load-success",
-      "ordinal": 18,
-      "value": {}
-    },
-    "c2212473f0c1": {
-      "name": "repo.list#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "d11f484ecaf5": {
-      "name": "source-control.action-error",
-      "ordinal": 7,
-      "value": {
-        "message": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "dfec2e1f4c62": {
-      "name": "git.status#2",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "admissionTier": "background",
-            "reuseLineStats": true,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ec8abacd89e5": {
+    "af2c785b7188": {
       "name": "git.status#3",
-      "ordinal": 13,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -411,14 +384,19 @@
         }
       }
     },
-    "f648b042d810": {
-      "name": "settings.get#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    "afafd4479aaf": {
+      "name": "git.status#2",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\",\"reuseLineStats\":true,\"admissionTier\":\"background\"}}"
     },
-    "fa585aceeec2": {
+    "b0f8e731cf5e": {
+      "name": "source-control.status-load-success",
+      "ordinal": 18,
+      "value": {}
+    },
+    "df3bf9bbb7bf": {
       "name": "repo.list#2",
-      "ordinal": 16,
+      "ordinal": 14,
       "args": [
         {
           "name": "method",
@@ -442,10 +420,18 @@
         "startedAt": 0
       }
     },
-    "fdf16729e242": {
-      "name": "worktree.show#2",
-      "ordinal": 19,
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f648b042d810": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     }
   },
   "recording": {
@@ -459,20 +445,20 @@
             "9cb2ba41c834",
             "6d220bb7b42a",
             "587de4c7f7fc",
-            "dfec2e1f4c62",
-            "ec8abacd89e5",
-            "1cf83b63fb9c",
-            "fa585aceeec2"
+            "07dab9ce5927",
+            "af2c785b7188",
+            "62537e6d32f8",
+            "df3bf9bbb7bf"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "1d58dcdbd73b",
-            "68e3e9823059",
-            "fdf16729e242",
-            "0676b719a6d3"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "afafd4479aaf",
+            "4ad21925feec",
+            "55fcd35df38b",
+            "8329dee32b1b"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -481,7 +467,7 @@
             "stage": "84e5ca07cb7a"
           },
           "state": "215256dcc66d",
-          "effects": ["d11f484ecaf5", "a6482f604002", "37c6af2ac5fd", "b0f8e731cf5e"]
+          "effects": ["37c6af2ac5fd", "b0f8e731cf5e"]
         }
       },
       {
@@ -492,20 +478,20 @@
             "9cb2ba41c834",
             "6d220bb7b42a",
             "587de4c7f7fc",
-            "88522646e95b",
-            "ec8abacd89e5",
-            "1cf83b63fb9c",
-            "fa585aceeec2"
+            "62697e79481c",
+            "af2c785b7188",
+            "62537e6d32f8",
+            "df3bf9bbb7bf"
           ],
           "payloads": [
             "f648b042d810",
             "973ac78137f2",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "1d58dcdbd73b",
-            "68e3e9823059",
-            "fdf16729e242",
-            "0676b719a6d3"
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "afafd4479aaf",
+            "4ad21925feec",
+            "55fcd35df38b",
+            "8329dee32b1b"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -514,7 +500,7 @@
             "stage": "84e5ca07cb7a"
           },
           "state": "215256dcc66d",
-          "effects": ["d11f484ecaf5", "a6482f604002", "37c6af2ac5fd", "b0f8e731cf5e"]
+          "effects": ["37c6af2ac5fd", "b0f8e731cf5e"]
         }
       }
     ]
