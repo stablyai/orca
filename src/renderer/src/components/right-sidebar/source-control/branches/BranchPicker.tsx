@@ -33,7 +33,7 @@ export function BranchPicker({ branch, blocker, agentHint, ...options }: BranchP
           <ChevronDown className="size-3 shrink-0" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-0">
+      <PopoverContent align="start" className="w-80">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={translate('sourceControl.branchPicker.search', 'Search branches')}
@@ -111,7 +111,7 @@ const BranchRow = memo(function BranchRow({
     <CommandItem
       value={`${row.target.kind}:${row.target.name}`}
       data-current={row.current ? 'true' : undefined}
-      className="jump-palette-item"
+      selection="palette"
       disabled={row.current || (row.workspace ? pending : disabled || Boolean(row.occupiedPath))}
       onSelect={() => void onSelect(row)}
     >
