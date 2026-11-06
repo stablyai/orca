@@ -31,7 +31,8 @@ import {
   mobileNativeChatComposerPasteHandler,
   type MobilePastedImages
 } from './mobile-native-chat-composer-paste'
-import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
+import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-composer-menu'
+export type { MobileNativeChatStructuredComposer } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
@@ -46,26 +47,12 @@ import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
 } from './MobileNativeChatComposerMic'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
+import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
-
-export type MobileNativeChatStructuredComposer = {
-  catalog: MobileComposerStructuredCatalog
-  onSlashMenuOpen: () => void
-  onSlashMenuDemand?: (open: boolean) => void
-  onAttachFiles?: () => void
-  /** Set when the host keeps phone files, so a long paste becomes a "Pasted text" file. */
-  onAttachPastedText?: (text: string) => void
-  // An uploading attachment must hold Send.
-  files: readonly PendingNativeChatFile[]
-  onRemoveFile: (id: string) => void
-  /** Null unless the host reports goals for this chat. */
-  threadGoal?: MobileStructuredThreadGoal | null
-}
 
 type Props = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
@@ -107,6 +94,10 @@ type Props = MobileNativeChatMicProps & {
   onNeedSkills?: () => void
   /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
   stop?: { onStop?: () => void; held: boolean } | null
+  /** At the screen's bottom edge: even margins and bottom corners that follow the screen's. */
+  fitScreenCorners?: boolean
+  /** On the iPhone Duo: whether the chat runs across the status column, and the switch for it. */
+  widthToggle?: { expanded: boolean; onToggle: () => void } | null
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
@@ -148,7 +139,9 @@ export function MobileNativeChatComposer({
   skillDiscovery,
   onNeedSkills,
   stop = null,
-  sendFollowUp = null
+  sendFollowUp = null,
+  fitScreenCorners = false,
+  widthToggle = null
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -294,9 +287,16 @@ export function MobileNativeChatComposer({
           nestedScrollEnabled={editSession ? true : undefined}
         />
       ) : null}
-      <View style={styles.composerInset} testID="native-chat-composer-inset">
+      <View
+        style={fitScreenCorners ? styles.composerInsetCornerFit : styles.composerInset}
+        testID="native-chat-composer-inset"
+      >
         {goal.strip}
-        <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
+        <View
+          {...contextRing.barProps}
+          style={fitScreenCorners ? styles.barCornerFit : styles.bar}
+          testID="native-chat-composer"
+        >
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -372,6 +372,7 @@ export function MobileNativeChatComposer({
             ) : null}
             <View style={inputStyles.actionSpacer} />
             {contextRing.ring}
+            {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}

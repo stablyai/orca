@@ -1,3 +1,5 @@
+import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
+import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import {
@@ -115,4 +117,18 @@ export function draftAfterSkillEdit(previous: string, next: string, skillToken: 
   }
   const rest = previous.slice(lead.length)
   return next.length < previous.length && next.endsWith(rest) ? rest : next
+}
+
+export type MobileNativeChatStructuredComposer = {
+  catalog: MobileComposerStructuredCatalog
+  onSlashMenuOpen: () => void
+  onSlashMenuDemand?: (open: boolean) => void
+  onAttachFiles?: () => void
+  /** Set when the host keeps phone files, so a long paste becomes a "Pasted text" file. */
+  onAttachPastedText?: (text: string) => void
+  // An uploading attachment must hold Send.
+  files: readonly PendingNativeChatFile[]
+  onRemoveFile: (id: string) => void
+  /** Null unless the host reports goals for this chat. */
+  threadGoal?: MobileStructuredThreadGoal | null
 }
