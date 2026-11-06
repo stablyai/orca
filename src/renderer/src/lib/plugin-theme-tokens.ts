@@ -147,6 +147,43 @@ function mix(a: Rgba, b: Rgba, percent: number): Rgba {
   return [channel(0), channel(1), channel(2), channel(3)]
 }
 
+/** A token as main.css paints it: the theme's own color, else its CSS fallback, else built-in. */
+function themeTokenResolver(
+  own: (token: string) => Rgba | null | undefined,
+  base: 'light' | 'dark',
+  builtIns: Readonly<Record<string, string>>,
+  probe: ColorProbe
+): (token: string) => Rgba | null {
+  const builtInColors = new Map<string, Rgba | null>()
+  const derived = (rule: PluginThemeCssFallbackRule): Rgba | null => {
+    if ('tint' in rule) {
+      const hue = effective(rule.tint)
+      return hue ? [hue[0], hue[1], hue[2], (hue[3] * rule.percent) / 100] : null
+    }
+    if (!('mixForeground' in rule)) {
+      return rule.map(effective).find(Boolean) ?? null
+    }
+    const foreground = effective('--foreground')
+    const into = effective(rule.into ?? '--background')
+    return foreground && into ? mix(foreground, into, rule.mixForeground) : null
+  }
+  function effective(token: string): Rgba | null {
+    const color = own(token)
+    if (color) {
+      return color
+    }
+    const fallback = pluginAppThemeCssFallback(token, base)
+    if (fallback) {
+      return derived(fallback)
+    }
+    if (!builtInColors.has(token)) {
+      builtInColors.set(token, builtIns[token] ? probe(builtIns[token]) : null)
+    }
+    return builtInColors.get(token) ?? null
+  }
+  return effective
+}
+
 /**
  * The plugin tokens that are safe to paint over the built-in ones for the theme's base.
  * Checks run on the effective set (plugin values, else what main.css derives from them, else
@@ -166,33 +203,7 @@ export function safePluginThemeTokens(
       accepted.set(token, color)
     }
   }
-  const builtInColors = new Map<string, Rgba | null>()
-  const derived = (rule: PluginThemeCssFallbackRule): Rgba | null => {
-    if ('tint' in rule) {
-      const hue = effective(rule.tint)
-      return hue ? [hue[0], hue[1], hue[2], (hue[3] * rule.percent) / 100] : null
-    }
-    if (!('mixForeground' in rule)) {
-      return rule.map(effective).find(Boolean) ?? null
-    }
-    const foreground = effective('--foreground')
-    const into = effective(rule.into ?? '--background')
-    return foreground && into ? mix(foreground, into, rule.mixForeground) : null
-  }
-  function effective(token: string): Rgba | null {
-    const own = accepted.get(token)
-    if (own) {
-      return own
-    }
-    const fallback = pluginAppThemeCssFallback(token, base)
-    if (fallback) {
-      return derived(fallback)
-    }
-    if (!builtInColors.has(token)) {
-      builtInColors.set(token, builtIns[token] ? probe(builtIns[token]) : null)
-    }
-    return builtInColors.get(token) ?? null
-  }
+  const effective = themeTokenResolver((token) => accepted.get(token), base, builtIns, probe)
   const drop = (...pair: string[]): boolean =>
     pair.map((token) => accepted.delete(token)).some(Boolean)
 
@@ -237,6 +248,44 @@ export function safePluginThemeTokens(
     }
   }
   return Object.fromEntries(Object.entries(tokens).filter(([token]) => accepted.has(token)))
+}
+
+export const HOST_PILL_OUTLINE_MIX_TOKEN = '--worktree-host-pill-outline-mix'
+// Keep in sync with the host pill outline's fallback in main.css.
+const HOST_PILL_OUTLINE_MIX = 40
+
+/**
+ * How much sidebar text the selected card's host pill outline mixes into the sidebar: Orca's 40%,
+ * raised just enough to stand out from the selected wash. Takes tokens that already passed
+ * safePluginThemeTokens.
+ */
+export function hostPillOutlineMix(
+  tokens: Readonly<Record<string, string>>,
+  base: 'light' | 'dark',
+  builtIns: Readonly<Record<string, string>>,
+  probe: ColorProbe
+): number {
+  const effective = themeTokenResolver(
+    (token) => (tokens[token] ? probe(tokens[token]) : null),
+    base,
+    builtIns,
+    probe
+  )
+  const foreground = effective('--worktree-sidebar-foreground')
+  const sidebar = effective('--worktree-sidebar')
+  const wash = effective('--worktree-sidebar-active')
+  if (!foreground || !sidebar || foreground[3] < 1 || sidebar[3] < 1) {
+    return HOST_PILL_OUTLINE_MIX
+  }
+  const card = wash ? over(wash, sidebar) : sidebar
+  // Why the ring floor: the wash matches the pill's fill, so the outline alone keeps the pill from
+  // vanishing; 2:1 stays under the label's 4.5:1, and Orca's own (2.3:1 light, 2.5:1 dark) clears it.
+  for (let percent = HOST_PILL_OUTLINE_MIX; percent < 100; percent++) {
+    if (contrastRatio(mix(foreground, sidebar, percent), card) >= MIN_RING_CONTRAST) {
+      return percent
+    }
+  }
+  return 100
 }
 
 let probeContext: OffscreenCanvasRenderingContext2D | null | undefined

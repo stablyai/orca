@@ -36,7 +36,8 @@ function buildTintedSurfaceVariables(background: string): LeftSidebarStyleVariab
     // Why `initial`: the chosen appearance owns this subtree, so a plugin theme's row colors yield
     // to each consumer's built-in fallback derived from the tokens above.
     '--worktree-sidebar-active': 'initial',
-    '--worktree-sidebar-active-border': 'initial'
+    '--worktree-sidebar-active-border': 'initial',
+    '--worktree-host-pill-outline-mix': 'initial'
   }
 }
 
