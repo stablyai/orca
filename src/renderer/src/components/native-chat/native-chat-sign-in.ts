@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 import { agentSessionRemoteSignInCommand } from '../../../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/web-runtime-terminal-creation'
 import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/web-runtime-terminal-create-failure-notice'
 import { startStoppedWslHostForUserAct } from '@/lib/wsl-host-user-start'
 import { toast } from 'sonner'
@@ -112,7 +112,7 @@ export function useNativeChatSignIn(input: {
         if (!(await startStoppedWslHostForUserAct(environmentId))) {
           return
         }
-        const outcome = await createWebRuntimeSessionTerminal(
+        const outcome = await createWebRuntimeSessionTerminalOnHost(
           {
             worktreeId,
             environmentId,

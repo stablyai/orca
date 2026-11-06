@@ -24,7 +24,7 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/lib/launch-agent-tab-order', () => ({ persistAgentLaunchTabOrder: persistOrder }))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: remoteCreate
+  createWebRuntimeSessionTerminalOnHost: remoteCreate
 }))
 vi.mock('@/runtime/web-runtime-terminal-create-failure-notice', () => ({
   notifyWebRuntimeTerminalCreateFailure: notifyFailure
