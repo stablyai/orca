@@ -22,7 +22,7 @@ import { useNativeChatComposerSessionOptions } from './use-native-chat-composer-
 import { useNativeChatDictation } from './use-native-chat-dictation'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
-import { useImeEnterGestureOwnership } from '@/lib/imeEnterGesture-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
