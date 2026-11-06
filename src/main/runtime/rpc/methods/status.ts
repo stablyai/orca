@@ -1,3 +1,5 @@
+import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
+import { PR_FOLLOW_UPS_CAPABILITY } from '../../../../shared/pr-follow-ups/settings'
 import { defineMethod } from '../core'
 import { getRemoteServerUpdaterSnapshot } from '../../remote-server-updater'
 import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
@@ -25,6 +27,11 @@ export const STATUS_METHODS = [
       const hostDescriptor = getPublishedHostDescriptor(runtime.getRuntimeId())
       return {
         ...runtime.getStatus(),
+        ...(runtime.prFollowUps && getRuntimeDesktopSurface().sendToRenderers
+          ? {
+              capabilities: [...(runtime.getStatus().capabilities ?? []), PR_FOLLOW_UPS_CAPABILITY]
+            }
+          : {}),
         ...(hostDescriptor ? { hostDescriptor } : {}),
         ...(hostMachine ? { hostMachine } : {}),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),

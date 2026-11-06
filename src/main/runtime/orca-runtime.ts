@@ -1,3 +1,5 @@
+import { installPrFollowUps, type FollowUpHostInputs } from '../pr-follow-ups/install'
+import type { FollowUpObservationSource } from '../../shared/pr-follow-ups/contracts'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
@@ -180,6 +182,47 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   subscribeStructuredAgentAvailability(read: AvailabilityReader): () => void {
     this.structuredAgentAvailability ??= installAvailability(this.store, this)
     return this.structuredAgentAvailability.subscribe(read)
+  }
+
+  private followUpHost?: ReturnType<typeof installPrFollowUps>
+
+  get prFollowUps() {
+    return this.followUpHost?.engine
+  }
+
+  /** The reader installs only once its observation and workspace projections are ready. */
+  installPrFollowUpSource(
+    source: FollowUpObservationSource,
+    inputs: FollowUpHostInputs
+  ): () => Promise<void> {
+    if (this.followUpHost) {
+      throw new Error('PR follow-up source already installed')
+    }
+    const host = installPrFollowUps(
+      this,
+      this.requireStore(),
+      source,
+      inputs,
+      (listener) => {
+        this.graphSyncCallbacks.push(listener)
+        return () => {
+          const index = this.graphSyncCallbacks.indexOf(listener)
+          if (index !== -1) {
+            this.graphSyncCallbacks.splice(index, 1)
+          }
+        }
+      },
+      (event) => this.emitClientEvent(event)
+    )
+    this.followUpHost = host
+    this.emitClientEvent({ type: 'prFollowUpsChanged' })
+    return async () => {
+      if (this.followUpHost === host) {
+        this.followUpHost = undefined
+      }
+      await host.dispose()
+      this.emitClientEvent({ type: 'prFollowUpsChanged' })
+    }
   }
 
   /** Whether a layout-owning window can show a tab before process creation. */

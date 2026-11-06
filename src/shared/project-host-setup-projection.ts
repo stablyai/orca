@@ -291,6 +291,7 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
     ...(repo.worktreeBasePath ? { worktreeBasePath: repo.worktreeBasePath } : {}),
     ...(repo.hookSettings ? { hookSettings: repo.hookSettings } : {}),
     ...(repo.gitUsername ? { gitUsername: repo.gitUsername } : {}),
+    ...(repo.prFollowUps ? { prFollowUps: repo.prFollowUps } : {}),
     ...(repo.sourceControlAi ? { sourceControlAi: repo.sourceControlAi } : {}),
     setupState: 'ready',
     setupMethod,

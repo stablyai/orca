@@ -84,6 +84,9 @@ export function createNotificationDeliveryService(
 
   return {
     dispatch: (request) => {
+      if (request.source === 'pr-followup-started' && deps.findActiveWindow()?.isFocused()) {
+        return { delivered: false, reason: 'suppressed-focus' }
+      }
       if (request.executionHost && request.notificationId) {
         request = {
           ...request,

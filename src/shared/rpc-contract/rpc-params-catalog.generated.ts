@@ -534,6 +534,7 @@ import {
   PluginShotReplayParams,
   PluginsPanelActionParams
 } from './plugins-params'
+import { PrFollowUpsRead, PrFollowUpsStop } from './pr-follow-up-params'
 import {
   PreflightAgentDetection,
   PreflightCheck,
@@ -1368,6 +1369,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.shotChrome': PluginShotChromeParams,
   'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
+  'prFollowUps.get': PrFollowUpsRead,
+  'prFollowUps.stop': PrFollowUpsStop,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

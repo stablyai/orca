@@ -1,3 +1,4 @@
+import { patchPrFollowUps } from '../../../../shared/pr-follow-ups/settings'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-environment'
@@ -67,6 +68,7 @@ export class RuntimeClientSettingsController {
     // Older clients read permission from composed argument text, before a stored choice existed.
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
+      prFollowUps: settings.prFollowUps,
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
@@ -130,11 +132,14 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
+    const { agentDefaultArgs, agentDefaultEnv, prFollowUpsPatch, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
         ...otherUpdates,
+        ...(prFollowUpsPatch
+          ? { prFollowUps: patchPrFollowUps(beforeSettings.prFollowUps, prFollowUpsPatch) }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
@@ -149,7 +154,7 @@ export class RuntimeClientSettingsController {
     )
     const settings = this.store.getSettings()
     await getClaudeAgentViewService().reconcile(settings)
-    if (updates.worktreeVisibilityDefaults !== undefined) {
+    if (updates.worktreeVisibilityDefaults !== undefined || prFollowUpsPatch !== undefined) {
       this.notifyReposChanged?.()
     }
     if (

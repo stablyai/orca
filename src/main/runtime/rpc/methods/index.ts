@@ -1,3 +1,4 @@
+import { PR_FOLLOW_UP_METHODS } from './pr-follow-ups'
 import { STATUS_METHODS } from './status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
@@ -148,6 +149,7 @@ export const ALL_RPC_METHODS = [
   ...RUNTIME_CLIENT_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
+  ...PR_FOLLOW_UP_METHODS,
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
   ...MOBILE_RELAY_HOSTS_METHODS,

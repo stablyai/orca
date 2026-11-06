@@ -19,6 +19,14 @@ export type RuntimeClientEvent =
       acknowledgement: NotificationAttentionAcknowledgement
     }
   | { type: 'reposChanged' }
+  | { type: 'prFollowUpsChanged' }
+  | {
+      type: 'prFollowUpStarted'
+      worktreeId: string
+      paneKey?: string
+      surface?: 'chat' | 'terminal'
+      agent: string
+    }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }

@@ -1,3 +1,4 @@
+import type { PrFollowUpsPatch } from '../../../shared/pr-follow-ups/settings'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../../shared/repo-types'
@@ -54,6 +55,7 @@ type RepositoryUpdates = Partial<
     | 'projectGroupOrder'
   >
 > & {
+  prFollowUpsPatch?: PrFollowUpsPatch
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */

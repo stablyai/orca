@@ -1,3 +1,4 @@
+import type { PrFollowUpsPatch } from '../../../../shared/pr-follow-ups/settings'
 // What a paired client reads and may write of this host's settings.
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -36,6 +37,7 @@ export type RuntimeClientSettings = Pick<
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
   | 'nativeChatQueueFollowUps'
+  | 'prFollowUps'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
   | 'diffShowWhitespace'
@@ -78,4 +80,4 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'machineName'
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
->
+> & { prFollowUpsPatch?: PrFollowUpsPatch }

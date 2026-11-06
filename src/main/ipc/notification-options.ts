@@ -28,6 +28,13 @@ export function buildNotificationOptions(
     }
   }
 
+  if (args.source === 'pr-followup-started') {
+    return {
+      title: `${formatAgentTypeLabel(args.terminalTitle)} started automatically`,
+      body: `Fixing checks in ${args.worktreeLabel ?? 'your workspace'}.`
+    }
+  }
+
   if (args.source === 'test') {
     return {
       title: translate('notifications.test.title', 'Orca notifications are on'),

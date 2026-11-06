@@ -1,3 +1,4 @@
+import { PrFollowUpsPatch } from './pr-follow-up-params'
 import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
@@ -89,6 +90,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber,
+      prFollowUpsPatch: PrFollowUpsPatch.optional(),
       sourceControlAi: RepoSourceControlAiOverrides
     })
   })

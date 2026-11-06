@@ -1,3 +1,4 @@
+import type { PrFollowUpsPatch } from '../../../shared/pr-follow-ups/settings'
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
@@ -58,6 +59,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         > & {
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
+          prFollowUpsPatch?: PrFollowUpsPatch
           sourceControlAi?: Repo['sourceControlAi'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
