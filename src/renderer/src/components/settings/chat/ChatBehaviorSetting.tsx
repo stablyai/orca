@@ -14,10 +14,7 @@ import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentS
 import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import {
-  nativeChatScrollsToLatestOnSend,
-  nativeChatShowsTurnDiffSummary
-} from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatScrollsToLatestOnSend } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -57,7 +54,6 @@ export function ChatBehaviorSetting({
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
     entries.linkPreviews,
-    entries.turnDiffSummary,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -68,7 +64,6 @@ export function ChatBehaviorSetting({
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
-  const turnDiffSummary = nativeChatShowsTurnDiffSummary(settings)
   return (
     <section id="chat-behavior" className="space-y-3">
       <SettingsSubsectionHeader title={getChatBehaviorTitle()} />
@@ -181,20 +176,6 @@ export function ChatBehaviorSetting({
                   'Toggle link previews'
                 )}
                 onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
-              />
-            </SearchableSetting>
-            <SearchableSetting
-              {...entries.turnDiffSummary}
-              id={entries.turnDiffSummary.targetSectionId}
-              forceVisible={forceVisible}
-              className="max-w-none"
-            >
-              <SettingsSwitchRow
-                label={entries.turnDiffSummary.title}
-                description={entries.turnDiffSummary.description}
-                checked={turnDiffSummary}
-                ariaLabel={entries.turnDiffSummary.title}
-                onChange={() => updateSettings({ nativeChatTurnDiffSummary: !turnDiffSummary })}
               />
             </SearchableSetting>
             <SearchableSetting

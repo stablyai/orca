@@ -146,7 +146,7 @@ it('Hide turns the changed-files card off in every chat and the toast links to i
       const description = vi.mocked(toast).mock.calls[0]?.[1]?.description
       cleanup()
       render(<>{typeof description === 'function' ? description() : description}</>)
-      fireEvent.click(screen.getByRole('button', { name: 'Settings › Chat' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Settings › Chat UI' }))
       expect(openSettingsPage).toHaveBeenCalledTimes(1)
       expect(openSettingsTarget).toHaveBeenCalledWith({
         pane: 'chat',

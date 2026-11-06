@@ -3,7 +3,6 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
-import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from './native-chat-turn-diff-setting-target'
 
 export const getChatBehaviorTitle = (): string =>
   translate('components.settings.nativeChat.behaviorTitle', 'Behavior')
@@ -88,21 +87,6 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     keywords: [
       translate('components.settings.nativeChat.linkPreviewsSearchUnfurl', 'unfurl'),
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
-    ]
-  },
-  turnDiffSummary: {
-    targetSectionId: NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID,
-    title: translate(
-      'components.settings.nativeChat.turnDiffSummaryTitle',
-      'Changed files summary'
-    ),
-    description: translate(
-      'components.settings.nativeChat.turnDiffSummaryCopy',
-      'Shows the files each turn changed, with line counts, below the reply.'
-    ),
-    keywords: [
-      translate('components.settings.nativeChat.turnDiffSummarySearchDiff', 'diff'),
-      translate('components.settings.nativeChat.turnDiffSummarySearchEdits', 'edits')
     ]
   },
   shellEnvironment: {
