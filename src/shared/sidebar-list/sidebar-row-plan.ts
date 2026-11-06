@@ -62,6 +62,7 @@ type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: W
 
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
 export type SidebarRowPlanInputs = {
+  hideEmptyProjects?: boolean
   groupBy: WorktreeGroupBy
   sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
@@ -294,6 +295,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     }
 
     appendProjectGroupSections(sectionContext, {
+      hideEmptyProjects: inputs.hideEmptyProjects,
       orderedGroups,
       projectGroups,
       folderWorkspaces: renderableFolderWorkspaces,

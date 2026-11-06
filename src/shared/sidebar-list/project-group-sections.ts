@@ -21,6 +21,7 @@ import { buildFolderWorkspaceRow } from './row-builders'
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
   args: {
+    hideEmptyProjects?: boolean
     orderedGroups: OrderedGroupEntry[]
     projectGroups: readonly ProjectGroup[]
     folderWorkspaces: readonly RenderableFolderWorkspace[]
@@ -102,6 +103,9 @@ export function appendProjectGroupSections(
   }
 
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
+    if (args.hideEmptyProjects && getProjectGroupSubtreeCount(projectGroup.id) === 0) {
+      return
+    }
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
     const key = getProjectGroupHeaderKey(projectGroup.id)

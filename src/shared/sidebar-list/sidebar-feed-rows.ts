@@ -212,6 +212,7 @@ export function planSidebarFeedRows(
   )
   const hostOptions = buildFeedHostOptions(domains, repos, view)
   const placeholderRepoIds = getEmptyProjectPlaceholderRepoIds({
+    hideEmptyProjects: view.filters.hideEmptyProjects,
     groupBy,
     repos: visibleRepos,
     worktreesByRepo,
@@ -219,6 +220,7 @@ export function planSidebarFeedRows(
     filterRepoIds: view.filters.filterRepoIds
   })
   const plan = planSidebarRows({
+    hideEmptyProjects: view.filters.hideEmptyProjects,
     groupBy,
     sortBy: view.sortBy,
     worktrees: visibleWorktrees,

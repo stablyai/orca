@@ -21,6 +21,7 @@ const tab = makeTerminalTab('terminal', worktree.id, 'Remote session')
 const ptyId = 'remote:pty-1'
 const args: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
   filterState: {
+    hideEmptyProjects: false,
     showSleepingWorkspaces: false,
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,

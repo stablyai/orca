@@ -317,6 +317,47 @@ function projectGroup(id: string, parentGroupId: string | null): ProjectGroup {
   }
 }
 
+it('optionally omits empty projects while keeping folder workspaces and their ancestor groups', () => {
+  const repos = [repo('empty-repo')]
+  const groups = [
+    projectGroup('parent', null),
+    { ...projectGroup('gist', 'parent'), parentPath: '/gist' },
+    projectGroup('frontend', null)
+  ]
+  const folder = {
+    id: 'gist-workspace',
+    projectGroupId: 'gist',
+    name: 'Gist workspace',
+    folderPath: '/gist',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
+  const rows = buildWorkspaceRows({
+    worktrees: [],
+    folderWorkspaces: [folder],
+    repos,
+    lineageById: {}
+  })
+  const render = (hideEmptyProjects: boolean) =>
+    buildSidebarFeedRows(
+      domains({ workspaces: rows }),
+      catalog(repos, groups),
+      view({ groupBy: 'repo', filters: { ...NO_WORKSPACE_ROW_FILTERS, hideEmptyProjects } })
+    ).sectionRows
+  const headers = (hide: boolean) =>
+    render(hide).flatMap((row) => (row.type === 'header' ? [row.label] : []))
+  expect(headers(false)).toEqual(['frontend', 'parent', 'gist', 'empty-repo'])
+  expect(headers(true)).toEqual(['parent', 'gist'])
+  expect(render(true).filter((row) => row.type === 'folder-workspace')).toHaveLength(1)
+})
+
 describe('buildSidebarFeedRows host sections', () => {
   it('repeats a nested project group’s whole path in each host it spans', () => {
     const repos = [

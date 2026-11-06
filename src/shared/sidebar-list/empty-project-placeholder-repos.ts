@@ -3,13 +3,14 @@ import type { Worktree } from '../worktree/types'
 import type { WorktreeGroupBy } from './row-types'
 
 export function getEmptyProjectPlaceholderRepoIds(args: {
+  hideEmptyProjects?: boolean
   groupBy: WorktreeGroupBy
   repos: readonly Repo[]
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
   visibleWorktrees: readonly Worktree[]
   filterRepoIds: readonly string[]
 }): Set<string> {
-  if (args.groupBy !== 'repo') {
+  if (args.groupBy !== 'repo' || args.hideEmptyProjects) {
     return new Set()
   }
 

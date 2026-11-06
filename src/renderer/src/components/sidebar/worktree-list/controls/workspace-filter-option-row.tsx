@@ -22,6 +22,7 @@ export type WorkspaceFilterOptionKey = Extract<
   | 'hideCliCreatedWorkspaces'
   | 'hideWorkspacesFromOtherDevices'
   | 'hideDetachedHeadWorkspaces'
+  | 'hideEmptyProjects'
 >
 
 type FilterRow = {
@@ -34,6 +35,12 @@ type FilterRow = {
 }
 
 const FILTER_ROWS: Record<WorkspaceFilterOptionKey, FilterRow> = {
+  hideEmptyProjects: {
+    icon: <GitBranch className="size-3.5" />,
+    label: () => translate('workspaceOptions.hideEmptyProjects', 'Hide empty projects'),
+    checked: (state) => state.hideEmptyProjects,
+    set: (next) => useAppStore.getState().setHideEmptyProjects(next)
+  },
   hideSleepingWorkspaces: {
     icon: <Moon className="size-3.5" />,
     label: () =>

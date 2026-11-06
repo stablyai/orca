@@ -24034,5 +24034,8 @@
     "discussionAction": "Join the discussion",
     "checkAction": "Check compatibility",
     "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
+  },
+  "workspaceOptions": {
+    "hideEmptyProjects": "Hide empty projects"
   }
 }
