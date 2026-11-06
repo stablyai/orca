@@ -1,4 +1,5 @@
 import type {
+  RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
@@ -24,6 +25,21 @@ export function hasTerminalHandleRetirementProof(
         retired.terminal === surface.handle
     ) === true
   )
+}
+
+/** The host's newest close record for this pane surface; proofs are appended oldest first. */
+export function latestTerminalRetirementProof(
+  snapshot: Pick<RuntimeMobileSessionTabsResult, 'retiredTerminalSurfaces'>,
+  surface: { tabId: string; leafId: string }
+): RuntimeMobileSessionRetiredTerminalSurface | null {
+  const proofs = snapshot.retiredTerminalSurfaces ?? []
+  for (let index = proofs.length - 1; index >= 0; index -= 1) {
+    const proof = proofs[index]
+    if (proof.parentTabId === surface.tabId && proof.leafId === surface.leafId) {
+      return proof
+    }
+  }
+  return null
 }
 
 export function isRemovedSnapshot(snapshot: RuntimeMobileSessionTabsResult): boolean {

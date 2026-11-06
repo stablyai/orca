@@ -95,13 +95,13 @@ export const CONTEXTUAL_TOURS = [
       // Exactly one split step shows: its target exists only for the active tab's kind.
       {
         id: 'agent-sessions-split-chat',
-        title: 'Run two chats side by side',
+        title: 'Split a terminal pane',
         body: 'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.',
         targetSelector:
           '[data-contextual-tour-target="chat-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="agent-session"]',
         requiredForStart: true,
         preferredPlacement: 'bottom',
-        primaryAction: { kind: 'split-chat-pane', label: 'Split chat' },
+        primaryAction: { kind: 'split-chat-pane', label: 'Split terminal' },
         advanceOnFeatureInteraction: 'tab-splits'
       },
       {

@@ -1,4 +1,5 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from '../use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
@@ -32,6 +33,7 @@ import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNa
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+import type { MobileNativeChatUsageLimit } from './use-mobile-native-chat-usage-limit'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -99,6 +101,7 @@ export type MobileNativeChatController = {
   nativeChatContextUsage: NativeChatContextUsageSummary | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
+  nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   nativeChatSkills: NativeChatSkillDiscoverySnapshot
@@ -123,4 +126,5 @@ export type MobileNativeChatController = {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   nativeChatAcceptsImages: boolean
+  nativeChatUsageLimit: MobileNativeChatUsageLimit | null
 }

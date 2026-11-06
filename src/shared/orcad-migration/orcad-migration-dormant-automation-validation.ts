@@ -4,6 +4,8 @@ import { assertAutomationExtraAgentArgs } from '../automation-extra-agent-args-r
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { Automation, AutomationRun } from '../automations-types'
 import { getAutomationRunRepoId } from '../automation-run-identity'
+import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from './orcad-migration-blob-transfer'
+import type { OrcadMigrationAutomationRunHistoryRef } from './orcad-migration-manifest'
 import {
   assertUnique,
   boundedArray,
@@ -42,6 +44,24 @@ export function parseOrcadMigrationDormantAutomationRuns(value: unknown): Automa
   const runs = boundedArray(value, parseAutomationRun, 'automation_runs')
   assertUnique(runs, (entry) => entry.id, 'automation_run')
   return runs
+}
+
+export function parseOrcadMigrationAutomationRunHistoryRef(
+  value: unknown
+): OrcadMigrationAutomationRunHistoryRef {
+  const record = requiredRecord(value, 'orcad_migration_dormant_automation_run_history_invalid')
+  const { sha256, byteLength } = record
+  if (
+    typeof sha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(sha256) ||
+    typeof byteLength !== 'number' ||
+    !Number.isSafeInteger(byteLength) ||
+    byteLength < 1 ||
+    byteLength > ORCAD_MIGRATION_BLOB_KIND_CONTRACTS['automation-run-history'].maxBytes
+  ) {
+    throw new Error('orcad_migration_dormant_automation_run_history_invalid')
+  }
+  return { sha256, byteLength }
 }
 
 export function assertOrcadMigrationDormantAutomationReferences(args: {

@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useRef,
   useState,
   type MouseEventHandler,
@@ -8,7 +7,7 @@ import {
   type RefObject
 } from 'react'
 import { flushSync } from 'react-dom'
-import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
+import { markdownMathSelectionText } from '../../../../shared/markdown-math-selection'
 import { Clipboard, Copy, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -180,13 +179,9 @@ export function useNativeChatContextMenu({
   const hasItems =
     hasEditItems || hasSessionItems || chatPane !== undefined || resolveOrcaSessionId !== undefined
 
-  useEffect(() => {
-    if (!enabled) {
-      setState((current) =>
-        current.open ? { ...current, open: false, image: undefined } : current
-      )
-    }
-  }, [enabled])
+  if (!enabled && state.open) {
+    setState({ ...state, open: false, image: undefined })
+  }
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
@@ -403,7 +398,7 @@ function getNativeChatSelectedText(root: HTMLElement | null): string {
   if (!nodeBelongsToRoot(anchor, root) || !nodeBelongsToRoot(focus, root)) {
     return ''
   }
-  return chatMathSelectionText(selection, root) ?? selection.toString()
+  return markdownMathSelectionText(selection, root) ?? selection.toString()
 }
 
 function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {

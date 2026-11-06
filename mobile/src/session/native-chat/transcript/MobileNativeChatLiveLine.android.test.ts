@@ -24,6 +24,7 @@ vi.mock('../../../components/LoadingSpinner', () => ({ LoadingSpinner: 'LoadingS
 vi.mock('./MobileNativeChatReasoningRow', () => ({
   MobileNativeChatReasoningBody: 'ReasoningBody'
 }))
+vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog: () => null }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
