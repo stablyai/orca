@@ -107,6 +107,13 @@ describe('installTerminalImeNativeTextForwarder', () => {
       }
     })
 
+    it('rejects the NUL-keyed 229 keydown HarmonyOS ArkWeb sends before an IME commit', () => {
+      const { forwarder } = install()
+      expect(forwarder.claimKeyEvent(keyEvent({ key: '\u0000', code: '', keyCode: 229 }))).toBe(
+        false
+      )
+    })
+
     it('rejects keystrokes that belong to an active composition', () => {
       const { forwarder } = install(() => true)
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(false)

@@ -52,6 +52,7 @@ export type ImeNativeTextKeyEvent = {
   altKey: boolean
   shiftKey?: boolean
   repeat?: boolean
+  keyCode?: number
   isComposing?: boolean
   getModifierState?: (key: string) => boolean
 }
@@ -75,6 +76,8 @@ function isNativeTextKeydown(event: ImeNativeTextKeyEvent, compositionActive: bo
     !event.metaKey &&
     // Keep Space/letters claimable: clearing the helper field suppresses macOS double-space period substitution (#11504).
     event.key.length === 1 &&
+    // HarmonyOS ArkWeb's IME commit keydown is a NUL-keyed 229 that xterm's 229 path owns; fcitx4 XIM's keyCode-0 NUL stays claimable.
+    !(event.key === '\u0000' && event.keyCode === 229) &&
     // Composing keystrokes already belong to xterm's composition helper.
     event.isComposing !== true &&
     !compositionActive
