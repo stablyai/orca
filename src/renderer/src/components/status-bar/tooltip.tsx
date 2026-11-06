@@ -306,56 +306,56 @@ export function ProviderPanel({
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
       {!embedded ? (
-      <div>
-        <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className={faintClass}>{updatedAgo}</div>
-        {resetCreditCount !== null && resetCreditCount !== undefined ? (
-          <div className={mutedClass}>
-            {p.provider === 'zcode'
-              ? resetCreditCount === 1
-                ? translate(
-                    'auto.components.status.bar.StatusBar.zcode.oneFiveHourCard',
-                    '1 five-hour rate-limit reset available'
-                  )
-                : translate(
-                    'auto.components.status.bar.StatusBar.zcode.fiveHourCards',
-                    '{{value0}} five-hour rate-limit resets available',
-                    { value0: resetCreditCount }
-                  )
-              : translate(
-                  'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
-                  '{{count}} rate-limit resets available',
-                  {
-                    count: resetCreditCount,
-                    defaultValue_one: '{{count}} rate-limit reset available'
-                  }
-                )}
+        <div>
+          <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
           </div>
-        ) : null}
-        {resetCreditCount != null && resetCreditCount > 0 && resetCreditExpiry ? (
-          <div className={faintClass}>{resetCreditExpiry}</div>
-        ) : null}
-        {weekResetCount > 0 ? (
-          <>
+          <div className={faintClass}>{updatedAgo}</div>
+          {resetCreditCount !== null && resetCreditCount !== undefined ? (
             <div className={mutedClass}>
-              {weekResetCount === 1
-                ? translate(
-                    'auto.components.status.bar.StatusBar.zcode.oneWeekCard',
-                    '1 weekly rate-limit reset available'
-                  )
+              {p.provider === 'zcode'
+                ? resetCreditCount === 1
+                  ? translate(
+                      'auto.components.status.bar.StatusBar.zcode.oneFiveHourCard',
+                      '1 five-hour rate-limit reset available'
+                    )
+                  : translate(
+                      'auto.components.status.bar.StatusBar.zcode.fiveHourCards',
+                      '{{value0}} five-hour rate-limit resets available',
+                      { value0: resetCreditCount }
+                    )
                 : translate(
-                    'auto.components.status.bar.StatusBar.zcode.weekCards',
-                    '{{value0}} weekly rate-limit resets available',
-                    { value0: weekResetCount }
+                    'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
+                    '{{count}} rate-limit resets available',
+                    {
+                      count: resetCreditCount,
+                      defaultValue_one: '{{count}} rate-limit reset available'
+                    }
                   )}
             </div>
-            {weekResetExpiry ? <div className={faintClass}>{weekResetExpiry}</div> : null}
-          </>
-        ) : null}
-      </div>
+          ) : null}
+          {resetCreditCount != null && resetCreditCount > 0 && resetCreditExpiry ? (
+            <div className={faintClass}>{resetCreditExpiry}</div>
+          ) : null}
+          {weekResetCount > 0 ? (
+            <>
+              <div className={mutedClass}>
+                {weekResetCount === 1
+                  ? translate(
+                      'auto.components.status.bar.StatusBar.zcode.oneWeekCard',
+                      '1 weekly rate-limit reset available'
+                    )
+                  : translate(
+                      'auto.components.status.bar.StatusBar.zcode.weekCards',
+                      '{{value0}} weekly rate-limit resets available',
+                      { value0: weekResetCount }
+                    )}
+              </div>
+              {weekResetExpiry ? <div className={faintClass}>{weekResetExpiry}</div> : null}
+            </>
+          ) : null}
+        </div>
       ) : null}
 
       {embedded ? null : <div className={`border-t ${dividerClass}`} />}
