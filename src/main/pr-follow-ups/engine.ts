@@ -1,7 +1,7 @@
 import { FollowUpTargetIndex } from './target-index'
 import { evaluateFollowUpObservation } from './observation'
 import { createFollowUpProjectionState, publishFollowUpProjection } from './projection'
-import { FollowUpActivityRouter } from './activity-journal'
+import { FollowUpActivityRouter, type FollowUpActivityAuthority } from './activity-journal'
 import { reconcileFollowUpActions } from './action-lifecycle'
 import type {
   FollowUpObservation,
@@ -24,13 +24,8 @@ export class FollowUpEngine {
     return this.activityRouter.activeKeys()
   }
 
-  prKeysForAuthorities(
-    identities: readonly string[],
-    instances: readonly string[],
-    operations: readonly string[] = [],
-    workspaces: readonly string[] = []
-  ): string[] {
-    return this.activityRouter.keys(identities, instances, operations, workspaces)
+  prKeysForAuthorities(authorities: readonly FollowUpActivityAuthority[]): string[] {
+    return this.activityRouter.keys(authorities)
   }
 
   get waitingForWindow(): boolean {

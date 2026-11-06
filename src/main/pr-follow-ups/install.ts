@@ -147,12 +147,18 @@ export function installPrFollowUps(
         schedule(engine.activePrKeys())
       } else if (facets.has('records') || facets.operationIds?.length) {
         schedule(
-          facets.recordIds || facets.recordWorkspaceIds || facets.operationIds
+          facets.recordAuthorities ||
+            facets.recordIds ||
+            facets.recordWorkspaceIds ||
+            facets.operationIds
             ? engine.prKeysForAuthorities(
-                facets.recordIds ?? [],
-                [],
-                facets.operationIds ?? [],
-                facets.recordWorkspaceIds ?? []
+                facets.recordAuthorities ?? [
+                  ...(facets.recordIds ?? []).map((recordId) => ({ recordId })),
+                  ...(facets.operationIds ?? []).map((id) => ({ operationIds: [id] })),
+                  ...(!facets.recordIds && !facets.operationIds
+                    ? [{ workspaceIds: facets.recordWorkspaceIds }]
+                    : [])
+                ]
               )
             : engine.activePrKeys()
         )

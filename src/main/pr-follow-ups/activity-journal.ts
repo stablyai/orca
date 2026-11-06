@@ -1,5 +1,8 @@
 import type { FollowUpAction } from '../../shared/pr-follow-ups/contracts'
 import type { FollowUpStore } from './store'
+import type { CrewRecordAuthority } from '../runtime/orchestration/crew/crew-changes'
+
+export type FollowUpActivityAuthority = CrewRecordAuthority & { readonly instanceId?: string }
 
 export type FollowUpActivityKind = 'started' | 'working' | 'idle' | 'unknown' | 'terminated'
 export type FollowUpActivity = { at: number; kind: FollowUpActivityKind }
@@ -83,22 +86,26 @@ export class FollowUpActivityRouter {
     }
   }
 
-  keys(
-    identities: readonly string[] = [],
-    instances: readonly string[] = [],
-    operations: readonly string[] = [],
-    workspaces: readonly string[] = []
-  ): string[] {
+  keys(authorities: readonly FollowUpActivityAuthority[]): string[] {
     const keys = new Set<string>()
-    for (const [map, ids] of [
-      [this.identities, identities],
-      [this.operations, operations],
-      [this.instances, instances],
-      [this.workspaces, workspaces]
-    ] as const) {
-      for (const id of ids) {
-        for (const key of map.get(id) ?? []) {
-          keys.add(this.actions.get(key)!.prKey)
+    const add = (matches: Iterable<string>) => {
+      for (const key of matches) {
+        keys.add(this.actions.get(key)!.prKey)
+      }
+    }
+    for (const entry of authorities) {
+      const precise = new Set(this.identities.get(entry.recordId ?? ''))
+      for (const id of entry.operationIds ?? []) {
+        for (const key of this.operations.get(id) ?? []) {
+          precise.add(key)
+        }
+      }
+      if (precise.size) {
+        add(precise)
+      } else {
+        add(this.instances.get(entry.instanceId ?? '') ?? [])
+        for (const workspace of entry.workspaceIds ?? []) {
+          add(this.workspaces.get(workspace) ?? [])
         }
       }
     }
@@ -111,7 +118,6 @@ export class FollowUpActivityRouter {
 
   admit(worktreeId: string, identity: string, kind: FollowUpActivityKind, at: number): string[] {
     const owners = new Set<string>()
-    const recipients = new Set<string>()
     // Identity retains its original instance even after its workspace is removed or replaced.
     const obligations = new Set([
       ...(this.identities.get(identity) ?? []),
@@ -120,11 +126,11 @@ export class FollowUpActivityRouter {
     for (const key of obligations) {
       const action = this.actions.get(key)!
       owners.add(action.instanceId)
-      recipients.add(action.prKey)
     }
     for (const owner of owners) {
       this.store.appendActivity(owner, identity, kind, at)
     }
-    return [...recipients]
+    // Capture includes unresolved owners; a known stream only reevaluates its precise obligations.
+    return this.keys([{ recordId: identity, workspaceIds: [worktreeId] }])
   }
 }

@@ -167,8 +167,7 @@ it.each([
       h.stream('unrelated', false, h.now + 5)
       sessionCrewChanges.notify(
         Object.assign(new Set(['records'] as const), {
-          recordIds: ['unrelated'],
-          recordWorkspaceIds: ['w0']
+          recordAuthorities: [{ recordId: 'unrelated', workspaceIds: ['w0'] }]
         })
       )
       await h.flush()
@@ -182,8 +181,7 @@ it.each([
       histories.clear()
       sessionCrewChanges.notify(
         Object.assign(new Set(['records'] as const), {
-          operationIds: ['old-pr1'],
-          recordWorkspaceIds: ['w0']
+          recordAuthorities: [{ operationIds: ['old-pr1'], workspaceIds: ['w0'] }]
         })
       )
       await h.flush()
@@ -234,9 +232,13 @@ it.each(['separate', 'shared', 'moved'] as const)(
     const reconcile = vi.spyOn(h.engine, 'reconcile')
     sessionCrewChanges.notify(
       Object.assign(new Set(['records'] as const), {
-        recordIds: ['pane-w1', 'late-record'],
-        recordWorkspaceIds:
-          layout === 'moved' ? [knownWorkspace, 'moved-workspace', 'w0'] : [knownWorkspace, 'w0']
+        recordAuthorities: [
+          { recordId: 'pane-w1', workspaceIds: [knownWorkspace] },
+          {
+            recordId: 'late-record',
+            workspaceIds: layout === 'moved' ? ['w0', 'moved-workspace'] : ['w0']
+          }
+        ]
       })
     )
     await h.flush()
@@ -248,7 +250,7 @@ it.each(['separate', 'shared', 'moved'] as const)(
     expect(
       reconcile.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => [...keys!])
     ).toEqual([['pr1', 'pr0']])
-    expect(h.engine.prKeysForAuthorities(['late-record'], [])).toEqual(['pr0'])
+    expect(h.engine.prKeysForAuthorities([{ recordId: 'late-record' }])).toEqual(['pr0'])
     expect(launchFollowUp).not.toHaveBeenCalled()
   }
 )

@@ -12,6 +12,7 @@ import {
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
 import type { PersistedAgentSessionTab } from '../agent-session-tab-table'
+import type { CrewRecordAuthority } from '../../orchestration/crew/crew-changes'
 
 /** Unreadable rows are derived at load and never written, so the draft shares them. */
 export function draftAgentSessionStoreState(state: AgentSessionStoreState): AgentSessionStoreState {
@@ -151,7 +152,44 @@ export function agentSessionStoreChangedAuthorities(
       ...changedTabs
     ])
   ]
+  const workspaceIds = (id: string) =>
+    [
+      ...new Set([
+        published.records.get(id)?.location.workspaceId,
+        draft.records.get(id)?.location.workspaceId
+      ])
+    ].filter((value): value is string => !!value)
+  const operations = writes.operations.upsert.map(([key]) => draft.operations.get(key)!)
+  const operationsByRecord = new Map<string, string[]>()
+  for (const row of operations) {
+    if (row.outcome.status === 'succeeded' && row.outcome.sessionId) {
+      const ids = operationsByRecord.get(row.outcome.sessionId) ?? []
+      ids.push(row.operationId)
+      operationsByRecord.set(row.outcome.sessionId, ids)
+    }
+  }
+  // Preserve each record's old/new authority so a known sibling cannot suppress its recovery.
+  const recordAuthorities: CrewRecordAuthority[] = recordIds.map((recordId) => ({
+    recordId,
+    workspaceIds: workspaceIds(recordId),
+    operationIds: [
+      ...new Set([
+        published.records.get(recordId)?.lease.handoffOperationId,
+        draft.records.get(recordId)?.lease.handoffOperationId,
+        ...(operationsByRecord.get(recordId) ?? [])
+      ])
+    ].filter((id): id is string => !!id)
+  }))
+  for (const row of operations) {
+    const recordId = row.outcome.status === 'succeeded' ? row.outcome.sessionId : undefined
+    recordAuthorities.push({
+      recordId,
+      operationIds: [row.operationId],
+      workspaceIds: recordId ? workspaceIds(recordId) : []
+    })
+  }
   return {
+    recordAuthorities,
     recordWorkspaceIds: [
       ...new Set(
         recordIds

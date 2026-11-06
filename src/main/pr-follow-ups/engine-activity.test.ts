@@ -121,7 +121,7 @@ it('captures identity-specific evidence before acceptance and recovers it after 
     status: 'accepted',
     identity: { sessionId: 'late', surface: 'chat' }
   })
-  await h.engine.reconcile(h.engine.prKeysForAuthorities([], ['i1']))
+  await h.engine.reconcile(h.engine.prKeysForAuthorities([{ instanceId: 'i1' }]))
   expect(h.launch).toHaveBeenCalledOnce()
   expect(h.store.workingOverlap(h.target.prKey, start + 15, start + 18)).toBe(false)
   expect(h.store.workingOverlap(h.target.prKey, start + 21, start + 28)).toBe(true)

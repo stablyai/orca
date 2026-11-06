@@ -1,5 +1,5 @@
 import { cancelAgentSessionUsageLimitContinue } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
+import { sessionCrewChanges, type CrewRecordAuthority } from '../../orchestration/crew/crew-changes'
 import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
 import type { CrewReadDependencies } from '../../orchestration/crew/crew-read-dependencies'
 import { subscribeCrew } from '../../orchestration/crew/crew-stream'
@@ -118,10 +118,12 @@ describe('writing a transaction', () => {
 
   it('carries affected record identities in normal record invalidations', async () => {
     const events: string[][] = []
+    const authorities: (readonly CrewRecordAuthority[])[] = []
     const ownership: { workspaces: readonly string[]; operations: readonly string[] }[] = []
     const release = sessionCrewChanges.subscribe((facets) => {
       if (facets.has('records')) {
         events.push([...(facets.recordIds ?? [])])
+        authorities.push(facets.recordAuthorities ?? [])
         ownership.push({
           workspaces: facets.recordWorkspaceIds ?? [],
           operations: facets.operationIds ?? []
@@ -145,6 +147,13 @@ describe('writing a transaction', () => {
         { sessionId: 'affected-chat' }
       )
       expect(ownership.at(-1)?.workspaces).toEqual(['workspace-1', 'workspace-2'])
+      expect(authorities.at(-1)).toEqual([
+        {
+          recordId: 'affected-chat',
+          operationIds: [],
+          workspaceIds: ['workspace-1', 'workspace-2']
+        }
+      ])
     } finally {
       release()
     }
@@ -236,7 +245,23 @@ describe('a receipt', () => {
       ).toEqual(cancel)
       expect(await persistedStatus()).toBe('succeeded')
 
-      receipt.committed()
+      const authorities: (readonly CrewRecordAuthority[])[] = []
+      const release = sessionCrewChanges.subscribe((facets) => {
+        if (facets.recordAuthorities) {
+          authorities.push(facets.recordAuthorities)
+        }
+      })
+      try {
+        receipt.committed()
+      } finally {
+        release()
+      }
+      expect(authorities).toEqual([
+        [
+          { recordId: 'chat-a-0001', operationIds: [operationId], workspaceIds: ['workspace-1'] },
+          { recordId: 'chat-a-0001', operationIds: [operationId], workspaceIds: ['workspace-1'] }
+        ]
+      ])
       expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
       expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
     }

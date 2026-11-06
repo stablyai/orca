@@ -163,15 +163,15 @@ it.each([
     h.stream('pane-w1', false, at)
     sessionCrewChanges.notify(
       Object.assign(new Set(['records'] as const), {
-        recordIds: ['pane-w1'],
-        operationIds: ['old-pr1'],
-        recordWorkspaceIds: ['w0']
+        recordAuthorities: [
+          { recordId: 'pane-w1', operationIds: ['old-pr1'], workspaceIds: ['w0'] }
+        ]
       })
     )
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(
       routed.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => [...keys!])
-    ).toEqual([['pr1', 'pr0']])
+    ).toEqual([['pr1']])
     // Both identities arrive while the operation is claimed, before any receipt identifies it.
     h.stream('pane-w0', false, at + 1)
     h.stream('late', true, at + 5)
@@ -192,9 +192,9 @@ it.each([
     )
     sessionCrewChanges.notify(
       Object.assign(new Set(['records'] as const), {
-        recordIds: ['late'],
-        recordWorkspaceIds: ['w0'],
-        operationIds: [action.operationId]
+        recordAuthorities: [
+          { recordId: 'late', workspaceIds: ['w0'], operationIds: [action.operationId] }
+        ]
       })
     )
     await h.flush()
@@ -249,8 +249,7 @@ it.each([
     h.stream('unrelated', true, h.now, 'other-workspace')
     sessionCrewChanges.notify(
       Object.assign(new Set(['records'] as const), {
-        recordIds: ['unrelated'],
-        recordWorkspaceIds: ['other-workspace']
+        recordAuthorities: [{ recordId: 'unrelated', workspaceIds: ['other-workspace'] }]
       })
     )
     await h.flush()
