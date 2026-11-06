@@ -3066,6 +3066,8 @@
         "loadGitHubWorkFailed": "無法載入 GitHub 工作項目。",
         "gitlabViewIssues": "議題",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "所有人",
+        "gitlabInvolvementReviewing": "審閱中",
         "gitlabViewTodos": "我的待辦事項",
         "startWorkspaceFromMr": "從 MR {{number}} 啟動工作區",
         "startWorkspaceFromIssue": "從議題 {{number}} 啟動工作區",
@@ -11731,7 +11733,7 @@
             "terminalRun": "在你的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
-          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路並執行其他程式。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理）。",
           "uiWarning": "在 Orca 內執行發布者的程式碼來繪製其畫面。Orca 會顯示它能存取的內容，並在啟用前先詢問你。"
         },
         "PluginConsentProvenance": {
@@ -19104,6 +19106,9 @@
       "composer": {
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
+        "previewQueue": "加入佇列",
+        "previewSteer": "引導",
+        "previewSteerQueued": "引導下一則",
         "alternateQueueHint": "{{shortcut}} 加入佇列",
         "noPty": "沒有作用中的終端機，請切回終端機以重新連線。",
         "locked": "輸入正被另一台裝置佔用。",
