@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
+import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
@@ -176,8 +177,17 @@ export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Ele
         <span className="min-w-0 truncate text-[11px] text-muted-foreground tabular-nums">
           {facts.fixedText}
           {facts.fixedText && age ? ' · ' : null}
-          {/* The age is the only part that changes over time; its reserved width keeps "9m ago" to "10m ago" from re-truncating the name. */}
-          {age && <span className="inline-block min-w-[8ch] text-right">{age}</span>}
+          {/* The age is the only part that changes over time; its reserved width ("10m ago", "started 10m ago") keeps a growing age from re-truncating the name. */}
+          {age && (
+            <span
+              className={cn(
+                'inline-block text-right',
+                facts.running ? 'min-w-[15ch]' : 'min-w-[8ch]'
+              )}
+            >
+              {age}
+            </span>
+          )}
         </span>
       </TooltipTrigger>
       {facts.details.length > 0 && (
