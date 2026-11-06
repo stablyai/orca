@@ -1,4 +1,5 @@
-const FONT_SCALE_MIN = 0.8
+// Match the terminal's smallest text scale so a pinch can keep shrinking.
+const FONT_SCALE_MIN = 0.5
 const FONT_SCALE_MAX = 1.8
 
 function clampFontScale(scale: number): number {

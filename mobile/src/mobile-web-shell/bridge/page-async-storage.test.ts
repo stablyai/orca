@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../page-storage-keys'
+import {
+  NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY,
+  NEGOTIATED_PAGE_STORAGE_KEYS,
+  PAGE_STORAGE_EXACT_KEYS,
+  PAGE_STORAGE_MAX_VALUE_CHARS
+} from '../page-storage-keys'
 import pageAsyncStorage, { PageStorageRefusedError, publishPageStorage } from './page-async-storage'
 
 type Write = { key: string; value: string | null }
@@ -80,6 +85,17 @@ describe('a write the page makes', () => {
     await pageAsyncStorage.removeItem('orca:pins:host-1')
     expect(writes).toEqual([{ key: 'orca:pins:host-1', value: null }])
     await expect(pageAsyncStorage.getItem('orca:pins:host-1')).resolves.toBeNull()
+  })
+
+  it('allowlists the pinched chat text size and round-trips a value', async () => {
+    expect(PAGE_STORAGE_EXACT_KEYS).toContain(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY)
+    expect(NEGOTIATED_PAGE_STORAGE_KEYS).toContain(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY)
+    publish({ [NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY]: '1.35' })
+    expect(pageAsyncStorage.getItemSync(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY)).toBe('1.35')
+    await pageAsyncStorage.setItem(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY, '1.5')
+    expect(writes).toEqual([{ key: NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY, value: '1.5' }])
+    await expect(pageAsyncStorage.getItem(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY)).resolves.toBe('1.5')
+    expect(pageAsyncStorage.getItemSync(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY)).toBe('1.5')
   })
 
   it('is dropped, and not kept, for a key outside the allowlist', async () => {

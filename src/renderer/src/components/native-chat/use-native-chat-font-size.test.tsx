@@ -112,4 +112,51 @@ describe('persisted chat font-size shortcuts', () => {
     await waitFor(() => expect(mocks.settings.nativeChatAppearance).toBeUndefined())
     expect(mocks.updateSettings).toHaveBeenCalledTimes(2)
   })
+
+  it('steps text size from a pinch on the chat and leaves other wheels alone', async () => {
+    mocks.web = false
+    const root = document.createElement('div')
+    const text = document.createElement('p')
+    root.append(text)
+    document.body.append(root)
+    renderHook(() => useNativeChatFontSize(false, { current: root }))
+    const wheel = (deltaY: number): WheelEvent => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY })
+      Object.defineProperty(event, 'ctrlKey', { value: true })
+      text.dispatchEvent(event)
+      return event
+    }
+    expect(wheel(-4).defaultPrevented).toBe(true)
+    await Promise.resolve()
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+    wheel(-4)
+    wheel(-4)
+    wheel(-4)
+    await waitFor(() => expect(mocks.settings.nativeChatAppearance).toEqual({ fontSize: 15 }))
+    const scroll = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -8 })
+    text.dispatchEvent(scroll)
+    const outside = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -8 })
+    Object.defineProperty(outside, 'ctrlKey', { value: true })
+    document.body.dispatchEvent(outside)
+    await Promise.resolve()
+    expect(mocks.updateSettings).toHaveBeenCalledTimes(1)
+    expect(outside.defaultPrevented).toBe(false)
+    root.remove()
+  })
+
+  it('keeps pinch travel regardless of wheel event grouping', async () => {
+    const root = document.createElement('div')
+    document.body.append(root)
+    renderHook(() => useNativeChatFontSize(false, { current: root }))
+    const event = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: -24
+    })
+    Object.defineProperty(event, 'ctrlKey', { value: true })
+    root.dispatchEvent(event)
+    await waitFor(() => expect(mocks.settings.nativeChatAppearance).toEqual({ fontSize: 16 }))
+    expect(mocks.updateSettings).toHaveBeenCalledTimes(2)
+    root.remove()
+  })
 })

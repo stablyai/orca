@@ -10,8 +10,10 @@ import {
   retainMirroredStorage,
   writeMirroredStorage
 } from '../storage/mirrored-storage-keys'
-
-import { TERMINAL_SHORTCUT_STORAGE_KEYS } from './page-storage-keys'
+import {
+  NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY,
+  TERMINAL_SHORTCUT_STORAGE_KEYS
+} from './page-storage-keys'
 import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness'
 
 const store = vi.hoisted(() => ({
@@ -178,4 +180,20 @@ it('republishes an accepted page zoom after an older native snapshot crosses the
   pair.client.close()
   pair.host.dispose()
   releaseKeys()
+})
+
+it('pushes a pinched chat size to other open pages', () => {
+  const publish = vi.fn()
+  function Harness(): null {
+    useShellPageStorageRefresh(async () => undefined, publish)
+    return null
+  }
+  let renderer!: ReturnType<typeof create>
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
+  const before = publish.mock.calls.length
+  writeMirroredStorage(NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY, '1.35')
+  expect(publish).toHaveBeenCalledTimes(before + 1)
+  act(() => renderer.unmount())
 })

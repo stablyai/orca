@@ -23,7 +23,7 @@ import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestion
 import { nativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
-import { useNativeChatFontSize } from './use-native-chat-font-size'
+import { useChatFontPinch } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
@@ -147,7 +147,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   // Final read refusal replaces the pane because no existing action can succeed.
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const paneActive = props.isVisible && props.isFocusedGroup
-  useNativeChatFontSize(viewState.kind === 'ready' && paneActive, rootRef)
+  useChatFontPinch(props.isFocusedGroup, props.isVisible, viewState.kind === 'ready', rootRef)
   const find = useNativeChatFind(paneActive, rootRef, composerRef, submits.messageListRef)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)

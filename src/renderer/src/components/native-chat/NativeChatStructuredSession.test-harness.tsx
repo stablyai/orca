@@ -290,7 +290,8 @@ export function createStructuredSessionMocks() {
       }
     }),
     useNativeChatFontSize: () => ({
-      useNativeChatFontSize: () => undefined
+      useNativeChatFontSize: () => undefined,
+      useChatFontPinch: () => undefined
     }),
     useNativeChatFileLinkContext: () => ({
       useNativeChatFileLinkContext: () => mocks.fileLinkContext

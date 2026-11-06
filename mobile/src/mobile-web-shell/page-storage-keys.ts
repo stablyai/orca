@@ -21,11 +21,16 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
   'orca:custom-accessory-keys'
 ] as const
 
+/** Pinched chat text size. Every open chat reads the same value. */
+export const NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY = 'orca:nativeChatTextScale'
+
+/** Keys a later init may replace on a page that is already showing. */
 export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   ...TERMINAL_SHORTCUT_STORAGE_KEYS,
   'orca:terminalTextScale',
   'orca:terminalAutocompleteEnabled',
-  'orca:terminalLinkOpenMode'
+  'orca:terminalLinkOpenMode',
+  NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY
 ] as const
 
 export const PAGE_STORAGE_EXACT_KEYS = [
@@ -42,7 +47,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Whether a terminal link opens in Orca's browser or the phone's. */
   'orca:terminalLinkOpenMode',
   /** The split terminal's chosen direction. */
-  'orca:terminalSplitLayout'
+  'orca:terminalSplitLayout',
+  NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY
 ] as const
 
 /**
@@ -50,7 +56,10 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  * reader refines each key against its own list and refuses the whole frame on one it lacks, so
  * the host sends these only to a page whose `ready` named them in `storageKeys`.
  */
-export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
+export const NEGOTIATED_PAGE_STORAGE_KEYS = [
+  'orca:terminalSplitLayout',
+  NATIVE_CHAT_TEXT_SCALE_STORAGE_KEY
+] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
 export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {
