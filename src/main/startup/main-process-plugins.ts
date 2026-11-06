@@ -103,13 +103,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     hostVersion: pluginHostVersion(app.getVersion()),
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
     imageCache: pluginImageCache,
-    revokeConsent: async (pluginKey) => {
-      // Why throw: an install that cannot drop the old approval must not publish.
-      if (!state.pluginService) {
-        throw new Error('plugin service is not running')
-      }
-      await revokePluginConsent({ store, pluginService: state.pluginService, pluginKey })
-    }
+    revokeConsent: (pluginKey) =>
+      revokePluginConsent({ store, pluginService: state.pluginService, pluginKey })
   })
   const bundledPluginRoot = bundledPluginRootForApp(app)
   state.pluginService = new PluginService({

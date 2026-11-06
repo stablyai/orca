@@ -52,10 +52,14 @@ export async function applyPluginConsent(input: {
 /** Drops a plugin's recorded approval without disabling it, so it waits for review. */
 export async function revokePluginConsent(input: {
   store: Store
-  pluginService: PluginService
+  pluginService: PluginService | null
   pluginKey: string
 }): Promise<void> {
   const { store, pluginService, pluginKey } = input
+  // Why throw: an install that cannot drop the old approval must not publish.
+  if (!pluginService) {
+    throw new Error('plugin service is not running')
+  }
   const consents = normalizePluginConsents(store.getSettings().pluginConsents)
   if (!(pluginKey in consents)) {
     return
