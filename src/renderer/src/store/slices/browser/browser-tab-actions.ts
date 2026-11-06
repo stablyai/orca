@@ -25,6 +25,7 @@ import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-lay
 import { browserTabOpenView } from './browser-tab-open-view'
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 
+/** Create workspace browser tabs with initial page presentation before applying layout and focus. */
 export function createBrowserTabActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -62,6 +63,9 @@ export function createBrowserTabActions(
         !options?.validateLinkPlacement
       ) {
         admitBrowserPageMount(page.id)
+      }
+      if (options?.chromeless) {
+        page.chromeless = true
       }
       // Why: with no explicit profile, Settings decides, so the profile scope applies to every way a tab opens.
       const { sessionProfileId, sessionPartition } =

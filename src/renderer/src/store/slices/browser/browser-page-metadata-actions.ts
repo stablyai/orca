@@ -12,6 +12,7 @@ import {
 } from './browser-page-annotation'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 
+/** Update page-local metadata without publishing presentation overrides back to a remote host. */
 export function createBrowserPageMetadataActions(
   set: BrowserSliceSet,
   _get: BrowserSliceGet
@@ -20,6 +21,7 @@ export function createBrowserPageMetadataActions(
   | 'setRemoteBrowserPageHandle'
   | 'removeRemoteBrowserPageHandle'
   | 'setBrowserPageViewportPreset'
+  | 'setBrowserPageChromeless'
   | 'addBrowserPageAnnotation'
   | 'updateBrowserPageAnnotation'
   | 'deleteBrowserPageAnnotation'
@@ -28,6 +30,21 @@ export function createBrowserPageMetadataActions(
   | 'removeDeliveredBrowserPageAnnotations'
 > {
   return {
+    setBrowserPageChromeless: (pageId, chromeless) =>
+      set((s) => {
+        const page = findPage(s.browserPagesByWorkspace, pageId)
+        if (!page || page.chromeless === chromeless) {
+          return s
+        }
+        return {
+          browserPagesByWorkspace: {
+            ...s.browserPagesByWorkspace,
+            [page.workspaceId]: s.browserPagesByWorkspace[page.workspaceId].map((entry) =>
+              entry.id === pageId ? { ...entry, chromeless } : entry
+            )
+          }
+        }
+      }),
     setRemoteBrowserPageHandle: (pageId, handle) => {
       set((s) => ({
         remoteBrowserPageHandlesByPageId: {

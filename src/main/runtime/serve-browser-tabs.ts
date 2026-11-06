@@ -66,7 +66,7 @@ export class ServeBrowserTabs {
   navigated(page: ServeBrowserPageState): void {
     // While layout open is pending, retain the latest page address for its eventual save.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && this.pendingOpens.has(page.pageId)) {
-      this.pendingOpens.set(page.pageId, page)
+      this.pendingOpens.set(page.pageId, { ...this.pendingOpens.get(page.pageId), ...page })
       return
     }
     this.write(page.worktreeId, (_hostId, session) => withServeBrowserPageState(session, page))

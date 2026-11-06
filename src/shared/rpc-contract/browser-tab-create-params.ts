@@ -10,6 +10,7 @@ export const BrowserTabCreateParams = z.object({
   page: OptionalString,
   profileId: OptionalString,
   waitForRegistration: z.boolean().optional(),
+  chromeless: z.boolean().optional(),
   activate: z.boolean().optional(),
   // Why: `activate` says the caller wants the new tab selected; `navigation` says on whose screens.
   // Absent, a paired caller means 'caller' — one device's create must not steer every other UI.

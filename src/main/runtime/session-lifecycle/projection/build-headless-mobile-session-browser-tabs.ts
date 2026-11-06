@@ -7,6 +7,7 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { findSavedBrowserPage } from '../../serve-browser-tab-layout'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
@@ -32,7 +33,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
   protected abstract getRendererOwnedBrowserPageIds(
     ...args: Parameters<BrowserOwnership['getRendererOwnedBrowserPageIds']>
   ): ReturnType<BrowserOwnership['getRendererOwnedBrowserPageIds']>
-  // Offscreen browser pages live outside renderer graphs; expose session rows or snapshots prune them and close fails with tab_not_found.
+  /** Publish pages outside renderer graphs with saved toolbar hints so snapshots retain their tabs. */
   protected buildHeadlessMobileSessionBrowserTabs(
     worktreeId: string
   ): RuntimeMobileSessionBrowserTab[] {
@@ -48,6 +49,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
+    const session = serverTabs.length > 0 ? this.getWorkspaceSessionForWorktree(worktreeId) : null
     const publishedServerTabs = serverTabs.map((tab) => {
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
         worktreeId,
@@ -69,6 +71,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
         ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
+        chromeless: findSavedBrowserPage(session, worktreeId, tab.browserPageId)?.page.chromeless,
         isActive: tab.active === true
       }
     })
@@ -87,6 +90,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         loading: page.loading,
         canGoBack: page.canGoBack,
         canGoForward: page.canGoForward,
+        ...(page.chromeless !== undefined ? { chromeless: page.chromeless } : {}),
         isActive: page.active
       }))
     return [...publishedServerTabs, ...publishedClientTabs]

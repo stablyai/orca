@@ -40,6 +40,7 @@ export class RuntimeBrowserTabCreation {
     >
   ) {}
 
+  /** Route creation to the page's host, carrying presentation hints without changing execution or focus policy. */
   async browserTabCreate(
     params: {
       url?: string
@@ -47,6 +48,7 @@ export class RuntimeBrowserTabCreation {
       page?: string
       profileId?: string
       waitForRegistration?: boolean
+      chromeless?: boolean
       activate?: boolean
       navigation?: RuntimeNavigationTarget
       targetGroupId?: string
@@ -117,6 +119,7 @@ export class RuntimeBrowserTabCreation {
           pageId: created.browserPageId,
           url,
           title: '',
+          ...(params.chromeless !== undefined ? { chromeless: params.chromeless } : {}),
           ...(params.profileId ? { profileId: params.profileId } : {}),
           ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
         })
@@ -141,7 +144,8 @@ export class RuntimeBrowserTabCreation {
       focus.focusesHost,
       params.page,
       undefined,
-      params.split ? { direction: params.split, fromTabId: params.splitFromTabId } : undefined
+      params.split ? { direction: params.split, fromTabId: params.splitFromTabId } : undefined,
+      params.chromeless
     )
 
     // Wait for operability, but retain the created id if mounting times out.

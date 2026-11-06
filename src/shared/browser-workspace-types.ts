@@ -101,6 +101,8 @@ export type BrowserPage = {
   remoteBrowserPageClientHosted?: boolean
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
+  /** Hide browser controls while keeping the workspace tab strip available. */
+  chromeless?: boolean
   /** Set on a page that shows a workspace document; absent on every page that shows a URL. */
   docLocation?: BrowserPageDocLocation | null
   /** Set on a page the address bar converted from the other kind; absent everywhere else. */

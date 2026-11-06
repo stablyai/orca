@@ -53,6 +53,31 @@ describe('client-hosted browser page persistence', () => {
     expect(isRestoredClientHostedBrowserPlacement(restored.getPage('page-a')!.placement)).toBe(true)
   })
 
+  it('retains the initial chromeless preference when a client page is restored', () => {
+    const store = sessionStore()
+    const pages = new RuntimeBrowserPageRegistry()
+    pages.publishClientPage({
+      browserPageId: 'clean',
+      workspaceId: 'repo-1::wt-a',
+      browserProfileId: 'default',
+      executionHostKey: 'local',
+      placement: livePlacement,
+      pairedDeviceId: 'device-a',
+      chromeless: true,
+      url: 'https://example.com',
+      loading: false,
+      active: false
+    })
+    persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')
+    const restored = new RuntimeBrowserPageRegistry()
+    rehydrateClientHostedBrowserPages(restored, {
+      listWorkspaceSessions: () => [store.session],
+      isKnownWorktree: () => true,
+      now: () => NOW
+    })
+    expect(restored.getPage('clean')?.chromeless).toBe(true)
+  })
+
   it('persists no authority: a rehydrated placement can never equal a mintable one', () => {
     expect(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT.browserHostGeneration).toBe(0)
     expect(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT.pageHostGeneration).toBe(0)

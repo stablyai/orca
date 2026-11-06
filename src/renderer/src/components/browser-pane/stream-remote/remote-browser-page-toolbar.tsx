@@ -10,6 +10,7 @@ import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-
 import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 
+/** Apply local toolbar visibility to remote controls while leaving navigation execution on the host. */
 export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
   addressBarValue,
@@ -50,6 +51,7 @@ export function RemoteBrowserPageToolbar({
 }): React.JSX.Element {
   return (
     <BrowserNavigationControlRow
+      browserPageId={addressBarEditSession.pageId}
       controls={{
         // Hosts report no history depth; keep arrows enabled and let dead-end RPCs no-op.
         canGoBack: true,

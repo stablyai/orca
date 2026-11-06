@@ -5,6 +5,7 @@ import { editorRowHost } from '../../../../shared/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isUnifiedTabActiveInActiveGroup } from './mobile-session-surfaces'
 
+/** Publish active-page metadata and its desktop toolbar hint without changing mobile navigation controls. */
 export function buildMobileBrowserTab(
   inputs: MobileSessionWorktreeInputs,
   workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number],
@@ -21,6 +22,7 @@ export function buildMobileBrowserTab(
     title,
     browserWorkspaceId: workspace.id,
     browserPageId: activePage?.id ?? workspace.activePageId ?? null,
+    ...(activePage?.chromeless !== undefined ? { chromeless: activePage.chromeless } : {}),
     browserProfileId:
       workspace.sessionProfileId === undefined || activePage?.browserRuntimeEnvironmentId
         ? undefined

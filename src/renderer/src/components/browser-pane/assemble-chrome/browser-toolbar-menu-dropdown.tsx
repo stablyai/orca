@@ -38,6 +38,7 @@ type DetectedBrowserEntry = {
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
 import { browserViewportPresetLabel } from './browser-viewport-preset-label'
 import { translate } from '@/i18n/i18n'
+import { BrowserToolbarVisibilityMenuItem } from './browser-toolbar-visibility-menu-item'
 import {
   BrowserChromeFoldedMenuItems,
   type BrowserChromeOverflowMenuProps
@@ -69,6 +70,7 @@ type BrowserToolbarMenuDropdownProps = {
   overflow: BrowserChromeOverflowMenuProps
 }
 
+/** Expose page presentation and session tools while deferring folded actions until the menu closes. */
 export function BrowserToolbarMenuDropdown({
   browserPageId,
   menuOpen,
@@ -114,6 +116,7 @@ export function BrowserToolbarMenuDropdown({
         data-browser-page-menu-id={browserPageId}
         onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
       >
+        <BrowserToolbarVisibilityMenuItem browserPageId={browserPageId} menuKind="dropdown" />
         <BrowserChromeFoldedMenuItems
           tools={overflow.tools}
           deferUntilClose={overflow.deferUntilClose}

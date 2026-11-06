@@ -7,8 +7,7 @@ import {
 import type { AppState } from '../../types'
 import { ownsGlobalSelection } from '../../global-selection-owner'
 
-// The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and
-// the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
+/** Build local tab order and selection, requesting blank-page address focus only when its toolbar is shown. */
 export function browserTabOpenView(
   s: AppState,
   worktreeId: string,
@@ -42,6 +41,7 @@ export function browserTabOpenView(
     // Why the doc check and not just the url: a document page is blank by construction, and
     // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
     !page.docLocation &&
+    !page.chromeless &&
     (options?.focusAddressBar ??
       (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
 

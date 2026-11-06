@@ -17,6 +17,7 @@ import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/brow
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
 
+/** Coordinate page creation and closure; a blank chromeless page must not request address-bar focus. */
 export function createBrowserPageCreateActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -36,6 +37,9 @@ export function createBrowserPageCreateActions(
         undefined,
         options?.docLocation
       )
+      if (options?.chromeless) {
+        page.chromeless = true
+      }
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
@@ -64,6 +68,7 @@ export function createBrowserPageCreateActions(
           const shouldFocusAddressBar =
             shouldUpdateGlobalActiveSurface &&
             !page.docLocation &&
+            !page.chromeless &&
             (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL)
 
           return {

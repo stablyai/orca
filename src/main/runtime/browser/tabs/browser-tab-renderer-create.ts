@@ -4,6 +4,7 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
 import type { BrowserTabCreateRequest } from '../../../../shared/browser-tab-create-request'
 
+/** Request renderer creation, accepting only its matching reply and rejecting after a bounded wait. */
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
   url: string,
@@ -14,7 +15,8 @@ export async function createBrowserTabInRenderer(
   requestedPageId?: string,
   /** Used only when `worktreeId` is unset and no workspace is active in the renderer. */
   fallbackWorktreeId?: string,
-  split?: { direction: BrowserTabSplitDirection; fromTabId?: string }
+  split?: { direction: BrowserTabSplitDirection; fromTabId?: string },
+  chromeless?: boolean
 ): Promise<{ browserPageId: string }> {
   const rendererWebContents = host.getAuthoritativeWindow().webContents
   const requestId = randomUUID()
@@ -50,6 +52,7 @@ export async function createBrowserTabInRenderer(
       sessionProfileId: profileId,
       sessionPartition,
       activate,
+      ...(chromeless !== undefined ? { chromeless } : {}),
       ...(fallbackWorktreeId ? { fallbackWorktreeId } : {}),
       ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
     }

@@ -135,6 +135,7 @@ export function resolveMirroredBrowserPageContent(
   }
 }
 
+/** Seed new mirrors from host hints while retaining existing local presentation choices, including false. */
 export function buildMirroredBrowserTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -193,7 +194,8 @@ export function buildMirroredBrowserTabs(
         (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
-      viewportPresetId: existing?.page.viewportPresetId ?? null
+      viewportPresetId: existing?.page.viewportPresetId ?? null,
+      chromeless: existing?.page.chromeless ?? tab.chromeless
     }
     // Reuse requires workspaceId equality or removed-workspace cleanup misses the retained page list.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
