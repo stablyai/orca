@@ -139,6 +139,11 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:toggleAgentDashboard', listener)
     return () => ipcRenderer.removeListener('ui:toggleAgentDashboard', listener)
   },
+  onOpenHome: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:openHome', listener)
+    return () => ipcRenderer.removeListener('ui:openHome', listener)
+  },
   onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
     ipcRenderer.on('ui:jumpToWorktreeIndex', listener)

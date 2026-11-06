@@ -78,11 +78,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     conflictGroup: 'workspace-shell',
     searchKeywords: ['shortcut', 'global', 'worktree', 'rename', 'workspace', 'title'],
     // Why: macOS only — Windows/Linux Ctrl+Alt+R has no safe default (Ctrl+R reverse-search, Ctrl+Shift+R reload are taken).
-    defaultBindings: {
-      darwin: ['Mod+Alt+R'],
-      linux: [],
-      win32: []
-    }
+    defaultBindings: { darwin: ['Mod+Alt+R'], linux: [], win32: [] }
   },
   {
     id: 'workspace.delete',
@@ -141,6 +137,15 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
       'close'
     ],
     // Experimental surfaces stay unbound rather than claim terminal users’ global chords, matching workspace.openBoard.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'home.open',
+    title: 'Go to Home',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'home', 'dashboard', 'open', 'go to home'],
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -301,11 +306,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
       'expand'
     ],
     // Why: pairs with floatingTerminal.toggle (Cmd+Opt+A) so maximize stays one-handed; macOS-only, Linux/Windows unbound.
-    defaultBindings: {
-      darwin: ['Mod+Alt+Shift+A'],
-      linux: [],
-      win32: []
-    },
+    defaultBindings: { darwin: ['Mod+Alt+Shift+A'], linux: [], win32: [] },
     allowInTerminal: true
   }
 ]

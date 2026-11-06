@@ -123,6 +123,7 @@ export type UiViewHistory =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  | 'home'
 
 export type UISliceCore = {
   sidebarOpen: boolean
@@ -204,6 +205,7 @@ export type UISliceCore = {
   clearPendingSkillsSharedView: () => void
   openArtifactsPage: () => void
   closeArtifactsPage: () => void
+  openHomePage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISliceCore['newWorkspaceDraft']>) => void

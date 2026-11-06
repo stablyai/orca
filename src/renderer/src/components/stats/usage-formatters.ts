@@ -38,3 +38,23 @@ export function formatSessionTime(timestamp: string): string {
     minute: '2-digit'
   })
 }
+
+export function formatDuration(ms: number): string {
+  if (ms <= 0) {
+    return '0m'
+  }
+
+  const totalMinutes = Math.floor(ms / 60_000)
+  const totalHours = Math.floor(totalMinutes / 60)
+  const totalDays = Math.floor(totalHours / 24)
+  const remainingHours = totalHours % 24
+  const remainingMinutes = totalMinutes % 60
+
+  if (totalDays > 0) {
+    return `${totalDays}d ${remainingHours}h`
+  }
+  if (totalHours > 0) {
+    return `${totalHours}h ${remainingMinutes}m`
+  }
+  return `${totalMinutes}m`
+}

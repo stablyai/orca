@@ -31,6 +31,7 @@ const ActivityPrototypePage = lazy(() => import('../components/activity/Activity
 const Settings = lazy(() => import('../components/settings/Settings'))
 const SkillsPage = lazy(() => import('../components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage'))
+const HomePage = lazy(() => import('../components/home/HomePage'))
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
 const Terminal = lazy(() => import('../components/Terminal'))
@@ -87,9 +88,12 @@ function PendingCreationSurface(props: {
 
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
+  // Why: first run keeps Landing's onboarding; once projects exist the empty state shows Home.
+  const hasProjects = useAppStore((s) => s.repos.length > 0)
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
+      {activeView === 'home' ? hasProjects ? <HomePage /> : <Landing /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}
       {activeView === 'tasks' ? <TaskPage /> : null}
@@ -104,7 +108,13 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
         />
       ) : null}
       {activeView === 'terminal' && !hasActiveWorktree && !creationLayoutActive ? (
-        <Landing />
+        hasProjects ? (
+          <div className="absolute inset-0 flex">
+            <HomePage asLanding />
+          </div>
+        ) : (
+          <Landing />
+        )
       ) : null}
     </>
   )
@@ -184,10 +194,11 @@ export function AppWorkspaceShell(props: {
               )
             ) : null}
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-              {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
+              {/* Automations/artifacts/home own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&
               layout.activeView !== 'automations' &&
-              layout.activeView !== 'artifacts' ? (
+              layout.activeView !== 'artifacts' &&
+              layout.activeView !== 'home' ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">

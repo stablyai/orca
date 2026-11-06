@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BarChart3, Bot, Check, ChevronDown, Clock, GitPullRequest } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { StatCard } from './StatCard'
+import { formatDuration } from './usage-formatters'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
@@ -18,26 +19,6 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 export { getStatsPaneSearchEntries } from './stats-search'
-
-function formatDuration(ms: number): string {
-  if (ms <= 0) {
-    return '0m'
-  }
-
-  const totalMinutes = Math.floor(ms / 60_000)
-  const totalHours = Math.floor(totalMinutes / 60)
-  const totalDays = Math.floor(totalHours / 24)
-  const remainingHours = totalHours % 24
-  const remainingMinutes = totalMinutes % 60
-
-  if (totalDays > 0) {
-    return `${totalDays}d ${remainingHours}h`
-  }
-  if (totalHours > 0) {
-    return `${totalHours}h ${remainingMinutes}m`
-  }
-  return `${totalMinutes}m`
-}
 
 function formatTrackingSince(timestamp: number | null): string {
   if (!timestamp) {

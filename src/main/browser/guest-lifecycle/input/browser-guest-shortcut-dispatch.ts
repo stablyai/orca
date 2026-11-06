@@ -179,6 +179,8 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:openTasks')
   } else if (action?.type === 'toggleAgentDashboard') {
     renderer.send('ui:toggleAgentDashboard')
+  } else if (action?.type === 'openHome') {
+    renderer.send('ui:openHome')
   } else if (action?.type === 'openSettings') {
     renderer.send('ui:openSettings')
   } else if (action?.type === 'forceReload') {

@@ -6512,7 +6512,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "home": "Home"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -7910,7 +7911,8 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
-          }
+          },
+          "showHomeButton": "Show Home Button"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10144,7 +10146,12 @@
                 "cursor": "cursor"
               }
             },
-            "matchTerminal": "match terminal"
+            "matchTerminal": "match terminal",
+            "home": {
+              "title": "Show Home Button",
+              "description": "Show the Home button at the top of the left sidebar.",
+              "home": "home"
+            }
           }
         },
         "auto": {
@@ -19369,6 +19376,45 @@
           "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
           "switch": "Use {{value0}} instead of Orca’s {{value1}}"
         }
+      },
+      "home": {
+        "HomeActivityCard": {
+          "title": "Activity",
+          "details": "Stats & Usage",
+          "noProvider": "Token tracking is off. Enable a provider in Stats & Usage.",
+          "scanning": "Scanning agent logs…",
+          "noData": "No token usage yet.",
+          "today": "Tokens today",
+          "week": "Tokens, last 7 days",
+          "sessions": "Sessions in tracked range",
+          "cost": "Est. cost in tracked range",
+          "agents": "Agents, all time",
+          "agentTime": "Agent time",
+          "prs": "PRs created"
+        },
+        "HomeAmbientView": {
+          "recentlyFinished": "Recently finished",
+          "exit": "Exit rest mode"
+        },
+        "HomeFleetCards": {
+          "needsYou": "Needs you",
+          "needsYouEmpty": "Nothing needs you right now.",
+          "runningNow": "Running now",
+          "runningNowEmpty": "No agents running."
+        },
+        "HomePage": {
+          "title": "Home",
+          "restMode": "Rest mode",
+          "fleetSummary": "{{working}} working · {{attention}} needs you · {{done}} done"
+        },
+        "HomeUsageCard": {
+          "title": "Usage & limits",
+          "details": "Details",
+          "empty": "No usage providers set up. Open Details to connect one."
+        },
+        "HomeAgentRow": {
+          "revealFailed": "This agent is no longer available."
+        }
       }
     },
     "i18n": {
@@ -23243,6 +23289,7 @@
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
       "viewPlugins": "Open Plugins",
+      "homeOpen": "Go to Home",
       "sidebarProjectsToggleCollapse": "Collapse / Expand All Projects"
     },
     "group": {

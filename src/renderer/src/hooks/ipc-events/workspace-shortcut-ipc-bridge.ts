@@ -71,6 +71,14 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     )
   }
 
+  if (window.api.ui.onOpenHome) {
+    unsubs.push(
+      window.api.ui.onOpenHome(() => {
+        useAppStore.getState().openHomePage()
+      })
+    )
+  }
+
   unsubs.push(
     window.api.ui.onOpenTasks(() => {
       const store = useAppStore.getState()
