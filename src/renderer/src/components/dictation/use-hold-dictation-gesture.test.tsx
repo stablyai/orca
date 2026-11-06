@@ -178,7 +178,7 @@ describe('useHoldDictationGesture', () => {
     expect(stopDictation).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a held dictation when settings changes re-create the dictation callbacks', async () => {
+  it('keeps a held dictation when the dictation callbacks are re-created', async () => {
     await renderProbe()
 
     beginHold()
