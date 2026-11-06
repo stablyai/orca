@@ -18,6 +18,8 @@ let stream: any = null
 let isStreaming = false
 let offlineChunker: OfflineAudioChunker | null = null
 let offlineSampleRate = 16000
+// Primed on a session's first feed so stop never waits on the next session's stream.
+let streamPrimed = false
 
 function loadSherpa(): any {
   const modulePath = workerData?.sherpaModulePath
@@ -65,6 +67,7 @@ function decodeOfflineChunk(samples: Float32Array): string {
 
 // Discard residual audio and spent streams so a warm worker never carries one session into the next.
 function resetSessionState(): void {
+  streamPrimed = false
   try {
     if (!isStreaming) {
       offlineChunker = new OfflineAudioChunker(offlineSampleRate)
@@ -90,6 +93,15 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
     // Normalize rates before native decode: mixed rates on one recognizer abort the process.
     const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
     if (isStreaming) {
+      if (!streamPrimed) {
+        // New streams start with empty encoder caches; zipformer en-20M dropped most of the first second
+        // (first word wrong on 71 of 73 LibriSpeech clips). A second of silence fills them first.
+        sherpa.acceptWaveformOnline(stream, {
+          sampleRate: offlineSampleRate,
+          samples: new Float32Array(offlineSampleRate)
+        })
+        streamPrimed = true
+      }
       sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
 
       while (sherpa.isOnlineStreamReady(recognizer, stream)) {
