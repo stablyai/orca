@@ -3,10 +3,9 @@ import type { PersistedNativeChatSessionOptions } from '../../native-chat/input/
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY } from '../structured-agent-session-surface-capabilities'
 
-/** Rules for keeping a host's model lists to seed new-chat pickers without a first-frame guess.
- *  Only host answers populate a snapshot; newer answers replace older ones. */
+// A host's model lists seed new-chat pickers without a first-frame guess; newer answers replace older ones.
 
-export type ListedHostModelCatalog = Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }>
+type ListedHostModelCatalog = Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }>
 
 /** One host's answers for one agent. */
 export type HostModelCatalogSnapshot = {
@@ -53,16 +52,16 @@ export function selectHostModelCatalogSnapshot(
   return launch.seedsModel ? withoutNamedDefault(listed) : undefined
 }
 
-/** The snapshot after a host answer for `worktree` (null for a session-less read); null means keep none.
+/** The snapshot after a host answer for `worktree` (null for a session-less read); undefined means keep none.
  *  An unknown or empty answer proves absence and retires what it answered for. */
 export function withHostModelCatalogAnswer(
   snapshot: HostModelCatalogSnapshot | undefined,
   worktree: string | null,
   catalog: AgentSessionModelCatalogResult
-): HostModelCatalogSnapshot | null {
+): HostModelCatalogSnapshot | undefined {
   if (catalog.origin === 'unknown' || catalog.models.length === 0) {
     if (worktree === null || !snapshot) {
-      return null
+      return undefined
     }
     const retired = snapshot.byWorktree.get(worktree)
     const byWorktree = new Map(snapshot.byWorktree)

@@ -9,7 +9,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from './structured-agent-session-client'
 import { structuredAgentSessionHostKey } from './structured-agent-session-host-capability'
 
-// Host/agent saved model lists seed new-chat pickers; absence/account-setting changes drop them.
+// Per host and agent; absence or an account-setting change drops them.
 const snapshots = new Map<string, HostModelCatalogSnapshot>()
 // Bumped when a host's answers are dropped, so a preload sent before then records nothing.
 const generations = new Map<string, number>()
