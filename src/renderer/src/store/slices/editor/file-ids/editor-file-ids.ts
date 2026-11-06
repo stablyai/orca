@@ -1,4 +1,7 @@
-import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import {
+  getOpenFileExecutionHostId,
+  hasOpenFileExecutionHostEvidence
+} from '@/lib/unified-tab-host-ownership'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
@@ -24,7 +27,9 @@ export function isSameEditorOwner(
   executionHostId?: string
 ): boolean {
   return (
-    (!executionHostId || getOpenFileExecutionHostId(file) === executionHostId) &&
+    (!executionHostId ||
+      !hasOpenFileExecutionHostEvidence(file) ||
+      getOpenFileExecutionHostId(file) === executionHostId) &&
     file.worktreeId === worktreeId &&
     runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
   )
@@ -118,9 +123,10 @@ export function isEditorFileIdOccupiedByOtherOwner(
   >,
   filePath: string,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  executionHostId?: string
 ): boolean {
-  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)) {
+  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId, executionHostId)) {
     return false
   }
   return file.id === filePath || file.markdownPreviewSourceFileId === filePath
@@ -156,8 +162,8 @@ export function resolveEditorFileIdForOwner(
     return existing.id
   }
   // Why: restore always names a server's file by its owned id; minting it on first open avoids a rename (and remount) at restart.
-  if (runtimeOwnerKey(runtimeEnvironmentId) !== null || executionHostId?.startsWith('ssh:')) {
-    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId, executionHostId)
+  if (runtimeOwnerKey(runtimeEnvironmentId) !== null) {
+    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
   }
   // Why: every frame restores floating files under their owned id; minting it here keeps main's tab on the same id.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -165,9 +171,15 @@ export function resolveEditorFileIdForOwner(
   }
   // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>
-    isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
+    isEditorFileIdOccupiedByOtherOwner(
+      file,
+      filePath,
+      worktreeId,
+      runtimeEnvironmentId,
+      executionHostId
+    )
   )
-    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
+    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId, executionHostId)
     : filePath
 }
 

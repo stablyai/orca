@@ -10,16 +10,7 @@ export function useWorktreeFiles(
     renderedActiveWorktreeId ? state.unifiedTabsByWorktree[renderedActiveWorktreeId] : undefined
   )
   return useMemo(
-    () =>
-      renderedActiveWorktreeId
-        ? workspaceEditorFiles(
-            {
-              openFiles,
-              unifiedTabsByWorktree: { [renderedActiveWorktreeId]: tabs ?? [] }
-            },
-            renderedActiveWorktreeId
-          )
-        : [],
+    () => (renderedActiveWorktreeId ? workspaceEditorFiles(openFiles, tabs) : []),
     [openFiles, tabs, renderedActiveWorktreeId]
   )
 }

@@ -1,9 +1,9 @@
+import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
-type PlacementState = Pick<AppState, 'unifiedTabsByWorktree'> & { openFiles: readonly OpenFile[] }
 const indexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile>>()
 export function openFileIndex(files: readonly OpenFile[]): ReadonlyMap<string, OpenFile> {
   let index = indexes.get(files)
@@ -14,12 +14,13 @@ export function openFileIndex(files: readonly OpenFile[]): ReadonlyMap<string, O
   return index
 }
 /** Placement belongs to tabs; an unreferenced content record is never another visible tab. */
-export function workspaceEditorFiles(state: PlacementState, workspaceId: string): OpenFile[] {
-  const index = openFileIndex(state.openFiles)
+export function workspaceEditorFiles(
+  files: readonly OpenFile[],
+  tabs: readonly Tab[] | undefined
+): OpenFile[] {
+  const index = openFileIndex(files)
   const ids = new Set(
-    (state.unifiedTabsByWorktree[workspaceId] ?? [])
-      .filter((tab) => isEditorTabContentType(tab.contentType))
-      .map((tab) => tab.entityId)
+    (tabs ?? []).filter((tab) => isEditorTabContentType(tab.contentType)).map((tab) => tab.entityId)
   )
   return [...ids].flatMap((id) => {
     const file = index.get(id)
@@ -31,31 +32,37 @@ export function editorContentIsReferenced(
   entityId: string,
   exceptTabId?: string
 ): boolean {
-  return (
-    hasPendingEntityTab(null, entityId) ||
-    Object.values(state.unifiedTabsByWorktree).some((tabs) =>
-      tabs.some(
-        (tab) =>
-          tab.id !== exceptTabId &&
-          tab.entityId === entityId &&
-          isEditorTabContentType(tab.contentType)
-      )
-    )
+  const index = editorPlacementIndex(state.unifiedTabsByWorktree)
+  const references = index.tabIdsByEntityId.get(entityId)
+  return Boolean(
+    (references && (references.size > 1 || !exceptTabId || !references.has(exceptTabId))) ||
+    hasPendingEntityTab(null, entityId)
   )
 }
 
 type PlacementIndex = {
   workspaceByTabId: Map<string, string>
   workspacesByEntityId: Map<string, Set<string>>
+  tabIdsByEntityId: Map<string, Set<string>>
 }
 const placementIndexes = new WeakMap<AppState['unifiedTabsByWorktree'], PlacementIndex>()
 export function editorPlacementIndex(tabs: AppState['unifiedTabsByWorktree']): PlacementIndex {
   let index = placementIndexes.get(tabs)
   if (!index) {
-    index = { workspaceByTabId: new Map(), workspacesByEntityId: new Map() }
+    index = {
+      workspaceByTabId: new Map(),
+      workspacesByEntityId: new Map(),
+      tabIdsByEntityId: new Map()
+    }
     for (const [workspaceId, rows] of Object.entries(tabs)) {
       for (const tab of rows) {
         index.workspaceByTabId.set(tab.id, workspaceId)
+        if (!isEditorTabContentType(tab.contentType)) {
+          continue
+        }
+        const tabIds = index.tabIdsByEntityId.get(tab.entityId) ?? new Set<string>()
+        tabIds.add(tab.id)
+        index.tabIdsByEntityId.set(tab.entityId, tabIds)
         const owners = index.workspacesByEntityId.get(tab.entityId) ?? new Set<string>()
         owners.add(workspaceId)
         index.workspacesByEntityId.set(tab.entityId, owners)
@@ -82,7 +89,9 @@ export function editorOpenTabBarOrder(
   }
   const entities = [
     ...(state.tabsByWorktree[workspaceId] ?? []).map((tab) => tab.id),
-    ...workspaceEditorFiles(state, workspaceId).map((file) => file.id),
+    ...workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[workspaceId]).map(
+      (file) => file.id
+    ),
     ...(state.browserTabsByWorktree[workspaceId] ?? []).map((tab) => tab.id)
   ]
   const live = new Set(entities)

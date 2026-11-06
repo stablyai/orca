@@ -89,10 +89,10 @@ it('shares child-owned diff content across folder and child views, with independ
   await main.settle()
   const folderTab = tabs(FOLDER)[0]!
   expect(
-    workspaceEditorFiles(useAppStore.getState(), FOLDER).map((file) => [
-      file.worktreeId,
-      file.filePath
-    ])
+    workspaceEditorFiles(
+      useAppStore.getState().openFiles,
+      useAppStore.getState().unifiedTabsByWorktree[FOLDER]
+    ).map((file) => [file.worktreeId, file.filePath])
   ).toEqual([[CHILD, '/child/a.ts']])
   expect(tabs(CHILD)).toEqual([])
   useAppStore.getState().reconcileWorktreeTabModel(FOLDER)
@@ -127,10 +127,16 @@ it('replaces only the folder preview and preserves a child placement and split',
   openDiff(FOLDER, 'b.ts', true)
   await main.settle()
   expect(
-    workspaceEditorFiles(useAppStore.getState(), FOLDER).map((file) => file.relativePath)
+    workspaceEditorFiles(
+      useAppStore.getState().openFiles,
+      useAppStore.getState().unifiedTabsByWorktree[FOLDER]
+    ).map((file) => file.relativePath)
   ).toEqual(['b.ts'])
   expect(
-    workspaceEditorFiles(useAppStore.getState(), CHILD).map((file) => file.relativePath)
+    workspaceEditorFiles(
+      useAppStore.getState().openFiles,
+      useAppStore.getState().unifiedTabsByWorktree[CHILD]
+    ).map((file) => file.relativePath)
   ).toEqual(['a.ts'])
   expect(tabs(CHILD)).toHaveLength(2)
   useAppStore.getState().closeUnifiedTab(tabs(CHILD)[0]!.id)
@@ -277,4 +283,86 @@ it('retires a placement intent deleted during content publication without creati
   expect(tabs(FOLDER)).toEqual([])
   expect(tabs(CHILD)).toEqual([])
   expect(useAppStore.getState().openFiles).toEqual([])
+})
+
+it('dirty SSH edit tab survives restart round trip (no drop, no duplicate on reopen)', async () => {
+  useAppStore.setState((state) => ({
+    activeWorktreeId: CHILD,
+    activeWorkspaceKey: CHILD,
+    activeWorkspaceExecutionHostId: 'ssh:builder',
+    repos: state.repos.map((repo) => ({
+      ...repo,
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })),
+    worktreesByRepo: {
+      repo: state.worktreesByRepo.repo!.map((worktree) => ({ ...worktree, hostId: 'ssh:builder' }))
+    },
+    sshConnectionStates: new Map([
+      [
+        'builder',
+        {
+          targetId: 'builder',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          connectionGeneration: 1
+        }
+      ]
+    ])
+  }))
+  const file = {
+    filePath: '/child/ssh.ts',
+    relativePath: 'ssh.ts',
+    worktreeId: CHILD,
+    language: 'typescript',
+    mode: 'edit' as const,
+    runtimeEnvironmentId: null
+  }
+  const id = useAppStore
+    .getState()
+    .openFile(file, { executionHostId: 'ssh:builder', preview: false })
+  await main.settle()
+  useAppStore.getState().setEditorDraft(id, 'unsaved SSH text')
+  useAppStore.getState().markFileDirty(id, true)
+  const saved = buildWorkspaceSessionPayload(useAppStore.getState())
+  const restoredTabs = buildHydratedTabState(saved, new Set([CHILD]))
+  useAppStore.setState({ ...restoredTabs, openFiles: [], editorDrafts: {} })
+  useAppStore.getState().hydrateEditorSession(saved)
+  useAppStore.getState().reconcileWorktreeTabModel(CHILD)
+  expect(tabs(CHILD).map((tab) => tab.entityId)).toEqual(['/child/ssh.ts'])
+  expect(useAppStore.getState().editorDrafts['/child/ssh.ts']).toBe('unsaved SSH text')
+  const reopened = useAppStore
+    .getState()
+    .openFile(file, { executionHostId: 'ssh:builder', preview: false })
+  await main.settle()
+  expect(reopened).toBe('/child/ssh.ts')
+  expect(useAppStore.getState().openFiles).toHaveLength(1)
+  expect(tabs(CHILD)).toHaveLength(1)
+  expect(useAppStore.getState().editorDrafts[reopened]).toBe('unsaved SSH text')
+})
+
+it('moves an edit placement to its content owner when the folder is deleted', async () => {
+  const id = useAppStore.getState().openFile(
+    {
+      filePath: '/child/note.md',
+      relativePath: 'note.md',
+      language: 'markdown',
+      worktreeId: CHILD,
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    },
+    { placementWorkspaceId: FOLDER, executionHostId: 'local', preview: false }
+  )
+  await main.settle()
+  useAppStore.getState().setEditorDraft(id, 'retained draft')
+  useAppStore.getState().markFileDirty(id, true)
+  patchRemoval(FOLDER)
+  expect(tabs(FOLDER)).toEqual([])
+  expect(tabs(CHILD).map((tab) => tab.entityId)).toEqual(['/child/note.md'])
+  const state = useAppStore.getState()
+  expect(state.groupsByWorktree[CHILD]?.[0]?.tabOrder).toEqual([tabs(CHILD)[0]!.id])
+  expect(state.activeFileIdByWorktree[CHILD]).toBe('/child/note.md')
+  expect(state.editorDrafts[id]).toBe('retained draft')
+  expect(state.openFiles).toHaveLength(1)
 })

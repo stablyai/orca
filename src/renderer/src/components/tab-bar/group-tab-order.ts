@@ -155,7 +155,9 @@ export function getActiveTabNavOrder(
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
-  const editorIds = ids.editorIds ?? workspaceEditorFiles(state, worktreeId).map((f) => f.id)
+  const editorIds =
+    ids.editorIds ??
+    workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId]).map((f) => f.id)
   const browserIds =
     ids.browserIds ?? (state.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
   const simulatorIds =

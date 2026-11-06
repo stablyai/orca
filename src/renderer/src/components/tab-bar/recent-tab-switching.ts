@@ -154,7 +154,7 @@ export function buildRecentTabSwitcherModel(
     (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
   )
   const dirtyFileIds = new Set(
-    workspaceEditorFiles(state, worktreeId)
+    workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId])
       .filter((file) => file.isDirty)
       .map((file) => file.id)
   )

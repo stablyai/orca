@@ -2,6 +2,7 @@ import {
   retirePendingWorkspaceTabs,
   hasPendingEntityTab
 } from '@/runtime/layout-owner-pending-tabs'
+import { editorPlacementsInContentOwners } from '@/lib/workspace-session-unified-tabs'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'
@@ -93,9 +94,16 @@ export function removeWorktreeLayout(
         hasPendingEntityTab(null, file.id) ||
         file.mode === 'edit')
   )
+  const transferred = editorPlacementsInContentOwners(
+    remainingFiles,
+    s.unifiedTabsByWorktree,
+    groupLayout?.groups ?? s.groupsByWorktree,
+    worktreeIds
+  )
+  const transferredPlacements = keep(omitByWorktree(transferred.sourceTabs), kept?.unifiedTabs)
   const survivingIds = new Set(remainingFiles.map((file) => file.id))
   const unifiedTabs = Object.fromEntries(
-    Object.entries(placements).map(([id, tabs]) => [
+    Object.entries(transferredPlacements).map(([id, tabs]) => [
       id,
       tabs.filter(
         (tab) => !isEditorTabContentType(tab.contentType) || survivingIds.has(tab.entityId)
@@ -106,23 +114,21 @@ export function removeWorktreeLayout(
     Object.values(unifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
   const cleanGroups = Object.fromEntries(
-    Object.entries(groupLayout?.groups ?? omitByWorktree(s.groupsByWorktree)).map(
-      ([id, groups]) => [
-        id,
-        groups.map((group) => {
-          const tabOrder = group.tabOrder.filter((id) => liveTabIds.has(id))
-          return {
-            ...group,
-            tabOrder,
-            recentTabIds: group.recentTabIds?.filter((id) => liveTabIds.has(id)),
-            activeTabId:
-              group.activeTabId && liveTabIds.has(group.activeTabId)
-                ? group.activeTabId
-                : (tabOrder[0] ?? null)
-          }
-        })
-      ]
-    )
+    Object.entries(omitByWorktree(transferred.sourceGroups)).map(([id, groups]) => [
+      id,
+      groups.map((group) => {
+        const tabOrder = group.tabOrder.filter((id) => liveTabIds.has(id))
+        return {
+          ...group,
+          tabOrder,
+          recentTabIds: group.recentTabIds?.filter((id) => liveTabIds.has(id)),
+          activeTabId:
+            group.activeTabId && liveTabIds.has(group.activeTabId)
+              ? group.activeTabId
+              : (tabOrder[0] ?? null)
+        }
+      })
+    ])
   )
   const collapsed = collapseEmptiedKeptGroups(
     {
@@ -162,6 +168,17 @@ export function removeWorktreeLayout(
       ([id, selected]) => [id, selected && survivingIds.has(selected) ? selected : null]
     )
   )
+  const ownerLayouts = { ...collapsed.layout }
+  const ownerActiveGroups = { ...collapsed.activeGroups }
+  const ownerOrders = { ...keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder) }
+  const ownerActiveTypes = { ...omitByWorktree(s.activeTabTypeByWorktree) }
+  for (const tab of transferred.movedTabs) {
+    ownerLayouts[tab.worktreeId] ??= { type: 'leaf', groupId: tab.groupId }
+    ownerActiveGroups[tab.worktreeId] ??= tab.groupId
+    ownerOrders[tab.worktreeId] = [...(ownerOrders[tab.worktreeId] ?? []), tab.entityId]
+    activeFiles[tab.worktreeId] ??= tab.entityId
+    ownerActiveTypes[tab.worktreeId] ??= 'editor'
+  }
   const patch: WorktreeLayoutPatch = {
     tabsByWorktree: keep(omitByWorktree(s.tabsByWorktree), kept?.tabs),
     terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
@@ -169,15 +186,13 @@ export function removeWorktreeLayout(
     // Why: split-tab layout/group state is worktree-owned; leaving it makes a deleted worktree look restorable.
     unifiedTabsByWorktree: unifiedTabs,
     groupsByWorktree: collapsed.groups,
-    layoutByWorktree: omitByWorktree(collapsed.layout),
-    activeGroupIdByWorktree: omitByWorktree(collapsed.activeGroups),
+    layoutByWorktree: omitByWorktree(ownerLayouts),
+    activeGroupIdByWorktree: omitByWorktree(ownerActiveGroups),
     tabBarOrderByWorktree: Object.fromEntries(
-      Object.entries(keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder)).map(
-        ([id, order]) => [
-          id,
-          order.filter((item) => !removedContentIds.has(item) && !removedPlacementIds.has(item))
-        ]
-      )
+      Object.entries(ownerOrders).map(([id, order]) => [
+        id,
+        order.filter((item) => !removedContentIds.has(item) && !removedPlacementIds.has(item))
+      ])
     ),
     browserTabsByWorktree: keep(omitByWorktree(s.browserTabsByWorktree), kept?.browserTabs),
     // Why guarded: a removed worktree usually has no open file, and an unconditional
@@ -189,7 +204,7 @@ export function removeWorktreeLayout(
       omitByWorktree(s.activeBrowserTabIdByWorktree),
       kept?.activeBrowserTabIds
     ),
-    activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
+    activeTabTypeByWorktree: ownerActiveTypes,
     recentlyClosedEditorTabsByWorktree: recentEditors,
     recentlyClosedTabKindsByWorktree: recentKinds,
     activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,

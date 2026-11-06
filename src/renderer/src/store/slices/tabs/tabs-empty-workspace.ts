@@ -25,7 +25,7 @@ export function landsOnEmptiedWorktree(
     remainingTabs === 0 &&
     (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
     (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
-    workspaceEditorFiles(current, worktreeId).length === 0
+    workspaceEditorFiles(current.openFiles, current.unifiedTabsByWorktree[worktreeId]).length === 0
   )
 }
 

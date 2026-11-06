@@ -48,7 +48,9 @@ export function deriveActiveSurfaceForWorktree(
   const browserTabs = state.browserTabsByWorktree[worktreeId] ?? []
   const terminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const fileStillOpen = restoredFileId
-    ? workspaceEditorFiles(state, worktreeId).some((file) => file.id === restoredFileId)
+    ? workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId]).some(
+        (file) => file.id === restoredFileId
+      )
     : false
   const browserTabStillOpen = restoredBrowserTabId
     ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
@@ -104,7 +106,8 @@ export function deriveActiveSurfaceForWorktree(
     activeBrowserTabId = browserTabs[0]?.id ?? null
     activeTabType = 'editor'
   } else {
-    const fallbackFile = workspaceEditorFiles(state, worktreeId)[0] ?? null
+    const fallbackFile =
+      workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId])[0] ?? null
     const fallbackBrowserTab = browserTabs[0] ?? null
     activeFileId = fallbackFile?.id ?? null
     activeBrowserTabId = fallbackBrowserTab?.id ?? null
