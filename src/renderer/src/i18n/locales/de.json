@@ -3130,6 +3130,8 @@
         "loadGitHubWorkFailed": "GitHub-Aufgaben konnten nicht geladen werden.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Alle Personen",
+        "gitlabInvolvementReviewing": "Als Reviewer",
         "gitlabViewTodos": "Meine Aufgaben",
         "startWorkspaceFromMr": "Arbeitsbereich aus MR {{number}} starten",
         "startWorkspaceFromIssue": "Arbeitsbereich aus Issue {{number}} starten",
@@ -11889,7 +11891,7 @@
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
-          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen und andere Programme ausführen.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
           "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
         },
         "PluginConsentProvenance": {
@@ -19344,6 +19346,9 @@
       "composer": {
         "send": "Senden",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
+        "previewQueue": "Einreihen",
+        "previewSteer": "Steuern",
+        "previewSteerQueued": "Wartende steuern",
         "alternateQueueHint": "{{shortcut}} zum Einreihen",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",
         "locked": "Die Eingabe wird von einem anderen Gerät gesteuert.",

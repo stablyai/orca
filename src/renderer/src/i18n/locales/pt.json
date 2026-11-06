@@ -6507,7 +6507,7 @@
             "agentsRead": "Receber avisos quando o status de um agente mudar"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
-          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede e executar outros programas.",
+          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
           "uiWarning": "Executa o código do publicador dentro do Orca para desenhar sua visualização. O Orca mostra o que ele pode acessar e pergunta antes de ativá-lo."
         },
         "SparsePresetSettingsSection": {
@@ -15004,6 +15004,8 @@
         "loadGitHubWorkFailed": "Falha ao carregar o trabalho do GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Minhas tarefas",
         "startWorkspaceFromMr": "Iniciar espaço de trabalho a partir da MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espaço de trabalho a partir da issue {{number}}",
@@ -20058,6 +20060,9 @@
       "composer": {
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
+        "previewQueue": "Colocar na fila",
+        "previewSteer": "Orientar",
+        "previewSteerQueued": "Orientar o próximo",
         "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",

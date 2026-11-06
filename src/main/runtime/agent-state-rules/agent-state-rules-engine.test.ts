@@ -262,3 +262,27 @@ describe('a bundled strong, quiet idle rule', () => {
     )
   })
 })
+
+describe('Antigravity with a custom statusLine (#34707)', () => {
+  // Non-blank rows captured from agy 1.5.2 with a two-line command statusLine.
+  const rule = '─'.repeat(40)
+  const status = ['· Gemini · idle', '· capture']
+  const verdict = (lines: string[]) =>
+    evaluateAgentStateRules('antigravity', { readScreenLines: () => lines })?.state
+
+  it('reads the composer above the status rows as idle', () => {
+    expect(verdict(['Error ID: e3b6', rule, '>', rule, ...status])).toBe('idle')
+    expect(verdict(['~', rule, '>', rule, status[0]])).toBe('idle')
+  })
+
+  it('holds mid-turn, when only the spinner row above the composer shows the turn', () => {
+    expect(verdict(['> Write a paragraph', '⣷  Generating...', rule, '>', rule, ...status])).toBe(
+      'hold'
+    )
+  })
+
+  it('holds for the /model picker drawn between the composer and the status rows', () => {
+    const picker = ['Switch Model', '> Gemini 4 Argon   (current)', 'Keyboard: ↑/↓ Navigate']
+    expect(verdict(['~', rule, '>', rule, ...picker, ...status])).toBe('hold')
+  })
+})
