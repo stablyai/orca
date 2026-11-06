@@ -47,7 +47,7 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(spec.hostBackend
       ? {
           hostAlternative: async (shellEnv) =>
-            (await selectAcpHostAccountHome(spec, shellEnv)) !== null
+            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath())) !== null
         }
       : {})
   }
@@ -88,13 +88,17 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     // New chats prefer a compatible host program, which their account home then pins; reads such
     // as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
-      { launchEnv, purpose },
+      { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment }
     ) => {
+      // A host program without the chat's permission mode never takes it.
       const host =
-        spec.hostBackend && purpose === 'launch'
+        spec.hostBackend &&
+        purpose === 'launch' &&
+        (permissionMode === undefined ||
+          spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
-              .then((env) => selectAcpHostAccountHome(spec, env))
+              .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory))
               .catch(() => null)
           : null
       return host ?? spec.account.resolve({ launchEnv, stateDirectory })

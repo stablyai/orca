@@ -135,7 +135,11 @@ export async function initializeAcpStructuredSession(
   const mode = spec.permissionModeConfig
   if (mode && acquire.permissionMode !== 'own') {
     // Fail startup rather than silently use a different permission mode.
-    const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
+    const wanted = acquire.permissionMode ?? 'ask'
+    const requested = mode.values[wanted]
+    if (requested === undefined) {
+      throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
+    }
     const configId = options.modeConfigId()
     const { configOptions } = await connection.setConfigOption(configId, requested)
     assertStarting()

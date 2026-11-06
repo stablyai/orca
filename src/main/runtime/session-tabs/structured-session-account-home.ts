@@ -18,12 +18,13 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     if (!registration) {
       return null
     }
-    return async ({ launchEnv, location }) =>
+    return async ({ launchEnv, location }, permissionMode?: string) =>
       registration.resolveAccountHome(
         {
           launchEnv,
           location: location ?? null,
           purpose,
+          ...(permissionMode ? { permissionMode } : {}),
           workspacePath:
             purpose === 'launch'
               ? async () =>

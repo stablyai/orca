@@ -1,10 +1,19 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { selectAcpHostAccountHome } from '../acp/acp-launch-command'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
+
+// agy's own sign-in, read from the host's keyring or token file.
+const agyCredential = vi.hoisted(() => ({ present: true }))
+vi.mock('./native-credential-backend', () => ({
+  createAntigravityHostCredentialBackend: () => ({
+    read: async () => (agyCredential.present ? { contents: '{}' } : null),
+    write: async () => {}
+  })
+}))
 
 // Trimmed from `agy acp` 1.5.2's initialize response.
 const HOST_INITIALIZE = {
@@ -45,14 +54,17 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
 }
 
 it.skipIf(process.platform === 'win32')(
-  "new chats pin the host's agy only when it answers as a compatible server",
+  "new chats pin the host's agy only when it is compatible, signed in, and Orca's Chat is not",
   async () => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-state-test-'))
+    folders.push(stateDirectory)
     const select = async (result: unknown) =>
-      selectAcpHostAccountHome(ANTIGRAVITY_LAUNCH_SPEC, {
-        PATH: await fakeAgy(result),
-        HOME: '/home/user'
-      })
+      selectAcpHostAccountHome(
+        ANTIGRAVITY_LAUNCH_SPEC,
+        { PATH: await fakeAgy(result), HOME: '/home/user' },
+        stateDirectory
+      )
     await expect(select(HOST_INITIALIZE)).resolves.toEqual({
       variable: 'GEMINI_HOME',
       path: '/home/user/.gemini'
@@ -65,8 +77,23 @@ it.skipIf(process.platform === 'win32')(
     const managed = { ...HOST_INITIALIZE, agentInfo: { name: 'antigravity-acp', version: '1.5.2' } }
     await expect(select(managed)).resolves.toBeNull()
     await expect(
-      selectAcpHostAccountHome(ANTIGRAVITY_LAUNCH_SPEC, { PATH: '', HOME: '/nowhere' })
+      selectAcpHostAccountHome(
+        ANTIGRAVITY_LAUNCH_SPEC,
+        { PATH: '', HOME: '/nowhere' },
+        stateDirectory
+      )
     ).resolves.toBeNull()
+
+    agyCredential.present = false
+    await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
+    agyCredential.present = true
+
+    // Someone already signed in to Orca's own Chat keeps it.
+    const managedAcp = join(stateDirectory, 'antigravity-chat', 'antigravity-acp')
+    await mkdir(managedAcp, { recursive: true })
+    await expect(select(HOST_INITIALIZE)).resolves.not.toBeNull()
+    await writeFile(join(managedAcp, 'antigravity-oauth-token'), '{}')
+    await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
   }
 )
 

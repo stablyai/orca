@@ -49,6 +49,8 @@ export type StructuredAgentAccountHomeRequest = {
   purpose: 'launch' | 'read' | 'identity'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
+  /** The permission mode a new chat starts in, when it names one. */
+  permissionMode?: string
 }
 
 /** What resolving an account may ask of the runtime around it. */

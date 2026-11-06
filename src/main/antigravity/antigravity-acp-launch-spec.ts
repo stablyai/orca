@@ -11,13 +11,17 @@ import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravi
 import {
   ANTIGRAVITY_LAUNCH_GATE,
   answerAntigravityChatAuth,
-  antigravityChatAccount
+  antigravityChatAccount,
+  antigravityChatSignIn
 } from './antigravity-chat-account'
+import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import {
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
   antigravityHostAccountHome,
   antigravityHostAcpAnswers,
+  hasAgyCredential,
+  hasManagedAntigravityChatSignIn,
   isAntigravityHostAccountHome
 } from './antigravity-host-acp'
 
@@ -88,7 +92,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
   managedRuntime: undefined,
-  // agy has no full-access mode; those chats fall back to asking.
+  // agy has no full-access mode: such chats start on Orca's runtime, and a switch fails the start.
   permissionModeConfig: { values: { ask: 'default', 'accept-edits': 'accept-edits' } },
   keepsEverySession: true
 }
@@ -98,7 +102,13 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
     pins: isAntigravityHostAccountHome,
-    select: async ({ command, env, envToDelete, homePath }) =>
+    // Someone signed in to Orca's own Chat keeps it; the host's agy needs its own sign-in.
+    select: async ({ command, env, envToDelete, homePath, stateDirectory }) =>
+      antigravityChatSignIn.get().value.auth !== 'signedIn' &&
+      !(await hasManagedAntigravityChatSignIn(
+        join(stateDirectory, ANTIGRAVITY_CHAT_HOME_FOLDER)
+      )) &&
+      (await hasAgyCredential(homePath)) &&
       (await antigravityHostAcpAnswers(command, env, envToDelete))
         ? antigravityHostAccountHome(homePath)
         : null

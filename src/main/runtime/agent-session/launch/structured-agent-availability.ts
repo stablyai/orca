@@ -69,7 +69,7 @@ async function observeHostAgent(
 
 /** Resolve chat program without spawn; bare names miss unless relative PATH entries require workspace resolution. */
 async function observeChatProgram(
-  { definition: { agent }, chatProgram }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, chatProgram, supportsLocation }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<NonNullable<AgentSessionAgentAvailability['chatProgram']>> {
   if (!chatProgram) {
@@ -90,7 +90,7 @@ async function observeChatProgram(
   } catch {
     return 'unknown'
   }
-  if (await chatProgram.hostAlternative?.(shellEnv)) {
+  if (supportsLocation(HOST_LOCATION) && (await chatProgram.hostAlternative?.(shellEnv))) {
     return 'available'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'

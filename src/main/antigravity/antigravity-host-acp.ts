@@ -1,6 +1,6 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
-import { stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import {
@@ -9,12 +9,14 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
+import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 
 /** First release verified with Orca chats; it also leaves the chat's folder untouched. */
 export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
-const PROBE_TIMEOUT_MS = 20_000
+const PROBE_TIMEOUT_MS = 5_000
+const FAILED_CHECK_RETRY_MS = 5 * 60_000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
   const capabilities = initialized.agentCapabilities
@@ -44,13 +46,15 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 }
 
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-const checks = new Map<string, { identity: string; answer: Promise<boolean> }>()
+type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
+const checks = new Map<string, HostCheck>()
 
-/** Whether `command acp` initializes as a compatible server; failed checks are retried next time. */
+/** Whether `command acp` initializes as a compatible server; a failed check waits before retrying. */
 export async function antigravityHostAcpAnswers(
   command: string,
   env: Record<string, string>,
-  envToDelete: string[]
+  envToDelete: string[],
+  now = Date.now
 ): Promise<boolean> {
   const stats = await stat(command).catch(() => null)
   if (!stats?.isFile()) {
@@ -58,18 +62,45 @@ export async function antigravityHostAcpAnswers(
   }
   const identity = `${stats.size}:${stats.mtimeMs}`
   const cached = checks.get(command)
-  if (cached?.identity === identity) {
+  if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
     return cached.answer
   }
-  const answer = initializeAntigravityAcp(
-    () => ({ command, args: ['acp'], env, envToDelete }),
-    PROBE_TIMEOUT_MS
-  ).then(isCompatibleAntigravityHostAcp, () => {
-    if (checks.get(command)?.answer === answer) {
-      checks.delete(command)
+  const check: HostCheck = {
+    identity,
+    answer: initializeAntigravityAcp(
+      () => ({ command, args: ['acp'], env, envToDelete }),
+      PROBE_TIMEOUT_MS
+    ).then(isCompatibleAntigravityHostAcp, () => {
+      // A hung or crashing agy must not delay every chat start and availability read.
+      check.retryAt = now() + FAILED_CHECK_RETRY_MS
+      return false
+    })
+  }
+  checks.set(command, check)
+  return check.answer
+}
+
+/** Whether Orca's own Chat sign-in has left credentials in its managed home or a folder inside it. */
+export async function hasManagedAntigravityChatSignIn(managedHome: string): Promise<boolean> {
+  const entries = await readdir(managedHome, { withFileTypes: true }).catch(() => [])
+  const folders = [
+    managedHome,
+    ...entries.filter((entry) => entry.isDirectory()).map((entry) => join(managedHome, entry.name))
+  ]
+  for (const folder of folders) {
+    const names = await readdir(folder).catch(() => [])
+    if (names.some((name) => name.endsWith('oauth-token'))) {
+      return true
     }
+  }
+  return false
+}
+
+/** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */
+export async function hasAgyCredential(homePath: string): Promise<boolean> {
+  try {
+    return (await createAntigravityHostCredentialBackend(homePath).read()) !== null
+  } catch {
     return false
-  })
-  checks.set(command, { identity, answer })
-  return answer
+  }
 }

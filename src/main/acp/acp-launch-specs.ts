@@ -165,12 +165,14 @@ export type AcpLaunchSpec = {
 export type AcpHostBackend = {
   spec: AcpLaunchSpec
   pins(home: AgentSessionAccountHome): boolean
-  /** The account home pinning a new chat to `spec`, or null when `command` is not compatible. */
+  /** The account home pinning a new chat to `spec`, or null when the host should not run it. */
   select(input: {
     command: string
     env: Record<string, string>
     envToDelete: string[]
     homePath: string
+    /** Orca's data folder on this host, where the agent's own account lives. */
+    stateDirectory: string
   }): Promise<AgentSessionAccountHome | null>
 }
 

@@ -70,6 +70,7 @@ export function acpLaunchSpecForAccount(
 export async function selectAcpHostAccountHome(
   spec: AcpLaunchSpec,
   shellEnv: Readonly<Record<string, string>>,
+  stateDirectory: string,
   inherited: NodeJS.ProcessEnv = process.env
 ): Promise<AgentSessionAccountHome | null> {
   const backend = spec.hostBackend
@@ -84,5 +85,7 @@ export async function selectAcpHostAccountHome(
   Object.assign(env, backend.spec.env)
   const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
   const { command } = resolveAcpLaunchCommand(backend.spec, env, { homePath, dataDirectory: null })
-  return isAbsolute(command) ? backend.select({ command, env, envToDelete, homePath }) : null
+  return isAbsolute(command)
+    ? backend.select({ command, env, envToDelete, homePath, stateDirectory })
+    : null
 }
