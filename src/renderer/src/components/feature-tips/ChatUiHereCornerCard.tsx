@@ -21,34 +21,25 @@ import {
 export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.Element | null {
   const mountedRef = useMountedRef()
   const settings = useAppStore((s) => s.settings)
-  const [busy, setBusy] = useState(false)
-  const [switched, setSwitched] = useState(false)
+  const [stage, setStage] = useState<'prompt' | 'saving' | 'switched'>('prompt')
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'chat-ui-here')
   if (!tip) {
     return null
   }
-  if (switched) {
+  if (stage === 'switched') {
     return <ChatUiSwitchedCornerNote onClose={onClose} />
   }
   const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
   const [intro = ''] = paragraphs
 
   const handleUseChatUi = async (): Promise<void> => {
-    if (busy) {
+    if (stage !== 'prompt') {
       return
     }
-    setBusy(true)
-    try {
-      if (
-        (await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })) &&
-        mountedRef.current
-      ) {
-        setSwitched(true)
-      }
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
-      }
+    setStage('saving')
+    const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
+    if (mountedRef.current) {
+      setStage(saved ? 'switched' : 'prompt')
     }
   }
 
@@ -115,7 +106,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
           <div className="flex items-center gap-2">
             <FeatureTipActions
               currentTip={tip}
-              primaryBusy={busy}
+              primaryBusy={stage === 'saving'}
               swapButtons={
                 settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
                 settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'

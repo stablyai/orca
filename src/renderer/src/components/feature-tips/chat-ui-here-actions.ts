@@ -58,12 +58,3 @@ export function openChatUiFeatureTipSettings(): void {
   openSettingsTarget({ pane: 'chat', repoId: null, sectionId: CHAT_LAUNCH_DEFAULT_SECTION_ID })
   openSettingsPage()
 }
-
-/** Opens Settings already searching "Chat UI", the term the switched note tells users to search. */
-export function openChatUiSettingsSearch(): void {
-  const { openSettingsPage, openSettingsTarget, setSettingsSearchQuery } = useAppStore.getState()
-  // Why this order: openSettingsPage clears the search query.
-  openSettingsPage()
-  openSettingsTarget({ pane: 'chat', repoId: null })
-  setSettingsSearchQuery(translate('settings.appearance.chat.title', 'Chat UI'))
-}

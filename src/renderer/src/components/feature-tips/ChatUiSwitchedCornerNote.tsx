@@ -4,11 +4,10 @@ import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { i18n, translate } from '@/i18n/i18n'
-import { openChatUiSettingsSearch } from './chat-ui-here-actions'
+import { openChatUiFeatureTipSettings } from './chat-ui-here-actions'
 
 const AUTO_DISMISS_MS = 12_000
 
-/** Replaces the launch card after Use Chat UI so the way back shows where the user clicked. */
 export function ChatUiSwitchedCornerNote({ onClose }: { onClose: () => void }): JSX.Element {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -25,7 +24,7 @@ export function ChatUiSwitchedCornerNote({ onClose }: { onClose: () => void }): 
 
   const handleOpenSettings = (): void => {
     onClose()
-    openChatUiSettingsSearch()
+    openChatUiFeatureTipSettings()
   }
 
   return (
@@ -46,11 +45,11 @@ export function ChatUiSwitchedCornerNote({ onClose }: { onClose: () => void }): 
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="flex size-[18px] items-center justify-center rounded-full bg-status-success-background text-status-success">
+            <span className="flex size-4.5 items-center justify-center rounded-full bg-status-success-background text-status-success">
               <Check className="size-3" strokeWidth={3} />
             </span>
             <CardTitle id="chat-ui-switched-note-heading">
-              {translate('featureTips.chatUiHere.switchedNoteTitle', "You're on Chat UI")}
+              {translate('featureTips.chatUiHere.switchedNoteTitle', 'Chat UI is now the default')}
             </CardTitle>
           </div>
           <Button
