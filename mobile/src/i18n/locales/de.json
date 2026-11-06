@@ -4004,7 +4004,6 @@
       "targetRemoved": "Der SSH-Host dieser Automatisierung wurde entfernt. Sie kann nicht ausgeführt werden. Lösche sie oder füge den Host erneut hinzu.",
       "fencingRequired": "Diese Automatisierung ist an einen SSH-Host gebunden. Die Anfrage muss daher den erwarteten Host angeben.",
       "invalidDestination": "Dieser Host ist auf dieser Instanz nicht mehr verfügbar. Wähle einen Host und versuche es erneut.",
-      "moveProjectToServerFirst": "Dieses Projekt zuerst auf {{host}} verschieben.",
       "agentDiscoveryUnavailable": "Die Agentenerkennung ist für diesen Projekthost nicht verfügbar. Gespeicherte Agentenauswahlen bleiben erhalten.",
       "agentVerificationUnavailable": "Dieser Host kann Agenten für dieses Projekt nicht überprüfen. Aktualisiere den Host und versuche es erneut.",
       "hostUnavailable": "Automatisierungen sind auf diesem Host nicht verfügbar. Aktualisiere Orca auf diesem Host und verbinde dich erneut.",

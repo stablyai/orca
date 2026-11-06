@@ -4004,7 +4004,6 @@
       "targetRemoved": "Bu otomasyonun SSH ana makinesi kaldırıldı, dolayısıyla çalışamaz. Otomasyonu silin veya ana makineyi yeniden ekleyin.",
       "fencingRequired": "Bu otomasyon bir SSH ana makinesine sabitlenmiştir; istek beklediği ana makineyi belirtmelidir.",
       "invalidDestination": "Bu yetkili sunucuda o ana makine artık kullanılamıyor. Bir ana makine seçip tekrar deneyin.",
-      "moveProjectToServerFirst": "Önce bu projeyi {{host}} sunucusuna taşıyın.",
       "agentDiscoveryUnavailable": "Bu proje ana makinesinde aracı keşfi kullanılamıyor. Kaydedilen aracı seçimleri korunur.",
       "agentVerificationUnavailable": "Bu ana makine projenin aracılarını doğrulayamıyor. Ana makineyi güncelleyip tekrar deneyin.",
       "hostUnavailable": "Bu ana makinede otomasyonlar kullanılamıyor. Ana makinedeki Orca’yı güncelleyip yeniden bağlanın.",

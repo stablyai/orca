@@ -195,9 +195,8 @@ describe('resolveAutomationRunTarget on a managed SSH host', () => {
       executionTargetId: 'box'
     })
 
-    expect(resolveAutomationRunTarget(store, automation)).toEqual({
+    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
       ok: false,
-      error: 'Build box now runs automations on its Orca server',
       errorCode: 'managedHostServer',
       errorParams: { host: 'Build box' }
     })

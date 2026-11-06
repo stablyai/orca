@@ -37,8 +37,7 @@ const relayHostSchema = z.looseObject({
   relay: z.enum(RELAY).catch('unavailable'),
   stoppedOnDesktop: z.literal(true).optional().catch(undefined),
   unavailableOnDesktop: z.literal(true).optional().catch(undefined),
-  installationId: z.string().optional().catch(undefined),
-  managedSshTargetId: z.string().optional().catch(undefined)
+  installationId: z.string().optional().catch(undefined)
 }) satisfies z.ZodType<MobileRelayHost>
 
 export const relayHostsListRead = bindDeferredRpcOperation(

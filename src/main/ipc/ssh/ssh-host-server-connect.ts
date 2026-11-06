@@ -91,6 +91,10 @@ export function publishManagedServerConnect(
     managedServer
   }
   broadcastSshState(getCurrentMainWindow, targetId, state)
+  // The server is reachable now: desktop rows this host owns can move to it.
+  void import('../../startup/main-process-automations').then((automations) =>
+    automations.handOffManagedHostLeftovers()
+  )
   return getPublicSshState(targetId) ?? state
 }
 

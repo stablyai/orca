@@ -4008,7 +4008,6 @@
       "targetRemoved": "此自动化的 SSH 主机已移除，因此无法运行。请删除自动化或重新添加该主机。",
       "fencingRequired": "此自动化已固定到 SSH 主机，因此请求必须指定预期的主机。",
       "invalidDestination": "此管理端不再提供该主机。请选择主机后重试。",
-      "moveProjectToServerFirst": "请先将此项目移动到 {{host}}。",
       "agentDiscoveryUnavailable": "此项目主机不支持代理发现。已保存的代理选择将保留。",
       "agentVerificationUnavailable": "此主机无法验证此项目的代理。请更新主机后重试。",
       "hostUnavailable": "此主机不支持自动化。请更新该主机上的 Orca 后重新连接。",

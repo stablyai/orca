@@ -7,11 +7,11 @@ import {
 import type { AutomationDestination } from '../shared/automation-owner-precondition'
 import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { SshTargetSummary } from '../shared/ssh-types'
-import type { SshEditableTarget } from '../shared/ssh-target-management'
 import type { Repo } from '../shared/repo-types'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 import { getManagedOrcadSshTargetId } from '../shared/managed-orcad-execution-host'
 import { listEnvironments } from '../shared/remote-runtime/host-store/runtime-environment-store'
-import { getDefaultUserDataPath, RuntimeClient, RuntimeClientError } from './runtime-client'
+import { RuntimeClient } from './runtime-client'
 import { fetchSshTargetSummaries } from './host-selector-alternatives'
 
 /** Empty selectors mean the execution host cannot change. */
@@ -37,70 +37,58 @@ async function resolveTargetRepo(
   return { repo, worktreeId: worktree.id }
 }
 
-type RegisteredSshTarget = SshTargetSummary & Pick<SshEditableTarget, 'managedServer'>
-
-// An unregistered target is gone.
-async function registeredSshTarget(
+// A registered target without a generation needs no fence; an unregistered target is gone.
+async function sshTargetGeneration(
   client: RuntimeClient,
   targetId: string
-): Promise<RegisteredSshTarget> {
-  const { targets } = await fetchSshTargetSummaries<RegisteredSshTarget>(client)
+): Promise<number | undefined> {
+  const { targets } = await fetchSshTargetSummaries<SshTargetSummary>(client)
   const match = targets.find((candidate) => candidate.id === targetId)
   if (!match) {
     throw new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.invalidDestination)
   }
-  return match
+  return match.generation
 }
 
-/** Where a write lands: here, or the managed Orca server that holds an SSH host's automations (#24863). */
-type AutomationWriteRoute =
-  | { kind: 'here'; destination?: AutomationDestination }
-  | { kind: 'server'; environmentId: string; host: string; repoId: string; worktreeId?: string }
+type AutomationWriteTarget = {
+  destination?: AutomationDestination
+  repo?: Repo
+  worktreeId?: string
+}
 
-async function resolveAutomationWriteRoute(
+async function resolveAutomationWriteTarget(
   client: RuntimeClient,
   target: AutomationDestinationTarget
-): Promise<AutomationWriteRoute> {
+): Promise<AutomationWriteTarget> {
   if (!target.repo && !target.workspace) {
-    return { kind: 'here' }
+    return {}
   }
   const { repo, worktreeId } = await resolveTargetRepo(client, target)
   const connectionId = repo.connectionId?.trim()
   if (!connectionId) {
-    return { kind: 'here', destination: { selector: { kind: 'self' } } }
+    return { destination: { selector: { kind: 'self' } }, repo, worktreeId }
   }
-  const sshTarget = await registeredSshTarget(client, connectionId)
-  const server = listEnvironments(getDefaultUserDataPath()).find(
-    (environment) => getManagedOrcadSshTargetId(environment) === connectionId
-  )
-  if (server) {
-    return {
-      kind: 'server',
-      environmentId: server.id,
-      host: sshTarget.label,
-      repoId: repo.id,
-      ...(worktreeId ? { worktreeId } : {})
-    }
-  }
-  // A paired CLI may not hold the server this desktop reaches; a desktop copy would never run.
-  if (sshTarget.managedServer) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `${sshTarget.label} now runs automations on its Orca server`
-    )
-  }
-  // A registered target without a generation needs no fence.
-  return sshTarget.generation === undefined
-    ? { kind: 'here' }
+  const generation = await sshTargetGeneration(client, connectionId)
+  return generation === undefined
+    ? { repo, worktreeId }
     : {
-        kind: 'here',
         destination: {
-          selector: { kind: 'ssh', targetId: connectionId, targetGeneration: sshTarget.generation }
-        }
+          selector: { kind: 'ssh', targetId: connectionId, targetGeneration: generation }
+        },
+        repo,
+        worktreeId
       }
 }
 
-/** The client a create goes to, with its params; a managed SSH host's server takes it by project id. */
+/** The destination an edit names; the desktop refuses one on a managed SSH host. */
+export async function resolveAutomationDestination(
+  client: RuntimeClient,
+  target: AutomationDestinationTarget
+): Promise<AutomationDestination | undefined> {
+  return (await resolveAutomationWriteTarget(client, target)).destination
+}
+
+/** A local CLI creates a managed SSH host's automation on its Orca server (#24863), by the ids both share. */
 export async function routeAutomationCreate<
   TCreate extends { repo?: string; workspace?: string; runContext?: unknown }
 >(
@@ -108,41 +96,31 @@ export async function routeAutomationCreate<
   target: AutomationDestinationTarget,
   create: TCreate
 ): Promise<{ writer: RuntimeClient; params: TCreate & { destination?: AutomationDestination } }> {
-  const route = await resolveAutomationWriteRoute(client, target)
-  if (route.kind === 'here') {
-    return {
-      writer: client,
-      params: { ...create, ...(route.destination ? { destination: route.destination } : {}) }
-    }
+  const { destination, repo, worktreeId } = await resolveAutomationWriteTarget(client, target)
+  const here = { writer: client, params: { ...create, ...(destination ? { destination } : {}) } }
+  const connectionId = repo ? getRepoRoutingConnectionId(repo) : null
+  const server =
+    repo && connectionId && client.isRemote === false
+      ? listEnvironments(client.userDataPath).find(
+          (environment) => getManagedOrcadSshTargetId(environment) === connectionId
+        )
+      : undefined
+  if (!repo || !server) {
+    return here
   }
-  const server = new RuntimeClient(getDefaultUserDataPath(), undefined, null, route.environmentId)
-  const { repos } = (await server.call<{ repos: Pick<Repo, 'id'>[] }>('repo.list')).result
-  if (!repos.some((repo) => repo.id === route.repoId)) {
-    throw new RuntimeClientError('invalid_argument', `Move this project to ${route.host} first.`)
+  const writer = new RuntimeClient(client.userDataPath, undefined, null, server.id)
+  const { repos } = (await writer.call<{ repos: Pick<Repo, 'id'>[] }>('repo.list')).result
+  // A project only on the desktop's copy goes to the desktop, which refuses it.
+  if (!repos.some((entry) => entry.id === repo.id)) {
+    return here
   }
-  // The server sets the project up from its own records, by ids it shares with the desktop.
   return {
-    writer: server,
+    writer,
     params: {
       ...create,
       runContext: undefined,
-      repo: create.repo === undefined ? undefined : `id:${route.repoId}`,
-      ...(route.worktreeId ? { workspace: `id:${route.worktreeId}` } : {})
+      repo: create.repo === undefined ? undefined : `id:${repo.id}`,
+      ...(worktreeId ? { workspace: `id:${worktreeId}` } : {})
     }
   }
-}
-
-/** An edit cannot move a row to another authority, so a managed SSH host refuses it. */
-export async function resolveAutomationUpdateDestination(
-  client: RuntimeClient,
-  target: AutomationDestinationTarget
-): Promise<AutomationDestination | undefined> {
-  const route = await resolveAutomationWriteRoute(client, target)
-  if (route.kind === 'server') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `${route.host} now runs automations on its Orca server`
-    )
-  }
-  return route.destination
 }

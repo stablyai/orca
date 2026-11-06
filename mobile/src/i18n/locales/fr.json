@@ -4111,7 +4111,6 @@
       "targetRemoved": "L’hôte SSH de cette automatisation a été supprimé ; elle ne peut pas s’exécuter. Supprimez-la ou ajoutez de nouveau cet hôte.",
       "fencingRequired": "Cette automatisation est liée à un hôte SSH ; la requête doit donc préciser l’hôte attendu.",
       "invalidDestination": "Cet hôte n’est plus disponible sur cette instance. Choisissez un hôte et réessayez.",
-      "moveProjectToServerFirst": "Déplacez d'abord ce projet vers {{host}}.",
       "agentDiscoveryUnavailable": "La détection des agents est indisponible pour l’hôte de ce projet. Les choix enregistrés sont conservés.",
       "agentVerificationUnavailable": "Cet hôte ne peut pas vérifier les agents de ce projet. Mettez-le à jour et réessayez.",
       "hostUnavailable": "Les automatisations sont indisponibles sur cet hôte. Mettez Orca à jour sur cet hôte et reconnectez-vous.",

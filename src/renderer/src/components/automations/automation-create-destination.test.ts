@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
 import type { AutomationCatalogSshMirrorInput } from './automation-host-catalog-types'
 import {
@@ -38,17 +37,12 @@ describe('create destination on a managed SSH host', () => {
       ],
       runtimeCatalogSettled: true
     })
-    const desktopSshKey = hostStableKey({
-      authority: { kind: 'desktop' },
-      selector: { kind: 'ssh', targetId: 'box' }
-    })
-    const serverKey = hostStableKey({
-      authority: { kind: 'runtime', environmentId: 'env-1' },
-      selector: { kind: 'self' }
-    })
+    const desktopSshKey = 'host:desktop:ssh:box'
 
     const desktopSsh = entries.find((entry) => entry.stableKey === desktopSshKey)
     expect(desktopSsh && automationCreateHostOffered(desktopSsh)).toBe(false)
-    expect(preselectAutomationCreateHost(entries, desktopSshKey, null)?.stableKey).toBe(serverKey)
+    expect(preselectAutomationCreateHost(entries, desktopSshKey, null)?.stableKey).toBe(
+      'host:runtime:env-1:self'
+    )
   })
 })

@@ -3,6 +3,7 @@ import type { Automation } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence/loading-store/store'
 import { isManagedOrcadSshTarget } from '../ssh/connection/ssh-connection-store'
+import { moveProjectToManagedHostFirst } from '../../shared/managed-orcad-ssh-owner'
 import { listOrcadMigrationCutoverChainForTarget } from '../ssh/orcad-migration-cutover-journal'
 
 export const ORCAD_FENCED_AUTOMATION = "This automation now runs on its SSH host's Orca server."
@@ -51,4 +52,30 @@ export function managedOrcadHostOf(
         : null
   const target = targetId ? store.getSshTarget(targetId) : undefined
   return target && isManagedOrcadSshTarget(target) ? target : null
+}
+
+type SshLandingRow = Pick<Automation, 'executionTargetType' | 'executionTargetId'>
+type SshLandingPin = { targetId: string } | null | undefined
+
+/** The SSH host a row runs on: its own target, or the one its workspace is pinned to. */
+function landingSshTargetId(row: SshLandingRow, pin: SshLandingPin): string | undefined {
+  return row.executionTargetType === 'ssh' ? row.executionTargetId : pin?.targetId
+}
+
+/** A desktop row may not newly land on a managed host: it could never run here. */
+export function refuseManagedOrcadHost(
+  state: { sshTargets?: readonly SshTarget[] },
+  row: SshLandingRow,
+  pin: SshLandingPin,
+  previousRow?: SshLandingRow,
+  previousPin?: SshLandingPin
+): void {
+  const targetId = landingSshTargetId(row, pin)
+  if (!targetId || (previousRow && landingSshTargetId(previousRow, previousPin) === targetId)) {
+    return
+  }
+  const target = state.sshTargets?.find((entry) => entry.id === targetId)
+  if (target && isManagedOrcadSshTarget(target)) {
+    throw new Error(moveProjectToManagedHostFirst(target.label))
+  }
 }

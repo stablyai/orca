@@ -4008,7 +4008,6 @@
       "targetRemoved": "이 자동화의 SSH 호스트가 제거되어 실행할 수 없습니다. 자동화를 삭제하거나 해당 호스트를 다시 추가하세요.",
       "fencingRequired": "이 자동화는 SSH 호스트에 고정되어 있으므로 요청에 예상 호스트를 지정해야 합니다.",
       "invalidDestination": "이 관리 주체에서 해당 호스트를 더 이상 사용할 수 없습니다. 호스트를 선택하고 다시 시도하세요.",
-      "moveProjectToServerFirst": "먼저 이 프로젝트를 {{host}}(으)로 이동하세요.",
       "agentDiscoveryUnavailable": "이 프로젝트 호스트에서 에이전트 검색을 사용할 수 없습니다. 저장된 선택은 유지됩니다.",
       "agentVerificationUnavailable": "이 호스트는 이 프로젝트의 에이전트를 확인할 수 없습니다. 호스트를 업데이트하고 다시 시도하세요.",
       "hostUnavailable": "이 호스트에서 자동화를 사용할 수 없습니다. 해당 호스트의 Orca를 업데이트하고 다시 연결하세요.",

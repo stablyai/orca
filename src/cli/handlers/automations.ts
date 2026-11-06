@@ -26,10 +26,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import {
-  resolveAutomationUpdateDestination,
-  routeAutomationCreate
-} from '../automation-destination'
+import { resolveAutomationDestination, routeAutomationCreate } from '../automation-destination'
 import {
   AUTOMATION_RUNS_PAGE_SIZE,
   automationRunsRpc,
@@ -245,7 +242,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
     )
     // Owner fencing covers the source host; moves must fence the destination too.
-    const destination = await resolveAutomationUpdateDestination(client, target)
+    const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {
       id,
       ...(expectedOwner ? { expectedOwner } : {}),

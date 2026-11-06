@@ -4008,7 +4008,6 @@
       "targetRemoved": "この自動化の SSH ホストが削除されたため、実行できません。自動化を削除するか、ホストを再追加してください。",
       "fencingRequired": "この自動化は SSH ホストに固定されているため、リクエストには想定するホストの指定が必要です。",
       "invalidDestination": "この管理元ではそのホストは利用できなくなりました。ホストを選択して再試行してください。",
-      "moveProjectToServerFirst": "先にこのプロジェクトを {{host}} に移動してください。",
       "agentDiscoveryUnavailable": "このプロジェクトのホストではAgentを検出できません。保存済みの選択は保持されます。",
       "agentVerificationUnavailable": "このホストではプロジェクトのAgentを確認できません。ホストを更新して再試行してください。",
       "hostUnavailable": "このホストでは自動化を利用できません。ホストの Orca を更新して再接続してください。",

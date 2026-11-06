@@ -146,7 +146,8 @@ export const sshInventorySchema = z.object({
     z.object({
       id: z.string(),
       label: z.string(),
-      generation: z.number().int().positive().optional()
+      generation: z.number().int().positive().optional(),
+      managedServer: z.literal(true).optional().catch(undefined)
     })
   )
 })

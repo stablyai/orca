@@ -4000,7 +4000,6 @@
       "targetRemoved": "此自動化的 SSH 主機已移除，因此無法執行。請刪除自動化或重新新增該主機。",
       "fencingRequired": "此自動化已固定至 SSH 主機，因此要求必須指定預期的主機。",
       "invalidDestination": "此管理端不再提供該主機。請選擇主機後再試。",
-      "moveProjectToServerFirst": "請先將此專案移至 {{host}}。",
       "agentDiscoveryUnavailable": "此專案主機無法探索代理程式。已儲存的代理程式選擇會保留。",
       "agentVerificationUnavailable": "此主機無法驗證此專案的代理程式。請更新主機後再試。",
       "hostUnavailable": "此主機無法使用自動化。請更新該主機上的 Orca 後重新連線。",

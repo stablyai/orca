@@ -20,7 +20,6 @@ import { useReachableServerClients } from '../worktree/use-reachable-server-clie
 import { AutomationManager } from './AutomationManager'
 import { leaveThrough, type AutomationLeaveGuard } from './AutomationEditorNavigation'
 import { automationStyles as styles } from './automation-styles'
-import type { AutomationDraft } from './automation-draft'
 
 export function MobileAutomationsScreen() {
   const t = useMobileTranslation()
@@ -35,8 +34,6 @@ export function MobileAutomationsScreen() {
   const host = useHostProfile(hostId)
   const hostTitle = useHostDisplay(host).title
   const [authority, setAuthority] = useState('paired')
-  // A managed SSH host's new automation, carried to its server's editor.
-  const [serverDraft, setServerDraft] = useState<AutomationDraft>()
   const [pickingHost, setPickingHost] = useState(false)
   const leaveGuard = useRef<AutomationLeaveGuard | null>(null)
   // A discard prompt may follow, so switch once the picker's sheet is gone.
@@ -86,15 +83,6 @@ export function MobileAutomationsScreen() {
         hostId={hostId}
         client={selectedClient}
         startInEditor={creating}
-        handoff={{
-          servers,
-          draft: serverDraft,
-          continueOn: (server, draft) => {
-            setServerDraft(draft)
-            setCreating(true)
-            setAuthority(server.hostId)
-          }
-        }}
         leaveGuard={leaveGuard}
         executionHost={
           authority === 'paired' ? undefined : (normalizeExecutionHostId(authority) ?? undefined)
@@ -138,7 +126,6 @@ export function MobileAutomationsScreen() {
             hostPicker.closeThen(() =>
               leaveThrough(leaveGuard, () => {
                 setCreating(false)
-                setServerDraft(undefined)
                 setAuthority(next)
               })
             )
