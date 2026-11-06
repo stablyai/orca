@@ -1,16 +1,14 @@
 import { realpathSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import {
-  OrcaRuntimeService,
-  execFileSync,
-  getRepoUpstreamMock,
-  join,
-  mkdtemp,
-  projectHostSetupProjectionFromRepos,
-  rm,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { execFileSync } from 'node:child_process'
+import { getRepoUpstreamMock } from '../orca-runtime-test-mocks/setup.spec'
+import { join } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { tmpdir } from 'node:os'
+import { store } from './orca-runtime-test-fixtures.spec'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeStore } from '../runtime-store-contract'
 

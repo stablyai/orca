@@ -2,7 +2,10 @@ import { terminalImageViewerSupported } from '../../terminal/launch/terminal-ima
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { hostQualifiedRepoSelector, type RuntimeRepoSelector } from '../../runtime-repo-selector'
+import {
+  hostQualifiedRepoSelector,
+  type RuntimeRepoSelector
+} from '../../workspaces/catalog/runtime-repo-selector'
 import type { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
@@ -114,6 +117,10 @@ export function buildManagedWorktreeCreateArgs(
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
+      ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
+      ...(params.crossStoreParentInferredFrom
+        ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }
+        : {}),
       ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
       ...(params.cwdParentAmbiguous === true
         ? { cwdParentAmbiguous: params.cwdParentAmbiguous }

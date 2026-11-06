@@ -43,7 +43,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: vi.fn()
+  downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -248,6 +248,8 @@ describe('a link to this computer printed in a paired-server terminal', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const onOpenFailure = vi.fn()
+    // Why: a host that cannot page grants leaves the download undone, so the file opens in Orca.
+    vi.mocked(downloadAndOpenRemoteTerminalFile).mockResolvedValueOnce(false)
 
     openDetectedFilePath('/tmp/artifact.txt', null, null, {
       ...serverWorkspace,
@@ -270,7 +272,11 @@ describe('a link to this computer printed in a paired-server terminal', () => {
     )
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
-    expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'wt-feat' }),
+      '/tmp/artifact.txt',
+      expect.objectContaining({ grant: { terminalArtifactGrantId: 'g-1' } })
+    )
     expect(onOpenFailure).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,53 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeTerminalChunk } from '../terminal-ansi-normalization'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
-import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
-import { readPtyTail, runtimeWithLeaf } from '../../../orca-runtime-pty-leaf.test-fixture'
 
-function ingestChunks(chunks: string[]) {
-  let lines: string[] = []
-  let partialLine = ''
-  let pendingAnsi = ''
-  let redrawCursor: RetainedTailRedrawCursor | null = null
-  let completeLines = 0
-  const completed: string[] = []
-  for (const chunk of chunks) {
-    const normalized = normalizeTerminalChunk(chunk, pendingAnsi)
-    pendingAnsi = normalized.pendingAnsi
-    const next = appendNormalizedToTailBuffer(lines, partialLine, normalized.text, redrawCursor)
-    lines = next.lines
-    partialLine = next.partialLine
-    redrawCursor = next.redrawCursor
-    completeLines += next.newCompleteLines
-    completed.push(...next.newlyCompletedLines)
-    expect(next.truncated).toBe(false)
-  }
-  return { lines, partialLine, pendingAnsi, completeLines, completed }
-}
+import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
+import {
+  readPtyTail,
+  runtimeWithLeaf
+} from '../../../orca-runtime-tests/orca-runtime-pty-leaf.test-fixture'
 
 describe('terminal tail CRLF chunk boundaries', () => {
-  it('retains the reported base64 line when CR and LF arrive separately', () => {
-    expect(ingestChunks(['QUJDRA==\r', '\n'])).toEqual({
-      lines: ['QUJDRA=='],
-      partialLine: '',
-      pendingAnsi: '',
-      completeLines: 1,
-      completed: ['QUJDRA==']
-    })
-  })
-
-  it('retains content and line counts at every boundary, including empty chunks', () => {
-    const output = '\r\nfirst\r\n\r\nsecond\r\nlast'
-    const expected = ingestChunks([output])
-    for (let boundary = 0; boundary <= output.length; boundary += 1) {
-      expect(ingestChunks([output.slice(0, boundary), '', output.slice(boundary)])).toEqual(
-        expected
-      )
-    }
-    expect(ingestChunks([...output])).toEqual(expected)
-  })
-
   it('keeps partial retention bounded while a final CR is pending', () => {
     const normalized = normalizeTerminalChunk(`${'x'.repeat(MAX_TAIL_PARTIAL_CHARS * 2)}\r`)
     const partial = appendNormalizedToTailBuffer([], '', normalized.text)

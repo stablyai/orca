@@ -12,7 +12,7 @@ import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from './terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import type { OrchestrationDb } from './db'
 import {

@@ -1,7 +1,11 @@
 import { expect, it, vi } from 'vitest'
 import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
-import { deferred, makeDeferred, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import {
+  deferred,
+  makeDeferred,
+  syncSinglePty
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   createHydrationRuntime,
   EMPTY_RETAINED_STATE,
@@ -9,7 +13,7 @@ import {
   RETIRED_SNAPSHOT,
   retire,
   SIZE
-} from './headless-hydration-ownership-test-fixture'
+} from './orca-runtime-tests/headless-hydration-ownership-test-fixture'
 
 type Snapshot = typeof RETIRED_SNAPSHOT | null
 

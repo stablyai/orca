@@ -50,7 +50,7 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
   const { mainProcessState } = await import('../startup/main-process-state')
   const { codexStructuredLaunchHomeResolvers } = await import('../startup/codex-launch-preparation')
   const { structuredAgentRuntimeRegistration } =
-    await import('../runtime/structured-agent-runtime-registrations')
+    await import('../runtime/agent-session/installation/structured-agent-runtime-registrations')
   const { agentModelCatalogFingerprint } =
     await import('../native-chat/agent-model-catalog/agent-model-catalog-fingerprint')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the settings read/update surface the service uses.

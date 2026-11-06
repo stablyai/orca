@@ -16,7 +16,7 @@ import { requireSupportedCodexCli, withSupportedCodexCli } from './codex-cli-ins
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
-} from '../../../runtime/structured-agent-launch-composition.test-support'
+} from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { resolveProviderChildEnv } from '../../../provider-process/provider-process-launch'
 import { identityFor } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'

@@ -18,6 +18,17 @@ public class OrcaMobileWebShellModule: Module {
       presenter.present(controller, animated: true)
     }.runOnQueue(.main)
 
+    AsyncFunction("shareImage") { (url: URL, _: String) in
+      guard let presenter = self.appContext?.utilities?.currentViewController() else {
+        throw ImagePresenterUnavailableException()
+      }
+      presentImageShareSheet(url: url, from: presenter)
+    }.runOnQueue(.main)
+
+    AsyncFunction("saveImageToPhotos") { (url: URL, _: String, promise: Promise) in
+      saveImageToPhotoLibrary(url: url, promise: promise)
+    }
+
     View(OrcaMobileWebShellView.self) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation", "onBackEdgeSwipe")
 

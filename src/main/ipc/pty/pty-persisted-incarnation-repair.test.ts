@@ -1,5 +1,5 @@
 import { createPaneBindingStore } from './pty-launch-race-test-fixture'
-import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'

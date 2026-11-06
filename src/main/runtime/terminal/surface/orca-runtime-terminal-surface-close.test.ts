@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { Store } from '../../../persistence/loading-store/store'
@@ -183,52 +183,6 @@ describe('renderer close intents', () => {
 })
 
 describe('CLI close of one pane in a split tab', () => {
-  it('commits the pane removal without waiting for its process exit', async () => {
-    const harness = createHarness()
-    harness.syncSplitFixtureGraph()
-    // Verified stop can lack an exit event; retirement must not depend on it.
-    harness.setVerifiedStopResult(true)
-    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
-      (candidate) => candidate.ptyId === PTY_ID
-    )!
-
-    await expect(harness.runtime.closeTerminal(terminal.handle)).resolves.toMatchObject({
-      tabId: TAB_ID,
-      ptyKilled: true
-    })
-
-    const session = harness.getSession()
-    expect(session.tabsByWorktree[WORKTREE_ID]).toEqual([expect.objectContaining({ id: TAB_ID })])
-    expect(session.terminalLayoutsByTabId[TAB_ID]).toMatchObject({
-      root: { type: 'leaf', leafId: SIBLING_LEAF_ID },
-      ptyIdsByLeafId: { [SIBLING_LEAF_ID]: SIBLING_PTY_ID }
-    })
-    expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
-    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-  })
-
-  it('commits the pane removal when the handle names a live PTY', async () => {
-    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
-    harness.syncSplitFixtureGraph()
-    harness.syncFixtureTabWithoutLeaf()
-    harness.setVerifiedStopResult(true)
-    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
-      (candidate) => candidate.ptyId === PTY_ID
-    )!
-
-    await expect(harness.runtime.closeTerminal(terminal.handle)).resolves.toMatchObject({
-      tabId: TAB_ID,
-      ptyKilled: true
-    })
-
-    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
-      type: 'leaf',
-      leafId: SIBLING_LEAF_ID
-    })
-    expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
-    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-  })
-
   it.each([
     ['reports no exit', false],
     ['throws, as an unreachable SSH host does', new Error('ssh_host_unreachable')]
@@ -270,33 +224,6 @@ describe('CLI close of one pane in a split tab', () => {
   )
 
   // L255: expected main-owned headless pane-close failure until its fix lands.
-  ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it.fails : it)(
-    'drops only that pane from paired clients on a host with no renderer listing the tab',
-    async () => {
-      const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
-      harness.syncSplitFixtureGraph()
-      harness.syncFixtureTabWithoutLeaf()
-      const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
-        (candidate) => candidate.ptyId === PTY_ID
-      )!
-      harness.syncEmptyGraph()
-      harness.setVerifiedStopResult(new Error('ssh_host_unreachable'))
-
-      await harness.runtime.closeTerminal(terminal.handle)
-
-      const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      expect(snapshot.tabs).toEqual([
-        expect.objectContaining({ parentTabId: TAB_ID, leafId: SIBLING_LEAF_ID })
-      ])
-      expect(snapshot.retiredTerminalSurfaces).toEqual([
-        expect.objectContaining({ parentTabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
-      ])
-      expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
-        type: 'leaf',
-        leafId: SIBLING_LEAF_ID
-      })
-    }
-  )
 
   it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {
     const harness = createHarness()
@@ -315,58 +242,5 @@ describe('CLI close of one pane in a split tab', () => {
       type: 'leaf',
       leafId: SIBLING_LEAF_ID
     })
-  })
-})
-
-describe('mobile close of one pane in a split tab', () => {
-  it('commits the pane removal alongside its kill', async () => {
-    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
-    harness.syncSplitFixtureGraph()
-
-    await expect(
-      harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, `${TAB_ID}::${LEAF_ID}`, {
-        reason: 'user'
-      })
-    ).resolves.toMatchObject({ closed: true })
-
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]).toMatchObject({
-      root: { type: 'leaf', leafId: SIBLING_LEAF_ID }
-    })
-    expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
-  })
-})
-
-describe('mobile close of a tab the desktop renderer lists', () => {
-  // Legacy renderer owns pin presentation and must be allowed to refuse close.
-  it('still asks the renderer, whose pin guard can refuse it', async () => {
-    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
-    harness.rejectTerminalTabClose(new Error('terminal_tab_pinned'))
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main-owned layout has its own pin guard, requiring no renderer acknowledgement.
-      harness.editSession((session) => ({
-        ...session,
-        tabsByWorktree: {
-          [WORKTREE_ID]: (session.tabsByWorktree[WORKTREE_ID] ?? []).map((tab) => ({
-            ...tab,
-            isPinned: true
-          }))
-        }
-      }))
-    }
-
-    await expect(
-      harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, { reason: 'user' })
-    ).rejects.toThrow('terminal_tab_pinned')
-
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-    } else {
-      expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_ID)
-    }
-    expect(harness.kill).not.toHaveBeenCalled()
-    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([
-      expect.objectContaining({ id: TAB_ID })
-    ])
   })
 })

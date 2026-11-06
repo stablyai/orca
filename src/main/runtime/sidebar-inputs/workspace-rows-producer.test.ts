@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
+import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
 import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
-} from '../workspaces/resolved-worktree-scan-join'
+} from '../workspaces/catalog/resolved-worktree-scan-join'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 

@@ -1,5 +1,5 @@
 import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
-import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 
 type DriverState = RuntimeTerminalDriverState
 

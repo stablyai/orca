@@ -12,6 +12,9 @@ import {
 import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./native-chat/composer/MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 // BottomDrawer also carries the option pager, which loads Reanimated at import.
 vi.mock('react-native-reanimated', async () =>
   (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()

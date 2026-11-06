@@ -3,7 +3,7 @@ import type { IPtyProvider, PtyProcessInfo } from '../../../../providers/pty-pro
 import { createAdapter } from './daemon-pty-router-test-fixture'
 import { DaemonSessionOwnerResolver } from '../daemon-session-owner-resolution'
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
-import { sweepProviderByPrefix } from '../../../../runtime/worktree-pty-surface-sweeps'
+import { sweepProviderByPrefix } from '../../../../runtime/workspaces/removal/worktree-pty-surface-sweeps'
 
 const row = (id = 'shared', incarnationId = 'live'): PtyProcessInfo => ({
   id,

@@ -1,4 +1,4 @@
-import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,
@@ -15,7 +15,7 @@ import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-com
 
 import type { RuntimeStore } from '../runtime-store-contract'
 import { installGitHubProjectAccounts } from '../../github/github-project-account'
-import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
+import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -33,7 +33,7 @@ import {
 import {
   type RuntimeRepositoryCommandSurface,
   installRuntimeRepositoryCommandSurface
-} from '../runtime-repository-command-surface'
+} from '../repositories/runtime-repository-command-surface'
 import {
   type RuntimeReviewCommandSurface,
   installRuntimeReviewCommandSurface
@@ -48,7 +48,7 @@ import {
   installRuntimeSkillCommandSurface
 } from '../integrations/skill/runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
-import { RuntimeClientSettingsController } from '../runtime-client-settings'
+import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
 import { RuntimeAutomationController } from '../runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
@@ -57,7 +57,7 @@ import { configureHostReadableTranscriptPathSources } from '../../native-chat/ho
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
-import { RuntimeMachineName } from '../runtime-machine-name'
+import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
 import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 

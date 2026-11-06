@@ -45,7 +45,7 @@ import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/ag
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
-import { openOffscreenBrowserPageLink } from '../runtime/browser/offscreen-browser-page-link'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate

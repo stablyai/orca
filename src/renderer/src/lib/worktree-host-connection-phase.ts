@@ -10,6 +10,9 @@ import {
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { isConnectedRuntimeHostState } from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 
 /**
  * `local`: no SSH target this client dials for the worktree — a local workspace, a
@@ -117,15 +120,52 @@ export function selectWorktreeHostConnectionPhase(
   )
 }
 
+/**
+ * The SSH connection this client's browser route dials. A recipe VM's target publishes no SSH
+ * state, but its server's tunnel runs over that same connection, so the server's state stands in.
+ */
+export function resolveBrowserRouteHostConnection(
+  state: AppState,
+  worktreeId: string | null,
+  targetId: string | null
+): WorktreeHostConnection {
+  if (!targetId || !isRuntimeOwnedSshTargetId(targetId)) {
+    return resolveWorktreeHostConnection(state, worktreeId, targetId, null)
+  }
+  const environmentId = state.runtimeEnvironments?.find(
+    (environment) => getOrcadSshDeployment(environment)?.sshTargetId === targetId
+  )?.id
+  if (!environmentId) {
+    return LOCAL_HOST_CONNECTION
+  }
+  const entry = state.runtimeStatusByEnvironmentId?.get(environmentId)
+  const hostState = runtimeHostConnectionStateForEntry(entry)
+  const connected = isConnectedRuntimeHostState(hostState)
+  // Only a live dial waits; lost or never-attempted contact settles so the route card offers recovery.
+  return {
+    phase: connected
+      ? 'connected'
+      : entry && hostState === 'checking'
+        ? 'connecting'
+        : 'unavailable',
+    targetId,
+    environmentId: null,
+    publishedStatus: null,
+    connectedEpoch: connected
+      ? `${targetId}:${entry?.connectionGeneration ?? ''}:${entry?.hostContactEpoch ?? ''}`
+      : null
+  }
+}
+
 export function useWorktreeHostConnection(
   worktreeId: string | null,
-  localSshTargetId?: string | null
+  browserRouteTargetId?: string | null
 ): WorktreeHostConnection {
   return useAppStore(
     useShallow((state) =>
-      localSshTargetId === undefined
+      browserRouteTargetId === undefined
         ? selectWorktreeHostConnectionPhase(state, worktreeId)
-        : resolveWorktreeHostConnection(state, worktreeId, localSshTargetId, null)
+        : resolveBrowserRouteHostConnection(state, worktreeId, browserRouteTargetId)
     )
   )
 }

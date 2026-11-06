@@ -6,8 +6,8 @@ import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { SURFACE_CLAIM_WITHOUT_STANDING } from './terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   // #18191: the launch placeholder makes status ready but has no renderer authority to retract restored panes.

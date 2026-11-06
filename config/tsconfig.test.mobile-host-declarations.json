@@ -18,7 +18,7 @@
     "../src/main/runtime/rpc/core.ts",
     "../src/main/runtime/rpc/dispatcher-request-parsing.ts",
     "../src/main/github/issue-field-options.ts",
-    "../src/main/runtime/runtime-worktree-ps-summaries.ts",
+    "../src/main/runtime/workspaces/process-listing/runtime-worktree-ps-summaries.ts",
     "../src/types/build-constants.d.ts"
   ],
   "include": ["../src/shared/**/*.ts", "../src/shared/**/*.tsx"],

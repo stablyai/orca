@@ -12,7 +12,7 @@ import {
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
-import { readStructuredAgentSessionRecord } from '../../../../structured-worker-authority'
+import { readStructuredAgentSessionRecord } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { createHash } from 'node:crypto'
 import { escalateWorkerFailure } from '../../../../orchestration/worker-failure-escalation'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'

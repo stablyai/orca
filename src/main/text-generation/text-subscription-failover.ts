@@ -1,4 +1,4 @@
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { CommitMessageAgentEnvironmentResolvers } from './commit-message-agent-environment'
 import { createOpenCodeTextSubscriptionPreparation } from './opencode-text-subscriptions'
 import { createClaudeTextSubscriptionPreparation } from './claude-text-subscriptions'

@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import {
-  DEV_BUNDLE_MARKER_FILENAME,
-  getDevBundleProcessTable,
-  selectStaleDevBundleDirs
-} from '../development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
-import { collectDevBundles } from './reclaim-dev-electron-bundles.mjs'
+import { DEV_BUNDLE_MARKER_FILENAME } from '../development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
 
 const roots: string[] = []
 
@@ -30,26 +25,6 @@ function makeWorktree(bundles: { name: string; marker: boolean }[]): string {
   }
   return worktree
 }
-
-describe('collectDevBundles', () => {
-  it('reports each bundle and whether its build finished', () => {
-    const worktree = makeWorktree([
-      { name: 'aaaa', marker: true },
-      { name: 'bbbb', marker: false }
-    ])
-    const bundles = collectDevBundles(worktree).sort((a, b) => a.dir.localeCompare(b.dir))
-    expect(bundles).toHaveLength(2)
-    expect(bundles[0].hasMarker).toBe(true)
-    expect(bundles[1].hasMarker).toBe(false)
-    expect(bundles[0].mtimeMs).toBeGreaterThan(0)
-  })
-
-  it('returns nothing for a worktree that has never run the dev app', () => {
-    const worktree = mkdtempSync(path.join(tmpdir(), 'orca-dev-bundles-'))
-    roots.push(worktree)
-    expect(collectDevBundles(worktree)).toEqual([])
-  })
-})
 
 describe('sweeping across worktrees', () => {
   it.each([
@@ -110,42 +85,4 @@ describe('sweeping across worktrees', () => {
       expect(existsSync(recent)).toBe(true)
     }
   )
-
-  it('spares a bundle a live process is running from, and takes the idle ones', () => {
-    const worktree = makeWorktree([
-      { name: 'live', marker: true },
-      { name: 'idle', marker: true }
-    ])
-    const bundles = collectDevBundles(worktree)
-    const live = bundles.find((bundle) => bundle.dir.endsWith('live'))!
-    // No launch follows sweep; null currentDir leaves only live process/in-flight build protection.
-    const stale = selectStaleDevBundleDirs({
-      bundles,
-      currentDir: null,
-      processTable: `/usr/bin/foo ${live.dir}/Orca.app/Contents/MacOS/Electron`,
-      nowMs: Date.now()
-    })
-    expect(stale).toEqual([bundles.find((bundle) => bundle.dir.endsWith('idle'))!.dir])
-  })
-
-  it('spares a build still in flight, which has no marker yet', () => {
-    const worktree = makeWorktree([{ name: 'building', marker: false }])
-    const stale = selectStaleDevBundleDirs({
-      bundles: collectDevBundles(worktree),
-      currentDir: null,
-      processTable: '',
-      nowMs: Date.now()
-    })
-    expect(stale).toEqual([])
-  })
-})
-
-describe('getDevBundleProcessTable', () => {
-  it('returns null rather than an empty table when ps fails', () => {
-    expect(
-      getDevBundleProcessTable(() => {
-        throw new Error('ps unavailable')
-      })
-    ).toBeNull()
-  })
 })

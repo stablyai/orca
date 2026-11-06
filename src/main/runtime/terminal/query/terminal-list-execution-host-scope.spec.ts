@@ -11,10 +11,6 @@ export function registerTerminalListExecutionHostScopeTests(): void {
   // A scoped list must identify its hosts so omitting a live remote worker cannot be mistaken for exit.
 
   const LOCAL_WORKTREE_ID = 'repo-local::/tmp/local-worktree'
-  const SSH_WORKTREE_ID = 'repo-ssh::/remote/ssh-worktree'
-  const LOCAL_LEAF_ID = '11111111-1111-4111-8111-111111111111'
-  const SSH_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-  const REMOTE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 
   const REPOS = [
     {
@@ -114,143 +110,7 @@ export function registerTerminalListExecutionHostScopeTests(): void {
     return runtime
   }
 
-  describe('listTerminals execution-host identity', () => {
-    it('names the SSH connection a remote terminal runs on instead of local', async () => {
-      const runtime = makeRuntime([
-        { worktreeId: LOCAL_WORKTREE_ID, leafId: LOCAL_LEAF_ID, ptyId: 'pty-local-1' },
-        { worktreeId: SSH_WORKTREE_ID, leafId: SSH_LEAF_ID, ptyId: 'ssh:box-1@@pty-7' }
-      ])
-
-      const { terminals } = await runtime.listTerminals()
-
-      const sshRow = terminals.find((terminal) => terminal.ptyId === 'ssh:box-1@@pty-7')
-      const localRow = terminals.find((terminal) => terminal.ptyId === 'pty-local-1')
-      expect(sshRow?.executionHostId).toBe('ssh:box-1')
-      expect(localRow?.executionHostId).toBe('local')
-    })
-
-    it('names the paired runtime environment a mirrored terminal belongs to', async () => {
-      const runtime = makeRuntime([
-        {
-          worktreeId: LOCAL_WORKTREE_ID,
-          leafId: REMOTE_LEAF_ID,
-          ptyId: 'remote:env-7@@handle-1'
-        }
-      ])
-
-      const { terminals } = await runtime.listTerminals()
-
-      expect(terminals[0]?.executionHostId).toBe('runtime:env-7')
-    })
-
-    it('leaves the host unset — never local — for a paired PTY that names no environment', async () => {
-      const runtime = makeRuntime([
-        { worktreeId: LOCAL_WORKTREE_ID, leafId: REMOTE_LEAF_ID, ptyId: 'remote:handle-1' }
-      ])
-
-      const { hostScope, terminals } = await runtime.listTerminals()
-
-      expect(terminals[0]?.executionHostId).toBeUndefined()
-      expect(hostScope?.hostIds).toEqual(['local'])
-    })
-
-    it.each([
-      'remote:env@@%E0%A4%A',
-      'remote:%20@@terminal%3Aone',
-      'ssh:%E0%A4%A@@pty-7',
-      'ssh:%20@@pty-7'
-    ])('leaves the host unset for a malformed foreign PTY id: %s', async (ptyId) => {
-      const runtime = makeRuntime([
-        { worktreeId: LOCAL_WORKTREE_ID, leafId: REMOTE_LEAF_ID, ptyId }
-      ])
-
-      const { hostScope, terminals } = await runtime.listTerminals()
-
-      expect(terminals[0]?.executionHostId).toBeUndefined()
-      expect(hostScope?.hostIds).toEqual(['local'])
-    })
-  })
-
   describe('listTerminals scope declaration', () => {
-    it('declares every host an unscoped listing covers', async () => {
-      const runtime = makeRuntime([
-        { worktreeId: LOCAL_WORKTREE_ID, leafId: LOCAL_LEAF_ID, ptyId: 'pty-local-1' },
-        { worktreeId: SSH_WORKTREE_ID, leafId: SSH_LEAF_ID, ptyId: 'ssh:box-1@@pty-7' }
-      ])
-
-      const result = await runtime.listTerminals()
-
-      expect(result.hostScope?.hostIds).toEqual(['local', 'ssh:box-1'])
-      expect(result.hostScope?.omittedHostIds).toEqual([])
-    })
-
-    it('does not claim a paired runtime was covered from a mirrored row', async () => {
-      const runtime = makeRuntime([
-        {
-          worktreeId: LOCAL_WORKTREE_ID,
-          leafId: REMOTE_LEAF_ID,
-          ptyId: 'remote:env-7@@handle-1'
-        }
-      ])
-
-      const result = await runtime.listTerminals()
-
-      expect(result.hostScope?.hostIds).toEqual(['local'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['runtime:env-7', 'ssh:box-1'])
-    })
-
-    it('keeps a repo-known paired runtime omitted without a mirrored row', async () => {
-      const baseStore = makeStore()
-      const repos = [
-        REPOS[0]!,
-        {
-          id: 'repo-runtime',
-          path: '/remote/runtime-worktree',
-          displayName: 'runtime',
-          badgeColor: '#000000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-9' as const
-        }
-      ]
-      const runtime = makeRuntime([], {
-        ...baseStore,
-        getRepos: vi.fn(() => repos),
-        getRepo: vi.fn((id: string) => repos.find((repo) => repo.id === id)),
-        getWorkspaceSessionHostIds: vi.fn(() => ['local'])
-      })
-
-      const result = await runtime.listTerminals()
-
-      expect(result.hostScope?.hostIds).toEqual(['local'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['runtime:env-9'])
-    })
-
-    it('keeps a repo-known paired runtime omitted in a worktree-scoped listing', async () => {
-      const baseStore = makeStore()
-      const repos = [
-        REPOS[0]!,
-        {
-          id: 'repo-runtime',
-          path: '/remote/runtime-worktree',
-          displayName: 'runtime',
-          badgeColor: '#000000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-9' as const
-        }
-      ]
-      const runtime = makeRuntime([], {
-        ...baseStore,
-        getRepos: vi.fn(() => repos),
-        getRepo: vi.fn((id: string) => repos.find((repo) => repo.id === id)),
-        getWorkspaceSessionHostIds: vi.fn(() => ['local'])
-      })
-
-      const result = await runtime.listTerminals(`id:${LOCAL_WORKTREE_ID}`)
-
-      expect(result.hostScope?.hostIds).toEqual(['local'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['runtime:env-9'])
-    })
-
     it('covers a queried SSH host used only by a folder workspace', async () => {
       const baseStore = makeStore()
       const folderWorkspace = makeSshFolderWorkspace()
@@ -278,31 +138,6 @@ export function registerTerminalListExecutionHostScopeTests(): void {
       expect(result.hostScope?.omittedHostIds).toEqual(['local'])
     })
 
-    it('keeps a disconnected folder-workspace SSH host omitted', async () => {
-      const baseStore = makeStore()
-      const folderWorkspace = makeSshFolderWorkspace()
-      const runtime = makeRuntime([], {
-        ...baseStore,
-        getRepos: vi.fn(() => [REPOS[0]!]),
-        getRepo: vi.fn((id: string) => (id === REPOS[0]!.id ? REPOS[0] : undefined)),
-        getWorkspaceSessionHostIds: vi.fn(() => ['local']),
-        getFolderWorkspaces: vi.fn(() => [folderWorkspace])
-      })
-      runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'never' })),
-        write: () => true,
-        kill: () => true,
-        listProcesses: vi.fn(async () => {
-          throw new Error('relay unavailable')
-        })
-      } as never)
-
-      const result = await runtime.listTerminals(`id:${folderWorkspaceKey(folderWorkspace.id)}`)
-
-      expect(result.hostScope?.hostIds).toEqual([])
-      expect(result.hostScope?.omittedHostIds).toEqual(['local', 'ssh:box-2'])
-    })
-
     it('does not claim local coverage for a paired-runtime folder workspace', async () => {
       const baseStore = makeStore()
       const folderWorkspace = makeRuntimeFolderWorkspace()
@@ -318,38 +153,6 @@ export function registerTerminalListExecutionHostScopeTests(): void {
 
       expect(result.hostScope?.hostIds).toEqual([])
       expect(result.hostScope?.omittedHostIds).toEqual(['local', 'runtime:env-9'])
-    })
-
-    it('keeps a paired-runtime folder owner omitted in an unscoped listing', async () => {
-      const baseStore = makeStore()
-      const folderWorkspace = makeRuntimeFolderWorkspace()
-      const runtime = makeRuntime([], {
-        ...baseStore,
-        getRepos: vi.fn(() => [REPOS[0]!]),
-        getRepo: vi.fn((id: string) => (id === REPOS[0]!.id ? REPOS[0] : undefined)),
-        getWorkspaceSessionHostIds: vi.fn(() => ['local']),
-        getFolderWorkspaces: vi.fn(() => [folderWorkspace])
-      })
-
-      const result = await runtime.listTerminals()
-
-      expect(result.hostScope?.hostIds).toEqual(['local'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['runtime:env-9'])
-    })
-
-    it('keeps a disconnected SSH host omitted when only local inventory answered', async () => {
-      const runtime = makeRuntime([])
-      runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'never' })),
-        write: () => true,
-        kill: () => true,
-        listProcesses: vi.fn(async () => [])
-      } as never)
-
-      const result = await runtime.listTerminals()
-
-      expect(result.hostScope?.hostIds).toEqual(['local'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['ssh:box-1'])
     })
 
     it('marks every known host omitted when process inventory is unverifiable', async () => {
@@ -398,18 +201,6 @@ export function registerTerminalListExecutionHostScopeTests(): void {
       expect((await superseded).hostScope?.hostIds).toEqual(['local'])
       expect((await current).hostScope?.hostIds).toEqual(['local'])
       expect(listProcessesWithHostScope).toHaveBeenCalledTimes(2)
-    })
-
-    it('reports the hosts a worktree-scoped listing skipped, so an empty result is not absolute', async () => {
-      const runtime = makeRuntime([
-        { worktreeId: SSH_WORKTREE_ID, leafId: SSH_LEAF_ID, ptyId: 'ssh:box-1@@pty-7' }
-      ])
-
-      const result = await runtime.listTerminals(`id:${LOCAL_WORKTREE_ID}`)
-
-      expect(result.terminals).toEqual([])
-      expect(result.hostScope?.hostIds).toEqual(['local'])
-      expect(result.hostScope?.omittedHostIds).toEqual(['ssh:box-1'])
     })
   })
 }

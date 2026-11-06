@@ -6,7 +6,7 @@ import type {
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import type { ResolvedWorktreeSnapshot } from '../../runtime-resolved-worktree-cache'
+import type { ResolvedWorktreeSnapshot } from '../../workspaces/catalog/runtime-resolved-worktree-cache'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -15,7 +15,7 @@ import { buildRuntimeTerminalVisualLayouts } from '../layout/runtime-terminal-vi
 import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
-} from '../../runtime-worktree-path-identity'
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 
 type RuntimeTerminalListDependencies = {
   getGraphEpoch(): number | null

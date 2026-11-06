@@ -3,7 +3,7 @@ import {
   type MobileTerminalCreateOptions,
   type OwnedMobileTerminalCreateOptions
 } from './mobile-terminal-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {
   prepareStructuredChatCliFork,

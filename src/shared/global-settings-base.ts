@@ -18,6 +18,7 @@ import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/term
 import type { WindowMaterialSettings } from './window-material'
 import type { EditorSaveSettings } from './editor-save-settings'
 import type { TextGenerationAccountRecoverySettings } from './text-generation-account-recovery-settings'
+import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -39,4 +40,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   WindowMaterialSettings &
   EditorSaveSettings &
   BrowserPasswordsGlobalSettings &
-  TextGenerationAccountRecoverySettings
+  TextGenerationAccountRecoverySettings &
+  NestedWorkerDepthSettings

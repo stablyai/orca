@@ -7,9 +7,8 @@ import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
 import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { gitHubSlugApiForTarget } from '@/runtime/github-slug-owner-api'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
@@ -59,24 +58,15 @@ export function SlugDialogBody({
     setLoading(true)
     setError(null)
     setDetails(null)
-    const target = sourceTarget
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<ProjectWorkItemDetailsBySlugResult>(
-            target,
-            'github.project.workItemDetailsBySlug',
-            { owner, repo, host, number, type },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.projectWorkItemDetailsBySlug({
-            owner,
-            repo,
-            host,
-            number,
-            type,
-            // Opening an item is a click (E9).
-            wakeWslDistro: true
-          })
+    const request = gitHubSlugApiForTarget(sourceTarget).projectWorkItemDetailsBySlug({
+      owner,
+      repo,
+      host,
+      number,
+      type,
+      // Opening an item is a click (E9).
+      wakeWslDistro: true
+    })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {

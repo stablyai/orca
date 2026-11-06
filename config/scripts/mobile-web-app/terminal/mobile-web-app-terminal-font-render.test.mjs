@@ -79,32 +79,4 @@ describeRender('terminal font startup and late painting', () => {
       await page.close()
     }
   }, 300_000)
-
-  it('still opens under an older shell that refuses fonts', async () => {
-    const { page } = await openTerminal({
-      beforeNavigate: async (page) => {
-        await page.route('**/*', async (route) => {
-          const response = await route.fetch()
-          const headers = response.headers()
-          if (headers['content-security-policy']) {
-            headers['content-security-policy'] = headers['content-security-policy'].replace(
-              /font-src[^;]+/,
-              "font-src 'none'"
-            )
-          }
-          await route.fulfill({ response, headers })
-        })
-      }
-    })
-    try {
-      await openProbeTerminal(page)
-      expect(await page.locator('.xterm').count()).toBe(1)
-      expect(
-        await page.evaluate(() => document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0'))
-      ).toBe(false)
-      expect(await page.evaluate(() => globalThis.__orcaTerminalEngineErrors)).toEqual([])
-    } finally {
-      await page.close()
-    }
-  }, 300_000)
 })

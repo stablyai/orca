@@ -11,7 +11,7 @@ import {
   type LaunchedAgentReadinessRuntime
 } from '../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
+import { assertAgentPromptRequestActive } from '../../terminal/input/agent-prompt-signals'
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime,

@@ -157,7 +157,7 @@ export async function runManagedOrcadUpdate(
     }
     // Policy refusal is final for this host, not a transient update to retry.
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
-      recordManagedOrcadUpdateDeferral(environment.id, deferral)
+      recordManagedOrcadUpdateDeferral(environment.id, deferral, context.activationRecord)
     }
     await pruneSupersededOrcadCandidates(slot, context.serverTarget, result.fullVersion)
     return deferral

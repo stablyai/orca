@@ -4,7 +4,7 @@ import { isHibernationDoneRecord } from '../../../../shared/hibernation-done-rec
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { PaneStartArgsOf } from './runtime-pane-admission'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import {
   PaneResumeOutcomes,

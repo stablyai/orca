@@ -8,21 +8,10 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { redactString } from '../observability/redactor'
-import {
-  classifyCodexRateLimitWindows,
-  CODEX_SESSION_WINDOW_MINUTES,
-  CODEX_WEEKLY_WINDOW_MINUTES,
-  type CodexRateLimitWindowsSnapshot
-} from './codex-rate-limit-window-classification'
-import { mapCodexCredits } from './codex-credit-balance'
+import { mapCodexRpcRateLimits, type RpcRateLimitsResponse } from './codex-rpc-rate-limit-mapper'
 import { classifyCodexRpcErrorFailureKind } from './codex-rpc-failure-kind'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
-import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
-import {
-  mapRpcRateLimitResetCredits,
-  type RpcRateLimitResetCredits
-} from './codex-reset-credit-client'
 
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
@@ -30,11 +19,6 @@ type RpcResponse = {
   id: number
   result?: unknown
   error?: { code: number; message: string }
-}
-
-type RpcRateLimitsResponse = {
-  rateLimits?: CodexRateLimitWindowsSnapshot | null
-  rateLimitResetCredits?: RpcRateLimitResetCredits
 }
 
 type RpcDataStream = {
@@ -242,24 +226,10 @@ export function readCodexRateLimitsViaRpc(
             )
             return
           }
-          const wrapper = message.result as RpcRateLimitsResponse | undefined
-          const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
-          const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
-          const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared mapper reads only optional fields from the Codex rate-limit reply.
+          const wrapper = message.result as RpcRateLimitsResponse
           settle(
-            observeCodexSubscriptionWindows(
-              {
-                provider: 'codex',
-                session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-                weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
-                ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
-                ...(extraUsage ? { extraUsage } : {}),
-                updatedAt: Date.now(),
-                error: null,
-                status: 'ok'
-              },
-              wrapper?.rateLimits
-            ),
+            observeCodexSubscriptionWindows(mapCodexRpcRateLimits(wrapper), wrapper?.rateLimits),
             { kill: true }
           )
         } catch {
