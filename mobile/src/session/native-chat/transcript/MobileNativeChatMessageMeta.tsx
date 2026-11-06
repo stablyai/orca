@@ -4,6 +4,7 @@ import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatRewindButton } from './MobileNativeChatRewindButton'
 import { MobileNativeChatResponseActions } from './MobileNativeChatResponseActions'
+import { mobileNativeChatRowHoldsForkSlot } from '../use-mobile-native-chat-fork'
 import { styles } from './mobile-native-chat-message-styles'
 
 /** A chat turn's time, then its actions together: copy, and rewind on a user row the chat can rewind to. */
@@ -20,10 +21,13 @@ export function MobileNativeChatMessageMeta({
   return (
     <View style={styles.meta}>
       <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
-      <View style={styles.metaActions}>
-        <MobileNativeChatResponseActions message={message} copyText={copyText} />
-        {rewindable ? <MobileNativeChatRewindButton itemId={message.id} /> : null}
-      </View>
+      {/* An empty wrapper would still pull the time over by the icons' edge margin. */}
+      {copyText.length > 0 || rewindable || mobileNativeChatRowHoldsForkSlot(message) ? (
+        <View style={styles.metaActions}>
+          <MobileNativeChatResponseActions message={message} copyText={copyText} />
+          {rewindable ? <MobileNativeChatRewindButton itemId={message.id} /> : null}
+        </View>
+      ) : null}
     </View>
   )
 }

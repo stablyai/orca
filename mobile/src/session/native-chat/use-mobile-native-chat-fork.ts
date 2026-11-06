@@ -43,6 +43,16 @@ export type MobileNativeChatFork = {
   fork: (message: NativeChatMessage) => void
 }
 
+/** Fixed by the row's own kind, never by support or turn state, so the meta row never shifts. */
+export function mobileNativeChatRowHoldsForkSlot(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'assistant' &&
+    message.source === 'transcript' &&
+    !message.agentStart &&
+    isRootAgentJournalItem(message)
+  )
+}
+
 export const MobileNativeChatForkContext = createContext<MobileNativeChatFork | null>(null)
 
 const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]
@@ -190,13 +200,7 @@ export function useMobileNativeChatFork(input: {
   const [pending, setPending] = useState(false)
   const offerFor = useCallback(
     (message: NativeChatMessage): MobileNativeChatForkOffer => {
-      // Fixed by the row's own kind, never by support or turn state, so the meta row never shifts.
-      if (
-        message.role !== 'assistant' ||
-        message.source !== 'transcript' ||
-        message.agentStart ||
-        !isRootAgentJournalItem(message)
-      ) {
+      if (!mobileNativeChatRowHoldsForkSlot(message)) {
         return 'hidden'
       }
       const turnKey = turns.keyById.get(message.id)
