@@ -1,4 +1,4 @@
-import type { BlockContent, DefinitionContent, Parent, PhrasingContent } from 'mdast'
+import type { BlockContent, DefinitionContent, Literal, Parent, PhrasingContent } from 'mdast'
 
 // The node types MobileMarkdown adds to mdast, registered by declaration merging. Merging needs
 // interfaces, which React Doctor's root rules flag; mobile's lint config ignores this file because
@@ -16,11 +16,31 @@ declare module 'mdast' {
     children: (BlockContent | DefinitionContent)[]
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface InlineMath extends Literal {
+    type: 'inlineMath'
+    /** `$$` or `\[`: shown as a display formula when it stands alone in its paragraph. */
+    display: boolean
+    /** The authored text, delimiters included, for copying and fallbacks. */
+    source: string
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface Math extends Literal {
+    type: 'math'
+    source: string
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface PhrasingContentMap {
+    inlineMath: InlineMath
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface RootContentMap {
     details: Details
+    inlineMath: InlineMath
+    math: Math
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface BlockContentMap {
     details: Details
+    math: Math
   }
 }
