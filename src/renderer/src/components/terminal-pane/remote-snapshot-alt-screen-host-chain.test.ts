@@ -17,7 +17,7 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 
-import type { PtyReplayDataMeta } from './pty-transport-types'
+import type { PtyReplayDataMeta } from './pty-transport/pty-transport-types'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -76,7 +76,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', async (importOriginal) => ({
+vi.mock('./pty-transport/ipc/pty-transport', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
@@ -252,7 +252,8 @@ async function publishHostRecovery(
     runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
   })
 
-  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const { createRemoteRuntimePtyTransport } =
+    await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'tab-1',

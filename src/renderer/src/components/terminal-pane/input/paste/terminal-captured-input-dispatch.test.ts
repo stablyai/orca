@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { sendCapturedTerminalInput } from './terminal-captured-input-dispatch'
 
 function createTransport(ptyId: string | null, sendResult = true): PtyTransport {

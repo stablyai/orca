@@ -236,7 +236,7 @@ import {
 import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport-test-harness'
 import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
 import type * as React from 'react'
-import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport-types'
+import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
 
 let rendererState: StoreState
 vi.mock('@/store/index', () => ({
@@ -325,7 +325,7 @@ describe('account restart through renderer connection and host spawn', () => {
       }
     })
     const { createIpcPtyTransport } =
-      await import('../../src/renderer/src/components/terminal-pane/pty-transport')
+      await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport')
     const { useTerminalPaneProcessExitActions } =
       await import('../../src/renderer/src/components/terminal-pane/use-terminal-pane-process-exit-actions')
     const oldTransport = createIpcPtyTransport({ worktreeId, tabId, leafId })
@@ -468,7 +468,7 @@ describe('account restart through renderer connection and host spawn', () => {
       )
       Object.assign(window.api, { runtimeEnvironments: { call: runtimeCall, subscribe } })
       const { createRemoteRuntimePtyTransport } =
-        await import('../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport')
+        await import('../../src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport')
       const { releasePaneTransportForRestart } =
         await import('../../src/renderer/src/components/terminal-pane/pane-restart-transport-handoff')
       const { buildCodexAccountRestartStartup } =

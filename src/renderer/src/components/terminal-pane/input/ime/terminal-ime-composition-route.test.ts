@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import {
   hasPendingTerminalImeComposition,
   installTerminalImeCompositionRoute,

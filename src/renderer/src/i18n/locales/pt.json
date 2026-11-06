@@ -17916,6 +17916,7 @@
         "cb55b0390f": "Gerenciar",
         "4f9313984d": "Revisores",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Não foi possível carregar este item. Atualize para tentar novamente.",
         "be3d291837": "Arquivos",
         "c996e2962c": "Conversa",
         "b3c156dd51": "Atualizar",

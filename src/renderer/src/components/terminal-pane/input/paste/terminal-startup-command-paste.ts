@@ -1,4 +1,4 @@
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { pasteTerminalText } from './terminal-bracketed-paste'
 import type { TerminalPasteExecutionResult, TerminalPasteRuntime } from './terminal-paste-model'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'

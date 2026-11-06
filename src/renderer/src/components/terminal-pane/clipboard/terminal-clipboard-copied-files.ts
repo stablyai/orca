@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import { prepareOsFileDropPaths } from '@/lib/os-file-drop-preparation'
-import type { PtyTransport } from '../pty-transport-types'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { TerminalClipboardCopiedFiles } from './terminal-clipboard-paste'
 import {
   captureNativeTerminalFileDrop,

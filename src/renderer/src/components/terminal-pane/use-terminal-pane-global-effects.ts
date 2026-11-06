@@ -8,7 +8,7 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { IDisposable } from '@xterm/xterm'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
@@ -25,7 +25,7 @@ import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recove
 import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
-} from './pty-renderer-delivery-claims'
+} from './pty-transport/delivery/pty-renderer-delivery-claims'
 import { activePaneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {

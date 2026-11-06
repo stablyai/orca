@@ -1,7 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { MacOptionAsAlt } from './terminal-option-shortcut-policy'
 import type {
   KeybindingOverrides,

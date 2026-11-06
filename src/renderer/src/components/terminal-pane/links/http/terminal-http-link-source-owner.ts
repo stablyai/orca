@@ -2,7 +2,7 @@ import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-rou
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import { legacyRelayBridgedPane } from '../../legacy-relay-bridge-panes'
