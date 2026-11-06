@@ -7,13 +7,25 @@ export const COMPOSER_INSET_TOP = 6
 /** How far a box docked on the composer's top edge reaches under it, past its rounded corners. */
 export const COMPOSER_TUCK = 12
 
+const composerInset = {
+  paddingHorizontal: spacing.md,
+  paddingTop: COMPOSER_INSET_TOP,
+  paddingBottom: spacing.sm
+}
+
 export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
-  composerInset: {
-    paddingHorizontal: spacing.md,
-    paddingTop: COMPOSER_INSET_TOP,
-    paddingBottom: spacing.sm
-  },
+  composerInset,
+
+  // Bottom margin matches the sides, so the box sits evenly in the screen's corners.
+  composerInsetCornerFit: { ...composerInset, paddingHorizontal: 10, paddingBottom: 10 },
   bar: composerInputStyles.box,
+  // Wider bottom corners stay concentric with the rounded screen instead of poking into it.
+  barCornerFit: {
+    ...composerInputStyles.box,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
+    paddingBottom: 14
+  },
   dictationMeter: {
     flexDirection: 'row',
     alignItems: 'center',
