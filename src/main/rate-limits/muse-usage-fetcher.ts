@@ -15,7 +15,11 @@ const MUSE_USAGE_TIMEOUT_MS = 15_000
 const MUSE_HELP_TIMEOUT_MS = 5_000
 const MUSE_MAX_OUTPUT_BYTES = 64 * 1024
 // The launcher must not self-update or start a device sign-in from a background poll.
-const MUSE_PROBE_ENV = { MUSE_NO_AUTO_UPDATE: '1', MUSE_LOGIN: '0' } as const
+const MUSE_PROBE_ENV = {
+  MUSE_NO_AUTO_UPDATE: '1',
+  MUSE_LOGIN: '0',
+  MUSE_LAUNCHER_INSTALL: '0'
+} as const
 
 export type FetchMuseRateLimitsOptions = {
   signal?: AbortSignal

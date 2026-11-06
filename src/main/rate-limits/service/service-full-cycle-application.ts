@@ -1,6 +1,11 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
-import { settleSiblingProviderResult } from './service-sibling-provider-result'
+import {
+  settleSiblingProviderResult,
+  type SettledProviderResult
+} from './service-sibling-provider-result'
+import { disabledUsageSnapshot } from '../disabled-usage-snapshot'
+import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
 import type { ProviderRateLimits } from './service-types'
 
 function hasKnownProvenanceChange(
@@ -21,6 +26,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
+    const museBeforeFetch = this.state.muse
+    const museResultPromise = this.startMuseUsageFetch(signal)
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -54,8 +61,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise,
-      museResultPromise
+      antigravityResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -275,7 +281,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.trackActiveFailureStreak('muse', muse)
     this.updateState({
       ...this.state,
-      muse: this.applyStalePolicy(muse, previousState.muse)
+      muse: this.applyStalePolicy(muse, museBeforeFetch)
     })
+  }
+
+  // Started before the shared preparation awaits; hidden meters skip the CLI spawn entirely.
+  private startMuseUsageFetch(signal: AbortSignal): Promise<SettledProviderResult> {
+    const enabled = this.museUsageEnabledResolver?.() ?? true
+    const previous = this.state.muse
+    const beforeFetch = enabled
+      ? this.withFetchingStatus(previous, 'muse')
+      : (previous ?? disabledUsageSnapshot('muse'))
+    this.updateState({ ...this.state, muse: beforeFetch })
+    return prepareMuseUsageFetch(signal, enabled, beforeFetch)
   }
 }

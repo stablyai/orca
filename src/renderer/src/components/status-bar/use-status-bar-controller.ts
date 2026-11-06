@@ -202,19 +202,18 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching = [
-    claude,
-    codex,
-    gemini,
-    opencodeGo,
-    kimi,
-    antigravity,
-    minimax,
-    grok,
-    cursor,
-    zcode,
-    muse
-  ].some((provider) => provider?.status === 'fetching')
+  const anyFetching =
+    claude?.status === 'fetching' ||
+    codex?.status === 'fetching' ||
+    gemini?.status === 'fetching' ||
+    opencodeGo?.status === 'fetching' ||
+    kimi?.status === 'fetching' ||
+    antigravity?.status === 'fetching' ||
+    minimax?.status === 'fetching' ||
+    grok?.status === 'fetching' ||
+    cursor?.status === 'fetching' ||
+    zcode?.status === 'fetching' ||
+    muse?.status === 'fetching'
 
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? translate(

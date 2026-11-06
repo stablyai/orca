@@ -7,17 +7,13 @@ import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
-import { disabledUsageSnapshot } from '../disabled-usage-snapshot'
-import { fetchMuseRateLimits } from '../muse-usage-fetcher'
+import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
 import { RateLimitServiceAntigravityAccounts } from './service-antigravity-accounts'
-import {
-  settleSiblingProviderFetch,
-  type SettledProviderResult
-} from './service-sibling-provider-result'
+import type { SettledProviderResult } from './service-sibling-provider-result'
 import type {
   ClaudeRuntimeAuthPreparation,
   InternalRateLimitState,
@@ -57,7 +53,6 @@ export type FetchAllCyclePrepared = {
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
-  museResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceAntigravityAccounts {
@@ -138,10 +133,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
-    // Hidden Muse meters skip the CLI spawn entirely.
-    const museFetchAllowed = this.museUsageEnabledResolver?.() ?? true
-    const museBeforeFetch = previousState.muse ?? disabledUsageSnapshot('muse')
-
     const zcodePlanConfigResult = this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
     // Hash credentials because only changes matter, never retain the raw key here.
@@ -175,10 +166,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
       antigravity: antigravityFetchAllowed
         ? this.withFetchingStatus(previousState.antigravity, 'antigravity')
-        : (previousState.antigravity ?? disabledUsageSnapshot('antigravity')),
-      muse: museFetchAllowed
-        ? this.withFetchingStatus(previousState.muse, 'muse')
-        : museBeforeFetch,
+        : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -190,36 +178,45 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     })
 
     // Async Keychain/worker DB reads must not delay other providers.
-    const cursorResultPromise = settleSiblingProviderFetch(
-      readCursorAuthSession().then((authReadResult) => {
+    const cursorResultPromise = readCursorAuthSession()
+      .then((authReadResult) => {
         this.cursorAuthConfigured = authReadResult.status === 'ok'
         return fetchCursorRateLimits({ signal, authReadResult })
       })
-    )
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
-    const zcodeResultPromise = settleSiblingProviderFetch(
+    const zcodeResultPromise = (
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
         : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
     )
 
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
-    const antigravityResultPromise = settleSiblingProviderFetch(
+    const antigravityResultPromise = (
       antigravityFetchAllowed
         ? fetchAntigravityRateLimits({ signal, target: antigravityTarget }).then((limits) =>
             this.attributeAntigravityReading(antigravityRead, antigravityGeneration, limits)
           )
-        : Promise.resolve(previousState.antigravity ?? disabledUsageSnapshot('antigravity'))
-    )
-
-    const museResultPromise = settleSiblingProviderFetch(
-      museFetchAllowed ? fetchMuseRateLimits({ signal }) : Promise.resolve(museBeforeFetch)
+        : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
     )
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = settleSiblingProviderFetch(
-      fetchGrokRateLimits({ signal, authReadResult: grokAuthReadResult })
+    const grokResultPromise = fetchGrokRateLimits({
+      signal,
+      authReadResult: grokAuthReadResult
+    }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
     )
 
     // Live display does not waive automated Retry-After gates.
@@ -322,8 +319,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise,
-      museResultPromise
+      antigravityResultPromise
     }
   }
 }

@@ -38,7 +38,7 @@ function fetchWith(responses: Record<string, ProcessResult>) {
   const pending = fetchMuseRateLimits({
     runCommand,
     resolveCommand: async () => '/usr/local/bin/muse',
-    resolveEnvironment: async () => ({ PATH: '/usr/local/bin' }),
+    resolveEnvironment: async () => ({ PATH: '/usr/local/bin', MUSE_LAUNCHER_INSTALL: '1' }),
     resolveCwd: () => '/tmp',
     now: () => 1000
   })
@@ -70,7 +70,8 @@ describe('fetchMuseRateLimits', () => {
     })
     expect(runCommand.mock.calls[1]?.[0].env).toMatchObject({
       MUSE_NO_AUTO_UPDATE: '1',
-      MUSE_LOGIN: '0'
+      MUSE_LOGIN: '0',
+      MUSE_LAUNCHER_INSTALL: '0'
     })
   })
 
