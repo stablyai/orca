@@ -85,6 +85,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     actionItem,
     addHostedItemComment,
     addLinearComment,
+    commentSendNotice,
     createLinearSubIssue,
     detailCommentGroups,
     detailError,
@@ -338,6 +339,9 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
         ) : (
           detailCommentGroups.map(renderDetailCommentGroup)
         )}
+        {commentSendNotice ? (
+          <Text style={styles.detailError}>{commentSendNotice.text}</Text>
+        ) : null}
         {(detailPayload.provider === 'github' && actionItem.provider === 'github') ||
         (detailPayload.provider === 'gitlab' && actionItem.provider === 'gitlab')
           ? renderCommentComposer({

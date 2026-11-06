@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionConversationCopyInput } from '../structured-agent-session-conversation-copy-input'
+import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
 import type { CodexAccountUsageRead } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from '../delivery/structured-agent-session-input-admission'

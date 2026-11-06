@@ -1,4 +1,9 @@
-import type { MessageType, MessagePriority, MessageDeliveryContract, MessageRow } from '../../types'
+import type {
+  MessageType,
+  MessagePriority,
+  MessageDeliveryContract,
+  MessageRow
+} from '../orchestration-records'
 import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'

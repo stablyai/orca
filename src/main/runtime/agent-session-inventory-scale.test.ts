@@ -25,9 +25,13 @@ import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore
 } from './agent-session/records/agent-session-record-store-test-harness'
-import { OrchestrationDb } from './orchestration/db'
-import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
-import { resolveOrcaSessionParty } from './orchestration/orchestration-party'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
+import { structuredSessionMailReach } from './orchestration/mailbox/routing/structured-session-mail-address'
+import { resolveOrcaSessionParty } from './orchestration/addressing/orchestration-party'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
@@ -41,7 +45,7 @@ import {
 } from './agent-session/records/agent-session-record-store-slot'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import './agent-session/structured-agent-session-create-adoption'
 import { listStructuredSessionsForWorktree } from './workspaces/removal/structured-session-worktree-teardown'
 import * as membership from './agent-session/records/agent-session-store-state'

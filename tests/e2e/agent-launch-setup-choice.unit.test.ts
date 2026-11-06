@@ -19,8 +19,8 @@ import {
   rpcContext,
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
-import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
+import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch'
 
 const SETUP_CHOICE = 'Setup decision required for this repository'
 const create = { repo: 'id:repo-1', name: 'task', activate: false }

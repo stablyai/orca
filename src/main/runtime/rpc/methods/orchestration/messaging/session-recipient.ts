@@ -14,10 +14,10 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../.
 import {
   lookupOrcaAgentSession,
   structuredSessionMailReach
-} from '../../../../orchestration/structured-session-mail-address'
-import type { AgentSessionRecordReader } from '../../../../orchestration/structured-session-lineage'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
+} from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
+import type { AgentSessionRecordReader } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
 export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }
