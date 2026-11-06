@@ -1,4 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentRowState } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
+import type { AgentChildRowModel } from '../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
@@ -34,6 +36,27 @@ const EXCEPTION_KINDS: ReadonlySet<SlotLineSignal['kind']> = new Set([
   'working'
 ])
 
+/** One agent's dot and slot kind, program-status blocks included; visible lines and collapsed rollups both read this. */
+export function projectSlotAgentLine(
+  agent: {
+    state: AgentRowState
+    entry: DashboardAgentRow['entry']
+    childRow?: Pick<AgentChildRowModel, 'displayState'>
+  },
+  unreadCompletion: boolean
+): { dotState: AgentDotState; kind: SlotLineSignal['kind'] } {
+  const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
+  const dotState = dotStateOverride ?? agentRowDisplayDotState(agent)
+  return {
+    dotState,
+    kind: classifySlotLine({
+      dotState,
+      needsAttention: Boolean(presentation.attention),
+      unreadCompletion
+    })
+  }
+}
+
 /** `unread[i]` is the acknowledgement-based unread flag for `agents[i]` (`selectAgentRowsUnread`). */
 export function buildSlotAgentSignals(
   agents: readonly DashboardAgentRow[],
@@ -41,13 +64,7 @@ export function buildSlotAgentSignals(
 ): SlotAgentSignals {
   const lineByPaneKey = new Map<string, SlotAgentLine>()
   agents.forEach((agent, index) => {
-    const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-    const dotState = dotStateOverride ?? agentRowDisplayDotState(agent)
-    const kind = classifySlotLine({
-      dotState,
-      needsAttention: Boolean(presentation.attention),
-      unreadCompletion: unread[index] ?? false
-    })
+    const { dotState, kind } = projectSlotAgentLine(agent, unread[index] ?? false)
     lineByPaneKey.set(agent.paneKey, {
       agent,
       dotState,

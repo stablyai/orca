@@ -1,6 +1,9 @@
 import type { Repo } from '../../repo-types'
 import type { Worktree } from '../../worktree/types'
-import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
@@ -65,20 +68,21 @@ export function buildNewExternalWorktreesInboxRow(
   }
 }
 
-function descendantIds(
+/** Pre-order occurrences: a parent's descendants are the run after it that is deeper. */
+function descendantIdentities(
   occurrences: readonly WorktreeOccurrence<Worktree>[],
-  parent: WorktreeOccurrence<Worktree>
-): string[] {
-  const ids: string[] = []
-  const start = occurrences.indexOf(parent)
-  for (let index = start + 1; start !== -1 && index < occurrences.length; index++) {
+  start: number
+): HostScopedWorktreeKey[] {
+  const parentDepth = occurrences[start]!.depth
+  const identities: HostScopedWorktreeKey[] = []
+  for (let index = start + 1; index < occurrences.length; index++) {
     const occurrence = occurrences[index]!
-    if (occurrence.depth <= parent.depth) {
+    if (occurrence.depth <= parentDepth) {
       break
     }
-    ids.push(occurrence.row.id)
+    identities.push(getWorktreeHostIdentity(occurrence.row))
   }
-  return ids
+  return identities
 }
 
 export function appendWorktreeRows(
@@ -97,13 +101,19 @@ export function appendWorktreeRows(
 ): void {
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
   const childIdsByParent = new Map<string, string[]>()
-  for (const occurrence of sectionOccurrences) {
+  const childIdentitiesByParent = new Map<string, HostScopedWorktreeKey[]>()
+  const indexByKey = new Map<string, number>()
+  sectionOccurrences.forEach((occurrence, index) => {
+    indexByKey.set(occurrence.key, index)
     if (occurrence.parent) {
       const children = childIdsByParent.get(occurrence.parent.key) ?? []
       children.push(occurrence.row.id)
       childIdsByParent.set(occurrence.parent.key, children)
+      const identities = childIdentitiesByParent.get(occurrence.parent.key) ?? []
+      identities.push(getWorktreeHostIdentity(occurrence.row))
+      childIdentitiesByParent.set(occurrence.parent.key, identities)
     }
-  }
+  })
   const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
     options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
@@ -134,6 +144,7 @@ export function appendWorktreeRows(
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
       lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
+      lineageChildIdentities: childIdentitiesByParent.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
@@ -142,7 +153,10 @@ export function appendWorktreeRows(
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),
             lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree)),
-            lineageDescendantIds: descendantIds(sectionOccurrences, occurrence)
+            lineageDescendantIdentities: descendantIdentities(
+              sectionOccurrences,
+              indexByKey.get(occurrence.key)!
+            )
           }
         : {})
     })

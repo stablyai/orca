@@ -139,8 +139,9 @@ export function renderWorktreeItemRow(
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}
         lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
+        lineageChildIdentities={itemRow.lineageChildIdentities}
         lineageCollapsed={itemRow.lineageCollapsed}
-        lineageDescendantIds={itemRow.lineageDescendantIds}
+        lineageDescendantIdentities={itemRow.lineageDescendantIdentities}
         onLineageToggle={
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }

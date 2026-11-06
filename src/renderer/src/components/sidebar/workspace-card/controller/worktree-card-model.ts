@@ -3,6 +3,7 @@ import type React from 'react'
 
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
+import type { HostScopedWorktreeKey } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -36,9 +37,10 @@ export type WorktreeCardProps = {
   flushSurface?: boolean
   lineageChildCount?: number
   lineageChildWorktreeIds?: readonly string[]
+  lineageChildIdentities?: readonly HostScopedWorktreeKey[]
   lineageCollapsed?: boolean
   /** Workspaces nested under this one; the 2.0 card rolls up their latest time and, when collapsed, their exceptions. */
-  lineageDescendantIds?: readonly string[]
+  lineageDescendantIdentities?: readonly HostScopedWorktreeKey[]
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void

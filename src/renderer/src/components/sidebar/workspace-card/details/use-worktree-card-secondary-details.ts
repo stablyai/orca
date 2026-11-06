@@ -38,6 +38,7 @@ export function useWorktreeCardSecondaryDetails({
   linkedAzureDevOpsPR,
   linkedGiteaPR,
   newCardStyle,
+  worktreeCardStyle,
   compactCards,
   cardDetails,
   agentActivityDisplayMode,
@@ -225,13 +226,15 @@ export function useWorktreeCardSecondaryDetails({
     },
     [linearIssue, openTaskPage]
   )
+  // 1.0 draws the PR in its status lane; Classic and 2.0 list it with the other details.
+  const reviewInStatusLane = newCardStyle && worktreeCardStyle !== 'experimental-2'
   const hasDetails =
     getWorkspaceAttachments(worktree).length > 0 ||
     hasWorktreeCardDetails({
       issue: metaIssue,
       linearIssue: metaLinearIssue,
       jiraIssue: metaJiraIssue,
-      review: newCardStyle ? null : metaReview,
+      review: reviewInStatusLane ? null : metaReview,
       comment: metaComment,
       automationProvenance: metaAutomationProvenance,
       cliProvenance: metaCliProvenance
@@ -266,6 +269,7 @@ export function useWorktreeCardSecondaryDetails({
     hasExplicitLinkedReview,
     handleUnlinkReview,
     handleOpenLinearIssueInOrca,
+    reviewInStatusLane,
     hasDetails,
     hasPorts,
     cacheStartedAt,
