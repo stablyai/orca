@@ -87,6 +87,9 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
           ) : (
             // A GitHub task's read-only box, centred on the item's first line.
             <View
+              accessible
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: Boolean(item.checked), disabled: true }}
               style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
             >
               {item.checked ? (
