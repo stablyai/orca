@@ -222,6 +222,47 @@ describe('useMobileDiffReviewController', () => {
       await stageCurrent(() => controller?.moveFile('previous'))
       expect(controller?.currentItem?.filePath).toBe('b.ts')
     })
+
+    it('keeps an unsaved note across reopen and edits, and clears it once saved', async () => {
+      loadSnapshot.mockResolvedValueOnce(unstaged(['c.ts']))
+      await act(async () => {
+        renderer = create(createElement(StageProbe))
+        await Promise.resolve()
+      })
+      act(() => controller?.openComposer(3))
+      act(() => controller?.setComposerBody('rename this'))
+      act(() => controller?.closeComposer())
+      act(() => controller?.openNewNoteSheet({ kind: 'range', startLine: 5, line: 7 }))
+      expect(controller?.composerBody).toBe('rename this')
+
+      act(() => controller?.closeSheet('range'))
+      act(() =>
+        controller?.openEditComposer({
+          id: 'saved',
+          worktreeId: 'wt-1',
+          filePath: 'c.ts',
+          lineNumber: 1,
+          body: 'older note',
+          createdAt: 1
+        })
+      )
+      expect(controller?.composerBody).toBe('older note')
+      act(() => controller?.closeComposer())
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('rename this')
+
+      let saving: Promise<void> | undefined
+      act(() => {
+        saving = controller?.saveComposer()
+      })
+      const save = client.requests.find((request) => request.method === 'worktree.set')
+      await act(async () => {
+        save?.resolve({ id: 'save', ok: true, result: {}, _meta: { runtimeId: 'r' } })
+        await saving
+      })
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('')
+    })
   })
 })
 
