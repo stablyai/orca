@@ -1,7 +1,7 @@
-import type { TerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
-import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
-import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
-import type { TerminalInputAckKind } from '../../../shared/terminal-stream-protocol'
+import type { TerminalAttachmentLaunchResult } from '../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
+import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal/replay/terminal-snapshot-unavailability'
+import type { TerminalStreamEndVerdict } from '../../../shared/terminal/stream/terminal-stream-end-verdict'
+import type { TerminalInputAckKind } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { RemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -51,6 +51,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
       kittyKeyboardFlags?: number
       alternateScreen?: boolean
       terminalOwner?: 'shell'
+      /** The host's tracked title when this image was taken; absent from older hosts. */
+      lastTitle?: string
       /** Grid the host serialized this image at. Absent from hosts that omit
        *  it, which must read as unknown so replay keeps the pane's own grid. */
       cols?: number
@@ -101,6 +103,7 @@ export type RemoteRuntimeSnapshotImage = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   /** `data` starts on the normal buffer and enters alt itself. */
   carriesNormalBuffer?: boolean
 }
@@ -226,6 +229,7 @@ export type RemoteRuntimeSnapshotInfo = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason

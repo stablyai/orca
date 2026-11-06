@@ -1,7 +1,7 @@
 /** Exercise RPC authorization, parsing and all surface factories; structured creates must omit startupAgent while legacy worktree.create retains its terminal contract. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { RpcContext } from '../core'
 import {
   CAPABLE_CLIENT,
@@ -191,6 +191,43 @@ describe('what agent.launch accepts', () => {
 })
 
 describe('the worktree factory', () => {
+  // Why: a desktop older than #34525 sends its own dispatch token, which this host cannot verify (#34433).
+  it('creates a plain worktree for another owner’s automation run, but surfaces store failures', async () => {
+    const provenanceRequest = {
+      automationId: 'desktop-automation',
+      automationRunId: 'desktop-run',
+      dispatchToken: 'desktop-token',
+      createRequestId: 'create-request-desktop'
+    }
+    const launchFor = (failure: string, runtime: RuntimeStub) =>
+      launch(
+        {
+          ...CREATE_LAUNCH,
+          target: {
+            ...CREATE_LAUNCH.target,
+            create: {
+              ...CREATE_LAUNCH.target.create,
+              automationProvenanceRequest: provenanceRequest
+            }
+          }
+        },
+        Object.assign(runtime, {
+          showAutomation: () => {
+            throw new Error(failure)
+          },
+          listAutomationRuns: () => []
+        })
+      )
+
+    const runtime = runtimeStub()
+    await launchFor('Automation not found.', runtime)
+    expect(createArgs(runtime).automationProvenance).toBeUndefined()
+
+    await expect(launchFor('database is locked', runtimeStub())).rejects.toThrow(
+      'database is locked'
+    )
+  })
+
   it('creates a structured launch’s worktree with no startup agent', async () => {
     const runtime = runtimeStub()
     const result = await launch(CREATE_LAUNCH, runtime)
@@ -437,6 +474,22 @@ describe('whose window a new workspace moves', () => {
 })
 
 describe('the structured session factory', () => {
+  it.each([{}, { effort: 'high' }, { model: 'sonnet' }])(
+    'keeps an explicit Chat view separate from Terminal options: %j',
+    async (chatOptions) => {
+      const runtime = runtimeStub()
+      await launch(
+        { ...CREATE_LAUNCH, sessionOptions: { model: 'opus', effort: 'low' }, chatOptions },
+        runtime
+      )
+      expect(createStructuredSession.mock.calls[0]?.[0]).toMatchObject({ options: chatOptions })
+      expect(createStructuredSession.mock.calls[0]?.[0].optionsMode).toBe(
+        chatOptions.model ? 'replace-model-selection' : undefined
+      )
+      expect(createArgs(runtime)).not.toHaveProperty('startupSessionOptions')
+    }
+  )
+
   it('creates the session for the worktree the launch just made, and activates it', async () => {
     const runtime = runtimeStub()
     const result = await launch(CREATE_LAUNCH, runtime)
@@ -546,6 +599,7 @@ describe('the terminal factory', () => {
     const result = await launch(CREATE_LAUNCH, runtime)
 
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
+      wslUserAct: true,
       startupAgent: 'claude',
       terminalImageViewerSupported: false,
       viewMode: 'terminal',
@@ -571,6 +625,7 @@ describe('the terminal factory', () => {
     expect(runtime.showManagedTerminalWorkspace).not.toHaveBeenCalled()
     // Normalize selectors to ids before lower layers add their own id: prefix.
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
+      wslUserAct: true,
       startupAgent: 'gemini',
       terminalImageViewerSupported: false,
       viewMode: 'terminal',

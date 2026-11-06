@@ -1,109 +1,96 @@
 // @vitest-environment happy-dom
-
-import { cleanup, renderHook } from '@testing-library/react'
+import { memo } from 'react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
 
 afterEach(cleanup)
+const EMPTY: readonly never[] = []
 
-const EMPTY: never[] = []
-
-function rejected(
-  clientMessageId: string,
-  kind: 'hostRestarted' | 'notDelivered'
-): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: clientMessageId,
-    dispatchState: 'rejected',
-    providerItemId: null,
-    reason: null,
-    rejection: { kind },
-    submittedAt: 1,
-    resolvedAt: 2
-  }
-}
-
-function accepted(clientMessageId: string): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: clientMessageId,
-    dispatchState: 'accepted',
-    providerItemId: `provider-${clientMessageId}`,
-    reason: null,
-    submittedAt: 3,
-    resolvedAt: 4
-  }
-}
-
-function withdrawn(clientMessageId: string): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    fence: 1,
-    payloadFingerprint: clientMessageId,
-    dispatchState: 'rejected',
-    providerItemId: null,
-    reason: DISPATCH_REJECTED_CANCELLED,
-    rejection: { kind: 'cancelled' },
-    submittedAt: 1,
-    resolvedAt: 2
-  }
-}
-
-it('keeps the same notices across batches in a chat whose only rejection a Stop withdrew', () => {
-  const { result, rerender } = renderHook(
-    ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
-      useStructuredAgentSessionDeliveryNotices({
+it('bounds submission work and renders only rows whose delivery notice changes at N and 10N', () => {
+  for (const size of [32, 320]) {
+    let stateReads = 0
+    let fingerprintReads = 0
+    const renders = new Map<string, number>()
+    let latest: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
+    function submission(
+      index: number,
+      state: AgentJournalSubmission['dispatchState'],
+      at = 1
+    ): AgentJournalSubmission {
+      const id = String(index)
+      return {
+        clientMessageId: id,
+        fence: 1,
+        get payloadFingerprint() {
+          fingerprintReads++
+          return id
+        },
+        get dispatchState() {
+          stateReads++
+          return state
+        },
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: state === 'pending' ? null : at
+      }
+    }
+    const Row = memo(function Row({
+      id,
+      notice
+    }: {
+      id: string
+      notice: NativeChatDeliveryNotice | undefined
+    }) {
+      renders.set(id, (renders.get(id) ?? 0) + 1)
+      return <span>{notice?.sending ? 'Sending' : 'Ordinary'}</span>
+    })
+    function Chat({ submissions }: { submissions: readonly AgentJournalSubmission[] }) {
+      latest = useStructuredAgentSessionDeliveryNotices({
         pending: EMPTY,
         submissions,
         journalItems: EMPTY,
+        startFailures: EMPTY,
         agentName: 'Claude'
-      }),
-    { initialProps: { submissions: [withdrawn('stopped')] } }
-  )
-  const first = result.current
+      })
+      return submissions.map(({ clientMessageId }) => (
+        <Row
+          key={clientMessageId}
+          id={clientMessageId}
+          notice={latest.get(agentJournalSubmissionKey(clientMessageId))}
+        />
+      ))
+    }
+    const initial = Array.from({ length: size }, (_, index) =>
+      submission(index, index === size - 1 ? 'accepted' : 'pending')
+    )
+    const view = render(<Chat submissions={initial} />)
+    const before = latest
+    renders.clear()
+    stateReads = 0
+    fingerprintReads = 0
+    const unrelated = [...initial.slice(0, -1), submission(size - 1, 'accepted', 2)]
+    view.rerender(<Chat submissions={unrelated} />)
+    expect(latest).toBe(before)
+    expect(renders.size).toBe(0)
+    expect(stateReads).toBeLessThanOrEqual(5 * size)
+    expect(stateReads).toBeGreaterThanOrEqual(size)
+    expect(fingerprintReads).toBe(0)
 
-  rerender({ submissions: [withdrawn('stopped')] })
-
-  expect(result.current).toBe(first)
-  expect(result.current.size).toBe(0)
-})
-
-function renderNotices(submissions: readonly AgentJournalSubmission[]) {
-  return renderHook(
-    ({ submissions: current }: { submissions: readonly AgentJournalSubmission[] }) =>
-      useStructuredAgentSessionDeliveryNotices({
-        pending: EMPTY,
-        submissions: current,
-        journalItems: EMPTY,
-        agentName: 'Claude'
-      }),
-    { initialProps: { submissions } }
-  )
-}
-
-it('keeps the same notices when a batch leaves every not-sent message as it was', () => {
-  const { result, rerender } = renderNotices([rejected('lost', 'hostRestarted')])
-  const first = result.current
-  expect(first.size).toBe(1)
-
-  rerender({ submissions: [rejected('lost', 'hostRestarted'), accepted('next')] })
-
-  expect(result.current).toBe(first)
-})
-
-it('keeps the notice of a row that did not change when another one does', () => {
-  const { result, rerender } = renderNotices([rejected('lost', 'hostRestarted')])
-  const lost = result.current.get('orca:lost')
-
-  rerender({
-    submissions: [rejected('lost', 'hostRestarted'), rejected('other', 'notDelivered')]
-  })
-
-  expect(result.current.size).toBe(2)
-  expect(result.current.get('orca:lost')).toBe(lost)
+    stateReads = 0
+    const accepted = [submission(0, 'accepted'), ...unrelated.slice(1)]
+    view.rerender(<Chat submissions={accepted} />)
+    expect(latest.has(agentJournalSubmissionKey('0'))).toBe(false)
+    expect(latest.get(agentJournalSubmissionKey('1'))).toBe(
+      before.get(agentJournalSubmissionKey('1'))
+    )
+    expect(renders).toEqual(new Map([['0', 1]]))
+    expect(stateReads).toBeLessThanOrEqual(5 * size)
+    expect(fingerprintReads).toBe(0)
+    view.unmount()
+  }
 })

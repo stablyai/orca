@@ -12,6 +12,8 @@ export const MobileQueuedMessageComposerContext = createContext<{
   onError: (text: string) => void
   onMicPress: (() => void) | undefined
   micActive: boolean
+  micStarting: boolean
+  micProcessing: boolean
   dictationMode: string | undefined
   onMicPressIn: () => void
   onMicPressOut: () => void

@@ -3,11 +3,14 @@ import {
   CommentMarkdownMermaidContext,
   CommentMarkdownMermaidSourceContext
 } from './comment-markdown-mermaid-policy'
-import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import {
+  defaultUrlTransform,
+  type Components,
+  type Options as MarkdownOptions
+} from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { remarkChatMath } from './chat-markdown-math'
-import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { copyChatMathSelection } from './chat-markdown-math-selection'
 import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
@@ -21,52 +24,30 @@ import {
   type DocumentCodeBlockRenderer
 } from './comment-markdown-element-renderers'
 import {
-  remarkNativeChatFileLinks,
+  linkNativeChatFilePaths,
   type FileLinkExists
-} from './comment-markdown-native-chat-file-links'
+} from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
-import { rehypeWordFade } from './comment-markdown-word-fade'
 import { remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
-  splitMarkdownTopLevelBlocks,
-  type MarkdownBlock,
-  type MarkdownBlockSplit
-} from './markdown-top-level-blocks'
-import {
-  GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
-  remarkGitHubCallouts
-} from '@/lib/remark-github-callouts'
+  MemoizedMarkdown,
+  useMarkdownBlocks,
+  markdownBlockContent
+} from './comment-markdown-block-pipeline'
+import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../shared/github/github-callouts'
+import { remarkGitHubCallouts } from '@/lib/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
+import {
+  linkGitHubReferences,
+  type GitHubRepoReference
+} from '../../../../shared/github/github-reference-links'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
-type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
-type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
-type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
-
-type GitHubRepoReference = {
-  owner: string
-  repo: string
-}
-
-type MarkdownTextNode = {
-  type: 'text'
-  value: string
-}
-
-type MarkdownLinkNode = {
-  type: 'link'
-  url: string
-  title: null
-  children: MarkdownTextNode[]
-}
-
-type MarkdownNode = {
-  type: string
-  value?: string
-  children?: MarkdownNode[]
-}
+type MarkdownPlugins = NonNullable<MarkdownOptions['rehypePlugins']>
+type RemarkPlugins = NonNullable<MarkdownOptions['remarkPlugins']>
+type UrlTransform = NonNullable<MarkdownOptions['urlTransform']>
 
 const commentMarkdownUrlTransform: UrlTransform = (value, key, node) => {
   if (key === 'src' && node?.tagName === 'img' && isTrustedCompactImageSrc(value)) {
@@ -91,95 +72,16 @@ const remarkPlugins = [
   remarkBreaks
 ]
 
-const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
-
-function createGitHubIssueUrl(owner: string, repo: string, number: string): string {
-  return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${number}`
-}
-
-function isEmbeddedGitHubReference(value: string, index: number): boolean {
-  if (index === 0) {
-    return false
-  }
-  return /[A-Za-z0-9_./-]/.test(value[index - 1] ?? '')
-}
-
-function createGitHubReferenceLinkNode(
-  label: string,
-  owner: string,
-  repo: string,
-  number: string
-): MarkdownLinkNode {
-  return {
-    type: 'link',
-    url: createGitHubIssueUrl(owner, repo, number),
-    title: null,
-    children: [{ type: 'text', value: label }]
-  }
-}
-
-function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReference): MarkdownNode[] {
-  const parts: MarkdownNode[] = []
-  let cursor = 0
-
-  for (const match of value.matchAll(GITHUB_REFERENCE_PATTERN)) {
-    const label = match[0]
-    const index = match.index ?? 0
-    if (isEmbeddedGitHubReference(value, index)) {
-      continue
-    }
-
-    const owner = match[1] ?? defaultRepo.owner
-    const repo = match[2] ?? defaultRepo.repo
-    const number = match[3]
-    if (!number) {
-      continue
-    }
-
-    if (index > cursor) {
-      parts.push({ type: 'text', value: value.slice(cursor, index) })
-    }
-    parts.push(createGitHubReferenceLinkNode(label, owner, repo, number))
-    cursor = index + label.length
-  }
-
-  if (cursor === 0) {
-    return [{ type: 'text', value }]
-  }
-  if (cursor < value.length) {
-    parts.push({ type: 'text', value: value.slice(cursor) })
-  }
-  return parts
-}
-
-function transformGitHubReferenceChildren(
-  node: MarkdownNode,
-  defaultRepo: GitHubRepoReference
-): void {
-  if (!node.children || node.type === 'link' || node.type === 'image') {
-    return
-  }
-
-  const nextChildren: MarkdownNode[] = []
-  for (const child of node.children) {
-    if (child.type === 'text' && child.value !== undefined) {
-      // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
-      for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
-        nextChildren.push(part)
-      }
-    } else {
-      transformGitHubReferenceChildren(child, defaultRepo)
-      nextChildren.push(child)
-    }
-  }
-
-  node.children = nextChildren
+function remarkNativeChatFileLinks(
+  exists: FileLinkExists
+): () => (tree: Parameters<typeof linkNativeChatFilePaths>[0]) => void {
+  return () => (tree) => linkNativeChatFilePaths(tree, exists)
 }
 
 export function remarkGitHubReferences(
   defaultRepo: GitHubRepoReference
-): () => (tree: MarkdownNode) => void {
-  return () => (tree) => transformGitHubReferenceChildren(tree, defaultRepo)
+): () => (tree: Parameters<typeof linkGitHubReferences>[0]) => void {
+  return () => (tree) => linkGitHubReferences(tree, defaultRepo)
 }
 
 const commentMarkdownSanitizeSchema: SanitizeSchema = {
@@ -232,6 +134,8 @@ const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkd
 /** Keep extensions stable per surface; new objects rebuild components and remount their contents. */
 export type CommentMarkdownExtension = {
   remarkPlugins: RemarkPlugins
+  /** Extra flow syntax requires one of these markers; omitted means unknown grammar. */
+  extraFlowSyntaxMarkers?: readonly string[]
   sanitizeAttributes: Record<string, readonly string[]>
   components: Components
 }
@@ -268,49 +172,6 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   extension?: CommentMarkdownExtension
   /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
   unknownHtmlAsText?: boolean
-}
-
-/** One render of the pipeline; memoized so an unchanged block is not parsed again. */
-const MemoizedMarkdown = React.memo(function DeferredMarkdown({
-  math,
-  fadeWords,
-  ...props
-}: React.ComponentProps<typeof Markdown> & { math: boolean; fadeWords: boolean }) {
-  const renderMath = useChatMathRendering(math)
-  const plugins = React.useMemo(
-    () => [
-      ...(props.rehypePlugins ?? []),
-      ...(math ? [renderMath] : []),
-      ...(fadeWords ? [rehypeWordFade] : [])
-    ],
-    [props.rehypePlugins, math, renderMath, fadeWords]
-  )
-  return <Markdown {...props} rehypePlugins={plugins} />
-})
-
-/** The content as the blocks to render. Cut into blocks from the first time it is growing, and
- *  from then on, so the stream ending does not redraw what is already there. */
-function useMarkdownBlocks(
-  content: string,
-  growing: boolean,
-  math: boolean
-): readonly MarkdownBlock[] {
-  const [previous, setPrevious] = React.useState<MarkdownBlockSplit | null>(null)
-  if (!growing && previous === null) {
-    return [{ start: 0, line: 1, text: content }]
-  }
-  if (previous?.source === content) {
-    return previous.blocks
-  }
-  const next = splitMarkdownTopLevelBlocks(content, previous, math)
-  setPrevious(next)
-  return next.blocks
-}
-
-function markdownBlockContent(block: MarkdownBlock): string {
-  return block.literalMath && block.end !== undefined
-    ? block.text.slice(0, block.end - block.start)
-    : block.text
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -371,7 +232,7 @@ const CommentMarkdown = React.memo(
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
     }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
-    const blocks = useMarkdownBlocks(content, growing, math)
+    const blocks = useMarkdownBlocks(content, growing, math, activeRemarkPlugins, extension)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)
@@ -400,6 +261,7 @@ const CommentMarkdown = React.memo(
             {blocks.map((block, index) => (
               <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                 <MemoizedMarkdown
+                  block={block.tree ? block : undefined}
                   remarkPlugins={activeRemarkPlugins}
                   rehypePlugins={activeRehypePlugins}
                   math={math}

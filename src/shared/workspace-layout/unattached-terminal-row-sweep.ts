@@ -1,8 +1,8 @@
 // Mirror the window’s stored-row startup reconnect/orphan sweep in main load before main owns layout: retain only rows whose reconnect plan names a terminal.
 
-import { isValidTerminalTabId } from '../terminal-tab-id'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { isValidTerminalTabId } from './terminal-tab-id'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { readCanonicalPtyOwners, resolveCanonicalPtyClaim } from './legacy-terminal-row-claims'
 
 /** Apply shutdown-list/fallback-terminal evidence per host partition; each partition lists only its own workspaces. */

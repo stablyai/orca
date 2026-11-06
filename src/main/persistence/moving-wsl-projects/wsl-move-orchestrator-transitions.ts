@@ -67,7 +67,9 @@ function refusalOutcome(
     case 'wsl_move_nothing_new':
     case 'wsl_move_unavailable':
       return { next: 'idle' }
+    // Retried on the next trigger; an undo that releases parks the distro as declined.
     case 'wsl_move_already_running':
+    case 'wsl_move_undo_running':
       return { next: 'stay' }
     case 'wsl_move_terminals_blocked':
       return { next: 'deferred', blockers: 'blockers' in preview ? (preview.blockers ?? []) : [] }

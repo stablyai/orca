@@ -1,30 +1,38 @@
 import {
   agentSessionFailureFact,
+  providerDiagnostic,
   providerDiagnosticOf,
-  type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
-} from '../../../shared/agent-session-failure'
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-refusal-details'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   agentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
-import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  AgentSessionAcquisitionRefusal,
+  isAgentSessionPreSpawnError
+} from './structured-agent-session-adapter'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
-import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { agentCliInstallationFacts } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 const TYPED_START_REFUSALS = [
+  'savedConversationMissing',
   'notSignedIn',
   'cliMissing',
   'historyTooLarge',
@@ -38,6 +46,7 @@ const TYPED_START_REFUSALS = [
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
   'fullAccessAsRoot',
+  'launchPreparationFailed',
   'conversationOpenInTerminal',
   'conversationOpenElsewhere'
 ] as const satisfies readonly (AgentSessionFailureKind &
@@ -47,6 +56,34 @@ function typedStartRefusal(
   reason: string | undefined
 ): (typeof TYPED_START_REFUSALS)[number] | undefined {
   return TYPED_START_REFUSALS.find((typed) => typed === reason)
+}
+
+/** A failed launch preparation shows the host error behind it in Details; named problems keep their own words. */
+export function launchPreparationDiagnosticOf(error: unknown): ProviderDiagnostic | undefined {
+  const preSpawn = findInErrorChain(error, (inner) =>
+    isAgentSessionPreSpawnError(inner) && inner.reason === 'launchPreparationFailed'
+      ? inner
+      : undefined
+  )
+  if (
+    !preSpawn ||
+    providerDiagnosticOf(error) ||
+    argumentProblemOf(error) ||
+    agentCliInstallationProblemOf(error)
+  ) {
+    return undefined
+  }
+  // Bounded like the other cause-chain readers, so a cyclic cause cannot hang the host.
+  let root: Error = preSpawn
+  for (let depth = 0; depth < 6 && root.cause instanceof Error; depth += 1) {
+    root = root.cause
+  }
+  return providerDiagnostic(root.message, 'log')
+}
+
+/** The words Details shows for a failed start: the provider's, else the host error behind it. */
+export function startFailureDiagnosticOf(error: unknown): ProviderDiagnostic | undefined {
+  return providerDiagnosticOf(error) ?? launchPreparationDiagnosticOf(error)
 }
 
 /** Mark exit evidence at the adapter’s observation site. */
@@ -105,11 +142,24 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   if (providerExecutableMissing(cause)) {
     return agentSessionFailureFact('cliMissing')
   }
-  const exited = providerExitObserved(cause)
+  if (providerLaunchFolderMissing(cause)) {
+    return agentSessionFailureFact('launchFolderMissing')
+  }
+  const preparation = launchPreparationDiagnosticOf(cause)
+  if (preparation) {
+    return agentSessionFailureFact('launchPreparationFailed', { detail: preparation })
+  }
+  // A request deadline is the most specific explanation: an exit seen around it never replaces it.
+  const requestTimeout = providerRequestTimeoutOf(cause)
+  const exited = !requestTimeout && providerExitObserved(cause)
   return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    // A typed refusal of any reason stays final when only its exit fact reaches the start.
+    ...(cause instanceof AgentSessionAcquisitionRefusal
+      ? { refusal: { code: cause.code, details: { reason: cause.reason } } }
+      : {}),
     detail: providerDiagnosticOf(cause),
     argumentProblem: argumentProblemOf(cause),
-    ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })
+    requestTimeout
   })
 }
 

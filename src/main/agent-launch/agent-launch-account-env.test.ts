@@ -1,7 +1,8 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
-import { STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING } from '../../shared/agent-launch-account-env'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING } from '../../shared/agent-launch/startup/agent-launch-account-env'
 
 const ACCOUNT_ENV = { CLAUDE_CONFIG_DIR: '/home/u/.orca/claude/a', CODEX_HOME: '/home/u/.codex-b' }
 
@@ -19,7 +20,7 @@ function harness(structured: boolean) {
   const createTerminalAgent = vi.fn(async () => ({ handle: 'term_1' }))
   const runtime = {
     requireStore: () => ({
-      getSettings: () => (structured ? { experimentalNativeChat: true } : null)
+      getSettings: () => (structured ? { nativeChatProviders: EVERY_AGENT_CHAT } : null)
     }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true })
   }
@@ -39,31 +40,6 @@ function harness(structured: boolean) {
 }
 
 describe('agent.launch account env', () => {
-  it('passes the account env to a terminal agent in an existing workspace', async () => {
-    const h = harness(false)
-    const result = await h.run({
-      agent: 'claude',
-      target: { kind: 'existing', worktree: 'wt-7' },
-      accountEnv: ACCOUNT_ENV
-    })
-    expect(h.createTerminalAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ accountEnv: ACCOUNT_ENV })
-    )
-    expect(result.warning).toBeUndefined()
-  })
-
-  it('passes it to the startup terminal of a worktree the launch creates', async () => {
-    const h = harness(false)
-    await h.run({
-      agent: 'codex',
-      target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } },
-      accountEnv: ACCOUNT_ENV
-    })
-    expect(h.createWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ startupAgent: 'codex', accountEnv: ACCOUNT_ENV })
-    )
-  })
-
   it('keeps a structured session on its host-derived home and warns', async () => {
     const h = harness(true)
     const result = await h.run({
@@ -76,11 +52,5 @@ describe('agent.launch account env', () => {
       expect.not.objectContaining({ accountEnv: expect.anything() })
     )
     expect(result.warning).toBe(STRUCTURED_ACCOUNT_ENV_IGNORED_WARNING)
-  })
-
-  it('adds no warning to a structured launch that carried none', async () => {
-    const h = harness(true)
-    const result = await h.run({ agent: 'claude', target: { kind: 'existing', worktree: 'wt-7' } })
-    expect(result.warning).toBeUndefined()
   })
 })

@@ -1,13 +1,13 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../../shared/paired-runtime-connection'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
-} from '../../../shared/runtime-host-descriptor'
-import { classifyRuntimeHostRePair } from '../../../shared/runtime-host-pairing-identity'
+} from '../../../shared/remote-runtime/host-status/runtime-host-descriptor'
+import { classifyRuntimeHostRePair } from '../../../shared/remote-runtime/host-status/runtime-host-pairing-identity'
 import type { WebPairingOffer } from './web-pairing'
 import { readWebDeviceKeySupport } from './web-device-key-support'
 import { MIGRATED_DEVICE_TOKEN_PREFIX } from './web-runtime-credential-source'

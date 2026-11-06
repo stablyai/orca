@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export async function copyArtifactLink(
   shareUrl: string,
@@ -18,5 +19,5 @@ export async function copyArtifactLink(
 }
 
 export function openArtifactInBrowser(shareUrl: string): void {
-  void window.api.shell.openUrl(shareUrl)
+  openAppHttpLink(shareUrl)
 }

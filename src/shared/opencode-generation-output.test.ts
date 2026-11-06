@@ -78,7 +78,8 @@ describe('OpenCode generation event output', () => {
   ])('rejects malformed events %s', (output) => {
     expect(parseOpenCodeGenerationOutput(output)).toEqual({
       ok: false,
-      error: 'OpenCode returned invalid JSON events.'
+      error: 'OpenCode returned invalid JSON events.',
+      errorCode: 'openCodeInvalidEvents'
     })
   })
 })

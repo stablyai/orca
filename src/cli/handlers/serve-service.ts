@@ -18,7 +18,7 @@ import {
   resolveServeServiceManager,
   type ServeServiceSpec
 } from '../runtime/serve-service-unit'
-import { resolveServiceCommand } from '../runtime/serve-app-launcher'
+import { resolveServiceCommand, resolveServicePath } from '../runtime/serve-app-launcher'
 
 type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
 
@@ -82,7 +82,7 @@ function serviceSpec(
     command: options.command,
     userDataPath: resolveLaunchUserDataPath(deps.env),
     defaultUserDataPath: getPlatformUserDataPath(deps.platform, deps.homeDir),
-    path: deps.env.PATH ?? '/usr/bin:/bin',
+    path: resolveServicePath(deps.env),
     port: options.port,
     bind: resolveServeServiceBind(options.bind),
     pairingAddress: options.pairingAddress

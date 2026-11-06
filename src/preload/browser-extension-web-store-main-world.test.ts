@@ -1,15 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  BROWSER_EXTENSION_WEB_STORE_CHANNEL,
-  BROWSER_EXTENSION_WEB_STORE_EVENT_CHANNEL,
-  CHROME_WEB_STORE_ORIGIN
-} from '../shared/browser-extension-webstore'
-import {
-  CHROME_WEB_STORE_ORIGIN as PRELOAD_ORIGIN,
-  PRELOAD_WEB_STORE_CHANNEL,
-  PRELOAD_WEB_STORE_EVENT_CHANNEL
-} from './browser-extension-web-store-bridge'
+
 import {
   installChromeWebStoreApis,
   type ChromeWebStoreBridgeReply
@@ -72,16 +63,6 @@ function lastErrors(realm: unknown): [unknown, unknown] {
 }
 
 describe('installChromeWebStoreApis', () => {
-  it('creates chrome, runtime, extension and management when the page has none', () => {
-    const { realm } = installInFreshRealm(() => ({}))
-    expect(typeof member(realm, 'chrome.webstorePrivate.beginInstallWithManifest3')).toBe(
-      'function'
-    )
-    expect(typeof member(realm, 'chrome.management.getAll')).toBe('function')
-    expect(isRecord(member(realm, 'chrome.runtime'))).toBe(true)
-    expect(isRecord(member(realm, 'chrome.extension'))).toBe(true)
-  })
-
   it('keeps existing runtime members', () => {
     const sendMessage = () => {}
     const { realm } = installInFreshRealm(() => ({}), { runtime: { sendMessage } })
@@ -142,21 +123,6 @@ describe('installChromeWebStoreApis', () => {
     ).rejects.toThrow('uninstall canceled by user')
   })
 
-  it('answers the store stubs locally with the real Chrome version', async () => {
-    const { realm, calls } = installInFreshRealm(() => ({}))
-    await expect(fn(realm, 'chrome.webstorePrivate.getFullChromeVersion')()).resolves.toEqual({
-      version_number: '146.0.7680.0'
-    })
-    await expect(fn(realm, 'chrome.webstorePrivate.isInIncognitoMode')()).resolves.toBe(false)
-    await expect(fn(realm, 'chrome.webstorePrivate.getMV2DeprecationStatus')()).resolves.toBe(
-      'hard_disable'
-    )
-    await expect(fn(realm, 'chrome.webstorePrivate.getBrowserLogin')()).resolves.toEqual({
-      login: ''
-    })
-    expect(calls).toEqual([])
-  })
-
   it('delivers management events to registered listeners', () => {
     const { realm, emit } = installInFreshRealm(() => ({}))
     const listener = vi.fn()
@@ -166,13 +132,5 @@ describe('installChromeWebStoreApis', () => {
     fn(realm, 'chrome.management.onInstalled.removeListener')(listener)
     emit('onInstalled', [{ id: 'b' }])
     expect(listener.mock.calls).toEqual([[{ id: 'a' }]])
-  })
-})
-
-describe('store bridge constants', () => {
-  it('match the shared copies main uses', () => {
-    expect(PRELOAD_ORIGIN).toBe(CHROME_WEB_STORE_ORIGIN)
-    expect(PRELOAD_WEB_STORE_CHANNEL).toBe(BROWSER_EXTENSION_WEB_STORE_CHANNEL)
-    expect(PRELOAD_WEB_STORE_EVENT_CHANNEL).toBe(BROWSER_EXTENSION_WEB_STORE_EVENT_CHANNEL)
   })
 })

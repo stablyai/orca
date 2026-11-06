@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { prepareNativeChatLiveMessages } from './native-chat-live-message-preparation'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 

@@ -1,5 +1,8 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionEndedEvent
@@ -137,6 +140,9 @@ export function endAcpStructuredSession(
   const detail = providerDiagnostic([how, stderr].filter(Boolean).join('\n'), 'log')
   onEvent?.({
     type: 'ended',
+    ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+      ? { deathEvidenceKind: 'kill-delivered' as const }
+      : {}),
     sessionId: session.sessionId,
     reason,
     failure: session.closeRequested

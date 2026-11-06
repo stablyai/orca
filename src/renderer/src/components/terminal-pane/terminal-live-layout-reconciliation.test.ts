@@ -6,7 +6,7 @@ import {
   selectRetiredPaneIds,
   trackRetiredLeafIds
 } from './terminal-live-layout-reconciliation'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const LOCAL_PTY = 'pty-local-123'
 const REMOTE_PTY = 'remote:env-1@@term_abc'

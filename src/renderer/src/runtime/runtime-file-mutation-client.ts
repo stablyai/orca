@@ -21,25 +21,38 @@ import {
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
 import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
+import { writeRemoteFileStaged } from './runtime-staged-file-save'
+
+/** Null when the content fits one request; otherwise the refusal an older host's frame cap needs. */
+function remoteWriteTooLargeError(content: string): Error | null {
+  // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
+  if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
+    return null
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(content)).length
+  return bytes > REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES
+    ? new Error(
+        `File is too large to save to a remote Orca server (${Math.ceil(bytes / 1024)} KB; the limit is ${REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES / 1024} KB).`
+      )
+    : null
+}
 
 /** Refuses a save the host's frame cap would reject by dropping the whole connection. */
 export function assertRemoteWriteFitsOneRequest(content: string): void {
-  // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
-  if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
-    return
-  }
-  const bytes = new TextEncoder().encode(JSON.stringify(content)).length
-  if (bytes > REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
-    throw new Error(
-      `File is too large to save to a remote Orca server (${Math.ceil(bytes / 1024)} KB; the limit is ${REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES / 1024} KB).`
-    )
+  const tooLarge = remoteWriteTooLargeError(content)
+  if (tooLarge) {
+    throw tooLarge
   }
 }
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
-  { wakeWslDistro, ...options }: { followSymlinks?: boolean; wakeWslDistro?: boolean } = {}
+  {
+    wakeWslDistro,
+    access,
+    ...options
+  }: { followSymlinks?: boolean; wakeWslDistro?: boolean; access?: LocalFileAccess } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
@@ -48,7 +61,8 @@ export async function readRuntimeDirectory(
       dirPath,
       connectionId: context.connectionId,
       ...options,
-      ...(wakeWslDistro ? { wakeWslDistro } : {})
+      ...(wakeWslDistro ? { wakeWslDistro } : {}),
+      ...(access ? { access } : {})
     })
   }
   return callRuntimeRpc<DirEntry[]>(
@@ -85,7 +99,22 @@ export async function writeRuntimeFile(
       )
     )
   }
-  assertRemoteWriteFitsOneRequest(content)
+  const tooLarge = remoteWriteTooLargeError(content)
+  if (tooLarge) {
+    const target = remoteArgs.target
+    const location = withSshMutationExpectation(context, {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath
+    })
+    return writeRemoteFileStaged(
+      target,
+      location,
+      content,
+      diskPrecondition,
+      () => tooLarge,
+      beforeSend
+    )
+  }
   const params = withSshMutationExpectation(context, {
     worktree: remoteArgs.worktreeSelector,
     relativePath: remoteArgs.relativePath,

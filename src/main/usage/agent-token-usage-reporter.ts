@@ -6,7 +6,7 @@ import {
   type AgentTokenUsage
 } from '../../shared/telemetry-agent-token-usage-schema'
 import { isTelemetryEnabled, track } from '../telemetry/client'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import type { AgentTokenSession } from './agent-token-usage'
 
 const stateSchema = z
@@ -19,7 +19,7 @@ const stateSchema = z
 /** Cumulative snapshots: consumers select the highest revision per provider/session, never sum retries. */
 export class AgentTokenUsageReporter {
   private snapshots: Map<string, AgentTokenUsage> | null = null
-  private readonly sent = new Map<string, number>()
+  private readonly acceptedRevisions = new Map<string, number>()
   private readonly writer: UsageCacheSnapshotWriter
   private pending: Promise<void> = Promise.resolve()
 
@@ -88,13 +88,14 @@ export class AgentTokenUsageReporter {
     }
     this.snapshots = next
     for (const snapshot of next.values()) {
-      if (this.sent.get(snapshot.analytics_session_id) === snapshot.revision) {
+      if (this.acceptedRevisions.get(snapshot.analytics_session_id) === snapshot.revision) {
         continue
       }
       if (!track('agent_token_usage', snapshot)) {
         break
       }
-      this.sent.set(snapshot.analytics_session_id, snapshot.revision)
+      // Queue acceptance only deduplicates this process; restart must retry undelivered snapshots.
+      this.acceptedRevisions.set(snapshot.analytics_session_id, snapshot.revision)
     }
   }
 

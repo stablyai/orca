@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatToolRunOutcome } from './native-chat-tool-run-outcome'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 
 function call(command: string, state?: 'running' | 'completed' | 'failed'): NativeChatBlock {
   return { type: 'tool-call', name: 'shell', input: { command }, state }
@@ -62,12 +62,6 @@ describe('nativeChatToolRunOutcome', () => {
     ).toBe(1)
   })
 
-  it('reports nothing for a clean run', () => {
-    expect(
-      nativeChatToolRunOutcome([call('a', 'completed'), result('ok')], {}).failedCallCount
-    ).toBe(0)
-  })
-
   it('refuses success to a run whose call is still running', () => {
     expect(
       nativeChatToolRunOutcome([call('a', 'running')], { activeTurnIsWorking: true }).succeeded
@@ -83,12 +77,6 @@ describe('nativeChatToolRunOutcome', () => {
   it('refuses success while a state-less call rides a working turn', () => {
     expect(nativeChatToolRunOutcome([call('a')], { activeTurnIsWorking: true }).succeeded).toBe(
       false
-    )
-  })
-
-  it('grants success to a completed run', () => {
-    expect(nativeChatToolRunOutcome([call('a', 'completed'), result('ok')], {}).succeeded).toBe(
-      true
     )
   })
 

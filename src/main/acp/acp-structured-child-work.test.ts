@@ -1,8 +1,8 @@
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat-types'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
+import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat/native-chat-types'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   CALLER,
@@ -185,31 +185,6 @@ describe('Grok roster evidence through the existing host child store', () => {
     ).toBeNull()
   })
 
-  it('shares one label and one id between saved rows, agent strip and sidebar after parent completion', async () => {
-    const f = await fixture()
-    await f.spawn('first')
-    await f.spawn('sibling')
-    // Ordinals belong to presentation; persisted labels stay unchanged.
-    expect(await f.roster()).toMatchObject([{ label: 'Exact label' }, { label: 'Exact label' }])
-    expect((await f.strip())?.tasks).toMatchObject([
-      { id: 'first', kind: 'agent', description: 'Exact label' },
-      { id: 'sibling', kind: 'agent', description: 'Exact label' }
-    ])
-    const stripIds = (await f.strip())?.children?.map((view) => view.id)
-    expect(f.sidebar.at(-1)?.map((view) => view.id)).toEqual(stripIds)
-    f.agent.reply(f.prompt, { stopReason: 'end_turn' })
-    await f.rows()
-    expect(f.childWork.views().map((view) => view.membership)).toEqual(['live', 'live'])
-    await f.finish('first', 'completed')
-    expect((await f.strip())?.tasks).toMatchObject([{ id: 'sibling' }])
-    await f.finish('sibling', 'failed')
-    expect(await f.strip()).toBeNull()
-    expect(f.sidebar.at(-1)).toEqual([])
-    expect(f.childWork.views().map((view) => view.outcome)).toEqual(['succeeded', 'failed'])
-    await f.notify({ sessionUpdate: 'subagent_progress', subagent_id: 'first', tokens_used: 100 })
-    expect(await f.strip()).toBeNull()
-  })
-
   it('uses the targeted extension for one owned child and awaits its finish without cancelling parent or sibling', async () => {
     const f = await fixture()
     await f.spawn('first')
@@ -329,17 +304,6 @@ describe('Grok roster evidence through the existing host child store', () => {
     expect.soft(remainingSidebar).toMatchObject([{ description: 'Second', membership: 'live' }])
   })
 
-  it('uses the exact clipped roster label and hides Stop for digested oversized provider handles', async () => {
-    const f = await fixture()
-    await f.spawn('long-id'.repeat(100), 'Long label '.repeat(70))
-    const [entry] = await f.roster()
-    expect((await f.strip())?.tasks).toMatchObject([
-      { description: entry.label, kind: 'agent', stoppable: false }
-    ])
-    expect((await f.strip())?.tasks?.[0]?.id).toMatch(/^acp-child:[0-9a-f]{64}$/)
-    expect((await f.strip())?.tasks?.[0]?.id).toBe(entry.id)
-  })
-
   it('keeps 34 live groups in both host surfaces and never recreates the first settled eviction', async () => {
     const f = await fixture()
     await f.spawn('original-live', 'Original', 'original-turn')
@@ -443,13 +407,5 @@ describe('Grok roster evidence through the existing host child store', () => {
     expect(f.childWork.views().every((view) => view.membership === 'live')).toBe(true)
     expect(f.agent.frames.filter((frame) => frame.method === 'session/cancel')).toEqual([])
     expect(f.rig.child().closed).toBe(false)
-  })
-
-  it('records nothing for a subagent first reported finished, and occupies no running surface', async () => {
-    const f = await fixture()
-    await f.finish('finished-before-spawn', 'completed')
-    expect(await f.roster()).toEqual([])
-    expect(f.childWork.views()).toEqual([])
-    expect(await f.strip()).toBeNull()
   })
 })

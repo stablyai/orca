@@ -1,9 +1,8 @@
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
+import { type RuntimeRpcResponse, isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import type {
   PairedE2EEAuthReply,
   PairedE2EEClientHandshake
-} from '../../../shared/paired-e2ee-client-handshake'
+} from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import type { WebRuntimeTransportSubscription } from './web-runtime-subscription-contract'

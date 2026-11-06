@@ -1,8 +1,8 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionChildExitSession } from './structured-agent-session-child-exit'
 import type {
   JournalLifecycleBatchInput,
@@ -43,7 +43,9 @@ export function exitJournalDouble(fields: {
     itemBody: () => null,
     itemFence: fields.itemFence ?? (() => undefined),
     snapshot: () => ({ items: fields.items() }),
+    statusRead: () => ({ items: fields.items() }),
     submissions: fields.submissions ?? (() => []),
+    inputOrder: { recoverableSubmissions: fields.submissions ?? (() => []) },
     stopMarks: { latest: () => null, personStopDecides: () => false },
     appendPlannedLifecycleBatch: plannedBatchThrough(fields.appendLifecycleBatch)
   } as unknown as StructuredAgentSessionChildExitSession['journal']

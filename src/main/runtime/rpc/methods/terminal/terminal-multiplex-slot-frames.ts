@@ -2,7 +2,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
   type TerminalStreamFrame
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TerminalMultiplexLegacyAckFrame,
   TerminalMultiplexSnapshotRequestFrame
@@ -214,6 +214,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
         alternateScreen: serialized?.alternateScreen,
         terminalOwner: serialized?.terminalOwner,
+        lastTitle: serialized?.lastTitle,
         oscLinks: serialized?.oscLinks,
         pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
         truncated: false,

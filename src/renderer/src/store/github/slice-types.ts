@@ -1,3 +1,5 @@
+import type { GitHubSourceCollections } from './source-collections'
+import type { GitHubTaskRecordCache } from './task-record-cache'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
@@ -43,10 +45,14 @@ import type {
 import type { PRRefreshState, PRRefreshStateClearToken } from './pr-refresh-state'
 
 export type GitHubSlice = {
+  githubSourceCollections: GitHubSourceCollections
+  githubTaskCache: GitHubTaskRecordCache
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
   commentsCache: Record<string, CacheEntry<PRComment[]>>
+  /** Resolve/unresolve requests in flight: comments cacheKey + threadId -> threadId. */
+  reviewThreadResolutionsInFlight: Record<string, string>
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
@@ -64,6 +70,7 @@ export type GitHubSlice = {
       fallbackPRNumber?: number | null
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
+      userRefresh?: boolean
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
@@ -77,7 +84,12 @@ export type GitHubSlice = {
     branch?: string,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: RepoScopedFetchOptions & { throwOnError?: boolean }
+    options?: RepoScopedFetchOptions & {
+      throwOnError?: boolean
+      /** Refresh or a check action: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      userRefresh?: boolean
+    }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
     repoPath: string,
@@ -93,7 +105,7 @@ export type GitHubSlice = {
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
-    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
   ) => Promise<PRComment[]>
   addPRConversationComment: (
     repoPath: string,
@@ -130,12 +142,13 @@ export type GitHubSlice = {
   ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
-  refreshGitHubForWorktree: (worktreeId: string) => void
+  refreshGitHubForWorktree: (worktreeId: string, executionHostId?: string) => void
   refreshGitHubForWorktreeIfStale: (worktreeId: string) => void
   enqueueGitHubPRRefresh: (
     worktreeId: string,
     reason: GitHubPRRefreshReason,
-    priority?: number
+    priority?: number,
+    executionHostId?: string
   ) => void
   reportVisibleGitHubPRRefreshCandidates: (
     worktreeIds: string[],
@@ -176,7 +189,7 @@ export type GitHubSlice = {
     limit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<readonly GitHubWorkItem[]>
+  ) => Promise<readonly GitHubWorkItem[] | undefined>
   /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
   fetchWorkItemsAcrossRepos: (
     repos: {
@@ -189,12 +202,15 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<{
-    items: GitHubWorkItem[]
-    failedCount: number
-    githubUnavailable: boolean
-    requestFailureCount?: number
-  }>
+  ) => Promise<
+    | {
+        items: GitHubWorkItem[]
+        failedCount: number
+        githubUnavailable: boolean
+        requestFailureCount?: number
+      }
+    | undefined
+  >
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
@@ -207,12 +223,15 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     page: number,
-    options?: Pick<FetchOptions, 'noCache' | 'requireComplete'>
-  ) => Promise<{
-    items: GitHubWorkItem[]
-    failedCount: number
-    errorTypes: ClassifiedError['type'][]
-  }>
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'wakeWslDistro'>
+  ) => Promise<
+    | {
+        items: GitHubWorkItem[]
+        failedCount: number
+        errorTypes: ClassifiedError['type'][]
+      }
+    | undefined
+  >
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
     repos: {
@@ -222,8 +241,9 @@ export type GitHubSlice = {
       sourceContext?: TaskSourceContext | null
     }[],
     query: string,
-    perRepoLimit: number
-  ) => Promise<{ totalCount: number; totalPages: number }>
+    perRepoLimit: number,
+    options?: Pick<FetchOptions, 'wakeWslDistro'>
+  ) => Promise<{ totalCount: number; totalPages: number } | undefined>
   /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
   prefetchWorkItems: (
     repoId: string,
@@ -234,7 +254,8 @@ export type GitHubSlice = {
   ) => void
   patchWorkItem: (
     itemId: string,
-    patch: Partial<GitHubWorkItem>,
+    /** A function patch applies one operation's change to each matching copy's current value. */
+    patch: Partial<GitHubWorkItem> | ((row: GitHubWorkItem) => Partial<GitHubWorkItem>),
     repoId?: string | null,
     options?: GitHubPatchWorkItemOptions
   ) => void

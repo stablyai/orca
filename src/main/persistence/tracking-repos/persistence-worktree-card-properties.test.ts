@@ -1,4 +1,11 @@
-import { closeTestStores, testState, createStore, writeDataFile } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  readPersistedStateJson,
+  writeDataFile
+} from '../persistence-test-harness'
+import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -44,6 +51,17 @@ vi.mock('../../telemetry/cohort-classifier', () => ({
 }))
 
 describe('Store', () => {
+  it('defaults absent model visibility on and preserves an explicit choice across reload', async () => {
+    writeDataFile({ schemaVersion: 1, repos: [], worktreeMeta: {}, ui: {} })
+    const store = await createStore()
+    expect(store.getUI().showAgentModels).toBe(true)
+    store.updateUI({ showAgentModels: false })
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.getUI().showAgentModels).toBe(false)
+  })
+
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     trackMock.mockReset()
@@ -489,4 +507,49 @@ describe('Store', () => {
       expect(store.getUI()._worktreeCardModeDefaulted).toBe(true)
     }
   )
+
+  // UI writes persist the normalized ['status', 'unread'] form; fresh profiles keep ['status'].
+  it.each([
+    ['raw', false],
+    ['normalized', true]
+  ])('does not rewrite a %s migrated Compact preset on reload', async (_, writeUI) => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      if (writeUI) {
+        store.updateUI({ syncTaskStatusFromWorkspaceBoard: true })
+      }
+      vi.advanceTimersByTime(10_000)
+      await store.waitForPendingWrite()
+      await closeTestStores()
+      const settled = readPersistedStateJson()
+      const completeWrite = vi.spyOn(
+        ProfileStateSqliteAuthority.prototype,
+        'writeCompleteSerializedDomains'
+      )
+      const selectiveWrite = vi.spyOn(
+        ProfileStateSqliteAuthority.prototype,
+        'writeSerializedDomains'
+      )
+      const reloaded = await createStore()
+      vi.advanceTimersByTime(10_000)
+      await reloaded.waitForPendingWrite()
+      expect(reloaded.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+      expect(completeWrite).not.toHaveBeenCalled()
+      expect(selectiveWrite).not.toHaveBeenCalled()
+      expect(readPersistedStateJson()).toBe(settled)
+    } finally {
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+    }
+  })
 })

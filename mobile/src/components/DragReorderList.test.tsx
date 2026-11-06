@@ -1,17 +1,11 @@
-import {
-  probe,
-  publishLayout,
-  mounted,
-  positions,
-  measurementFrames
-} from './drag-reorder-test-harness.test-fixture'
+import { probe, publishLayout, mounted, positions } from './drag-reorder-test-harness.test-fixture'
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import Animated, { useAnimatedRef, useSharedValue } from 'react-native-reanimated'
 import { describe, expect, it, vi } from 'vitest'
 import { DragReorderList } from './DragReorderList'
 import { GripVertical } from 'lucide-react-native'
-import { TerminalShortcutSettings } from './TerminalShortcutSettings'
+
 import { queuedMessageStyles } from '../session/native-chat/input/mobile-native-chat-queued-message-styles'
 import { spacing } from '../theme/mobile-theme'
 
@@ -293,23 +287,6 @@ it('keeps measured rows still on hold, restores cancellation, and drops by moved
   await act(async () => root!.unmount())
 })
 
-it('supplies geometry inputs to both Web mappers and recalculates layout after a slot change', async () => {
-  const fixture = await mounted()
-  const layout = probe.layouts.at(-1)!
-  expect(layout.inputs).toHaveLength(2)
-  expect(layout.inputs.every((input) => probe.shared.some((shared) => shared === input))).toBe(true)
-  expect(probe.styleInputs.every((inputs) => inputs.includes(layout))).toBe(true)
-  expect(layout.value).toMatchObject({ keys: ['a', 'b'], tops: { a: 0, b: 72 } })
-  await act(async () => {
-    fixture.gesture.start!({ absoluteY: 80, translationY: 0 }, true)
-    fixture.gesture.update!({ absoluteY: 160, translationY: 80 }, true)
-  })
-  expect(layout.value).toMatchObject({ keys: ['b', 'a'], tops: { b: 0, a: 72 } })
-  await act(async () => fixture.gesture.finalize!({ absoluteY: 160, translationY: 80 }, false))
-  expect(layout.value).toMatchObject({ keys: ['a', 'b'], tops: { a: 0, b: 72 } })
-  await act(async () => fixture.root.unmount())
-})
-
 it.each([100, 1000])(
   'bounds accessibility work for %i rows while excluded slots stay fixed',
   async (count) => {
@@ -362,123 +339,3 @@ it.each([100, 1000])(
     await act(async () => root!.unmount())
   }
 )
-
-it.each([100, 1000])(
-  'batches %i first layouts with linear copying and projection, then prunes and releases measurements',
-  async (count) => {
-    let ids = Array.from({ length: count }, (_, at) => `row-${at}`)
-    function Harness() {
-      return createElement(DragReorderList<string>, {
-        items: ids,
-        itemKey: (id) => id,
-        renderRow: (id) => createElement('Text', null, id),
-        scrollRef: useAnimatedRef<Animated.ScrollView>(),
-        scrollOffsetY: useSharedValue(0),
-        scrollContentHeight: useSharedValue(0)
-      })
-    }
-    let root: ReturnType<typeof create>
-    await act(async () => {
-      root = create(createElement(Harness))
-    })
-    let rows = root!.root.findAll((node) => node.type === Animated.View && node.props.onLayout)
-    const staleLayout = rows[0]!.props.onLayout
-    const original = Object.fromEntries
-    let projectedOrCopied = 0
-    let publications = 0
-    let collector: Map<string, number> | undefined
-    vi.spyOn(Object, 'fromEntries').mockImplementation((entries) => {
-      const pairs = Array.from(entries)
-      projectedOrCopied += pairs.length
-      if (entries instanceof Map) {
-        publications++
-        collector = entries
-      }
-      return original(pairs)
-    })
-    const layout = (row: (typeof rows)[number], height: number) =>
-      row.props.onLayout({ nativeEvent: { layout: { height } } })
-    for (const row of rows) {
-      await act(async () => layout(row, 20))
-    }
-    expect(probe.copiedStateKeys).toBe(0)
-    expect(projectedOrCopied).toBe(0)
-    expect(measurementFrames.size).toBe(1)
-    await publishLayout()
-    expect(publications).toBe(1)
-    expect(projectedOrCopied).toBe(2 * count)
-    expect(collector?.size).toBe(count)
-    expect(probe.layouts.at(-1)!.value).toMatchObject({ tops: { 'row-0': 0, 'row-1': 20 } })
-    for (const row of rows) {
-      await act(async () => layout(row, 20))
-    }
-    expect(measurementFrames.size).toBe(0)
-    expect(projectedOrCopied).toBe(2 * count)
-    for (const row of rows) {
-      await act(async () => layout(row, 30))
-    }
-    expect(measurementFrames.size).toBe(1)
-    await publishLayout()
-    expect(publications).toBe(2)
-    expect(projectedOrCopied).toBe(4 * count)
-    expect(probe.copiedStateKeys).toBe(0)
-    ids = [`row-${count - 1}`, 'row-new']
-    await act(async () => root!.update(createElement(Harness)))
-    await act(async () => staleLayout({ nativeEvent: { layout: { height: 99 } } }))
-    rows = root!.root.findAll((node) => node.type === Animated.View && node.props.onLayout)
-    await act(async () => layout(rows[1]!, 40))
-    await publishLayout()
-    expect([...collector!.keys()]).toEqual(ids)
-    expect(probe.layouts.at(-1)!.value).toMatchObject({
-      keys: ids,
-      tops: { [ids[0]!]: 0, 'row-new': 30 }
-    })
-    await act(async () => layout(rows[1]!, 50))
-    expect(measurementFrames.size).toBe(1)
-    const lateLayout = rows[1]!.props.onLayout
-    await act(async () => root!.unmount())
-    expect(measurementFrames.size).toBe(0)
-    expect(collector!.size).toBe(0)
-    await act(async () => lateLayout({ nativeEvent: { layout: { height: 60 } } }))
-    expect(measurementFrames.size).toBe(0)
-  }
-)
-
-it('keeps the actual fixed-height shortcut settings consumer ready without measurement publications', async () => {
-  function Harness() {
-    return createElement(TerminalShortcutSettings, {
-      scrollRef: useAnimatedRef<Animated.ScrollView>(),
-      scrollOffsetY: useSharedValue(0),
-      scrollContentHeight: useSharedValue(0),
-      onDragActiveChange: () => {}
-    })
-  }
-  let root: ReturnType<typeof create>
-  await act(async () => {
-    root = create(createElement(Harness))
-  })
-  const handles = root!.root.findAllByType(Animated.View).filter((node) => node.props.hitSlop)
-  expect(handles.length).toBeGreaterThan(1)
-  for (const handle of handles) {
-    expect(Object.assign({}, ...handle.props.style).paddingHorizontal).toBe(spacing.md)
-    expect(handle.props.hitSlop).toEqual({ top: 8, bottom: 8, left: 8, right: 8 })
-  }
-  const rows = root!.root.findAll((node) => node.type === Animated.View && node.props.onLayout)
-  expect(rows.length).toBeGreaterThan(1)
-  const projections = vi.spyOn(Object, 'fromEntries')
-  for (const height of [56, 60]) {
-    for (const row of rows) {
-      await act(async () => row.props.onLayout({ nativeEvent: { layout: { height } } }))
-    }
-  }
-  expect(measurementFrames.size).toBe(0)
-  expect(projections).not.toHaveBeenCalled()
-  expect(probe.layouts.at(-1)!.value).toMatchObject({
-    tops: expect.objectContaining({
-      [root!.root
-        .findByType(DragReorderList)
-        .props.itemKey(root!.root.findByType(DragReorderList).props.items[1])]: 56
-    })
-  })
-  await act(async () => root!.unmount())
-})

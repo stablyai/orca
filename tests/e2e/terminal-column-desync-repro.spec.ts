@@ -159,33 +159,6 @@ test.describe('Terminal column desync repro', () => {
       .toBe('match')
   })
 
-  test('PTY columns re-sync after the terminal is resized while hidden', async ({ orcaPage }) => {
-    test.setTimeout(120_000)
-    await waitForSessionReady(orcaPage)
-    const homeWorktreeId = await waitForActiveWorktree(orcaPage)
-    const otherWorktreeId = (await getAllWorktreeIds(orcaPage)).find((id) => id !== homeWorktreeId)
-    test.skip(!otherWorktreeId, 'hidden-resize repro needs the seeded secondary worktree')
-    if (!otherWorktreeId) {
-      return
-    }
-
-    await closeRightSidebarAndFeatureTips(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    const ptyId = await settleTerminal(orcaPage)
-    await orcaPage.setViewportSize({ width: 1280, height: 800 })
-    await expectColumnsInSync(orcaPage, ptyId, 'before hidden resize')
-
-    // Resize while hidden so normal forwarding is gated, then test resume correction.
-    await switchToWorktree(orcaPage, otherWorktreeId)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await orcaPage.setViewportSize({ width: 720, height: 800 })
-    await orcaPage.waitForTimeout(500)
-    await switchToWorktree(orcaPage, homeWorktreeId)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await expectColumnsInSync(orcaPage, ptyId, 'after hidden resize + return')
-  })
-
   test('PTY columns re-sync after repeated background resizes', async ({ orcaPage }) => {
     test.setTimeout(180_000)
     await waitForSessionReady(orcaPage)

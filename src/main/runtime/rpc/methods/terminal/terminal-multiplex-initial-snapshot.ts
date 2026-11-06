@@ -116,6 +116,7 @@ export async function publishMultiplexInitialSnapshot(
     kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
     alternateScreen: serialized?.alternateScreen,
     terminalOwner: serialized?.terminalOwner,
+    lastTitle: serialized?.lastTitle,
     oscLinks: serialized?.oscLinks,
     pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
     // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.

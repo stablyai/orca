@@ -2,8 +2,8 @@ import type {
   AiVaultScanProgress,
   AiVaultScanProgressUpdate,
   AiVaultScanWork
-} from '../../shared/ai-vault-scan-progress'
-import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import type { AiVaultServiceScanListener } from './scan-service/session-scanner-service-request-deadline'
 
 type Listener = (update: AiVaultScanProgressUpdate) => void
 

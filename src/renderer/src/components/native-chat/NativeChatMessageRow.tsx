@@ -1,20 +1,20 @@
 import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+} from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
 import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
 import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
-import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
   NativeChatSubagentDisclosure,
   NativeChatSubagentRosterState
@@ -25,8 +25,22 @@ import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onDismiss?: never; detail?: never }
-  | { sending?: never; text: string; onDismiss?: () => void; detail?: string }
+  | {
+      sending: true
+      text?: never
+      onDismiss?: never
+      onEdit?: never
+      onSend?: never
+      detail?: never
+    }
+  | {
+      sending?: never
+      text: string
+      detail?: string
+      onDismiss?: () => void
+      onEdit?: () => void
+      onSend?: () => void
+    }
 
 export type MessageRowProps = {
   message: NativeChatMessage
@@ -42,14 +56,13 @@ export type MessageRowProps = {
   continuesTurn?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
   deliveryNotice?: NativeChatDeliveryNotice
   /** On a roster row: its list's state and the subagents whose rows open below it. */
   subagentRoster?: NativeChatSubagentRosterState
   subagentDisclosure?: NativeChatSubagentDisclosure
   /** Inside a subagent's section, whose border has to reach past the row's controls. */
   inSubagentSection?: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
@@ -76,8 +89,6 @@ export const MessageRow = memo(function MessageRow(
     agentName,
     activeTurnIsWorking,
     onScrollMessageToTop,
-    onLinkClick,
-    allowFileUriLinks = false,
     deliveryNotice,
     runtimeContext,
     rewind,
@@ -94,29 +105,34 @@ export const MessageRow = memo(function MessageRow(
   const providerFrame = blocks.find((block) => block.type === 'text' && block.providerFrame)
   const run = useNativeChatWorkRun(workRun, {
     revealedDiff: props.revealedDiff,
-    activeTurnIsWorking,
-    onLinkClick,
-    allowFileUriLinks
+    activeTurnIsWorking
   })
 
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
   // Return after all hooks to preserve hook order when content disappears.
-  if (run === undefined && !rowHasContent(content)) {
+  if (run === undefined && !rowHasContent(content) && !message.agentStart) {
     return null
+  }
+
+  if (message.agentStart && message.from) {
+    return (
+      <div ref={rowRef} data-native-chat-message-id={message.id}>
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          runtimeContext={runtimeContext}
+          onRefolded={returnToView}
+        />
+      </div>
+    )
   }
 
   const notice = isSystem ? nativeChatNoticeBlock(blocks) : undefined
   if (notice) {
     return (
       <div ref={rowRef}>
-        <NativeChatNoticeRow
-          block={notice}
-          messageId={message.id}
-          agentName={agentName}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-        />
+        <NativeChatNoticeRow block={notice} messageId={message.id} agentName={agentName} />
       </div>
     )
   }
@@ -137,9 +153,8 @@ export const MessageRow = memo(function MessageRow(
         prose={prose}
         rowRef={rowRef}
         onRefolded={returnToView}
-        onLinkClick={onLinkClick}
-        allowFileUriLinks={allowFileUriLinks}
         runtimeContext={runtimeContext}
+        structuredAttachments={props.structuredAttachments}
         rewind={rewind}
         deliveryNotice={deliveryNotice}
       />
@@ -153,8 +168,6 @@ export const MessageRow = memo(function MessageRow(
           message={message}
           turnIsWorking={activeTurnIsWorking}
           markdown={markdown}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
         />
       </div>
     )

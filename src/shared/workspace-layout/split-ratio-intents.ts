@@ -1,7 +1,7 @@
 // Send divider path/ratio with split identity so main changes only the intended split in its own tree; a mismatching path must refuse.
 
 import type { TabGroupLayoutNode } from '../tab-types'
-import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
+import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import { SPLIT_RATIO_TOLERANCE } from './terminal-pane-tree'
 
 /** A split by its direction and the first pane (or group) on each side. */

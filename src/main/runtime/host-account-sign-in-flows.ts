@@ -3,7 +3,9 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import {
+  HOST_ACCOUNT_SIGN_IN_FAILURE_COPY,
   HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
+  type HostAccountSignInFailureCode,
   isHostAccountSignInPage,
   type HostAccountSignInChannel,
   type HostAccountSignInProvider,
@@ -18,8 +20,6 @@ const OWNER_SILENCE_MS = 90_000
 const CANCEL_WAIT_MS = 10_000
 const MAX_ERROR_CHARS = 600
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
-const SILENT_OWNER = 'The device that started this sign-in stopped answering.'
-const SUPERSEDED = 'An account change on this host stopped the sign-in. Start it again.'
 const LOGIN_CANCELLED_MESSAGES = new Set([
   'Claude sign-in was cancelled.',
   CODEX_LOGIN_CANCELLED_MESSAGE
@@ -117,7 +117,7 @@ export class HostAccountSignInFlows {
         flow,
         flow.stop === 'cancelled'
           ? { phase: 'cancelled', prompt: undefined }
-          : { phase: 'failed', prompt: undefined, error: failureMessage(flow, message) }
+          : { phase: 'failed', prompt: undefined, ...failure(flow, message) }
       )
     } finally {
       this.end(flow)
@@ -223,14 +223,22 @@ export class HostAccountSignInFlows {
   }
 }
 
-function failureMessage(flow: Flow, raw: string): string {
+function coded(
+  errorCode: HostAccountSignInFailureCode
+): Pick<HostAccountSignInStatus, 'error' | 'errorCode'> {
+  return { error: HOST_ACCOUNT_SIGN_IN_FAILURE_COPY[errorCode], errorCode }
+}
+
+function failure(flow: Flow, raw: string): Pick<HostAccountSignInStatus, 'error' | 'errorCode'> {
   if (flow.stop === 'silent') {
-    return SILENT_OWNER
+    return coded('ownerSilent')
   }
   const message = stripAnsiEscapeSequences(raw).trim()
   // Without our cancel, login cancellation means another host account action superseded this flow.
   if (LOGIN_CANCELLED_MESSAGES.has(message)) {
-    return SUPERSEDED
+    return coded('superseded')
   }
-  return message.length > MAX_ERROR_CHARS ? `${message.slice(0, MAX_ERROR_CHARS)}…` : message
+  return {
+    error: message.length > MAX_ERROR_CHARS ? `${message.slice(0, MAX_ERROR_CHARS)}…` : message
+  }
 }

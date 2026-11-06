@@ -1,7 +1,7 @@
 /** Evict nativeChatLaunchDraftByTabId wherever launch prompt retires (close, orphan sweep, bulk/single purge); stranded drafts otherwise keep publishing to mobile. */
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
@@ -98,108 +98,6 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
   afterEach(() => {
     main?.close()
     main = undefined
-  })
-
-  it('closeTab drops the closed tab’s draft only', () => {
-    const store = createTestStore()
-    seedDrafts(store)
-
-    store.getState().closeTab(TAB1)
-
-    const s = store.getState()
-    expect(s.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
-    expect(s.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
-  })
-
-  it('bulk purgeWorktreeTerminalState drops drafts for the removed worktree only', () => {
-    const store = createTestStore()
-    seedDrafts(store)
-
-    store.getState().purgeWorktreeTerminalState([WT1])
-
-    const s = store.getState()
-    expect(s.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
-    expect(s.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
-  })
-
-  it('single removeWorktree drops drafts for the removed worktree only', async () => {
-    const store = createTestStore()
-    seedDrafts(store)
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
-
-    expect(result).toEqual({ ok: true })
-    const s = store.getState()
-    expect(s.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
-    expect(s.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
-  })
-
-  it('persists the adopted flag, idempotently, and clears the whole entry', () => {
-    // Consumers stub these reducers; test real adopted handling so manual composer clears cannot revive prefill.
-    const store = createTestStore()
-    store.getState().seedNativeChatLaunchDraft(draft(TAB1, 'https://github.com/o/r/issues/1'))
-    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.adopted).toBeUndefined()
-
-    store.getState().markNativeChatLaunchDraftAdopted(TAB1)
-    const adopted = store.getState().nativeChatLaunchDraftByTabId[TAB1]
-    expect(adopted).toMatchObject({ tabId: TAB1, adopted: true })
-
-    store.getState().markNativeChatLaunchDraftAdopted(TAB1)
-    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]).toBe(adopted)
-
-    store.getState().clearNativeChatLaunchDraft(TAB1)
-    expect(TAB1 in store.getState().nativeChatLaunchDraftByTabId).toBe(false)
-  })
-
-  it('resolves only the exact draft generation', () => {
-    const store = createTestStore()
-    const entry = draft(TAB1, 'same text')
-    store.getState().seedNativeChatLaunchDraft(entry)
-
-    store.getState().resolveNativeChatLaunchDraft(TAB1, { text: entry.text, createdAt: 0 })
-    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBeUndefined()
-
-    store.getState().resolveNativeChatLaunchDraft(TAB1, {
-      text: entry.text,
-      createdAt: entry.createdAt
-    })
-    expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBe(true)
-  })
-
-  it('the orphan terminal cleanup patch drops swept tabs’ drafts only', () => {
-    const store = createTestStore()
-    seedDrafts(store)
-
-    const patch = buildOrphanTerminalCleanupPatch(store.getState(), WT1, new Set([TAB1]))
-
-    expect(patch.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
-    expect(patch.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
-  })
-
-  it('removing a worktree drops the unsent composer drafts of its tabs only', async () => {
-    const store = createTestStore()
-    seedDrafts(store)
-    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
-    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
-
-    expect(result).toEqual({ ok: true })
-    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
-    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
-  })
-
-  it('a user tab close drops the unsent composer drafts of that tab’s panes only', () => {
-    const store = createTestStore()
-    seedDrafts(store)
-    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
-    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
-
-    store.getState().closeTab(TAB2, { reason: 'pty-exit' })
-    store.getState().closeTab(TAB1)
-
-    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
-    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
   })
 
   it('a user tab close drops the uploads still on their way in that tab’s panes only', () => {

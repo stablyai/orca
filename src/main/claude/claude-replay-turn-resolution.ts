@@ -3,18 +3,18 @@ import {
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
-import { forgetRetiredWaiter } from './claude-structured-dispatch-waiters'
+import { forgetRetiredWaiter } from './structured/claude-structured-dispatch-waiters'
 import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
 import type {
   ClaudeDispatchWaiter,
   ClaudeLateDispatchOutcome,
   ClaudeSession
 } from './structured/claude-structured-session-state'
 import { readClaudeFrameString } from './structured/claude-structured-init-proof'
-import { claudeDispatchContentKey } from './claude-structured-dispatch-content'
+import { claudeDispatchContentKey } from './structured/claude-structured-dispatch-content'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -214,5 +214,34 @@ function recoverLateIdentity(
       clientMessageId: waiter.clientMessageId,
       providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
     })
+  }
+}
+
+/** Retain send ownership until publication and its delivery receipts have both settled. */
+export function withClaudeReplaySettlements(
+  session: ClaudeSession | null,
+  settlements: ClaudeLateDispatchOutcome[],
+  publish: () => void,
+  report: (settlement: ClaudeLateDispatchOutcome) => void
+): void {
+  const reported = session?.unreportedSettlements
+  if (session && settlements.length > 0) {
+    session.unreportedSettlements = new Set([
+      ...(reported ?? []),
+      ...settlements.map((settlement) => settlement.clientMessageId)
+    ])
+  }
+  try {
+    publish()
+  } finally {
+    try {
+      for (const settlement of settlements) {
+        report(settlement)
+      }
+    } finally {
+      if (session) {
+        session.unreportedSettlements = reported
+      }
+    }
   }
 }

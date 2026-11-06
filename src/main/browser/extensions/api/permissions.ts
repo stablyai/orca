@@ -2,14 +2,14 @@ import { z } from 'zod'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
-} from '../browser-extension-api-host'
+} from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   setBrowserExtensionGrantedPermissionsLookup,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   browserExtensionHostPatterns,
   containsBrowserExtensionPermissions,
@@ -19,19 +19,16 @@ import {
   withGrantedPermissions,
   withoutGrantedPermissions,
   type BrowserExtensionPermissionSet
-} from '../browser-extension-permission-grants'
-import { askToGrantBrowserExtensionPermissions } from '../browser-extension-permission-prompt'
-import { getBrowserExtensionProfileStateStore } from '../browser-extension-profile-state-store'
-import { getHostSessionState } from '../browser-extension-contexts'
-import { getBrowserExtensionContextSignal } from '../browser-extension-context-lifetime'
-import { getDnrSessionRuntime } from '../browser-extension-dnr-session'
+} from '../permissions/browser-extension-permission-grants'
+import { askToGrantBrowserExtensionPermissions } from '../permissions/browser-extension-permission-prompt'
+import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
+import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
+import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
+import { getDnrSessionRuntime } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { observeBrowserExtensionWebRequests } from '../browser-extension-web-request'
 
 const USER_GESTURE_WINDOW_MS = 5_000
-const recentGestures = new WeakMap<
-  Electron.Session,
-  Map<string, { at: number; signal: AbortSignal }>
->()
+const recentGestures = new WeakMap<AbortSignal, number>()
 const pendingRequests = new Set<string>()
 
 const permissionsSchema = z
@@ -56,24 +53,20 @@ export function noteBrowserExtensionUserGesture(
     return
   }
   const signal = getBrowserExtensionContextSignal(state, extensionId)
-  let gestures = recentGestures.get(session)
-  if (!gestures) {
-    gestures = new Map()
-    recentGestures.set(session, gestures)
-  }
-  gestures.set(extensionId, { at: Date.now(), signal })
+  recentGestures.set(signal, Date.now())
 }
 
 export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): boolean {
   if (caller.userGesture === true) {
     return true
   }
-  const gesture = recentGestures.get(caller.session)?.get(caller.extension.id)
-  return (
-    gesture !== undefined &&
-    !gesture.signal.aborted &&
-    Date.now() - gesture.at <= USER_GESTURE_WINDOW_MS
-  )
+  const state = getHostSessionState(caller.session)
+  if (!state) {
+    return false
+  }
+  const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
+  const at = recentGestures.get(signal)
+  return at !== undefined && !signal.aborted && Date.now() - at <= USER_GESTURE_WINDOW_MS
 }
 
 function readGrants(profileId: string, extensionId: string) {

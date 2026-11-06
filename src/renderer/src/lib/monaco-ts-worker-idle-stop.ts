@@ -26,45 +26,48 @@ export function installMonacoTsWorkerIdleStop<Options>(
   monaco: MonacoTsWorkerHost<Options>,
   delayMs = TS_WORKER_IDLE_STOP_MS
 ): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  const hasTsModels = (): boolean =>
-    monaco.editor.getModels().some((model) => TS_LANGUAGE_IDS.has(model.getLanguageId()))
+  const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  const schedule = (): void => {
-    if (timer !== null) {
+  const schedule = (languageId: string): void => {
+    const timer = timers.get(languageId)
+    if (timer !== undefined) {
       clearTimeout(timer)
     }
-    timer = setTimeout(() => {
-      timer = null
-      if (hasTsModels()) {
-        return
-      }
-      // Re-setting options fires onDidChange, which disposes the worker; the next TS model starts a fresh one.
-      for (const defaults of [
-        monaco.typescript.typescriptDefaults,
-        monaco.typescript.javascriptDefaults
-      ]) {
+    timers.set(
+      languageId,
+      setTimeout(() => {
+        timers.delete(languageId)
+        if (monaco.editor.getModels().some((model) => model.getLanguageId() === languageId)) {
+          return
+        }
+        const defaults =
+          languageId === 'typescript'
+            ? monaco.typescript.typescriptDefaults
+            : monaco.typescript.javascriptDefaults
+        // Each language owns its worker; resetting options releases only the idle one.
         defaults.setCompilerOptions(defaults.getCompilerOptions())
-      }
-    }, delayMs)
+      }, delayMs)
+    )
   }
 
   const subscriptions = [
     monaco.editor.onWillDisposeModel((model) => {
-      if (TS_LANGUAGE_IDS.has(model.getLanguageId())) {
-        schedule()
+      const languageId = model.getLanguageId()
+      if (TS_LANGUAGE_IDS.has(languageId)) {
+        schedule(languageId)
       }
     }),
     monaco.editor.onDidChangeModelLanguage(({ model, oldLanguage }) => {
-      if (TS_LANGUAGE_IDS.has(oldLanguage) && !TS_LANGUAGE_IDS.has(model.getLanguageId())) {
-        schedule()
+      if (TS_LANGUAGE_IDS.has(oldLanguage) && oldLanguage !== model.getLanguageId()) {
+        schedule(oldLanguage)
       }
     })
   ]
   return () => {
-    if (timer !== null) {
+    for (const timer of timers.values()) {
       clearTimeout(timer)
     }
+    timers.clear()
     for (const subscription of subscriptions) {
       subscription.dispose()
     }

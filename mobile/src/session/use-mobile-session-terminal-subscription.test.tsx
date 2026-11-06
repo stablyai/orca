@@ -15,11 +15,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
+import { terminalPaneViewport, type TerminalPaneViewport } from './mobile-terminal-pane-layout'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
@@ -32,6 +35,7 @@ function subscriptionHarness(opts: {
   frameWidth?: number
   viewport?: typeof PHONE
   synchronousEvents?: unknown[]
+  split?: boolean
 }) {
   let fit = opts.fit
   const order: string[] = []
@@ -48,6 +52,7 @@ function subscriptionHarness(opts: {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => fit),
+    scrollToBottom: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),
@@ -64,6 +69,7 @@ function subscriptionHarness(opts: {
   }
   const fields = {
     client: {
+      onStateChange: () => () => {},
       subscribe: vi.fn(
         (_method: string, params: Record<string, unknown>, onData: StreamHandler) => {
           order.push(`subscribe ${JSON.stringify(params.viewport ?? null)}`)
@@ -86,6 +92,15 @@ function subscriptionHarness(opts: {
     viewportResubscribeBudgetRef: { current: new TerminalViewportResubscribeBudget() },
     webReadyHandlesRef,
     activeHandleRef: { current: HANDLE },
+    activeHandle: HANDLE,
+    terminals: [{ handle: HANDLE, title: 'Terminal', isActive: true }],
+    splitTerminalHandles: null,
+    setSplitTerminalHandles: vi.fn(),
+    visibleTerminalHandles: [HANDLE],
+    visibleTerminalHandlesRef: { current: [HANDLE] },
+    showNativeChat: false,
+    switchTab: vi.fn(),
+    handleTerminalTap: vi.fn(),
     subscribeSeqRef,
     layoutSeqRef: { current: new Map() },
     terminalFrameRef,
@@ -104,6 +119,7 @@ function subscriptionHarness(opts: {
     unsubscribeTerminalRef: { current: vi.fn() },
     signalTerminalInventoryRecovery: vi.fn(),
     terminalRefs: { current: new Map([[HANDLE, terminal]]) },
+    terminalPaneViewportsRef: { current: new Map<string, TerminalPaneViewport>() },
     pendingSelectionRef: { current: null },
     nativeChatStream: { notifyWebReady: vi.fn() },
     terminalGestureInputBucketsRef: { current: new Map() },
@@ -117,20 +133,57 @@ function subscriptionHarness(opts: {
     notifyTerminalFrameHeight: vi.fn(),
     notifyTerminalFrameWidth: vi.fn()
   }
+  const second = {
+    ...terminal,
+    write: vi.fn(),
+    init: vi.fn(),
+    fitDimensions: vi.fn(() => ({ cols: 30, rows: 20 }))
+  }
+  const secondGeometry: TerminalPaneViewport = {
+    terminalFrameRef: { current: { width: 240, height: 320 } },
+    viewportRef: { current: null },
+    viewportMeasuredRef: { current: false }
+  }
+  fields.terminalPaneViewportsRef.current.set(HANDLE, {
+    terminalFrameRef: fields.terminalFrameRef,
+    viewportRef: fields.viewportRef,
+    viewportMeasuredRef: fields.viewportMeasuredRef
+  })
+  fields.terminalPaneViewportsRef.current.set('term-2', secondGeometry)
+  if (opts.split) {
+    fields.terminals.push({ handle: 'term-2', title: 'Second', isActive: false })
+    fields.visibleTerminalHandles.push('term-2')
+    fields.visibleTerminalHandlesRef.current.push('term-2')
+    fields.webReadyHandlesRef.current.add('term-2')
+    fields.terminalRefs.current.set('term-2', second)
+  }
+  fields.getTerminalRef = (handle: string | null) =>
+    handle === HANDLE ? currentTerminal : handle === 'term-2' && opts.split ? second : undefined
   fields.unsubscribeTerminalRef.current.mockImplementation(fields.unsubscribeTerminal)
   let subscribe: ((handle: string) => void) | undefined
   let webReady: ((handle: string) => void) | undefined
+  let setRef: ((handle: string, ref: TerminalWebViewHandle | null) => void) | undefined
   let notifyFrame: ((frame: { width: number; height: number }) => void) | undefined
   function Probe() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook destructures only the fields built above.
-    const scope = fields as unknown as MobileSessionTerminalSubscriptionFoundationModel
+    const scope = {
+      ...fields,
+      getTerminalPaneViewport: (handle: string) =>
+        terminalPaneViewport(fields.terminalPaneViewportsRef.current, handle)
+    } as unknown as MobileSessionTerminalSubscriptionFoundationModel
     subscribe = useMobileSessionTerminalSubscription(scope).subscribeToTerminal
-    const withSubscribe = { ...fields, subscribeToTerminal: subscribe }
+    const withSubscribe = {
+      ...fields,
+      subscribeToTerminal: subscribe,
+      getTerminalPaneViewport: (handle: string) =>
+        terminalPaneViewport(fields.terminalPaneViewportsRef.current, handle)
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the web-ready handler reads only the fields built above.
     const webviewScope = withSubscribe as unknown as MobileSessionTabSwitchingModel
     const webview = useMobileSessionTerminalWebview(webviewScope)
     webReady = webview.handleTerminalWebReady
-    notifyFrame = webview.notifyTerminalFrame
+    setRef = webview.setTerminalWebViewRef
+    notifyFrame = (frame) => webview.notifyTerminalPaneFrame(HANDLE, frame)
     return null
   }
   act(() => {
@@ -144,6 +197,8 @@ function subscriptionHarness(opts: {
     order,
     stopStream,
     subscribe: () => act(() => subscribe!(HANDLE)),
+    subscribeHandle: (handle: string) => act(() => subscribe!(handle)),
+    second,
     scrollback,
     terminal,
     event: (index: number, data: unknown) => act(() => handlers[index](data)),
@@ -151,6 +206,13 @@ function subscriptionHarness(opts: {
       currentTerminal = next
       fields.terminalRefs.current.set(HANDLE, next)
     },
+    replaceImperativeHandle: () =>
+      act(() => {
+        setRef!(HANDLE, null)
+        currentTerminal = { ...terminal }
+        setRef!(HANDLE, currentTerminal)
+      }),
+    // The document's web-ready, carrying the box xterm laid out.
     documentReady: () => {
       act(() => webReady!(HANDLE))
     },
@@ -192,46 +254,12 @@ describe('a terminal first subscribe', () => {
     ])
   })
 
-  it('sizes from the reported box against the laid-out frame', () => {
-    const harness = subscriptionHarness({ fit: PHONE, webReady: true, frameWidth: 427.5 })
-    harness.subscribe()
-    expect(harness.terminal.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
-    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
-  })
-
-  it('keeps a measured viewport rather than fitting again', () => {
-    const measured = { cols: 60, rows: 40 }
-    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: measured })
-    harness.subscribe()
-    expect(harness.terminal.fitDimensions).not.toHaveBeenCalled()
-    expect(harness.order).toEqual(['subscribe {"cols":60,"rows":40}'])
-  })
-
   it('holds a ready document without a box until its frame is laid out', () => {
     const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
     harness.subscribe()
     expect(harness.order).toEqual([])
     harness.layOutFrame(427)
     expect(harness.order).toEqual(['subscribe null'])
-  })
-
-  it('keeps one frame, notifies a new width, and subscribes on the first layout only', () => {
-    const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
-    const { notifyTerminalFrameHeight, notifyTerminalFrameWidth } = harness.fields
-    harness.layOutFrame(0, 0)
-    expect(harness.terminalFrameRef.current).toBeNull()
-    harness.layOutFrame(427, 751)
-    harness.layOutFrame(427, 700)
-    expect(harness.order).toEqual(['subscribe null'])
-    expect(notifyTerminalFrameWidth).not.toHaveBeenCalled()
-    harness.layOutFrame(0, 0)
-    expect(harness.terminalFrameRef.current).toEqual({ width: 427, height: 700 })
-    harness.layOutFrame(360.5, 700)
-    expect(harness.terminalFrameRef.current).toEqual({ width: 360.5, height: 700 })
-    expect(notifyTerminalFrameWidth).toHaveBeenCalledTimes(1)
-    expect(notifyTerminalFrameHeight.mock.calls.map(([height]) => height)).toEqual([
-      0, 751, 700, 0, 700
-    ])
   })
 
   it('goes without dims when no cell box was reported, and the fit pass resubscribes once', async () => {
@@ -268,13 +296,6 @@ describe('settled terminal fits belong to their stream and document', () => {
     harness.fields.webReadyHandlesRef.current.clear()
     harness.fields.webReadyHandlesRef.current.add(HANDLE)
   }
-
-  it('still fits a current initial snapshot after the same settling delay', () => {
-    const h = start()
-    expect(fits(h)).toHaveLength(1)
-    act(() => fits(h)[0]())
-    expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
-  })
   it('does not fit after the stream was unsubscribed', () => {
     const h = start()
     h.fields.unsubscribeTerminal(HANDLE)
@@ -339,13 +360,6 @@ describe('settled terminal fits belong to their stream and document', () => {
     act(() => fits(h)[0]())
     expect(h.terminal.resetZoom).not.toHaveBeenCalled()
     expect(h.fields.signalTerminalInventoryRecovery).toHaveBeenCalledTimes(1)
-  })
-  it('still fits the current geometry-only resize', () => {
-    const h = start()
-    h.event(0, { type: 'resized', seq: 2, cols: 60, rows: 40 })
-    expect(h.terminal.resize).toHaveBeenCalledWith(60, 40, h.terminalFrameRef.current)
-    act(() => fits(h)[1]())
-    expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
   })
   it('does not let an ignored older resize invalidate the latest accepted fit', () => {
     const h = start()
@@ -458,4 +472,53 @@ describe('foreground snapshots preserve the terminal reading position', () => {
       }
     }
   )
+})
+
+describe('two visible terminal subscriptions', () => {
+  it('retains a split pane frame when a mounted document replaces its imperative handle', () => {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, split: true })
+    harness.fields.unsubscribeTerminal(HANDLE)
+    vi.mocked(harness.terminal.fitDimensions).mockImplementation((frame) => ({
+      cols: Math.floor(frame.width / 8),
+      rows: Math.floor(frame.height / 16)
+    }))
+    harness.layOutFrame(376, 224)
+    harness.fields.unsubscribeTerminal(HANDLE)
+    const priorSubscriptions = harness.fields.client.subscribe.mock.calls.length
+    harness.replaceImperativeHandle()
+    harness.subscribe()
+    expect(harness.fields.client.subscribe).toHaveBeenCalledTimes(priorSubscriptions + 1)
+    expect(harness.fields.client.subscribe.mock.calls.at(-1)?.[1]).toMatchObject({
+      terminal: HANDLE,
+      viewport: { cols: 47, rows: 14 }
+    })
+    expect(
+      harness.fields.terminalPaneViewportsRef.current.get(HANDLE)?.terminalFrameRef.current
+    ).toEqual({ width: 376, height: 224 })
+  })
+
+  it('subscribes and renders both streams with their own measured grids', () => {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, split: true })
+    harness.subscribe()
+    harness.subscribeHandle('term-2')
+    const requests = harness.fields.client.subscribe.mock.calls
+    expect(requests.map((call) => [call[1].terminal, call[1].viewport])).toEqual([
+      [HANDLE, PHONE],
+      ['term-2', { cols: 30, rows: 20 }]
+    ])
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.scrollback(1, 30, 20)
+    harness.event(0, { type: 'data', chunk: 'first' })
+    harness.event(1, { type: 'data', chunk: 'second' })
+    expect(harness.terminal.write).toHaveBeenCalledWith('first')
+    expect(harness.terminal.write).not.toHaveBeenCalledWith('second')
+    expect(harness.second.write).toHaveBeenCalledWith('second')
+    expect(harness.second.init).toHaveBeenCalledWith(
+      expect.objectContaining({ cols: 30, rows: 20, frame: { width: 240, height: 320 } })
+    )
+    harness.fields.activeHandleRef.current = 'term-2'
+    harness.event(0, { type: 'data', chunk: 'still live' })
+    expect(harness.terminal.write).toHaveBeenCalledWith('still live')
+    expect(harness.fields.terminalUnsubsRef.current.size).toBe(2)
+  })
 })

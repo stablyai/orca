@@ -1,15 +1,15 @@
 /** Merge local/paired-host samples and daemon sessions by project/workspace; unsampled metrics are null and paired rows are read-only. */
 
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
-import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type {
-  DaemonSession,
   MergeContext,
   UnifiedProjectGroup,
   UnifiedSessionRow,
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,
@@ -20,9 +20,15 @@ import {
   resolveDaemonSessionLabel,
   resolveSnapshotSessionLabel
 } from './resource-session-labels'
+import { translate } from '@/i18n/i18n'
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
-export const UNATTRIBUTED_REPO_NAME = 'Unattributed'
+function getUnattributedRepoName(): string {
+  return translate(
+    'auto.components.status.bar.mergeSnapshotAndSessions.unattributed',
+    'Unattributed'
+  )
+}
 
 export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
@@ -176,7 +182,7 @@ export function mergeSnapshotAndSessions(
       ? UNATTRIBUTED_REPO_ID
       : (worktree?.repoId ?? getRepoIdFromWorktreeId(finalWorktreeId))
     const finalRepoName = isUnattributed
-      ? UNATTRIBUTED_REPO_NAME
+      ? getUnattributedRepoName()
       : ctx.repoDisplayNameById.get(finalRepoId) || finalRepoId
     const finalWorktreeName = isUnattributed
       ? session.title || session.id.slice(0, 12)

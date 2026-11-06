@@ -6,6 +6,7 @@ import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/new-workspace-project-options'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -119,7 +120,12 @@ export function NewWorkspaceComposerProjectSection({
           <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
             <ProjectCombobox
               options={projectOptions}
-              value={selectedProjectId}
+              value={getSelectedNewWorkspaceProjectOptionId(
+                projectOptions,
+                selectedProjectId,
+                selectedProjectHostSetupId,
+                selectedRepoExecutionHostId
+              )}
               onValueChange={onProjectChange}
               onValueSelected={focusNameInput}
               onAddProject={onAddProject}
@@ -183,8 +189,11 @@ export function NewWorkspaceComposerProjectSection({
         >
           <div className="min-w-0">
             <div className="truncate text-xs font-medium text-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-              {selectedProjectName}
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.connectProject',
+                'Connect {{name}}',
+                { name: selectedProjectName }
+              )}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
           </div>

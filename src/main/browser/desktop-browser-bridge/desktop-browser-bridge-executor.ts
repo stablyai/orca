@@ -11,11 +11,11 @@ import {
 } from '../../../shared/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
+import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }
-  | { ok: false; error: { code: string; message: string } }
+  | { ok: false; error: { code: string; message: string; data?: unknown } }
 
 export type DesktopBrowserBridgeAuditEntry = {
   environmentId: string
@@ -102,7 +102,7 @@ export async function executeDesktopBrowserBridgeRequest(
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })
-      return { ok: false, error: { code: response.error.code, message: response.error.message } }
+      return { ok: false, error: response.error }
     }
     deps.audit({ ...audit, outcome: 'ok' })
     return { ok: true, result: response.result }
@@ -137,6 +137,12 @@ async function scopeRequest(
   }
   const params: Record<string, unknown> = { ...request.params }
   if (request.method === 'browser.tabCreate') {
+    if (params.split !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --split is not available from an SSH host; the desktop decides where its tabs open.'
+      )
+    }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {
       delete params[key]
     }

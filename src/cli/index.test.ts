@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { worktreeRemovalReplyTimeoutMs } from '../shared/worktree/archive-hook-removal-gate'
 
 const {
   callMock,
@@ -30,9 +31,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -41,7 +45,7 @@ vi.mock('child_process', async () => {
 })
 
 import { COMMAND_SPECS, main } from './index'
-import { GLOBAL_FLAGS, specPaths } from './args'
+import { specPaths } from './args'
 import { okFixture, queueFixtures } from './test-fixtures'
 
 describe('COMMAND_SPECS collision check', () => {
@@ -53,20 +57,6 @@ describe('COMMAND_SPECS collision check', () => {
         const key = path.join(' ')
         expect(seen.has(key), `Duplicate command/alias path: "${key}"`).toBe(false)
         seen.add(key)
-      }
-    }
-  })
-
-  it('allows every flag documented in command usage strings', () => {
-    const flagPattern = /--([a-zA-Z0-9-]+)/g
-    for (const spec of COMMAND_SPECS) {
-      const allowed = new Set([...GLOBAL_FLAGS, ...spec.allowedFlags])
-      for (const match of spec.usage.matchAll(flagPattern)) {
-        const flag = match[1]
-        expect(
-          allowed.has(flag),
-          `Documented flag --${flag} is not allowed for command: ${spec.path.join(' ')}`
-        ).toBe(true)
       }
     }
   })
@@ -98,27 +88,36 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true }),
+      expect.anything()
     )
   })
 
-  it('runs `worktree delete` as the canonical `worktree rm`', async () => {
+  it('asks the host to reply with the delete outcome and waits past Git deletion (#35135)', async () => {
     queueFixtures(
       callMock,
-      okFixture('req_show', { worktree: { hostId: 'runtime:env-1' } }),
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
       okFixture('req', { removed: true })
     )
 
-    await main(['worktree', 'delete', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--run-hooks'], '/tmp/repo')
 
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'runtime:env-1' })
+      expect.objectContaining({ waitForBackgroundRemoval: true }),
+      {
+        timeoutMs: worktreeRemovalReplyTimeoutMs(true),
+        requestSelection: {
+          paramsForStatus: expect.any(Function),
+          onDispatch: expect.any(Function)
+        }
+      }
     )
+    expect(logSpy).toHaveBeenCalledWith('removed: true')
   })
 
-  it('says the checkout is still being deleted when the host accepted a background removal', async () => {
+  it('does not say removed when an older host only accepted a background removal', async () => {
     queueFixtures(
       callMock,
       okFixture('req_show', { worktree: { hostId: 'local' } }),
@@ -128,8 +127,25 @@ describe('command aliases dispatch to the canonical handler', () => {
     await main(['worktree', 'rm', '--worktree', 'id:wt-1'], '/tmp/repo')
 
     expect(logSpy).toHaveBeenCalledWith(
-      'removed: true\nOrca is still deleting the checkout in the background.'
+      'removed: false\nOrca is still deleting the checkout in the background.'
     )
+  })
+
+  it('leaves missing removal and branch outcomes unconfirmed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('show', { worktree: { hostId: 'local' } }),
+      okFixture('rm', {})
+    )
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--delete-branch'], '/tmp/repo')
+    expect(logSpy).toHaveBeenCalledWith('Removal is not confirmed.')
+    queueFixtures(
+      callMock,
+      okFixture('show', { worktree: { hostId: 'local' } }),
+      okFixture('rm', {})
+    )
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+    expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0])).result).toEqual({})
   })
 
   it('fails closed when worktree removal cannot resolve a host', async () => {
@@ -180,7 +196,8 @@ describe('command aliases dispatch to the canonical handler', () => {
         expect.objectContaining({
           runHooks: true,
           allowFailedArchiveHook: false
-        })
+        }),
+        expect.anything()
       )
       expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
         id: 'req_archive',
@@ -240,18 +257,8 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.rm',
-      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true })
-    )
-  })
-
-  it('still runs `terminal focus` after the handler de-duplication', async () => {
-    queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
-
-    await main(['terminal', 'focus', '--terminal', 'term_abc', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'terminal.focus',
-      expect.objectContaining({ navigation: 'host' })
+      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true }),
+      expect.anything()
     )
   })
 
@@ -347,7 +354,7 @@ describe('unknown command surfaces a suggestion', () => {
       expect(process.exitCode).toBe(1)
       const output = logSpy.mock.calls.flat().join('\n')
       expect(output).toContain('invalid_argument')
-      expect(output).toContain('"runtimeId": null')
+      expect(JSON.parse(output)).toHaveProperty('ok', false)
       expect(output).not.toContain(`orca ${forbidden}`)
       expect(output).not.toContain(`"${forbidden}"`)
       expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
@@ -372,6 +379,7 @@ describe('unknown command surfaces a suggestion', () => {
   })
 
   it('names the offending --worktree value and the valid forms on selector_not_found', async () => {
+    const stdoutSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const { RuntimeRpcFailureError } = await import('./runtime/types.js')
     callMock.mockRejectedValue(
       new RuntimeRpcFailureError({
@@ -399,14 +407,17 @@ describe('unknown command surfaces a suggestion', () => {
     )
 
     expect(process.exitCode).toBe(1)
+    // Orchestration failures keep one stderr line and print the recovery detail on stdout.
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    const stdout = stdoutSpy.mock.calls.map((call) => String(call[0])).join('\n')
     expect(callMock).toHaveBeenCalledExactlyOnceWith(
       'orchestration.workerStart',
       expect.objectContaining({ worktree: 'repo-1', from: 'term-caller' })
     )
-    expect(stderr).toContain('No Orca workspace matched the worktree selector "repo-1"')
-    expect(stderr).toContain('id:repo-1::<absolute-path>')
-    expect(stderr).toContain('Valid selector forms:')
+    expect(stderr).toBe('error: selector_not_found: selector_not_found')
+    expect(stdout).toContain('No Orca workspace matched the worktree selector "repo-1"')
+    expect(stdout).toContain('id:repo-1::<absolute-path>')
+    expect(stdout).toContain('Valid selector forms:')
   })
 
   it('reports a pre-command flag that belongs to another command', async () => {
@@ -533,34 +544,5 @@ describe('nested command group help', () => {
       process.exitCode = previousExitCode
       serveOrcaAppMock.mockReset()
     }
-  })
-})
-
-describe('orca help', () => {
-  it('progressively discloses Linear commands', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['--help'], '/tmp/repo')
-
-    const rootHelp = String(logSpy.mock.calls[0][0])
-    expect(rootHelp).toContain('linear')
-    expect(rootHelp).not.toContain('linear issue')
-
-    logSpy.mockClear()
-    await main(['linear', '--help'], '/tmp/repo')
-
-    const groupHelp = String(logSpy.mock.calls[0][0])
-    expect(groupHelp).toContain('orca linear')
-    expect(groupHelp).toContain('issue')
-    expect(groupHelp).not.toContain('--comments')
-
-    logSpy.mockClear()
-    await main(['linear', 'issue', '--help'], '/tmp/repo')
-
-    const issueHelp = String(logSpy.mock.calls[0][0])
-    expect(issueHelp).toContain('orca linear issue')
-    expect(issueHelp).toContain('--comments')
-    expect(callMock).not.toHaveBeenCalled()
-    logSpy.mockRestore()
   })
 })

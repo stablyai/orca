@@ -9,14 +9,14 @@ import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-he
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
-import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import { buildHeadlessMobileSessionTerminalTabs } from '../../mobile-session-terminal-projection'
+import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
 import {
   RestoredPaneStarter,
   type RestoredPane,
@@ -24,15 +24,15 @@ import {
   type RestoredPaneTrigger
 } from '../../terminal/recovery/restored-pane-start'
 import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
-import { reopenNewerDaemonTerminals } from '../../../daemon/daemon-newer-protocol-hold'
+import { reopenNewerDaemonTerminals } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
-import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
-import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
-import { HistoryReader } from '../../../daemon/history-reader'
+import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
+import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
+import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -147,6 +147,14 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     })
   }
 
+  /** The user's Start on panes main held for a stopped WSL distro: each starts as the user's act. */
+  async startWslHeldTerminalPanes(panes: readonly RestoredPane[]): Promise<{ started: boolean }> {
+    const results = await Promise.allSettled(
+      panes.map((pane) => this.ensureRestoredPaneStarted(pane, { wslUserAct: true }))
+    )
+    return { started: results.every((result) => result.status === 'fulfilled' && result.value) }
+  }
+
   /**
    * The session a WSL move installed for this pane (its carried checkpoint, interrupted), so its
    * first start cold-restores that history once like after an app restart; undefined otherwise.
@@ -199,7 +207,8 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       automatic = false,
       targetsHost = false,
       targetGroupId,
-      sessionId
+      sessionId,
+      wslUserAct
     }: RestoredPaneTrigger & { sessionId?: string }
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
@@ -216,7 +225,9 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     if (resumeStartup === undefined && tab.launchAgent) {
       let workspace
       try {
-        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
+          wslUserAct: wslUserAct === true
+        })
         agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
           agent: tab.launchAgent
         })
@@ -262,6 +273,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
             : {}),
           launchRuntime: agentStartup.launchRuntime,
           targetGroupId,
+          ...(wslUserAct ? { wslUserAct } : {}),
           onPtySpawnDispatched: () => {
             dispatched = true
           },
@@ -290,6 +302,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
               }
             : {}),
           ...(automatic ? { refuseSleptWorktree: true } : {}),
+          reopensPane: true,
           // Only resumes from this pane's record show the window banner.
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }

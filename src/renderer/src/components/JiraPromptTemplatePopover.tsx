@@ -123,7 +123,7 @@ export function JiraPromptTemplatePopover({
             disabled={copying || !prompt}
             onClick={async () => {
               setCopying(true)
-              const copied = await copyJiraTextToClipboard(prompt, 'Prompt')
+              const copied = await copyJiraTextToClipboard(prompt, 'prompt')
               setCopying(false)
               if (copied) {
                 onClose()

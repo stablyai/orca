@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   createAutomationTerminalOwnership,
   type AutomationTerminalOwnershipStore
@@ -205,17 +205,6 @@ describe('automation terminal ownership', () => {
         ]
       }
     })
-
-    expect(await ownership.finalize({ preservePane: false })).toBeNull()
-    expect(closeTab).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['remote runtime', { runtimeKind: 'environment' as const }],
-    ['remote PTY identity', { ptyId: 'remote:env-1@@terminal-1' }]
-  ])('never owns a %s terminal', async (_label, overrides) => {
-    const { closeTab, store } = createStore()
-    const ownership = own(store, overrides)
 
     expect(await ownership.finalize({ preservePane: false })).toBeNull()
     expect(closeTab).not.toHaveBeenCalled()

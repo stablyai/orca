@@ -1,43 +1,44 @@
+import type { Socket } from 'node:net'
 import {
   formatAssignmentInventorySnapshot,
   readAssignmentInventorySnapshot
 } from './assignment/assignment-inventory-snapshot.js'
-import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { readRegionCorrectionOutcomes } from './assignment/regional-rehome/region-correction-outcomes.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { loadRelayConfig } from './config.js'
-import { startCellHeartbeat } from './cell-heartbeat-client.js'
+import { startCellHeartbeat } from './cell/cell-heartbeat-client.js'
 import {
   CELL_FLAG_DEFAULTS,
   CELL_FLAGS_APPLIED_EVENT,
   type CellFlags,
   cellFlagObjectName,
   cellFlagParser
-} from './cell-flags.js'
-import { startControlFlagChannel } from './relay-control-flag-channel.js'
-import { readCloudRunInstanceZone } from './cloud-run-instance-zone.js'
-import { readSandboxTcpCounters } from './sandbox-tcp-counters.js'
+} from './cell/control-flags/cell-flags.js'
+import { startControlFlagChannel } from './cell/control-flags/relay-control-flag-channel.js'
+import { readCloudRunInstanceZone } from './process-lifecycle/cloud-run-instance-zone.js'
+import { readSandboxTcpCounters } from './observability/sandbox-tcp-counters.js'
 import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
-} from './cell-admission-startup.js'
-import { openRelayDatabaseAtBoot } from './boot-database-open.js'
+} from './cell/admission/cell-admission-startup.js'
+import { openRelayDatabaseAtBoot } from './database/boot-database-open.js'
 import {
   consumeRelayCellInventoryHold,
   consumeRelayDatabasePoolPressure,
   readRelayDatabasePoolPressure
-} from './database.js'
+} from './database/database.js'
 import { runAssignmentCleanup } from './assignment/assignment-cleanup-steps.js'
-import { runRelayBackgroundOperation } from './relay-background-operation.js'
-import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
-import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
-import { observedRelayRequests } from './relay-observability.js'
-import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
-import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
+import { runRelayBackgroundOperation } from './process-lifecycle/relay-background-operation.js'
+import { readPostgresLockWaitSample } from './database/postgres-lock-wait-sample.js'
+import { jitteredSweepIntervalMs } from './process-lifecycle/relay-sweep-schedule.js'
+import { observedRelayRequests } from './observability/relay-observability.js'
+import { handleRelayUnhandledRejection } from './database/relay-database-rejection-fence.js'
+import { startRegionalRehomeWorker } from './assignment/regional-rehome/regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
 import {
   formatRegisteredMigrationInventory,
   readRegisteredMigrationInventory
-} from './registered-migration-inventory.js'
+} from './assignment/migrations/registered-migration-inventory.js'
 
 // Both read the cell's switch file once it exists; until then, the boot values.
 let cellFlagsApplied: (() => CellFlags) | null = null
@@ -179,11 +180,45 @@ const heartbeat = startCellHeartbeat(config, {
   })
 })
 
+// Includes upgraded sockets, which closeAllConnections() does not reach.
+const openSockets = new Set<Socket>()
+server.on('connection', (socket: Socket) => {
+  openSockets.add(socket)
+  socket.once('close', () => openSockets.delete(socket))
+})
 server.listen(config.port, () => {
   console.log(`[orca-relay] listening on ${config.publicUrl} (port ${config.port})`)
 })
 
+// server.close() waits on every socket and stops header timeouts, so one silent TCP peer held exit until docker's SIGKILL.
+const SHUTDOWN_SOCKET_GRACE_MS = 5_000
+const SHUTDOWN_EXIT_BACKSTOP_MS = 10_000
+const SHUTDOWN_POOL_SETTLE_DEADLINE_MS = 9_000
+// pool.end() fails callers still queued for a client, so let checked-out and queued work settle first.
+const databasePoolBusy = (): boolean => {
+  const pool = readRelayDatabasePoolPressure(database)
+  return pool.databasePoolWaiting > 0 || pool.databasePoolTotal > pool.databasePoolIdle
+}
+async function closeDatabaseAndExit(shutdownStartedAt: number): Promise<void> {
+  while (databasePoolBusy() && Date.now() - shutdownStartedAt < SHUTDOWN_POOL_SETTLE_DEADLINE_MS) {
+    await new Promise((resolveTick) => setTimeout(resolveTick, 50))
+  }
+  await database.close().catch(() => undefined)
+  process.exit(0)
+}
+let shuttingDown = false
 const shutdown = (): void => {
+  if (shuttingDown) {
+    return
+  }
+  shuttingDown = true
+  const shutdownStartedAt = Date.now()
+  setTimeout(() => process.exit(0), SHUTDOWN_EXIT_BACKSTOP_MS).unref()
+  setTimeout(() => {
+    for (const socket of openSockets) {
+      socket.destroy()
+    }
+  }, SHUTDOWN_SOCKET_GRACE_MS).unref()
   if (cleanupTimer) clearInterval(cleanupTimer)
   if (assignmentCleanupTimer) clearInterval(assignmentCleanupTimer)
   if (inventorySnapshotTimer) clearInterval(inventorySnapshotTimer)
@@ -195,7 +230,8 @@ const shutdown = (): void => {
   shadowSeatPoller?.stop()
   cellFlagChannel?.stop()
   sessions.drain(0)
-  server.close(() => void database.close().catch(() => undefined))
+  server.close(() => void closeDatabaseAndExit(shutdownStartedAt).catch(() => undefined))
 }
-process.once('SIGTERM', shutdown)
-process.once('SIGINT', shutdown)
+// A repeated signal must not fall through to Node's default immediate exit.
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)

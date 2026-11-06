@@ -1,11 +1,11 @@
 import React from 'react'
-import type { GitHistoryGraphColorId } from '../../../../../../shared/git-history'
+import type { GitHistoryGraphColorId } from '../../../../../../shared/git/history/git-history-types'
 import {
   getGitHistoryItemColor,
   getGitHistoryItemLaneIndex,
   getGitHistoryMergeParentLaneIndex,
   type GitHistoryItemViewModel
-} from '../../../../../../shared/git-history-graph'
+} from '../../../../../../shared/git/history/git-history-graph'
 
 const SWIMLANE_HEIGHT = 24
 const SWIMLANE_WIDTH = 11

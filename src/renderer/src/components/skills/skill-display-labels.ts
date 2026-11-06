@@ -16,33 +16,38 @@ export function sourceKindLabel(kind: SkillSourceKind): string {
 }
 
 export function skillCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.skillOne', '{{count}} skill', { count })
-    : translate('auto.components.skills.count.skillOther', '{{count}} skills', { count })
+  return translate('auto.components.skills.count.skill', '{{count}} skills', {
+    count,
+    defaultValue_one: '{{count}} skill'
+  })
 }
 
 export function sourceCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.sourceOne', '{{count}} source', { count })
-    : translate('auto.components.skills.count.sourceOther', '{{count}} sources', { count })
+  return translate('auto.components.skills.count.source', '{{count}} sources', {
+    count,
+    defaultValue_one: '{{count}} source'
+  })
 }
 
 export function fileCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.fileOne', '{{count}} file', { count })
-    : translate('auto.components.skills.count.fileOther', '{{count}} files', { count })
+  return translate('auto.components.skills.count.file', '{{count}} files', {
+    count,
+    defaultValue_one: '{{count}} file'
+  })
 }
 
 export function shareLinkCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.linkOne', '{{count}} link', { count })
-    : translate('auto.components.skills.count.linkOther', '{{count}} links', { count })
+  return translate('auto.components.skills.count.link', '{{count}} links', {
+    count,
+    defaultValue_one: '{{count}} link'
+  })
 }
 
 export function resultCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.resultOne', '{{count}} result', { count })
-    : translate('auto.components.skills.count.resultOther', '{{count}} results', { count })
+  return translate('auto.components.skills.count.result', '{{count}} results', {
+    count,
+    defaultValue_one: '{{count}} result'
+  })
 }
 
 export function selectedCountLabel(count: number): string {
@@ -50,19 +55,22 @@ export function selectedCountLabel(count: number): string {
 }
 
 export function shareSelectionActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.shareOne', 'Share {{count}} skill', { count })
-    : translate('auto.components.skills.count.shareOther', 'Share {{count}} skills', { count })
+  return translate('auto.components.skills.count.share', 'Share {{count}} skills', {
+    count,
+    defaultValue_one: 'Share {{count}} skill'
+  })
 }
 
 export function installSkillsActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.installOne', 'Install {{count}} skill', { count })
-    : translate('auto.components.skills.count.installOther', 'Install {{count}} skills', { count })
+  return translate('auto.components.skills.count.install', 'Install {{count}} skills', {
+    count,
+    defaultValue_one: 'Install {{count}} skill'
+  })
 }
 
 export function retrySkillsActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.retryOne', 'Retry {{count}} skill', { count })
-    : translate('auto.components.skills.count.retryOther', 'Retry {{count}} skills', { count })
+  return translate('auto.components.skills.count.retry', 'Retry {{count}} skills', {
+    count,
+    defaultValue_one: 'Retry {{count}} skill'
+  })
 }

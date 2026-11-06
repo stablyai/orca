@@ -4,10 +4,25 @@
   "family": "worktree.setup-hook-trust",
   "namedDeltas": [],
   "values": {
+    "227b8a130a49": {
+      "name": "ui.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000},\"all\":{\"approvedAt\":1767225600000}}}}}"
+    },
     "229c35d1a4ba": {
       "trust": "unapproved"
     },
-    "b6a1b1ed0a08": {
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "fed440092fe8": {
       "name": "ui.set#1",
       "ordinal": 1,
       "args": [
@@ -22,6 +37,10 @@
               "repo-1": {
                 "all": {
                   "approvedAt": 1767225600000
+                },
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
                 }
               }
             }
@@ -47,21 +66,6 @@
           "ok": false
         }
       }
-    },
-    "f35a1e7f7cdb": {
-      "name": "ui.set#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"all\":{\"approvedAt\":1767225600000}}}}}"
-    },
-    "f3b516f62081": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": false
-      }
     }
   },
   "recording": {
@@ -70,8 +74,8 @@
       {
         "id": "refused-empty-message",
         "observation": {
-          "sender": ["b6a1b1ed0a08"],
-          "payloads": ["f35a1e7f7cdb"],
+          "sender": ["fed440092fe8"],
+          "payloads": ["227b8a130a49"],
           "settlements": {
             "approve": "f3b516f62081"
           },

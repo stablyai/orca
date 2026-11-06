@@ -5,7 +5,7 @@ import type { ValidatedCookie } from './sources/browser-cookie-validation'
 vi.mock('electron', () => ({ dialog: {}, session: {} }))
 vi.mock('./browser-cookie-import-diagnostics', () => ({
   diag: vi.fn(),
-  reasonWithDiagLog: (message: string) => message,
+  getDiagLogPath: () => 'cookie-import-diag.log',
   summarizeCookieImportError: String
 }))
 

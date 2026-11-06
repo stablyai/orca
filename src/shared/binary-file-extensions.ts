@@ -1,4 +1,6 @@
-import { IMAGE_FILE_EXTENSIONS } from './image-file-extensions'
+import { IMAGE_FILE_EXTENSIONS } from './media-file-extensions'
+
+export { IMAGE_FILE_MIME_TYPES, IMAGE_FILE_EXTENSIONS } from './media-file-extensions'
 
 // Keep SVG out of binary extensions because editors open it as source text.
 const TEXT_IMAGE_EXTENSIONS = new Set(['.svg'])

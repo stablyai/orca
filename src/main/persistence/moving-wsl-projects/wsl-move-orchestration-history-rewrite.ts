@@ -30,6 +30,8 @@ const BUSY_TIMEOUT_MS = 2_000
 
 type Rewrite = { key: string; from: string; to: string }
 
+type OrchestrationScope = Pick<WslMoveRewriteScope, 'inScope' | 'worktreeId'>
+
 function text(row: SqliteRow, column: string): string | null {
   const value = row[column]
   return typeof value === 'string' ? value : null
@@ -58,7 +60,7 @@ function unlessListedIn(db: Database, table: string, dispatchIdColumn: string): 
  */
 function plan(
   rows: SqliteRow[],
-  scope: WslMoveRewriteScope,
+  scope: OrchestrationScope,
   keyColumn: string,
   handleColumn: string
 ): Rewrite[] {
@@ -79,7 +81,7 @@ function plan(
   })
 }
 
-function dispatchRewrites(db: Database, scope: WslMoveRewriteScope): Rewrite[] {
+function dispatchRewrites(db: Database, scope: OrchestrationScope): Rewrite[] {
   if (
     !hasColumns(db, 'worker_dispatches', [
       'dispatch_id',
@@ -103,7 +105,7 @@ function dispatchRewrites(db: Database, scope: WslMoveRewriteScope): Rewrite[] {
   return plan(rows, scope, 'dispatch_id', 'agent_terminal_handle')
 }
 
-function resourceRewrites(db: Database, scope: WslMoveRewriteScope): Rewrite[] {
+function resourceRewrites(db: Database, scope: OrchestrationScope): Rewrite[] {
   if (
     !hasColumns(db, 'worker_terminal_resources', [
       'id',
@@ -147,7 +149,7 @@ function applyRewrites(db: Database, sql: string, rewrites: readonly Rewrite[]):
  */
 export function rewriteWslMoveOrchestrationHistory(
   db: Database,
-  scope: WslMoveRewriteScope
+  scope: OrchestrationScope
 ): number {
   db.exec('BEGIN IMMEDIATE')
   try {
@@ -182,20 +184,28 @@ export function registerWslMoveOrchestrationHistoryStore(databasePath: string): 
     id: WSL_MOVE_ORCHESTRATION_HISTORY_STORE_ID,
     side: 'main',
     run: (context) => {
-      if (!existsSync(databasePath)) {
-        return
-      }
-      const db = new Database(databasePath, { fileMustExist: true, timeout: BUSY_TIMEOUT_MS })
-      try {
-        // A FULL commit is on disk when it returns, which is what the ledger entry needs.
-        db.pragma('synchronous = FULL')
-        rewriteWslMoveOrchestrationHistory(db, wslMoveRewriteScope(context))
-      } finally {
-        db.close()
-        hardenOrchestrationDatabaseFiles(databasePath)
-      }
+      rewriteWslMoveOrchestrationHistoryFile(databasePath, wslMoveRewriteScope(context))
     },
     // `run` commits with synchronous FULL, so its write is durable before this is called.
     flush: () => {}
   })
+}
+
+/** On its own connection, durable when it returns; a missing database has no history. */
+export function rewriteWslMoveOrchestrationHistoryFile(
+  databasePath: string,
+  scope: OrchestrationScope
+): void {
+  if (!existsSync(databasePath)) {
+    return
+  }
+  const db = new Database(databasePath, { fileMustExist: true, timeout: BUSY_TIMEOUT_MS })
+  try {
+    // A FULL commit is on disk when it returns, which is what the ledger entry needs.
+    db.pragma('synchronous = FULL')
+    rewriteWslMoveOrchestrationHistory(db, scope)
+  } finally {
+    db.close()
+    hardenOrchestrationDatabaseFiles(databasePath)
+  }
 }

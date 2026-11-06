@@ -5,7 +5,7 @@ import {
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import { resolveCreatedHostedReviewLink } from '../../source-control-created-review-link'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
@@ -14,6 +14,7 @@ import type {
   CreatedHostedReview,
   HostedReviewCreatedContext
 } from './hosted-review-creation-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function useSourceControlHostedReviewCreated({
   activeRepo,
@@ -123,7 +124,7 @@ export function useSourceControlHostedReviewCreated({
                 'Open on {{value0}}',
                 { value0: copy.providerName }
               ),
-              onClick: () => window.api.shell.openUrl(result.url)
+              onClick: () => openAppHttpLink(result.url, { worktreeId })
             }
           }
         )

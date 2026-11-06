@@ -43,6 +43,7 @@ export type {
   SearchableSimulatorTab,
   SimulatorPaletteSearchResult
 } from './simulator-palette-search-types'
+import { formatSimulatorTabLabel } from './simulator-tab-label'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -96,7 +97,7 @@ function positionScore(entry: SearchableSimulatorTab): number {
 }
 
 export function simulatorPaletteTabTitle(tab: Tab): string {
-  return tab.label || 'Mobile Emulator'
+  return formatSimulatorTabLabel(tab.label)
 }
 
 function baseResult(

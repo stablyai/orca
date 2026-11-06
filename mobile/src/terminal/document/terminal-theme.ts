@@ -1,7 +1,7 @@
 import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { colors } from '../../theme/mobile-theme'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
-import { resolveTerminalMinimumContrastRatio } from '../../../../src/shared/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../src/shared/terminal-themes/terminal-contrast-correction'
 
 const TERMINAL_BACKGROUND_FALLBACK = colors.terminalBg
 

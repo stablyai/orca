@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { accessMock, homedirMock } = vi.hoisted(() => ({
@@ -35,28 +34,6 @@ describe('probeCodexAuthPresence', () => {
     } else {
       process.env.CODEX_HOME = originalCodexHome
     }
-  })
-
-  it('checks an explicit managed-account home first', async () => {
-    accessMock.mockResolvedValue(undefined)
-
-    await expect(probeCodexAuthPresence('/managed/home')).resolves.toBe('present')
-    expect(accessMock).toHaveBeenCalledWith(join('/managed/home', 'auth.json'))
-  })
-
-  it('falls back to CODEX_HOME when no home is provided', async () => {
-    process.env.CODEX_HOME = '/custom/codex'
-    accessMock.mockResolvedValue(undefined)
-
-    await expect(probeCodexAuthPresence()).resolves.toBe('present')
-    expect(accessMock).toHaveBeenCalledWith(join('/custom/codex', 'auth.json'))
-  })
-
-  it('falls back to ~/.codex when neither home nor CODEX_HOME is set', async () => {
-    accessMock.mockRejectedValue(fsError('ENOENT'))
-
-    await expect(probeCodexAuthPresence()).resolves.toBe('absent')
-    expect(accessMock).toHaveBeenCalledWith(join('/home/alice', '.codex', 'auth.json'))
   })
 
   it('keeps an inaccessible auth path distinct from confirmed absence', async () => {

@@ -8,7 +8,7 @@ import {
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
-import { delegatedMobileSessionTabClose } from './mobile-session-tab-close-outcome'
+import { delegatedMobileSessionTabClose } from './session-lifecycle/close/mobile-session-tab-close-outcome'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
@@ -39,7 +39,7 @@ itSwitchOff.each([false, true])(
       f.publish(false, 2)
     }
     f.acknowledgement.resolve()
-    await expect(pending).resolves.toEqual({ closed: true })
+    await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(f.hasTab()).toBe(false)
   }
 )
@@ -89,7 +89,7 @@ itSwitchOff.each([false, true])(
       [ACK_SECOND_LEAF]: 'pty-b'
     })
     f.acknowledgement.resolve()
-    await expect(pending).resolves.toEqual({ closed: true })
+    await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(f.hasTab()).toBe(false)
   }
 )
@@ -193,7 +193,7 @@ itSwitchOff(
     await f.entered.promise
     f.runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     f.acknowledgement.resolve()
-    await expect(pending).resolves.toEqual({ closed: true })
+    await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(kill.mock.calls).toEqual(expect.arrayContaining([[visible], [dormant]]))
     expect(f.hasTab()).toBe(false)
   }

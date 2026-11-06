@@ -1,6 +1,6 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit, type QueuedMessageEdit } from '../../../shared/queued-message-edit'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 

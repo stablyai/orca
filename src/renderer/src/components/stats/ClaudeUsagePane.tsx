@@ -17,7 +17,7 @@ import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { unpricedCostLabel } from './unpriced-cost-label'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
@@ -217,7 +217,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
               'auto.components.stats.ClaudeUsagePane.0f3e696ca9',
               'Sessions / Turns'
             )}
-            value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.turns ?? 0).toLocaleString()}`}
+            value={`${(summary?.sessions ?? 0).toLocaleString(getIntlLocale())} / ${(summary?.turns ?? 0).toLocaleString(getIntlLocale())}`}
             icon={<FolderKanban className="size-4" />}
           />
           <StatCard

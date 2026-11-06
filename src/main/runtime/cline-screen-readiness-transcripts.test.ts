@@ -3,7 +3,7 @@ import {
   createTranscriptPane,
   waitForTranscriptIdle,
   TRANSCRIPT_PANE_PTY_ID
-} from './agent-transcript-pane-test-harness'
+} from './orca-runtime-tests/agent-transcript-pane-test-harness'
 import {
   finalReadProjection,
   finalReplayFrame,
@@ -14,19 +14,20 @@ import {
   describeScreenRuledAgentTranscripts,
   readsIdleComposer
 } from './screen-ruled-agent-transcript-suite'
-import { RuntimeMachineName } from './runtime-machine-name'
+import { RuntimeMachineName } from './hosts/platform-probe/runtime-machine-name'
 import { GROK_STARTUP_PTY_TRACE } from '../../shared/__fixtures__/grok-startup-pty-trace'
-import { waitForWorkerStartComposer } from './launched-agent-composer-readiness'
+import { waitForWorkerStartComposer } from './terminal/wait/launched-agent-composer-readiness'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { extractLastOscTitle } from '../../shared/osc-title-extraction'
-import { getAgentLabel, normalizeTerminalTitle } from '../../shared/agent-detection'
+import { extractLastOscTitle } from '../../shared/agent-status/title/osc-title-extraction'
+import { getAgentLabel } from '../../shared/agent-status/title/agent-title-identity'
+import { normalizeTerminalTitle } from '../../shared/agent-status/title/agent-title-status'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import {
   getSyntheticAgentTerminalTitle,
   shouldDriveSyntheticAgentTitleFromHook
-} from '../../shared/synthetic-agent-title'
-import { hasExplicitIdleTitle } from './tui-idle-evidence'
+} from '../../shared/agent-status/title/synthetic-agent-title'
+import { hasExplicitIdleTitle } from './terminal/wait/tui-idle-evidence'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -335,7 +336,11 @@ describe('ZCode captured composer readiness', () => {
       expect(getSyntheticAgentTerminalTitle('zcode', 'waiting')).toBe('ZCode - action required')
       expect(shouldDriveSyntheticAgentTitleFromHook('zcode', 'working')).toBe(true)
       expect(
-        hasExplicitIdleTitle({ lastAgentStatus: 'idle', lastOutputAt: Date.now() }, 'ZCode ready')
+        hasExplicitIdleTitle({
+          lastAgentStatus: 'idle',
+          lastOutputAt: Date.now(),
+          lastOscTitle: 'ZCode ready'
+        })
       ).toBe(true)
     })
 

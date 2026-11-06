@@ -1,5 +1,6 @@
-import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
-import { ipcMain, shell, dialog } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
+import { BrowserWindow, ipcMain, shell } from 'electron'
+import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,15 +8,19 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
+} from '../../shared/shell/opening/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
-import type { Store } from '../persistence'
+import {
+  repoIconPickFailure,
+  type RepoIconPickResult
+} from '../../shared/repo-icon-pick-failure-copy'
+import type { Store } from '../persistence/loading-store/store'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
   resolveExternalEditorLaunchSpec
-} from '../external-editor-launch'
-import { resolveRemoteSshEditorLaunchSpec } from '../remote-ssh-editor-launch'
+} from '../external-editors/external-editor-launch'
+import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -24,10 +29,10 @@ import {
 } from './shell-editor-ssh-host'
 import {
   isLocallyOwned,
-  pathExists,
   resolveOwnedPathTarget,
   validateLocalPathTarget
 } from './shell-owned-path-target'
+import { registerShellPathExistenceHandlers } from './shell-path-existence-handlers'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -193,23 +198,19 @@ export function registerShellHandlers(
     await openWithSystemDefault(target.path, ownerHostId)
   })
 
-  ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
-    validatePathExistenceBatch(paths)
-    return Promise.all(paths.map(pathExists))
-  })
-
-  ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
-    return pathExists(filePath)
-  })
+  registerShellPathExistenceHandlers()
 
   ipcMain.handle(
     'shell:pickDirectory',
-    async (_event, args: { defaultPath?: string }): Promise<string | null> => {
-      const result = await dialog.showOpenDialog({
-        defaultPath: args.defaultPath,
-        // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
-        properties: ['openDirectory']
-      })
+    async (event, args: { defaultPath?: string }): Promise<string | null> => {
+      const result = await showSingleFlightOpenDialog(
+        {
+          defaultPath: args.defaultPath,
+          // macOS creation-enabled pickers can create typed prefixes; this picker grants existing folders only.
+          properties: ['openDirectory']
+        },
+        BrowserWindow.fromWebContents(event.sender)
+      )
       if (result.canceled || result.filePaths.length === 0) {
         return null
       }
@@ -218,10 +219,13 @@ export function registerShellHandlers(
   )
 
   // Native dialogs avoid Electron prompt/file-input reliability issues.
-  ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile']
-    })
+  ipcMain.handle('shell:pickAttachment', async (event): Promise<string | null> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile']
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
@@ -229,62 +233,84 @@ export function registerShellHandlers(
   })
 
   // Keep single-file callers, including interpreter selection, on pickAttachment.
-  ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile', 'multiSelections']
-    })
+  ipcMain.handle('shell:pickAttachments', async (event): Promise<string[]> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile', 'multiSelections']
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     return result.canceled ? [] : result.filePaths
   })
 
-  ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
-      ]
-    })
+  ipcMain.handle('shell:pickImage', async (event): Promise<string | null> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile'],
+        filters: [
+          {
+            name: translateMain('native.dialog.images', 'Images'),
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
+          }
+        ]
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
     return result.filePaths[0]
   })
 
-  ipcMain.handle(
-    'shell:pickRepoIconImage',
-    async (): Promise<{ dataUrl: string; fileName: string } | null> => {
-      const result = await dialog.showOpenDialog({
+  ipcMain.handle('shell:pickRepoIconImage', async (event): Promise<RepoIconPickResult> => {
+    const result = await showSingleFlightOpenDialog(
+      {
         properties: ['openFile'],
-        filters: [{ name: 'Repo icon images', extensions: ['png'] }]
-      })
-      if (result.canceled || result.filePaths.length === 0) {
-        return null
-      }
-
-      const filePath = result.filePaths[0]
-      const extension = extname(filePath).toLowerCase()
-      const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
-      if (!mimeType) {
-        throw new Error('Repo icons must be PNG files.')
-      }
-
-      const stats = await stat(filePath)
-      if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
-        throw new Error('Repo icon image must be 256KB or smaller.')
-      }
-
-      const buffer = await readFile(filePath)
-      return {
-        dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
-        fileName: basename(filePath)
-      }
+        filters: [
+          {
+            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
+            extensions: ['png']
+          }
+        ]
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
     }
-  )
 
-  ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
-    })
+    const filePath = result.filePaths[0]
+    const extension = extname(filePath).toLowerCase()
+    const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
+    if (!mimeType) {
+      return repoIconPickFailure('notPng')
+    }
+
+    const stats = await stat(filePath)
+    if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
+      return repoIconPickFailure('tooLarge')
+    }
+
+    const buffer = await readFile(filePath)
+    return {
+      dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+      fileName: basename(filePath)
+    }
+  })
+
+  ipcMain.handle('shell:pickAudio', async (event): Promise<string | null> => {
+    const result = await showSingleFlightOpenDialog(
+      {
+        properties: ['openFile'],
+        filters: [
+          {
+            name: translateMain('native.dialog.audio', 'Audio'),
+            extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac']
+          }
+        ]
+      },
+      BrowserWindow.fromWebContents(event.sender)
+    )
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }

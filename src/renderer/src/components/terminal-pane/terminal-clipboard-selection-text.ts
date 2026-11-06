@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { useAppStore } from '@/store'
-import { stripTerminalSelectionGutter } from '../../../../shared/terminal-selection-gutter'
+import { stripTerminalSelectionGutter } from '../../../../shared/terminal/output/terminal-selection-gutter'
 
 /**
  * The selection text every terminal clipboard path should write: screen cells

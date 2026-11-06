@@ -1,4 +1,4 @@
-import type { BrowserExtensionContextMenuPayload } from './browser-extension-context-menu-types'
+import type { BrowserExtensionContextMenuPayload } from './browser/extensions/browser-extension-context-menu-types'
 
 export type BrowserPermissionDeniedEvent = {
   browserPageId: string

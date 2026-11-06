@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  openTestJournalHostDatabase,
+  readTestQueueChanges
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -12,6 +15,9 @@ import {
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+// A refused queued card comes back as a returned card that holds the cards behind it, read from the
+// chat's own rows with no card write of its own: through provider context replacement, a restart
+// and a Resume. Only its own Send and Delete act on it.
 
 let rig: QueuedMessageTestRig
 const rewind = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewind']>>()
@@ -34,26 +40,9 @@ async function queuedDraft(text: string): Promise<string> {
 }
 
 function queueRows(): { messageId: string; op: string }[] {
-  return openTestJournalHostDatabase(rig.root)
-    .db.prepare('SELECT row_json FROM journal_rows WHERE session_id = ? ORDER BY seq')
-    .all(SESSION)
-    .flatMap((row) => {
-      const parsed: unknown =
-        typeof row === 'object' && row !== null && 'row_json' in row
-          ? JSON.parse(String(row.row_json))
-          : null
-      return typeof parsed === 'object' &&
-        parsed !== null &&
-        'kind' in parsed &&
-        parsed.kind === 'queue' &&
-        'messageId' in parsed &&
-        'change' in parsed &&
-        typeof parsed.change === 'object' &&
-        parsed.change !== null &&
-        'op' in parsed.change
-        ? [{ messageId: String(parsed.messageId), op: String(parsed.change.op) }]
-        : []
-    })
+  return readTestQueueChanges(openTestJournalHostDatabase(rig.root).db, SESSION).map(
+    ({ messageId, op }) => ({ messageId, op })
+  )
 }
 
 async function expectNothingSent(...draftIds: string[]): Promise<void> {
@@ -92,9 +81,14 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
     { messageId: c, state: 'waiting' }
   ]
   await eventually(async () => expect(await rig.drafts()).toEqual(held))
-  // Refusal lives in dispatch state, without another card row.
-  expect(queueRows()).toEqual([a, b, c].map((messageId) => ({ messageId, op: 'queued' })))
+  // Refusal returns the same card in place: its own state changes, and no card is added.
+  expect(queueRows()).toEqual([
+    ...[a, b, c].map((messageId) => ({ messageId, op: 'queued' })),
+    { messageId: a, op: 'dispatched' },
+    { messageId: a, op: 'returned' }
+  ])
 
+  // A rewind hides the refused bubble while retaining its canonical refusal and returned card.
   const rewound = { itemId: target, expectedEpoch: journal().cursor().epoch }
   expect(
     await rig.host.rewind(CALLER, {
@@ -102,11 +96,12 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
       envelope: rig.envelope(rewound, 'agentSession.rewind', hostTestOperationId())
     })
   ).toMatchObject({ ok: true })
-  expect(journal().submission(refused)).toBeUndefined()
+  expect(journal().submission(refused)?.dispatchState).toBe('rejected')
+  expect(journal().item(agentJournalSubmissionKey(refused))).toBeNull()
   expect(await rig.drafts()).toEqual(held)
   await expectNothingSent(b, c)
 
-  // Replacement epochs restate refusal with the card after retiring old rows.
+  // Another context boundary retains the refusal's original rows for replay.
   await journal().rollEpoch('handle_forked', rig.store.getRecord(SESSION)!.lease.runtimeFence)
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(held)

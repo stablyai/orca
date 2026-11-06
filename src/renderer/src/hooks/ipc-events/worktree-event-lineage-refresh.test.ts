@@ -13,6 +13,7 @@ import {
 } from '../../store/slices/worktrees-slice-test-fixtures'
 import { replaceRuntimeEnvironmentRevisions } from '../../runtime/runtime-environment-revision'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status-connection-generation'
+import { WORKTREE_SORT_ORDER_BATCH_WINDOW_MS } from './worktree-sort-order-publication-batch'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -73,6 +74,7 @@ afterEach(() => {
     unsubscribe()
   }
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('remote worktree event lineage refresh', () => {
@@ -138,10 +140,21 @@ describe('remote worktree event lineage refresh', () => {
         sortOrder: now - index * 1000
       }))
     }))
+    let catalogCommits = 0
+    unsubs.push(
+      store.subscribe((next, previous) => {
+        if (next.worktreesByRepo !== previous.worktreesByRepo) {
+          catalogCommits += 1
+        }
+      })
+    )
     for (const event of events) {
       queue.enqueue({ ...event, executionHostId: 'runtime:env-1' })
     }
+    await vi.waitFor(() => expect(catalogCommits).toBe(1))
     await flushPromises()
+    // One commit for the whole burst, so global consumers render once rather than per repo.
+    expect(catalogCommits).toBe(1)
     expect(store.getState().fetchWorktrees).not.toHaveBeenCalled()
     expect(store.getState().fetchWorktreeLineage).not.toHaveBeenCalled()
     expect(store.getState().sortEpoch).toBe(3)
@@ -369,10 +382,79 @@ describe('order-only refresh with actual store actions', () => {
       sortOrderOnly: true,
       sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
     })
+    await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(99))
     await flushPromises()
-    expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(99)
     expect(store.getState().sortEpoch).toBe(beforeEpoch)
     expect(runtimeEnvironmentCall.mock.calls.length).toBe(readsBefore)
+  })
+
+  it.each([true, false])(
+    'fences only the submitted repository listing (same repository: %s)',
+    async (sameRepo) => {
+      vi.useFakeTimers()
+      const h = createActualActionFixture()
+      await h.warm()
+      const fetch = vi.spyOn(store.getState(), 'fetchWorktrees')
+      const publishedOrders: number[] = []
+      const unsubscribe = store.subscribe((state) => {
+        publishedOrders.push(state.worktreesByRepo.repo[0].sortOrder)
+      })
+      unsubs.push(unsubscribe)
+      h.queue.enqueue({
+        repoId: 'repo',
+        executionHostId: 'runtime:env-1',
+        sortOrderOnly: true,
+        sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+      })
+      h.setOrder(42)
+      if (sameRepo) {
+        await store.getState().fetchWorktrees('repo', { executionHostId: 'runtime:env-1' })
+        expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(42)
+      } else {
+        store.setState((state) => ({
+          worktreesByRepo: { ...state.worktreesByRepo, unrelated: [] }
+        }))
+      }
+      fetch.mockClear()
+      await vi.advanceTimersByTimeAsync(WORKTREE_SORT_ORDER_BATCH_WINDOW_MS)
+      expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(sameRepo ? 42 : 99)
+      expect(fetch).toHaveBeenCalledTimes(sameRepo ? 1 : 0)
+      if (sameRepo) {
+        expect(publishedOrders).not.toContain(99)
+      }
+    }
+  )
+
+  it('refetches instead of patching when the connection changes inside the batch window', async () => {
+    const h = createActualActionFixture()
+    await h.warm()
+    h.queue.enqueue({
+      repoId: 'repo',
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+    })
+    advanceRuntimeEnvironmentConnectionGeneration('env-1')
+    h.setOrder(42)
+    // The refetch starts only after the flush rejected the stale values, so nothing patches later.
+    await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(42))
+  })
+
+  it('runs a structural refresh queued behind a pending order patch after the patch', async () => {
+    const h = createActualActionFixture()
+    await h.warm()
+    h.queue.enqueue({
+      repoId: 'repo',
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
+    })
+    h.setOrder(7)
+    h.queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+    await flushPromises()
+    expect(store.getState().worktreesByRepo.repo[0].sortOrder).not.toBe(7)
+    // The newer listing lands last, so the older published value cannot overwrite it.
+    await vi.waitFor(() => expect(store.getState().worktreesByRepo.repo[0].sortOrder).toBe(7))
   })
 
   it('refetches when a published row was never loaded here', async () => {
@@ -443,8 +525,9 @@ describe('order-only refresh with actual store actions', () => {
       sortOrderOnly: true,
       sortOrders: [{ worktreeId: h.worktree.id, sortOrder: 99 }]
     })
-    await flushPromises()
-    expect(store.getState().worktreesByRepo.repo.map((row) => row.sortOrder)).toEqual([99, 5])
+    await vi.waitFor(() =>
+      expect(store.getState().worktreesByRepo.repo.map((row) => row.sortOrder)).toEqual([99, 5])
+    )
   })
 
   it('still bumps sortEpoch when a refetch changes more than sortOrder', async () => {

@@ -118,7 +118,9 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     if (superviseError) {
       throw new RuntimeClientError('invalid_argument', superviseError)
     }
+    const bind = getOptionalServeBind(flags) ?? null
     const validationError = getServeOptionValidationError({
+      bind,
       noPairing,
       mobilePairing,
       grantDesktopControl,
@@ -129,7 +131,6 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', validationError)
     }
     const port = getOptionalServePort(flags)
-    const bind = getOptionalServeBind(flags) ?? null
     const pairingAddressValue = flags.get('pairing-address')
     const exitCode = await serveOrcaApp({
       json,

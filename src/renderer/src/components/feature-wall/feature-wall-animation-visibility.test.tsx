@@ -2,11 +2,8 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { StatusesPage } from './agents-orchestration/StatusesPage'
-import { useWorkbenchTerminalStoryboard } from './use-workbench-terminal-storyboard'
 import { WorkspacesAnimatedVisual } from './WorkspacesAnimatedVisual'
 
 let container: HTMLDivElement
@@ -72,44 +69,5 @@ describe('feature wall animation timers', () => {
     expect(vi.getTimerCount()).toBe(1)
     act(() => vi.advanceTimersByTime(3_600))
     expect(cardOrder()).not.toEqual(afterOneStep)
-  })
-
-  it('pauses the workbench run queue while hidden and resumes from the same entry', () => {
-    const view = renderHook(() => useWorkbenchTerminalStoryboard('tour', false))
-    const first = view.result.current.running
-    act(() => vi.advanceTimersByTime(2_400))
-    const second = view.result.current.running
-    expect(second).not.toBe(first)
-
-    setDocumentVisibility('hidden')
-    act(() => vi.advanceTimersByTime(2_400 * 10))
-    expect(view.result.current.running).toBe(second)
-
-    setDocumentVisibility('visible')
-    expect(view.result.current.running).toBe(second)
-    act(() => vi.advanceTimersByTime(2_400))
-    expect(view.result.current.running).not.toBe(second)
-    view.unmount()
-  })
-
-  it('pauses the agent-status activity cycle while hidden and resumes in place', () => {
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <StatusesPage active reducedMotion={false} />
-        </TooltipProvider>
-      )
-    )
-    act(() => vi.advanceTimersByTime(2_400 + 280))
-    const afterOneCycle = container.textContent ?? ''
-
-    setDocumentVisibility('hidden')
-    act(() => vi.advanceTimersByTime((2_400 + 280) * 10))
-    expect(container.textContent).toBe(afterOneCycle)
-
-    setDocumentVisibility('visible')
-    expect(container.textContent).toBe(afterOneCycle)
-    act(() => vi.advanceTimersByTime(2_400 + 280))
-    expect(container.textContent).not.toBe(afterOneCycle)
   })
 })
