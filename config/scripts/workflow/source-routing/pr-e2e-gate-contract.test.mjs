@@ -27,6 +27,27 @@ describe('restart-survival E2E routing', () => {
   })
 })
 
+describe('paired HTML preview E2E routing', () => {
+  const spec = 'tests/e2e/paired-remote-html-preview-local-render.spec.ts'
+  it.each([
+    'src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.tsx',
+    'src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.tsx',
+    'src/main/browser/document-preview/doc-preview-protocol.ts',
+    'src/main/ipc/doc-preview-grant-ipc.ts',
+    'src/preload/doc-preview-link-interception.ts',
+    'src/shared/doc-preview-scheme.ts',
+    'tests/e2e/helpers/paired-html-preview-inventory.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it.each([
+    'src/main/ipc/doc-preview-grant-ipc.test.ts',
+    'src/renderer/src/components/browser-pane/BrowserPane.tsx'
+  ])('does not route %s', (path) => {
+    expect(selectPrE2eSpecs([path])).not.toContain(spec)
+  })
+})
+
 describe('PR E2E gate contract', () => {
   it('routes only core xterm patches to both IME lanes across version updates', () => {
     for (const file of [
