@@ -225,7 +225,8 @@
       "clipboardRejected": "Die Zwischenablage hat den Text abgewiesen.",
       "copyFailed": "Kopieren fehlgeschlagen",
       "copyMessage": "Nachricht kopieren",
-      "selectText": "Text auswählen"
+      "selectText": "Text auswählen",
+      "rewind": "Bis hierher zurücksetzen"
     },
     "nativeChatImageViewer": {
       "closeImage": "Bild schließen",
@@ -598,6 +599,25 @@
       "attachmentsUnsupported": "Vor dem Festlegen eines Ziels die Anhänge entfernen.",
       "pause": "Pausieren",
       "resume": "Fortsetzen"
+    },
+    "rewind": {
+      "title": "Bis hierher zurücksetzen?",
+      "confirmation": "Diese Nachricht und alle folgenden verwerfen? Die Nachricht steht danach wieder im Eingabefeld und kann bearbeitet und erneut gesendet werden. Dateiänderungen auf dem Datenträger bleiben erhalten.",
+      "confirm": "Zurücksetzen",
+      "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
+      "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
+      "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+      "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
+      "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
+      "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
+      "providerRefused": "Der Agent konnte nicht zu dieser Nachricht zurückkehren.",
+      "proofMismatch": "Der Verlauf des Agenten stimmte nicht mit diesem Chat überein. Das Gespräch vor dem Fortfahren prüfen.",
+      "outcomeUnknown": "Orca konnte nicht bestätigen, ob das Gespräch zu einer früheren Nachricht zurückgesetzt wurde. Dies wird vor dem Senden der nächsten Nachricht geprüft.",
+      "refused": "Orca konnte nicht zu dieser Nachricht zurückkehren. Das Gespräch vor dem Fortfahren prüfen.",
+      "unavailable": "Warten, bis die Verbindung zum Chat hergestellt ist.",
+      "outcomeUnknownReturned": "Orca konnte nicht bestätigen, ob das Gespräch zu dieser Nachricht zurückgesetzt wurde. Die Nachricht steht wieder im Eingabefeld, und Orca prüft das Gespräch vor dem Senden der nächsten Nachricht.",
+      "timeout": "Der Chat wurde nach dem Zurücksetzen zu dieser Nachricht nicht aktualisiert. Erneut öffnen, um den neuesten Stand zu sehen.",
+      "pending": "Warten, bis das Gespräch zur früheren Nachricht zurückgesetzt wurde."
     }
   },
   "common": {
@@ -798,8 +818,8 @@
       "pairingInvalid": "Kopplung ungültig",
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
       "repairHint": "Zum erneuten Koppeln mit dem Desktop tippen",
+      "sameNetworkOnlyHint": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
-      "updateDesktopHint": "Orca auf dem Desktop aktualisieren und sich dort anmelden, um von überall eine Verbindung herzustellen",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv"
     },
     "hostDiagnosticsLink": {

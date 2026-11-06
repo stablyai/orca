@@ -9,12 +9,14 @@ export type StructuredLaunchAttempt =
       requestId: AgentLaunchRequestId
       stagedPrompt: StagedStructuredLaunchPrompt | null
     }
-  | { kind: 'retry' }
+  | { kind: 'retry'; requestId?: AgentLaunchRequestId }
 
 /** The first attempt `requestId` re-delivers, whose text is already staged or seeded. */
 export function repeatedStructuredLaunchAttempt(
   attempt: StructuredLaunchAttempt,
   requestId: AgentLaunchRequestId
-): Extract<StructuredLaunchAttempt, { kind: 'first' }> | undefined {
-  return attempt.kind === 'first' && attempt.requestId === requestId ? attempt : undefined
+): { stagedPrompt: StagedStructuredLaunchPrompt | null } | undefined {
+  return attempt.requestId === requestId
+    ? { stagedPrompt: attempt.kind === 'first' ? attempt.stagedPrompt : null }
+    : undefined
 }

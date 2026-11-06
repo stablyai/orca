@@ -80,6 +80,8 @@ export function useMobileStructuredAgentOptions(args: {
     conversationSupport,
     imageSupport,
     threadGoalSupport,
+    rewindSupport,
+    rewindBlockedReason,
     receiveCatalog,
     isCurrentContext,
     controller,
@@ -230,6 +232,12 @@ export function useMobileStructuredAgentOptions(args: {
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),
+    /** Undefined until this fence's options read answers. */
+    rewindSupport:
+      rewindSupport?.sessionId === sessionId && rewindSupport.fence === fence
+        ? rewindSupport
+        : undefined,
+    rewindBlockedReason,
     optionSnapshot,
     optionSurface,
     pendingOptionId: writer.pendingOptionId(controller, optionState.record),

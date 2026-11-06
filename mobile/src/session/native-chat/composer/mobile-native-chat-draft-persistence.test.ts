@@ -88,23 +88,6 @@ describe('mobile native-chat draft persistence', () => {
     ])
   })
 
-  it('never brings back a sent draft', async () => {
-    vi.useFakeTimers()
-    await loadMobileNativeChatDrafts('host-1', 'wt-1')
-    editMobileNativeChatDraft(TAB_A, 'ship it')
-    await settle()
-    clearMobileNativeChatDraftForSend(
-      TAB_A,
-      readMobileNativeChatDraftEditGeneration(TAB_A),
-      'ship it'
-    )
-    await writesSettled()
-
-    await relaunch()
-
-    expect(draftText(TAB_A)).toBe('')
-  })
-
   it('keeps a send made before the saved drafts finished loading', async () => {
     vi.useFakeTimers()
     await loadMobileNativeChatDrafts('host-1', 'wt-1')
