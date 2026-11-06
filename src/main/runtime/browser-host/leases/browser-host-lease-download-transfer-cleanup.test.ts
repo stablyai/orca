@@ -7,6 +7,7 @@ function createRuntime() {
   const removed: string[] = []
   const runtime = {
     getRuntimeId: () => 'runtime-a',
+    resolveRuntimeFileTarget: vi.fn().mockResolvedValue({ executionHostId: 'local' }),
     writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue(undefined),
     commitFileExplorerUpload: vi.fn().mockResolvedValue(undefined),
     deleteFileExplorerPath: vi.fn(async (_worktree: string, relativePath: string) => {

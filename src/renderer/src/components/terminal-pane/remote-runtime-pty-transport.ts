@@ -256,6 +256,7 @@ export function createRemoteRuntimePtyTransport(
   let handle: string | null = null
   let remotePtyId: string | null = null
   let authoritativeExecutionHostId: ExecutionHostId | null = executionHostId ?? null
+  const executionHostListeners = new Set<() => void>()
   let authoritativeHostPlatform: NodeJS.Platform | null = null
   let authoritativePtyIncarnationId: string | null = null
   // Why: never adopts a persisted existingPtyId's environment; the worktree owner chose this transport.
@@ -527,9 +528,15 @@ export function createRemoteRuntimePtyTransport(
     hostPlatform?: NodeJS.Platform
     incarnationId?: string | null
   }): void => {
+    const previousExecutionHostId = authoritativeExecutionHostId
     authoritativeExecutionHostId = terminal.executionHostId ?? authoritativeExecutionHostId
     authoritativeHostPlatform = terminal.hostPlatform ?? authoritativeHostPlatform
     authoritativePtyIncarnationId = terminal.incarnationId ?? null
+    if (authoritativeExecutionHostId !== previousExecutionHostId) {
+      for (const listener of executionHostListeners) {
+        listener()
+      }
+    }
   }
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
@@ -4002,6 +4009,11 @@ export function createRemoteRuntimePtyTransport(
 
     getExecutionHostId() {
       return authoritativeExecutionHostId
+    },
+
+    onExecutionHostChange(listener) {
+      executionHostListeners.add(listener)
+      return () => executionHostListeners.delete(listener)
     },
 
     getRemotePlatform() {

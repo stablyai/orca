@@ -695,3 +695,43 @@ describe('acquireOrcadInstanceLock', () => {
     }
   )
 })
+
+describe('instance lock heartbeat', () => {
+  function withHeartbeat(run: () => void): void {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    try {
+      run()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  it('restores a lock removed while held, so a second starter is still refused', () =>
+    withHeartbeat(() => {
+      const root = makeRoot()
+      const onExclusivityLost = vi.fn()
+      const lock = acquireOrcadInstanceLock(root, hooks({ onExclusivityLost }))
+      rmSync(lock.path)
+      vi.advanceTimersByTime(60_000)
+      expect(readOrcadInstanceLockRecord(lock.path)?.nonce).toBe(lock.record.nonce)
+      expect(() => acquireOrcadInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
+        expect.objectContaining({ code: 'orcad_instance_lock_held' })
+      )
+      expect(onExclusivityLost).not.toHaveBeenCalled()
+      lock.release()
+    }))
+
+  it('yields once another process holds the lock, leaving its record alone', () =>
+    withHeartbeat(() => {
+      const root = makeRoot()
+      const onExclusivityLost = vi.fn()
+      const lock = acquireOrcadInstanceLock(root, hooks({ onExclusivityLost }))
+      rmSync(lock.path)
+      const successor = acquireOrcadInstanceLock(root, hooks())
+      vi.advanceTimersByTime(2 * 60_000)
+      expect(onExclusivityLost).toHaveBeenCalledOnce()
+      lock.release()
+      expect(readOrcadInstanceLockRecord(lock.path)?.nonce).toBe(successor.record.nonce)
+      successor.release()
+    }))
+})

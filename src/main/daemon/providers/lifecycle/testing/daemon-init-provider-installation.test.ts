@@ -336,6 +336,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }))
     await mod.initDaemonPtyProvider()
     checkDaemonHealthMock.mockClear()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(false)
 
     const { DegradedDaemonPtyProvider } = await import('../../routing/degraded-daemon-pty-provider')
     const provider = mod.getDaemonProvider()
@@ -348,6 +349,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/degraded-token'
     )
     expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+    // Fresh terminals are daemon-backed again, so they survive a runtime restart.
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(true)
   })
 
   it('keeps legacy daemon pid/token files when the probe fails but the pid-file process is alive', async () => {

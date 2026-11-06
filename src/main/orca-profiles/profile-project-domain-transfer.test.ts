@@ -433,6 +433,29 @@ describe('profile domain transfers', () => {
     }
   )
 
+  it('refuses to move a project whose workspace is nested under another machine', () => {
+    const source = normalizeProfileProjectState({
+      repos: [{ id: 'repo-1', path: '/src/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
+      worktreeMeta: {},
+      // Unreadable by this build, yet still a link the move would drop.
+      crossStoreLineageByChildKey: { 'worktree:repo-1::/src/app-fix': { fromANewerBuild: true } }
+    })
+    const sourceRepo = source.repos[0]
+    if (!sourceRepo) {
+      throw new Error('Missing source repo')
+    }
+    expect(() =>
+      createTransferPayload({
+        sourceState: source,
+        sourceRepo,
+        targetRepo: sourceRepo,
+        includeSessions: true
+      })
+    ).toThrow(
+      '"app-fix" is nested under a workspace on another machine. Remove its parent, then move the project. Nothing was changed.'
+    )
+  })
+
   it('journals only changed domains and replays target-first with exact revisions', () => {
     const { intent, sourceAfter, targetAfter } = preparedMove()
     expect(intent.source.replacements.map(({ domain }) => domain)).not.toContain('futureOpaque')

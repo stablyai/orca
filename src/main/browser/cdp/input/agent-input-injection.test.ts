@@ -8,6 +8,7 @@ vi.mock('electron', () => ({
 import { isAgentInjectingInput, withAgentInputInjection } from './agent-input-injection'
 import { setupGuestShortcutForwarding } from '../../guest-lifecycle/input/browser-guest-shortcut-forwarding'
 import { setupGrabShortcutForwarding } from '../../guest-lifecycle/input/browser-guest-grab-shortcuts'
+import { setupGuestEscapeForwarding } from '../../guest-lifecycle/input/browser-guest-escape-forwarding'
 
 type BeforeInputHandler = (event: Electron.Event, input: Electron.Input) => void
 
@@ -74,7 +75,7 @@ describe('withAgentInputInjection', () => {
     expect(isAgentInjectingInput(webContents)).toBe(false)
   })
 
-  it('keeps Orca shortcuts and grab copy from acting on injected keys', async () => {
+  it('keeps Orca shortcuts, grab copy and Escape from acting on injected keys', async () => {
     const { webContents, press } = fakeGuest()
     const send = vi.fn()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwarding only calls send and isDestroyed.
@@ -90,11 +91,19 @@ describe('withAgentInputInjection', () => {
       resolveRenderer: () => renderer,
       hasActiveGrabOp: () => true
     })
+    setupGuestEscapeForwarding({
+      guest: webContents,
+      resolveTarget: () => ({ browserPageId: 'tab-1', renderer }),
+      hasActiveGrabOp: () => true
+    })
 
     await withAgentInputInjection(webContents, async () => {
       expect(press({ code: 'KeyT', key: 't' })).not.toHaveBeenCalled()
       expect(press({ code: 'KeyW', key: 'w' })).not.toHaveBeenCalled()
       press({ code: 'KeyC', key: 'c', meta: false, control: false })
+      expect(
+        press({ code: 'Escape', key: 'Escape', meta: false, control: false })
+      ).not.toHaveBeenCalled()
     })
     expect(send).not.toHaveBeenCalled()
 

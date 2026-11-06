@@ -2,8 +2,8 @@ import type {
   AiVaultListResult,
   AiVaultSubagentListResult
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import type { CachedAiVaultSessionTitle } from '../session-titles/session-title-file-reader'
 import type {
-  AiVaultSessionTitle,
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
@@ -184,8 +184,8 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
 }
 
 export function cacheServiceTitle(
-  titleIndex: Map<string, AiVaultSessionTitle>,
-  title: AiVaultSessionTitle,
+  titleIndex: Map<string, CachedAiVaultSessionTitle>,
+  title: CachedAiVaultSessionTitle,
   maxEntries = 4_096
 ): void {
   const key = `${title.agent}\0${title.sessionId}`
