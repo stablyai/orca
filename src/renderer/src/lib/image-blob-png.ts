@@ -63,12 +63,13 @@ export async function convertImageBlobToPng(
     await image.decode()
     const width = image.naturalWidth
     const height = image.naturalHeight
-    assertClipboardImageDimensionsWithinLimit({ width, height })
     // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
     if (await hasPngSignature(blob)) {
+      assertClipboardImageDimensionsWithinLimit({ width, height })
       return blob
     }
     if (!downscaleToFit) {
+      assertClipboardImageDimensionsWithinLimit({ width, height })
       const png = await encodeImagePng(image, { width, height })
       assertClipboardImageByteLengthWithinLimit(png.size)
       return png
