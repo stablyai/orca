@@ -39,21 +39,38 @@ export class FolderParentLineagePersistence {
 }
 
 /**
- * Before hydrate checked folder parents, a worktree created under a folder could also get an
- * inferred worktree parent. Keep the explicit folder parent; leave every other pairing as saved.
+ * Before hydrate checked folder parents, it could save an inferred worktree parent beside a
+ * worktree's folder parent. The folder wins when it was chosen explicitly or the worktree parent
+ * has hydrate's stamp; every other pairing stays as saved.
  */
+export function folderParentDefeatsInferredParent(
+  legacy: WorktreeLineage | undefined,
+  row: WorkspaceLineage | undefined
+): boolean {
+  // Saved worktree rows load unvalidated; a malformed one must not fail the whole load.
+  if (
+    !row ||
+    parseWorkspaceKey(row.parentWorkspaceKey)?.type !== 'folder' ||
+    legacy?.capture?.confidence !== 'inferred'
+  ) {
+    return false
+  }
+  return (
+    row.capture?.confidence === 'explicit' ||
+    (legacy.origin === 'orchestration' && legacy.capture.source === 'orchestration-context')
+  )
+}
+
 export function dropInferredParentsOverFolderParents(
   worktreeLineageById: Record<string, WorktreeLineage>,
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
 ): void {
   for (const worktreeId of Object.keys(worktreeLineageById)) {
-    const lineage = worktreeLineageById[worktreeId]
-    const row = workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
-    // Saved worktree rows load unvalidated; a malformed one must not fail the whole load.
     if (
-      row?.capture.confidence === 'explicit' &&
-      parseWorkspaceKey(row.parentWorkspaceKey)?.type === 'folder' &&
-      lineage?.capture?.confidence === 'inferred'
+      folderParentDefeatsInferredParent(
+        worktreeLineageById[worktreeId],
+        workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+      )
     ) {
       delete worktreeLineageById[worktreeId]
     }

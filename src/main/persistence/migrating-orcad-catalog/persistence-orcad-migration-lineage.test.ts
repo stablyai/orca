@@ -7,7 +7,12 @@ import type {
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../../shared/worktree/lineage-types'
+import { parseOrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { manifest } from './persistence-orcad-migration-catalog-fixture'
 import { createStore, testState, writeDataFile } from '../persistence-test-harness'
 
@@ -46,6 +51,19 @@ const folderParent: WorkspaceLineage = {
   createdAt: 2
 }
 
+const crossMachineParent: CrossStoreWorkspaceLineage = {
+  childWorkspaceKey: CHILD_KEY,
+  childInstanceId: 'child-instance',
+  parent: {
+    installationId: 'other-install',
+    workspaceKey: 'worktree:other-repo::/srv/parent',
+    instanceId: 'other-parent'
+  },
+  origin: 'manual',
+  capture: { source: 'manual-action', confidence: 'explicit' },
+  createdAt: 1
+}
+
 function withLineage(
   worktreeLineage: WorktreeLineage[],
   workspaceLineage: WorkspaceLineage[]
@@ -67,7 +85,8 @@ function withLineage(
     retiredWorktreeNames: [],
     retiredWorktreeNamespaces: []
   }
-  return manifest({ payload: { ...manifest().payload, dormantState } })
+  // The real parser and its reference checks admit the payload, as a staged import would.
+  return parseOrcadMigrationManifest(manifest({ payload: { ...manifest().payload, dormantState } }))
 }
 
 function commit(store: ReturnType<typeof createStore>, input: OrcadMigrationManifest) {
@@ -84,24 +103,67 @@ describe('orcad migration lineage', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it.each([false, true])(
-    'keeps an imported folder parent over an inferred worktree parent saved here (payload repeats it: %s)',
-    (repeatsSavedRow) => {
-      writeDataFile({
-        ...getDefaultPersistedState(testState.dir),
-        worktreeLineageById: { [CHILD]: worktreeParent('inferred') }
-      })
+  it.each(['saved here', 'saved here and repeated', 'only in the import'] as const)(
+    'keeps a folder parent over an inferred worktree parent %s',
+    (inferredParent) => {
+      if (inferredParent !== 'only in the import') {
+        writeDataFile({
+          ...getDefaultPersistedState(testState.dir),
+          worktreeLineageById: { [CHILD]: worktreeParent('inferred') }
+        })
+      }
       const store = createStore()
 
       commit(
         store,
-        withLineage(repeatsSavedRow ? [worktreeParent('inferred')] : [], [folderParent])
+        withLineage(inferredParent === 'saved here' ? [] : [worktreeParent('inferred')], [
+          folderParent
+        ])
       )
 
       expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
       expect(store.getWorkspaceLineage(CHILD_KEY)?.parentWorkspaceKey).toBe('folder:folder-1')
     }
   )
+
+  it('keeps an inferred folder parent over a worktree parent with the hydrate stamp', () => {
+    const store = createStore()
+    const inferredFolder: WorkspaceLineage = {
+      ...folderParent,
+      origin: 'cli',
+      capture: { source: 'env-workspace', confidence: 'inferred' }
+    }
+
+    commit(store, withLineage([worktreeParent('inferred')], [inferredFolder]))
+
+    expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
+    expect(store.getWorkspaceLineage(CHILD_KEY)).toMatchObject({
+      parentWorkspaceKey: 'folder:folder-1',
+      capture: { source: 'env-workspace', confidence: 'inferred' }
+    })
+  })
+
+  it('refuses two inferred parents without the hydrate stamp, changing nothing', () => {
+    const store = createStore()
+    const envCapture = {
+      origin: 'cli',
+      capture: { source: 'env-workspace', confidence: 'inferred' }
+    } as const
+
+    expect(() =>
+      commit(
+        store,
+        withLineage(
+          [{ ...worktreeParent('inferred'), ...envCapture }],
+          [{ ...folderParent, ...envCapture }]
+        )
+      )
+    ).toThrow('orcad_migration_dormant_id_conflict:lineage_parent')
+
+    expect(store.getRepos()).toEqual([])
+    expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
+    expect(store.getWorkspaceLineage(CHILD_KEY)).toBeUndefined()
+  })
 
   it('refuses a payload whose worktree has two explicit parents, changing nothing', () => {
     const store = createStore()
@@ -117,26 +179,30 @@ describe('orcad migration lineage', () => {
 
   it('refuses a folder parent for a worktree whose parent is on another machine', () => {
     const store = createStore()
-    store.setCrossStoreWorkspaceLineage(
-      {
-        childWorkspaceKey: CHILD_KEY,
-        childInstanceId: 'child-instance',
-        parent: {
-          installationId: 'other-install',
-          workspaceKey: 'worktree:other-repo::/srv/parent',
-          instanceId: 'other-parent'
-        },
-        origin: 'manual',
-        capture: { source: 'manual-action', confidence: 'explicit' },
-        createdAt: 1
-      },
-      'local'
-    )
+    store.setCrossStoreWorkspaceLineage(crossMachineParent, 'local')
 
     expect(() => commit(store, withLineage([], [folderParent]))).toThrow(
       'orcad_migration_dormant_id_conflict:lineage_parent'
     )
 
+    expect(store.getRepos()).toEqual([])
+    expect(store.getWorkspaceLineage(CHILD_KEY)).toBeUndefined()
+    expect(store.getCrossStoreWorkspaceLineage(CHILD_KEY)?.parent.installationId).toBe(
+      'other-install'
+    )
+  })
+
+  it('refuses at commit when a parent on another machine appears after staging', () => {
+    const store = createStore()
+    const input = withLineage([], [folderParent])
+    store.stageOrcadMigrationCatalog(input)
+    store.setCrossStoreWorkspaceLineage(crossMachineParent, 'local')
+
+    expect(() => store.commitStagedOrcadMigrationCatalog(input)).toThrow(
+      'orcad_migration_dormant_id_conflict:lineage_parent'
+    )
+
+    expect(store.getOrcadMigrationCatalogState(input)).toMatchObject({ state: 'staged' })
     expect(store.getRepos()).toEqual([])
     expect(store.getWorkspaceLineage(CHILD_KEY)).toBeUndefined()
     expect(store.getCrossStoreWorkspaceLineage(CHILD_KEY)?.parent.installationId).toBe(

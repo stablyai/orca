@@ -98,26 +98,40 @@ describe('worktree parent records', () => {
     )
   })
 
-  it('keeps an explicit folder parent over an inferred worktree parent saved beside it', async () => {
+  const hydrateCapture = {
+    origin: 'orchestration',
+    capture: { source: 'orchestration-context', confidence: 'inferred' }
+  } as const
+  const envCapture = {
+    origin: 'cli',
+    capture: { source: 'env-workspace', confidence: 'inferred' }
+  } as const
+  const manualCapture = {
+    origin: 'manual',
+    capture: { source: 'manual-action', confidence: 'explicit' }
+  } as const
+
+  it.each([
+    ['explicit folder, hydrate worktree parent', manualCapture, hydrateCapture, false],
+    ['explicit folder, inferred worktree parent', manualCapture, envCapture, false],
+    ['inferred folder, hydrate worktree parent', envCapture, hydrateCapture, false],
+    ['inferred folder, inferred worktree parent', envCapture, envCapture, true],
+    ['explicit folder, explicit worktree parent', manualCapture, manualCapture, true]
+  ] as const)('loads %s', async (_, folder, legacy, kept) => {
     writeDataFile({
       schemaVersion: 1,
       repos: [makeRepo({ id: 'repo-a', path: '/workspace/repo-a' })],
       worktreeMeta: {},
-      worktreeLineageById: {
-        [CHILD]: {
-          ...worktreeParent(PARENT),
-          origin: 'orchestration',
-          capture: { source: 'orchestration-context', confidence: 'inferred' }
-        }
-      },
-      workspaceLineageByChildKey: { [`worktree:${CHILD}`]: folderParent }
+      worktreeLineageById: { [CHILD]: { ...worktreeParent(PARENT), ...legacy } },
+      workspaceLineageByChildKey: { [`worktree:${CHILD}`]: { ...folderParent, ...folder } }
     })
 
     const store = await createStore()
 
-    expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
-    expect(store.getWorkspaceLineage(`worktree:${CHILD}`)?.parentWorkspaceKey).toBe(
-      'folder:feature'
-    )
+    expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(kept ? PARENT : undefined)
+    expect(store.getWorkspaceLineage(`worktree:${CHILD}`)).toMatchObject({
+      parentWorkspaceKey: 'folder:feature',
+      capture: folder.capture
+    })
   })
 })

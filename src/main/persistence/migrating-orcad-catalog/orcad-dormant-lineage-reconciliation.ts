@@ -9,6 +9,7 @@ import {
   worktreeWorkspaceKey,
   type WorkspaceKey
 } from '../../../shared/workspace-scope'
+import { folderParentDefeatsInferredParent } from '../loading-store/folder-parent-lineage-persistence'
 import { ownsRawIdBucket } from '../loading-store/metadata-lineage-operations'
 
 /** One imported child's parent records; `legacy: null` deletes a destination worktree row. */
@@ -41,8 +42,8 @@ function sameParent(legacy: WorktreeLineage, row: WorkspaceLineage): boolean {
 }
 
 /**
- * Settles one parent for each child the import touches, before anything is written. Only an
- * explicit folder parent defeats an inferred worktree parent; any other disagreement refuses the
+ * Settles one parent for each child the import touches, before anything is written. Only the
+ * load repair's folder-over-inferred rule picks a winner; any other disagreement refuses the
  * whole import, since an import is not a reparent.
  */
 export function reconcileImportedLineage(
@@ -86,11 +87,7 @@ export function reconcileImportedLineage(
     const savedRow = state.workspaceLineageByChildKey[childKey]
     let legacy = savedLegacy ?? (worktreeId ? incomingLegacy.get(worktreeId) : undefined)
     const row = savedRow ?? incomingRows.get(childKey)
-    if (
-      legacy?.capture.confidence === 'inferred' &&
-      row?.capture.confidence === 'explicit' &&
-      parseWorkspaceKey(row.parentWorkspaceKey)?.type === 'folder'
-    ) {
+    if (folderParentDefeatsInferredParent(legacy, row)) {
       legacy = undefined
     }
     if (legacy && row && !sameParent(legacy, row)) {
