@@ -118,11 +118,13 @@ export function isReorderInsideFolderRow(
   if (!point) {
     return false
   }
-  const rect = document
-    .querySelector<HTMLElement>(
-      `[data-worktree-lineage-drop-row][data-worktree-host-identity="${CSS.escape(folderIdentity)}"]`
-    )
-    ?.getBoundingClientRect()
+  const row = document.querySelector<HTMLElement>(
+    `[data-worktree-lineage-drop-row][data-worktree-host-identity="${CSS.escape(folderIdentity)}"]`
+  )
+  // The visible card, not the full-width row around it.
+  const rect = (
+    row?.querySelector<HTMLElement>('[data-worktree-card-surface]') ?? row
+  )?.getBoundingClientRect()
   return (
     rect !== undefined &&
     point.clientX >= rect.left &&

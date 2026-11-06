@@ -69,11 +69,16 @@ describe('isReorderInsideFolderRow', () => {
     const folder = document.createElement('div')
     folder.setAttribute('data-worktree-lineage-drop-row', '')
     folder.setAttribute('data-worktree-host-identity', 'local|folder:f-1')
-    folder.getBoundingClientRect = () => new DOMRect(0, 100, 280, 200)
+    folder.getBoundingClientRect = () => new DOMRect(0, 100, 290, 200)
+    const card = document.createElement('div')
+    card.setAttribute('data-worktree-card-surface', 'true')
+    card.getBoundingClientRect = () => new DOMRect(15, 100, 265, 200)
+    folder.append(card)
     document.body.append(folder)
     const inside = { clientX: 140, clientY: 200, lineClientY: 180 }
     expect(isReorderInsideFolderRow('local|folder:f-1', inside)).toBe(true)
     expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientX: 900 })).toBe(false)
+    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientX: 4 })).toBe(false)
     expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, lineClientY: 320 })).toBe(
       false
     )
