@@ -1524,8 +1524,8 @@
             "direct": {
               "3de6371df3": "Der Startbefehl für den Agenten konnte nicht erstellt werden.",
               "67e103dd60": "Der Arbeitsbereich wurde erstellt, konnte aber nicht aktiviert werden.",
-              "19c7683acf": "Der ausgewählte Agent ist im erstellten Arbeitsbereich nicht verfügbar.",
-              "8bc45efdbc": "Der PR-Head konnte nicht ermittelt werden.",
+              "19c7683acf": "Der ausgewählte Agent ist nicht verfügbar. Prüfe die Agenteneinstellungen des Arbeitsbereichs und versuche es erneut.",
+              "8bc45efdbc": "Der Pull Request konnte nicht gelesen werden. Prüfe, ob du ihn öffnen kannst, und versuche es erneut.",
               "agent": {
                 "ceeeb509b5": "Der Agent brauchte zu lange zum Starten. Der Arbeitsbereich ist bereit — {{value0}} einfügen, sobald der Agent im Leerlauf ist."
               }

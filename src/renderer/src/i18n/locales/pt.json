@@ -2436,8 +2436,8 @@
             "direct": {
               "3de6371df3": "Não foi possível montar o comando de inicialização do agente.",
               "67e103dd60": "Espaço de trabalho criado, mas não pôde ser ativado.",
-              "19c7683acf": "O agente selecionado não está disponível no espaço de trabalho criado.",
-              "8bc45efdbc": "Falha ao resolver o head do PR.",
+              "19c7683acf": "O agente selecionado está indisponível. Verifique as configurações do agente do espaço de trabalho e tente novamente.",
+              "8bc45efdbc": "Não foi possível ler o pull request. Verifique se você consegue abri-lo e tente novamente.",
               "agent": {
                 "ceeeb509b5": "O agente demorou muito para iniciar. O espaço de trabalho está pronto — cole o {{value0}} quando o agente estiver inativo."
               }

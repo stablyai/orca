@@ -1,3 +1,4 @@
+import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from './agent-launch-failure'
 import {
   prepareDirectWorkItemSetup,
   type DirectWorkItemLaunchResult
@@ -44,8 +45,13 @@ export async function launchWorkItemDirect(
   args = captureDirectWorkItemLaunchArgs(args)
   let agentArgs = args.agentArgs
   let creationAccepted = false
+  let failureAgent = agentOverride
   const reportFailure = (message: string): false => {
-    toast.error(message)
+    if (failureAgent) {
+      notifyAgentLaunchFailure(failureAgent, message)
+    } else {
+      toast.error(message)
+    }
     args.onFailureNotified?.()
     return false
   }
@@ -57,6 +63,11 @@ export async function launchWorkItemDirect(
     const context = prepareDirectLaunchContext(store, args)
     if (!context) {
       return false
+    }
+    if ('unavailable' in context) {
+      return context.unavailable.pending
+        ? 'cancelled'
+        : reportFailure(agentLaunchRecoveryMessage(context.unavailable.recovery))
     }
     const { repo } = context
     const promptDelivery = args.promptDelivery ?? 'draft'
@@ -91,11 +102,11 @@ export async function launchWorkItemDirect(
         resolvedPushTarget = result.pushTarget
         resolvedBranchNameOverride = result.branchNameOverride
         resolvedCompareBaseRef = result.compareBaseRef
-      } catch (error) {
+      } catch {
         if (args.signal?.aborted) {
           return 'cancelled'
         }
-        toast.error(error instanceof Error ? error.message : resolvePrHeadErrorMessage())
+        reportFailure(resolvePrHeadErrorMessage())
         openModalFallback()
         return false
       }
@@ -106,8 +117,7 @@ export async function launchWorkItemDirect(
       return 'cancelled'
     }
     if (!projectPreflight) {
-      toast.error(unavailableAgentErrorMessage())
-      return false
+      return reportFailure(unavailableAgentErrorMessage())
     }
     const projectContext = projectPreflight.context
     const { prospectiveAgent, unavailable } = await resolveDirectProspectiveAgent(
@@ -119,9 +129,9 @@ export async function launchWorkItemDirect(
     if (args.signal?.aborted) {
       return 'cancelled'
     }
+    failureAgent = prospectiveAgent ?? undefined
     if (unavailable) {
-      toast.error(unavailableAgentErrorMessage())
-      return false
+      return reportFailure(unavailableAgentErrorMessage())
     }
     const requestId = newAgentLaunchRequestId()
     const draftContent = await getDirectWorkItemDraftContent(item, context.repoConnectionId)
@@ -152,11 +162,11 @@ export async function launchWorkItemDirect(
     const agentArgsError = directWorkItemAgentArgsError(
       preflightInputs ? preflightInputs.agentArgs : args.agentArgs,
       context.shell,
-      Boolean(projectContext && preflightPlan?.route === 'structured-native-chat')
+      Boolean(projectContext && preflightPlan?.route === 'structured-native-chat'),
+      failureAgent
     )
     if (agentArgsError) {
-      toast.error(agentArgsError)
-      return false
+      return reportFailure(agentArgsError)
     }
 
     if (args.signal?.aborted) {

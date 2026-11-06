@@ -1,3 +1,4 @@
+import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -9,7 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 afterEach(cleanup)
 it('keeps the terminal launch shown but waiting while the host connects, with chat usable and setup stable', async () => {
@@ -41,7 +42,19 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
           <AgentLaunchPickerMenu
             entries={[entry, sshOnly]}
             runLaunch={launch}
-            terminalPending={terminalPending}
+            model={{
+              state: 'settled',
+              rows: entry.rows,
+              terminalPending,
+              detection: {
+                detectedIds: ['codex', 'claude'],
+                isLoading: false,
+                detectionFailed: false,
+                isRefreshing: false,
+                needsServerUpdate: false,
+                refresh: async () => ['codex', 'claude']
+              }
+            }}
           />
         </DropdownMenuContent>
       </DropdownMenu>
@@ -50,8 +63,9 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   const view = render(menu(true))
   const row = screen.getByRole('menuitem', { name: /Codex/ })
   // The waiting launch reads as unavailable, says why, and stays focusable.
-  expect(row.getAttribute('aria-disabled')).toBe('true')
-  expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+  const primary = screen.getByRole('button', { name: /^Codex/ })
+  expect(primary.getAttribute('aria-disabled')).toBe('true')
+  expect(document.getElementById(primary.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
     'Connecting…'
   )
   act(() => row.focus())
@@ -64,19 +78,28 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   const configure = screen.getByRole('button', { name: 'Configure Codex' })
   expect(configure.closest('[aria-disabled="true"], [disabled]')).toBeNull()
   fireEvent.keyDown(row, { key: 'ArrowRight' })
-  expect(document.activeElement).toBe(configure)
+  expect(screen.getByRole('menu', { name: 'Configure Codex' })).not.toBeNull()
   // One reason per row: the wait, not also the missing chat.
-  const reasons = () =>
-    [...screen.getByRole('menuitem', { name: /Claude/ }).querySelectorAll('.text-xs')].map(
-      (node) => node.textContent
-    )
-  expect(reasons()).toEqual(['Connecting…'])
-  fireEvent.keyDown(configure, { key: 'Enter' })
-  expect(screen.getByRole('dialog', { name: 'Configure Codex' })).not.toBeNull()
+  const reason = () => screen.getByRole('menuitem', { name: /^Claude/ }).textContent
+  expect(reason()).toBe('ClaudeConnecting…')
+  expect(screen.getByRole('menu', { name: 'Configure Codex' })).not.toBeNull()
   const user = userEvent.setup()
+  fireEvent.keyDown(screen.getByRole('menu', { name: 'Configure Codex' }), { key: 'Escape' })
+  expect(document.activeElement).toBe(configure)
+  await user.keyboard('{Enter}')
+  expect(screen.getByRole('menu', { name: 'Configure Codex' })).not.toBeNull()
+  expect(launch).not.toHaveBeenCalled()
+  const editor = document.querySelector<HTMLElement>('[contenteditable]')!
+  changePrompt(editor, 'first line')
+  const editingKey = vi.fn()
+  editor.addEventListener('keydown', editingKey)
+  fireEvent.keyDown(editor, { key: 'Enter', shiftKey: true })
+  expect(editingKey).toHaveBeenCalledOnce()
+  expect(launch).not.toHaveBeenCalled()
+  editor.removeEventListener('keydown', editingKey)
   const buttons = () =>
     screen.getAllByRole('button', { name: /^Launch / }).map((button) => ({
-      name: button.textContent,
+      name: button.getAttribute('aria-label'),
       disabled: button.hasAttribute('disabled')
     }))
   // The terminal default stays the default and stays mounted; only its launch waits.
@@ -87,7 +110,7 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   const args = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')
   fireEvent.change(args()!, { target: { value: '--search' } })
   view.rerender(menu(false))
-  expect(reasons()).toEqual(['No chat over SSH'])
+  expect(reason()).toBe('ClaudeNo chat over SSH')
   expect(args()?.value).toBe('--search')
   expect(buttons()).toEqual([
     { name: 'Launch chat', disabled: false },
@@ -105,3 +128,51 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
   // The chat closes the menu as a chosen item would, without the waiting row being chosen.
   expect(screen.queryByRole('menu')).toBeNull()
 })
+
+it.each(['launch', 'select'] as const)(
+  'pending terminal readiness preserves %s mode semantics',
+  (mode) => {
+    const entry: AgentPickerEntry = {
+      agent: 'codex',
+      label: 'Codex',
+      defaultSurface: 'terminal',
+      surfaces: ['terminal'],
+      terminal: {},
+      structured: {},
+      catalog: { origin: 'probe', fetchedAt: 1, models: [] },
+      rows: [{ kind: 'cli', agent: 'codex' }]
+    }
+    const launch = vi.fn(() => false)
+    render(
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <AgentLaunchPickerMenu
+            entries={[entry]}
+            mode={mode}
+            setupDisabled
+            runLaunch={launch}
+            model={{
+              state: 'settled',
+              rows: entry.rows,
+              terminalPending: true,
+              detection: {
+                detectedIds: ['codex'],
+                isLoading: false,
+                detectionFailed: false,
+                isRefreshing: false,
+                needsServerUpdate: false,
+                refresh: async () => ['codex']
+              }
+            }}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+    const row = screen.getByRole('menuitem', { name: 'Codex' })
+    expect(row.getAttribute('aria-disabled')).toBe(mode === 'launch' ? 'true' : null)
+    fireEvent.click(row)
+    expect(launch).toHaveBeenCalledTimes(mode === 'launch' ? 0 : 1)
+    expect(screen.getByRole('menu')).not.toBeNull()
+  }
+)

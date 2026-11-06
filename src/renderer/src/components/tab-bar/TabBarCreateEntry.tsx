@@ -8,7 +8,8 @@ import {
 } from './tab-create-entry-action'
 import {
   configuredAgentPickerLaunchOption,
-  matchingAgentLaunchOptions
+  matchingAgentLaunchOptions,
+  tabAgentLaunchOptionDisabled
 } from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
@@ -233,7 +234,7 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      if (selectedOption.option.disabled) {
+      if (tabAgentLaunchOptionDisabled(selectedOption.option)) {
         return false
       }
       const accepted = onLaunchAgentOption

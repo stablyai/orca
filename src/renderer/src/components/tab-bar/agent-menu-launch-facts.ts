@@ -14,12 +14,12 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
-} from '../../../../shared/runtime-host-contact'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */

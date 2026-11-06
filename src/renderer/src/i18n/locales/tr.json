@@ -1502,8 +1502,8 @@
             "direct": {
               "3de6371df3": "Ajan başlatma komutu oluşturulamadı.",
               "67e103dd60": "Çalışma alanı oluşturuldu ancak etkinleştirilemedi.",
-              "19c7683acf": "Seçilen ajan, oluşturulan çalışma alanında kullanılamıyor.",
-              "8bc45efdbc": "PR head'i belirlenemedi.",
+              "19c7683acf": "Seçilen aracı kullanılamıyor. Çalışma alanının aracı ayarlarını kontrol edin ve tekrar deneyin.",
+              "8bc45efdbc": "Çekme isteği okunamadı. Açabildiğinizden emin olun ve tekrar deneyin.",
               "agent": {
                 "ceeeb509b5": "Ajanın başlaması çok uzun sürdü. Çalışma alanı hazır; ajan boşta olduğunda {{value0}} öğesini yapıştırın."
               }

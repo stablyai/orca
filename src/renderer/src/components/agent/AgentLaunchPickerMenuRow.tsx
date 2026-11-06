@@ -1,3 +1,4 @@
+import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
 import { memo, useId } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,6 +52,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   mode,
   setupDisabled,
   disabled,
+  terminalBlocked,
   runLaunch,
   shortcut,
   onSelectAgent,
@@ -79,6 +81,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   mode?: 'launch' | 'select'
   setupDisabled?: boolean
   disabled?: boolean
+  terminalBlocked?: boolean
   runLaunch: AgentPickerMenuLaunch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
@@ -99,6 +102,10 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       })
     : undefined
   const closeMenu = useDropdownMenuClose()
+  const surface =
+    initial?.surface ?? (mode === 'select' ? selected?.surface : undefined) ?? entry.defaultSurface
+  const launchBlocked = mode !== 'select' && terminalBlocked && surface === 'terminal'
+  const reasonId = useId()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   const setDefault =
     onSetDefault && entry.surfaces.length ? () => onSetDefault(entry.agent) : undefined
@@ -106,11 +113,16 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     return (
       <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
         <DropdownMenuItem
-          disabled={disabled || !entry.surfaces.length}
+          disabled={disabled || launchBlocked || !entry.surfaces.length}
           data-search-default={searchDefault || undefined}
-          onSelect={() => {
+          aria-description={launchBlocked ? terminalPendingLabel() : undefined}
+          onSelect={(event) => {
             onSelectAgent?.(entry.agent)
-            runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface))
+            if (
+              runLaunch(pickerLaunchRow(entry, selected?.surface ?? entry.defaultSurface)) === false
+            ) {
+              event.preventDefault()
+            }
           }}
         >
           <AgentIcon agent={entry.agent} size={14} />
@@ -136,6 +148,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       seed={initial ?? selected ?? source}
       surface={selected?.surface}
       mode={mode}
+      terminalBlocked={terminalBlocked}
       open={openSetup === setupId}
       replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
       disabled={disabled || setupDisabled || !entry.surfaces.length}
@@ -164,7 +177,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           data-search-default={searchDefault || undefined}
           onClick={(event) => {
             event.preventDefault()
-            if (disabled || !entry.surfaces.length) {
+            if (disabled || launchBlocked || !entry.surfaces.length) {
               return
             }
             const draft = initial ?? (mode === 'select' ? selected : undefined)
@@ -193,17 +206,28 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         >
           {/* Why: the anchor is a Radix sub-trigger's asChild child, so the context menu wraps the label instead. */}
           <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
-            <Button asChild variant="menu-launch" size="menu">
-              <span>
-                <AgentIcon agent={entry.agent} size={14} />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-                {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-                  <span className="text-xs text-muted-foreground">
-                    {chatUnavailableLabel(unavailable.reason)}
-                  </span>
-                ) : null}
-              </span>
+            <Button
+              type="button"
+              variant="menu-launch"
+              size="menu"
+              aria-disabled={launchBlocked || undefined}
+              aria-describedby={launchBlocked ? reasonId : undefined}
+            >
+              <AgentIcon agent={entry.agent} size={14} />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+              {launchBlocked ? (
+                <span
+                  id={reasonId}
+                  className="min-w-0 shrink truncate text-xs text-muted-foreground"
+                >
+                  {terminalPendingLabel()}
+                </span>
+              ) : unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel(unavailable.reason)}
+                </span>
+              ) : null}
             </Button>
           </AgentDefaultContextMenu>
           {trigger}

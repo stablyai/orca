@@ -1,3 +1,4 @@
+import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
 import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -53,10 +54,15 @@ export async function startFixChecksFromDialog(args: {
   if (!args.targetRepoId) {
     return false
   }
+  let failureNotified = false
+  const onFailureNotified = () => {
+    failureNotified = true
+    args.onFailureNotified?.()
+  }
   return await launchWorkItemDirect({
     signal: args.signal,
     onCreateAccepted: args.onCreateAccepted,
-    onFailureNotified: args.onFailureNotified,
+    onFailureNotified,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',
@@ -79,12 +85,20 @@ export async function startFixChecksFromDialog(args: {
       : {}),
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
-      toast.error(
-        translate(
-          'auto.components.PullRequestPage.c4c02ea23e',
-          'Unable to create a fix workspace automatically.'
+      if (failureNotified) {
+        return
+      }
+      if (args.agent) {
+        notifyAgentLaunchFailure(args.agent, agentLaunchRecoveryMessage('refreshProjects'))
+      } else {
+        toast.error(
+          translate(
+            'auto.components.PullRequestPage.c4c02ea23e',
+            'Unable to create a fix workspace automatically.'
+          )
         )
-      )
+      }
+      onFailureNotified()
     }
   })
 }

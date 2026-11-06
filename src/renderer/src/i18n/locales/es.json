@@ -1077,8 +1077,8 @@
             "direct": {
               "3de6371df3": "No se pudo generar el comando de inicio del agente.",
               "67e103dd60": "Se creó el espacio de trabajo, pero no se pudo activar.",
-              "19c7683acf": "El agente seleccionado no está disponible en el espacio de trabajo creado.",
-              "8bc45efdbc": "No se pudo resolver el head del PR.",
+              "19c7683acf": "El agente seleccionado no está disponible. Revisa los ajustes del agente del espacio de trabajo y vuelve a intentarlo.",
+              "8bc45efdbc": "No se pudo leer la solicitud de incorporación. Comprueba que puedes abrirla y vuelve a intentarlo.",
               "agent": {
                 "ceeeb509b5": "El agente tardó demasiado en iniciar. El espacio de trabajo está listo: pega {{value0}} cuando el agente esté inactivo."
               }

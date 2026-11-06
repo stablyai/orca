@@ -41,7 +41,7 @@ it('New Chat reports one actionable named-agent error through the actual launche
     for (const language of ['en', 'fr']) {
       await i18n.changeLanguage(language)
       mockToastError.mockClear()
-      act(() => hook.result.current({ kind: 'cli', agent: 'codex' }))
+      act(() => expect(hook.result.current({ kind: 'cli', agent: 'codex' })).toBe(false))
       expect(mockToastError).toHaveBeenCalledExactlyOnceWith(
         language === 'fr'
           ? 'Impossible de démarrer une nouvelle session Codex.'

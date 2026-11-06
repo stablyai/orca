@@ -1735,8 +1735,8 @@
             "direct": {
               "3de6371df3": "Could not build the agent launch command.",
               "67e103dd60": "Workspace created but could not be activated.",
-              "19c7683acf": "Selected agent is not available in the created workspace.",
-              "8bc45efdbc": "Failed to resolve PR head.",
+              "19c7683acf": "The selected agent is unavailable. Check the workspace’s agent settings, then try again.",
+              "8bc45efdbc": "Could not read the pull request. Check that you can open it, then try again.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
               }

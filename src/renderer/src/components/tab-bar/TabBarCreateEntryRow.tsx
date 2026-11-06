@@ -1,3 +1,5 @@
+import { tabAgentLaunchOptionDisabled } from './tab-agent-launch-options'
+import { terminalPendingLabel } from './new-tab-agent-menu-model'
 import React from 'react'
 import {
   FilePlus,
@@ -66,7 +68,8 @@ export function EntryActionRow({
   terminalPending?: boolean
 }): React.JSX.Element {
   const presentation = getActionPresentation(option, labelOverride)
-  const launchDisabled = disabled || (option.kind === 'agent' && option.option.disabled === true)
+  const launchDisabled =
+    disabled || (option.kind === 'agent' && tabAgentLaunchOptionDisabled(option.option))
 
   const row = (
     <div className="flex items-center gap-1">
@@ -225,7 +228,12 @@ function getActionPresentation(
   }
   if (option.kind === 'agent') {
     return {
-      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
+      detail: [
+        option.option.label,
+        option.option.reason ?? (option.option.terminalWaiting ? terminalPendingLabel() : undefined)
+      ]
+        .filter(Boolean)
+        .join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
         labelOverride ??

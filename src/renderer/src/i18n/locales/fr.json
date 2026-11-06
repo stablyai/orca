@@ -1297,8 +1297,8 @@
             "direct": {
               "3de6371df3": "Impossible de construire la commande de lancement de l'agent.",
               "67e103dd60": "L'espace de travail a été créé mais n'a pas pu être activé.",
-              "19c7683acf": "L'agent sélectionné n'est pas disponible dans l'espace de travail créé.",
-              "8bc45efdbc": "Échec de la résolution du head de la pull request.",
+              "19c7683acf": "L’agent sélectionné est indisponible. Vérifiez les paramètres de l’agent dans l’espace de travail, puis réessayez.",
+              "8bc45efdbc": "Impossible de lire la pull request. Vérifiez que vous pouvez l’ouvrir, puis réessayez.",
               "agent": {
                 "ceeeb509b5": "L'agent a mis trop de temps à démarrer. L'espace de travail est prêt — collez le {{value0}} quand l'agent est inactif."
               }

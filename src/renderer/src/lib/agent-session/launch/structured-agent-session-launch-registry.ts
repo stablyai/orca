@@ -72,6 +72,10 @@ export function notifyStructuredLaunchListeners(): void {
     }
   }
   updateStructuredAgentLaunchRecords(changes())
+  publishStructuredLaunchChange()
+}
+
+export function publishStructuredLaunchChange(): void {
   for (const listener of structuredLaunchListeners) {
     listener()
   }

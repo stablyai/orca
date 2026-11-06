@@ -1,3 +1,5 @@
+import { resolveIndexedRepoOwner } from '@/lib/repo-owner-index'
+import { getResourceExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
@@ -39,7 +41,7 @@ import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
 } from '@/runtime/paired-runtime-environment-test-fixture'
-import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/runtime-host-status'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 const initial = useAppStore.getState()
 afterEach(() => {
@@ -737,6 +739,17 @@ it.each([1, 10])(
       runtimeEnvironmentCatalogHydrated: true,
       ...hubA('checking')
     })
+    // A separate cold main-owner control accounts for its shared classification index.
+    const control = { ...useAppStore.getState(), repos: [...repos] }
+    visits = 0
+    expect(resolveIndexedRepoOwner(control.repos, 'repo-1').kind).toBe('ambiguous')
+    const ownerIndexVisits = visits
+    expect(ownerIndexVisits).toBeLessThanOrEqual(3 * repos.length + 2)
+    visits = 0
+    expect(getResourceExecutionHostIdForWorktree(control, ids[0])).toBe('local')
+    const mainClassificationVisits = visits
+    expect(mainClassificationVisits).toBeLessThanOrEqual(3 * repos.length)
+    expect(ownerIndexVisits + mainClassificationVisits).toBeLessThanOrEqual(6 * repos.length + 2)
     const visitsFor = async (update: () => void) => {
       visits = 0
       await act(async () => update())
@@ -798,7 +811,10 @@ it.each([1, 10])(
         readinessVisits = (await visitsFor(republish('late1'))) - storeOnly.republish
       })
     ).toEqual(none)
-    expect(readinessVisits).toBeLessThanOrEqual(3 * repos.length + 4 * targets.length)
+    expect(readinessVisits).toBeLessThanOrEqual(6 * repos.length + 4 * targets.length)
+    expect(readinessVisits - mainClassificationVisits).toBeLessThanOrEqual(
+      3 * repos.length + 4 * targets.length
+    )
     expect(pending()).toEqual(none)
     // Stamping one row with a server still checking, with no OS, waits only that row's pickers.
     expect(
