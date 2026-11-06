@@ -279,19 +279,24 @@ export function AntigravityChatSignInRow(props: {
         owner={props.owner}
         disabled={props.disabled || signIn.ownFlow}
         onSignIn={signIn.start}
+        heading={
+          <div>
+            {' '}
+            <p className="text-sm font-medium leading-none">
+              {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
+            </p>
+            {props.description ? (
+              <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
+            ) : null}
+          </div>
+        }
       >
         {(auth) => (
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium leading-none">
-                {translate('accounts.antigravity.chatTitle', 'Antigravity chats')}
-              </p>
-              {props.description ? (
-                <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
-              ) : null}
               {/* Reserve line height so the host’s answer cannot shift layout. */}
               <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
-                {line}
+                {!signIn.ownFlow && !alert ? (auth.hint ?? line) : line}
                 {line && alert ? ' ' : null}
                 {alert && (
                   <span role="alert" className="text-destructive">

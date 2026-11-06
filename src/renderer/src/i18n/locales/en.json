@@ -22181,14 +22181,15 @@
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
       "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
-      "authMethod": "Sign-in method",
-      "personal": "Google account (personal)",
+      "authMethod": "Sign in with",
+      "personal": "Google account",
       "enterprise": "Gemini Enterprise",
       "gcpProject": "Google Cloud project",
       "gcpLocation": "Google Cloud location",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
-      "authHelp": "Changes stop running Antigravity chats. Sign in again to use a different account."
+      "signInAgainWith": "Sign in again to use {{method}}.",
+      "signInWith": "Signs in with {{method}}."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

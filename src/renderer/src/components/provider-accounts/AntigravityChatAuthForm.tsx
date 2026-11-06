@@ -17,11 +17,12 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
-type AuthAction = { disabled: boolean; start: () => void }
+type AuthAction = { disabled: boolean; start: () => void; hint: string | null }
 type AuthFormProps = {
   owner: RuntimeClientTarget
   disabled: boolean
   onSignIn: () => void
+  heading: ReactNode
   children: (action: AuthAction) => ReactNode
 }
 
@@ -29,6 +30,7 @@ export function AntigravityChatAuthForm({
   owner,
   disabled,
   onSignIn,
+  heading,
   children
 }: AuthFormProps): React.JSX.Element | null {
   const capability = useStructuredAgentSessionHostCapabilityState(
@@ -36,7 +38,12 @@ export function AntigravityChatAuthForm({
     ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY
   )
   if (capability === 'unsupported') {
-    return <>{children({ disabled: false, start: onSignIn })}</>
+    return (
+      <>
+        {heading}
+        {children({ disabled: false, start: onSignIn, hint: null })}
+      </>
+    )
   }
   const key = owner.kind === 'local' ? 'local' : owner.environmentId
   return (
@@ -46,6 +53,7 @@ export function AntigravityChatAuthForm({
       disabled={disabled}
       supported={capability === 'supported'}
       onSignIn={onSignIn}
+      heading={heading}
     >
       {children}
     </AuthForm>
@@ -57,6 +65,7 @@ function AuthForm({
   disabled,
   supported,
   onSignIn,
+  heading,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const id = useId()
@@ -66,7 +75,6 @@ function AuthForm({
     readAntigravityChatSignInSnapshot(owner)
   )
   const [loaded, setLoaded] = useState(false)
-  const saved = useRef<AntigravityChatAuthConfig | null>(null)
   const mounted = useRef(true)
   const saveInFlight = useRef<{ key: string; result: Promise<boolean> } | null>(null)
   const starting = useRef(false)
@@ -77,6 +85,7 @@ function AuthForm({
       mounted.current = false
     }
   }, [])
+  const [authenticatedMethod, setAuthenticatedMethod] = useState<string | null>(null)
   const [method, setMethod] = useState('oauth-personal')
   const [project, setProject] = useState('')
   const [location, setLocation] = useState('')
@@ -95,9 +104,11 @@ function AuthForm({
     void callAntigravityChatAuthConfig(target).then(
       (config) => {
         if (current && read === reads.current) {
-          saved.current = config
           setLoaded(true)
           if (!edited.current) {
+            if (observation.kind === 'known' && observation.state.auth === 'signedIn') {
+              setAuthenticatedMethod(config?.method ?? null)
+            }
             setMethod(config?.method ?? '')
             setProject(config?.gcpProject ?? '')
             setLocation(config?.gcpLocation ?? '')
@@ -151,10 +162,6 @@ function AuthForm({
       return saveInFlight.current.key === key ? saveInFlight.current.result : Promise.resolve(false)
     }
     setError(null)
-    if (key === JSON.stringify(saved.current)) {
-      edited.current = false
-      return Promise.resolve(true)
-    }
     reads.current++
     setPending(true)
     const result = callAntigravityChatAuthConfig(owner, config)
@@ -165,7 +172,6 @@ function AuthForm({
         }
         reads.current++
         edited.current = false
-        saved.current = next
         setMethod(next.method)
         setProject(next.gcpProject ?? '')
         setLocation(next.gcpLocation ?? '')
@@ -218,11 +224,11 @@ function AuthForm({
   }
   return (
     <>
-      {children({ disabled: disabled || !loaded || !valid || preparing, start })}
+      {heading}
       <div className="space-y-2">
         <div className="space-y-1">
           <Label htmlFor={`${id}-method`} variant="settings">
-            {translate('accounts.antigravity.authMethod', 'Sign-in method')}
+            {translate('accounts.antigravity.authMethod', 'Sign in with')}
           </Label>
           <Select
             value={method}
@@ -238,7 +244,7 @@ function AuthForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="oauth-personal">
-                {translate('accounts.antigravity.personal', 'Google account (personal)')}
+                {translate('accounts.antigravity.personal', 'Google account')}
               </SelectItem>
               <SelectItem value="oauth-business">
                 {translate('accounts.antigravity.enterprise', 'Gemini Enterprise')}
@@ -288,12 +294,6 @@ function AuthForm({
             </div>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'accounts.antigravity.authHelp',
-            'Changes stop running Antigravity chats. Sign in again to use a different account.'
-          )}
-        </p>
         {error && (
           <p role="alert" className="text-xs text-destructive">
             {error}
@@ -305,6 +305,30 @@ function AuthForm({
           </Button>
         )}
       </div>
+      {children({
+        disabled: disabled || !loaded || !valid || preparing,
+        start,
+        hint:
+          !loaded || (method !== 'oauth-business' && method !== 'oauth-personal')
+            ? null
+            : authenticatedMethod !== null && authenticatedMethod !== method
+              ? translate(
+                  'accounts.antigravity.signInAgainWith',
+                  'Sign in again to use {{method}}.',
+                  {
+                    method:
+                      method === 'oauth-business'
+                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                        : translate('accounts.antigravity.personal', 'Google account')
+                  }
+                )
+              : translate('accounts.antigravity.signInWith', 'Signs in with {{method}}.', {
+                  method:
+                    method === 'oauth-business'
+                      ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                      : translate('accounts.antigravity.personal', 'Google account')
+                })
+      })}
     </>
   )
 }

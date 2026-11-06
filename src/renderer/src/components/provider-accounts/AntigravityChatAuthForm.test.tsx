@@ -182,35 +182,43 @@ it('retains sign-in for an older host without configuration capability', async (
   expect(callAntigravityChatAuthConfig).not.toHaveBeenCalled()
 })
 
-it('follows another client’s account change while mounted and allows Personal to be applied again', async () => {
-  let current: typeof personal | typeof enterprise = personal
-  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
-    async (_owner, config) => config ?? current
-  )
-  const user = userEvent.setup()
+it('commits the visible choice before sign-in while another client’s refresh is unresolved', async () => {
   const target = { kind: 'environment', environmentId: 'connected-client-change' } as const
-  follow(target)
+  let refreshing = false
+  let finishSave!: (value: typeof personal) => void
+  let finishRead!: (value: typeof enterprise) => void
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation((_owner, config) => {
+    if (config) {
+      return new Promise((resolve) => {
+        finishSave = resolve
+      })
+    }
+    return refreshing
+      ? new Promise((resolve) => {
+          finishRead = resolve
+        })
+      : Promise.resolve(personal)
+  })
+  const user = userEvent.setup()
   render(
     <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
   )
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-  expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
   await act(async () => {
-    current = enterprise
+    refreshing = true
     streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
   })
-  await waitFor(() =>
-    expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project')
-  )
-  await user.click(screen.getByRole('combobox'))
-  await user.click(screen.getByRole('option', { name: 'Google account (personal)' }))
-  await waitFor(() =>
-    expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
-      method: 'oauth-personal',
-      gcpProject: 'enterprise-project',
-      gcpLocation: 'us-central1'
-    })
-  )
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, personal)
+  expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+  await act(async () => {
+    finishSave(personal)
+  })
+  await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+  await act(async () => {
+    finishRead(enterprise)
+  })
+  expect(screen.getByRole('combobox')).toHaveTextContent('Google account')
 })
 
 it('refreshes the saved method after reconnecting to a restarted host with the same revision', async () => {

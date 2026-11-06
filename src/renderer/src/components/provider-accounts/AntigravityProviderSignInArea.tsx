@@ -52,13 +52,18 @@ export function AntigravityProviderSignInArea(props: {
         owner={props.owner}
         disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
         onSignIn={signIn.start}
+        heading={
+          <div>
+            {' '}
+            <p className="text-xs font-medium leading-none">
+              {translate('settings.chat.providers.antigravityAccount', 'Account')}
+            </p>
+          </div>
+        }
       >
         {(auth) => (
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium leading-none">
-                {translate('settings.chat.providers.antigravityAccount', 'Account')}
-              </p>
               {/* Reserve line height so the host’s answer cannot shift layout. */}
               <div
                 role="status"
@@ -66,7 +71,7 @@ export function AntigravityProviderSignInArea(props: {
               >
                 {ownFlow ? <LoadingSpinner className="size-3 shrink-0" /> : null}
                 <span className="min-w-0 break-words">
-                  {line}
+                  {!ownFlow && !alert ? (auth.hint ?? line) : line}
                   {line && alert ? ' ' : null}
                   {alert && (
                     <span role="alert" className="text-destructive">
