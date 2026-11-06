@@ -338,7 +338,7 @@ function mount(
   const show = (next: NativeChatMessage[], joined = 0): number => {
     const before = scroller.writes
     last = { messages: next, joined }
-    act(() => renderer.update(h(Activity, { mode }, h(Chat, { ...options, ...last }))))
+    act(() => renderer.update(<Activity mode={mode}>{h(Chat, { ...options, ...last })}</Activity>))
     return scroller.writes - before
   }
   // Hide or show the list the way the chat overlay does behind its terminal.
