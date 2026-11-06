@@ -1,197 +1,104 @@
 import type { JournalSqlScope } from './journal-sql-scope'
-import { JournalSqlDomainTables } from './journal-sql-domain-tables'
+import type { JournalSqlDomainTables } from './journal-sql-domain-tables'
 import type {
+  EncodedJournalSqlValue,
   JournalSqlValueLocation,
-  JournalSqlValueReference,
-  EncodedJournalSqlValue
+  JournalSqlValueReference
 } from './journal-sql-value-codec'
+import { journalSqlCaptureHolders, journalSqlSourceId } from './journal-sql-captures'
 
+export type JournalSqlDetachedValue = {
+  encoded: EncodedJournalSqlValue
+  raw: unknown
+  /** Unchanged since it was read, so an item may keep its saved outcome pointer. */
+  unchanged: boolean
+}
+
+/**
+ * A replaced entity incarnation stays saved while some holder row captures it, and is removed
+ * with the last capture, as are the incarnations it captured in turn.
+ */
 export class JournalSqlValueReferences {
-  private readonly tables: JournalSqlDomainTables
   constructor(
     private readonly scope: JournalSqlScope,
+    private readonly tables: JournalSqlDomainTables,
     private readonly detached: (
       location: JournalSqlValueLocation
-    ) => EncodedJournalSqlValue | undefined,
-    private readonly payload: (location: JournalSqlValueLocation, json: string) => string = (
-      _location,
-      json
-    ) => json,
-    private readonly forget: (location: JournalSqlValueLocation) => void = () => undefined
-  ) {
-    this.tables = new JournalSqlDomainTables(scope)
-  }
-
-  retain(location: JournalSqlValueLocation): void {
-    if (this.tables.for(location.collection)) {
-      return
-    }
-    this.scope.db
-      .prepare(`INSERT OR IGNORE INTO journal_proj_value_snapshots
-      (session_id, generation, collection, entry_key, incarnation, value_json)
-      SELECT session_id, generation, collection, entry_key, incarnation, value_json
-      FROM journal_proj_values WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
-      .run(...this.scope.prefix, location.collection, location.key)
-  }
-
-  private current(location: JournalSqlValueLocation) {
-    const entity = this.tables.for(location.collection)
-    if (entity) {
-      return entity.header(location.key)
-    }
-    const row = this.scope.db
-      .prepare(`SELECT incarnation FROM journal_proj_values
-      WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
-      .get(...this.scope.prefix, location.collection, location.key)
-    return row && this.scope.examined(row)
-  }
+    ) => JournalSqlDetachedValue | undefined
+  ) {}
 
   referenced(location: JournalSqlValueLocation): boolean {
-    const row = this.scope.db
-      .prepare(`SELECT holder_key FROM journal_proj_value_refs
-      WHERE session_id=? AND generation=? AND source_collection=? AND source_key=? AND source_incarnation=? LIMIT 1`)
-      .get(...this.scope.prefix, location.collection, location.key, location.incarnation)
-    if (row) {
-      this.scope.examined(row)
-    }
-    return !!row
+    const id = journalSqlSourceId(location.collection, location.key)
+    return journalSqlCaptureHolders(location.collection).some(
+      ({ table, id: column, incarnation }) => {
+        const row = this.scope.db
+          .prepare(`SELECT 1 AS held FROM ${table}
+          WHERE session_id=? AND epoch=? AND ${column}=? AND ${incarnation}=? LIMIT 1`)
+          .get(...this.scope.prefix, id, location.incarnation)
+        return !!row && !!this.scope.examined(row)
+      }
+    )
   }
 
-  replace(location: JournalSqlValueLocation, refs: JournalSqlValueReference[]): void {
-    const previous = this.references(location)
-    this.removeReferences(location)
-    for (const { source } of refs) {
-      this.ensureSnapshot(source)
-      this.scope.db
-        .prepare(`INSERT OR IGNORE INTO journal_proj_value_refs
-        (session_id, generation, holder_collection, holder_key, holder_incarnation,
-         source_collection, source_key, source_incarnation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(
-          ...this.scope.prefix,
-          location.collection,
-          location.key,
-          location.incarnation,
-          source.collection,
-          source.key,
-          source.incarnation
-        )
+  captured(location: JournalSqlValueLocation): JournalSqlValueLocation[] {
+    return this.tables
+      .for(location.collection)
+      .captured(location)
+      .map((ref) => ref.source)
+  }
+
+  /** A holder row now captures `next` instead of `previous`. */
+  replace(previous: JournalSqlValueLocation[], next: readonly JournalSqlValueReference[]): void {
+    for (const { source } of next) {
+      this.ensureSaved(source)
     }
     this.prune(previous)
   }
 
-  private ensureSnapshot(location: JournalSqlValueLocation): void {
-    const active = this.current(location)
-    if (Number(active?.incarnation) === location.incarnation) {
-      return
-    }
+  /** Removes a holder incarnation no one captures, then releases what it captured. */
+  drop(location: JournalSqlValueLocation): void {
+    const previous = this.captured(location)
+    this.tables.for(location.collection).remove(location)
+    this.prune(previous)
+  }
+
+  update(location: JournalSqlValueLocation, encoded: EncodedJournalSqlValue, value: unknown) {
     const entity = this.tables.for(location.collection)
-    const snapshot = entity
-      ? entity.load(location)
-      : this.scope.db
-          .prepare(`SELECT incarnation FROM journal_proj_value_snapshots
-      WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-          .get(...this.scope.prefix, location.collection, location.key, location.incarnation)
-    if (snapshot) {
-      if (!entity) {
-        this.scope.examined(snapshot)
-      }
+    return {
+      stored: entity.update(location, encoded, value),
+      current: Number(entity.header(location.key)?.incarnation) === location.incarnation
+    }
+  }
+
+  /** A capture of an incarnation replaced earlier in this command saves that incarnation. */
+  private ensureSaved(location: JournalSqlValueLocation): void {
+    const entity = this.tables.for(location.collection)
+    if (
+      Number(entity.header(location.key)?.incarnation) === location.incarnation ||
+      entity.load(location)
+    ) {
       return
     }
-    const encoded = this.detached(location)
-    if (!encoded) {
+    const detached = this.detached(location)
+    if (!detached) {
       throw new Error('Missing journal projection object incarnation')
     }
-    if (entity) {
-      entity.store(location, encoded.json, undefined, false, 0)
-    } else {
-      this.scope.db
-        .prepare(`INSERT INTO journal_proj_value_snapshots
-      (session_id, generation, collection, entry_key, incarnation, value_json) VALUES (?, ?, ?, ?, ?, ?)`)
-        .run(
-          ...this.scope.prefix,
-          location.collection,
-          location.key,
-          location.incarnation,
-          this.payload(location, encoded.json)
-        )
-    }
-    this.replace(location, encoded.refs)
-  }
-
-  private references(location: JournalSqlValueLocation): JournalSqlValueLocation[] {
-    return this.scope.db
-      .prepare(`SELECT source_collection, source_key, source_incarnation
-      FROM journal_proj_value_refs WHERE session_id=? AND generation=?
-      AND holder_collection=? AND holder_key=? AND holder_incarnation=?`)
-      .all(...this.scope.prefix, location.collection, location.key, location.incarnation)
-      .map((row) => {
-        this.scope.examined(row)
-        return {
-          collection: String(row.source_collection),
-          key: String(row.source_key),
-          incarnation: Number(row.source_incarnation),
-          path: []
-        }
-      })
-  }
-
-  private removeReferences(location: JournalSqlValueLocation): void {
-    this.scope.db
-      .prepare(`DELETE FROM journal_proj_value_refs WHERE session_id=? AND generation=?
-      AND holder_collection=? AND holder_key=? AND holder_incarnation=?`)
-      .run(...this.scope.prefix, location.collection, location.key, location.incarnation)
-  }
-
-  drop(location: JournalSqlValueLocation): void {
-    const previous = this.references(location)
-    this.removeReferences(location)
-    this.forget(location)
-    this.tables.for(location.collection)?.remove(location)
-    this.prune(previous)
-  }
-
-  update(location: JournalSqlValueLocation, json: string, value: unknown) {
-    const entity = this.tables.for(location.collection)
-    if (entity) {
-      return {
-        stored: entity.update(location, json, value),
-        current: Number(entity.header(location.key)?.incarnation) === location.incarnation
-      }
-    }
-    const key = [...this.scope.prefix, location.collection, location.key, location.incarnation]
-    const updated = this.scope.db
-      .prepare(`UPDATE journal_proj_values SET value_json=?
-        WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-      .run(json, ...key)
-    const snapshot =
-      !updated.changes &&
-      this.scope.db
-        .prepare(`UPDATE journal_proj_value_snapshots SET value_json=?
-        WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-        .run(json, ...key)
-    return {
-      stored: !!(updated.changes || (snapshot && snapshot.changes)),
-      current: !!updated.changes
-    }
+    entity.store(location, detached.encoded, detached.raw, false, 0, detached.unchanged)
+    this.replace([], detached.encoded.refs)
   }
 
   private prune(locations: JournalSqlValueLocation[]): void {
     for (const location of locations) {
-      const active = this.current(location)
-      if (Number(active?.incarnation) === location.incarnation || this.referenced(location)) {
+      const entity = this.tables.for(location.collection)
+      if (
+        Number(entity.header(location.key)?.incarnation) === location.incarnation ||
+        this.referenced(location)
+      ) {
         continue
       }
-      const entity = this.tables.for(location.collection)
-      const removed = entity
-        ? { changes: entity.remove(location) }
-        : this.scope.db
-            .prepare(`DELETE FROM journal_proj_value_snapshots
-        WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?`)
-            .run(...this.scope.prefix, location.collection, location.key, location.incarnation)
-      if (removed.changes) {
-        this.forget(location)
-        locations.push(...this.references(location))
-        this.removeReferences(location)
+      const captured = this.captured(location)
+      if (entity.remove(location)) {
+        locations.push(...captured)
       }
     }
   }

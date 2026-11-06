@@ -1,6 +1,16 @@
 import { journalSqlPrimitiveTable } from './journal-sql-primitive-tables'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalSqlValueLocation } from './journal-sql-value-codec'
+import {
+  parseJournalSqlValue,
+  type EncodedJournalSqlValue,
+  type JournalSqlValueLocation,
+  type StoredJournalSqlValue
+} from './journal-sql-value-codec'
+import {
+  journalSqlCaptureColumns,
+  journalSqlCaptureSelect,
+  journalSqlCapturedRefs
+} from './journal-sql-captures'
 
 export type JournalSqlPrimitiveTable = {
   table: string
@@ -14,7 +24,7 @@ export type JournalSqlPrimitiveTable = {
 
 export function journalSqlPrimitiveFact(scope: JournalSqlScope, collection: string) {
   const table = journalSqlPrimitiveTable(collection)
-  return table && new JournalSqlPrimitiveFact(scope, table)
+  return table && new JournalSqlPrimitiveFact(scope, table, collection)
 }
 
 /** Scalar facts have no captured object identity; replacing one keeps only its membership order. */
@@ -25,7 +35,8 @@ export class JournalSqlPrimitiveFact {
   private readonly counterTable: string
   constructor(
     private readonly scope: JournalSqlScope,
-    private readonly table: JournalSqlPrimitiveTable
+    private readonly table: JournalSqlPrimitiveTable,
+    private readonly collection: string
   ) {
     const columns = ['session_id', 'epoch', ...(table.group ? [table.group.column] : [])]
     this.columns = columns.join(', ')
@@ -50,16 +61,40 @@ export class JournalSqlPrimitiveFact {
     return row && this.scope.examined(row)
   }
 
-  load(location: JournalSqlValueLocation) {
+  private row(location: JournalSqlValueLocation, value: boolean) {
     const row = this.scope.db
-      .prepare(`SELECT ${this.table.value} AS value FROM ${this.table.table}
+      .prepare(`SELECT ${value ? this.table.value : '1'} AS value
+        ${journalSqlCaptureSelect(this.collection)} FROM ${this.table.table}
         WHERE ${this.where} AND ${this.table.id}=?`)
       .get(...this.prefix, JSON.parse(location.key))
+    return row && this.scope.examined(row)
+  }
+
+  load(location: JournalSqlValueLocation): StoredJournalSqlValue | undefined {
+    const row = this.row(location, true)
     if (!row) {
       return undefined
     }
-    const { value } = this.scope.examined(row)
-    return { value_json: this.table.payload ? value : JSON.stringify({ data: [value], refs: [] }) }
+    return this.table.payload
+      ? parseJournalSqlValue(row.value, journalSqlCapturedRefs(this.collection, row), (json) =>
+          this.scope.parse(json)
+        )
+      : { data: [row.value], refs: [] }
+  }
+
+  captured(location: JournalSqlValueLocation) {
+    const row = this.table.payload ? this.row(location, false) : undefined
+    return row ? journalSqlCapturedRefs(this.collection, row) : []
+  }
+
+  private writeCaptures(location: JournalSqlValueLocation, encoded: EncodedJournalSqlValue) {
+    const columns = journalSqlCaptureColumns(this.collection, encoded.refs)
+    if (columns) {
+      this.scope.db
+        .prepare(`UPDATE ${this.table.table} SET ${columns.set}
+          WHERE ${this.where} AND ${this.table.id}=?`)
+        .run(...columns.values, ...this.prefix, JSON.parse(location.key))
+    }
   }
 
   counters(added: boolean, _replaced: boolean) {
@@ -90,7 +125,7 @@ export class JournalSqlPrimitiveFact {
 
   store(
     location: JournalSqlValueLocation,
-    json: string,
+    encoded: EncodedJournalSqlValue,
     value: unknown,
     _current: boolean,
     ordinal: number
@@ -104,8 +139,9 @@ export class JournalSqlPrimitiveFact {
         ...this.prefix,
         JSON.parse(location.key),
         ordinal,
-        ...(column === id ? [] : [this.table.payload ? json : this.scalar(value)])
+        ...(column === id ? [] : [this.table.payload ? encoded.json : this.scalar(value)])
       )
+    this.writeCaptures(location, encoded)
   }
 
   private scalar(value: unknown): string | number {
@@ -113,12 +149,23 @@ export class JournalSqlPrimitiveFact {
     return value as string | number
   }
 
-  update(location: JournalSqlValueLocation, json: string, value: unknown): boolean {
-    return !!this.scope.db
+  update(
+    location: JournalSqlValueLocation,
+    encoded: EncodedJournalSqlValue,
+    value: unknown
+  ): boolean {
+    const updated = !!this.scope.db
       .prepare(`UPDATE ${this.table.table} SET ${this.table.value}=?
         WHERE ${this.where} AND ${this.table.id}=?`)
-      .run(this.table.payload ? json : this.scalar(value), ...this.prefix, JSON.parse(location.key))
-      .changes
+      .run(
+        this.table.payload ? encoded.json : this.scalar(value),
+        ...this.prefix,
+        JSON.parse(location.key)
+      ).changes
+    if (updated) {
+      this.writeCaptures(location, encoded)
+    }
+    return updated
   }
 
   delete(_key: string): void {

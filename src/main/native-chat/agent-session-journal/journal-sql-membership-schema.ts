@@ -123,6 +123,8 @@ CREATE TABLE IF NOT EXISTS journal_proj_phase_members (
   phase TEXT NOT NULL,
   input_id TEXT NOT NULL,
   payload_json TEXT NOT NULL,
+  submission_id TEXT,
+  submission_incarnation INTEGER,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, phase, input_id)
 ) WITHOUT ROWID;
@@ -142,6 +144,8 @@ CREATE TABLE IF NOT EXISTS journal_proj_link_family_members (
   family_id TEXT NOT NULL,
   input_id TEXT NOT NULL,
   payload_json TEXT NOT NULL,
+  submission_id TEXT,
+  submission_incarnation INTEGER,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, family_id, input_id)
 ) WITHOUT ROWID;
@@ -154,6 +158,27 @@ CREATE TABLE IF NOT EXISTS journal_proj_link_family_members_counters (
   members_count INTEGER NOT NULL DEFAULT 0,
   members_ordinal INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, epoch, family_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS journal_proj_index_cards (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  index_name TEXT NOT NULL,
+  entry_id TEXT NOT NULL,
+  payload_json TEXT,
+  card_id TEXT,
+  card_incarnation INTEGER,
+  ordinal INTEGER NOT NULL,
+  PRIMARY KEY (session_id, epoch, index_name, entry_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_proj_index_cards_order
+  ON journal_proj_index_cards(session_id, epoch, index_name, ordinal);
+CREATE TABLE IF NOT EXISTS journal_proj_index_cards_counters (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  index_name TEXT NOT NULL,
+  members_count INTEGER NOT NULL DEFAULT 0,
+  members_ordinal INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (session_id, epoch, index_name)
 ) WITHOUT ROWID;
 `
 }

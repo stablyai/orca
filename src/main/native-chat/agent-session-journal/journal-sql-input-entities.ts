@@ -1,5 +1,15 @@
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalSqlValueLocation } from './journal-sql-value-codec'
+import {
+  parseJournalSqlValue,
+  type EncodedJournalSqlValue,
+  type JournalSqlValueLocation,
+  type StoredJournalSqlValue
+} from './journal-sql-value-codec'
+import {
+  journalSqlCaptureColumns,
+  journalSqlCaptureSelect,
+  journalSqlCapturedRefs
+} from './journal-sql-captures'
 import { writeJournalSqlInputEntityColumns } from './journal-sql-input-entity-columns'
 import { journalSqlSubmissionMemberTables } from './journal-sql-submission-member-tables'
 
@@ -90,12 +100,45 @@ export class JournalSqlInputEntity {
     return row && this.scope.examined(row)
   }
 
-  load(location: JournalSqlValueLocation) {
+  private row(location: JournalSqlValueLocation, payload: boolean) {
     const row = this.scope.db
-      .prepare(`SELECT payload_json AS value_json FROM ${this.table.table}
+      .prepare(`SELECT ${payload ? 'payload_json' : '1'} AS payload
+        ${journalSqlCaptureSelect(this.collection)} FROM ${this.table.table}
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
       .get(...this.scope.prefix, this.id(location.key), location.incarnation)
     return row && this.scope.examined(row)
+  }
+
+  load(location: JournalSqlValueLocation): StoredJournalSqlValue | undefined {
+    const row = this.row(location, true)
+    return (
+      row &&
+      parseJournalSqlValue(row.payload, journalSqlCapturedRefs(this.collection, row), (json) =>
+        this.scope.parse(json)
+      )
+    )
+  }
+
+  captured(location: JournalSqlValueLocation) {
+    const row = this.row(location, false)
+    return row ? journalSqlCapturedRefs(this.collection, row) : []
+  }
+
+  private writeCaptures(location: JournalSqlValueLocation, encoded: EncodedJournalSqlValue) {
+    const columns = journalSqlCaptureColumns(this.collection, encoded.refs)
+    if (columns) {
+      this.scope.db
+        .prepare(`UPDATE ${this.table.table} SET ${columns.set}
+          WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
+        .run(...columns.values, ...this.scope.prefix, this.id(location.key), location.incarnation)
+    }
+  }
+
+  private payload(encoded: EncodedJournalSqlValue): string {
+    if (encoded.json === null) {
+      throw new Error('journal projection entity values are never undefined')
+    }
+    return encoded.json
   }
 
   counters(added: boolean, replaced: boolean) {
@@ -134,7 +177,7 @@ export class JournalSqlInputEntity {
 
   store(
     location: JournalSqlValueLocation,
-    json: string,
+    encoded: EncodedJournalSqlValue,
     value: unknown,
     current: boolean,
     ordinal: number
@@ -157,20 +200,26 @@ export class JournalSqlInputEntity {
         location.incarnation,
         Number(current),
         ordinal,
-        json
+        this.payload(encoded)
       )
-    writeJournalSqlInputEntityColumns(this.scope, location, value, json)
+    this.writeCaptures(location, encoded)
+    writeJournalSqlInputEntityColumns(this.scope, location, value, encoded.refs)
     this.legacyDelta(1, location.key, location.incarnation)
   }
 
-  update(location: JournalSqlValueLocation, json: string, value: unknown): boolean {
+  update(
+    location: JournalSqlValueLocation,
+    encoded: EncodedJournalSqlValue,
+    value: unknown
+  ): boolean {
     this.legacyDelta(-1, location.key, location.incarnation)
     const result = this.scope.db
       .prepare(`UPDATE ${this.table.table} SET payload_json=?
         WHERE session_id=? AND epoch=? AND ${this.table.id}=? AND incarnation=?`)
-      .run(json, ...this.scope.prefix, this.id(location.key), location.incarnation)
+      .run(this.payload(encoded), ...this.scope.prefix, this.id(location.key), location.incarnation)
     if (result.changes) {
-      writeJournalSqlInputEntityColumns(this.scope, location, value, json)
+      this.writeCaptures(location, encoded)
+      writeJournalSqlInputEntityColumns(this.scope, location, value, encoded.refs)
       this.legacyDelta(1, location.key, location.incarnation)
     }
     return !!result.changes

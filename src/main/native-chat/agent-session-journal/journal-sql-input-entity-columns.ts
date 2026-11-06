@@ -6,7 +6,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalSqlValueLocation } from './journal-sql-value-codec'
+import type { JournalSqlValueLocation, JournalSqlValueReference } from './journal-sql-value-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type { JournalInputSource } from './journal-input-source-schema'
 import type { JournalDispatchRow } from './journal-row-schema'
@@ -19,14 +19,14 @@ export function writeJournalSqlInputEntityColumns(
   scope: JournalSqlScope,
   location: JournalSqlValueLocation,
   value: unknown,
-  json: string
+  refs: readonly JournalSqlValueReference[]
 ): void {
   if (value === undefined) {
     return
   }
   if (
-    writeJournalSqlSubmissionMemberColumns(scope, location, value, json) ||
-    writeJournalSqlCardMemberColumns(scope, location, value, json)
+    writeJournalSqlSubmissionMemberColumns(scope, location, value, refs) ||
+    writeJournalSqlCardMemberColumns(scope, location, value, refs)
   ) {
     return
   }

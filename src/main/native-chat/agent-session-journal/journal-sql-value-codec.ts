@@ -1,4 +1,4 @@
-import { journalSqlCaptures } from './journal-sql-captures'
+import { journalSqlCapturedPaths } from './journal-sql-captures'
 
 export type JournalSqlValueLocation = {
   collection: string
@@ -8,13 +8,15 @@ export type JournalSqlValueLocation = {
 }
 
 export type JournalSqlValueReference = { path: string[]; source: JournalSqlValueLocation }
-export type EncodedJournalSqlValue = { json: string; refs: JournalSqlValueReference[] }
+/** The entry's own plain JSON (null when the value is undefined) and the entities it captures. */
+export type EncodedJournalSqlValue = { json: string | null; refs: JournalSqlValueReference[] }
 export type StoredJournalSqlValue = { data: [] | [unknown]; refs: JournalSqlValueReference[] }
 
 export function journalSqlLocationKey(value: JournalSqlValueLocation): string {
   return JSON.stringify([value.collection, value.key, value.incarnation])
 }
 
+/** Captured fields become refs and save as null; every other object is saved inline. */
 export function encodeJournalSqlValue(
   value: unknown,
   owner: JournalSqlValueLocation,
@@ -22,18 +24,16 @@ export function encodeJournalSqlValue(
   placed?: (value: object, path: string[]) => void
 ): EncodedJournalSqlValue {
   const refs: JournalSqlValueReference[] = []
-  const captures = journalSqlCaptures(owner.collection)
+  if (value === undefined) {
+    return { json: null, refs }
+  }
+  const captures = journalSqlCapturedPaths(owner.collection)
   const paths = new WeakMap<object, string[]>()
-  const stored: StoredJournalSqlValue = { data: value === undefined ? [] : [value], refs }
-  paths.set(stored.data, [])
-  const json = JSON.stringify(stored, function (key, child: unknown) {
-    if (key === '' || this === stored || !paths.has(this)) {
-      return child
-    }
+  const json = JSON.stringify(value, function (key, child: unknown) {
     if (typeof child !== 'object' || child === null) {
       return child
     }
-    const path = this === stored.data ? [] : [...paths.get(this)!, key]
+    const path = key === '' && !paths.has(this) ? [] : [...(paths.get(this) ?? []), key]
     const source = locate(child)
     if (
       source &&
@@ -49,6 +49,21 @@ export function encodeJournalSqlValue(
     return child
   })
   return { json, refs }
+}
+
+/** Reads a saved payload; byte accounting belongs to the caller's scope. */
+export function parseJournalSqlValue(
+  json: unknown,
+  refs: JournalSqlValueReference[],
+  parse: (json: string) => unknown = JSON.parse
+): StoredJournalSqlValue {
+  if (json === null || json === undefined) {
+    return { data: [], refs }
+  }
+  if (typeof json !== 'string') {
+    throw new Error('Invalid journal projection value')
+  }
+  return { data: [parse(json)], refs }
 }
 
 export function decodeJournalSqlValue(

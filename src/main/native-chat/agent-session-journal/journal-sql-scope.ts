@@ -34,6 +34,12 @@ export class JournalSqlScope {
     return this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
   }
 
+  /** A projection row's own payload; never an index value pointer. */
+  parse(json: string): unknown {
+    this.work.decodedBytes += Buffer.byteLength(json)
+    return JSON.parse(json)
+  }
+
   encode(value: unknown, collection: string, key: string): string {
     return this.indexValues?.encode(value, collection, key) ?? JSON.stringify(value)
   }

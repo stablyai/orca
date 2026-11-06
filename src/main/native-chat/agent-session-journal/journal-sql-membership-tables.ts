@@ -26,25 +26,33 @@ const MEMBERS = [
     table: 'journal_proj_link_family_members',
     group: 'family_id',
     id: 'input_id'
-  }
+  },
+  { name: '@index:', table: 'journal_proj_index_cards', group: 'index_name', id: 'entry_id' }
 ] as const
+
+const PAYLOADS: readonly string[] = ['phase:', 'link-family:', '@index:']
 
 export function journalSqlMemberIds(scope: JournalSqlScope, collection: string) {
   const family = MEMBERS.find((member) => collection.startsWith(member.name))
   if (!family) {
     return undefined
   }
-  return new JournalSqlPrimitiveFact(scope, {
-    table: family.table,
-    id: family.id,
-    ...(family.name === 'phase:' || family.name === 'link-family:'
-      ? { value: 'payload_json', payload: true }
-      : { value: family.id }),
-    counter: 'members',
-    group: {
-      column: family.group,
-      value: JSON.parse(collection.slice(family.name.length)),
-      counterTable: `${family.table}_counters`
-    }
-  })
+  const group = collection.slice(family.name.length)
+  const payload = PAYLOADS.includes(family.name)
+  return new JournalSqlPrimitiveFact(
+    scope,
+    {
+      table: family.table,
+      id: family.id,
+      ...(payload ? { value: 'payload_json', payload } : { value: family.id }),
+      counter: 'members',
+      group: {
+        column: family.group,
+        // Index holders are named by their index; the other groups by a saved key.
+        value: family.name === '@index:' ? group : JSON.parse(group),
+        counterTable: `${family.table}_counters`
+      }
+    },
+    collection
+  )
 }

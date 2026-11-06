@@ -1,5 +1,5 @@
 import { journalSqlIndexSchema } from './journal-sql-index-schema'
-import { journalSqlValueSchema } from './journal-sql-value-schema'
+import { journalSqlCaptureSchema } from './journal-sql-captures'
 import { journalSqlScalarSchema } from './journal-sql-scalars'
 import { journalSqlItemSchema } from './journal-sql-item-schema'
 import { journalSqlPauseSchema } from './journal-sql-pause-marks'
@@ -16,7 +16,6 @@ import { journalSqlCardMemberSchema } from './journal-sql-card-member-schema'
 export function journalSqlProjectionSchema(): string {
   return (
     journalSqlIndexSchema() +
-    journalSqlValueSchema() +
     journalSqlScalarSchema() +
     journalSqlItemSchema() +
     journalSqlDomainCounterSchema() +
@@ -27,6 +26,7 @@ export function journalSqlProjectionSchema(): string {
     journalSqlInputEventSchema() +
     journalSqlSubmissionMemberSchema() +
     journalSqlCardMemberSchema() +
+    journalSqlCaptureSchema() +
     journalSqlPauseSchema() +
     journalSqlMetaSchema()
   )

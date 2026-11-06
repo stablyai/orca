@@ -236,6 +236,13 @@ const FACTS = {
     counter: 'link_ids',
     payload: true
   },
+  '@index:turn-sources': {
+    table: 'journal_proj_turn_source_items',
+    id: 'source_id',
+    value: 'payload_json',
+    counter: 'turn_source_items',
+    payload: true
+  },
   normalizedHandOffs: {
     table: 'journal_proj_normalized_handoffs',
     id: 'input_id',

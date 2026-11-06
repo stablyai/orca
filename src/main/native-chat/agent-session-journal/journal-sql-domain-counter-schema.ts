@@ -141,6 +141,11 @@ CREATE TABLE IF NOT EXISTS journal_proj_domain_counters (
   carrier_coverage_ordinal INTEGER NOT NULL DEFAULT 0,
   link_ids_count INTEGER NOT NULL DEFAULT 0,
   link_ids_ordinal INTEGER NOT NULL DEFAULT 0,
+  turn_source_items_count INTEGER NOT NULL DEFAULT 0,
+  turn_source_items_ordinal INTEGER NOT NULL DEFAULT 0,
+  items_count INTEGER NOT NULL DEFAULT 0,
+  items_ordinal INTEGER NOT NULL DEFAULT 0,
+  items_incarnation INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, epoch)
 ) WITHOUT ROWID;
 `

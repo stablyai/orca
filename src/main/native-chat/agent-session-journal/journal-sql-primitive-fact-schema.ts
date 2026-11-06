@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS journal_proj_item_echoes (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
   item_id TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
+  payload_json TEXT,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, item_id)
 ) WITHOUT ROWID;
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS journal_proj_stopped_carried (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
   input_id TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
+  payload_json TEXT,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS journal_proj_handoff_places (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
   input_id TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
+  payload_json TEXT,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS journal_proj_original_acceptances (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
   input_id TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
+  payload_json TEXT,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS journal_proj_carrier_coverage (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
   input_id TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
+  payload_json TEXT,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
@@ -119,10 +119,21 @@ CREATE TABLE IF NOT EXISTS journal_proj_link_ids (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
   input_id TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
+  payload_json TEXT,
   ordinal INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, input_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_link_ids_order ON journal_proj_link_ids(session_id, epoch, ordinal);
+CREATE TABLE IF NOT EXISTS journal_proj_turn_source_items (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  payload_json TEXT,
+  item_key TEXT,
+  item_incarnation INTEGER,
+  ordinal INTEGER NOT NULL,
+  PRIMARY KEY (session_id, epoch, source_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_proj_turn_source_items_order ON journal_proj_turn_source_items(session_id, epoch, ordinal);
 `
 }

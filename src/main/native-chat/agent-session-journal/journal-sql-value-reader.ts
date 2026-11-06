@@ -10,77 +10,26 @@ import {
   type StoredJournalSqlValue
 } from './journal-sql-value-codec'
 
+/** Each saved incarnation decodes once per command, so every holder sees the same object. */
 export class JournalSqlValueReader {
   readonly loaded = new Map<string, unknown>()
   private readonly tables: JournalSqlDomainTables
 
   constructor(
-    private readonly scope: JournalSqlScope,
+    scope: JournalSqlScope,
     private readonly objects: JournalSqlValueObjects,
-    private readonly items?: JournalSqlItemValues
+    items?: JournalSqlItemValues
   ) {
-    this.tables = new JournalSqlDomainTables(scope)
+    this.tables = new JournalSqlDomainTables(scope, items)
   }
 
-  size(collection: string): number {
-    const entity = this.tables.for(collection)
-    if (entity) {
-      return entity.size()
-    }
-    const row = this.scope.db
-      .prepare(`SELECT size FROM journal_proj_collections
-        WHERE session_id=? AND generation=? AND collection=?`)
-      .get(...this.scope.prefix, collection)
-    return row ? Number(this.scope.examined(row).size) : 0
-  }
-
-  header(collection: string, key: string) {
-    const entity = this.tables.for(collection)
-    if (entity) {
-      return entity.header(key)
-    }
-    const row = this.scope.db
-      .prepare(`SELECT ordinal, incarnation FROM journal_proj_values
-        WHERE session_id=? AND generation=? AND collection=? AND entry_key=?`)
-      .get(...this.scope.prefix, collection, key)
-    return row && this.scope.examined(row)
-  }
-
-  load(location: JournalSqlValueLocation, json?: unknown): unknown {
+  load(location: JournalSqlValueLocation, stored?: StoredJournalSqlValue): unknown {
     const key = journalSqlLocationKey(location)
     if (!this.loaded.has(key)) {
-      let encoded = json
-      if (encoded === undefined) {
-        const entity = this.tables.for(location.collection)
-        const row = entity
-          ? entity.load(location)
-          : this.scope.db
-              .prepare(`SELECT value_json FROM journal_proj_values
-          WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=?
-          UNION ALL SELECT value_json FROM journal_proj_value_snapshots
-          WHERE session_id=? AND generation=? AND collection=? AND entry_key=? AND incarnation=? LIMIT 1`)
-              .get(
-                ...this.scope.prefix,
-                location.collection,
-                location.key,
-                location.incarnation,
-                ...this.scope.prefix,
-                location.collection,
-                location.key,
-                location.incarnation
-              )
-        if (!row) {
-          throw new Error('Missing journal projection object incarnation')
-        }
-        if (!entity) {
-          this.scope.examined(row)
-        }
-        encoded = row.value_json
+      const payload = stored ?? this.tables.for(location.collection).load(location)
+      if (!payload) {
+        throw new Error('Missing journal projection object incarnation')
       }
-      const payload =
-        location.collection === 'items' && this.items
-          ? this.items.load(location, encoded)
-          : this.scope.decode<StoredJournalSqlValue>(encoded)
       const value = decodeJournalSqlValue(payload, (ref) => this.load(ref))
       const reference =
         typeof value === 'object' && value !== null && this.objects.locations.has(value)

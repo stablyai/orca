@@ -12,11 +12,7 @@ import {
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
-import type {
-  JournalSqlValueLocation,
-  JournalSqlValueReference,
-  StoredJournalSqlValue
-} from './journal-sql-value-codec'
+import type { JournalSqlValueLocation, StoredJournalSqlValue } from './journal-sql-value-codec'
 
 export function journalSqlItemMetadata(item: AgentJournalRenderItem, bytes: number) {
   const turn = readAgentJournalTurn(item.body)
@@ -63,10 +59,9 @@ export class JournalSqlItemValues {
     current: boolean,
     ordinal: number,
     preserve = false
-  ): string {
+  ): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the typed items collection uses this payload home.
     const item = value as AgentJournalRenderItem
-    const { refs }: { refs: JournalSqlValueReference[] } = JSON.parse(encoded)
     const key = JSON.stringify([location.key, location.incarnation])
     const original = preserve ? this.detached.get(key) : undefined
     this.scope.db
@@ -93,20 +88,27 @@ export class JournalSqlItemValues {
     if (current) {
       this.metadata(location, item, Buffer.byteLength(encoded), ordinal)
     }
-    return JSON.stringify({ refs })
   }
 
-  load(location: JournalSqlValueLocation, token: unknown): StoredJournalSqlValue {
+  stored(location: JournalSqlValueLocation): boolean {
+    const row = this.scope.db
+      .prepare(`SELECT 1 AS present FROM journal_proj_item_versions
+      WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
+      .get(...this.scope.prefix, location.key, location.incarnation)
+    return !!row && !!this.scope.examined(row)
+  }
+
+  load(location: JournalSqlValueLocation): StoredJournalSqlValue | undefined {
     const version = this.scope.db
       .prepare(`SELECT outcome_generation, outcome_seq, inline_json FROM journal_proj_item_versions
       WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
       .get(...this.scope.prefix, location.key, location.incarnation)
     if (!version) {
-      throw new Error('Missing journal item incarnation')
+      return undefined
     }
     this.scope.examined(version)
     if (typeof version.inline_json === 'string') {
-      return this.scope.decode(version.inline_json)
+      return { data: [this.scope.parse(version.inline_json)], refs: [] }
     }
     const row = this.scope.db
       .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted
@@ -117,9 +119,7 @@ export class JournalSqlItemValues {
     }
     this.scope.examined(row)
     this.scope.work.decodedBytes += Buffer.byteLength(String(row.value_json))
-    const item = decodeJournalOutcomeItem(row)
-    const { refs } = this.scope.decode<{ refs: JournalSqlValueReference[] }>(token)
-    return { data: [item], refs }
+    return { data: [decodeJournalOutcomeItem(row)], refs: [] }
   }
 
   /** Called after each applied row's outcomes are inserted, within the same command SAVEPOINT. */
@@ -171,7 +171,7 @@ export class JournalSqlItemValues {
       .run(...this.scope.prefix, key)
   }
 
-  forget(location: JournalSqlValueLocation): void {
+  forget(location: JournalSqlValueLocation): boolean {
     const row = this.scope.db
       .prepare(`SELECT outcome_generation, outcome_seq FROM journal_proj_item_versions
       WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
@@ -180,11 +180,12 @@ export class JournalSqlItemValues {
       this.scope.examined(row)
       this.detached.set(JSON.stringify([location.key, location.incarnation]), row)
     }
-    this.scope.db
+    const removed = this.scope.db
       .prepare(`DELETE FROM journal_proj_item_versions
       WHERE session_id=? AND generation=? AND entry_key=? AND incarnation=?`)
       .run(...this.scope.prefix, location.key, location.incarnation)
     this.pending.delete(JSON.stringify([location.key, location.incarnation]))
+    return removed.changes > 0
   }
 
   private metadata(

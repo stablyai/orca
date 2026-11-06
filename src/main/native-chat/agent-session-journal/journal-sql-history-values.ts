@@ -11,7 +11,7 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlItemValues } from './journal-sql-item-values'
 import { JournalSqlValueReader } from './journal-sql-value-reader'
 import { JournalSqlValueObjects } from './journal-sql-value-objects'
-import type { JournalSqlValueLocation } from './journal-sql-value-codec'
+import { parseJournalSqlValue, type JournalSqlValueLocation } from './journal-sql-value-codec'
 import { projectJournalStopNote } from './journal-stop-note-projection'
 import type { JournalSqlHistoryWork } from './journal-sql-history-page'
 
@@ -95,7 +95,7 @@ export class JournalSqlHistoryValues {
           key,
           this.values.load(
             { collection: 'submissions', key, incarnation: Number(row.incarnation), path: [] },
-            row.payload_json
+            parseJournalSqlValue(row.payload_json, [], (json) => this.scope.parse(json))
           ) as AgentJournalSubmission
         )
       }

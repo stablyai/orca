@@ -84,12 +84,6 @@ it('reads saved bodies through outcome pointers, keeps inline prefixes, and rest
     outcome_seq: 2,
     inline_json: null
   })
-  expect(
-    f.db
-      .prepare(`SELECT value_json FROM journal_proj_values
-    WHERE collection='items' AND entry_key='"saved"'`)
-      .get()
-  ).toEqual({ value_json: '{"refs":[]}' })
   c = f.command()
   expect(c.items.get('saved')).toEqual(item('saved', 'original'))
   expect(c.items.get('prefix')).toEqual(item('prefix', 'prefix-only'))

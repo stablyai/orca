@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS journal_proj_input_rejections (
   fence REAL,
   dispatch_state TEXT,
   provider_item_id TEXT,
+  submission_id TEXT,
+  submission_incarnation INTEGER,
   PRIMARY KEY (session_id, epoch, input_id, incarnation)
 ) WITHOUT ROWID;
 CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_input_rejections_current
@@ -35,6 +37,8 @@ CREATE TABLE IF NOT EXISTS journal_proj_input_presentations (
   dispatch_state TEXT,
   message_id TEXT,
   queue_operation TEXT,
+  card_id TEXT,
+  card_incarnation INTEGER,
   PRIMARY KEY (session_id, epoch, input_id, incarnation)
 ) WITHOUT ROWID;
 CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_input_presentations_current
@@ -53,6 +57,8 @@ CREATE TABLE IF NOT EXISTS journal_proj_input_handovers (
   source_seq INTEGER,
   fence REAL,
   dispatch_state TEXT,
+  presentation_id TEXT,
+  presentation_incarnation INTEGER,
   PRIMARY KEY (session_id, epoch, input_id, incarnation)
 ) WITHOUT ROWID;
 CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_input_handovers_current
