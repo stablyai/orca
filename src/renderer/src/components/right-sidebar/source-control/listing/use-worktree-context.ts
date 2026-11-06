@@ -1,3 +1,4 @@
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
@@ -20,15 +21,19 @@ const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
 export function useSourceControlWorktreeContext() {
-  const activeWorktree = useActiveWorktree()
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const scope = useSourceControlScope()
+  const selectedWorktree = useActiveWorktree()
+  const selectedWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorktree = scope?.worktree ?? selectedWorktree
+  const activeWorktreeId = scope?.worktreeId ?? selectedWorktreeId
   const activeWorktreeInstanceId = activeWorktree?.instanceId
   const activeGroupId = useAppStore((s) =>
     activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
   )
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const selectedRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRepo = scope?.repo ?? selectedRepo
   const activeRepoId = activeRepo?.id ?? null
   const activeRepoPath = activeRepo?.path ?? null
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
@@ -68,19 +73,17 @@ export function useSourceControlWorktreeContext() {
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
-  const conflictOperationsByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   // Preserve unknown upstream while fetching so workspace switches cannot flash Publish Branch.
   const remoteStatus = useAppStore((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
-  const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore(
     (s) =>
       s.remoteOperations.findLast((operation) => operation.worktreeId === activeWorktreeId)?.kind ??
       null
   )
-  const isRemoteOperationInAnotherWorktree =
-    isRemoteOperationActive && inFlightRemoteOpKind === null
+  const isRemoteOperationActive = inFlightRemoteOpKind !== null
+  const isRemoteOperationInAnotherWorktree = false
   const settings = useAppStore((s) => s.settings)
   const hostedReviewCacheKey =
     activeRepo && branchName
@@ -117,13 +120,14 @@ export function useSourceControlWorktreeContext() {
     () =>
       activeRepoId
         ? ipcOrRuntimeTargetForHostId(
-            getRepoExecutionHostId({
-              connectionId: activeRepoConnectionId,
-              executionHostId: activeRepoExecutionHostId
-            })
+            scope?.executionHostId ??
+              getRepoExecutionHostId({
+                connectionId: activeRepoConnectionId,
+                executionHostId: activeRepoExecutionHostId
+              })
           )
         : null,
-    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId]
+    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, scope?.executionHostId]
   )
   const activeRepoRuntimeEnvironmentId =
     activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
@@ -132,7 +136,9 @@ export function useSourceControlWorktreeContext() {
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
   const activeConnectionId = activeWorktreeId
-    ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
+    ? scope
+      ? activeRepoConnectionId
+      : (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   // Quote for the workspace owner's OS, where agents run (#27971).
   const activeSourceControlLaunchPlatform =
@@ -144,6 +150,7 @@ export function useSourceControlWorktreeContext() {
   const hasUncommittedEntries = entries.length > 0
 
   return {
+    scope,
     activeConnectionId,
     activeGitStatusHead,
     activeGroupId,
@@ -165,7 +172,6 @@ export function useSourceControlWorktreeContext() {
     branchName,
     branchSummary,
     conflictOperation,
-    conflictOperationsByWorktree,
     entries,
     gitIdentityDisplay,
     hasUncommittedEntries,

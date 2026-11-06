@@ -6,12 +6,15 @@ import {
 } from '@/components/sidebar/worktree-list/rows/indentation'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
+  const executionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
@@ -23,9 +26,9 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
     ReadonlySet<string>
   >(() => new Set())
 
-  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const { folderWorkspace, childWorktrees, lineageChildrenByParentId, rootChildWorktrees } =
     getAttachedWorktreesForFolderWorkspace({
+      executionHostId,
       activeWorkspaceKey,
       activeWorktreeId,
       folderWorkspaces,
@@ -50,16 +53,19 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
     worktree: Worktree,
     ancestorIds: ReadonlySet<string> = new Set()
   ): React.JSX.Element => {
-    const lineageChildren = lineageChildrenByParentId.get(worktree.id) ?? []
-    const lineageCollapsed = collapsedLineageWorktreeIds.has(worktree.id)
-    const nextAncestorIds = new Set([...ancestorIds, worktree.id])
-    const safeLineageChildren = lineageChildren.filter((child) => !nextAncestorIds.has(child.id))
+    const identity = getWorktreeHostIdentity(worktree)
+    const lineageChildren = lineageChildrenByParentId.get(identity) ?? []
+    const lineageCollapsed = collapsedLineageWorktreeIds.has(identity)
+    const nextAncestorIds = new Set([...ancestorIds, identity])
+    const safeLineageChildren = lineageChildren.filter(
+      (child) => !nextAncestorIds.has(getWorktreeHostIdentity(child))
+    )
     const hasSafeLineageChildren = safeLineageChildren.length > 0
     return (
       <WorktreeCard
-        key={worktree.id}
+        key={identity}
         worktree={worktree}
-        repo={repoById.get(worktree.repoId)}
+        repo={resolveReviewRepository(repos, worktree) ?? undefined}
         isActive={activeWorktreeId === worktree.id}
         isActiveSurface={false}
         hideRepoBadge={false}
@@ -73,7 +79,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
           !lineageCollapsed && hasSafeLineageChildren
             ? safeLineageChildren.map((child) => (
                 <div
-                  key={child.id}
+                  key={getWorktreeHostIdentity(child)}
                   onClick={stopNestedWorktreeCardBubble}
                   onDoubleClick={stopNestedWorktreeCardBubble}
                   onDragStart={stopNestedWorktreeCardBubble}
@@ -93,7 +99,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
             ? (event) => {
                 event.preventDefault()
                 event.stopPropagation()
-                toggleLineage(worktree.id)
+                toggleLineage(identity)
               }
             : undefined
         }

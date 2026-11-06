@@ -11,6 +11,7 @@ import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import { setCreatePrIntentNotice } from '../panel/worktree-operation-store'
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { HostedReviewCreatedContext } from './hosted-review-creation-state'
@@ -28,13 +29,13 @@ export function useSourceControlHostedReviewCreation({
   activeWorktreeId,
   branchName,
   createHostedReview,
-  createPrInFlightRef,
   createStackedHostedReview,
   handleGeneratePullRequestFields,
   handlePullRequestCreated,
   hostedReviewCreateCopy,
   hostedReviewCreateProvider,
   hostedReviewCreation,
+  operationStore,
   prAiGenerationEnabled,
   prBase,
   prBody,
@@ -45,8 +46,6 @@ export function useSourceControlHostedReviewCreation({
   prTitle,
   pullRequestFieldsInitialized,
   resolvedPrCreationDefaults,
-  setCreatePrInFlightByWorktree,
-  setCreatePrIntentNoticeForWorktree,
   settings,
   worktreePath
 }: {
@@ -55,13 +54,13 @@ export function useSourceControlHostedReviewCreation({
   activeWorktreeId: string | null
   branchName: string
   createHostedReview: SourceControlStoreActions['createHostedReview']
-  createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
   createStackedHostedReview: SourceControlStoreActions['createStackedHostedReview']
   handleGeneratePullRequestFields: SourceControlCreateReviewComposer['handleGeneratePullRequestFields']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
   hostedReviewCreateProvider: SourceControlHostedReviewState['hostedReviewCreateProvider']
   hostedReviewCreation: SourceControlHostedReviewState['hostedReviewCreation']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   prAiGenerationEnabled: SourceControlCreateReviewComposer['prAiGenerationEnabled']
   prBase: SourceControlCreateReviewComposer['prBase']
   prBody: SourceControlCreateReviewComposer['prBody']
@@ -72,8 +71,6 @@ export function useSourceControlHostedReviewCreation({
   prTitle: SourceControlCreateReviewComposer['prTitle']
   pullRequestFieldsInitialized: SourceControlCreateReviewComposer['pullRequestFieldsInitialized']
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
-  setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
-  setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
   settings: SourceControlWorktreeContext['settings']
   worktreePath: string | null
 }) {
@@ -93,7 +90,7 @@ export function useSourceControlHostedReviewCreation({
         // Blocked clicks show inline prerequisite guidance.
         const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
         if (message) {
-          setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+          setCreatePrIntentNotice(operationStore, {
             tone: 'destructive',
             message
           })
@@ -106,7 +103,7 @@ export function useSourceControlHostedReviewCreation({
       const title = fields.title.trim()
 
       if (!title) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: translate(
             'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
@@ -118,7 +115,7 @@ export function useSourceControlHostedReviewCreation({
       }
 
       if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: translate(
             'auto.components.right.sidebar.SourceControl.ae743199cd',
@@ -129,7 +126,7 @@ export function useSourceControlHostedReviewCreation({
         return
       }
 
-      setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+      setCreatePrIntentNotice(operationStore, null)
       const createdContext = (): HostedReviewCreatedContext => ({
         repoPath: activeRepo.path,
         repoId: activeRepo.id,
@@ -154,7 +151,7 @@ export function useSourceControlHostedReviewCreation({
           : await createHostedReview(activeRepo.path, createInput)
 
         if (result.ok) {
-          setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+          setCreatePrIntentNotice(operationStore, null)
           const context = createdContext()
           await handlePullRequestCreated(
             {
@@ -197,7 +194,7 @@ export function useSourceControlHostedReviewCreation({
             }
           )
           if (number) {
-            setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+            setCreatePrIntentNotice(operationStore, null)
             await handlePullRequestCreated(
               {
                 provider: hostedReviewCreateProvider,
@@ -225,12 +222,12 @@ export function useSourceControlHostedReviewCreation({
           }
         }
 
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: localizedCreateFailure(result, hostedReviewCreateProvider)
         })
       } catch (error) {
-        setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message:
             error instanceof Error
@@ -262,7 +259,7 @@ export function useSourceControlHostedReviewCreation({
       prTitle,
       resolvedPrCreationDefaults.openAfterCreate,
       resolvedPrCreationDefaults.useTemplate,
-      setCreatePrIntentNoticeForWorktree,
+      operationStore,
       worktreePath
     ]
   )
@@ -284,26 +281,18 @@ export function useSourceControlHostedReviewCreation({
 
   const handleCreatePullRequest = useCallback(
     async (stacked = false): Promise<void> => {
-      const worktreeId = activeWorktreeId
-      if (!worktreeId || createPrInFlightRef.current[worktreeId]) {
+      if (!activeWorktreeId || operationStore.getState().isCreatingPr) {
         return
       }
       // Hold the click through creation so eligibility refreshes cannot close the composer during generation.
-      createPrInFlightRef.current[worktreeId] = true
-      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [worktreeId]: true }))
+      operationStore.setState({ isCreatingPr: true })
       try {
         await generateThenCreatePullRequest(stacked)
       } finally {
-        createPrInFlightRef.current[worktreeId] = false
-        setCreatePrInFlightByWorktree((prev) => ({ ...prev, [worktreeId]: false }))
+        operationStore.setState({ isCreatingPr: false })
       }
     },
-    [
-      activeWorktreeId,
-      createPrInFlightRef,
-      generateThenCreatePullRequest,
-      setCreatePrInFlightByWorktree
-    ]
+    [activeWorktreeId, generateThenCreatePullRequest, operationStore]
   )
 
   return { handleCreatePullRequest }

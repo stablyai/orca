@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -90,4 +90,82 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
 
     expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([visible.id])
   })
+})
+
+function edge(child: Worktree, parent: Worktree, createdAt: number): WorktreeLineage {
+  return {
+    worktreeId: child.id,
+    worktreeInstanceId: child.instanceId!,
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: parent.instanceId!,
+    origin: 'cli',
+    capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+    createdAt
+  }
+}
+
+it('keeps attachment order, descendants and Attached-tab parents on their resolved host and instance', () => {
+  const root = makeWorktree({
+    id: 'same-root',
+    hostId: 'local',
+    instanceId: 'local-root',
+    lastActivityAt: 99
+  })
+  const twin = makeWorktree({ id: 'same-root', hostId: 'ssh:box', instanceId: 'remote-root' })
+  const child = makeWorktree({ id: 'same-child', hostId: 'local', instanceId: 'local-child' })
+  const remoteChild = makeWorktree({
+    id: 'same-child',
+    hostId: 'ssh:box',
+    instanceId: 'remote-child'
+  })
+  const remoteGrandchild = makeWorktree({
+    id: 'grandchild',
+    hostId: 'ssh:box',
+    instanceId: 'remote-grandchild'
+  })
+  const remoteOnly = makeWorktree({
+    id: 'remote-only',
+    hostId: 'ssh:box',
+    instanceId: 'remote-only-instance'
+  })
+  const stale = makeWorktree({ id: 'stale', hostId: 'local', instanceId: 'new-instance' })
+  const remoteEdge = edge(remoteChild, twin, 40)
+  Object.assign(remoteChild, { lineage: remoteEdge })
+  const result = getAttachedWorktreesForFolderWorkspace({
+    activeWorkspaceKey: 'folder:folder-1',
+    activeWorktreeId: null,
+    executionHostId: 'local',
+    folderWorkspaces: [makeFolder()],
+    workspaceLineageByChildKey: {
+      remoteOnly: { ...makeWorkspaceLineage(remoteOnly), createdAt: 60 },
+      first: { ...makeWorkspaceLineage(twin), createdAt: 10 },
+      second: { ...makeWorkspaceLineage(root), createdAt: 20 },
+      stale: { ...makeWorkspaceLineage(stale), childInstanceId: 'old-instance' }
+    },
+    worktreeLineageById: {
+      [child.id]: edge(child, root, 30),
+      [remoteGrandchild.id]: edge(remoteGrandchild, remoteChild, 50)
+    },
+    worktreesByRepo: {
+      remote: [twin, remoteChild, remoteGrandchild, remoteOnly],
+      local: [root, child, stale]
+    }
+  })
+  expect(
+    result.owners.map((owner) => [
+      owner.executionHostId,
+      owner.worktree.instanceId,
+      owner.attachedAt
+    ])
+  ).toEqual([
+    ['local', 'local-root', 20],
+    ['local', 'local-child', 30],
+    ['ssh:box', 'remote-only-instance', 60]
+  ])
+  expect(result.lineageChildrenByParentId.get('local|same-root')).toEqual([child])
+  expect(result.lineageChildrenByParentId.has('ssh:box|same-root')).toBe(false)
+  expect(result.rootChildWorktrees.map((row) => row.instanceId)).toEqual([
+    'local-root',
+    'remote-only-instance'
+  ])
 })

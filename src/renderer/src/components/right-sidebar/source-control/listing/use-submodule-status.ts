@@ -3,7 +3,7 @@ import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-status-client'
 import {
   getSubmoduleExpansionKey,
@@ -30,11 +30,12 @@ export type UseSourceControlSubmoduleStatusResult = {
 export function useSourceControlSubmoduleStatus(
   input: UseSourceControlSubmoduleStatusInput
 ): UseSourceControlSubmoduleStatusResult {
+  const scope = useSourceControlScope()
   const { activeWorktreeId, worktreePath, activeRepoTarget, entries } = input
   const [expandedSubmoduleKeys, setExpandedSubmoduleKeys] = useState<Set<string>>(() => new Set())
   const activeRuntimeRouteKey =
     activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : ''
-  const activeConnectionRouteKey = getConnectionId(activeWorktreeId ?? null) ?? ''
+  const activeConnectionRouteKey = sourceControlConnectionId(scope, activeWorktreeId ?? null) ?? ''
   const submoduleStatusScopeKey = `${activeConnectionRouteKey}\0${activeRuntimeRouteKey}\0${activeWorktreeId ?? ''}\0${worktreePath ?? ''}`
   // Store scope with results so late previous-host/worktree updates can no-op without render-time refs.
   const [submoduleStatusStore, setSubmoduleStatusStore] = useState<{
@@ -69,7 +70,7 @@ export function useSourceControlSubmoduleStatus(
             }
       )
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId ?? null)
         const result = await getRuntimeGitSubmoduleStatus(
           {
             // Use the repo owner like the rest of the panel.
@@ -115,7 +116,7 @@ export function useSourceControlSubmoduleStatus(
         )
       }
     },
-    [activeRepoTarget, activeWorktreeId, submoduleStatusScopeKey, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, submoduleStatusScopeKey, worktreePath]
   )
 
   const toggleSubmodule = useCallback((entry: Pick<GitStatusEntry, 'area' | 'path'>) => {

@@ -1,3 +1,4 @@
+import { useSourceControlScope } from '../../source-control/panel/worktree-scope'
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useAppStore } from '@/store/index'
@@ -33,12 +34,16 @@ export function useCreatePullRequestBaseRefDiscovery({
   setBaseSearchPending,
   setBaseSearchError
 }: CreatePullRequestBaseRefDiscoveryOptions): string | null {
+  const scope = useSourceControlScope()
   // Stamp the repo so an old default cannot suppress stacked-PR lookup after navigation.
   const [repoDefault, setRepoDefault] = useState<{ repoId: string; baseRef: string } | null>(null)
   const repoDefaultBaseRef = repoDefault?.repoId === repoId ? repoDefault.baseRef : null
   // Refs belong to the repo owner, which may differ from the focused host.
   const repoHostId = useAppStore((s) => {
-    const repo = findRepoForHost(s.repos, repoId, { settings: s.settings })
+    const repo = findRepoForHost(s.repos, repoId, {
+      settings: s.settings,
+      hostId: scope?.executionHostId
+    })
     return repo ? getRepoExecutionHostId(repo) : null
   })
 

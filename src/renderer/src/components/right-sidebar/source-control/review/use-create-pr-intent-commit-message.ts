@@ -13,19 +13,15 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 /** Pin generation to the run token’s worktree so navigation cannot retarget it. */
 export function useSourceControlCreatePrIntentCommitMessage({
   activeRepo,
-  generateInFlightRef,
   getCreatePrIntentOperationTarget,
+  operationStore,
   resolvedCommitMessageAi,
-  setGenerateErrors,
-  setGenerateInFlightByWorktree,
   settings
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
-  generateInFlightRef: SourceControlWorktreeOperationState['generateInFlightRef']
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   resolvedCommitMessageAi: SourceControlAi['resolvedCommitMessageAi']
-  setGenerateErrors: SourceControlWorktreeOperationState['setGenerateErrors']
-  setGenerateInFlightByWorktree: SourceControlWorktreeOperationState['setGenerateInFlightByWorktree']
   settings: SourceControlWorktreeContext['settings']
 }) {
   const generateCommitMessageForCreatePrIntent = useCallback(
@@ -49,13 +45,10 @@ export function useSourceControlCreatePrIntentCommitMessage({
         }
       }
       const target = getCreatePrIntentOperationTarget(token)
-      if (generateInFlightRef.current[target.worktreeId]) {
+      if (operationStore.getState().generateInFlight) {
         return { ok: false, reason: 'failed' }
       }
-
-      generateInFlightRef.current[target.worktreeId] = true
-      setGenerateInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: true }))
-      setGenerateErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+      operationStore.setState({ generateInFlight: true, generateError: null })
       try {
         const result = await generateRuntimeCommitMessage(
           operationGitContext(target, useAppStore.getState().settings),
@@ -65,32 +58,28 @@ export function useSourceControlCreatePrIntentCommitMessage({
         )
         if (!result.success) {
           if (!result.canceled) {
-            setGenerateErrors((prev) => ({ ...prev, [target.worktreeId]: result.error }))
+            operationStore.setState({ generateError: result.error })
           }
           return { ok: false, reason: result.canceled ? 'canceled' : 'failed' }
         }
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
-        setGenerateErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+        operationStore.setState({ generateError: null })
         return { ok: true, message: result.message }
       } catch (error) {
-        setGenerateErrors((prev) => ({
-          ...prev,
-          [target.worktreeId]:
+        operationStore.setState({
+          generateError:
             error instanceof Error ? error.message : 'Failed to generate commit message'
-        }))
+        })
         return { ok: false, reason: 'failed' }
       } finally {
-        setGenerateInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: false }))
-        generateInFlightRef.current[target.worktreeId] = false
+        operationStore.setState({ generateInFlight: false })
       }
     },
     [
       activeRepo,
-      generateInFlightRef,
       getCreatePrIntentOperationTarget,
+      operationStore,
       resolvedCommitMessageAi,
-      setGenerateErrors,
-      setGenerateInFlightByWorktree,
       settings
     ]
   )

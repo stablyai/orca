@@ -23216,5 +23216,8 @@
     "sameAsTextDefault": "Wie Standard · {{value0}}",
     "chatChoicesNote": "Modell- oder Effort-Auswahlen für {{agent}} ohne CLI-Flag gelten für Chats.",
     "composedChoicesNote": "Effort- und Geschwindigkeitsauswahlen für {{agent}} sind im Modellargument enthalten."
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Diesen Worktree öffnen",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Stelle die Verbindung wieder her, um die Änderungen dieses Worktrees zu sehen.",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "Alle aktualisieren"
 }

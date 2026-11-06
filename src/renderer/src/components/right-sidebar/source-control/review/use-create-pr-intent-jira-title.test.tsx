@@ -12,6 +12,7 @@ import {
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
+import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 
 const runtime = vi.hoisted(() => ({ generate: vi.fn() }))
 vi.mock('@/runtime/runtime-git-generation-client', () => ({
@@ -60,6 +61,8 @@ it.each(['github', 'gitlab'] as const)(
       title: 'Fix login',
       body: 'Details'
     }
+    const operationStore = getWorktreeOperationStore(`wt-1-${provider}`, null, undefined)
+    operationStore.setState({ createPrIntentRun: token, createPrIntentTarget: token })
     const create = vi
       .fn()
       .mockResolvedValue({ ok: true, number: 100, url: 'https://example.com/reviews/100' })
@@ -79,10 +82,6 @@ it.each(['github', 'gitlab'] as const)(
         useSourceControlCreatePrIntentReview({
           activeRepo: { ...makeRepo(), connectionId: 'owner' },
           createHostedReview: create,
-          createPrInFlightRef: { current: {} },
-          createPrIntentActiveTargetConflicts: () => false,
-          createPrIntentCurrentTargetRef: { current: token },
-          createPrIntentRunStillOwnsWorktree: () => true,
           getCreatePrIntentOperationTarget: () => ({
             target: { kind: 'local' },
             worktreeId: 'wt-1',
@@ -90,11 +89,10 @@ it.each(['github', 'gitlab'] as const)(
           }),
           handlePullRequestCreated: vi.fn(),
           hostedReviewCreateCopy: localizedHostedReviewCopy(provider),
+          operationStore,
           prBase: 'main',
           prBody: '',
           resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
-          setCreatePrInFlightByWorktree: vi.fn(),
-          setCreatePrIntentNoticeForWorktree: vi.fn(),
           settings
         }),
       { initialProps: { settings: null } }

@@ -23932,5 +23932,8 @@
   },
   "checks": {
     "rerunUnsuccessful": "Rerun unsuccessful"
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Open this worktree",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Reconnect to see this worktree’s changes.",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "Refresh all"
 }

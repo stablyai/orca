@@ -1,0 +1,192 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import type * as GitIdentityDisplay from '../../../../shared/worktree/git-identity-display'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import FolderWorkspaceSourceControlPanel from './FolderWorkspaceSourceControlPanel'
+import { useSourceControlWatchConsumers } from '@/hooks/source-control-watch-consumers'
+import { useSourceControlScope } from './source-control/panel/worktree-scope'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+
+const probes = vi.hoisted(() => ({
+  status: vi.fn(async (_request: { worktreeId: string }) => {}),
+  body: vi.fn(),
+  header: vi.fn(),
+  watches: 0
+}))
+vi.mock('./source-control/sync/git-status-refresh', () => ({
+  refreshGitStatusForWorktree: probes.status
+}))
+vi.mock('./source-control/sync/use-git-status-upstream-ref-watch', () => ({
+  useGitStatusUpstreamRefWatch: () => undefined
+}))
+vi.mock('./source-control/sync/use-refresh-on-host-contact', () => ({
+  useRefreshOnHostContact: () => {}
+}))
+vi.mock('@/lib/worktree-git-copy', () => ({
+  resolveWorktreeGitCopyNow: (id: string, hostId: string) => ({
+    worktreeId: id,
+    hostId,
+    transport: { kind: 'local' }
+  })
+}))
+vi.mock('../../../../shared/worktree/git-identity-display', async (original) => {
+  const actual = await original<typeof GitIdentityDisplay>()
+  return {
+    ...actual,
+    getWorktreeGitIdentityDisplay: (
+      ...args: Parameters<typeof actual.getWorktreeGitIdentityDisplay>
+    ) => {
+      probes.header(args[0].branch)
+      return actual.getWorktreeGitIdentityDisplay(...args)
+    }
+  }
+})
+vi.mock('./source-control/panel/panel', () => ({
+  SourceControlPanel: () => {
+    const scope = useSourceControlScope()
+    probes.body(scope?.worktreeId)
+    return <div data-commit-owner={scope?.worktreeId} />
+  }
+}))
+
+let root: Root
+let container: HTMLDivElement
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.useFakeTimers()
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  probes.status.mockClear()
+  probes.body.mockClear()
+  probes.header.mockClear()
+})
+afterEach(async () => {
+  await act(async () => root.unmount())
+  container.remove()
+  vi.useRealTimers()
+})
+function Watches() {
+  probes.watches = useSourceControlWatchConsumers().length
+  return null
+}
+function setup(count: number) {
+  const worktrees = Array.from({ length: count }, (_, i) => ({
+    id: `repo::/child-${i}`,
+    repoId: 'repo',
+    path: `/child-${i}`,
+    branch: `feature-${i}`,
+    hostId: 'local',
+    instanceId: `instance-${i}`
+  }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the catalog and status fields consumed by the folder panel.
+  useAppStore.setState({
+    activeWorktreeId: 'folder:feature',
+    activeWorkspaceKey: 'folder:feature',
+    activeWorkspaceExecutionHostId: 'local',
+    rightSidebarOpen: true,
+    rightSidebarTab: 'source-control',
+    repos: [{ id: 'repo', displayName: 'Child', path: '/repo', kind: 'git' }],
+    worktreesByRepo: { repo: worktrees },
+    folderWorkspaces: [
+      { id: 'feature', name: 'Feature', folderPath: '/folder', projectGroupId: 'group' }
+    ],
+    workspaceLineageByChildKey: Object.fromEntries(
+      worktrees.map((row, i) => [
+        row.id,
+        {
+          childWorkspaceKey: `worktree:${row.id}`,
+          childInstanceId: row.instanceId,
+          parentWorkspaceKey: 'folder:feature',
+          parentInstanceId: null,
+          createdAt: i
+        }
+      ])
+    ),
+    gitStatusByWorktree: Object.fromEntries(worktrees.map((row) => [row.id, []]))
+  } as unknown as Partial<AppState>)
+  return worktrees
+}
+async function render(visible = true) {
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <Watches />
+        {visible && <FolderWorkspaceSourceControlPanel />}
+      </TooltipProvider>
+    )
+  )
+}
+
+it.each([3, 30])(
+  'bounds observation, watches and unrelated renders for %i attached worktrees',
+  async (count) => {
+    const worktrees = setup(count)
+    await render()
+    // One status per visible repository is necessary for its badge; collapsed bodies do no compare work.
+    expect(probes.status).toHaveBeenCalledTimes(count)
+    expect(probes.body).not.toHaveBeenCalled()
+    expect(probes.watches).toBe(0)
+    probes.header.mockClear()
+    await act(async () => useAppStore.setState({ activeFileId: 'unrelated-file' }))
+    expect(probes.header).not.toHaveBeenCalled()
+    await act(async () =>
+      useAppStore.setState({
+        sshConnectionStates: new Map([
+          [
+            'other-host',
+            { targetId: 'other-host', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ])
+      })
+    )
+    expect(probes.header).not.toHaveBeenCalled()
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        gitStatusByWorktree: {
+          ...state.gitStatusByWorktree,
+          [worktrees[0]!.id]: [{ path: 'a.ts', status: 'modified', area: 'unstaged' }]
+        }
+      }))
+    )
+    expect(probes.header.mock.calls).toEqual([['feature-0']])
+    expect(probes.body).not.toHaveBeenCalled()
+    // Agent changes wake the matching collapsed badge, using the existing scheduler's coalescing.
+    probes.status.mockClear()
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: {
+            runtimeEnvironmentId: null,
+            payload: {
+              worktreePath: worktrees[0]!.path,
+              events: [{ absolutePath: `${worktrees[0]!.path}/a.ts`, kind: 'change' }]
+            }
+          }
+        })
+      )
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+    expect(probes.status).toHaveBeenCalledTimes(1)
+    expect(probes.status.mock.calls[0]?.[0]?.worktreeId).toBe(worktrees[0]!.id)
+    const toggles = container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')
+    for (const toggle of toggles) {
+      await act(async () => toggle.click())
+    }
+    expect(probes.body).toHaveBeenCalledTimes(count)
+    // Required recursive watches are capped at the existing warm-workspace budget of three.
+    expect(probes.watches).toBe(3)
+    await render(false)
+    probes.status.mockClear()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120000)
+    })
+    expect(probes.status).not.toHaveBeenCalled()
+    expect(probes.watches).toBe(0)
+  }
+)

@@ -1,0 +1,196 @@
+// @vitest-environment happy-dom
+
+import { act, cleanup, renderHook } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { useSourceControlStoreActions } from '../listing/use-store-actions'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { useSourceControlCommitAction } from '../commit/use-commit-action'
+import { useSourceControlWorktreeOperationState } from './use-worktree-operation-state'
+import { getWorktreeOperationStore } from './worktree-operation-store'
+import { SourceControlScopeProvider } from './worktree-scope'
+
+const git = vi.hoisted(() => ({
+  commit: vi.fn<(context: { connectionId?: string }, message: string) => Promise<unknown>>()
+}))
+vi.mock('@/runtime/runtime-git-sync-client', () => ({
+  commitRuntimeGit: git.commit,
+  completeRuntimeGitMerge: vi.fn()
+}))
+
+const initialAppState = useAppStore.getInitialState()
+afterEach(() => {
+  cleanup()
+  git.commit.mockReset()
+  useAppStore.setState(initialAppState, true)
+})
+
+function sectionWrapper(worktreeId: string, executionHostId: ExecutionHostId) {
+  const worktree = makeWorktree(worktreeId, worktreeId, { instanceId: 'instance-1' })
+  const repo = {
+    ...makeRepo(),
+    connectionId: executionHostId === 'local' ? null : executionHostId.slice('ssh:'.length)
+  }
+  const owner = {
+    worktreeId,
+    repoId: repo.id,
+    executionHostId,
+    worktree,
+    attachedAt: 1,
+    repo,
+    placementWorkspaceId: 'folder:feature'
+  }
+  return ({ children }: { children: ReactNode }) => (
+    <SourceControlScopeProvider owner={owner}>{children}</SourceControlScopeProvider>
+  )
+}
+
+function useCommitSection(worktreeId: string) {
+  const state = useSourceControlWorktreeOperationState({
+    activeWorktreeId: worktreeId,
+    activeWorktreeInstanceId: 'instance-1',
+    conflictOperation: 'unknown'
+  })
+  const action = useSourceControlCommitAction({
+    activeRepoTarget: { kind: 'local' },
+    activeWorktree: null,
+    activeWorktreeId: worktreeId,
+    beginGitBranchCompareRequest: vi.fn(),
+    commitMessage: state.commitMessage,
+    compareBaseRef: null,
+    operationStore: state.operationStore,
+    refreshActiveGitStatusAfterMutation: async () => {},
+    refreshBranchCompareRef: { current: async () => {} },
+    refreshGitHistoryRef: { current: async () => {} },
+    stagedCount: 1,
+    unresolvedConflictCount: 0,
+    updateCommitDraft: state.updateCommitDraft,
+    worktreePath: `/tmp/${worktreeId}`
+  })
+  return { ...state, ...action }
+}
+
+it('keeps drafts of same-id worktrees on different hosts apart and across remounts', () => {
+  const local = renderHook(() => useCommitSection('wt-drafts'), {
+    wrapper: sectionWrapper('wt-drafts', 'local')
+  })
+  const remote = renderHook(() => useCommitSection('wt-drafts'), {
+    wrapper: sectionWrapper('wt-drafts', 'ssh:box')
+  })
+  act(() => local.result.current.updateCommitDraft('fix: local copy'))
+  act(() => remote.result.current.updateCommitDraft('fix: remote copy'))
+  local.unmount()
+
+  const remounted = renderHook(() => useCommitSection('wt-drafts'), {
+    wrapper: sectionWrapper('wt-drafts', 'local')
+  })
+  expect(remounted.result.current.commitMessage).toBe('fix: local copy')
+  expect(remote.result.current.commitMessage).toBe('fix: remote copy')
+})
+
+it('keeps a slow commit latched after collapse so the re-expanded section cannot resubmit', async () => {
+  let finishCommit: (result: { success: boolean }) => void = () => {}
+  git.commit.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishCommit = resolve
+      })
+  )
+  const wrapper = sectionWrapper('wt-slow', 'local')
+  const first = renderHook(() => useCommitSection('wt-slow'), { wrapper })
+  act(() => first.result.current.updateCommitDraft('feat: slow'))
+  let pending: Promise<boolean> | undefined
+  act(() => {
+    pending = first.result.current.handleCommit()
+  })
+  first.unmount()
+
+  const reexpanded = renderHook(() => useCommitSection('wt-slow'), { wrapper })
+  expect(reexpanded.result.current.isCommitting).toBe(true)
+  await act(async () => {
+    expect(await reexpanded.result.current.handleCommit()).toBe(false)
+  })
+  expect(git.commit).toHaveBeenCalledTimes(1)
+
+  await act(async () => {
+    finishCommit({ success: true })
+    expect(await pending).toBe(true)
+  })
+  expect(reexpanded.result.current.isCommitting).toBe(false)
+  expect(reexpanded.result.current.commitMessage).toBe('')
+})
+
+it('commits a same-id host twin over its own connection without blocking the other copy', async () => {
+  git.commit.mockImplementation(() => new Promise(() => {}))
+  const local = renderHook(() => useCommitSection('wt-twin'), {
+    wrapper: sectionWrapper('wt-twin', 'local')
+  })
+  const remote = renderHook(() => useCommitSection('wt-twin'), {
+    wrapper: sectionWrapper('wt-twin', 'ssh:box')
+  })
+  act(() => remote.result.current.updateCommitDraft('fix: remote'))
+  act(() => {
+    void remote.result.current.handleCommit()
+  })
+
+  expect(git.commit).toHaveBeenCalledWith(
+    expect.objectContaining({ worktreeId: 'wt-twin', connectionId: 'box' }),
+    'fix: remote'
+  )
+  expect(remote.result.current.isCommitting).toBe(true)
+  expect(local.result.current.isCommitting).toBe(false)
+})
+
+it('gives a worktree id reused by a new instance a fresh record', () => {
+  const original = getWorktreeOperationStore('wt-reused', 'local', 'instance-1')
+  original.setState({ draft: 'stale', isCommitting: true })
+  act(() => {
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree('wt-reused', 'wt-reused', { instanceId: 'instance-2' })]
+      }
+    })
+  })
+
+  const reused = getWorktreeOperationStore('wt-reused', 'local', 'instance-2')
+  expect(reused).not.toBe(original)
+  expect(reused.getState().draft).toBe('')
+  expect(reused.getState().isCommitting).toBe(false)
+})
+
+it('writes the base ref and opens aggregate diffs on the section host while the folder stays active', async () => {
+  const updateRepo = vi.fn<AppState['updateRepo']>()
+  const openAllDiffs = vi.fn<AppState['openAllDiffs']>()
+  useAppStore.setState({
+    activeWorktreeId: 'folder:feature',
+    activeWorkspaceExecutionHostId: 'local',
+    updateRepo,
+    openAllDiffs
+  })
+  const section = renderHook(() => useSourceControlStoreActions(), {
+    wrapper: sectionWrapper('wt-twin', 'ssh:box')
+  })
+  await section.result.current.updateRepo('repo-1', { worktreeBaseRef: 'release' })
+  expect(updateRepo).toHaveBeenCalledWith(
+    'repo-1',
+    { worktreeBaseRef: 'release' },
+    { hostId: 'ssh:box' }
+  )
+  section.result.current.openAllDiffs('wt-twin', '/remote/repo')
+  expect(openAllDiffs).toHaveBeenCalledWith(
+    'wt-twin',
+    '/remote/repo',
+    undefined,
+    undefined,
+    undefined,
+    {
+      placementWorkspaceId: 'folder:feature',
+      runtimeEnvironmentId: null,
+      executionHostId: 'ssh:box'
+    }
+  )
+  expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
+})

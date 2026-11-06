@@ -23596,5 +23596,8 @@
   "wslDistroHold": {
     "terminalStopped": "A distribuição WSL {{distro}} está parada, então o Orca não iniciou este terminal. Inicie a distribuição e tente novamente.",
     "terminalUnverifiable": "O Orca não conseguiu verificar se a distribuição WSL {{distro}} está em execução, então não iniciou este terminal. Inicie a distribuição e tente novamente."
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Abrir este worktree",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Reconecte para ver as alterações deste worktree.",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "Atualizar tudo"
 }

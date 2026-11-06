@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
 import { useAppStore } from '@/store'
 import { createLoadingBranchCompareSummary } from '@/store/slices/editor/git/branch-compare-state'
@@ -39,6 +39,7 @@ export function useSourceControlBranchCompare({
   activeGitStatusHead: string | null
   remoteStatus: GitUpstreamStatus | undefined
 }) {
+  const scope = useSourceControlScope()
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
   const clearGitBranchCompare = useAppStore((s) => s.clearGitBranchCompare)
@@ -73,7 +74,7 @@ export function useSourceControlBranchCompare({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+            connectionId: sourceControlConnectionId(scope, activeWorktreeId)
           },
           compareBaseRef,
           kind === 'interval' ? 'background' : 'interactive'
@@ -92,6 +93,7 @@ export function useSourceControlBranchCompare({
       }
     },
     [
+      scope,
       activeRepoTarget,
       activeWorktreeId,
       beginGitBranchCompareRequest,

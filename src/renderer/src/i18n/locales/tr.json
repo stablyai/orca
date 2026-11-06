@@ -23199,5 +23199,8 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Bu çalışma ağacını aç",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Bu çalışma ağacının değişikliklerini görmek için yeniden bağlanın.",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "Tümünü yenile"
 }

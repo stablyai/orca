@@ -1,3 +1,4 @@
+import { useSourceControlScope } from '../panel/worktree-scope'
 import { useCallback, useEffect } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
@@ -50,7 +51,9 @@ export function useSourceControlStatusRefresh({
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
-  const activeCopyHostId = useWorktreeGitCopyHostId(activeWorktreeId)
+  const scope = useSourceControlScope()
+  const selectedCopyHostId = useWorktreeGitCopyHostId(activeWorktreeId)
+  const activeCopyHostId = scope?.executionHostId ?? selectedCopyHostId
   const localIgnoreBlocked = isLocalPathOpenBlocked(
     getLocalPathOpenOwnerForRoute({
       runtimeEnvironmentId:

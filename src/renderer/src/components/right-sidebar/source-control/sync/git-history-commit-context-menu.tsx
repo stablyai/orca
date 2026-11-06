@@ -1,3 +1,4 @@
+import { useSourceControlScope } from '../panel/worktree-scope'
 import type React from 'react'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
@@ -19,10 +20,12 @@ export function GitHistoryCommitContextMenu({
   item: GitHistoryItem
   onAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element {
+  const scope = useSourceControlScope()
   const managedBrowserCreationEnabled = useAppStore(
     (state) =>
-      getClientCreationActionPolicy(state, state.activeWorktreeId)['managed-browser'].state ===
-      'enabled'
+      getClientCreationActionPolicy(state, scope?.worktreeId ?? state.activeWorktreeId)[
+        'managed-browser'
+      ].state === 'enabled'
   )
   return (
     <ContextMenuContent className="w-56">

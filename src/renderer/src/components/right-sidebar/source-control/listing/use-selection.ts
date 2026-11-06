@@ -175,14 +175,19 @@ export function useSourceControlSelection({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedKeys.size > 0) {
+      if (
+        e.key === 'Escape' &&
+        selectedKeys.size > 0 &&
+        e.target instanceof Node &&
+        containerRef.current?.contains(e.target)
+      ) {
         e.preventDefault()
         clearSelection()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedKeys.size, clearSelection])
+  }, [selectedKeys.size, clearSelection, containerRef])
 
   useEffect(() => {
     const handlePointerDown = (e: MouseEvent) => {

@@ -1,0 +1,267 @@
+import { memo, useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
+import { useAppStore } from '@/store'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  getAttachedWorktreesForFolderWorkspace,
+  attachedWorktreeOwnerKey
+} from './folder-workspace-attached-worktrees'
+import { resolveReviewRepository } from '@/lib/review-owner'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { SourceControlPanel } from './source-control/panel/panel'
+import {
+  SourceControlScopeProvider,
+  type SourceControlScope
+} from './source-control/panel/worktree-scope'
+import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { refreshGitStatusForWorktree } from './source-control/sync/git-status-refresh'
+import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+const EMPTY_ENTRIES: readonly unknown[] = []
+
+const WorktreeSection = memo(
+  function WorktreeSection({ owner }: { owner: SourceControlScope }) {
+    useUiLanguageRevision()
+    const id = owner.worktreeId
+    const entries = useAppStore((state) => state.gitStatusByWorktree[id] ?? EMPTY_ENTRIES)
+    const statusKnown = useAppStore((state) => Object.hasOwn(state.gitStatusByWorktree, id))
+    const remote = useAppStore((state) => state.remoteStatusesByWorktree[id])
+    const error = useAppStore((state) => state.gitStatusReadErrorByWorktree[id])
+    const huge = useAppStore((state) => state.gitStatusHugeByWorktree[id])
+    const connected = useAppStore(
+      (state) =>
+        !owner.repo.connectionId ||
+        state.sshConnectionStates.get(owner.repo.connectionId)?.status === 'connected'
+    )
+    const [expanded, setExpanded] = useState<boolean | undefined>()
+    const isExpanded = expanded ?? (statusKnown ? entries.length > 0 : true)
+    // Decide once at the first result; later agent edits update badges without undoing a user's collapse.
+    if (expanded === undefined && statusKnown) {
+      setExpanded(entries.length > 0)
+    }
+    useWorktreeGitStatusObservation(owner, { enabled: true })
+    const host = parseExecutionHostId(owner.executionHostId)
+    useSourceControlWatchConsumer(
+      attachedWorktreeOwnerKey(owner),
+      isExpanded && connected && !huge && !isFolderRepo(owner.repo)
+        ? {
+            worktreeId: id,
+            worktreePath: owner.worktree.path,
+            connectionId: owner.repo.connectionId ?? undefined,
+            runtimeEnvironmentId:
+              host?.kind === 'runtime'
+                ? host.environmentId
+                : (owner.worktree.runtimeOwnerEnvironmentId ?? null)
+          }
+        : null
+    )
+    const identity = getWorktreeGitIdentityDisplay(owner.worktree)
+    return (
+      <section className="border-b border-border" data-source-control-worktree={id}>
+        <div className="flex items-center gap-1 pr-1">
+          <button
+            type="button"
+            aria-expanded={isExpanded}
+            onClick={() => setExpanded(!isExpanded)}
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <ChevronRight className={`size-3 shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
+            <span className="truncate font-medium">{owner.repo.displayName}</span>
+            <span className="truncate text-muted-foreground">
+              {owner.worktree.displayName ?? owner.worktree.branch}
+            </span>
+            <GitBranch className="ml-auto size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate text-muted-foreground">
+              {identity?.kind === 'branch' ? identity.branchName : owner.worktree.branch}
+            </span>
+            {!!remote?.ahead && (
+              <span className="flex items-center text-muted-foreground">
+                <ArrowUp className="size-3" />
+                {remote.ahead}
+              </span>
+            )}
+            {!!remote?.behind && (
+              <span className="flex items-center text-muted-foreground">
+                <ArrowDown className="size-3" />
+                {remote.behind}
+              </span>
+            )}
+            {entries.length > 0 && (
+              <span className="rounded-full bg-muted px-1.5 text-2xs">{entries.length}</span>
+            )}
+          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                onClick={() => useAppStore.getState().setActiveWorktree(id, owner.executionHostId)}
+                aria-label={translate(
+                  'auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree',
+                  'Open this worktree'
+                )}
+              >
+                <ArrowUpRight className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {translate(
+                'auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree',
+                'Open this worktree'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        {isExpanded &&
+          (!connected ? (
+            <div className="px-4 pb-2 text-xs text-muted-foreground">
+              {translate(
+                'auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect',
+                'Reconnect to see this worktree’s changes.'
+              )}
+            </div>
+          ) : error ? (
+            <div className="px-4 pb-2 text-xs text-muted-foreground">{error}</div>
+          ) : !statusKnown && !isFolderRepo(owner.repo) ? (
+            <div className="h-24 space-y-2 p-3" aria-busy="true">
+              <div className="h-2 w-3/4 rounded bg-muted" />
+              <div className="h-2 w-1/2 rounded bg-muted" />
+            </div>
+          ) : (
+            <SourceControlScopeProvider owner={owner}>
+              <SourceControlPanel />
+            </SourceControlScopeProvider>
+          ))}
+      </section>
+    )
+  },
+  (left, right) =>
+    left.owner.worktree === right.owner.worktree &&
+    left.owner.repo === right.owner.repo &&
+    left.owner.placementWorkspaceId === right.owner.placementWorkspaceId
+)
+
+export default function FolderWorkspaceSourceControlPanel() {
+  const activeWorkspaceKey = useAppStore((state) => state.activeWorkspaceKey)
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const executionHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId)
+  const folderWorkspaces = useAppStore(selectFolderWorkspaces)
+  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  const workspaceLineageByChildKey = useAppStore((state) => state.workspaceLineageByChildKey)
+  const worktreeLineageById = useAppStore((state) => state.worktreeLineageById)
+  const repos = useAppStore((state) => state.repos)
+  const resolution = useMemo(
+    () =>
+      getAttachedWorktreesForFolderWorkspace({
+        activeWorkspaceKey,
+        activeWorktreeId,
+        executionHostId,
+        folderWorkspaces,
+        worktreesByRepo,
+        workspaceLineageByChildKey,
+        worktreeLineageById
+      }),
+    [
+      activeWorkspaceKey,
+      activeWorktreeId,
+      executionHostId,
+      folderWorkspaces,
+      worktreesByRepo,
+      workspaceLineageByChildKey,
+      worktreeLineageById
+    ]
+  )
+  const owners = useMemo(
+    () =>
+      resolution.owners.flatMap((owner) => {
+        const repo = resolveReviewRepository(repos, owner.worktree)
+        return repo && resolution.folderWorkspace
+          ? [{ ...owner, repo, placementWorkspaceId: `folder:${resolution.folderWorkspace.id}` }]
+          : []
+      }),
+    [resolution, repos]
+  )
+  const refresh = () => {
+    const state = useAppStore.getState()
+    for (const owner of owners) {
+      if (isFolderRepo(owner.repo)) {
+        continue
+      }
+      const copy = resolveWorktreeGitCopyNow(owner.worktreeId, owner.executionHostId)
+      if (copy) {
+        void refreshGitStatusForWorktree({
+          target: copy.transport,
+          ownerHostId: copy.hostId,
+          worktreeId: owner.worktreeId,
+          worktreePath: owner.worktree.path,
+          connectionId: copy.connectionId,
+          pushTarget: owner.worktree.pushTarget,
+          deps: state
+        }).catch(() => {})
+      }
+    }
+  }
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{resolution.folderWorkspace?.name}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.attachedCount',
+              '{{count}} attached worktrees',
+              { count: owners.length, defaultValue_one: '{{count}} attached worktree' }
+            )}
+          </div>
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={refresh}
+              aria-label={translate(
+                'auto.components.right.sidebar.SourceControl.refreshAll',
+                'Refresh all'
+              )}
+            >
+              <RefreshCw className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {translate('auto.components.right.sidebar.SourceControl.refreshAll', 'Refresh all')}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      {owners.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <div className="text-sm font-medium">
+            {translate(
+              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
+              'No attached worktrees yet'
+            )}
+          </div>
+          <div className="mt-2 max-w-64 text-xs leading-5 text-muted-foreground">
+            {translate(
+              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
+              'Worktrees created from this workspace will show up here.'
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+          {owners.map((owner) => (
+            <WorktreeSection key={attachedWorktreeOwnerKey(owner)} owner={owner} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

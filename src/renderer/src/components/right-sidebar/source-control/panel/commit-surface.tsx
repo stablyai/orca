@@ -1,6 +1,5 @@
 import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import { CommitArea } from '../commit/commit-area'
-import { writeCommitDraftForWorktree } from '../commit/commit-drafts'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 type SourceControlCommitSurfaceProps = SourceControlPanelReadyProps & {
@@ -78,7 +77,7 @@ export function SourceControlCommitSurface({
     sourceControlAiActionsVisible,
     stackParentReview,
     unresolvedConflicts,
-    updateCommitDrafts
+    updateCommitDraft
   } = model
 
   if (directCreatePrAction) {
@@ -161,7 +160,7 @@ export function SourceControlCommitSurface({
         if (!activeWorktreeId) {
           return
         }
-        updateCommitDrafts((prev) => writeCommitDraftForWorktree(prev, activeWorktreeId, value))
+        updateCommitDraft(value)
       }}
       onGenerate={handleGenerateCommitMessageClick}
       onCancelGenerate={handleCancelGenerate}

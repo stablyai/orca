@@ -17,67 +17,85 @@ type UseGitStatusPushSignalRefreshParams = {
   getRepoWorktreePaths: (repoId: string) => readonly string[]
 }
 
-// Push signals beat slow fallback polling after shell mutations; watcher debounce and coalesced pacing absorb bursts.
-export function useGitStatusPushSignalRefresh({
-  activeRepoId,
-  activeWorktreeId,
-  activeWorktreePath,
-  enabled,
-  fetchStatus,
-  getRepoWorktreePaths
-}: UseGitStatusPushSignalRefreshParams): void {
-  const fetchStatusRef = useRef(fetchStatus)
-  fetchStatusRef.current = fetchStatus
-
+type Observer = UseGitStatusPushSignalRefreshParams
+const observers = new Set<Observer>()
+let disposeSignals: (() => void) | null = null
+function subscribeSignals(): () => void {
+  const repoSignal = ({ repoId }: { repoId: string }) => {
+    if (!isWindowVisible()) {
+      return
+    }
+    for (const observer of observers) {
+      if (observer.activeRepoId === repoId) {
+        observer.fetchStatus()
+      }
+    }
+  }
+  const metadataSignal = (signal: GitStatusMetadataChangedEvent) => {
+    if (!isWindowVisible()) {
+      return
+    }
+    for (const observer of observers) {
+      if (
+        observer.activeRepoId === signal.repoId &&
+        isGitStatusSignalForWorktree(
+          signal,
+          observer.activeWorktreePath,
+          observer.getRepoWorktreePaths(signal.repoId)
+        )
+      ) {
+        observer.fetchStatus()
+      }
+    }
+  }
+  const commandSignal = (event: Event) => {
+    if (!isWindowVisible()) {
+      return
+    }
+    const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
+    for (const observer of observers) {
+      if (detail?.worktreeId === observer.activeWorktreeId) {
+        observer.fetchStatus()
+      }
+    }
+  }
+  const unsubs = [
+    window.api?.worktrees?.onChanged?.(repoSignal),
+    window.api?.worktrees?.onGitStatusMetadataChanged?.(metadataSignal)
+  ]
+  window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, commandSignal)
+  return () => {
+    for (const unsub of unsubs) {
+      unsub?.()
+    }
+    window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, commandSignal)
+  }
+}
+export function useGitStatusPushSignalRefresh(params: UseGitStatusPushSignalRefreshParams): void {
+  const latest = useRef(params)
+  latest.current = params
+  const { enabled, activeRepoId, activeWorktreeId, activeWorktreePath, getRepoWorktreePaths } =
+    params
   useEffect(() => {
-    if (!enabled || !activeRepoId) {
+    if (!enabled) {
       return
     }
-    // Remote web has no preload bridge; fallback polling still covers it.
-    const subscribeToWorktreesChanged = window.api?.worktrees?.onChanged
-    const subscribeToGitStatusMetadataChanged = window.api?.worktrees?.onGitStatusMetadataChanged
-    if (!subscribeToWorktreesChanged && !subscribeToGitStatusMetadataChanged) {
-      return
+    const observer = {
+      enabled,
+      activeRepoId,
+      activeWorktreeId,
+      activeWorktreePath,
+      getRepoWorktreePaths,
+      fetchStatus: () => latest.current.fetchStatus()
     }
-    const handleRepoSignal = ({ repoId }: { repoId: string }): void => {
-      if (repoId !== activeRepoId || !isWindowVisible()) {
-        return
-      }
-      fetchStatusRef.current()
-    }
-    // Ignore sibling-worktree index churn that cannot affect this checkout.
-    const handleGitStatusSignal = (signal: GitStatusMetadataChangedEvent): void => {
-      const paths = getRepoWorktreePaths(signal.repoId)
-      if (isGitStatusSignalForWorktree(signal, activeWorktreePath, paths)) {
-        handleRepoSignal(signal)
-      }
-    }
-    // Skip hidden-window nudges; visibility polling catches up on reveal.
-    const unsubs = [
-      subscribeToWorktreesChanged?.(handleRepoSignal),
-      subscribeToGitStatusMetadataChanged?.(handleGitStatusSignal)
-    ].filter((unsubscribe): unsubscribe is () => void => typeof unsubscribe === 'function')
+    observers.add(observer)
+    disposeSignals ??= subscribeSignals()
     return () => {
-      for (const unsubscribe of unsubs) {
-        unsubscribe()
+      observers.delete(observer)
+      if (observers.size === 0) {
+        disposeSignals?.()
+        disposeSignals = null
       }
     }
-  }, [enabled, activeRepoId, activeWorktreePath, getRepoWorktreePaths])
-
-  useEffect(() => {
-    if (!enabled || !activeWorktreeId) {
-      return
-    }
-    const handleCommandFinished = (event: Event): void => {
-      const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
-      if (detail?.worktreeId !== activeWorktreeId || !isWindowVisible()) {
-        return
-      }
-      fetchStatusRef.current()
-    }
-    window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
-    return () => {
-      window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
-    }
-  }, [enabled, activeWorktreeId])
+  }, [enabled, activeRepoId, activeWorktreeId, activeWorktreePath, getRepoWorktreePaths])
 }

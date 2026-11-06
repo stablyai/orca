@@ -45,9 +45,13 @@ export type HostedReviewFetchOptions = {
   /** An explicit Refresh: may start a stopped WSL distro. Local IPC only. */
   wakeWslDistro?: boolean
 }
-export type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
+export type CreateHostedReviewStoreInput = CreateHostedReviewInput & {
+  repoId?: string | null
+  repoOwnerExecutionHostId?: string
+}
 export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
   repoId?: string | null
+  repoOwnerExecutionHostId?: string
 }
 
 const CACHE_TTL_MS = 60_000

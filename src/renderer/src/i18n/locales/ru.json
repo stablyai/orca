@@ -23968,5 +23968,8 @@
     "sameAsTextDefault": "Как по умолчанию · {{value0}}",
     "chatChoicesNote": "Выбор модели или уровня усилий {{agent}} без флага CLI применяется к чатам.",
     "composedChoicesNote": "Выбранные уровень усилий и скорость {{agent}} включаются в аргумент модели."
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "Открыть это рабочее дерево",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "Подключитесь снова, чтобы увидеть изменения в этом рабочем дереве.",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "Обновить всё"
 }

@@ -22884,5 +22884,8 @@
     "sameAsTextDefault": "與預設值相同 · {{value0}}",
     "chatChoicesNote": "沒有 CLI 旗標的 {{agent}} 模型或推理力度選項適用於聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度選項包含在模型引數中。"
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "開啟此工作樹",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "請重新連線以查看此工作樹的變更。",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "全部重新整理"
 }

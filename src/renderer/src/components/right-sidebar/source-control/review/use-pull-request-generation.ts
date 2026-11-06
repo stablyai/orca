@@ -1,7 +1,7 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   cancelRuntimeGeneratePullRequestFields,
@@ -59,6 +59,7 @@ export function useSourceControlPullRequestGeneration({
   updatePullRequestGenerationRecord: SourceControlStoreActions['updatePullRequestGenerationRecord']
   worktreePath: string | null
 }) {
+  const scope = useSourceControlScope()
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
@@ -103,11 +104,13 @@ export function useSourceControlPullRequestGeneration({
       }
       const requestId = allocatePullRequestGenerationRequestId()
       // Why one resolution: the result must land on this copy, not a same-path twin.
-      const copy = activeWorktreeId ? resolveWorktreeGitCopyNow(activeWorktreeId) : null
+      const copy = activeWorktreeId
+        ? resolveWorktreeGitCopyNow(activeWorktreeId, scope?.executionHostId)
+        : null
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId: copy ? copy.connectionId : (getConnectionId(activeWorktreeId) ?? undefined),
+        connectionId: copy ? copy.connectionId : sourceControlConnectionId(scope, activeWorktreeId),
         ownerHostId: copy?.hostId ?? null,
         jiraIssueKey:
           (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
@@ -193,6 +196,7 @@ export function useSourceControlPullRequestGeneration({
       return await settlePullRequestGenerationRequest(generationKey, requestId, request)
     },
     [
+      scope,
       activePullRequestGenerationKey,
       activeRepo,
       activeRepoTarget,

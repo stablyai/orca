@@ -22934,5 +22934,8 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
-  }
+  },
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.openWorktree": "이 워크트리 열기",
+  "auto.components.rightSidebar.FolderWorkspaceSourceControl.reconnect": "이 워크트리의 변경 사항을 보려면 다시 연결하세요.",
+  "auto.components.right.sidebar.SourceControl.refreshAll": "모두 새로 고침"
 }

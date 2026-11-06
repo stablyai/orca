@@ -28,6 +28,10 @@ import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import {
+  createPrIntentRunIsCurrent,
+  setCreatePrIntentNotice
+} from '../panel/worktree-operation-store'
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
@@ -38,34 +42,24 @@ import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function useSourceControlCreatePrIntentReview({
   activeRepo,
   createHostedReview,
-  createPrInFlightRef,
-  createPrIntentActiveTargetConflicts,
-  createPrIntentCurrentTargetRef,
-  createPrIntentRunStillOwnsWorktree,
   getCreatePrIntentOperationTarget,
   handlePullRequestCreated,
   hostedReviewCreateCopy,
+  operationStore,
   prBase,
   prBody,
   resolvedPrCreationDefaults,
-  setCreatePrInFlightByWorktree,
-  setCreatePrIntentNoticeForWorktree,
   settings
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
   createHostedReview: SourceControlStoreActions['createHostedReview']
-  createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
-  createPrIntentActiveTargetConflicts: SourceControlWorktreeOperationState['createPrIntentActiveTargetConflicts']
-  createPrIntentCurrentTargetRef: SourceControlWorktreeOperationState['createPrIntentCurrentTargetRef']
-  createPrIntentRunStillOwnsWorktree: SourceControlWorktreeOperationState['createPrIntentRunStillOwnsWorktree']
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   prBase: SourceControlCreateReviewComposer['prBase']
   prBody: SourceControlCreateReviewComposer['prBody']
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
-  setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
-  setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
   settings: SourceControlWorktreeContext['settings']
 }) {
   const createHostedReviewForCreatePrIntent = useCallback(
@@ -83,7 +77,7 @@ export function useSourceControlCreatePrIntentReview({
         composerBaseRef: prBase
       }).trim()
       if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(token.branch).toLowerCase()) {
-        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: translate(
             'auto.components.right.sidebar.SourceControl.ae743199cd',
@@ -118,7 +112,7 @@ export function useSourceControlCreatePrIntentReview({
           repo: activeRepo
         })
       ) {
-        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'muted',
           message: translate(
             'auto.components.right.sidebar.SourceControl.createPrIntentGeneratingDetails',
@@ -136,7 +130,7 @@ export function useSourceControlCreatePrIntentReview({
             }
           )
           if (generated.branchChangedByPreparation) {
-            setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            setCreatePrIntentNotice(operationStore, {
               tone: 'muted',
               message: translate(
                 'auto.components.right.sidebar.SourceControl.createPrIntentBranchChangedDuringDetails',
@@ -147,7 +141,7 @@ export function useSourceControlCreatePrIntentReview({
           }
           const resolved = resolveCreatePrIntentGeneratedReviewFields(fields, generated)
           if (!resolved.ok) {
-            setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            setCreatePrIntentNotice(operationStore, {
               tone: 'destructive',
               message: resolved.error
             })
@@ -156,7 +150,7 @@ export function useSourceControlCreatePrIntentReview({
           fields = resolved.fields
         } catch (error) {
           console.warn('[SourceControl] Create PR intent detail generation failed', error)
-          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+          setCreatePrIntentNotice(operationStore, {
             tone: 'destructive',
             message:
               error instanceof Error
@@ -170,18 +164,15 @@ export function useSourceControlCreatePrIntentReview({
         }
       }
 
-      if (
-        !createPrIntentRunStillOwnsWorktree(token) ||
-        createPrIntentActiveTargetConflicts(token)
-      ) {
+      if (!createPrIntentRunIsCurrent(operationStore, token)) {
         return false
       }
       const createPrIntentIsForeground = (): boolean =>
-        createPrIntentRunTokenMatches(token, createPrIntentCurrentTargetRef.current)
+        createPrIntentRunTokenMatches(token, operationStore.getState().createPrIntentTarget)
 
       const title = prefixJiraReviewTitle(fields.title, jiraIssueKey).trim()
       if (!title) {
-        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: translate(
             'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
@@ -192,15 +183,14 @@ export function useSourceControlCreatePrIntentReview({
         return false
       }
 
-      setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+      setCreatePrIntentNotice(operationStore, {
         tone: 'muted',
         message: translate(
           'auto.components.right.sidebar.SourceControl.createPrIntentCreatingReview',
           'Creating review…'
         )
       })
-      createPrInFlightRef.current[token.worktreeId] = true
-      setCreatePrInFlightByWorktree((prev) => ({ ...prev, [token.worktreeId]: true }))
+      operationStore.setState({ isCreatingPr: true })
       try {
         const result = await createHostedReview(activeRepo.path, {
           repoId: activeRepo.id,
@@ -233,7 +223,7 @@ export function useSourceControlCreatePrIntentReview({
           if (openChecks && resolvedPrCreationDefaults.openAfterCreate) {
             openAppHttpLink(result.url, { worktreeId: token.worktreeId })
           }
-          setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
+          setCreatePrIntentNotice(operationStore, null)
           return true
         }
 
@@ -253,11 +243,11 @@ export function useSourceControlCreatePrIntentReview({
               openChecks
             }
           )
-          setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
+          setCreatePrIntentNotice(operationStore, null)
           return true
         }
 
-        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message: localizedCreateFailure(result, eligibility.provider)
         })
@@ -271,33 +261,27 @@ export function useSourceControlCreatePrIntentReview({
                 'Failed to create {{value0}}',
                 { value0: hostedReviewCreateCopy.reviewLabel }
               )
-        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+        setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
           message
         })
         return false
       } finally {
-        createPrInFlightRef.current[token.worktreeId] = false
-        setCreatePrInFlightByWorktree((prev) => ({ ...prev, [token.worktreeId]: false }))
+        operationStore.setState({ isCreatingPr: false })
       }
     },
     [
       activeRepo,
       createHostedReview,
-      createPrInFlightRef,
-      createPrIntentActiveTargetConflicts,
-      createPrIntentCurrentTargetRef,
-      createPrIntentRunStillOwnsWorktree,
       getCreatePrIntentOperationTarget,
       handlePullRequestCreated,
       hostedReviewCreateCopy.reviewLabel,
+      operationStore,
       prBase,
       prBody,
       resolvedPrCreationDefaults.draft,
       resolvedPrCreationDefaults.openAfterCreate,
       resolvedPrCreationDefaults.useTemplate,
-      setCreatePrInFlightByWorktree,
-      setCreatePrIntentNoticeForWorktree,
       settings
     ]
   )
