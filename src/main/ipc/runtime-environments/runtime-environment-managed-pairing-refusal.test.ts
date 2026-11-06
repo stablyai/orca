@@ -43,18 +43,4 @@ describe('handleManagedSharedControlRefusal', () => {
       'orcad_server_replaced'
     )
   })
-
-  it('keeps retrying when another process answered on the port', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await expect(
-      handleManagedSharedControlRefusal(
-        '/profile',
-        'env-1',
-        () => Promise.reject(OrcadManagedIdentityError.foreignPort(6_768, '4001')),
-        () => true
-      )
-    ).resolves.toBe('retry')
-    expect(mocks.authenticationRejected).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
 })

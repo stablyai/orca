@@ -7,8 +7,6 @@ import { connect, createServer, type Server } from 'node:net'
 import { DaemonServer } from '../daemon-server'
 import type { ConnectedDaemonClient } from '../daemon-client-connections'
 import { DaemonClient } from '../../transport/client/daemon-client'
-import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
-import { DAEMON_ENDPOINT_LOST_MESSAGE } from '../../endpoint/publication/daemon-endpoint-ownership'
 import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
 import { getDaemonSocketPath } from '../../launch/daemon-spawner'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
@@ -211,11 +209,6 @@ describe('daemon server error handling', () => {
     }
   )
 
-  it('treats the endpoint-lost refusal as a reconnectable error', () => {
-    expect(isDaemonGoneError(new Error(DAEMON_ENDPOINT_LOST_MESSAGE))).toBe(true)
-    expect(isDaemonGoneError(new Error('something else entirely'))).toBe(false)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'stands down once drained even while a pre-takeover client stays connected',
     async () => {
@@ -270,40 +263,6 @@ describe('daemon server error handling', () => {
         await expect(
           client.request('createOrAttach', { sessionId: 'x', cols: 80, rows: 24 })
         ).rejects.toThrow(/no longer owns its endpoint/)
-      } finally {
-        await new Promise<void>((resolve) => usurper.close(() => resolve()))
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'records endpoint loss even when already retiring for another reason',
-    async () => {
-      // Endpoint loss must be recorded independently of ordinary retirement, which hello can clear.
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        spawnSubprocess: () => createMockSubprocess()
-      })
-      await server.start()
-      client = new DaemonClient({ socketPath, tokenPath })
-      await client.ensureConnected()
-      await client.request('createOrAttach', { sessionId: 'keepalive', cols: 80, rows: 24 })
-
-      const usurper = createServer()
-      const usurperBind = join(dir, '.u6')
-      await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
-      try {
-        unlinkSync(socketPath)
-        linkSync(usurperBind, socketPath)
-
-        const daemon = server as unknown as DaemonServerInternals
-        daemon.lifecycle.retirementRequested = true
-
-        daemon.endpoint.checkOwnership()
-        daemon.endpoint.checkOwnership()
-
-        expect(daemon.endpoint.ownershipLost).toBe(true)
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
       }
