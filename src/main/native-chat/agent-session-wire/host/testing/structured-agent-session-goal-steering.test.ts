@@ -1,3 +1,4 @@
+import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection-types'
@@ -9,7 +10,6 @@ import { optionSession } from '../../../../codex/structured/catalog/codex-struct
 import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
