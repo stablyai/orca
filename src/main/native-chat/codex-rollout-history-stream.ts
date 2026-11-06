@@ -3,9 +3,13 @@ import { finished } from 'node:stream/promises'
 import { createZstdDecompress } from 'node:zlib'
 
 /** Bookmarks count decoded JSONL bytes, including newlines, never compressed file bytes. */
-export async function* readCodexRolloutBytes(path: string, end?: number): AsyncGenerator<Buffer> {
+export async function* readCodexRolloutBytes(
+  path: string,
+  end?: number,
+  signal?: AbortSignal
+): AsyncGenerator<Buffer> {
   const decoder = path.endsWith('.zst') ? createZstdDecompress() : undefined
-  const file = createReadStream(path)
+  const file = createReadStream(path, { signal })
   try {
     if (decoder) {
       file.on('error', (error) => decoder.destroy(error))

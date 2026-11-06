@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 
+vi.mock('./codex-session-resume-provider', () => ({
+  readCodexSessionResumeProvider: async () => 'openai'
+}))
+
 const SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
 const ORIGIN_HOME = '/managed/origin/home'
 const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${SESSION_ID}.jsonl`
@@ -76,7 +80,11 @@ describe('prepareCodexSessionResume legacy-rescan ranking forwarding', () => {
           listSessionFiles: listRolloutInEveryHome,
           resolveVerifiedResumeHome: async (source) => source.homePath
         })
-      ).resolves.toEqual({ outcome: 'resume', codexHomePath: accountBHome })
+      ).resolves.toEqual({
+        outcome: 'resume',
+        codexHomePath: accountBHome,
+        modelProvider: 'openai'
+      })
     }
   })
 })

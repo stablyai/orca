@@ -48,7 +48,10 @@ beforeEach(() => {
   const bridged = join(homes.selected, relativePath)
   mkdirSync(dirname(transcriptPath), { recursive: true })
   mkdirSync(dirname(bridged), { recursive: true })
-  writeFileSync(transcriptPath, '{"type":"session_meta"}\n')
+  writeFileSync(
+    transcriptPath,
+    '{"type":"session_meta","payload":{"id":"abcdef00-1234-4321-9999-cafecafecafe","model_provider":"openai"}}\n'
+  )
   linkSync(transcriptPath, bridged)
 })
 afterEach(() => rmSync(root, { recursive: true, force: true }))

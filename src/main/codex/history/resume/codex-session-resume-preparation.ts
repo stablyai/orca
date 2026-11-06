@@ -2,6 +2,7 @@ import {
   resolveCodexSessionResumeProvenance,
   type CodexSessionResumePreparation
 } from './codex-session-resume-home'
+import { readCodexSessionResumeProvider } from './codex-session-resume-provider'
 
 export type VerifiedCodexResumeSource = { homePath: string; transcriptPath: string }
 
@@ -30,11 +31,31 @@ export async function prepareCodexSessionResume(args: {
   if (provenance.outcome === 'fresh') {
     return provenance
   }
-  return {
-    outcome: 'resume',
-    codexHomePath: await args.resolveVerifiedResumeHome({
-      homePath: provenance.homePath,
+  let modelProvider = await readCodexSessionResumeProvider({
+    sessionId: args.sessionId,
+    homePath: provenance.homePath,
+    transcriptPath: provenance.transcriptPath
+  })
+  const codexHomePath = await args.resolveVerifiedResumeHome({
+    homePath: provenance.homePath,
+    transcriptPath: provenance.transcriptPath
+  })
+  if (codexHomePath !== provenance.homePath) {
+    const targetProvider = await readCodexSessionResumeProvider({
+      sessionId: args.sessionId,
+      homePath: codexHomePath,
       transcriptPath: provenance.transcriptPath
     })
+    if (targetProvider && modelProvider && targetProvider !== modelProvider) {
+      throw new Error(
+        'Codex resume stopped: the selected account has a different saved model provider'
+      )
+    }
+    modelProvider = targetProvider ?? modelProvider
+  }
+  return {
+    outcome: 'resume',
+    ...(modelProvider ? { modelProvider } : {}),
+    codexHomePath
   }
 }
