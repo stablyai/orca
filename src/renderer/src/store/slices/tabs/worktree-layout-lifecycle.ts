@@ -180,6 +180,7 @@ export function removeWorktreeLayout(
   const ownerOrders = { ...keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder) }
   const ownerActiveTypes = { ...omitByWorktree(s.activeTabTypeByWorktree) }
   for (const tab of transferred.movedTabs) {
+    affectedWorkspaces.add(tab.worktreeId)
     ownerLayouts[tab.worktreeId] ??= { type: 'leaf', groupId: tab.groupId }
     ownerActiveGroups[tab.worktreeId] ??= tab.groupId
     ownerOrders[tab.worktreeId] = [...(ownerOrders[tab.worktreeId] ?? []), tab.entityId]
@@ -222,7 +223,12 @@ export function removeWorktreeLayout(
     activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
     activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType
   }
-  if (s.activeWorktreeId && !removedActiveWorktree) {
+  if (
+    s.activeWorktreeId &&
+    !removedActiveWorktree &&
+    (affectedWorkspaces.has(s.activeWorktreeId) ||
+      removed.kept?.worktreeIds.has(s.activeWorktreeId))
+  ) {
     Object.assign(
       patch,
       buildActiveSurfacePatch(
