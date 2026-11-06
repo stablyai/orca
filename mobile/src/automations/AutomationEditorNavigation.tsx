@@ -22,28 +22,20 @@ export function leaveThrough(slot: AutomationLeaveSlot | undefined, leave: () =>
 
 // The *Edited flags record how a field changed, not anything the user would lose.
 function draftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
-  return (Object.keys(draft) as (keyof AutomationDraft)[]).some(
-    (key) => key !== 'targetEdited' && key !== 'setupDecisionEdited' && draft[key] !== original[key]
+  const before = new Map(Object.entries(original))
+  return Object.entries(draft).some(
+    ([key, value]) =>
+      key !== 'targetEdited' && key !== 'setupDecisionEdited' && value !== before.get(key)
   )
 }
 
-export function AutomationEditorHeader({
-  step,
-  editing,
-  busy,
-  draft,
-  original,
-  leaveGuard,
-  onCancel
-}: EditorPosition & {
-  draft: AutomationDraft
-  original: RefObject<AutomationDraft>
-  /** Filled while mounted so leaves the editor doesn't own ask first too. */
-  leaveGuard?: AutomationLeaveSlot
-  onCancel: () => void
-}) {
+/** Asks before a leave drops unsaved edits; fills `slot` while mounted so the tab and host switches ask too. */
+export function useAutomationLeaveGuard(
+  draft: AutomationDraft,
+  original: RefObject<AutomationDraft>,
+  slot?: AutomationLeaveSlot
+) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null)
   const guard: AutomationLeaveGuard = (leave) => {
     if (draftChanged(original.current, draft)) {
@@ -53,14 +45,40 @@ export function AutomationEditorHeader({
     }
   }
   useEffect(() => {
-    if (!leaveGuard) {
+    if (!slot) {
       return
     }
-    leaveGuard.current = guard
+    slot.current = guard
     return () => {
-      leaveGuard.current = null
+      slot.current = null
     }
   })
+  const confirm = (
+    <ConfirmModal
+      visible={pendingLeave !== null}
+      title={t('automations.mobile.discardChangesTitle', 'Discard changes?')}
+      message={t(
+        'automations.mobile.discardChangesMessage',
+        'Unsaved edits to this automation will be lost.'
+      )}
+      confirmLabel={t('automations.mobile.discard', 'Discard')}
+      cancelLabel={t('automations.mobile.keepEditing', 'Keep editing')}
+      destructive
+      onConfirm={() => pendingLeave?.()}
+      onCancel={() => setPendingLeave(null)}
+    />
+  )
+  return { guard, confirm }
+}
+
+export function AutomationEditorHeader({
+  step,
+  editing,
+  busy,
+  onCancel
+}: EditorPosition & { onCancel: () => void }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.row}>
@@ -71,7 +89,7 @@ export function AutomationEditorHeader({
         </Text>
         <AutomationButton
           label={t('automations.mobile.cancel', 'Cancel')}
-          onPress={() => guard(onCancel)}
+          onPress={onCancel}
           disabled={busy}
         />
       </View>
@@ -86,19 +104,6 @@ export function AutomationEditorHeader({
                 : t('automations.mobile.review', 'Review')
         })}
       </Text>
-      <ConfirmModal
-        visible={pendingLeave !== null}
-        title={t('automations.mobile.discardChangesTitle', 'Discard changes?')}
-        message={t(
-          'automations.mobile.discardChangesMessage',
-          'Unsaved edits to this automation will be lost.'
-        )}
-        confirmLabel={t('automations.mobile.discard', 'Discard')}
-        cancelLabel={t('automations.mobile.keepEditing', 'Keep editing')}
-        destructive
-        onConfirm={() => pendingLeave?.()}
-        onCancel={() => setPendingLeave(null)}
-      />
     </>
   )
 }

@@ -1,6 +1,10 @@
 import { AutomationDraftReview } from './AutomationDraftReview'
-import { AutomationEditorHeader, AutomationEditorNavigation } from './AutomationEditorNavigation'
-import type { AutomationLeaveSlot } from './AutomationEditorNavigation'
+import {
+  AutomationEditorHeader,
+  AutomationEditorNavigation,
+  useAutomationLeaveGuard,
+  type AutomationLeaveSlot
+} from './AutomationEditorNavigation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useRef, useState } from 'react'
@@ -44,6 +48,7 @@ export function AutomationEditor(props: {
   useMobileColorScheme()
   const [draft, setDraft] = useState(() => props.initialDraft ?? newAutomationDraft(props.current))
   const original = useRef(newAutomationDraft(props.current))
+  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard)
   const selectTargetDraft = useAutomationTargetDrafts()
   const initialized = useRef(false)
   const [targets, setTargets] = useState<AutomationTargets | null>(null)
@@ -128,9 +133,7 @@ export function AutomationEditor(props: {
         setAgents(options)
         const agentId = options[0]?.agent ?? null
         // The default agent is part of the untouched form, not an edit to ask about.
-        if (original.current.agentId === null) {
-          original.current = { ...original.current, agentId }
-        }
+        original.current.agentId ??= agentId
         setDraft((current) => (current.agentId ? current : { ...current, agentId }))
       })
       .catch((failure: unknown) => {
@@ -208,10 +211,7 @@ export function AutomationEditor(props: {
         step={step}
         editing={!!props.current}
         busy={props.busy}
-        draft={draft}
-        original={original}
-        leaveGuard={props.leaveGuard}
-        onCancel={props.onCancel}
+        onCancel={() => leave.guard(props.onCancel)}
       />
       {error || agentError ? (
         <View style={styles.stack}>
@@ -396,6 +396,7 @@ export function AutomationEditor(props: {
         onBack={() => setStep(step - 1)}
         onNext={next}
       />
+      {leave.confirm}
     </View>
   )
 }
