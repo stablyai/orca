@@ -2,10 +2,13 @@ import type { TerminalLeafMoveResult } from '../../shared/workspace-layout/termi
 
 // Why its own module: the plain-Node runtime commits leaf moves too, so this must stay Electron-free.
 
+/** The renderer a move was asked of (its WebContents), compared by identity. */
+export type PaneMoveRenderer = { readonly id: number }
+
 /** A client's pane move its window is carrying out. */
 export type RelayedPaneMove = {
   /** The renderer asked to make the move; only it may commit it. */
-  sender: object
+  sender: PaneMoveRenderer
   /** The client was told the move timed out, so the window may no longer commit it. */
   timedOut: boolean
   /** The window is committing, so neither the deadline nor the window going away decides the answer. */
@@ -38,7 +41,7 @@ export function holdRelayedPaneMove(
  * for a pane the host moved.
  */
 export function commitRelayedPaneMove(
-  sender: object,
+  sender: PaneMoveRenderer,
   targetTabId: string,
   commit: () => Promise<TerminalLeafMoveResult>
 ): Promise<TerminalLeafMoveResult> {

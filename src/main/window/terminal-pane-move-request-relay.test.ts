@@ -18,8 +18,9 @@ const move = { worktreeId: 'wt-1', sourceTabId: 'tab-1', targetTabId: 'tab-new',
 
 function createMainWindow() {
   const webContents = Object.assign(new EventEmitter(), {
+    id: 1,
     isDestroyed: () => false,
-    send: vi.fn()
+    send: vi.fn<(channel: string, request: { requestId: string }) => void>()
   })
   const mainWindow = Object.assign(new EventEmitter(), {
     isDestroyed: () => false,
@@ -36,9 +37,8 @@ async function requestMove() {
   const { mainWindow, webContents } = createMainWindow()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the EventEmitter double implements the BrowserWindow members the relay uses.
   const pending = relay.requestTerminalPaneMoveFromRenderer(mainWindow as never, move)
-  const request = webContents.send.mock.calls[0]?.[1] as { requestId: string }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay compares the sender by identity only.
-  const sender = webContents as never
+  const request = webContents.send.mock.calls[0]![1]
+  const sender = webContents
   const reply = (result: TerminalLeafMoveResult): void => {
     ipcEmitter.emit(
       'ui:terminalPaneMoveToNewTabReply',
