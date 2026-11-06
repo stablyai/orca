@@ -57,6 +57,7 @@ export function useMobileStructuredAgentSession(
   const {
     agent,
     client,
+    hostId,
     pairedHostClient: paired,
     connected,
     sessionId,
@@ -95,6 +96,7 @@ export function useMobileStructuredAgentSession(
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
     agent,
+    hostId,
     client,
     sessionId,
     enabled,

@@ -6,7 +6,8 @@ import {
   mobileComposerSkillTokens
 } from './native-chat/composer/mobile-native-chat-composer-menu'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
@@ -85,9 +86,13 @@ describe('useMobileStructuredSessionCommands', () => {
       close: () => {}
     }
     await act(async () => {
-      renderer = create(createElement(Probe, { client, sessionId: 'a' }))
+      renderer = createWithQueryClient(createElement(Probe, { client, sessionId: 'a' }))
     })
-    expect(sendRequest).toHaveBeenCalledWith('agentSession.commands', { sessionId: 'a' })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'agentSession.commands',
+      { sessionId: 'a' },
+      { failWhenDisconnected: true }
+    )
     expect(hook!.commands).toEqual(lists.a)
 
     lists.a = [...lists.a!, { name: 'research', kind: 'skill' }]
@@ -101,42 +106,6 @@ describe('useMobileStructuredSessionCommands', () => {
     expect(hook!.commands).toEqual(lists.b)
   })
 
-  it('reads again after the current read when the menu opens during it', async () => {
-    let catalog = [{ name: 'review-pr', kind: 'skill' as const }]
-    const answers: (() => void)[] = []
-    const sendRequest = vi.fn(async () => {
-      const answered = [...catalog]
-      await new Promise<void>((resolve) => answers.push(resolve))
-      return {
-        id: 'rpc-1',
-        ok: true as const,
-        result: { commands: answered },
-        _meta: { runtimeId: 'runtime-1' }
-      }
-    })
-    const client: RpcClient = {
-      sendRequest,
-      subscribe: () => () => {},
-      updateTerminalSubscriptionViewport: () => {},
-      getState: () => 'connected',
-      getReconnectAttempt: () => 0,
-      getLastConnectedAt: () => null,
-      onStateChange: () => () => {},
-      notifyForeground: () => {},
-      close: () => {}
-    }
-    await act(async () => {
-      renderer = create(createElement(Probe, { client, sessionId: 'a' }))
-    })
-    catalog = [...catalog, { name: 'research', kind: 'skill' as const }]
-    await act(async () => hook!.refresh())
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-
-    await act(async () => answers.shift()!())
-    expect(sendRequest).toHaveBeenCalledTimes(2)
-    await act(async () => answers.shift()!())
-    expect(hook!.commands?.map((entry) => entry.name)).toEqual(['review-pr', 'research'])
-  })
   it.each(['pending', 'lost-hint', 'lost-reply'])(
     'recovers a %s only while the same menu stays open',
     async (mode) => {
@@ -180,7 +149,7 @@ describe('useMobileStructuredSessionCommands', () => {
       }
       try {
         await act(async () => {
-          renderer = create(
+          renderer = createWithQueryClient(
             createElement(Probe, { client, sessionId: 'a', commandsOnRequest: true })
           )
         })
@@ -296,7 +265,7 @@ describe('useMobileStructuredSessionCommands', () => {
         }
       })
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Probe, { client, sessionId: 'a', commandsOnRequest: true, observe: true })
       )
     })
@@ -414,7 +383,7 @@ describe('useMobileStructuredSessionCommands', () => {
       }
       try {
         await act(async () => {
-          renderer = create(
+          renderer = createWithQueryClient(
             createElement(Probe, {
               client,
               sessionId: host.sessionId,

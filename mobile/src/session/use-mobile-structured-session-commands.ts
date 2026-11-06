@@ -5,6 +5,8 @@ import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session
 import type { RpcClient } from '../transport/rpc-client'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { defineHostQuery, useHostQuery } from '../query/host-query'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 
 type Reported = {
   client: RpcClient
@@ -40,7 +42,24 @@ const sessionCommandsRead = bindDeferredRpcOperation(
   })
 )
 
-// Bounded phone frames omit commands; reread on menu open for newly installed skills and follow any in-flight read.
+// A chat's last reported commands, so a reopened composer's `/` menu has them at once.
+const sessionCommandsQuery = defineHostQuery({
+  family: 'agentSession.commands',
+  fetch: async (
+    client,
+    _target,
+    { sessionId }: { sessionId: string },
+    previous: readonly AgentSessionSlashCommand[] | null | undefined
+  ) => {
+    const read = sessionCommandsRead.interpret(
+      await sessionCommandsRead.request(client, { sessionId })
+    )
+    return read.accepted && read.value.commands ? read.value.commands : (previous ?? null)
+  },
+  staleTime: 60_000
+})
+
+// Bounded phone frames omit commands; reread on menu open for newly installed skills.
 export function useMobileStructuredSessionCommands(args: {
   client: RpcClient | null
   hostId: string | null
@@ -57,26 +76,15 @@ export function useMobileStructuredSessionCommands(args: {
   const [menuOpen, setMenuOpen] = useState(false)
   const query = useRef<ReturnType<typeof startAgentSessionCommandMenuQuery> | null>(null)
   const [reported, setReported] = useState<Reported | null>(null)
-  const [readCount, setReadCount] = useState(0)
-
-  useEffect(() => {
-    if (!client || !hostId || !sessionId || !enabled || commandsOnRequest) {
-      return
-    }
-    let stale = false
-    void sessionCommandsRead
-      .requestSingleFlight(client, hostId, { sessionId })
-      .then((reply) => {
-        const read = sessionCommandsRead.interpret(reply)
-        if (!stale && read.accepted && read.value.commands) {
-          setReported({ client, hostId, sessionId, commands: read.value.commands })
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      stale = true
-    }
-  }, [client, commandsOnRequest, enabled, hostId, readCount, sessionId])
+  const exec = useWorkspaceExecutionHost() ?? 'local'
+  const reads = !!hostId && !!sessionId && enabled && !commandsOnRequest
+  const { data: published, refetch } = useHostQuery(
+    sessionCommandsQuery,
+    { hostId: hostId ?? '', client },
+    { exec },
+    { sessionId: sessionId ?? '' },
+    { enabled: reads }
+  )
 
   useEffect(() => {
     if (!commandsOnRequest || !menuOpen || !enabled || !client || !hostId || !sessionId) {
@@ -121,15 +129,20 @@ export function useMobileStructuredSessionCommands(args: {
   }, [client, commandsOnRequest, enabled, hostId, menuOpen, sessionId])
   const invalidate = useCallback(() => query.current?.invalidate(), [])
   const refresh = useCallback(() => {
-    if (!commandsOnRequest) {
-      setReadCount((count) => count + 1)
+    if (reads) {
+      void refetch()
     }
-  }, [commandsOnRequest])
+  }, [reads, refetch])
 
   return {
-    commands:
-      reported?.client === client && reported.hostId === hostId && reported.sessionId === sessionId
+    commands: commandsOnRequest
+      ? reported?.client === client &&
+        reported.hostId === hostId &&
+        reported.sessionId === sessionId
         ? reported.commands
+        : undefined
+      : hostId && sessionId
+        ? (published ?? undefined)
         : undefined,
     refresh,
     setMenuOpen,

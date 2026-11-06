@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
@@ -10,14 +11,67 @@ import {
 } from '../../../src/shared/host-model-listing-waits'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { usesModelSpecificAcpEfforts } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
+import {
+  hostReadsSavedModelCatalogsOnly,
+  selectHostModelCatalogSnapshot,
+  withHostModelCatalogAnswer,
+  type HostModelCatalogLaunch,
+  type HostModelCatalogSnapshot
+} from '../../../src/shared/agent-session/options/host-model-catalog-snapshot-rules'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { defineHostQuery, useHostQuery } from '../query/host-query'
+import { hostQueryKey } from '../query/host-query-key'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { readRuntimeStatusProbe } from '../transport/runtime-status-probe'
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
+
+// The host's account-level lists per agent, which a chat's first frame shows before its own read answers.
+const hostModelCatalogQuery = defineHostQuery({
+  family: 'agentSession.modelCatalog',
+  // savedOnly answers from the host's saved lists without starting the agent's CLI.
+  fetch: async (
+    client,
+    _target,
+    { agent }: { agent: string },
+    previous: HostModelCatalogSnapshot | null | undefined
+  ) =>
+    withHostModelCatalogAnswer(
+      previous ?? undefined,
+      null,
+      await callAgentSession<AgentSessionModelCatalogResult>(client, 'agentSession.modelCatalog', {
+        agent,
+        savedOnly: true
+      })
+    ) ?? null,
+  staleTime: 10 * 60_000,
+  gcTime: 30 * 60_000
+})
+
+type HostModelCatalogScope = { hostId: string; exec: ExecutionHostId; agent: string }
+
+const hostModelCatalogKey = ({ hostId, exec, agent }: HostModelCatalogScope) =>
+  hostQueryKey(hostId, hostModelCatalogQuery.family, { exec }, { agent })
+
+/** The last host list that fits this chat, or undefined when none does. */
+export function readHostModelCatalogSeed(
+  queryClient: QueryClient,
+  scope: HostModelCatalogScope,
+  launch: HostModelCatalogLaunch
+): AgentSessionModelCatalogResult | undefined {
+  return selectHostModelCatalogSnapshot(
+    queryClient.getQueryData<HostModelCatalogSnapshot | null>(hostModelCatalogKey(scope)) ??
+      undefined,
+    launch
+  )
+}
 
 // Show host model listings as they arrive without waiting for session attach; unsupported hosts retain a nameless built-in list until options load.
 export function useMobileHostModelCatalogUpgrade(args: {
   agent: string | null
   selectedModel?: string
+  hostId: string | null
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -44,6 +98,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     client,
     enabled,
     fence,
+    hostId,
     newLaunch,
     onListingLanded,
     optionCatalog,
@@ -51,6 +106,21 @@ export function useMobileHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
+  const queryClient = useQueryClient()
+  const exec = useWorkspaceExecutionHost() ?? 'local'
+  // Older hosts list (start the CLI) when nothing is saved, so only hosts that read saved-only are preloaded.
+  // The session's capability probe already answered for this connection; its answer re-renders the chat.
+  const preload =
+    enabled &&
+    !!client &&
+    hostReadsSavedModelCatalogsOnly(readRuntimeStatusProbe(client)?.capabilities)
+  useHostQuery(
+    hostModelCatalogQuery,
+    { hostId: hostId ?? '', client },
+    { exec },
+    { agent: agent ?? '' },
+    { enabled: preload && !!hostId && !!agent }
+  )
   const receiver = useRef(args.receiveCatalog)
   useEffect(() => {
     receiver.current = args.receiveCatalog
@@ -86,6 +156,14 @@ export function useMobileHostModelCatalogUpgrade(args: {
     ): void => {
       if (stale) {
         return
+      }
+      // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
+      if (newLaunch && hostId) {
+        queryClient.setQueryData<HostModelCatalogSnapshot | null>(
+          hostModelCatalogKey({ hostId, exec, agent }),
+          (snapshot) =>
+            withHostModelCatalogAnswer(snapshot ?? undefined, worktree ?? '', catalog) ?? null
+        )
       }
       receiver.current(catalog, settled ? 'settled' : event)
     }
@@ -146,10 +224,13 @@ export function useMobileHostModelCatalogUpgrade(args: {
     agent,
     client,
     enabled,
+    exec,
     fence,
+    hostId,
     newLaunch,
     onListingLanded,
     optionCatalog,
+    queryClient,
     sessionId,
     selectedModel,
     updateOptionState,
