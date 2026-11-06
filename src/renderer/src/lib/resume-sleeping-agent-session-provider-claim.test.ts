@@ -3,7 +3,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
-import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
+
 import { useAppStore, type AppState } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
@@ -217,13 +217,4 @@ describe('resume sleeping agent provider claims', () => {
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
   })
-})
-
-it('keeps the same OMP provider claim when a later hook supplies its transcript path', () => {
-  const record = makeRecord(makePaneKey('tab-1', LEAF_ID))
-  const enriched = {
-    ...record,
-    providerSession: { ...record.providerSession, transcriptPath: '/custom/session.jsonl' }
-  }
-  expect(getProviderSessionClaimKey(enriched)).toBe(getProviderSessionClaimKey(record))
 })

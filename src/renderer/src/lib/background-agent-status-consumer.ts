@@ -10,7 +10,7 @@ import type { AgentStatusObservation } from '../../../shared/agent-status/contra
 
 export function createBackgroundAgentStatusConsumer(args: {
   paneKey: string
-  launchToken: string
+  launchToken?: string
   mainOwnsAgentStatusWrites: boolean
   expectedConnectionId: string | null | undefined
   runtimeEnvironmentId: string | null

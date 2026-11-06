@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { performance, monitorEventLoopDelay } from 'node:perf_hooks'
-import { workload } from '../../../../../config/scripts/check-job-log-performance-cases.mjs'
+import { workload } from '../../../../../config/scripts/performance/check-job-log/check-job-log-performance-cases.mjs'
 
 assert(
   !process.versions.bun && typeof globalThis.gc === 'function',

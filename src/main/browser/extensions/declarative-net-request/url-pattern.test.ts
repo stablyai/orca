@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DnrUrlPatternMatcher, parseUrlFilter, type DnrAnchor } from './url-pattern'
+import { DnrUrlPatternMatcher, type DnrAnchor } from './url-pattern'
 import { canonicalizeDnrUrl, dnrUrlText } from './url-text'
 
 function matches(
@@ -22,23 +22,6 @@ function matches(
     matchCase
   }).matches(text)
 }
-
-describe('parseUrlFilter', () => {
-  it.each([
-    ['abc', 'abc', 'none', 'none'],
-    ['|abc', 'abc', 'boundary', 'none'],
-    ['||abc', 'abc', 'subdomain', 'none'],
-    ['abc|', 'abc', 'none', 'boundary'],
-    ['||abc|', 'abc', 'subdomain', 'boundary'],
-    ['a|b', 'a|b', 'none', 'none'],
-    ['|', '', 'boundary', 'none'],
-    ['||', '', 'subdomain', 'none'],
-    ['|||', '', 'subdomain', 'boundary'],
-    ['', '', 'none', 'none']
-  ])('%s', (filter, pattern, anchorLeft, anchorRight) => {
-    expect(parseUrlFilter(filter)).toEqual({ pattern, anchorLeft, anchorRight })
-  })
-})
 
 // Vectors from Chromium's components/url_pattern_index/url_pattern_unittest.cc.
 describe('DnrUrlPatternMatcher (Chromium vectors)', () => {

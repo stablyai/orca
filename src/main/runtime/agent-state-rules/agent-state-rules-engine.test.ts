@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateTuiIdle, type TuiIdleEvaluationInput } from '../tui-idle-evidence'
-import { isKnownReadyPromptBody, isQuietReadyScreenBody } from '../terminal-wait-detection'
+import { evaluateTuiIdle, type TuiIdleEvaluationInput } from '../terminal/wait/tui-idle-evidence'
+import {
+  isKnownReadyPromptBody,
+  isQuietReadyScreenBody
+} from '../terminal/wait/terminal-wait-detection'
 import {
   compileAgentRules,
   evaluateAgentStateRules,

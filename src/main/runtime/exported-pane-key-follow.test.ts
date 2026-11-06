@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentHookServer } from '../agent-hooks/server'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 // Fresh per test: the hook server is a process singleton.
 let OLD_TAB = ''

@@ -1,5 +1,6 @@
 import type { CloseTerminalPaneDetail } from '@/constants/terminal'
 import type { PaneProcessExit } from './pty-connection-types'
+import type { TerminalTabCloseIntent } from '../terminal/terminal-tab-close-intent'
 
 type TerminalPaneCloseManager = {
   closePane: (paneId: number) => void
@@ -12,7 +13,8 @@ type TerminalPaneCloseManager = {
 export function applyTerminalPaneCloseRequest(args: {
   detail: CloseTerminalPaneDetail
   manager: TerminalPaneCloseManager
-  closeTab: () => void
+  /** The tab's last pane closing closes the tab, with the reason its requester named. */
+  closeTab: (reason: TerminalTabCloseIntent) => void
   closeTabPreservingPty: () => void
   getPtyIdForLeaf?: (leafId: string) => string | undefined
 }): 'ignored' | 'pane' | 'tab' {
@@ -33,7 +35,7 @@ export function applyTerminalPaneCloseRequest(args: {
     if (args.detail.preservePty) {
       args.closeTabPreservingPty()
     } else {
-      args.closeTab()
+      args.closeTab(args.detail.lastPaneCloseReason)
     }
     return 'tab'
   }

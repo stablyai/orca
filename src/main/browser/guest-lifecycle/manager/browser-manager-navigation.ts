@@ -6,6 +6,7 @@ import { getBrowserProcessUserAgentIdentity } from '../../identity/browser-proce
 import type { BrowserSessionRequestUserAgentResolver } from '../../identity/browser-session-ua'
 import { isGoogleAuthUrl } from '../../identity/browser-google-auth-ua'
 import {
+  desktopUserAgentMetadata,
   googleAuthTabIdentity,
   resolveBrowserTabIdentity,
   type BrowserTabIdentity
@@ -116,7 +117,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         : presentedByWebContents === identity.userAgent
           ? { userAgent: '' }
           : // Temporary override until cross-document navigation can update the WebContents UA.
-            { userAgent: identity.userAgent }
+            { userAgent: identity.userAgent, userAgentMetadata: desktopUserAgentMetadata() }
     if (override.userAgent === '' && !this.standingCdpUserAgentOverride(guest.id)) {
       return Promise.resolve(true)
     }

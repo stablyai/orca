@@ -15,7 +15,7 @@ import {
 } from '../providers/execution-host-provider-dispatch'
 import { detectGitRemoteIdentity } from '../workspaces/catalog/repo-git-remote-identity'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../runtime/files/paths/runtime-relative-paths'
 
 const WEBSITE_HOSTS_TO_SKIP = new Set([
   'github.com',

@@ -27,6 +27,8 @@ import {
 } from '../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
+import { antigravityChatBrainDir } from '../antigravity/antigravity-chat-home'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
@@ -88,6 +90,7 @@ type LocalAiVaultScanRoots = Required<
     | 'wslOpenCodeReaders'
     | 'claudeProfileProjectsDirs'
     | 'opencodeAccountDataDirs'
+    | 'antigravityChatBrainDir'
   >
 
 /** Resolve fresh WSL roots for both listing and indexing; distros can start or stop between scans. */
@@ -117,6 +120,8 @@ async function resolveLocalAiVaultScanRoots(): Promise<{
       // Scanner workers have no account router; supply profile roots from this process.
       claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
       opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
+      // The chat host's state root, as structured-session-account-home resolves it.
+      antigravityChatBrainDir: antigravityChatBrainDir(getProfileUserDataPath()),
       wslOpenCodeReaders: await prepareOpenCodeWslReaders(wsl.homes),
       // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
       executionHostId: LOCAL_EXECUTION_HOST_ID

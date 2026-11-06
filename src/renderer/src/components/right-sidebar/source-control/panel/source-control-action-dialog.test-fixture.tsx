@@ -25,6 +25,7 @@ import {
   normalizeSourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { useSourceControlAgentActionDialog } from '../ai/useSourceControlAgentActionDialog'
+import { SourceControlTextGenerationDialog } from '../ai/text-generation-dialog'
 import * as dialogController from '../ai/useSourceControlAgentActionDialog'
 import {
   render,
@@ -36,6 +37,7 @@ import {
   type RenderHookResult
 } from '@testing-library/react'
 import { expect, vi, type Mock } from 'vitest'
+import type { ComponentProps } from 'react'
 
 export type SaveAction = NonNullable<SourceControlAgentActionDialogProps['onSaveAgentDefault']>
 
@@ -167,6 +169,49 @@ export async function pickDialogAgent(label: string, terminal: boolean) {
     throw new Error(`Missing agent row ${label}`)
   }
   fireEvent.click(row)
+}
+
+type TextGenerationDialogProps = ComponentProps<typeof SourceControlTextGenerationDialog>
+
+export function mountTextGenerationDialog(customAgentCommand = ''): {
+  view: RenderResult
+  repo: Repo
+  onGenerate: Mock<TextGenerationDialogProps['onGenerate']>
+  onSaveDefaults: Mock<TextGenerationDialogProps['onSaveDefaults']>
+  onOpenChange: Mock<TextGenerationDialogProps['onOpenChange']>
+} {
+  const settings = getDefaultSettings('/tmp/source-control-shared-picker')
+  settings.sourceControlAi = {
+    ...settings.sourceControlAi!,
+    enabled: true,
+    agentId: 'codex',
+    selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+    selectedThinkingByModel: { 'gpt-5.4-mini': 'xhigh' },
+    customAgentCommand,
+    actions: { commitMessage: { agentId: 'codex', commandInputTemplate: '{basePrompt}' } }
+  }
+  const repo = { ...TEST_REPO, sourceControlAi: undefined }
+  useAppStore.setState({ settings, repos: [repo] })
+  const onGenerate = vi.fn()
+  const onSaveDefaults = vi.fn().mockResolvedValue(undefined)
+  const onOpenChange = vi.fn()
+  const view = render(
+    <SourceControlTextGenerationDialog
+      open
+      actionId="commitMessage"
+      title="Customize commit message"
+      description="Configure this generation."
+      generateLabel="Generate commit message"
+      settings={settings}
+      repo={repo}
+      discoveryHostKey="host"
+      onGenerate={onGenerate}
+      onOpenChange={onOpenChange}
+      onSaveDefaults={onSaveDefaults}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  return { view, repo, onGenerate, onSaveDefaults, onOpenChange }
 }
 
 export function renderDialog(

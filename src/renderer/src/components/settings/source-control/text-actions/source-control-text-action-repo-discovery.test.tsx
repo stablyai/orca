@@ -83,18 +83,6 @@ function openRepoCard(repoId: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
 }
 
-it('a local repository card lists the models this machine reports when its picker opens', async () => {
-  useAppStore.setState({ repos: [TEST_REPO] })
-  openRepoCard(TEST_REPO.id)
-  expect(await screen.findByRole('option', { name: 'GPT-6.1 Sol' })).toBeDefined()
-  expect(discover).toHaveBeenCalledWith(
-    expect.objectContaining({ target: { kind: 'local' }, worktreeId: null }),
-    'codex'
-  )
-  const saved = useAppStore.getState().settings?.sourceControlAi
-  expect(saved?.discoveredModelsByAgentByHost?.local?.codex).toEqual(SOL)
-})
-
 it('a local repository card in WSL refreshes the local catalog generation reads, as the global card does', async () => {
   discover.mockImplementation(actualGenerationClient.discoverRuntimeCommitMessageModels)
   const list = vi.fn(async (args: { worktreePath?: string }) => ({

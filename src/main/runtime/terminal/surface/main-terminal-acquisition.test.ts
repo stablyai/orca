@@ -1,4 +1,4 @@
-import '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

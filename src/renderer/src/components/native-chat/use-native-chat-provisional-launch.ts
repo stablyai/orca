@@ -91,31 +91,34 @@ export function useNativeChatProvisionalLaunch(
   worktreeId: string | null | undefined,
   sessionId: string
 ) {
-  const rawLifecycle = useStructuredAgentSessionLaunchLifecycle(worktreeId ?? '', sessionId)
+  const lifecycle = useStructuredAgentSessionLaunchLifecycle(worktreeId ?? '', sessionId)
   const retainedInput = structuredAgentSessionLaunchHasRetainedInput(worktreeId ?? '', sessionId)
-  const lifecycle = retainedInput ? null : rawLifecycle
   useEffect(() => {
     if (worktreeId && retainedInput && !getStructuredLaunchStateBySessionId(sessionId)) {
       restorePersistedStructuredLaunchState(worktreeId, sessionId)
     }
   }, [worktreeId, sessionId, retainedInput])
   const failure = useStructuredAgentSessionLaunchFailure(worktreeId ?? '', sessionId)
-  const launch = useLaunchView(sessionId, worktreeId, lifecycle !== null)
+  const launch = useLaunchView(sessionId, worktreeId, lifecycle !== null && !retainedInput)
   const retry = useCallback(() => {
     if (worktreeId) {
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])
-  const starting = lifecycle === 'pending' || lifecycle === 'visibility-unknown'
+  const starting = lifecycle === 'pending' || (lifecycle === 'visibility-unknown' && !retainedInput)
   const sendThroughLaunch = useCallback(
-    (text: string, withImages: boolean, send: () => boolean | 'queued'): boolean | 'queued' => {
+    (
+      text: string,
+      requiresSession: boolean,
+      send: () => boolean | 'queued'
+    ): boolean | 'queued' => {
       if (starting) {
         return false
       }
       if (lifecycle !== 'failed' || !worktreeId) {
         return send()
       }
-      if (!withImages && text.trim()) {
+      if (!requiresSession && text.trim()) {
         return relaunchFailedStructuredAgentSessionWithMessage(worktreeId, sessionId, text) !== null
       }
       relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
@@ -130,6 +133,6 @@ export function useNativeChatProvisionalLaunch(
     retry,
     starting,
     sendThroughLaunch,
-    transportEnabled: lifecycle === null || lifecycle === 'published'
+    transportEnabled: retainedInput || lifecycle === null || lifecycle === 'published'
   }
 }

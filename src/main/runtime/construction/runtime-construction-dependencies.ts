@@ -5,7 +5,7 @@ import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,
   RuntimeTerminalProgramStatusFacetEvent
-} from '../runtime-terminal-contracts'
+} from '../terminal/output/terminal-agent-status-events'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -19,7 +19,7 @@ import type {
 import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
-import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
+import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {

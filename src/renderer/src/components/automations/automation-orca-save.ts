@@ -7,6 +7,7 @@ import { capturedAutomationOwner } from './automation-captured-owner'
 import {
   automationChatSupport,
   automationDraftLaunchSetup,
+  automationCopyLaunchSetup,
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { toast } from 'sonner'
@@ -16,7 +17,6 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -25,7 +25,7 @@ import {
   dispatchAutomationReread,
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
-import { buildDraftPrecheck } from './automation-draft-model'
+import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
 import {
@@ -94,17 +94,7 @@ export async function saveOrcaAutomation(
   const targetEdited = !currentAutomation || local.targetEdited
   const scheduleEdited = (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(edited)
   const timezone = currentAutomation?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-  const rrule =
-    draft.preset === 'custom'
-      ? draft.customSchedule.trim()
-      : buildAutomationRrule({
-          preset: draft.preset,
-          hour: time.hour,
-          minute: time.minute,
-          dayOfWeek: Number(draft.dayOfWeek)
-        })
-  const rawGrace = Number(draft.missedRunGraceMinutes)
-  const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
+  const { rrule, missedRunGraceMinutes } = buildDraftSchedule(draft, time)
   const precheck = buildDraftPrecheck(draft)
   const recordedContext =
     currentAutomation && editingDestination && isSameAutomationWorkspace(currentAutomation, draft)
@@ -186,6 +176,7 @@ export async function saveOrcaAutomation(
       : time.surface
   const launchSetup = automationDraftLaunchSetup(
     {
+      launchSetupPatch: draft.launchSetupPatch,
       extraAgentArgs: edited('extraAgentArgs')
         ? draft.extraAgentArgs
         : (currentAutomation?.extraAgentArgs ?? '')
@@ -198,7 +189,12 @@ export async function saveOrcaAutomation(
     ...(edited('prompt') ? { prompt: draft.prompt } : {}),
     ...(edited('precheckCommand') || edited('precheckTimeoutSeconds') ? { precheck } : {}),
     ...(edited('agentId') ? { agentId: draft.agentId } : {}),
-    ...(!currentAutomation || edited('surface') || edited('extraAgentArgs') ? launchSetup : {}),
+    ...(!currentAutomation ||
+    draft.launchSetupPatch ||
+    edited('surface') ||
+    edited('extraAgentArgs')
+      ? launchSetup
+      : {}),
     ...(targetEdited
       ? {
           runContext,
@@ -220,7 +216,7 @@ export async function saveOrcaAutomation(
     updates.rrule = rrule
     updates.dtstart = time.now
   }
-  const createInput: AutomationCreateInput = {
+  const createInput: AutomationCreateInput = automationCopyLaunchSetup(currentAutomation, updates, {
     name: currentAutomation ? currentAutomation.name : draft.name,
     prompt: currentAutomation ? currentAutomation.prompt : draft.prompt,
     precheck: currentAutomation ? currentAutomation.precheck : precheck,
@@ -242,7 +238,7 @@ export async function saveOrcaAutomation(
       ? currentAutomation.missedRunGraceMinutes
       : missedRunGraceMinutes,
     ...updates
-  }
+  })
 
   const destinationResult = resolveAutomationEditDestination({
     currentAutomation,

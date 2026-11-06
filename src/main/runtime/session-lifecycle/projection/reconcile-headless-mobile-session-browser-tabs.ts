@@ -2,7 +2,7 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as MobileSessionProjection } from './prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
 import type { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh as MobileSessionRefresh } from './perform-mobile-session-pty-records-refresh'
-import type { RuntimeWorkspaceCatalog as WorkspaceCatalog } from '../../workspaces/workspace-catalog'
+import type { RuntimeWorkspaceCatalog as WorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup } from '../../terminal/launch/mobile-terminal-startup'
 import type { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal as OwnedMobileTerminalCreate } from '../../terminal/launch/mobile-terminal-owned-create'
 import { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../../session-tabs/mobile-session-hydration'
@@ -20,8 +20,9 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { sshRemotePtyLeaseAllowsReattach } from '../../../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
+import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { isServeMintedPtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
   protected abstract getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
@@ -181,7 +182,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
   }
 
   protected isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return typeof ptyId === 'string' && ptyId.startsWith('serve-')
+    return typeof ptyId === 'string' && isServeMintedPtySessionId(ptyId)
   }
 
   protected isSshOwnedPtyId(ptyId: string | null | undefined): boolean {

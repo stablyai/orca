@@ -1,3 +1,4 @@
+import advisorCapture from '../../shared/__fixtures__/claude-server-tools-2.1.318.json'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { foldToolMessages } from '../../shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../shared/native-chat/tools/native-chat-tool-pairs'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
+import { decodeClaudeTurnLifecycle } from './transcript-turn-lifecycle'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
@@ -75,6 +77,46 @@ function pairsFrom(messages: NativeChatMessage[]) {
 }
 
 describe('provider transcript result identity', () => {
+  it('replays captured server calls and results through the normal transcript cards', async () => {
+    const messages = await load(advisorCapture, 'claude')
+    expect(pairsFrom(messages)).toMatchObject([
+      {
+        call: { callId: 'recorded-id-2', name: 'advisor', input: {} },
+        result: {
+          callId: 'recorded-id-2',
+          output:
+            '{"type":"advisor_redacted_result","encrypted_content":"redacted-advisor-content"}'
+        }
+      }
+    ])
+    const legacy = claudeRecord('legacy', 'assistant', [
+      { type: 'text', text: 'done' },
+      { type: 'server_tool_use', id: 'server', name: 'advisor', input: {} },
+      { type: 'advisor_tool_result', tool_use_id: 'server', content: 'advice' }
+    ])
+    expect(decodeClaudeTurnLifecycle(JSON.stringify(legacy), 'fallback')?.state).toBe('completed')
+    const failed = await load(
+      [
+        claudeRecord('failed', 'assistant', [
+          {
+            type: 'advisor_tool_result',
+            tool_use_id: 'server',
+            content: { type: 'advisor_tool_result_error', error_code: 'unavailable' }
+          }
+        ])
+      ],
+      'claude'
+    )
+    expect(failed[0]?.blocks).toEqual([
+      {
+        type: 'tool-result',
+        callId: 'server',
+        isError: true,
+        output: '{"type":"advisor_tool_result_error","error_code":"unavailable"}'
+      }
+    ])
+  })
+
   it('keeps Claude reverse completions attached to their calls past a silent spawn', async () => {
     const messages = await load(
       [

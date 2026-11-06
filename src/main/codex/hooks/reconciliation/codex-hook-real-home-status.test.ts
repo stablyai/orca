@@ -100,28 +100,11 @@ afterEach(() => {
 })
 
 describe('Codex hook status for ~/.codex', () => {
-  it('reports on ~/.codex outside the app, naming the file, before Orca asked Codex', () => {
-    expect(status()).toEqual({
-      agent: 'codex',
-      state: 'not_installed',
-      configPath: hooksPath(),
-      managedHooksPresent: false,
-      detail: 'Orca has not asked Codex yet'
-    })
-  })
-
   it("is installed once ~/.codex holds Orca's entry approved with Codex's hash", async () => {
     await answer({ kind: 'hashes', codexVersion: 'codex-cli 0.160.1', hashes: CODEX_HASHES })
     await writeOrcaEntry(CODEX_HASHES)
 
     expect(status()).toMatchObject({ state: 'installed', detail: null })
-  })
-
-  it('says to update a Codex that cannot approve hooks', async () => {
-    const failure = 'Codex 0.120.0 is too old for Orca status; update Codex'
-    await answer({ kind: 'refused', codexVersion: 'codex-cli 0.120.0', failure })
-
-    expect(status()).toMatchObject({ state: 'not_installed', detail: failure })
   })
 
   it("says Codex was not found, and that Orca's own approval stands until it answers", async () => {

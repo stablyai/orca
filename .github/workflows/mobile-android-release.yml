@@ -144,7 +144,7 @@ jobs:
           write_notes_with_verification() {
             NOTES_FILE="$notes_file" \
             NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
-            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/release/publication/create-draft-release.mjs" \
             node --input-type=module -e '
               const { readFileSync, writeFileSync } = await import("node:fs")
               const { pathToFileURL } = await import("node:url")
@@ -246,7 +246,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          node ../config/scripts/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
+          node ../config/scripts/release/versioning/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
           if git diff --quiet; then
             echo "The site's main branch already has Android APK $VERSION or newer." >> "$GITHUB_STEP_SUMMARY"
             exit 0

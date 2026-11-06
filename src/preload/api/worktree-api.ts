@@ -132,6 +132,10 @@ export type WorktreeApi = {
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>
+    /** Read through validCrossStoreLineage; older hosts omit it. */
+    crossStoreLineage?: Record<string, unknown>
+    /** This store's identity, which other stores' records name; absent when unknown. */
+    installationId?: string
   }>
   updateLineage: (args: {
     worktreeId: string

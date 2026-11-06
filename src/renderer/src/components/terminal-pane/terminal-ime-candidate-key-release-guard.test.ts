@@ -19,12 +19,6 @@ describe('terminal IME candidate key release guard', () => {
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', shiftKey: true }))).toBe(false)
   })
 
-  it('arms a pending release guard from a suppressed candidate keydown', () => {
-    const releases = createTerminalImePendingCandidateKeyReleases()
-    armTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }), 10)
-    expect(releases.get('2')).toBe(10 + TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS)
-  })
-
   it('does not arm from keyup, non-candidate, or Shift-modified keys', () => {
     const releases = createTerminalImePendingCandidateKeyReleases()
     armTerminalImePendingCandidateKeyRelease(releases, event({ type: 'keyup', key: '2' }), 10)

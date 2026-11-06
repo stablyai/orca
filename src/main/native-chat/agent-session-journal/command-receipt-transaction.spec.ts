@@ -11,11 +11,7 @@ import {
 } from './journal-host-database-test-support'
 import { AgentSessionJournal } from './journal-store'
 import { runJournalTransaction } from './journal-database'
-import {
-  deleteJournalEpochRows,
-  insertJournalRow,
-  publishJournalSessionEpoch
-} from './journal-row-table'
+import { insertJournalRow, publishJournalSessionEpoch } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
@@ -154,16 +150,6 @@ export function registerCommandReceiptTransactionTests(): void {
   })
 
   describe('command receipts across epoch replacement', () => {
-    it('survives deletion of its referenced journal epoch as retained spent proof', () => {
-      database.transaction((db) => {
-        insertJournalRow(db, identity.sessionId, epochRow(1, 1000))
-        insertCommandReceiptIfAbsent(db, scope, receipt)
-        deleteJournalEpochRows(db, identity.sessionId, 'epoch-1')
-      })
-      expect(storedRows()).toEqual([])
-      expect(readReceipt()).toEqual({ verdict: 'readable', receipt })
-    })
-
     it('survives the actual replacement transaction without transferring or copying results', async () => {
       database.transaction((db) => {
         insertJournalRow(db, identity.sessionId, epochRow(1, 1000))

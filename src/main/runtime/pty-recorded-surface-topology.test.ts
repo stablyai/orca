@@ -3,7 +3,7 @@ import {
   ptyHoldsRecordedSurface as holdsPane,
   type PtySurfaceTopology,
   type RecordedPtySurface
-} from './pty-recorded-surface-topology'
+} from './terminal/surface/pty-recorded-surface-topology'
 
 const TAB = 'tab-1'
 const LEAF = '11111111-1111-4111-8111-111111111111'

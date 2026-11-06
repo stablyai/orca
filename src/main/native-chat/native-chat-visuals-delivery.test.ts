@@ -16,7 +16,7 @@ import {
 } from './native-chat-visuals-delivery'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import { buildClaudeChildProcessEnv } from '../claude/claude-child-process-environment'
-import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { createCodexStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from './agent-session-record-test-fixture'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
