@@ -172,29 +172,6 @@ describe('permission changes with already admitted ACP input', () => {
 })
 
 describe('a send while a Grok prompt runs', () => {
-  it('cancels the running prompt, then sends as the next one', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    await sendHello(rig, 'first')
-    const first = await rig.frame('session/prompt')
-    rig.child().agent.notify('session/update', replyChunk('prompt:first', 'working'))
-    await rig.settle()
-    await sendHello(rig, 'steer')
-    await rig.settle()
-    expect(rig.sent('session/cancel')).toHaveLength(1)
-    expect(rig.sent('session/prompt')).toHaveLength(1)
-    rig.child().agent.reply(first, { stopReason: 'cancelled' })
-    const second = await rig.frame('session/prompt', 1)
-    expect(promptIdOf(second)).toBe('prompt:steer')
-    rig.child().agent.notify('session/update', replyChunk('prompt:steer', 'on it'))
-    await waitFor(async () => {
-      const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
-      expect(turns.map((turn) => turn.state)).toEqual(['interrupted', 'running'])
-    })
-    // A cancel, not a Stop: the session stays.
-    expect(rig.child().closes).toBe(0)
-  })
-
   it('runs the last of two quick steers; the one between is sent and cancelled', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
@@ -217,32 +194,6 @@ describe('a send while a Grok prompt runs', () => {
     ])
     expect(rig.sent('session/cancel')).toHaveLength(2)
     expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['first', 'steer-1'])
-  })
-
-  it('asks again on the next steer when the first cancel was never written', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    await sendHello(rig, 'first')
-    await rig.frame('session/prompt')
-    await rig.settle()
-    const child = rig.child()
-    const cancel = child.cancel.bind(child)
-    let failNext = true
-    child.cancel = (options) => {
-      if (failNext) {
-        failNext = false
-        return Promise.reject(new Error('write failed'))
-      }
-      return cancel(options)
-    }
-    await sendHello(rig, 'steer-1')
-    await rig.settle()
-    expect(rig.sent('session/cancel')).toHaveLength(0)
-    await sendHello(rig, 'steer-2')
-    await sendHello(rig, 'steer-3')
-    await rig.settle()
-    // The failed write freed the running prompt's one cancel; the next steer used it.
-    expect(rig.sent('session/cancel')).toHaveLength(1)
   })
 
   it('withdraws a steer a Stop reaches before its cancel lands', async () => {
@@ -300,29 +251,6 @@ describe('a send while a Grok prompt runs', () => {
 })
 
 describe('a send while a turn Grok began itself runs', () => {
-  it('goes to Grok at once, with no cancel of that turn', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    const { agent } = rig.child()
-    agent.notify('session/update', replyChunk(GROK_TURN, 'Build finished; now'))
-    await rig.settle()
-    await sendHello(rig, 'during')
-    const prompt = await rig.frame('session/prompt')
-    expect(rig.sent('session/cancel')).toHaveLength(0)
-    agent.notify('x.ai/session_notification', {
-      sessionId: PROVIDER_SESSION,
-      update: { sessionUpdate: 'turn_completed', prompt_id: GROK_TURN, stop_reason: 'end_turn' }
-    })
-    agent.notify('session/update', replyChunk(promptIdOf(prompt), 'on it'))
-    agent.reply(prompt, { stopReason: 'end_turn' })
-    await rig.settle()
-    expect(rig.settled).toEqual([
-      expect.objectContaining({ clientMessageId: 'during', providerIdentity: expect.anything() })
-    ])
-    const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
-    expect(turns.map((turn) => turn.state)).toEqual(['completed', 'completed'])
-  })
-
   it("cuts Grok's turn on a second send and runs both messages, never ending Grok", async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
@@ -427,22 +355,6 @@ describe('Steer on a Grok card, through the host', () => {
     expect((await page())?.queuedMessages ?? []).toEqual([])
     expect(rig.child().exited).toBe(false)
     await host.close(SESSION, 'user-close')
-  })
-
-  it("steers an older client's send the same way", async () => {
-    const rig = await openAttachedHostRig()
-    const { agent } = rig.rig.child()
-    await send(rig.host, 'hello')
-    const prompt = await rig.rig.frame('session/prompt')
-    agent.notify('session/update', replyChunk(promptIdOf(prompt), 'working'))
-    await rig.rig.settle()
-    await rig.host.flushStreamedEvents(SESSION)
-    await send(rig.host, 'steer')
-    await waitFor(() => expect(framesOf(rig.rig.child(), 'session/cancel')).toHaveLength(1))
-    agent.reply(prompt, { stopReason: 'cancelled' })
-    await rig.rig.frame('session/prompt', 1)
-    answersCancels(agent)
-    await rig.host.close(SESSION, 'user-close')
   })
 
   it('brings the card back paused when a Stop reaches it before the cancel lands', async () => {

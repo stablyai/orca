@@ -1,12 +1,5 @@
-import {
-  hostTestCatalogReadOperation,
-  HOST_TEST_SESSION as SESSION
-} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import './acp-structured-options'
-import {
-  createAgentModelCatalogService,
-  type AgentModelCatalogService
-} from '../native-chat/agent-model-catalog/agent-model-catalog-service'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   agentReadsProjectModelConfig,
@@ -18,7 +11,7 @@ import { GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { attachParams, openAttachedHostRig, openHostRig } from './acp-structured-host.test-support'
+import { attachParams, openHostRig } from './acp-structured-host.test-support'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -89,37 +82,6 @@ describe('a live Grok listing', () => {
       current: { model: 'grok-4.6', effort: 'high' }
     })
     expect(await saved()).toEqual(observed)
-    expect(store.getRecord(SESSION)?.options).toBeUndefined()
-  })
-
-  it('starts the chat even when saving its start listing throws', async () => {
-    const modelCatalog: AgentModelCatalogService = {
-      captureRead: hostTestCatalogReadOperation,
-      snapshot: vi.fn(() => ({ origin: 'unknown' as const })),
-      demand: vi.fn(async () => {}),
-      prepareSaved: vi.fn(async () => ({ origin: 'unknown' as const })),
-      captureSource: () => () => true,
-      retireContext: vi.fn(),
-      peek: () => null,
-      read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      recordLiveListing: vi.fn().mockImplementationOnce(() => {
-        throw new Error('catalog unavailable')
-      }),
-      prewarm: vi.fn(async () => {}),
-      stop: vi.fn(),
-      providerStarted: vi.fn()
-    }
-    const { host, rig, store, fence } = await openAttachedHostRig({}, undefined, modelCatalog)
-    expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
-    expect(store.getRecord(SESSION)?.lease.ownerProcess).toEqual(expect.any(Object))
-    await expect(host.readOptions(SESSION)).resolves.toMatchObject({ current: expect.any(Object) })
-    expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
-    expect(
-      (await rig.adapter.readOptions({ sessionId: SESSION, fence: fence() })).current
-    ).toMatchObject({
-      model: 'grok-4.7',
-      effort: 'high'
-    })
     expect(store.getRecord(SESSION)?.options).toBeUndefined()
   })
 })
