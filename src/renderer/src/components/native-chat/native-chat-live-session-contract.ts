@@ -3,6 +3,7 @@ import type {
   NativeChatSession,
   NativeChatTurnLifecycle
 } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentActivity } from '../../../../shared/native-chat/input/native-chat-activity'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
 export type ReadState =
@@ -35,4 +36,14 @@ export type NativeChatLiveSession = NativeChatSession & {
   readPhase: ReadState['phase']
   /** True only when caught up to host state; terminal-backed reads cannot prove what arrived while hidden. */
   readCurrent?: boolean
+  /** Children from history outside the loaded tail. The visible window still replays on top. */
+  subagentSeed?: readonly NativeChatSubagentActivity[] | null
+  /** Page one child. Absent keeps a child view on rows already carried by the parent. */
+  readSubagentPage?: (
+    subagentId: string,
+    limit: number,
+    beforeOffset?: number
+  ) => Promise<
+    { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number } | { error: string }
+  >
 }
