@@ -1,5 +1,5 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 
 export const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start'
 export const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end'

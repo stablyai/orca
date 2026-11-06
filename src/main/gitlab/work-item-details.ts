@@ -16,6 +16,7 @@ import { fetchDiscussions, flattenDiscussions } from './mr-discussion-notes'
 import { fetchMRFiles } from './mr-file-diffs'
 import { fetchMRApprovalState, fetchMRReviewers } from './mr-reviewers-and-approvals'
 import { fetchPipelineJobs } from './pipeline-job-graph'
+import { GitLabIncompletePaginationError } from './gitlab-paginated-list'
 import { gitLabRunTimes } from './gitlab-run-times'
 import {
   acquire,
@@ -163,7 +164,13 @@ async function fetchMRDetails(
           pipelineId,
           connectionId,
           localGitOptions
-        ).catch(() => [])
+        ).catch((error: unknown) => {
+          // A partial job list must fail the read so Checks and the dialog keep what they showed.
+          if (error instanceof GitLabIncompletePaginationError) {
+            throw error
+          }
+          return []
+        })
       : undefined
   // Checks needs pipeline/discussion data without the dialog's optional review enrichment.
   const includeReviewDetails = options.includeReviewDetails !== false

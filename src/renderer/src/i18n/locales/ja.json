@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} は設定どおりチャットとして開きます。",
       "defaultSurfaceSetAllChat": "すべてチャットにする",
       "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
-      "sameAsChoice": "{{agent}} と同じ · {{choice}}"
+      "sameAsChoice": "{{agent}} と同じ · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat はまだ Windows では利用できないため、このホストでは {{value0}} がターミナルで開きます。macOS または Linux ホストでのチャットは引き続き利用できます。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "シンボリックリンク",
@@ -499,7 +500,7 @@
         "parakeetV2": "英語のみ。v3 と同程度の精度で、より高速。句読点と大文字・小文字に対応。",
         "zipformerBilingual": "中国語 + 英語の混在に対応。低遅延のリアルタイムストリーミング。",
         "paraformerBilingual": "中国語（標準中国語 + 方言）+ 英語。なまりや地域ごとの中国語に強い。",
-        "zipformerStreamingEn": "英語のみ。2,000 万パラメーターの軽量モデル。速度とサイズのバランスが良好。",
+        "zipformerStreamingEnRetired": "提供を終了しました。文の冒頭が抜け落ちます。削除して空き容量を確保してください。",
         "zipformerStreamingZh": "中国語のみ。1,400 万パラメーターの超軽量モデル。リソースの少ないデバイスに最適。",
         "zipformerStreamingKo": "韓国語のみ。低遅延のリアルタイムストリーミング。",
         "parakeetJa": "日本語のみ。3.5 万時間以上の自然な音声で学習。句読点に対応。",
@@ -1859,6 +1860,7 @@
         "cb55b0390f": "管理",
         "4f9313984d": "レビュアー",
         "02cbe2de44": "パイプライン",
+        "itemLoadFailed": "この項目を読み込めませんでした。更新して再試行してください。",
         "be3d291837": "ファイル",
         "c996e2962c": "会話",
         "b3c156dd51": "更新",
@@ -3733,7 +3735,8 @@
             "agentsLoading": "Agent を読み込んでいます",
             "cliTag": "(CLI)",
             "terminalListNeedsServerUpdate": "ターミナル Agent を一覧表示するには、このサーバーの Orca を更新してください",
-            "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした"
+            "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした",
+            "chatNotOnWindows": "Windows ではまだチャットを利用できません"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -5517,7 +5520,6 @@
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "ローカル設定を保存する",
           "3933401d28": "設定する",
           "31b8b01a45": "設定",
           "4a98f907ae": "再試行",
@@ -5532,7 +5534,15 @@
           "5bfd5c8779": "セットアップスクリプトを閉じる",
           "detectedFromSource": "<source>{{source}}</source> から検出",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。"
+          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
+          "reviewSetupScript": "セットアップスクリプトを確認"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "セットアップスクリプトを確認",
+          "description": "保存すると、Orca が {{repo}} のワークツリーを作成するたびに実行されます。",
+          "setupScript": "セットアップスクリプト",
+          "archiveScript": "アーカイブスクリプト",
+          "save": "ローカル設定を保存する"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "キャンセル",
@@ -12722,7 +12732,8 @@
           "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
           "manyDescription": "確認するまで更新されません。",
           "review": "確認",
-          "dismiss": "閉じる"
+          "dismiss": "閉じる",
+          "movedInstalled": "確認するまでオフのままです。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "このフォルダーを信頼できることを確認してください",
@@ -16974,6 +16985,8 @@
           "noRunUsageYet": "まだ実行の使用量がありません",
           "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
+          "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+          "retryFullOutput": "再試行",
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
@@ -18643,6 +18656,7 @@
         "notDoneGoalChangeIncomplete": "目標の変更を完了できませんでした。チャットを確認してください。"
       },
       "composer": {
+        "planMode": "計画",
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",
         "previewQueue": "キューに入れる",
@@ -19388,7 +19402,8 @@
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "worktree": "ワークツリー"
-      }
+      },
+      "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。"
     },
     "tab": {
       "bar": {

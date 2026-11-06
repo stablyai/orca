@@ -844,7 +844,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}"
+      "sameAsChoice": "Wie {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -953,7 +954,7 @@
         "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
         "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
         "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
-        "zipformerStreamingEn": "Nur Englisch. Schlankes Modell mit 20 Mio. Parametern und gutem Verhältnis von Geschwindigkeit und Größe.",
+        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
         "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
         "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
         "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
@@ -2320,6 +2321,7 @@
         "cb55b0390f": "Verwalten",
         "4f9313984d": "Prüfer",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Dieses Element konnte nicht geladen werden. Aktualisiere, um es erneut zu versuchen.",
         "be3d291837": "Dateien",
         "c996e2962c": "Unterhaltung",
         "b3c156dd51": "Aktualisieren",
@@ -4268,7 +4270,8 @@
             "chatUnavailableAfterSelection": "Ein Chat mit {{value0}} konnte nicht gestartet werden.",
             "startChat": "Chat mit {{value0}} starten",
             "cliTag": "(CLI)",
-            "agentsLoading": "Agenten werden geladen"
+            "agentsLoading": "Agenten werden geladen",
+            "chatNotOnWindows": "Unter Windows noch kein Chat"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Tab wechseln",
@@ -6159,7 +6162,6 @@
           "savedInProjectSettings": "In den <settings>Einstellungen dieses Projekts</settings> gespeichert"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Lokales Setup speichern",
           "3933401d28": "Konfigurieren",
           "31b8b01a45": "Einstellungen",
           "4a98f907ae": "Erneut versuchen",
@@ -6174,7 +6176,15 @@
           "5bfd5c8779": "Setup-Skripte ausblenden",
           "detectedFromSource": "In <source>{{source}}</source> erkannt",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
-          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen."
+          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen.",
+          "reviewSetupScript": "Einrichtungsskript prüfen"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Einrichtungsskript prüfen",
+          "description": "Nach dem Speichern wird dies bei jeder Worktree-Erstellung für {{repo}} durch Orca ausgeführt.",
+          "setupScript": "Einrichtungsskript",
+          "archiveScript": "Archivierungsskript",
+          "save": "Lokales Setup speichern"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Abbrechen",
@@ -13268,7 +13278,8 @@
           "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
           "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
           "review": "Prüfen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "movedInstalled": "Es bleibt aus, bis du es prüfst."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",
@@ -17628,6 +17639,8 @@
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
           "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
+          "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+          "retryFullOutput": "Erneut versuchen",
           "backToList": "Alle Automatisierungen",
           "tableName": "Name",
           "tableProject": "Projekt",
@@ -19361,6 +19374,7 @@
       },
       "composer": {
         "send": "Senden",
+        "planMode": "Planen",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
         "previewQueue": "Einreihen",
         "previewSteer": "Steuern",
@@ -20091,7 +20105,8 @@
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal."
     },
     "tab": {
       "bar": {

@@ -6,7 +6,7 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import {
   buildFoldedImageReplayWrites,
   resolvePositiveTerminalDimensions
-} from '../terminal-snapshot-replay-paint'
+} from '../snapshots/terminal-snapshot-replay-paint'
 
 import {
   CURSOR_SHOW_SEQUENCE,

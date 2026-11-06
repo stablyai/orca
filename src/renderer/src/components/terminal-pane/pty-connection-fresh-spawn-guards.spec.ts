@@ -357,8 +357,9 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks12 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createIpcPtyTransport } = await import('./pty-transport')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {

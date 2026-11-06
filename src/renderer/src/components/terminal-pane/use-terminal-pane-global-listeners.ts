@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useTerminalFontZoom } from './useTerminalFontZoom'
+import { useTerminalFontZoom } from './appearance/useTerminalFontZoom'
 import { useTerminalKeyboardShortcuts } from './input/keyboard/terminal-keyboard-hook'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'

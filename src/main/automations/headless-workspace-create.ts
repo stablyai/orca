@@ -45,6 +45,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     startupAgent: automation.agentId,
     startupPrompt: automation.prompt,
     startupSuppressUpdatePrompt: true,
+    startupTitle: run.title,
     ...(setup.extraAgentArgs ? { startupExtraAgentArgs: setup.extraAgentArgs } : {}),
     ...(setup.agentArgs !== undefined ? { startupAgentArgs: setup.agentArgs } : {}),
     ...(setup.sessionOptions ? { startupSessionOptions: setup.sessionOptions } : {}),

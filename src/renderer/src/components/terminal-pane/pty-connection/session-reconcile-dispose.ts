@@ -6,7 +6,7 @@ import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-re
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
-import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
+import { releaseRendererPtyVisibilityClaim } from '../pty-transport/delivery/pty-renderer-delivery-claims'
 
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'

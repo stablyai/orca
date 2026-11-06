@@ -9,7 +9,7 @@ import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { updateTerminalRemoteRuntimeRecoveryUiState } from './terminal-remote-runtime-recovery-ui-state'
-import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { PtyTransportRecoveryState } from './pty-transport/pty-transport-types'
 import type { TerminalPaneFoundation } from './use-terminal-pane-foundation'
 
 export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {

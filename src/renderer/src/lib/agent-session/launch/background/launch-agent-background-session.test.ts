@@ -73,12 +73,12 @@ vi.mock('@/lib/execution-host-facts', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
   subscribeToPtyExit: mockSubscribeToPtyExit
 }))
 
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: mockSubscribeToPtyData
 }))
 

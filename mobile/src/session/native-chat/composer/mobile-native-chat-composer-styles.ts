@@ -16,6 +16,14 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm
   },
   bar: composerInputStyles.box,
+  leadingControls: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
   dictationMeter: {
     flexDirection: 'row',
     alignItems: 'center',

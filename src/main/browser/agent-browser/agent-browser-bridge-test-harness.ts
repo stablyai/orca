@@ -166,11 +166,12 @@ export function answerAgentBrowserCommands(
     command: string[],
     cb: ExecFileCallback,
     args: string[],
-    child: FakeAgentBrowserChild
+    child: FakeAgentBrowserChild,
+    opts: { env?: NodeJS.ProcessEnv }
   ) => void
 ): void {
   execFileMock.mockImplementation(
-    (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+    (_bin: string, args: string[], opts: { env?: NodeJS.ProcessEnv }, cb: ExecFileCallback) => {
       const child = createFakeAgentBrowserChild({
         kill: vi.fn(),
         stdin: {
@@ -182,29 +183,29 @@ export function answerAgentBrowserCommands(
               // Commands outside a batch were answered from argv at spawn.
               return
             }
-            answer(agentBrowserCommandOf(args, text), cb, args, child)
+            answer(agentBrowserCommandOf(args, text), cb, args, child, opts)
           }
         }
       })
       if (!args.includes('batch')) {
-        answer(agentBrowserCommandOf(args), cb, args, child)
+        answer(agentBrowserCommandOf(args), cb, args, child, opts)
       }
       return child
     }
   )
 }
 
-export type AgentBrowserSpawn = { command: string[]; args: string[] }
+export type AgentBrowserSpawn = { command: string[]; args: string[]; cdp: string | undefined }
 
-/** Succeeds every spawn with `data` and records each command beside its argv. */
+/** Succeeds every spawn with `data` and records each command beside its argv and CDP endpoint. */
 export function succeedRecordingAgentBrowserSpawns(
   execFileMock: Mock,
   stdinWrites: string[],
   data: unknown
 ): AgentBrowserSpawn[] {
   const spawns: AgentBrowserSpawn[] = []
-  answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, args) => {
-    spawns.push({ command, args })
+  answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, args, _child, opts) => {
+    spawns.push({ command, args, cdp: opts.env?.AGENT_BROWSER_CDP })
     cb(null, JSON.stringify({ success: true, data }), '')
   })
   return spawns
