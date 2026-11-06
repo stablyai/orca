@@ -9,7 +9,8 @@ const MSYS_BASH_IMAGE = 'bash.exe'
 
 /** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
  * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
- * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
+ * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents.
+ * A shell-only job still needs a PPID-tree scan: packaged shells (MSIX pwsh) run their children outside the job object (#39037). */
 export async function isWindowsShellAloneInJob(
   shellPid: number,
   spawnedShellPath: string,
@@ -21,7 +22,16 @@ export async function isWindowsShellAloneInJob(
     return false
   }
   if (jobProcessIds.size === 1) {
-    return true
+    const rows = await readIdentityTable()
+    const shell = rows.find((row) => row.pid === shellPid)
+    if (!shell?.name) {
+      return false
+    }
+    return (
+      collectDescendantsFromIndex(buildProcessTableIndex(rows), shellPid, (row) =>
+        startedBefore(row.creationTimeMs, shell.creationTimeMs)
+      ).length === 0
+    )
   }
   const isLauncher = isGitForWindowsBashLauncherPath(spawnedShellPath)
   if (!isLauncher && !readConsoleAttachedProcessIds) {

@@ -191,12 +191,34 @@ it('keeps missing Windows job membership unverifiable', async () => {
   })
 })
 
-it('reports an idle Windows shell only when the owned job contains the shell alone', async () => {
+it('reports an idle Windows shell only when the PPID tree clears a shell-only job', async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
   members.mockReturnValue(new Set([100]))
+  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'pwsh.exe' }])
   expect(await inspect(createHandle())).toMatchObject({ hasChildProcesses: false })
-  expect(readWindows).not.toHaveBeenCalled()
+})
+
+it('keeps the Windows close guard live when MSIX shell children escape the job (#39037)', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  resolveWindows.mockResolvedValue({ available: true, processName: null })
+  members.mockReturnValue(new Set([100]))
+  const msixPwsh =
+    'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\\pwsh.exe'
+  readWindows.mockResolvedValue([
+    { pid: 100, ppid: 1, name: 'pwsh.exe', creationTimeMs: 2_000 },
+    { pid: 102, ppid: 100, name: 'claude.exe', creationTimeMs: 3_000 }
+  ])
+  expect(await inspect(createHandle(false, msixPwsh))).toMatchObject({
+    hasChildProcesses: true,
+    childProcessEvidence: 'children'
+  })
+  // A ppid older than the shell is pid reuse, not an escaped child.
+  readWindows.mockResolvedValue([
+    { pid: 100, ppid: 1, name: 'pwsh.exe', creationTimeMs: 2_000 },
+    { pid: 102, ppid: 100, name: 'unrelated.exe', creationTimeMs: 1_000 }
+  ])
+  expect(await inspect(createHandle(false, msixPwsh))).toMatchObject({ hasChildProcesses: false })
 })
 
 it('accepts only a complete actual-shell Git Bash launch chain', async () => {
