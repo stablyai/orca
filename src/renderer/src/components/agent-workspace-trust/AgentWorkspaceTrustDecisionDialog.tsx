@@ -38,13 +38,13 @@ export function AgentWorkspaceTrustDecisionDialogView({
       onInteractOutside={(event) => event.preventDefault()}
     >
       <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-sm">
-          <ShieldQuestion className="size-4 text-muted-foreground" aria-hidden="true" />
-          {copy.promptTitle(repoName)}
+        <DialogTitle size="compact">
+          <span className="flex items-center gap-2">
+            <ShieldQuestion className="size-4 text-muted-foreground" aria-hidden="true" />
+            {copy.promptTitle(repoName)}
+          </span>
         </DialogTitle>
-        <DialogDescription className="text-xs leading-relaxed">
-          {copy.promptDescription()}
-        </DialogDescription>
+        <DialogDescription>{copy.promptDescription()}</DialogDescription>
       </DialogHeader>
       <p className="text-xs text-muted-foreground">{copy.promptRemembered()}</p>
       <DialogFooter>

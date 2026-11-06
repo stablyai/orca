@@ -34,10 +34,15 @@ beforeEach(() => {
 
 describe('first agent launch in a repo', () => {
   it('holds the launch until the answer is saved, asking once for all its worktrees', async () => {
-    const first = awaitAgentWorkspaceTrustDecision({ launchAgent: 'claude', workspaceId: WORKTREE })
+    const first = awaitAgentWorkspaceTrustDecision({
+      launchAgent: 'claude',
+      workspaceId: WORKTREE,
+      connectionId: null
+    })
     const second = awaitAgentWorkspaceTrustDecision({
       launchAgent: 'codex',
-      workspaceId: 'repo-1::/repos/app/other'
+      workspaceId: 'repo-1::/repos/app/other',
+      connectionId: null
     })
     expect(first).not.toBeNull()
     expect(second).toBe(first)
@@ -52,21 +57,33 @@ describe('first agent launch in a repo', () => {
       { hostId: 'local' }
     )
     expect(getAgentWorkspaceTrustDecisionRequest()).toBeNull()
-    expect(awaitAgentWorkspaceTrustDecision({ launchAgent: 'claude', workspaceId: WORKTREE })).toBe(
-      null
-    )
+    expect(
+      awaitAgentWorkspaceTrustDecision({
+        launchAgent: 'claude',
+        workspaceId: WORKTREE,
+        connectionId: null
+      })
+    ).toBe(null)
   })
 
   it('does not ask when folder trust is off globally', () => {
     state.settings = { agentWorkspaceTrustEnabled: false }
-    expect(awaitAgentWorkspaceTrustDecision({ launchAgent: 'claude', workspaceId: WORKTREE })).toBe(
-      null
-    )
+    expect(
+      awaitAgentWorkspaceTrustDecision({
+        launchAgent: 'claude',
+        workspaceId: WORKTREE,
+        connectionId: null
+      })
+    ).toBe(null)
   })
 
   it('does not ask for folder workspaces, which have no repo to remember the answer', () => {
     expect(
-      awaitAgentWorkspaceTrustDecision({ launchAgent: 'claude', workspaceId: 'folder:abc' })
+      awaitAgentWorkspaceTrustDecision({
+        launchAgent: 'claude',
+        workspaceId: 'folder:abc',
+        connectionId: null
+      })
     ).toBe(null)
   })
 })

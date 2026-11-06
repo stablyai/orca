@@ -86,7 +86,8 @@ export async function connectIpcPty(
         ? null
         : awaitAgentWorkspaceTrustDecision({
             launchAgent: options.launchAgent ?? transportOptions.launchAgent,
-            workspaceId: transportOptions.worktreeId
+            workspaceId: transportOptions.worktreeId,
+            connectionId: transportOptions.connectionId
           })
     if (trustDecision) {
       await trustDecision
