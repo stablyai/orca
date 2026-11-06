@@ -81,6 +81,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
+  const taskActions = useMemo(() => structuredAgentSessionTaskActions(mutate), [mutate])
   const journalItems = transportState.journalItems
   const {
     conversationCommands,
@@ -293,7 +294,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
-    ...structuredAgentSessionTaskActions(mutate),
+    ...taskActions,
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
       respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,

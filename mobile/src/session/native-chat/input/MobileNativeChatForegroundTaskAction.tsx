@@ -51,17 +51,17 @@ export function MobileNativeChatForegroundTasksProvider(props: {
     },
     [background]
   )
-  const source = props.tasks
+  const tasks =
+    props.tasks?.rowContext.transportObservation === 'live'
+      ? props.tasks.view.foregroundTasks
+      : undefined
   const value = useMemo(
     () => ({
-      tasks:
-        source?.rowContext.transportObservation === 'live'
-          ? (source.view.foregroundTasks ?? [])
-          : [],
+      tasks: tasks ?? [],
       pending,
       run
     }),
-    [source, pending, run]
+    [tasks, pending, run]
   )
   return <Context value={value}>{props.children}</Context>
 }
