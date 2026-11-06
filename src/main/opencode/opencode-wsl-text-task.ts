@@ -15,6 +15,7 @@ import { killSourceControlAgentProcess } from '../text-generation/source-control
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../text-generation/source-control-generation-limits'
 import { waitForProcessExitUntil } from '../provider-process/provider-process-exit-deadline'
 import type {
+  TextGenerationOperation,
   SpawnedSourceControlAgentProcess,
   SpawnSourceControlAgent
 } from '../text-generation/source-control-text-generation-types'
@@ -37,6 +38,7 @@ export type OpenCodeWslTextTask = {
   prompt: string
   runArgs: readonly string[]
   legacyVariantFlag?: boolean
+  operation?: TextGenerationOperation
   signal: AbortSignal
   /** Checked here before the guest starts; the guest cannot call back. */
   shouldExecute?: () => boolean
@@ -192,6 +194,7 @@ export async function runOpenCodeWslTextTask(
         // Existing WSL launches translate Windows paths in every argument, e.g. `--file C:\x`.
         runArgs: translateArgsForWsl([...input.runArgs]),
         legacyVariantFlag: input.legacyVariantFlag,
+        operation: input.operation,
         commandEnv: input.commandEnv,
         timeoutMs: Math.max(1, input.timeoutMs - (Date.now() - startedAt))
       })}\n`

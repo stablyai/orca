@@ -26,8 +26,8 @@ function guestHome() {
     join(home, '.profile'),
     [
       'echo Profile startup banner',
-      'export OPENCODE_CONFIG=rc OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD=rc OPENCODE_PASSWORD=rc',
-      `orca_fixture_opencode() { if [ "$1" = --version ]; then printf '1.18.31\\n'; else printf 'function:%s cwd:%s config:%s password:%s username:%s v2:%s\\n' "$*" "$(pwd)" "$OPENCODE_CONFIG" "$OPENCODE_SERVER_PASSWORD" "$OPENCODE_SERVER_USERNAME" "$OPENCODE_PASSWORD"; fi; }`
+      'export OPENCODE_CONFIG=rc OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD=rc OPENCODE_PASSWORD=rc OPENCODE_DISABLE_SHARE=0',
+      `orca_fixture_opencode() { if [ "$1" = --version ]; then printf '1.18.31\\n'; else printf 'function:%s cwd:%s config:%s password:%s username:%s v2:%s share:%s\\n' "$*" "$(pwd)" "$OPENCODE_CONFIG" "$OPENCODE_SERVER_PASSWORD" "$OPENCODE_SERVER_USERNAME" "$OPENCODE_PASSWORD" "$OPENCODE_DISABLE_SHARE"; fi; }`
     ].join('\n')
   )
   writeFileSync(join(home, '.zprofile'), "emulate sh -c '. ~/.profile'\n")
@@ -76,17 +76,22 @@ describe.skipIf(process.platform === 'win32')('guestLoginShellLaunch', () => {
         useCwdForNative: true
       },
       guest.env,
-      { OPENCODE_SERVER_USERNAME: 'custom', OPENCODE_PASSWORD: 'inline' },
+      {
+        OPENCODE_SERVER_USERNAME: 'custom',
+        OPENCODE_PASSWORD: 'inline',
+        OPENCODE_DISABLE_SHARE: '0'
+      },
       {
         OPENCODE_SERVER_USERNAME: 'opencode',
         OPENCODE_SERVER_PASSWORD: 'task-secret-7f3',
-        OPENCODE_PASSWORD: 'task-v2-secret'
+        OPENCODE_PASSWORD: 'task-v2-secret',
+        OPENCODE_DISABLE_SHARE: '1'
       }
     )
 
     expect(launch.args.join(' ')).not.toContain('task-secret-7f3')
     expect(run(launch)).toBe(
-      `function:serve --port 0 cwd:${guest.repo} config:rc password:task-secret-7f3 username:opencode v2:task-v2-secret`
+      `function:serve --port 0 cwd:${guest.repo} config:rc password:task-secret-7f3 username:opencode v2:task-v2-secret share:1`
     )
   })
 

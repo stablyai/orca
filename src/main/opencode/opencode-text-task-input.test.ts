@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { prepareOpenCodeTextTaskInput } from './opencode-text-task-input'
 
@@ -231,4 +231,48 @@ it('projects npx delimiter arguments without consuming the provider terminator',
   }
   expect(positional.plan.openCodeTask.prefixArgs).toEqual(['--', 'opencode'])
   expect(positional.plan.openCodeTask.runArgs.slice(0, 2)).toEqual(['--', 'literal'])
+})
+
+it('does no text decoding or binary classification for known MIME files at N and 10N bytes', async () => {
+  const cwd = await workspace()
+  for (const size of [1024 * 1024, 10 * 1024 * 1024]) {
+    const bytes = Buffer.alloc(size, 65)
+    await writeFile(path.join(cwd, 'document.pdf'), bytes)
+    const decode = vi.spyOn(Buffer.prototype, 'toString')
+    const classify = vi.spyOn(Buffer.prototype, 'includes')
+    const input = await prepareOpenCodeTextTaskInput({
+      version: 'v2',
+      cwd,
+      prompt: 'input',
+      runArgs: ['--file', 'document.pdf'],
+      signal: new AbortController().signal
+    })
+    const decodedBytes = decode.mock.calls.reduce(
+      (count, args, index) => count + (args[0] === 'utf8' ? decode.mock.contexts[index].length : 0),
+      0
+    )
+    const classifiedBytes = classify.mock.contexts.reduce(
+      (count, buffer) => count + buffer.length,
+      0
+    )
+    decode.mockRestore()
+    classify.mockRestore()
+    expect(decodedBytes).toBe(0)
+    expect(classifiedBytes).toBe(0)
+    expect(input.prompt).toBe('input')
+    expect(input.v2Files).toEqual([
+      { name: 'document.pdf', uri: `data:application/pdf;base64,${bytes.toString('base64')}` }
+    ])
+  }
+  await writeFile(path.join(cwd, 'unknown.data'), Buffer.from([0, 255, 1]))
+  const input = await prepareOpenCodeTextTaskInput({
+    version: 'v2',
+    cwd,
+    prompt: 'input',
+    runArgs: ['--file', 'unknown.data'],
+    signal: new AbortController().signal
+  })
+  expect(input.v2Files).toEqual([
+    { name: 'unknown.data', uri: 'data:application/octet-stream;base64,AP8B' }
+  ])
 })

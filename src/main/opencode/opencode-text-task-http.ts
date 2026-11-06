@@ -34,18 +34,30 @@ async function readBounded(response: Response): Promise<string> {
   }
 }
 
-export function createOpenCodeTextTaskHttp(url: string, password: string, query: string) {
+export function openCodeTextTaskUrl(url: string, path: string, version: 'v1' | 'v2'): string {
+  return version === 'v1' ? url.replace(/\/$/, '') + path : new URL(path, url).toString()
+}
+
+export function createOpenCodeTextTaskHttp(
+  url: string,
+  password: string | undefined,
+  query: string,
+  username = 'opencode',
+  version: 'v1' | 'v2' = 'v1'
+) {
   const headers = {
-    authorization: `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}`,
+    ...(password
+      ? { authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` }
+      : {}),
     'content-type': 'application/json'
   }
-  const request = async (
+  const requestRaw = async (
     method: string,
     path: string,
     body: unknown,
     signal: AbortSignal
   ): Promise<unknown> => {
-    const response = await fetch(`${url}${path}${query}`, {
+    const response = await fetch(openCodeTextTaskUrl(url, `${path}${query}`, version), {
       method,
       headers,
       signal,
@@ -56,7 +68,8 @@ export function createOpenCodeTextTaskHttp(url: string, password: string, query:
       throw new Error('OpenCode rejected the text generation request')
     }
     const text = await readBounded(response)
-    return text ? unwrap(JSON.parse(text)) : undefined
+    return text ? JSON.parse(text) : undefined
   }
-  return { headers, request }
+  const request: typeof requestRaw = async (...args) => unwrap(await requestRaw(...args))
+  return { headers, request, requestRaw }
 }

@@ -19,6 +19,15 @@ const request = z.object({
   /** Inline command assignments; applied after the inner login rc, as the CLI route did. */
   commandEnv: z.record(z.string(), z.string()).optional(),
   legacyVariantFlag: z.boolean().optional(),
+  operation: z
+    .enum([
+      'commit-message',
+      'pull-request-fields',
+      'branch-name',
+      'jira-issue-summary',
+      'conversation-name'
+    ])
+    .optional(),
   timeoutMs: z.number().int().positive()
 })
 
@@ -61,6 +70,7 @@ async function start(line: string): Promise<void> {
       prompt: task.prompt,
       runArgs: task.runArgs,
       legacyVariantFlag: task.legacyVariantFlag,
+      operation: task.operation,
       signal: AbortSignal.any([launcher.signal, AbortSignal.timeout(task.timeoutMs)]),
       readVersionStdout: (stdout) => readVersionStdout?.(stdout) ?? null,
       spawn: (input, context) => {

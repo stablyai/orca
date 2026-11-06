@@ -1,14 +1,27 @@
-import { randomUUID } from 'node:crypto'
+import { openCodeTextTaskEvents } from './opencode-text-task-events'
+import { prepareOpenCodeTextTaskPolicy } from './opencode-text-task-policy'
+import { randomBytes } from 'node:crypto'
+import { openCodeTextTaskTarget } from './opencode-text-task-target'
+import type { TextGenerationOperation } from '../text-generation/source-control-text-generation-types'
 import { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 import { z } from 'zod'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../text-generation/source-control-generation-limits'
 import type { OpenCodeTextTaskInput } from './opencode-text-task-input'
 
 export type OpenCodeTextTaskSession = {
   version: 'v1' | 'v2'
   url: string
-  password: string
+  password?: string
+  username?: string
+  exclusiveServer?: boolean
+  operation?: TextGenerationOperation
+  shouldExecute?: () => boolean
+  sessionId?: string
+  continue?: boolean
+  fork?: boolean
+  share?: boolean
+  external?: OpenCodeTextTaskInput['external']
+  externalDirectory?: string
   directory: string
   prompt: string
   agent?: string
@@ -21,215 +34,196 @@ export type OpenCodeTextTaskSession = {
   signal: AbortSignal
 }
 
-const RULES = [
-  ['*', '*', 'deny'],
-  ['read', '*', 'allow'],
-  ['grep', '*', 'allow'],
-  ['glob', '*', 'allow'],
-  ['external_directory', '*', 'allow'],
-  ['read', 'mcp:*', 'deny']
-] as const
-const session = z.looseObject({ id: z.string().min(1) })
-const event = z.looseObject({
-  type: z.string(),
-  data: z.looseObject({ sessionID: z.string() })
-})
-const textEvent = z.looseObject({
-  assistantMessageID: z.string(),
-  ordinal: z.number(),
-  text: z.string()
-})
-const permissionEvent = z.looseObject({ id: z.string() })
 const reply = z.looseObject({
-  info: z.looseObject({ error: z.unknown().optional() }),
+  info: z.looseObject({
+    id: z.string().optional(),
+    error: z.unknown().optional(),
+    parentID: z.string().optional()
+  }),
   parts: z.array(z.looseObject({ type: z.string(), text: z.string().optional() }))
 })
 
-/** The caller owns an exclusive server; session policy is applied before any semantic input. */
+let messageTimestamp = 0
+let messageCounter = 0
+function nextMessageID(): string {
+  const now = Date.now()
+  messageCounter = now === messageTimestamp ? messageCounter + 1 : 1
+  messageTimestamp = now
+  const time = BigInt.asUintN(48, BigInt(now) * 4096n + BigInt(messageCounter))
+  const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+  const suffix = Array.from(randomBytes(14), (byte) => alphabet[byte % 62]).join('')
+  return `msg_${time.toString(16).padStart(12, '0')}${suffix}`
+}
+
+/** Task IDs, history and servers have distinct owners; policy precedes semantic input. */
 export async function runOpenCodeTextTaskSession(input: OpenCodeTextTaskSession): Promise<string> {
   const v2 = input.version === 'v2'
   const base = v2 ? '/api/session' : '/session'
-  const query = v2 ? '' : `?directory=${encodeURIComponent(input.directory)}`
-  const { headers, request } = createOpenCodeTextTaskHttp(input.url, input.password, query)
-  const terminal = Promise.withResolvers<string>()
-  void terminal.promise.catch(() => {})
-  const stream = new AbortController()
-  const lost = new AbortController()
-  const activeSignal = AbortSignal.any([input.signal, lost.signal])
-  const streamSignal = AbortSignal.any([stream.signal, input.signal])
-  let streamDone: Promise<void> | undefined
-  let sessionID = ''
-  let completed = false
-  const texts = new Map<string, string>()
-  const onEvent = async (value: unknown): Promise<void> => {
-    const parsed = event.safeParse(value)
-    if (!parsed.success || parsed.data.data.sessionID !== sessionID || !sessionID) {
-      return
-    }
-    const { type, data } = parsed.data
-    if (type === 'session.text.ended') {
-      const text = textEvent.parse(data)
-      texts.set(`${text.assistantMessageID}:${text.ordinal}`, text.text)
-      if (
-        [...texts.values()].reduce((bytes, text) => bytes + Buffer.byteLength(text), 0) >
-        MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES
-      ) {
-        throw new Error('OpenCode text generation exceeded its output limit')
-      }
-    } else if (type === 'permission.asked') {
-      const permission = permissionEvent.parse(data)
-      await request(
-        'POST',
-        `${base}/${encodeURIComponent(sessionID)}/permission/${encodeURIComponent(permission.id)}/reply`,
-        {
-          decision: 'reject',
-          message: 'Tools are unavailable for this text task.'
-        },
-        streamSignal
-      )
-    } else if (type === 'session.execution.succeeded') {
-      terminal.resolve([...texts.values()].join('\n').trim())
-    } else if (type === 'session.execution.failed' || type === 'session.execution.interrupted') {
-      terminal.reject(new Error('OpenCode did not complete text generation'))
+  let directory = input.directory
+  const initialHttp = createOpenCodeTextTaskHttp(
+    input.url,
+    input.password,
+    '',
+    input.username,
+    input.version
+  )
+  let http = initialHttp
+  const request: typeof http.request = (...args) => http.request(...args)
+  const checkCurrent = () => {
+    input.signal.throwIfAborted()
+    if (input.shouldExecute?.() === false) {
+      throw new Error('OpenCode naming task was superseded')
     }
   }
+  const messageID = nextMessageID()
+  const lost = new AbortController()
+  const activeSignal = AbortSignal.any([input.signal, lost.signal])
+  let sessionID = ''
+  let completed = false
+  let owned = false
+  let actualSubtask = false
+  let submitted = false
+  let admission: Promise<unknown> | undefined
+  const ownedTree = new Set<string>()
+  const events = openCodeTextTaskEvents({
+    version: input.version,
+    url: input.url,
+    signal: input.signal,
+    lost,
+    messageID,
+    context: () => ({ sessionID, owned, ownedTree, directory, http })
+  })
   try {
     input.signal.throwIfAborted()
     if (v2) {
-      // Subscribe before session creation: execution events are volatile.
-      const response = await fetch(`${input.url}/api/event`, { headers, signal: streamSignal })
-      if (!response.ok || !response.body) {
-        throw new Error('OpenCode event stream is unavailable')
-      }
-      const reader = response.body.getReader()
-      streamDone = (async () => {
-        const decoder = new TextDecoder()
-        let buffered = ''
-        try {
-          for (;;) {
-            const chunk = await reader.read()
-            if (chunk.done) {
-              throw new Error('OpenCode event stream closed before completion')
-            }
-            buffered += decoder.decode(chunk.value, { stream: true })
-            if (Buffer.byteLength(buffered) > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
-              throw new Error('OpenCode text generation exceeded its output limit')
-            }
-            let boundary = /\r?\n\r?\n/.exec(buffered)
-            while (boundary) {
-              const frame = buffered.slice(0, boundary.index)
-              buffered = buffered.slice(boundary.index + boundary[0].length)
-              const data = frame
-                .split(/\r?\n/)
-                .filter((line) => line.startsWith('data:'))
-                .map((line) => line.slice(5).trimStart())
-                .join('\n')
-              if (data) {
-                await onEvent(JSON.parse(data))
-              }
-              boundary = /\r?\n\r?\n/.exec(buffered)
-            }
-          }
-        } finally {
-          await reader.cancel().catch(() => {})
-          reader.releaseLock()
-        }
-      })().catch((error: unknown) => {
-        terminal.reject(error)
-        lost.abort(error)
-      })
+      await events.subscribe()
     }
     activeSignal.throwIfAborted()
     let agent = input.agent || undefined
-    let agents: { name: string; mode: string }[] | undefined
-    if (!v2 && agent) {
-      agents = z
-        .array(z.looseObject({ name: z.string(), mode: z.string() }))
-        .parse(await request('GET', '/agent', undefined, activeSignal))
-      const selected = agents.find((candidate) => candidate.name === agent)
-      // The local CLI falls back to its default primary for missing or subagent selections.
-      if (!selected || selected.mode === 'subagent') {
-        agent = undefined
-      }
-    }
-    const title = input.title ?? `Orca text generation ${randomUUID()}`
-    const created = await request(
-      'POST',
-      base,
-      {
-        title,
-        ...(agent ? { agent } : {}),
-        ...(v2
-          ? {
-              location: { directory: input.directory },
-              ...(input.model
-                ? {
-                    model: {
-                      providerID: input.model.providerID,
-                      id: input.model.modelID,
-                      ...(input.variant ? { variant: input.variant } : {})
-                    }
-                  }
-                : {}),
-              permissions: RULES.map(([action, resource, effect]) => ({ action, resource, effect }))
-            }
-          : {
-              permission: RULES.map(([permission, pattern, action]) => ({
-                permission,
-                pattern,
-                action
-              }))
-            })
+    const target = await openCodeTextTaskTarget({
+      task: input,
+      version: input.version,
+      directory,
+      http: initialHttp,
+      signal: activeSignal,
+      allocated: (id, taskDirectory) => {
+        sessionID = id
+        directory = taskDirectory
+        owned = true
+        ownedTree.add(id)
+        http = createOpenCodeTextTaskHttp(
+          input.url,
+          input.password,
+          v2 ? '' : `?directory=${encodeURIComponent(directory)}`,
+          input.username,
+          input.version
+        )
       },
-      // Recover the owned ID even if cancellation arrives while creation is in flight.
-      AbortSignal.timeout(10_000)
-    )
-    sessionID = session.parse(created).id
+      prepare: async (taskDirectory) => {
+        directory = taskDirectory
+        http = createOpenCodeTextTaskHttp(
+          input.url,
+          input.password,
+          v2 ? '' : `?directory=${encodeURIComponent(directory)}`,
+          input.username,
+          input.version
+        )
+        const prepared = await prepareOpenCodeTextTaskPolicy(input, http, activeSignal)
+        agent = prepared.agent
+        actualSubtask = prepared.actualSubtask
+        return prepared
+      }
+    })
+    sessionID = target.id
+    directory = target.directory
+    owned = target.owned
     activeSignal.throwIfAborted()
-    let text: string
-    if (v2) {
+    if (!v2 && owned && actualSubtask) {
+      await events.subscribe()
+    }
+    if (input.share) {
       await request(
         'POST',
-        `${base}/${encodeURIComponent(sessionID)}/prompt`,
-        { text: input.prompt, ...(input.v2Files?.length ? { files: input.v2Files } : {}) },
+        `${base}/${encodeURIComponent(sessionID)}/share`,
+        undefined,
         activeSignal
-      )
-      text = await waitForPromiseWithSignal(terminal.promise, activeSignal)
-    } else {
-      if (input.command) {
-        const commands = z
-          .array(
-            z.looseObject({
-              name: z.string(),
-              agent: z.string().optional(),
-              subtask: z.boolean().optional()
-            })
-          )
-          .parse(await request('GET', '/command', undefined, activeSignal))
-        const command = commands.find((command) => command.name === input.command)
-        if (!command) {
-          throw new Error('OpenCode command is unavailable')
-        }
-        if (command.agent && !agents) {
-          agents = z
-            .array(z.looseObject({ name: z.string(), mode: z.string() }))
-            .parse(await request('GET', '/agent', undefined, activeSignal))
-        }
-        const commandAgent = command.agent ?? agent
-        // Explicit subtask commands create child histories with a different read-policy contract.
-        if (
-          command.subtask === true ||
-          (agents?.find((candidate) => candidate.name === commandAgent)?.mode === 'subagent' &&
-            command.subtask !== false)
-        ) {
-          throw new Error('OpenCode subtask command cannot run as a private text task')
-        }
+      ).catch(() => {})
+      activeSignal.throwIfAborted()
+    }
+    let text: string
+    if (v2) {
+      if (input.agent && (!owned || input.fork)) {
+        await request(
+          'POST',
+          `${base}/${encodeURIComponent(sessionID)}/agent`,
+          { agent: input.agent },
+          activeSignal
+        )
       }
+      let selectedModel = input.model
+        ? {
+            providerID: input.model.providerID,
+            id: input.model.modelID,
+            ...(input.variant ? { variant: input.variant } : {})
+          }
+        : undefined
+      if (!selectedModel && input.variant) {
+        const current = z
+          .looseObject({
+            model: z
+              .looseObject({
+                providerID: z.string(),
+                id: z.string(),
+                variant: z.string().optional()
+              })
+              .optional()
+          })
+          .parse(
+            await request(
+              'GET',
+              `${base}/${encodeURIComponent(sessionID)}`,
+              undefined,
+              activeSignal
+            )
+          )
+        const model =
+          current.model ??
+          z
+            .looseObject({ providerID: z.string(), id: z.string() })
+            .parse(await request('GET', '/api/model/default', undefined, activeSignal))
+        selectedModel = { ...model, variant: input.variant }
+      }
+      if (selectedModel && (!owned || input.fork || !input.model)) {
+        await request(
+          'POST',
+          `${base}/${encodeURIComponent(sessionID)}/model`,
+          { model: selectedModel },
+          activeSignal
+        )
+      }
+      checkCurrent()
+      submitted = true
+      admission = request(
+        'POST',
+        `${base}/${encodeURIComponent(sessionID)}/prompt`,
+        {
+          id: messageID,
+          delivery: 'steer',
+          text: input.prompt,
+          ...(input.v2Files?.length ? { files: input.v2Files } : {})
+        },
+        AbortSignal.timeout(10_000)
+      )
+      await waitForPromiseWithSignal(admission, activeSignal)
+      text = await waitForPromiseWithSignal(events.completion, activeSignal)
+    } else {
+      checkCurrent()
       const result = reply.parse(
         await request(
           'POST',
           `${base}/${encodeURIComponent(sessionID)}/${input.command ? 'command' : 'message'}`,
           {
+            messageID,
             ...(input.model
               ? {
                   model: input.command
@@ -261,11 +255,10 @@ export async function runOpenCodeTextTaskSession(input: OpenCodeTextTaskSession)
     completed = true
     return text
   } finally {
-    stream.abort()
-    await streamDone
+    await events.close()
     if (sessionID) {
       const path = `${base}/${encodeURIComponent(sessionID)}`
-      if (!completed) {
+      if (!completed && (owned || input.exclusiveServer !== false)) {
         await request(
           'POST',
           `${path}/${v2 ? 'interrupt' : 'abort'}`,
@@ -273,9 +266,20 @@ export async function runOpenCodeTextTaskSession(input: OpenCodeTextTaskSession)
           AbortSignal.timeout(2_000)
         ).catch(() => console.warn('OpenCode text task interruption cleanup failed'))
       }
-      await request('DELETE', path, undefined, AbortSignal.timeout(2_000)).catch(() =>
-        console.warn('OpenCode text task session cleanup failed')
-      )
+      if (!owned && input.exclusiveServer === false && v2 && submitted && !events.promoted) {
+        await admission?.catch(() => {})
+        await request(
+          'DELETE',
+          `${path}/inbox/${encodeURIComponent(messageID)}`,
+          undefined,
+          AbortSignal.timeout(2_000)
+        ).catch(() => console.warn('OpenCode naming input cancellation failed'))
+      }
+      if (owned && !input.share) {
+        await request('DELETE', path, undefined, AbortSignal.timeout(2_000)).catch(() =>
+          console.warn('OpenCode text task session cleanup failed')
+        )
+      }
     }
   }
 }

@@ -195,3 +195,89 @@ describe('runOwnedOpenCodeTextTask', () => {
     await expect(runOwnedOpenCodeTextTask(input)).resolves.toBe('Harbor Lantern')
   })
 })
+
+it.each(['v1', 'v2'] as const)(
+  'uses the selected external naming server’s protocol and URL (%s)',
+  async (version) => {
+    const server = createServer((request, response) => {
+      if (request.url !== (version === 'v1' ? '/prefix/global/health' : '/api/info')) {
+        response.statusCode = 400
+      }
+      response.setHeader('content-type', 'application/json')
+      response.end(
+        JSON.stringify({
+          version: version === 'v1' ? '1.18.31' : '2.0.14',
+          pid: 23,
+          urls: [],
+          paths: { tmp: '/tmp' }
+        })
+      )
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('No endpoint')
+      }
+      const url = `http://127.0.0.1:${address.port}`
+      const cli = fakeOpenCode('1.18.31')
+      vi.mocked(runOpenCodeTextTaskSession).mockResolvedValueOnce('Harbor Lantern')
+      const input = {
+        ...task(cli),
+        operation: 'conversation-name' as const,
+        runArgs: [
+          version === 'v1' ? '--attach' : '--server',
+          `${url}/prefix/`,
+          '--session',
+          'saved',
+          '--model',
+          'provider/model',
+          '--variant',
+          'high'
+        ],
+        legacyVariantFlag: true
+      }
+      await expect(runOwnedOpenCodeTextTask(input)).resolves.toBe('Harbor Lantern')
+      expect(cli.spawn).not.toHaveBeenCalled()
+      expect(cli.stop).not.toHaveBeenCalled()
+      expect(vi.mocked(runOpenCodeTextTaskSession).mock.lastCall?.[0]).toMatchObject({
+        version,
+        url: `${url}/prefix`,
+        sessionId: 'saved',
+        model: { providerID: 'provider', modelID: 'model' },
+        variant: 'high',
+        exclusiveServer: false
+      })
+      if (version === 'v2') {
+        await expect(
+          runOwnedOpenCodeTextTask({ ...input, legacyVariantFlag: false })
+        ).rejects.toMatchObject({ stage: 'startup' })
+      }
+      await expect(
+        runOwnedOpenCodeTextTask({ ...input, operation: 'commit-message' })
+      ).rejects.toMatchObject({ stage: 'startup' })
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  }
+)
+
+it('suppresses implicit publication before owned startup while retaining explicit share configuration', async () => {
+  for (const share of [false, true]) {
+    const cli = fakeOpenCode('1.18.31')
+    vi.mocked(runOpenCodeTextTaskSession).mockResolvedValueOnce('Harbor Lantern')
+    const input = {
+      ...task(cli),
+      operation: 'conversation-name' as const,
+      runArgs: share ? ['--share'] : [],
+      env: { OPENCODE_DISABLE_SHARE: 'user-value', OPENCODE_CONFIG_CONTENT: '{"share":"auto"}' }
+    }
+    await expect(runOwnedOpenCodeTextTask(input)).resolves.toBe('Harbor Lantern')
+    expect(cli.children[1].input.env).toMatchObject({
+      OPENCODE_DISABLE_SHARE: share ? 'user-value' : '1',
+      OPENCODE_CONFIG_CONTENT: '{"share":"auto"}'
+    })
+    expect(cli.children[1].exitCode).not.toBeNull()
+  }
+})

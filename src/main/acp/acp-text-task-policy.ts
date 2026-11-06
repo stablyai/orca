@@ -1,3 +1,5 @@
+import { AcpRpcError } from './acp-errors'
+import type { AcpStructuredConnection } from './acp-structured-connection'
 import { GROK_TEXT_TASK_ENV } from '../grok/grok-text-task'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
@@ -65,6 +67,7 @@ export function acpTextTaskArgs(spec: AcpLaunchSpec): string[] {
   const args = spec.args({ fullAccess: false, pluginDir: null })
   if (spec.agent === 'grok') {
     args.splice(1, 0, '--no-leader')
+    args.unshift('--permission-mode', 'default')
   }
   return args
 }
@@ -74,4 +77,22 @@ export function acpTextTaskEnv(
   env: Record<string, string>
 ): Record<string, string> {
   return agent === 'grok' ? { ...env, ...GROK_TEXT_TASK_ENV } : env
+}
+
+export function cleanupGrokTextTaskSession(
+  server: AcpStructuredConnection,
+  sessionId: string,
+  cwd: string | undefined,
+  logger: AcpStructuredSessionAdapterDeps['logger']
+): Promise<void> {
+  return cleanupAcpTextTaskProtocol(
+    () => server.requestSessionFreeExtension('_x.ai/session/delete', { sessionId, cwd }, 2_000),
+    logger
+  )
+}
+
+export function rejectAcpTextTaskWork(failed: AbortController): never {
+  const error = new AcpRpcError(-32601, 'Tools and user input are unavailable during chat naming')
+  failed.abort(error)
+  throw error
 }

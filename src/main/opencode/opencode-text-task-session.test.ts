@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { createServer, type ServerResponse } from 'node:http'
 import { once } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -87,6 +88,7 @@ it('v1 applies ordered session authority and preserves the selected native promp
   expect(
     requests.get('POST /session/ses_v1/message?directory=%2Fworkspace%20with%20spaces')
   ).toEqual({
+    messageID: expect.stringMatching(/^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/),
     model: { providerID: 'opencode', modelID: 'crouton-alpha-free' },
     agent: 'configured-agent',
     variant: 'low',
@@ -232,6 +234,7 @@ it('uses the native v1 command endpoint with its arguments and selected model', 
     })
   ).resolves.toBe('Harbor Lantern')
   expect(requests.get('POST /session/ses_command/command?directory=%2Fworkspace')).toEqual({
+    messageID: expect.stringMatching(/^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/),
     command: 'review',
     arguments: 'extra\ngenerated',
     agent: 'build',
@@ -301,6 +304,474 @@ it.each(['', 'missing', 'explore'])(
         signal: new AbortController().signal
       })
     ).resolves.toBe('Harbor Lantern')
-    expect(submitted).toEqual({ command: 'review', arguments: 'input' })
+    expect(submitted).toEqual({
+      command: 'review',
+      arguments: 'input',
+      messageID: expect.stringMatching(/^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    })
   }
 )
+
+it.each([false, true])(
+  'forks only the selected source and requires policy acknowledgement (reject=%s)',
+  async (rejectPolicy) => {
+    const requests: string[] = []
+    let policy: unknown
+    const url = await fixture((path, body, response) => {
+      requests.push(path)
+      if (path.startsWith('GET /session/saved?')) {
+        json(response, { id: 'saved', directory: '/workspace' })
+      } else if (path.startsWith('POST /session/saved/fork?')) {
+        json(response, { id: 'forked' })
+      } else if (path.startsWith('PATCH /session/forked?')) {
+        policy = body
+        if (rejectPolicy) {
+          response.statusCode = 400
+        }
+        json(response, rejectPolicy ? {} : { id: 'forked' })
+      } else if (path.startsWith('POST /session/forked/message?')) {
+        json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
+      } else {
+        json(response, true)
+      }
+    })
+    const result = runOpenCodeTextTaskSession({
+      version: 'v1',
+      url,
+      directory: '/workspace',
+      prompt: 'Name only',
+      operation: 'conversation-name',
+      sessionId: 'saved',
+      fork: true,
+      signal: new AbortController().signal
+    })
+    await (rejectPolicy
+      ? expect(result).rejects.toThrow('rejected')
+      : expect(result).resolves.toBe('Harbor Lantern'))
+    expect(policy).toMatchObject({
+      permission: [
+        { permission: '*', pattern: '*', action: 'deny' },
+        { permission: 'read', pattern: '*', action: 'allow' },
+        { permission: 'grep', pattern: '*', action: 'allow' },
+        { permission: 'glob', pattern: '*', action: 'allow' },
+        { permission: 'external_directory', pattern: '*', action: 'allow' },
+        { permission: 'read', pattern: 'mcp:*', action: 'deny' }
+      ]
+    })
+    expect(requests.some((path) => path.startsWith('POST /session/forked/message?'))).toBe(
+      !rejectPolicy
+    )
+    expect(requests).toContain('DELETE /session/forked?directory=%2Fworkspace')
+    expect(
+      requests.some((path) => /(?:PATCH|DELETE|POST) \/session\/saved\?(?:.*)/.test(path))
+    ).toBe(false)
+  }
+)
+
+it.each([
+  {
+    resume: false,
+    command: undefined,
+    parentID: 'msg_compaction_continue',
+    title: 'Harbor Lantern'
+  },
+  { resume: true, command: undefined, parentID: 'msg_replay', title: 'Harbor Lantern' },
+  {
+    resume: false,
+    command: 'inspect',
+    parentID: 'msg_subtask_compaction',
+    title: 'Harbor Lantern'
+  },
+  { resume: false, command: undefined, parentID: 'msg_other_caller', title: 'Shared run title' }
+])(
+  'uses the borrowed v1 HTTP response as best effort (%j)',
+  async ({ resume, command, parentID, title }) => {
+    const requests: string[] = []
+    const url = await fixture((path, body, response) => {
+      requests.push(path)
+      path = path.replace('/prefix/', '/')
+      if (path.startsWith('GET /session/saved?')) {
+        json(response, { id: 'saved', directory: '/old' })
+      } else if (path.startsWith('GET /session?')) {
+        json(response, [{ id: 'saved', directory: '/old' }])
+      } else if (path.startsWith('GET /agent?')) {
+        json(response, [{ name: 'reader', mode: 'subagent' }])
+      } else if (path.startsWith('GET /command?')) {
+        json(response, [{ name: 'inspect', agent: 'reader', subtask: true }])
+      } else if (path.startsWith(`POST /session/saved/${command ? 'command' : 'message'}?`)) {
+        expect(body).toMatchObject(
+          command
+            ? { command: 'inspect', arguments: 'Name only', model: 'configured/model' }
+            : {
+                parts: [{ type: 'text', text: 'Name only' }],
+                model: { providerID: 'configured', modelID: 'model' }
+              }
+        )
+        json(response, {
+          info: { id: 'msg_native_reply', parentID, role: 'assistant', time: { completed: 300 } },
+          parts: [{ type: 'text', text: title }]
+        })
+      } else {
+        response.statusCode = 400
+        json(response, {})
+      }
+    })
+    await expect(
+      runOpenCodeTextTaskSession({
+        version: 'v1',
+        url: `${url}/prefix/`,
+        directory: '/workspace',
+        externalDirectory: '/requested',
+        external: { url },
+        exclusiveServer: false,
+        prompt: 'Name only',
+        model: { providerID: 'configured', modelID: 'model' },
+        sessionId: resume ? undefined : 'saved',
+        continue: resume,
+        command,
+        operation: 'conversation-name',
+        signal: new AbortController().signal
+      })
+    ).resolves.toBe(title)
+    expect(requests).toEqual([
+      resume
+        ? 'GET /prefix/session?directory=%2Frequested'
+        : 'GET /prefix/session/saved?directory=%2Frequested',
+      ...(command
+        ? ['GET /prefix/agent?directory=%2Frequested', 'GET /prefix/command?directory=%2Frequested']
+        : []),
+      `POST /prefix/session/saved/${command ? 'command' : 'message'}?directory=%2Frequested`
+    ])
+  }
+)
+
+it('discards a cancelled borrowed v1 response without aborting or deleting its session', async () => {
+  const controller = new AbortController()
+  const submitted = Promise.withResolvers<void>()
+  const requests: string[] = []
+  let lateResponse: ServerResponse | undefined
+  const url = await fixture((path, _body, response) => {
+    requests.push(path)
+    if (path.startsWith('GET /session/saved')) {
+      json(response, { id: 'saved', directory: '/workspace' })
+    } else if (path.startsWith('POST /session/saved/message?')) {
+      lateResponse = response
+      submitted.resolve()
+    } else {
+      response.statusCode = 400
+      json(response, {})
+    }
+  })
+  const result = runOpenCodeTextTaskSession({
+    version: 'v1',
+    url,
+    directory: '/workspace',
+    external: { url },
+    exclusiveServer: false,
+    sessionId: 'saved',
+    operation: 'conversation-name',
+    prompt: 'Name only',
+    signal: controller.signal
+  })
+  const rejected = expect(result).rejects.toThrow('Renamed manually')
+  await submitted.promise
+  controller.abort(new Error('Renamed manually'))
+  await rejected
+  json(lateResponse!, {
+    info: { parentID: 'msg_compaction_continue' },
+    parts: [{ type: 'text', text: 'Late title' }]
+  })
+  expect(requests).toEqual([
+    'GET /session/saved',
+    'POST /session/saved/message?directory=%2Fworkspace'
+  ])
+})
+
+it.each([false, true])(
+  'correlates borrowed v2 admission and leaves unrelated work alone (superseded=%s)',
+  async (superseded) => {
+    const requests: string[] = []
+    let events: ServerResponse | undefined
+    const emit = (type: string, data: Record<string, unknown>) =>
+      events!.write(`data: ${JSON.stringify({ type, data: { sessionID: 'saved', ...data } })}\n\n`)
+    const url = await fixture((path, body, response) => {
+      requests.push(path)
+      if (path === 'GET /api/event') {
+        events = response
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.flushHeaders()
+      } else if (path === 'GET /api/session/saved') {
+        json(response, { data: { id: 'saved', location: { directory: '/server' } } })
+      } else if (path === 'POST /api/session/saved/prompt') {
+        const input = z.object({ id: z.string(), delivery: z.literal('steer') }).parse(body)
+        emit('session.text.ended', {
+          assistantMessageID: 'msg_earlier',
+          ordinal: 0,
+          text: 'Wrong title'
+        })
+        emit('session.execution.succeeded', {})
+        emit('session.inbox.delivered', { inboxID: input.id })
+        emit('session.compaction.started', { reason: 'auto', recent: 'msg_history' })
+        emit('session.compaction.ended', {
+          reason: 'auto',
+          text: 'This summary is context, not the requested title',
+          recent: 'msg_history',
+          model: { providerID: 'configured', id: 'model' },
+          cost: 0,
+          tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 0, write: 0 } }
+        })
+        emit('permission.asked', { id: 'per_other_owner' })
+        emit('session.step.started', { assistantMessageID: 'msg_ours' })
+        emit('session.text.ended', {
+          assistantMessageID: 'msg_ours',
+          ordinal: 0,
+          text: 'Harbor Lantern'
+        })
+        if (superseded) {
+          emit('session.inbox.delivered', { inboxID: 'msg_later_input' })
+        }
+        emit('session.execution.succeeded', {})
+        json(response, {})
+      } else {
+        json(response, {})
+      }
+    })
+    const result = runOpenCodeTextTaskSession({
+      version: 'v2',
+      url,
+      directory: '/client',
+      external: { url },
+      exclusiveServer: false,
+      prompt: 'Name only',
+      sessionId: 'saved',
+      operation: 'conversation-name',
+      signal: new AbortController().signal
+    })
+    await (superseded
+      ? expect(result).rejects.toThrow('superseded')
+      : expect(result).resolves.toBe('Harbor Lantern'))
+    expect(requests).toEqual([
+      'GET /api/event',
+      'GET /api/session/saved',
+      'POST /api/session/saved/prompt'
+    ])
+  }
+)
+
+it('cancels only its still-queued borrowed v2 input after a late admission response', async () => {
+  const controller = new AbortController()
+  const requests: string[] = []
+  let messageID = ''
+  const url = await fixture((path, body, response) => {
+    requests.push(path)
+    if (path === 'GET /api/event') {
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.flushHeaders()
+    } else if (path === 'GET /api/session/saved') {
+      json(response, { data: { id: 'saved', location: { directory: '/server' } } })
+    } else if (path === 'POST /api/session/saved/prompt') {
+      messageID = z.object({ id: z.string() }).parse(body).id
+      controller.abort(new Error('Renamed manually'))
+      json(response, {})
+    } else {
+      json(response, {})
+    }
+  })
+  await expect(
+    runOpenCodeTextTaskSession({
+      version: 'v2',
+      url,
+      directory: '/client',
+      external: { url },
+      exclusiveServer: false,
+      prompt: 'Name only',
+      sessionId: 'saved',
+      operation: 'conversation-name',
+      signal: controller.signal
+    })
+  ).rejects.toThrow('Renamed manually')
+  expect(requests).toEqual([
+    'GET /api/event',
+    'GET /api/session/saved',
+    'POST /api/session/saved/prompt',
+    `DELETE /api/session/saved/inbox/${messageID}`
+  ])
+})
+
+it('retains explicitly shared native history even when publication fails ambiguously', async () => {
+  const requests: string[] = []
+  const url = await fixture((path, _body, response) => {
+    requests.push(path)
+    if (path.startsWith('POST /session?')) {
+      json(response, { id: 'retained' })
+    } else if (path.startsWith('POST /session/retained/share?')) {
+      response.statusCode = 500
+      json(response, {})
+    } else if (path.startsWith('POST /session/retained/message?')) {
+      json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
+    } else {
+      json(response, true)
+    }
+  })
+  await expect(
+    runOpenCodeTextTaskSession({
+      version: 'v1',
+      url,
+      directory: '/workspace',
+      prompt: 'Name only',
+      share: true,
+      operation: 'conversation-name',
+      signal: new AbortController().signal
+    })
+  ).resolves.toBe('Harbor Lantern')
+  expect(requests).toEqual([
+    'POST /session?directory=%2Fworkspace',
+    'POST /session/retained/share?directory=%2Fworkspace',
+    'POST /session/retained/message?directory=%2Fworkspace'
+  ])
+})
+
+it('selects the newest matching root with one filtered request at N and 10N histories', async () => {
+  for (const population of [200, 2000]) {
+    let pages = 0
+    const history = Array.from({ length: population }, (_, index) => ({
+      id: index === population - 2 ? 'selected' : `other_${index}`,
+      location: { directory: index % 2 === 0 ? '/workspace' : '/elsewhere' },
+      parentID: index !== population - 2 && index % 3 === 0 ? 'parent' : null,
+      updated: index
+    }))
+    let events: ServerResponse | undefined
+    const url = await fixture((path, body, response) => {
+      const parsed = new URL(path.slice(path.indexOf(' ') + 1), 'http://fixture')
+      if (path === 'GET /api/event') {
+        events = response
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.flushHeaders()
+      } else if (parsed.pathname === '/api/location') {
+        json(response, { directory: '/workspace' })
+      } else if (path.startsWith('GET /api/session?')) {
+        pages++
+        expect(parsed.searchParams.get('directory')).toBe('/workspace')
+        expect(parsed.searchParams.get('parentID')).toBe('null')
+        expect(parsed.searchParams.get('order')).toBe('desc')
+        const matching = history
+          .filter(
+            (item) =>
+              item.location.directory === parsed.searchParams.get('directory') && !item.parentID
+          )
+          .sort((a, b) => b.updated - a.updated)
+        json(response, {
+          data: matching.slice(0, Number(parsed.searchParams.get('limit'))),
+          cursor: {}
+        })
+      } else if (path === 'POST /api/session/selected/prompt') {
+        const { id } = z.object({ id: z.string() }).parse(body)
+        const emitted: [string, Record<string, unknown>][] = [
+          ['session.inbox.delivered', { inboxID: id }],
+          ['session.step.started', { assistantMessageID: 'msg_selected' }],
+          [
+            'session.text.ended',
+            { assistantMessageID: 'msg_selected', ordinal: 0, text: 'Harbor Lantern' }
+          ],
+          ['session.execution.succeeded', {}]
+        ]
+        for (const [type, data] of emitted) {
+          events!.write(
+            `data: ${JSON.stringify({ type, data: { sessionID: 'selected', ...data } })}\n\n`
+          )
+        }
+        json(response, {})
+      } else {
+        response.statusCode = 400
+        json(response, {})
+      }
+    })
+    await expect(
+      runOpenCodeTextTaskSession({
+        version: 'v2',
+        url,
+        directory: '/workspace',
+        continue: true,
+        exclusiveServer: false,
+        operation: 'conversation-name',
+        prompt: 'Name only',
+        signal: new AbortController().signal
+      })
+    ).resolves.toBe('Harbor Lantern')
+    expect(pages).toBe(1)
+  }
+})
+
+it('preserves the actual subtask command and read-compatible child policy before prompting', async () => {
+  let events: ServerResponse | undefined
+  let readAllowed = false
+  let deniedChild = false
+  let commandResponse: ServerResponse | undefined
+  const url = await fixture((path, body, response) => {
+    if (path.startsWith('GET /agent?')) {
+      json(response, [{ name: 'reader', mode: 'subagent' }])
+    } else if (path.startsWith('GET /command?')) {
+      json(response, [
+        { name: 'inspect', agent: 'reader', subtask: true, model: 'configured/command-model' }
+      ])
+    } else if (path.startsWith('POST /session?')) {
+      const rules = z
+        .object({
+          permission: z.array(
+            z.object({ permission: z.string(), pattern: z.string(), action: z.string() })
+          )
+        })
+        .parse(body).permission
+      // The native child retains denies and drops ordinary parent read allows.
+      const childDenies = rules
+        .filter((rule) => rule.action === 'deny')
+        .map((rule) => rule.permission)
+      expect(childDenies).toEqual(['read', 'bash', 'edit', 'todowrite'])
+      readAllowed = !rules.some(
+        (rule) =>
+          rule.action === 'deny' && rule.pattern === '*' && ['*', 'read'].includes(rule.permission)
+      )
+      json(response, { id: 'root' })
+    } else if (path.startsWith('GET /event?')) {
+      events = response
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.flushHeaders()
+    } else if (path.startsWith('POST /session/root/command?')) {
+      expect(body).toMatchObject({
+        command: 'inspect',
+        arguments: 'Name from the recorded request',
+        model: 'selected/model'
+      })
+      events!.write(
+        `data: ${JSON.stringify({ type: 'session.created', properties: { sessionID: 'child', info: { id: 'child', parentID: 'root' } } })}\n\n`
+      )
+      events!.write(
+        `data: ${JSON.stringify({ type: 'permission.asked', properties: { sessionID: 'child', id: 'per_child_shell' } })}\n\n`
+      )
+      commandResponse = response
+    } else if (path.startsWith('POST /permission/per_child_shell/reply?')) {
+      expect(body).toMatchObject({ reply: 'reject' })
+      deniedChild = true
+      json(response, true)
+      json(commandResponse!, {
+        info: {},
+        parts: [{ type: 'text', text: readAllowed ? 'Harbor Lantern' : 'Child read was denied' }]
+      })
+    } else {
+      json(response, true)
+    }
+  })
+  await expect(
+    runOpenCodeTextTaskSession({
+      version: 'v1',
+      url,
+      directory: '/workspace',
+      command: 'inspect',
+      model: { providerID: 'selected', modelID: 'model' },
+      prompt: 'Name from the recorded request',
+      operation: 'conversation-name',
+      signal: new AbortController().signal
+    })
+  ).resolves.toBe('Harbor Lantern')
+  expect(deniedChild).toBe(true)
+})

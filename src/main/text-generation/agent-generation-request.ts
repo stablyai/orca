@@ -1,3 +1,4 @@
+import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
 import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
 import {
@@ -45,7 +46,11 @@ export async function runGenerationRequest(input: {
     ...input.params,
     backslash: commandBackslashMode(input.target)
   }
-  const planned = planCommitMessageGeneration(params, input.prompt)
+  const prompt =
+    input.operation === 'conversation-name'
+      ? conversationNameTaskPrompt(input.prompt)
+      : input.prompt
+  const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return { success: false, error: planned.error, ...textGenerationFailureCodeFields(planned) }
   }
@@ -75,24 +80,28 @@ export async function runGenerationRequest(input: {
             spawnAgent: input.spawnAgent,
             shouldExecute: input.shouldExecute
           })
-  let result = await runClaudeGenerationAttempts({
-    agentId: input.params.agentId,
-    run: (attempt): Promise<InternalTextGenerationResult> => {
-      if (attempt.strictMcp && !attempt.legacyToolPolicy) {
-        return execute(plan)
-      }
-      const retry = planCommitMessageGeneration(params, input.prompt, attempt)
-      return retry.ok
-        ? execute(retry.plan)
-        : Promise.resolve({
-            success: false,
-            error: retry.error,
-            ...textGenerationFailureCodeFields(retry)
-          })
-    },
-    failedExit: (outcome) => (outcome.success ? undefined : outcome.failureOutput)
-  })
+  let result =
+    input.operation === 'conversation-name'
+      ? await execute(plan)
+      : await runClaudeGenerationAttempts({
+          agentId: input.params.agentId,
+          run: (attempt): Promise<InternalTextGenerationResult> => {
+            if (attempt.strictMcp && !attempt.legacyToolPolicy) {
+              return execute(plan)
+            }
+            const retry = planCommitMessageGeneration(params, input.prompt, attempt)
+            return retry.ok
+              ? execute(retry.plan)
+              : Promise.resolve({
+                  success: false,
+                  error: retry.error,
+                  ...textGenerationFailureCodeFields(retry)
+                })
+          },
+          failedExit: (outcome) => (outcome.success ? undefined : outcome.failureOutput)
+        })
   if (
+    input.operation !== 'conversation-name' &&
     input.operation !== 'jira-issue-summary' &&
     !result.success &&
     input.params.agentId === 'opencode'
@@ -102,7 +111,11 @@ export async function runGenerationRequest(input: {
       result = await execute(retry)
     }
   }
-  if (!result.success && input.params.agentId === 'copilot') {
+  if (
+    input.operation !== 'conversation-name' &&
+    !result.success &&
+    input.params.agentId === 'copilot'
+  ) {
     const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput)
     if (retry) {
       result = await execute(retry)

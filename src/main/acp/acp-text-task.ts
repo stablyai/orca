@@ -1,5 +1,6 @@
+import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
@@ -10,13 +11,14 @@ import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
 import { prepareAcpLaunch } from './acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from './acp-private-temp'
-import { AcpRpcError } from './acp-errors'
 import {
   acpTextTaskCompletion,
   acpTextTaskArgs,
   acpTextTaskEnv,
   cleanupAcpTextTaskProtocol,
+  cleanupGrokTextTaskSession,
   denyAcpTextTaskPermission,
+  rejectAcpTextTaskWork,
   TASK_ENV_TO_DELETE
 } from './acp-text-task-policy'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -66,6 +68,7 @@ export class AcpTextTasks {
     observeRoot: (connection: AcpStructuredConnection) => void
   ): Promise<string | null> {
     const { spec } = this.deps
+    const namingPrompt = conversationNameTaskPrompt(input.prompt)
     const deadlineAt = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
     const deadline = new AbortController()
     const timer = setTimeout(
@@ -86,6 +89,7 @@ export class AcpTextTasks {
     let sessionId = ''
     let modeConfigId = 'mode'
     let completed = false
+    let headless = false
     let starting = false
     let done = false
     let disposed = false
@@ -123,17 +127,13 @@ export class AcpTextTasks {
       )
       home = launch.env.GEMINI_HOME ?? ''
       cwd = await mkdtemp(join(tmpdir(), 'orca-chat-name-'))
-      signal.throwIfAborted()
+      if (spec.agent === 'grok') {
+        cwd = await realpath(cwd)
+      }
+      checkCurrent()
       const failed = new AbortController()
       const taskSignal = AbortSignal.any([signal, failed.signal])
-      const reject = (): never => {
-        const error = new AcpRpcError(
-          -32601,
-          'Tools and user input are unavailable during chat naming'
-        )
-        failed.abort(error)
-        throw error
-      }
+      const reject = (): never => rejectAcpTextTaskWork(failed)
       const promptId = randomUUID()
       const terminal = Promise.withResolvers<{ stopReason: string }>()
       const notification = (method: string, params: unknown): void => {
@@ -211,10 +211,8 @@ export class AcpTextTasks {
         advertised: initialized.authMethods?.map((method) => method.id) ?? [],
         env: launch.env
       })
-      if (spec.agent === 'grok') {
-        if (!grokTextTaskPreservesAccount(initialized, authMethodId)) {
-          throw new Error('Grok cannot preserve the naming account with the text task policy')
-        }
+      if (spec.agent === 'grok' && grokTextTaskPreservesAccount(initialized, authMethodId)) {
+        headless = true
         sessionId = promptId
         if (authMethodId) {
           await waitForPromiseWithSignal(server.authenticate(authMethodId), taskSignal)
@@ -228,7 +226,7 @@ export class AcpTextTasks {
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           cwd,
-          prompt: input.prompt,
+          prompt: namingPrompt,
           sessionId,
           signal: taskSignal,
           timeoutMs: Math.max(1, deadlineAt - Date.now())
@@ -237,7 +235,12 @@ export class AcpTextTasks {
       starting = true
       await waitForPromiseWithSignal(
         server
-          .start({ cwd, mcpServers: [], authMethodId })
+          .start({
+            cwd,
+            mcpServers: [],
+            authMethodId,
+            ...(spec.agent === 'grok' ? { _meta: { yoloMode: false, autoMode: false } } : {})
+          })
           .then((started) => {
             sessionId = started.sessionId
             modeConfigId =
@@ -260,7 +263,7 @@ export class AcpTextTasks {
       checkCurrent()
       const response = await waitForPromiseWithSignal(
         Promise.race([
-          server.prompt([{ type: 'text', text: input.prompt }], { promptId, requestId: promptId }),
+          server.prompt([{ type: 'text', text: namingPrompt }], { promptId, requestId: promptId }),
           terminal.promise
         ]),
         taskSignal
@@ -282,15 +285,11 @@ export class AcpTextTasks {
       deadline.abort()
       if (connection && sessionId) {
         const server = connection
-        if (!completed && spec.agent !== 'grok') {
+        if (!completed && !headless) {
           await cleanupAcpTextTaskProtocol(() => server.cancel(), this.deps.logger)
         }
         if (spec.agent === 'grok') {
-          await cleanupAcpTextTaskProtocol(
-            () =>
-              server.requestSessionFreeExtension('_x.ai/session/delete', { sessionId, cwd }, 2_000),
-            this.deps.logger
-          )
+          await cleanupGrokTextTaskSession(server, sessionId, cwd, this.deps.logger)
         }
       }
       if (connection && !(await connection.close().catch(() => false))) {

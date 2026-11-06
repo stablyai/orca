@@ -1,13 +1,14 @@
 import { randomBytes } from 'node:crypto'
-import { z } from 'zod'
+import { readOpenCodeTextTaskServerUrl } from './opencode-text-task-server-ready'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 import { probeOpenCodeCliVersion, type OpenCodeCliVersionProbe } from './opencode-cli-version'
 import { runOpenCodeTextTaskSession } from './opencode-text-task-session'
-import { prepareOpenCodeTextTaskInput } from './opencode-text-task-input'
-import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../text-generation/source-control-generation-limits'
+import { readOpenCodeTextTaskServer } from './opencode-text-task-endpoint'
+import { prepareOpenCodeTextTaskInput, openCodeTextTaskEndpoint } from './opencode-text-task-input'
 import { waitForProcessExitUntil } from '../provider-process/provider-process-exit-deadline'
 import type {
+  TextGenerationOperation,
   SpawnedSourceControlAgentProcess,
   SourceControlAgentSpawnInput
 } from '../text-generation/source-control-text-generation-types'
@@ -27,6 +28,7 @@ export type OwnedOpenCodeTextTask = {
   /** The recipe's `run` options; resolved against the probed release on this host's filesystem. */
   runArgs: readonly string[]
   legacyVariantFlag?: boolean
+  operation?: TextGenerationOperation
   signal: AbortSignal
   spawn: (
     input: SourceControlAgentSpawnInput,
@@ -56,7 +58,6 @@ export class OpenCodeTextTaskError extends Error {
 const VERSION_PROBE_TIMEOUT_MS = 5_000
 const VERSION_OUTPUT_MAX_BYTES = 4_096
 const STDIN_CLOSE_GRACE_MS = 1_500
-const lease = z.object({ url: z.url() })
 
 function closed(child: SpawnedSourceControlAgentProcess): Promise<void> {
   return new Promise((resolve) => {
@@ -150,60 +151,6 @@ function probeVersion(input: OwnedOpenCodeTextTask): Promise<OpenCodeCliCapabili
   })
 }
 
-function readServerUrl(
-  child: SpawnedSourceControlAgentProcess,
-  v2: boolean,
-  signal: AbortSignal
-): Promise<string> {
-  const ready = Promise.withResolvers<string>()
-  let buffered = ''
-  let bytes = 0
-  let listening = false
-  child.stdout?.on('data', (chunk: Buffer) => {
-    if (listening) {
-      return
-    }
-    bytes += chunk.byteLength
-    if (bytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
-      ready.reject(new Error('OpenCode server readiness exceeded its output limit'))
-      return
-    }
-    buffered += chunk.toString('utf8')
-    const lines = buffered.split('\n')
-    buffered = lines.pop() ?? ''
-    for (const line of lines) {
-      let url: string | undefined
-      if (v2) {
-        try {
-          url = lease.parse(JSON.parse(line)).url
-        } catch {
-          continue
-        }
-      } else {
-        url = line.match(/listening on (http:\/\/\S+)/)?.[1]
-      }
-      if (!url) {
-        continue
-      }
-      const address = new URL(url)
-      if (
-        address.protocol !== 'http:' ||
-        !['127.0.0.1', 'localhost', '[::1]'].includes(address.hostname)
-      ) {
-        ready.reject(new Error('OpenCode private server returned an unexpected address'))
-        return
-      }
-      listening = true
-      ready.resolve(address.origin)
-    }
-  })
-  // Readiness output can contain credentials; never retain or log either stream.
-  child.stderr?.on('data', () => {})
-  child.once('error', (error) => ready.reject(error))
-  child.once('close', () => ready.reject(new Error('OpenCode private server exited')))
-  return waitForPromiseWithSignal(ready.promise, signal)
-}
-
 function splitModel(task: { model?: string; variant?: string }, v2: boolean) {
   let model = task.model
   let variant = task.variant
@@ -242,7 +189,16 @@ export async function runOwnedOpenCodeTextTask(input: OwnedOpenCodeTextTask): Pr
   try {
     signal.throwIfAborted()
     refuseStale()
-    const capabilities = await probeVersion(input)
+    const endpoint = openCodeTextTaskEndpoint(input.runArgs, input.legacyVariantFlag)
+    let capabilities: OpenCodeCliCapabilities
+    if (endpoint) {
+      if (input.operation !== 'conversation-name') {
+        throw new Error('OpenCode external server is unavailable for this text task')
+      }
+      capabilities = await readOpenCodeTextTaskServer(endpoint, input.env, signal)
+    } else {
+      capabilities = await probeVersion(input)
+    }
     signal.throwIfAborted()
     refuseStale()
     if (capabilities.pluginApi === 'unknown') {
@@ -256,13 +212,35 @@ export async function runOwnedOpenCodeTextTask(input: OwnedOpenCodeTextTask): Pr
       prompt: input.prompt,
       runArgs: input.runArgs,
       legacyVariantFlag: input.legacyVariantFlag,
+      operation: input.operation,
       signal
     })
     const selection = splitModel({ model, variant }, v2)
+    if (run.external) {
+      refuseStale()
+      began = true
+      return await runOpenCodeTextTaskSession({
+        ...run,
+        ...selection,
+        version,
+        directory,
+        url: run.external.url,
+        username: v2 ? 'opencode' : (run.external.username ?? input.env.OPENCODE_SERVER_USERNAME),
+        password:
+          run.external.password ?? input.env[v2 ? 'OPENCODE_PASSWORD' : 'OPENCODE_SERVER_PASSWORD'],
+        exclusiveServer: false,
+        operation: input.operation,
+        shouldExecute: input.shouldExecute,
+        signal
+      })
+    }
     const password = randomBytes(32).toString('base64url')
     const privateEnv: Record<string, string> = v2
       ? { OPENCODE_PASSWORD: password }
       : { OPENCODE_SERVER_USERNAME: 'opencode', OPENCODE_SERVER_PASSWORD: password }
+    if (!run.share) {
+      privateEnv.OPENCODE_DISABLE_SHARE = '1'
+    }
     owned = spawnOwned(
       input,
       [
@@ -280,13 +258,15 @@ export async function runOwnedOpenCodeTextTask(input: OwnedOpenCodeTextTask): Pr
     const lost = new AbortController()
     owned.child.once('close', () => lost.abort(new Error('OpenCode private server exited')))
     const taskSignal = AbortSignal.any([signal, lost.signal])
-    const url = await readServerUrl(owned.child, v2, taskSignal)
+    const url = await readOpenCodeTextTaskServerUrl(owned.child, v2, taskSignal)
     refuseStale()
     began = true
     return await runOpenCodeTextTaskSession({
       ...run,
       ...selection,
       version,
+      operation: input.operation,
+      shouldExecute: input.shouldExecute,
       url,
       password,
       directory,

@@ -1,7 +1,16 @@
-import { mkdtemp, readFile, writeFile, mkdir, rm, access } from 'node:fs/promises'
+import {
+  mkdtemp,
+  readFile,
+  writeFile,
+  mkdir,
+  rm,
+  access,
+  symlink,
+  realpath
+} from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
@@ -26,7 +35,9 @@ vi.mock('../grok/grok-text-task', async (original) => ({
 
 const boundary = vi.hoisted(() => ({
   adapter: vi.fn<() => StructuredAgentSessionAdapter>(),
-  afterTemp: vi.fn<(path: string) => Promise<void>>()
+  afterTemp: vi.fn<(path: string) => Promise<void>>(),
+  taskTempParent: '',
+  failTaskRealpath: false
 }))
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({ deps: { adapter: boundary.adapter() } })
@@ -36,9 +47,19 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...fs,
     mkdtemp: async (prefix: string) => {
-      const path = await fs.mkdtemp(prefix)
+      const path = await fs.mkdtemp(
+        boundary.taskTempParent && prefix.includes('orca-chat-name-')
+          ? join(boundary.taskTempParent, 'orca-chat-name-')
+          : prefix
+      )
       await boundary.afterTemp(path)
       return path
+    },
+    realpath: async (path: string) => {
+      if (boundary.failTaskRealpath && path.includes('orca-chat-name-')) {
+        throw new Error('Task directory resolution failed')
+      }
+      return fs.realpath(path)
     }
   }
 })
@@ -49,6 +70,8 @@ afterEach(async () => {
   vi.useRealTimers()
   vi.clearAllMocks()
   boundary.afterTemp.mockReset()
+  boundary.taskTempParent = ''
+  boundary.failTaskRealpath = false
   await Promise.all(folders.splice(0).map((folder) => rm(folder, { recursive: true, force: true })))
 })
 
@@ -63,6 +86,7 @@ async function stagedRig(
     shouldExecute?: () => boolean
     close?: (child: FakeAcpChild) => Promise<boolean>
     runtime?: boolean
+    requireAuth?: boolean
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-naming-task-test-'))
@@ -109,11 +133,19 @@ async function stagedRig(
       agent.on('initialize', (frame) =>
         agent.reply(frame, options.initialized ?? { protocolVersion: 1, agentCapabilities: {} })
       )
-      agent.on('authenticate', (frame) => agent.reply(frame, {}))
+      let authenticated = false
+      agent.on('authenticate', (frame) => {
+        authenticated = true
+        agent.reply(frame, {})
+      })
       agent.on('_x.ai/session/delete', (frame) => agent.reply(frame, { success: true }))
-      agent.on('session/new', (frame) =>
-        agent.reply(frame, { sessionId: '11111111-1111-4111-8111-111111111111' })
-      )
+      agent.on('session/new', (frame) => {
+        if (options.requireAuth && !authenticated) {
+          agent.fail(frame, -32000, 'Login required')
+        } else {
+          agent.reply(frame, { sessionId: '11111111-1111-4111-8111-111111111111' })
+        }
+      })
       agent.on('session/set_config_option', (frame) => {
         if (options.modeFailure) {
           agent.fail(frame, -32602, 'Mode control rejected')
@@ -190,6 +222,13 @@ async function rig(options: Parameters<typeof stagedRig>[0] = {}) {
 it.each(['success', 'failure'] as const)(
   'deletes only the owned Grok session after its headless writer settles on %s',
   async (outcome) => {
+    const parent = await mkdtemp(join(tmpdir(), 'orca-naming-path-test-'))
+    folders.push(parent)
+    const physical = join(await realpath(parent), 'physical')
+    await mkdir(physical)
+    const alias = join(parent, 'alias')
+    await symlink(physical, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    boundary.taskTempParent = alias
     const writer = Promise.withResolvers<string>()
     const launched = Promise.withResolvers<Parameters<typeof runGrokTextTask>[0]>()
     vi.mocked(runGrokTextTask).mockImplementationOnce((input) => {
@@ -212,8 +251,16 @@ it.each(['success', 'failure'] as const)(
       prompt: expect.stringContaining('Repair login'),
       sessionId: expect.stringMatching(/^[0-9a-f-]{36}$/)
     })
+    expect(input.cwd).toBe(join(physical, basename(input.cwd)))
+    expect(child.launch.cwd).toBe(input.cwd)
     expect(child.launch.env?.GROK_STORAGE_MODE).toBe('local')
-    expect(child.launch.args).toEqual(['agent', '--no-leader', 'stdio'])
+    expect(child.launch.args).toEqual([
+      '--permission-mode',
+      'default',
+      'agent',
+      '--no-leader',
+      'stdio'
+    ])
     expect(child.exited).toBe(false)
     expect(child.agent.frames.some((frame) => frame.method === '_x.ai/session/delete')).toBe(false)
     if (outcome === 'success') {
@@ -236,9 +283,26 @@ it.each(['success', 'failure'] as const)(
   }
 )
 
-it('does not send a Grok naming prompt when headless would change the selected account', async () => {
-  const r = await stagedRig({
+it('removes the allocated Grok directory without starting a child when canonicalization fails', async () => {
+  let allocated = ''
+  boundary.afterTemp.mockImplementation(async (path) => {
+    if (path.includes('orca-chat-name-')) {
+      allocated = path
+    }
+  })
+  boundary.failTaskRealpath = true
+  const r = await stagedRig({ antigravity: false })
+  await expect(r.result).rejects.toThrow('Task directory resolution failed')
+  expect(allocated).not.toBe('')
+  await expect(access(allocated)).rejects.toThrow()
+  expect(r.child()).toBeUndefined()
+  expect(runGrokTextTask).not.toHaveBeenCalled()
+})
+
+it('names on the normal Grok account when headless selects a different account', async () => {
+  const r = await rig({
     antigravity: false,
+    requireAuth: true,
     prepare: async () => ({ PATH: '/usr/bin', XAI_API_KEY: 'fixture-only' }),
     initialized: {
       protocolVersion: 1,
@@ -249,9 +313,22 @@ it('does not send a Grok naming prompt when headless would change the selected a
       _meta: { defaultAuthMethodId: 'cached_token' }
     }
   })
-  await expect(r.result).rejects.toThrow('cannot preserve the naming account')
   expect(runGrokTextTask).not.toHaveBeenCalled()
-  expect(r.child()?.agent.frames.some((frame) => frame.method === 'session/new')).toBe(false)
+  expect(r.agent.frames.find((frame) => frame.method === 'authenticate')?.params).toEqual({
+    methodId: 'xai.api_key'
+  })
+  expect(r.agent.frames.find((frame) => frame.method === 'session/new')?.params).toEqual({
+    cwd: await realpath(r.server.launch.cwd!),
+    mcpServers: [],
+    _meta: { yoloMode: false, autoMode: false }
+  })
+  r.text('Harbor Lantern')
+  r.agent.reply(r.frame, { stopReason: 'end_turn' })
+  await expect(r.result).resolves.toBe('Harbor Lantern')
+  expect(r.agent.frames.find((frame) => frame.method === '_x.ai/session/delete')?.params).toEqual({
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    cwd: r.server.launch.cwd
+  })
   expect(r.child()?.exited).toBe(true)
 })
 

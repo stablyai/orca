@@ -1,11 +1,19 @@
-import { open, stat } from 'node:fs/promises'
+import { findOptionOccurrence } from '../../shared/command-option-occurrence'
+import { stat } from 'node:fs/promises'
+import { prepareV1File, prepareV2File } from './opencode-text-task-files'
 import path from 'node:path'
+import type { TextGenerationOperation } from '../text-generation/source-control-text-generation-types'
 import { pathToFileURL } from 'node:url'
-
-const { lookup }: { lookup: (path: string) => string | false } = require('mime-types')
 
 export type OpenCodeTextTaskInput = {
   directory: string
+  /** Absent on an attached server until its source/default location is resolved there. */
+  externalDirectory?: string
+  external?: { url: string; username?: string; password?: string }
+  sessionId?: string
+  continue?: boolean
+  fork?: boolean
+  share?: boolean
   prompt: string
   serverArgs: string[]
   agent?: string
@@ -48,6 +56,38 @@ const v1Strings = [
   'log-level'
 ]
 const v1Booleans = ['share', 'mini', 'replay', 'interactive', 'demo', 'pure']
+
+export function openCodeTextTaskEndpoint(args: readonly string[], legacyVariantFlag = false) {
+  const valueOptions = [
+    ...commonStrings.map((name) => `--${name}`),
+    ...v1Strings.map((name) => `--${name}`),
+    '--server',
+    '-m',
+    '-f',
+    '-s',
+    '-p',
+    '-u'
+  ]
+  const attached = findOptionOccurrence(args, ['--attach'], true, valueOptions, 0, 'required')
+  const server = findOptionOccurrence(args, ['--server'], true, valueOptions, 0, 'required')
+  if (!attached && !server) {
+    return undefined
+  }
+  if (attached && server) {
+    throw new Error('OpenCode server options cannot be combined')
+  }
+  const option = attached ?? server!
+  if (!option.value) {
+    throw new Error('OpenCode server option requires a value')
+  }
+  const parsed = parseRunArgs(args, !!server, legacyVariantFlag)
+  return {
+    version: server ? ('v2' as const) : ('v1' as const),
+    url: option.value,
+    username: parsed.values.get('username'),
+    password: parsed.values.get('password')
+  }
+}
 
 function parseRunArgs(args: readonly string[], v2: boolean, legacyVariantFlag: boolean) {
   const values = new Map<string, string>()
@@ -122,49 +162,6 @@ function parseRunArgs(args: readonly string[], v2: boolean, legacyVariantFlag: b
   return { values, flags, files, message }
 }
 
-async function prepareV2File(file: string, directory: string, signal: AbortSignal) {
-  signal.throwIfAborted()
-  const filename = path.resolve(directory, file)
-  const handle = await open(filename, 'r')
-  try {
-    const info = await handle.stat()
-    if (!info.isFile() || info.size > 10 * 1024 * 1024) {
-      throw new Error('OpenCode attachment must be a regular file no larger than 10 MiB')
-    }
-    const content = Buffer.alloc(info.size)
-    let offset = 0
-    while (offset < content.length) {
-      signal.throwIfAborted()
-      const read = await handle.read(content, offset, content.length - offset, offset)
-      if (read.bytesRead === 0) {
-        break
-      }
-      offset += read.bytesRead
-    }
-    const bytes = content.subarray(0, offset)
-    const detected = lookup(filename) || 'application/octet-stream'
-    const text = bytes.toString('utf8')
-    const binary =
-      bytes.includes(0) ||
-      (bytes.length > 0 &&
-        bytes.reduce((count, byte) => count + Number(byte < 9 || (byte > 13 && byte < 32)), 0) /
-          bytes.length >
-          0.3)
-    const mime =
-      detected.startsWith('image/') || detected === 'application/pdf'
-        ? detected
-        : !binary && Buffer.from(text, 'utf8').equals(bytes)
-          ? 'text/plain'
-          : detected
-    const name = path.basename(filename)
-    return mime === 'text/plain'
-      ? { text: `<file name="${name}">\n${text}\n</file>` }
-      : { attachment: { name, uri: `data:${mime};base64,${bytes.toString('base64')}` } }
-  } finally {
-    await handle.close()
-  }
-}
-
 /** Resolve the selected CLI's run contract on the host that owns its filesystem. */
 export async function prepareOpenCodeTextTaskInput(input: {
   version: 'v1' | 'v2'
@@ -176,6 +173,7 @@ export async function prepareOpenCodeTextTaskInput(input: {
   model?: string
   variant?: string
   legacyVariantFlag?: boolean
+  operation?: TextGenerationOperation
 }): Promise<OpenCodeTextTaskInput> {
   input.signal.throwIfAborted()
   const v2 = input.version === 'v2'
@@ -203,13 +201,18 @@ export async function prepareOpenCodeTextTaskInput(input: {
   }
   // These modes have user-owned history/account/retention semantics; never silently discard them.
   if (
-    flags.get('continue') ||
-    flags.get('fork') ||
-    flags.get('share') ||
-    ['session', 'attach', 'server', 'password', 'username'].some((name) => values.has(name))
+    input.operation !== 'conversation-name' &&
+    (flags.get('continue') ||
+      flags.get('fork') ||
+      flags.get('share') ||
+      ['session', 'attach', 'server', 'password', 'username'].some((name) => values.has(name)))
   ) {
     throw new Error('OpenCode text task requires a fresh private session')
   }
+  if (v2 && values.has('server') && flags.get('standalone')) {
+    throw new Error('OpenCode server and standalone cannot be combined')
+  }
+  const endpoint = values.get(v2 ? 'server' : 'attach')
   const directory = path.resolve(input.cwd, values.get('dir') || '.')
   const positional = message
     .map((part) => (part.includes(' ') ? `"${part.replace(/"/g, '\\"')}"` : part))
@@ -237,6 +240,20 @@ export async function prepareOpenCodeTextTaskInput(input: {
     directory,
     prompt,
     serverArgs,
+    ...(endpoint
+      ? {
+          external: {
+            url: new URL(endpoint).toString().replace(/\/$/, ''),
+            username: values.get('username'),
+            password: values.get('password')
+          },
+          externalDirectory: values.get('dir')
+        }
+      : {}),
+    ...(values.has('session') ? { sessionId: values.get('session') } : {}),
+    ...(flags.get('continue') ? { continue: true } : {}),
+    ...(flags.get('fork') ? { fork: true } : {}),
+    ...(flags.get('share') ? { share: true } : {}),
     agent: values.get('agent') ?? input.agent,
     model,
     variant: v2 ? input.variant : (values.get('variant') ?? input.variant),
@@ -252,7 +269,7 @@ export async function prepareOpenCodeTextTaskInput(input: {
     const text: string[] = []
     result.v2Files = []
     for (const file of files) {
-      const prepared = await prepareV2File(file, directory, input.signal)
+      const prepared = await prepareV2File(file, endpoint ? input.cwd : directory, input.signal)
       if (prepared.text) {
         text.push(prepared.text)
       }
@@ -266,7 +283,11 @@ export async function prepareOpenCodeTextTaskInput(input: {
     result.v1Files = []
     for (const file of files) {
       input.signal.throwIfAborted()
-      const filename = path.resolve(directory, file)
+      const filename = path.resolve(endpoint ? input.cwd : directory, file)
+      if (endpoint) {
+        result.v1Files.push(await prepareV1File(file, input.cwd, input.signal))
+        continue
+      }
       const info = await stat(filename)
       result.v1Files.push({
         type: 'file',

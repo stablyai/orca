@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { prepareKimiTextTaskPolicy } from './source-control-kimi-policy'
 import { parse as parseJson, type ParseError } from 'jsonc-parser'
 import { z } from 'zod'
 import { findOptionOccurrence } from '../../shared/command-option-occurrence'
@@ -18,7 +18,8 @@ import { runSourceControlPolicyProbe } from './source-control-policy-probe'
 import type {
   LocalGenerationTarget,
   LocalProcessExecution,
-  SpawnSourceControlAgent
+  SpawnSourceControlAgent,
+  TextGenerationOperation
 } from './source-control-text-generation-types'
 
 const object = z.record(z.string(), z.unknown())
@@ -158,53 +159,6 @@ async function antigravityPolicy(
   }
 }
 
-async function kimiPolicy(
-  plan: CommitMessagePlan,
-  target: LocalGenerationTarget,
-  signal: AbortSignal
-) {
-  if (findOptionOccurrence(plan.args, ['--agent'], true, KIMI_VALUE_OPTIONS, 0, 'required')) {
-    throw new Error('Kimi named profiles cannot apply the text task tool policy')
-  }
-  const file = findOptionOccurrence(
-    plan.args,
-    ['--agent-file'],
-    true,
-    KIMI_VALUE_OPTIONS,
-    0,
-    'required'
-  )
-  let content =
-    '---\nname: orca-text-generation\ndescription: Text generation for Orca\ntools: []\n---\n${base_prompt}\n'
-  if (file) {
-    if (!file.value) {
-      throw new Error('Missing text task agent file')
-    }
-    const original = await recipeFile(file.value, target, signal, plan.env)
-    const frontmatter =
-      /^(?:\uFEFF)?---[^\S\r\n]*\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*(?:\r?\n|$)([\s\S]*)$/.exec(
-        original
-      )
-    if (!frontmatter) {
-      throw new Error('Invalid text task agent file')
-    }
-    const profile = object.parse(parseYaml(frontmatter[1]))
-    if (profile.name == null || (typeof profile.name === 'string' && !profile.name.trim())) {
-      profile.name = (file.value.split(/[\\/]/).pop() ?? '').replace(/\.[^.]*$/, '')
-    }
-    profile.tools = []
-    delete profile.disallowedTools
-    content = `---\n${stringifyYaml(profile)}---\n${frontmatter[2]}`
-  }
-  const args = compactRecipeOptions(plan.args, ['--agent-file'], KIMI_VALUE_OPTIONS)
-  args.push('--agent-file', '{text-task-profile}')
-  return {
-    ...plan,
-    args,
-    taskFiles: [{ name: 'text-task-profile.md', content, argIndex: args.length - 1 }]
-  }
-}
-
 function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
   const plugin = `export const inject = ['tools']\nexport function apply(ctx) {\n  ctx.tools.guard(exec => exec.name === 'read' ? undefined : 'This text task permits only file reads')\n  ctx.provide('orcaTextReadPolicy', Object.freeze({}))\n}\n`
   const patch = JSON.stringify([
@@ -239,6 +193,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
   target: LocalGenerationTarget
   signal: AbortSignal
   spawnAgent: SpawnSourceControlAgent
+  operation?: TextGenerationOperation
 }): LocalProcessExecution<CommitMessagePlan> {
   let probeClosed = Promise.resolve()
   const probe = async (args: string[]) => {
@@ -260,18 +215,39 @@ export function prepareSourceControlReadOnlyPlan(input: {
 
   async function prepare(): Promise<CommitMessagePlan> {
     const { plan, target, signal } = input
+    const naming = input.operation === 'conversation-name'
     if (input.agentId === 'amp' || input.agentId === 'muse') {
+      if (naming) {
+        return plan
+      }
       throw new Error('The agent cannot apply the text task tool policy')
     }
     if (input.agentId === 'antigravity') {
       const help = await probe([...(plan.policyProbeArgs ?? []), '--help'])
       if (![help.stdout, help.stderr].some((text) => /^\s*--settings(?:[= \t]|$)/m.test(text))) {
+        if (naming) {
+          return plan
+        }
         throw new Error('The agent cannot apply session-only text task settings')
       }
       return antigravityPolicy(plan, target, signal)
     }
     if (input.agentId === 'kimi') {
-      return kimiPolicy(plan, target, signal)
+      const selected = findOptionOccurrence(
+        plan.args,
+        ['--agent', '--session', '-S', '--resume', '-r', '--continue', '-c', '-C'],
+        true,
+        [...KIMI_VALUE_OPTIONS, '--session', '-S', '--resume', '-r'],
+        0,
+        false
+      )
+      if (selected) {
+        if (naming) {
+          return plan
+        }
+        throw new Error('Kimi selected history/profile cannot apply the text task tool policy')
+      }
+      return prepareKimiTextTaskPolicy(plan, (file) => recipeFile(file, target, signal, plan.env))
     }
     if (input.agentId === 'dsh') {
       return dshPolicy(plan)

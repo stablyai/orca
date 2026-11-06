@@ -57,6 +57,7 @@ export async function runOpenCodeTextTask(input: {
       prompt: input.plan.stdinPayload,
       runArgs: task.runArgs,
       legacyVariantFlag: input.legacyVariantFlag,
+      operation: input.operation,
       signal
     }
     const rawOutput = distro
