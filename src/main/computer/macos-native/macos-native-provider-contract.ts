@@ -1,8 +1,17 @@
 import type net from 'node:net'
 import type { ComputerProviderCapabilities } from '../../../shared/computer-use-runtime-types'
+import type {
+  ComputerUsePermissionId,
+  ComputerUsePermissionStatus
+} from '../../../shared/computer-use-permissions-types'
+
+export type NativePermissionStatus = Partial<
+  Record<ComputerUsePermissionId, ComputerUsePermissionStatus>
+>
 
 export type NativeMethod =
   | 'handshake'
+  | 'permissionStatus'
   | 'listApps'
   | 'listWindows'
   | 'getAppState'
@@ -19,7 +28,7 @@ export type NativeMethod =
 
 export type NativeActionMethod = Exclude<
   NativeMethod,
-  'handshake' | 'listApps' | 'listWindows' | 'getAppState' | 'terminate'
+  'handshake' | 'permissionStatus' | 'listApps' | 'listWindows' | 'getAppState' | 'terminate'
 >
 
 export type NativeResponse =

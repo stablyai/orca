@@ -56,6 +56,11 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
     case 'capabilities': {
       return withTreeDiffCapability(await provider.capabilities())
     }
+    case 'permissionStatus': {
+      return 'permissionStatusIfStarted' in provider
+        ? await provider.permissionStatusIfStarted()
+        : null
+    }
     case 'listApps': {
       return await provider.listApps()
     }

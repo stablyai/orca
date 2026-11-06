@@ -13,6 +13,7 @@ import {
   REQUIRED_MACOS_PROVIDER_PROTOCOL_VERSION,
   type NativeActionMethod,
   type NativeMethod,
+  type NativePermissionStatus,
   type NativeResponse,
   type PendingNativeRequest,
   writeNativeProviderLine
@@ -49,6 +50,13 @@ export class MacOSNativeProviderClient {
   async capabilities(): Promise<ComputerProviderCapabilities> {
     await this.ensureCompatible()
     return this.providerCapabilities!
+  }
+  async permissionStatusIfStarted(): Promise<NativePermissionStatus | null> {
+    if (!this.socket || this.socket.destroyed) {
+      return null
+    }
+    // SAFETY: the bundled helper emits this shape for permissionStatus over its authenticated socket.
+    return (await this.call('permissionStatus', {})) as NativePermissionStatus
   }
   async listWindows(params: unknown): Promise<ComputerListWindowsResult> {
     await this.ensureCapability('windows', 'list')

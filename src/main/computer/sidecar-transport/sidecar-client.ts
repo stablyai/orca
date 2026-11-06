@@ -14,6 +14,7 @@ import {
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from '../action-contracts/computer-sidecar-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'
+import type { NativePermissionStatus } from '../macos-native/macos-native-provider-contract'
 import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
@@ -21,6 +22,7 @@ export const COMPUTER_SIDECAR_ENTRY_FILENAME = 'computer-sidecar.js'
 
 type ComputerSidecarMethod =
   | 'capabilities'
+  | 'permissionStatus'
   | 'listApps'
   | 'listWindows'
   | 'getAppState'
@@ -64,6 +66,13 @@ export async function callComputerSidecarCapabilities(): Promise<ComputerProvide
   return (await getComputerSidecar().call('capabilities', {})) as ComputerProviderCapabilities
 }
 
+export async function callComputerSidecarPermissionStatus(): Promise<NativePermissionStatus | null> {
+  // SAFETY: our sidecar returns the bundled native helper's permission status or null over IPC.
+  return sidecar
+    ? ((await sidecar.callIfRunning('permissionStatus', {})) as NativePermissionStatus | null)
+    : null
+}
+
 export async function callComputerSidecarListWindows(
   params: unknown
 ): Promise<ComputerListWindowsResult> {
@@ -79,7 +88,7 @@ export async function callComputerSidecarSnapshot(
 export async function callComputerSidecarAction(
   method: Exclude<
     ComputerSidecarMethod,
-    'capabilities' | 'listApps' | 'listWindows' | 'getAppState'
+    'capabilities' | 'permissionStatus' | 'listApps' | 'listWindows' | 'getAppState'
   >,
   params: unknown
 ): Promise<ComputerActionResult> {
@@ -119,6 +128,13 @@ class ComputerSidecarProcess {
   private queueGeneration = 0
 
   constructor(private readonly entryPath: string) {}
+
+  callIfRunning(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
+    if (!this.child || this.child.killed || !this.child.connected) {
+      return Promise.resolve(null)
+    }
+    return this.call(method, params)
+  }
 
   call(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
     const generation = this.queueGeneration
