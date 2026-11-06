@@ -1,10 +1,11 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
 import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
+import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../../text-generation/source-control-generation-limits'
 import type { DiscoverCommitMessageModelsResult } from '../../../text-generation/source-control-text-generation-types'
 
 // Phones list these on every chat open; other agents' lists have their own catalog owners.
-// Each maps to the config-dir var that picks its login (see prepareLocalCommitMessageAgentEnv).
+// Each maps to the config-dir var that picks its login (mirrors prepareShellConfigDirEnv).
 const ACCOUNT_DIR_VAR: Partial<Record<TuiAgent, string>> = {
   omp: 'PI_CODING_AGENT_DIR',
   grok: 'GROK_HOME'
@@ -13,7 +14,10 @@ const TTL_MS = 10 * 60_000
 const MAX_ENTRIES = 32
 
 const cache = new Map<string, { result: DiscoverCommitMessageModelsResult; expiresAt: number }>()
-const inFlight = new InFlightPromiseDedupe<DiscoverCommitMessageModelsResult>()
+// Share a probe for its whole timeout, not the dedupe's 30 s default.
+const inFlight = new InFlightPromiseDedupe<DiscoverCommitMessageModelsResult>(
+  SOURCE_CONTROL_GENERATION_TIMEOUT_MS + 5_000
+)
 let generation = 0
 
 // An agent refresh is how a user says the CLI or its login changed.
