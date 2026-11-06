@@ -48,6 +48,7 @@ export function isContextualTourStartBlockedByProgress(
   tourId: ContextualTourId
 ): boolean {
   return (
+    tourId !== 'workspace-agent-sessions' &&
     !state.contextualToursStartedThisSession.includes(tourId) &&
     getContextualTour(tourId).steps.some((step) =>
       isContextualTourStepDone(step, state.featureInteractions)
