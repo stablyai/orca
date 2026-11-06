@@ -4,15 +4,13 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
  *  worktree on every agent: a restored row without a live PTY names none, and clients decide row
  *  ownership (and retraction) by worktree. The turn stamp travels on the tab, not the status. */
 export function frameAgentStatus(
-  projected: unknown,
+  projected: (AgentStatusEntry & { turnCompletedAt?: number }) | undefined,
   worktreeId: string
 ): { agentStatus?: AgentStatusEntry; projectedTurnCompletedAt?: number } {
   if (!projected) {
     return {}
   }
-  const { turnCompletedAt, ...fields } = projected as AgentStatusEntry & {
-    turnCompletedAt?: number
-  }
+  const { turnCompletedAt, ...fields } = projected
   return {
     agentStatus: { ...fields, worktreeId },
     ...(turnCompletedAt !== undefined ? { projectedTurnCompletedAt: turnCompletedAt } : {})

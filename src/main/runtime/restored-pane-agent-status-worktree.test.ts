@@ -1,5 +1,5 @@
 // #38434: clients judge an agent row's ownership by worktree, so a restored pane's status must name it.
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 // Preserve side-effect order: module registration, runtime, lifecycle, fixtures.
@@ -13,6 +13,13 @@ const {
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
+// The previous run's hook time; restored rows keep it.
+const RESTORED_AT = 1_700_000_000_000
+
+// A minute after the restored row's hook; only the clock is fixed.
+beforeEach(() => vi.useFakeTimers({ now: RESTORED_AT + 60_000, toFake: ['Date'] }))
+afterEach(() => vi.useRealTimers())
+
 it('names the worktree on a restored pane agent whose hook row carries none', async () => {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
@@ -25,8 +32,8 @@ it('names the worktree on a restored pane agent whose hook row carries none', as
       providerSession: { key: 'session_id' as const, id: 'codex-session' },
       prompt: 'ship it',
       state: 'working' as const,
-      receivedAt: Date.now() - 60_000,
-      stateStartedAt: Date.now() - 60_000,
+      receivedAt: RESTORED_AT,
+      stateStartedAt: RESTORED_AT,
       connectionId: null,
       restoredUnconfirmed: true
     }
