@@ -118,8 +118,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
   }
 
   synchronizePtyOutputSequenceFromProvider(

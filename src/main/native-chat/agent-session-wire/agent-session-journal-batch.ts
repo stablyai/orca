@@ -1,3 +1,4 @@
+import { journalItemsById } from './agent-session-journal-item-index'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type {
@@ -24,7 +25,7 @@ export function projectJournalBatch(input: {
   canonicalItemId?: (itemId: string) => string
   hasSubmission?: (id: string) => boolean
   queueSourceIds?: (messageId: string) => readonly string[]
-  readSnapshot?: (touched: ReadonlySet<string>) => AgentJournalSnapshot
+  readSnapshot?: (touched: Set<string>) => AgentJournalSnapshot
 }): JournalBatchProjection {
   if (
     input.rows.every((row) => row.kind !== 'outcome') &&
@@ -100,7 +101,7 @@ export function projectJournalBatch(input: {
     }
   }
   const snapshot = input.readSnapshot?.(touchedItemIds) ?? input.snapshot
-  const live = liveItemsById(snapshot.items)
+  const live = journalItemsById(snapshot.items)
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
@@ -119,10 +120,6 @@ export function projectJournalBatch(input: {
 }
 
 // Snapshot arrays invalidate these indexes; catch-up pages and byte-shrink retries reuse them.
-const liveItemsByTimeline = new WeakMap<
-  readonly AgentJournalRenderItem[],
-  ReadonlyMap<string, AgentJournalRenderItem>
->()
 const aliasesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],
   ReadonlyMap<string, string>
@@ -155,18 +152,6 @@ function stopNotesByTurn(
   }
   stopNotesByTimeline.set(items, notes)
   return notes
-}
-
-function liveItemsById(
-  items: readonly AgentJournalRenderItem[]
-): ReadonlyMap<string, AgentJournalRenderItem> {
-  const cached = liveItemsByTimeline.get(items)
-  if (cached) {
-    return cached
-  }
-  const live = new Map(items.map((item) => [item.itemId, item]))
-  liveItemsByTimeline.set(items, live)
-  return live
 }
 
 /** Derive aliases from published acceptance so projection stays independent of reducer internals. */

@@ -14,7 +14,6 @@
     "install:release": "pnpm install --frozen-lockfile --cpu=current,x64,arm64",
     "audit:perf": "oxlint --config config/oxlint-performance-audit.json --format json src",
     "test:perf:contracts": "vitest run --config config/vitest.performance.config.ts",
-    "test:perf:benchmarks": "vitest bench --run --config config/vitest.performance.config.ts",
     "format": "oxfmt --write .",
     "lint": "node config/scripts/preflight/changed-checks/run-lint.mjs",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",

@@ -1,6 +1,8 @@
-import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
-import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { QueuePublication } from './structured-agent-session-queued-publication'
+import type { ForkMarker } from './agent-session-fork-marker'
+import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
+import type { AgentSessionSubscribeInput, Subscriber } from './agent-session-subscribe-input'
+export type { AgentSessionSubscriberEmit, Subscriber } from './agent-session-subscribe-input'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
@@ -10,10 +12,8 @@ import {
   backgroundTaskFingerprint,
   emitSubscriberFrame,
   subscriberCommandsChanged,
-  type SubscriberFieldHooks,
-  type SubscriberFieldState
+  type SubscriberFieldHooks
 } from './agent-session-subscriber-frame-fields'
-import type { QueuePublication } from './structured-agent-session-queued-publication'
 import {
   deliverToSubscriber,
   type SubscriberDeliveryPort
@@ -26,34 +26,13 @@ import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 import { refreshPublishedWork } from './agent-session-work-refresh'
-import type { HistoryReader } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
-// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
-
-export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
-export type Subscriber = {
-  id: string
-  emit: AgentSessionSubscriberEmit
-  cursor: AgentJournalCursor
-  fence: number
-  readHistorySnapshot?: HistoryReader['snapshot']
-  readQueueSourceIds?: HistoryReader['queueSourceIds']
-  snapshotCatchUp?: boolean
-  /** The current-work view the last frame's fields were read under
-   *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
-  workView?: string
-  historyView?: string
-} & CurrentRequestsSubscriber &
-  SubscriberFieldState
-
-export type AgentSessionSubscribersHooks = {
-  readCommands?: SubscriberFieldHooks['readCommands']
-  /** Stable identity avoids serialization until queue changes. */
-  readQueuePublication?: (sessionId: string) => QueuePublication | undefined
-  readBackgroundTasks?: SubscriberFieldHooks['readBackgroundTasks']
+export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
+  readForkMarker?: (sessionId: string) => ForkMarker | undefined
+  readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   readCurrentWork?: (
     sessionId: string,
@@ -64,6 +43,12 @@ export type AgentSessionSubscribersHooks = {
 
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
+  private readonly forkMarkers = new ForkMarkerSubscriptions(
+    () => this.deliveryPort(),
+    (id) => this.subscribers(id),
+    () => this.now(),
+    (id) => this.hooks.readForkJournal?.(id)
+  )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
@@ -83,6 +68,7 @@ export class AgentSessionSubscribers {
     const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
+      readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       boundedFrames: input.boundedFrames === true,
       readsCurrentRequests: input.readsCurrentRequests === true,
@@ -92,9 +78,11 @@ export class AgentSessionSubscribers {
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
 
+    this.forkMarkers.add(subscriber)
     const hostNow = this.now()
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true)
+      this.forkMarkers.refresh(subscriber, input.journal, true)
       refreshDerivedStopNotes(
         this.deliveryPort(),
         subscriber,
@@ -127,6 +115,7 @@ export class AgentSessionSubscribers {
         { currentWork: work, historyView: view.normalizationKey, journal }
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
     }
     const { sessionId, id } = subscriber
@@ -266,6 +255,13 @@ export class AgentSessionSubscribers {
     }
   }
 
+  refreshForkSources(
+    readJournal: (sessionId: string) => AgentSessionJournal | undefined,
+    sourceIds?: readonly string[]
+  ): void {
+    this.forkMarkers.refreshSources(readJournal, sourceIds)
+  }
+
   private subscribers(sessionId: string): Subscriber[] {
     return [...(this.bySession.get(sessionId)?.values() ?? [])]
   }
@@ -321,6 +317,7 @@ export class AgentSessionSubscribers {
     session?.delete(subscriber.id)
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
+      this.forkMarkers.delete(subscriber)
     }
   }
 

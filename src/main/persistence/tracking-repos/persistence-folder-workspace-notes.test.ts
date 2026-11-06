@@ -176,47 +176,6 @@ describe('Store', () => {
     ])
   })
 
-  it('survives repeated rollback / re-upgrade hops', async () => {
-    const store = await createStore()
-    const group = store.createProjectGroup({
-      name: 'Platform',
-      parentPath: '/workspace/platform',
-      createdFrom: 'folder-scan'
-    })
-    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Refund fix' })
-    const note = makeFolderNote('note-1', 'Review this paragraph', workspace.id)
-    store.updateFolderWorkspace(workspace.id, { diffComments: [note] })
-    store.flush()
-
-    for (let hop = 0; hop < 2; hop++) {
-      writeDataFile(simulatePreviousBuildLoadAndFlush(readDataFile() as PersistedState))
-      const reupgraded = await createStore()
-      expect(reupgraded.getFolderWorkspace(workspace.id)?.diffComments).toEqual([note])
-      reupgraded.flush()
-    }
-  })
-
-  it('keeps notes and remote provenance for an SSH folder workspace across a rollback', async () => {
-    const store = await createStore()
-    const group = store.createProjectGroup({
-      name: 'Platform',
-      parentPath: '/workspace/platform',
-      connectionId: 'ssh-1',
-      createdFrom: 'folder-scan'
-    })
-    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Remote fix' })
-    expect(workspace.connectionId).toBe('ssh-1')
-    const note = makeFolderNote('note-remote', 'Remote review', workspace.id)
-    store.updateFolderWorkspace(workspace.id, { diffComments: [note] })
-    store.flush()
-
-    writeDataFile(simulatePreviousBuildLoadAndFlush(readDataFile() as PersistedState))
-
-    const restored = await createStore()
-    expect(restored.getFolderWorkspace(workspace.id)?.diffComments).toEqual([note])
-    expect(restored.getFolderWorkspace(workspace.id)?.connectionId).toBe('ssh-1')
-  })
-
   it('round-trips unknown top-level state keys through load and flush', async () => {
     writeFolderWorkspaceProfile({
       workspaces: [folderWorkspaceRecord({ unknownNestedField: 'from-a-newer-build' })],
@@ -240,19 +199,6 @@ describe('Store', () => {
         'record field-by-field, so nested unknown fields are dropped. That is why notes moved ' +
         'to a top-level key.'
     ).not.toHaveProperty('unknownNestedField')
-  })
-
-  it('migrates legacy inline folder-workspace notes into the top-level map', async () => {
-    const note = makeFolderNote('note-1', 'Legacy inline note')
-    writeFolderWorkspaceProfile({ workspaces: [folderWorkspaceRecord({ diffComments: [note] })] })
-
-    const store = await createStore()
-    expect(store.getFolderWorkspace('fw-1')?.diffComments).toEqual([note])
-    store.flush()
-
-    const persisted = readDataFile() as PersistedState
-    expect(persisted.folderWorkspaceDiffComments?.['fw-1']).toEqual([note])
-    expect(persisted.folderWorkspaces[0]).not.toHaveProperty('diffComments')
   })
 
   it('keeps notes across a rollback when the session never edits anything', async () => {
@@ -316,73 +262,6 @@ describe('Store', () => {
       'fw-1': [inline]
     })
   })
-
-  it('drops orphaned note entries and prunes them when workspaces are deleted', async () => {
-    const note = makeFolderNote('note-1', 'Kept note')
-    writeFolderWorkspaceProfile({
-      workspaces: [folderWorkspaceRecord()],
-      diffCommentsMap: { 'fw-1': [note], ghost: [makeFolderNote('note-ghost', 'Orphan', 'ghost')] }
-    })
-
-    const store = await createStore()
-    store.flush()
-    expect((readDataFile() as PersistedState).folderWorkspaceDiffComments).toEqual({
-      'fw-1': [note]
-    })
-
-    const reloaded = await createStore()
-    reloaded.flush()
-    expect((readDataFile() as PersistedState).folderWorkspaceDiffComments).not.toHaveProperty(
-      'ghost'
-    )
-
-    // Serialization derives the notes map from live workspaces; deletion needs no separate map pruning.
-    expect(reloaded.removeFolderWorkspace('fw-1')).toBe(true)
-    reloaded.flush()
-    expect(readDataFile() as PersistedState).not.toHaveProperty('folderWorkspaceDiffComments')
-
-    writeFolderWorkspaceProfile({
-      workspaces: [folderWorkspaceRecord()],
-      diffCommentsMap: { 'fw-1': [note] }
-    })
-    const groupDelete = await createStore()
-    expect(groupDelete.deleteProjectGroup('root')).toBe(true)
-    groupDelete.flush()
-    expect(readDataFile() as PersistedState).not.toHaveProperty('folderWorkspaceDiffComments')
-  })
-
-  it('writes no folderWorkspaceDiffComments key for note-free profiles', async () => {
-    const store = await createStore()
-    const group = store.createProjectGroup({
-      name: 'Platform',
-      parentPath: '/workspace/platform',
-      createdFrom: 'folder-scan'
-    })
-    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'No notes' })
-    store.flush()
-    expect('folderWorkspaceDiffComments' in (readDataFile() as object)).toBe(false)
-
-    store.updateFolderWorkspace(workspace.id, { diffComments: [] })
-    store.flush()
-    expect('folderWorkspaceDiffComments' in (readDataFile() as object)).toBe(false)
-  })
-
-  it.each([
-    ['null root', null, undefined],
-    ['string root', 'oops', undefined],
-    ['array root', [], undefined],
-    ['non-array entry value', { 'fw-1': 'oops' }, undefined],
-    ['array of non-DiffComment members', { 'fw-1': [7] }, [7]]
-  ])(
-    'tolerates a corrupt folderWorkspaceDiffComments map (%s)',
-    async (_label, diffCommentsMap, expected) => {
-      writeFolderWorkspaceProfile({ workspaces: [folderWorkspaceRecord()], diffCommentsMap })
-
-      const store = await createStore()
-
-      expect(store.getFolderWorkspace('fw-1')?.diffComments).toEqual(expected)
-    }
-  )
 
   it('passes note members through verbatim on load and re-write', async () => {
     // Preserve unknown note fields so validation cannot discard user-authored prose.

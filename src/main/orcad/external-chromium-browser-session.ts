@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
@@ -16,6 +16,7 @@ import {
   readAgentBrowserScreenshot
 } from '../browser/agent-browser/agent-browser-screenshot-arguments'
 import { runProcess } from '@orca/process-host'
+import { resolveExternalChromiumProfilePath } from './external-chromium-profile-path'
 
 const COMMAND_TIMEOUT_MS = 90_000
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024
@@ -92,26 +93,47 @@ export function externalChromiumAgentBrowserEnvironment(options: {
   }
 }
 
+// A profile held by another Chromium also fails ProcessSingleton; only an access failure means unwritable.
+function unwritableProfileLockLine(message: string): string | undefined {
+  return message
+    .split('\n')
+    .find((line) => /SingletonLock: (Permission denied|Read-only file system)/.test(line))
+    ?.trim()
+}
+
 export class ExternalChromiumBrowserSession {
-  private readonly profilePath: string
+  private readonly identity: string
   private readonly sessionName: string
+  private profilePathResolution: Promise<string> | null = null
 
   constructor(
     private readonly agentBrowserPath: string,
     private readonly launch: ExternalChromiumLaunch,
-    statePath: string
+    private readonly statePath: string
   ) {
-    const identity = createHash('sha256')
+    this.identity = createHash('sha256')
       .update(`${statePath}:${launch.provider}`)
       .digest('hex')
       .slice(0, 16)
-    this.sessionName = `orca-orcad-${identity}`
-    this.profilePath = join(statePath, `browser-${launch.provider}`)
+    this.sessionName = `orca-orcad-${this.identity}`
+  }
+
+  private profilePath(): Promise<string> {
+    this.profilePathResolution ??= resolveExternalChromiumProfilePath(
+      this.launch,
+      this.statePath,
+      this.identity
+    )
+    return this.profilePathResolution
   }
 
   async start(signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted()
-    await mkdir(this.profilePath, { recursive: true })
+    const profilePath = await this.profilePath()
+    signal?.throwIfAborted()
+    // A relocated snap profile sits outside orcad's private data root; it holds browser state and captures.
+    await mkdir(profilePath, { recursive: true, mode: 0o700 })
+    await chmod(profilePath, 0o700)
     signal?.throwIfAborted()
     // Stable sessions survive orcad restarts without --cdp binding; reuse them to preserve live tabs.
     const reusable = await this.readActiveTabId(signal)
@@ -122,7 +144,21 @@ export class ExternalChromiumBrowserSession {
     // Reclaim the stable name only when no active tab answers.
     await this.stop()
     signal?.throwIfAborted()
-    await this.run(['open', 'about:blank'], { signal })
+    try {
+      await this.run(['open', 'about:blank'], { signal })
+    } catch (error) {
+      // Chromium aborts when it cannot write its profile lock; the driver's generic hint misleads here.
+      const lockFailure =
+        error instanceof BrowserError ? unwritableProfileLockLine(error.message) : undefined
+      if (lockFailure) {
+        throw new BrowserError(
+          BROWSER_UNAVAILABLE_ERROR_CODE,
+          `Chromium cannot lock its profile directory ${profilePath} (${lockFailure}). ` +
+            'The browser needs write access there; confinement such as a snap sandbox can block it.'
+        )
+      }
+      throw error
+    }
     const opened = await this.readActiveTabId(signal)
     signal?.throwIfAborted()
     if (!opened) {
@@ -167,7 +203,7 @@ export class ExternalChromiumBrowserSession {
   async screenshot(params: Record<string, unknown>, full: boolean): Promise<unknown> {
     const options = Screenshot.parse(params)
     const raw = await this.run(
-      agentBrowserScreenshotArgs(options, { outputDir: this.profilePath, fullPage: full }),
+      agentBrowserScreenshotArgs(options, { outputDir: await this.profilePath(), fullPage: full }),
       { cliArgv: true }
     )
     return readAgentBrowserScreenshot(raw, options.format ?? 'png', (bytes) =>
@@ -176,7 +212,7 @@ export class ExternalChromiumBrowserSession {
   }
 
   async pdf(): Promise<unknown> {
-    const outputPath = join(this.profilePath, `capture-${randomUUID()}.pdf`)
+    const outputPath = join(await this.profilePath(), `capture-${randomUUID()}.pdf`)
     await this.run(['pdf', outputPath])
     const data = (await readFile(outputPath)).toString('base64')
     await rm(outputPath, { force: true }).catch(() => undefined)
@@ -229,7 +265,9 @@ export class ExternalChromiumBrowserSession {
     read: (stdout: string) => T
   ): Promise<{ envelope: T; stderr: string }> {
     signal?.throwIfAborted()
-    const args = ['--session', this.sessionName, '--profile', this.profilePath]
+    const profilePath = await this.profilePath()
+    signal?.throwIfAborted()
+    const args = ['--session', this.sessionName, '--profile', profilePath]
     if (this.launch.browserArgs?.length) {
       args.push('--args', this.launch.browserArgs.join('\n'))
     }
@@ -237,7 +275,7 @@ export class ExternalChromiumBrowserSession {
     const env = externalChromiumAgentBrowserEnvironment({
       inheritedEnv: process.env,
       executablePath: this.launch.executablePath,
-      profilePath: this.profilePath,
+      profilePath,
       sessionName: this.sessionName,
       browserArgs: this.launch.browserArgs
     })
