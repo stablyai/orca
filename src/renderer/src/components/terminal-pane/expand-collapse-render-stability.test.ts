@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import { useExpandCollapseActions } from './expand-collapse'
-import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
+import { useTerminalKeyboardShortcuts } from './input/keyboard/terminal-keyboard-hook'
 
 type ExpandCollapseHookState = Parameters<typeof useExpandCollapseActions>[0]
 type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]

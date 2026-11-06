@@ -10,7 +10,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store'
 import { linearAddIssueComment } from '@/runtime/runtime-linear-issue-mutations'
 import { translate } from '@/i18n/i18n'

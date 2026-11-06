@@ -7,13 +7,13 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../share
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
-import type { SearchState } from './terminal-keyboard-shortcut-matching'
+import type { SearchState } from './input/keyboard/terminal-keyboard-shortcut-matching'
 import type { CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 
 import {
   type TerminalLinkActionRequest,
   closeTerminalLinkActionRequest
-} from './terminal-link-action-request'
+} from './links/terminal-link-action-request'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'

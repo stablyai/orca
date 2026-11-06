@@ -2,7 +2,7 @@ import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 

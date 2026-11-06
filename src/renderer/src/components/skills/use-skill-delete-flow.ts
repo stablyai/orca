@@ -22,7 +22,7 @@ import {
   skillDeletePlacementSummary,
   skillDeleteRetainedSourceLines
 } from './skill-delete-copy'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type SkillDeleteFlow = {
   /** False while the target is unresolved or the host predates the capability. */

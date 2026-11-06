@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
-} from '@/lib/worktree-runtime-owner'
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   isFileSearchResultOwnerCurrent,
   type FileSearchResultOwner

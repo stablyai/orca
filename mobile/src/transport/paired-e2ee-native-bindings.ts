@@ -6,6 +6,8 @@ declare global {
   // Installed by react-native-libsodium's native install; unknown until checked.
   var jsi_from_base64_to_arraybuffer: unknown
   var jsi_crypto_secretbox_open_easy: unknown
+  var jsi_crypto_secretbox_easy: unknown
+  var jsi_to_base64: unknown
 }
 
 // Load only from app entry; shared/desktop/e2e transport imports must not load native types.
@@ -14,7 +16,7 @@ export function loadPairedE2EENativeBindings(): PairedE2EENativeBindings | null 
   return sodium && OrcaGzipUtf8Codec ? { codec: OrcaGzipUtf8Codec, sodium } : null
 }
 
-// Install JSI directly without the library entry’s logging/per-call wrappers; only two functions are needed.
+// Install JSI directly without the library entry’s logging/per-call wrappers.
 function installLibsodium(): LibsodiumBindings | null {
   const libsodium: { install?: unknown } | undefined = NativeModules.Libsodium
   if (typeof libsodium?.install !== 'function') {
@@ -22,19 +24,35 @@ function installLibsodium(): LibsodiumBindings | null {
   }
   libsodium.install()
   const fromBase64 = globalThis.jsi_from_base64_to_arraybuffer
+  const toBase64 = globalThis.jsi_to_base64
   const secretboxOpen = globalThis.jsi_crypto_secretbox_open_easy
-  if (typeof fromBase64 !== 'function' || typeof secretboxOpen !== 'function') {
+  const secretboxSeal = globalThis.jsi_crypto_secretbox_easy
+  if (
+    typeof fromBase64 !== 'function' ||
+    typeof toBase64 !== 'function' ||
+    typeof secretboxOpen !== 'function' ||
+    typeof secretboxSeal !== 'function'
+  ) {
     return null
   }
   return {
     fromBase64: (value, variant) => arrayBufferOf(fromBase64(value, variant)),
-    secretboxOpen: (box, nonce, key) => arrayBufferOf(secretboxOpen(box, nonce, key))
+    toBase64: (value, variant) => stringOf(toBase64(value, variant)),
+    secretboxOpen: (box, nonce, key) => arrayBufferOf(secretboxOpen(box, nonce, key)),
+    secretboxSeal: (message, nonce, key) => arrayBufferOf(secretboxSeal(message, nonce, key))
   }
 }
 
 function arrayBufferOf(value: unknown): ArrayBuffer {
   if (!(value instanceof ArrayBuffer)) {
     throw new TypeError('libsodium returned something other than an ArrayBuffer')
+  }
+  return value
+}
+
+function stringOf(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new TypeError('libsodium returned something other than a string')
   }
   return value
 }

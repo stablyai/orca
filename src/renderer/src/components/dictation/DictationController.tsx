@@ -26,6 +26,7 @@ export function DictationController() {
   const {
     start: startCapture,
     stop: stopCapture,
+    finish: finishCapture,
     flushBufferedAudio,
     discardBufferedAudio,
     getCapturedChunkCount
@@ -56,7 +57,11 @@ export function DictationController() {
     async (sessionId: string) => {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
-      stopCapture()
+      await finishCapture()
+      // A speech error during the tail already tore this session down; a newer one may own the refs now.
+      if (activeSessionIdRef.current !== sessionId) {
+        return
+      }
       try {
         await window.api.speech.stopDictation(sessionId)
       } catch {
@@ -85,7 +90,7 @@ export function DictationController() {
       setDictationState('idle')
       setPartialTranscript('')
     },
-    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount]
+    [setDictationState, setPartialTranscript, finishCapture, getCapturedChunkCount]
   )
 
   const startDictation = useCallback(async () => {
@@ -267,7 +272,7 @@ export function DictationController() {
       stopRequestedDuringStartRef.current = true
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
-      stopCapture({ preserveBufferedAudio: true })
+      void finishCapture({ preserveBufferedAudio: true })
       return
     }
 
@@ -280,7 +285,7 @@ export function DictationController() {
       return
     }
     await finishDictationSession(sessionId)
-  }, [finishDictationSession, setDictationState, stopCapture])
+  }, [finishDictationSession, setDictationState, finishCapture])
 
   // Capture opens before stopDictation exists; bridge through a ref to avoid cyclic callback dependencies.
   stopDictationRef.current = () => void stopDictation()

@@ -2,7 +2,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
-} from '../lib/agent-launch-prompt-delivery'
+} from '../lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'

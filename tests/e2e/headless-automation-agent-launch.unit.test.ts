@@ -62,7 +62,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   },
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: () => true }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: () => true
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () =>

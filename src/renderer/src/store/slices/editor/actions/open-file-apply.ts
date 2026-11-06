@@ -27,7 +27,7 @@ import {
   getReplaceablePreviewFileId,
   removeEditorStateForReplacedPreview
 } from '../tabs/workspace-editor-item'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../../tabs/tabs-group-actions'
 import { translate } from '@/i18n/i18n'
 import { refreshExistingOpenFile } from './open-file-existing-tab-refresh'

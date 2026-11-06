@@ -374,7 +374,7 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks6 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { pasteTerminalText } = await import('./terminal-bracketed-paste')
+      const { pasteTerminalText } = await import('./input/paste/terminal-bracketed-paste')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const pane = createPane(1)

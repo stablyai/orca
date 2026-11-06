@@ -16,7 +16,7 @@ import type {
   RuntimeTerminalQuickCommands,
   TerminalQuickCommandHostsSlice
 } from '@/store/slices/terminal-quick-command-hosts'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 
 export type TerminalQuickCommandHost = {

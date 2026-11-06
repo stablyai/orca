@@ -23,10 +23,10 @@ const getState = () => ({
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => getState() } }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => getState() } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => 'host-A'
 }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({

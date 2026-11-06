@@ -20,7 +20,7 @@ import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { captureTerminalDropTarget } from '../terminal-pane/terminal-drop-target'
+import { captureTerminalDropTarget } from '../terminal-pane/input/file-drop/terminal-drop-target'
 import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
 import { clearStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
@@ -43,7 +43,9 @@ vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatTypedCommand: vi.fn(),
   submitNativeChatPrompt: vi.fn()
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 afterEach(() => {
   cleanup()
   crewRows.length = 0

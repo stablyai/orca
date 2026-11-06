@@ -19,7 +19,7 @@ vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: mocks.activateStructuredAgentSessionTab
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 

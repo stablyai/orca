@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import type { ProspectiveWorkspace } from './agent-launch-route-input'
+import type { ProspectiveWorkspace } from './agent-session/launch/routing/agent-launch-route-input'
 import {
   agentsOfferedForLaunch,
   resolveChatProgramContext,

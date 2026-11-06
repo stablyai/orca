@@ -3,7 +3,7 @@ import type * as StoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
-import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-limits'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './input/paste/terminal-paste-limits'
 import {
   cleanupGlobalEffectsTestWindow,
   installGlobalEffectsTestWindow
@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   focusActivePane: vi.fn(),
   flushTerminalOutput: vi.fn(),
   getTerminalOutputEpoch: vi.fn(() => 0),
-  handleTerminalFileDrop: vi.fn(),
   enforceTerminalCurrentScrollIntent: vi.fn(),
   syncTerminalScrollIntentFromViewport: vi.fn(),
   pasteTerminalText: vi.fn(),
@@ -82,11 +81,7 @@ vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   syncTerminalScrollIntentFromViewport: mocks.syncTerminalScrollIntentFromViewport
 }))
 
-vi.mock('./terminal-drop-handler', () => ({
-  handleTerminalFileDrop: mocks.handleTerminalFileDrop
-}))
-
-vi.mock('./terminal-bracketed-paste', () => ({
+vi.mock('./input/paste/terminal-bracketed-paste', () => ({
   BRACKETED_PASTE_END: '\u001b[201~',
   BRACKETED_PASTE_START: '\u001b[200~',
   pasteTerminalText: mocks.pasteTerminalText,

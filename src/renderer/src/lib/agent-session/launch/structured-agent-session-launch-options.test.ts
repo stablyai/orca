@@ -108,7 +108,7 @@ import {
   registerStructuredSelectionCatalogStore,
   structuredSessionSelectionController,
   forgetStructuredSessionSelection
-} from '../../structured-agent-session-selection-controller'
+} from '../options/structured-agent-session-selection-controller'
 
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {

@@ -27,12 +27,12 @@ import {
   createBrowserLinkTestStore,
   WORKSPACE,
   URL_TO_OPEN
-} from '@/lib/browser-link-open.test-fixture'
+} from '@/lib/browser/navigation/browser-link-open.test-fixture'
 import {
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener
-} from '@/lib/http-link-routing'
-import { openWorkspaceBrowserTabForLink } from '@/lib/workspace-browser-tab-open'
+} from '@/lib/browser/navigation/http-link-routing'
+import { openWorkspaceBrowserTabForLink } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { terminalPreviewApiFor } from './terminal-preview-api'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
