@@ -4,7 +4,7 @@ export function attachRichMarkdownImageErrorLink(
   container: HTMLElement,
   image: HTMLImageElement,
   getSource: () => string | undefined
-): () => void {
+): { update: (sourceChanged: boolean) => void } {
   const link = document.createElement('a')
   link.hidden = true
   link.style.lineHeight = 'normal'
@@ -33,5 +33,13 @@ export function attachRichMarkdownImageErrorLink(
   }
   image.addEventListener('load', reset)
   container.appendChild(link)
-  return reset
+  return {
+    update: (sourceChanged) => {
+      if (sourceChanged) {
+        reset()
+      } else if (!link.hidden) {
+        link.textContent = image.alt || getSource() || ''
+      }
+    }
+  }
 }

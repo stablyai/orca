@@ -156,14 +156,13 @@ export function createRichMarkdownExtensions({
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
-          const resetErrorLink = imageErrorLink
+          const errorLink = imageErrorLink
             ? attachRichMarkdownImageErrorLink(dom, img, () => currentSrc)
             : undefined
           let currentContextVersion = getImageContextVersion(this.storage)
           let releaseImageLease: (() => void) | undefined
 
           const loadImage = (src: string | undefined): void => {
-            resetErrorLink?.()
             releaseImageLease?.()
             releaseImageLease = undefined
             const fp = this.storage.filePath as string
@@ -231,6 +230,7 @@ export function createRichMarkdownExtensions({
                 )
               )
               const newSrc = updatedNode.attrs.src as string | undefined
+              errorLink?.update(newSrc !== currentSrc)
               const nextContextVersion = getImageContextVersion(this.storage)
               if (newSrc !== currentSrc || nextContextVersion !== currentContextVersion) {
                 currentSrc = newSrc

@@ -423,7 +423,20 @@ it('shows a failed hosted image as its filename link without changing the upload
   expect(onChange.mock.lastCall?.[0]).toBe(
     '![screen.png](https://github.com/user-attachments/assets/private)'
   )
+  fireEvent.focus(window)
+  expect(image.hidden).toBe(true)
+  expect(view.getByRole('link', { name: 'screen.png' })).toBe(link)
+  view.rerender(
+    <GitHubMarkdownComposer
+      value="![renamed.png](https://github.com/user-attachments/assets/private)"
+      onChange={onChange}
+      placeholder="Private image"
+    />
+  )
+  await waitFor(() => expect(view.getByRole('link', { name: 'renamed.png' })).toBe(link))
+  expect(image.alt).toBe('renamed.png')
+  expect(image.hidden).toBe(true)
   fireEvent.load(image)
   expect(image.hidden).toBe(false)
-  expect(view.queryByRole('link', { name: 'screen.png' })).toBeNull()
+  expect(view.queryByRole('link', { name: 'renamed.png' })).toBeNull()
 })
