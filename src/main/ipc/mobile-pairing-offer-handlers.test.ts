@@ -19,6 +19,7 @@ vi.mock('os', async (importOriginal) => ({
   networkInterfaces: networkInterfacesMock
 }))
 
+import type { MobilePairingQrResult } from '../runtime/rpc/server/pairing/mobile-pairing-qr'
 import { registerMobileHandlers } from './mobile'
 
 const LAN = {
@@ -71,7 +72,11 @@ const RUNTIME_OFFER = {
 
 describe('desktop pairing IPC handlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
-  const encodePairingQr = vi.fn(async () => ({ ok: true, qrDataUrl: 'data:qr', qrSize: 21 }))
+  const encodePairingQr = async (): Promise<MobilePairingQrResult> => ({
+    ok: true,
+    qrDataUrl: 'data:qr',
+    qrSize: 21
+  })
 
   beforeEach(() => {
     handlers.clear()
@@ -88,8 +93,9 @@ describe('desktop pairing IPC handlers', () => {
     server: ReturnType<typeof fakeServer>['server'],
     args?: unknown
   ) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test call only the four methods the fake implements.
     registerMobileHandlers(server as never, {
-      encodePairingQr: encodePairingQr as never,
+      encodePairingQr,
       getDefaultRouteInterfaceNames: async () => new Set(['en0'])
     })
     return handlers.get(channel)?.({}, args)
