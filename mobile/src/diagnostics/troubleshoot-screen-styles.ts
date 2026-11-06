@@ -3,16 +3,8 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING } from '../components/list/ListGroup'
 
 export const troubleshootScreenStyles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
   scroll: {
     flex: 1
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg
   },
   diagnosticButton: {
     flexDirection: 'row',

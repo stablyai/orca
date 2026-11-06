@@ -10,7 +10,7 @@ import type { ConnectionLogEntry, ConnectionState } from '../transport/types'
 import type { ConnectionDiagnosis } from './connection-diagnostics-analysis'
 import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen-data'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNavBar } from '../settings/settings-screen-frame'
+import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
 
 export function ConnectionDiagnosticsView({
   hostPicker,
@@ -51,13 +51,19 @@ export function ConnectionDiagnosticsView({
     'auth-failed': t('diagnostics.connectionDiagnosticsView.authFailed', 'auth-failed')
   }
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
       <SettingsNavBar
         title={t('diagnostics.connectionDiagnosticsView.title', 'Network diagnostics')}
         onBack={onBack}
       />
 
-      <View style={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
+      <View
+        style={[
+          settingsScreenStyles.scrollContent,
+          styles.content,
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
+      >
         {hostPicker}
         {hasHost || entries.length > 0 ? (
           <>

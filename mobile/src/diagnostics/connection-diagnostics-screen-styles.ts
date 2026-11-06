@@ -3,8 +3,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const connectionDiagnosticsScreenStyles = themedStyleSheet(() => ({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  content: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  content: { flex: 1 },
   hostPicker: {
     flexDirection: 'row',
     flexWrap: 'wrap',

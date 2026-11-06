@@ -15,7 +15,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNavBar } from '../settings/settings-screen-frame'
+import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
 import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -66,7 +66,7 @@ export function TroubleshootView({
     []
   )
   return (
-    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top }]}>
+    <View ref={rootRef} style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
       <SettingsNavBar
         title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
         onBack={onBack}
@@ -75,7 +75,7 @@ export function TroubleshootView({
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
-          styles.scrollContent,
+          settingsScreenStyles.scrollContent,
           { paddingBottom: insets.bottom + spacing.xl }
         ]}
         showsVerticalScrollIndicator={false}
@@ -171,8 +171,6 @@ export function TroubleshootView({
             </View>
           ))}
         </ListGroup>
-
-        <View style={{ height: spacing.xl }} />
       </ScrollView>
     </View>
   )
