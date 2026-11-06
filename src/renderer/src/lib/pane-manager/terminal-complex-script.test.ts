@@ -42,3 +42,17 @@ it.each(['\x1b[32mx\x1b[0m', '\x1b[38m'])(
     }
   }
 )
+
+it.each([
+  ['\x1b[38;2;1;2;44m', false],
+  ['\x1b[38;2;1;2;3;41m', true],
+  ['\x1b[38:5:1;44m', true],
+  ['\x1b[38;5;41m', false],
+  ['\x1b[38;41m', false],
+  ['\x1b[0041m', true],
+  ['\x1b[4:41m', false],
+  ['\x1b[48m', true],
+  ['\x1b[\x1b[41m', true]
+])('classifies background SGR parameters in %j as %s', (data, expected) => {
+  expect(terminalOutputPrefersRenderRefresh(data)).toBe(expected)
+})
