@@ -17,7 +17,43 @@ export async function isWindowsShellAloneInJob(
   readIdentityTable: () => Promise<WindowsProcessIdentityRow[]>,
   readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
 ): Promise<boolean> {
-  if (!jobProcessIds?.has(shellPid)) {
+  let table: Promise<WindowsProcessIdentityRow[]> | undefined
+  const readTable = (): Promise<WindowsProcessIdentityRow[]> => (table ??= readIdentityTable())
+  if (
+    !jobProcessIds ||
+    !(await isShellAloneAmongJobMembers(
+      shellPid,
+      spawnedShellPath,
+      jobProcessIds,
+      readTable,
+      readConsoleAttachedProcessIds
+    ))
+  ) {
+    return false
+  }
+  return !hasDescendantOutsideJob(shellPid, jobProcessIds, await readTable())
+}
+
+/** Children of a Store (MSIX) shell start outside its job, so job membership alone cannot prove idle. */
+function hasDescendantOutsideJob(
+  shellPid: number,
+  jobProcessIds: ReadonlySet<number>,
+  rows: WindowsProcessIdentityRow[]
+): boolean {
+  const index = buildProcessTableIndex(rows)
+  return collectDescendantsFromIndex(index, shellPid, (row) =>
+    startedBefore(row.creationTimeMs, index.byPid.get(row.ppid)?.creationTimeMs)
+  ).some((row) => !jobProcessIds.has(row.pid))
+}
+
+async function isShellAloneAmongJobMembers(
+  shellPid: number,
+  spawnedShellPath: string,
+  jobProcessIds: ReadonlySet<number>,
+  readIdentityTable: () => Promise<WindowsProcessIdentityRow[]>,
+  readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+): Promise<boolean> {
+  if (!jobProcessIds.has(shellPid)) {
     return false
   }
   if (jobProcessIds.size === 1) {

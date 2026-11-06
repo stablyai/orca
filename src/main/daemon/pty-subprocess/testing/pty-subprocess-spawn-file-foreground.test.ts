@@ -195,8 +195,8 @@ it('reports an idle Windows shell only when the owned job contains the shell alo
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
   members.mockReturnValue(new Set([100]))
+  readWindows.mockResolvedValue([{ pid: 100, ppid: 1, name: 'zsh' }])
   expect(await inspect(createHandle())).toMatchObject({ hasChildProcesses: false })
-  expect(readWindows).not.toHaveBeenCalled()
 })
 
 it('accepts only a complete actual-shell Git Bash launch chain', async () => {
