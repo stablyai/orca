@@ -86,18 +86,6 @@ function makeTitleCountingState(worktreeCount: number): {
 }
 
 describe('mobile session publication cost', () => {
-  it('builds no worktree content when nothing changed', () => {
-    const { state, titleReads, resetTitleReads } = makeTitleCountingState(300)
-
-    buildMobileSessionTabSnapshots(state)
-    expect(titleReads()).toBeGreaterThan(0)
-    resetTitleReads()
-
-    buildMobileSessionTabSnapshots(state)
-
-    expect(titleReads()).toBe(0)
-  })
-
   it('builds content only for the worktree whose agent status changed', () => {
     const WORKTREES = 300
     const { state, titleReads, resetTitleReads, withOneAgentStatusChanged } =

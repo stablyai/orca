@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { PluginSurface } from '../frames/plugin-protocol'
 import * as stored from './plugin-host-api-storage-schemas'
 import { PLUGIN_PANEL_BRIDGE_API } from './plugin-host-api-panel-methods'
+import { PLUGIN_WORKER_ACTIONS_API } from './plugin-host-api-worker-actions'
 import {
   ALL_SURFACES,
   FRAMES_ONLY,
@@ -299,7 +300,8 @@ export const PLUGIN_HOST_API = {
     params: filesSaveAsParams,
     result: filesSaveAsResult
   }),
-  ...PLUGIN_PANEL_BRIDGE_API
+  ...PLUGIN_PANEL_BRIDGE_API,
+  ...PLUGIN_WORKER_ACTIONS_API
 }
 
 export type PluginHostApi = typeof PLUGIN_HOST_API

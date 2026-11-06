@@ -7,7 +7,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from '../command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
@@ -27,6 +27,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     // Share owner-aware display/title/completion/GPU decisions so raw title text cannot override stronger pane identity (#7428/#7447).
     const decision = resolvePaneTitleDecision({
       normalizedTitle: title,
+      isGeminiTerminalTitle: session.deps.isGeminiTerminalTitle,
       rawTitle,
       displayOwnerAgentType: session.getAuthoritativePaneAgent(),
       rendererOwnerAgentType: session.getPaneScopedRendererOwner(),

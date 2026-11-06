@@ -157,9 +157,6 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   keyboardInput: {
     flex: 1,
     height: 34,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
     fontSize: TEXT_INPUT_FONT_SIZE,

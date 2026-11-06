@@ -430,12 +430,15 @@ describe('reading the chat against where the offer was taken', () => {
       child: null,
       journal: {
         cursor: () => ({ epoch: input.epoch ?? TAKEN.epoch, sequence: 9 }),
-        submissions: () => input.submissions ?? []
+        inputOrder: {
+          acceptedInputsAfter: (sequence: number) =>
+            (input.submissions ?? []).filter((entry) => entry.acceptedSequence > sequence)
+        }
       }
     }
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
       logger: createStructuredAgentSessionLogger(),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and accepted-input query and the child fields given here.
       sessions: new Map([[SESSION, session as never]]),
       now: () => NOW,
       enqueue: (operation) => operation()
@@ -503,14 +506,17 @@ describe('reading the chat against where the offer was taken', () => {
         child: null,
         journal: {
           cursor: () => ({ epoch: TAKEN.epoch, sequence: 9 }),
-          submissions: () => [
-            { clientMessageId: retry, acceptedSequence: 7, dispatchState: 'rejected' }
-          ]
+          inputOrder: {
+            acceptedInputsAfter: (sequence: number) =>
+              [{ clientMessageId: retry, acceptedSequence: 7, dispatchState: 'rejected' }].filter(
+                (entry) => entry.acceptedSequence > sequence
+              )
+          }
         }
       }
       const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
         logger: createStructuredAgentSessionLogger(),
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and accepted-input query and the child fields given here.
         sessions: new Map([[SESSION, session as never]]),
         now: () => afterCrash,
         enqueue: (operation) => operation()

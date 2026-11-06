@@ -21,7 +21,7 @@ import {
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
 
-vi.mock('../../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: vi.fn(),
   resolveAiVaultSessionTitlesInService: vi.fn()

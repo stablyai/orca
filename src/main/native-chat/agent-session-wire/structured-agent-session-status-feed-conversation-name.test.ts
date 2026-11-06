@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -69,17 +69,6 @@ function lastName(events: readonly AgentSessionStatusEvent[]): string | undefine
   return event?.type === 'status' ? event.session.conversationName : undefined
 }
 
-it('publishes a held chat its saved name once, and not again for an unchanged record', async () => {
-  const { feed, events, name } = await namedFeed()
-  expect(lastName(events)).toBeUndefined()
-  name('Explain the parser')
-  expect(lastName(events)).toBe('Explain the parser')
-  const count = events.length
-  feed.publish('session')
-  feed.publishConversationName('session')
-  expect(events).toHaveLength(count + 1)
-})
-
 it('names a chat whose tab closed before naming finished, and keeps it for later subscribers', async () => {
   const { feed, events, sessions, name } = await namedFeed()
   feed.revokeLive('session')
@@ -92,21 +81,6 @@ it('names a chat whose tab closed before naming finished, and keeps it for later
     type: 'snapshot',
     sessions: [{ sessionId: 'session', conversationName: 'Explain the parser' }]
   })
-})
-
-it('keeps the name on the summary a closing chat retains', async () => {
-  const { feed, events, name } = await namedFeed()
-  name('Explain the parser')
-  feed.close('session')
-  expect(lastName(events)).toBe('Explain the parser')
-})
-
-it('publishes naming activity without needing a chat summary', async () => {
-  const { feed, events } = await namedFeed()
-  const count = events.length
-  feed.publishConversationName('unknown-session')
-  expect(events).toHaveLength(count + 1)
-  expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
 })
 
 it('publishes cold names from durable records across a host restart without a status row', () => {

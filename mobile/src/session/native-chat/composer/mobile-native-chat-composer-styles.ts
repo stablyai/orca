@@ -4,6 +4,8 @@ import { composerInputStyles } from '../../../components/composer-input/composer
 
 /** Space above the composer box; the queue box above reaches through it. */
 export const COMPOSER_INSET_TOP = 6
+/** How far a box docked on the composer's top edge reaches under it, past its rounded corners. */
+export const COMPOSER_TUCK = 12
 
 export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
   composerInset: {
@@ -11,7 +13,7 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     paddingTop: COMPOSER_INSET_TOP,
     paddingBottom: spacing.sm
   },
-  bar: { ...composerInputStyles.box, ...composerInputStyles.docked },
+  bar: composerInputStyles.box,
   dictationMeter: {
     flexDirection: 'row',
     alignItems: 'center',

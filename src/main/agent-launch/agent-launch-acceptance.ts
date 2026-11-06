@@ -7,9 +7,9 @@ import {
   AgentLaunchSetupNotCompletedError,
   type SetupRun
 } from '../runtime/setup/setup-run'
-import { AgentLaunchClosedBeforeDispatchError } from '../../shared/agent-launch-tab-closed'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
-import { formatAgentTypeLabel } from '../../shared/agent-type-label'
+import { AgentLaunchClosedBeforeDispatchError } from '../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import type {
   AgentLaunchSetupReceipt,
   AgentLaunchTerminalStartupParams

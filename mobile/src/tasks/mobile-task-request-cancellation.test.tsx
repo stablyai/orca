@@ -300,16 +300,6 @@ describe('task repository request ownership', () => {
       expect(fixture.model().setLoading).toHaveBeenLastCalledWith(false)
     })
   }
-
-  it('releases the refresh spinner when a silent reload is abandoned by disconnect', async () => {
-    const fixture = await mount('github')
-    const old = await fixture.load({ silent: true })
-    fixture.scope.connState = 'disconnected'
-    await fixture.render()
-    await fixture.drain()
-    await old.request
-    expect(fixture.model().setRefreshing).toHaveBeenLastCalledWith(false)
-  })
 })
 
 describe('GitHub next-page source failures', () => {

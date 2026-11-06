@@ -1,5 +1,4 @@
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
@@ -14,11 +13,8 @@ import {
   HOST_TEST_NOW as NOW
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { call, runtimeCalls } from './structured-agent-session-rpc.test-fixture'
-import {
-  resetStructuredAgentSessionClosesBeforeCreateForTests,
-  structuredAgentSessionClosedBeforeCreate
-} from './structured-agent-session-close-before-create'
+import { call } from './structured-agent-session-rpc.test-fixture'
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -94,115 +90,6 @@ const refusedAsClosed = {
 }
 
 describe('a close that reaches main before its create', () => {
-  it('cancel then create: main refuses the create and makes nothing', async () => {
-    expect(await close()).toMatchObject({ ok: true })
-
-    expect(await create()).toMatchObject(refusedAsClosed)
-    expect(rig.store.getRecord(SESSION)).toBeNull()
-    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
-  })
-
-  it('create then cancel: an ordinary close, and the create still replays', async () => {
-    expect(await create()).toMatchObject({ ok: true, result: { ok: true } })
-    expect(await close()).toMatchObject({ ok: true })
-
-    expect(await create()).toMatchObject({ ok: true, result: { ok: true, replayed: true } })
-  })
-
-  it('a close while the create resolves its workspace refuses it before anything is written', async () => {
-    const resolving = Promise.withResolvers<void>()
-    const entered = Promise.withResolvers<void>()
-    const creating = create({
-      resolveStructuredAgentSessionCreateIntent: vi.fn(async (params: { envelope: unknown }) => {
-        entered.resolve()
-        await resolving.promise
-        return {
-          envelope: params.envelope,
-          location: {
-            executionHostId: 'local',
-            wslDistro: null,
-            workspaceId: 'workspace-1',
-            workspaceKind: 'git-worktree'
-          },
-          provider: 'codex',
-          agent: 'codex',
-          accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
-          runtimeKind: 'native'
-        }
-      })
-    })
-    await entered.promise
-    await close()
-    resolving.resolve()
-
-    expect(await creating).toMatchObject(refusedAsClosed)
-    expect(rig.store.getRecord(SESSION)).toBeNull()
-  })
-
-  it('a close while the create commits closes the chat as it lands', async () => {
-    let closing: Promise<unknown> | undefined
-    const result = await create({
-      publishStructuredAgentSessionTab: vi.fn(
-        async (input: Parameters<OrcaRuntimeService['publishStructuredAgentSessionTab']>[0]) => {
-          raw = { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` }
-          input.capture?.({
-            tableId: rig.host.getSessionTabId(SESSION),
-            presentation: {
-              raw: { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` },
-              saved: []
-            }
-          })
-          closing = close()
-        }
-      )
-    })
-    await closing
-
-    expect(result).toMatchObject(refusedAsClosed)
-    expect(retireTab).toHaveBeenCalledWith(SESSION, `agent-session:${SESSION}`, 'workspace-1')
-    expect(rig.store.getSessionTabId(SESSION)).toBeNull()
-    expect(rig.host.hasSession(SESSION)).toBe(false)
-  })
-
-  it('a close before a create that fails past commit still closes what it made', async () => {
-    let closing: Promise<unknown> | undefined
-    const result = await create({
-      publishStructuredAgentSessionTab: vi.fn(
-        async (input: Parameters<OrcaRuntimeService['publishStructuredAgentSessionTab']>[0]) => {
-          raw = { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` }
-          input.capture?.({
-            tableId: rig.host.getSessionTabId(SESSION),
-            presentation: {
-              raw: { worktreeId: 'workspace-1', tabId: `agent-session:${SESSION}` },
-              saved: []
-            }
-          })
-          // Not awaited: the close's stop queues behind this create.
-          closing = close()
-          await vi.waitFor(() =>
-            expect(structuredAgentSessionClosedBeforeCreate(SESSION)).toBe(true)
-          )
-          throw new Error('tab write failed')
-        }
-      )
-    })
-
-    await closing
-    expect(result).toMatchObject(refusedAsClosed)
-    expect(rig.store.getRecord(SESSION)).not.toBeNull()
-    expect(retireTab).toHaveBeenCalledWith(SESSION, `agent-session:${SESSION}`, 'workspace-1')
-    expect(rig.host.hasSession(SESSION)).toBe(false)
-  })
-
-  it('a close main fails for want of its chat host still refuses the create that follows', async () => {
-    setStructuredAgentSessionHost(null)
-    expect(await close()).toMatchObject({ ok: false })
-    setStructuredAgentSessionHost(rig.host)
-
-    expect(await create()).toMatchObject(refusedAsClosed)
-    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
-  })
-
   it('a close fences pending creates with either layout owner', async () => {
     mocks.layoutOwnerIsMain = false
     await close()

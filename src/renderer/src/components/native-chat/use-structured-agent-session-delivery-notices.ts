@@ -11,8 +11,6 @@ import { useStructuredAgentSessionStartFailureFacts } from './use-structured-age
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
-const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
-
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
@@ -22,11 +20,10 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
-  // Read journal rows/items only for visible rejected messages so ordinary streaming cannot rebuild notices.
+  // Only rejection wording needs journal items; pending delivery comes from submissions alone.
   const hasRejected = submissions.some(
     (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
   )
-  const journalRows = hasRejected ? submissions : NO_SUBMISSIONS
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
     hasRejected && args.startFailures === undefined
@@ -37,12 +34,12 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
     () =>
       structuredAgentSessionDeliveryNotices({
         pending,
-        submissions: journalRows,
+        submissions,
         agentName,
         startFailures,
         commandItemIds
       }),
-    [pending, journalRows, agentName, startFailures, commandItemIds]
+    [pending, submissions, agentName, startFailures, commandItemIds]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)

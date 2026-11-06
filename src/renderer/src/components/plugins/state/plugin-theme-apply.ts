@@ -8,7 +8,7 @@ import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-set
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING
-} from '../../../../../shared/terminal-color-overrides'
+} from '../../../../../shared/terminal-themes/terminal-color-overrides'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useAppStore } from '@/store'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
@@ -78,6 +78,24 @@ export function terminalThemeUpdate(
     },
     terminalThemes
   )
+}
+
+/** Puts one just-installed app theme in its mode's slot, as picking it there would. */
+export async function applyPluginAppThemeToSlot(
+  pluginKey: string,
+  pick: Pick<PluginThemeRegistration, 'base' | 'label'>
+): Promise<boolean> {
+  const own = (await usePluginThemeStore.getState().fetchEntries()).filter(
+    (candidate) => candidate.pluginKey === pluginKey && candidate.base === pick.base
+  )
+  // Why the lone fallback: a catalog preview's label is display text and may differ from the title.
+  const theme =
+    own.find((candidate) => candidate.label === pick.label) ?? (own.length === 1 ? own[0] : null)
+  if (!theme) {
+    return false
+  }
+  await useAppStore.getState().updateSettings(pluginAppThemeSlotUpdate(pick.base, theme.id))
+  return true
 }
 
 /**

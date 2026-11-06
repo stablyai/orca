@@ -25,7 +25,7 @@ import { structuredSessionNotices } from '@/components/native-chat/native-chat-s
 import { requiredSetupLaunchFailureText } from '@/lib/required-setup-launch-failure'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
 import type { AgentLaunchStatusResult } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
-import type { AgentLaunchResult } from '../../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 

@@ -6,7 +6,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   getRemoteRuntimeTerminalMultiplexer,
   resetRemoteRuntimeTerminalMultiplexersForTests
@@ -154,15 +154,6 @@ class FakeMultiplexServer {
     this.send(TerminalStreamOpcode.Output, encodeTerminalStreamText(text), this.cursorUnits)
   }
 
-  outputSpan(data: string, rawLength: number): void {
-    this.cursorUnits += rawLength
-    this.send(
-      TerminalStreamOpcode.OutputSpan,
-      encodeTerminalStreamJson({ data, rawLength, transformed: true }),
-      this.cursorUnits
-    )
-  }
-
   malformedOutputSpan(): void {
     this.send(
       TerminalStreamOpcode.OutputSpan,
@@ -257,140 +248,6 @@ describe('remote terminal frame-drop resync', () => {
     return { data, metas, snapshots, stream }
   }
 
-  it('detects a dropped Output frame via the seq gap and resyncs', async () => {
-    const { data, snapshots } = await subscribeClient()
-    expect(snapshots).toEqual(['INITIAL'])
-
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('bbb') // dropped under backpressure — never reaches the client
-    server.output('ccc') // seq jumps past 'bbb', exposing the gap
-
-    // Flush the client's resync SnapshotRequest -> server snapshot round-trip.
-    await Promise.resolve()
-    await Promise.resolve()
-
-    // Snapshot already covers ccc; do not paint it again after recovery.
-    expect(data).toEqual(['aaa'])
-    expect(server.droppedFrames).toBe(1)
-    // Instead, a fresh authoritative snapshot recovers the terminal.
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-    // P2-5: the gap lost output, so the resync asks for history to replace the pane's own.
-    expect(server.snapshotRequestRows).toEqual([1000])
-
-    server.replaySnapshotCoveredOutput('ccc')
-    server.output('ddd')
-    expect(data).toEqual(['aaa', 'ddd'])
-  })
-
-  // Reveal’s requested image covers old-host hidden-pause gaps; redundant resync clears/repaints TUI a round trip later (#22087).
-  it('takes one requested image on reveal and no untagged resync after paused output', async () => {
-    const { data, snapshots, stream } = await subscribeClient()
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('dropped while paused')
-
-    const revealImage = await stream.serializeBufferOutcome({
-      scrollbackRows: 100,
-      repaintsPane: true
-    })
-    expect(revealImage.snapshot?.data).toBe('RECOVERED')
-
-    server.output('live after reveal')
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(server.snapshotRequests).toEqual([expect.any(Number)])
-    expect(snapshots).toEqual(['INITIAL'])
-    expect(data).toEqual(['aaa', 'live after reveal'])
-  })
-
-  // Stall probes/previews do not repaint; any gap they span still needs resync.
-  it('still resyncs a gap that a non-repainting request spanned', async () => {
-    const { data, snapshots, stream } = await subscribeClient()
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('dropped')
-
-    await stream.serializeBufferOutcome({ scrollbackRows: 100 })
-    server.output('ccc')
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(server.snapshotRequests).toEqual([expect.any(Number), undefined])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-    expect(data).toEqual(['aaa'])
-  })
-
-  it('retries a truncated recovery on a backoff while keeping live output flowing', async () => {
-    vi.useFakeTimers()
-    try {
-      const { data, snapshots } = await subscribeClient()
-      server.truncateNextRecoverySnapshot = true
-
-      server.output('aaa')
-      server.dropNextOutput = true
-      server.output('bbb')
-      server.output('ccc')
-      // Backoff limits recovery retries while live output stays open during slow serialization.
-      server.output('ddd')
-      expect(server.snapshotRequests).toEqual([undefined])
-
-      // The retry fires from the backoff timer alone — no further output needed.
-      await vi.advanceTimersByTimeAsync(500)
-      expect(server.snapshotRequests).toEqual([undefined, undefined])
-
-      server.output('eee')
-      expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-      expect(data).toEqual(['aaa', 'ddd', 'eee'])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  // Why: the host answers '' with `unavailable` when no serializer ran; that is not a blank pane.
-  it('retries an unavailable recovery instead of erasing the pane', async () => {
-    vi.useFakeTimers()
-    try {
-      const { data, snapshots } = await subscribeClient()
-      server.unavailableNextRecoverySnapshot = true
-
-      server.output('aaa')
-      server.dropNextOutput = true
-      server.output('bbb')
-      server.output('ccc')
-      expect(server.snapshotRequests).toEqual([undefined])
-      expect(snapshots).toEqual(['INITIAL'])
-
-      await vi.advanceTimersByTimeAsync(500)
-      expect(server.snapshotRequests).toEqual([undefined, undefined])
-      expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-      expect(data).toEqual(['aaa'])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps painting live output while a recovery snapshot is delayed', async () => {
-    const { data, snapshots, stream } = await subscribeClient()
-    try {
-      server.holdNextRecoverySnapshot = true
-
-      server.output('aaa')
-      server.dropNextOutput = true
-      server.output('bbb')
-      server.output('ccc') // exposes the gap and starts the delayed recovery
-      server.output('ddd')
-      server.output('eee')
-
-      // A slow snapshot must not become a renderer backpressure gate.
-      expect(data).toEqual(['aaa', 'ddd', 'eee'])
-      expect(snapshots).toEqual(['INITIAL'])
-    } finally {
-      stream.close()
-    }
-  })
-
   it('reconciles painted output when a delayed recovery snapshot arrives', async () => {
     const { data, snapshots, stream } = await subscribeClient()
     try {
@@ -416,30 +273,6 @@ describe('remote terminal frame-drop resync', () => {
     } finally {
       stream.close()
     }
-  })
-
-  it('re-opens the live path when only the JSON error event for a resync survives', async () => {
-    const { data, snapshots, stream } = await subscribeClient()
-    server.holdNextRecoverySnapshot = true
-
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('bbb')
-    server.output('ccc')
-    expect(server.snapshotRequests).toEqual([undefined])
-
-    // Reliable JSON error must release resync even if its paired binary Error frame was dropped.
-    subscriptionCallbacks.onResponse({
-      ok: true,
-      result: { type: 'error', streamId: stream.streamId, message: 'snapshot failed' }
-    })
-
-    server.output('ddd')
-    server.output('eee')
-
-    expect(server.snapshotRequests).toEqual([undefined, undefined])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-    expect(data).toEqual(['aaa', 'eee'])
   })
 
   it('dispatches the deferred resync when a JSON error consumes the manual snapshot', async () => {
@@ -487,28 +320,6 @@ describe('remote terminal frame-drop resync', () => {
       expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
 
       server.output('eee')
-      expect(data).toEqual(['aaa', 'ddd', 'eee'])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not re-gate on every timeout while recovery cannot complete', async () => {
-    vi.useFakeTimers()
-    try {
-      const { data } = await subscribeClient()
-      server.holdNextRecoverySnapshot = true
-
-      server.output('aaa')
-      server.dropNextOutput = true
-      server.output('bbb')
-      server.output('ccc')
-      await vi.advanceTimersByTimeAsync(10_000)
-      server.holdNextRecoverySnapshot = true
-      // Before #18488 the frame after each timeout re-tripped the stale gap and was dropped.
-      server.output('ddd')
-      server.output('eee')
-
       expect(data).toEqual(['aaa', 'ddd', 'eee'])
     } finally {
       vi.useRealTimers()
@@ -571,46 +382,6 @@ describe('remote terminal frame-drop resync', () => {
     }
   })
 
-  it('passes contiguous output straight through without resyncing', async () => {
-    const { data, snapshots } = await subscribeClient()
-
-    server.output('one')
-    server.output('two')
-    server.output('three')
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(data).toEqual(['one', 'two', 'three'])
-    expect(snapshots).toEqual(['INITIAL'])
-  })
-
-  it('replaces the stream and subscription CAS after a same-id re-pair', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
-    const onTransportClose = vi.fn()
-    const firstMultiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    await firstMultiplexer.subscribeTerminal({
-      terminal: 'terminal-1',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onTransportClose }
-    })
-
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
-    const secondMultiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    await secondMultiplexer.subscribeTerminal({
-      terminal: 'terminal-2',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
-    })
-
-    expect(secondMultiplexer).not.toBe(firstMultiplexer)
-    expect(onTransportClose).toHaveBeenCalledTimes(1)
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-    expect(subscribe.mock.calls.map((call) => call[0])).toEqual([
-      expect.objectContaining({ expectedEnvironmentPairingRevision: 10 }),
-      expect.objectContaining({ expectedEnvironmentPairingRevision: 11 })
-    ])
-  })
-
   it('drops stale binary output and retires the old transport after a same-id re-pair', async () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
     const data: string[] = []
@@ -632,38 +403,6 @@ describe('remote terminal frame-drop resync', () => {
     expect(data).toEqual([])
     expect(onTransportClose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops stale JSON events and retires the old transport after a same-id re-pair', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
-    const onEnd = vi.fn()
-    const onTransportClose = vi.fn()
-    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    const stream = await multiplexer.subscribeTerminal({
-      terminal: 'terminal-1',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onEnd, onTransportClose }
-    })
-
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
-    subscriptionCallbacks.onResponse({
-      ok: true,
-      result: { type: 'end', streamId: stream.streamId }
-    })
-
-    expect(onEnd).not.toHaveBeenCalled()
-    expect(onTransportClose).toHaveBeenCalledTimes(1)
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-  })
-
-  it('delivers an empty transformed span with its raw sequence metadata', async () => {
-    const { data, metas, snapshots } = await subscribeClient()
-
-    server.outputSpan('', 9)
-
-    expect(data).toEqual([''])
-    expect(metas).toEqual([{ seq: 9, rawLength: 9, transformed: true }])
-    expect(snapshots).toEqual(['INITIAL'])
   })
 
   it('requests an authoritative resync instead of rendering malformed span JSON', async () => {

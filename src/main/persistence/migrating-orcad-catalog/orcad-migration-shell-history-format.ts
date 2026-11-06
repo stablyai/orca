@@ -1,7 +1,7 @@
 // The JSON header carries the unhashed worktree ID needed for history GC; raw history follows.
 import { z } from 'zod'
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { hashWorktreeId } from '../../terminal-history-id'
+import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 
 // fish history lives outside Orca's store and cannot migrate.
 export const ORCAD_MIGRATION_SHELL_HISTORY_SHELLS = ['zsh', 'bash'] as const

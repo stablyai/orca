@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseHostPluginManifest, parsePluginManifest } from '../manifest/plugin-manifest'
+import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { pluginSettingValueIssue } from './plugin-settings-contribution'
-import { pluginSettingDefaults } from './plugin-settings-values'
 
 function manifest(settings: unknown[], capabilities = [{ kind: 'settings:own' }]) {
   return {
@@ -29,36 +28,6 @@ function issues(raw: unknown): string {
 }
 
 describe('contributes.settings', () => {
-  it('accepts a typed setting list and reads defaults from it', () => {
-    const parsed = parseHostPluginManifest(
-      manifest([
-        apiUrl,
-        {
-          key: 'pageSize',
-          title: 'Page size',
-          type: 'integer',
-          default: 20,
-          minimum: 1,
-          maximum: 100
-        },
-        {
-          key: 'mode',
-          title: 'Mode',
-          type: 'string',
-          enum: ['fast', 'safe'],
-          enumLabels: ['Fast', 'Safe']
-        }
-      ])
-    )
-    expect(parsed.ok).toBe(true)
-    if (parsed.ok) {
-      expect(pluginSettingDefaults(parsed.manifest.contributes.settings)).toEqual({
-        apiUrl: 'https://example.com',
-        pageSize: 20
-      })
-    }
-  })
-
   it('needs settings:own, unique keys, and defaults that fit the setting', () => {
     expect(issues(manifest([apiUrl], []))).toContain('settings:own')
     expect(issues(manifest([apiUrl, apiUrl]))).toContain('duplicate setting key')

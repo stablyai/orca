@@ -9,7 +9,11 @@ import {
   leafIdForPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
@@ -60,6 +64,7 @@ function startLeaf1(ptyId: string): void {
 
 async function connectWithStart(start: TerminalPaneStart | undefined) {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport()
   transportFactoryQueue.push(transport)
   setStore({
@@ -68,6 +73,8 @@ async function connectWithStart(start: TerminalPaneStart | undefined) {
   })
   const deps = buildPaneConnectionDeps(() => mockStoreState, { tabId: TAB })
   const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
+  bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
   connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps }
@@ -127,6 +134,7 @@ describe('a pane main is starting a terminal for', () => {
 
   it('attaches a split pane to the terminal main bound it to, not its tab’s', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const newLeaf = leafIdForPane(2)
@@ -141,6 +149,8 @@ describe('a pane main is starting a terminal for', () => {
       paneTransportsRef: { current: new Map([[1, source]]) }
     })
     const args = mockPanePtyArgs(createPane(2), createManager(2), deps)
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks2)
+
     connectPanePty(...args)
     await flushAsyncTicks()
     expect(transport.connect).not.toHaveBeenCalled()

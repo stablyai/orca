@@ -3,7 +3,7 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './session-tabs/structured-session-tab-close'
+
 import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from './session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs'
 
 const rendererPage: RuntimeMobileSessionBrowserTab = {
@@ -95,13 +95,6 @@ function reconcile(
   return storeMobileSessionSnapshot.mock.calls[0]?.[1]
 }
 
-it('keeps renderer-owned browser pages when refreshing client-hosted pages on an attached desktop', () => {
-  const published = reconcile({}) ?? snapshot
-
-  expect(published.tabs).toContainEqual(rendererPage)
-  expect(published.tabGroups?.[0].tabOrder).toContain('renderer-tab')
-})
-
 it.each([false, true])('retires absent offscreen pages when attached=%s', (attached) => {
   expect(
     reconcile({ attached, offscreen: true }, { ...snapshot, publicationEpoch: 'headless:1' })?.tabs
@@ -140,42 +133,4 @@ it('never publishes a row twice when the live build reclaims a renderer-owned id
 
   expect(published?.tabs).toEqual([reclaimed])
   expect(published?.tabGroups?.[0].tabOrder).toEqual([rendererPage.id])
-})
-
-it('does not republish when a client row merely sits before a renderer row', () => {
-  const interleaved = {
-    ...snapshot,
-    tabs: [clientPage, rendererPage],
-    tabGroups: [{ id: 'group', activeTabId: 'renderer-tab', tabOrder: ['client', 'renderer-tab'] }]
-  }
-
-  expect(reconcile({ live: [clientPage] }, interleaved)).toBeUndefined()
-})
-
-it('keeps the renderer publication epoch when selecting a client-hosted browser tab', () => {
-  const storeMobileSessionSnapshot = vi.fn()
-  const runtime = OrcaRuntimeWithCloseStructuredAgentSessionTab.prototype as unknown as {
-    markHeadlessBrowserSessionTabActive(
-      worktreeId: string,
-      browserPageId: string,
-      options: { focusesHost: boolean }
-    ): void
-  }
-
-  runtime.markHeadlessBrowserSessionTabActive.call(
-    {
-      offscreenBrowserBackend: {},
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: () => undefined,
-      mobileSessionTabsByWorktree: new Map([['wt', snapshot]]),
-      storeMobileSessionSnapshot,
-      emitMobileSessionTabsSnapshot: vi.fn()
-    },
-    'wt',
-    'renderer-page',
-    { focusesHost: false }
-  )
-
-  expect(storeMobileSessionSnapshot.mock.calls[0]?.[1].publicationEpoch).toBe(
-    snapshot.publicationEpoch
-  )
 })

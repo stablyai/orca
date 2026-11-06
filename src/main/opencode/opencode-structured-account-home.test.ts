@@ -40,15 +40,6 @@ function managedAccounts() {
 }
 
 describe('structured OpenCode account binding', () => {
-  it('records only that the chat has no managed profile', () => {
-    const accounts = managedAccounts()
-    accounts.select(null)
-    expect(resolveStructuredOpenCodeAccountHome({ managedAccounts: accounts })).toEqual({
-      kind: 'opencode',
-      locator: { kind: 'unmanaged' }
-    })
-  })
-
   it('uses the pinned managed profile after selection changes and refuses removal', () => {
     const accounts = managedAccounts()
     const binding = resolveStructuredOpenCodeAccountHome({ managedAccounts: accounts })

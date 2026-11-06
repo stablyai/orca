@@ -1,7 +1,8 @@
+import { journalInputOrder } from './journal-input-order'
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalLifecycleMutationFitsOneBatch,
@@ -18,10 +19,13 @@ import {
 import type {
   JournalLifecycleBatchInput,
   JournalPlannedLifecycleBatchInput,
-  JournalResolvedLifecycleBatchInput
+  JournalResolvedLifecycleBatchInput,
+  ResolveDispatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
-import { journalQueuedRejectionRowBuilders } from './journal-pending-submission-recovery'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { keepFailedStartSends } from './journal-unsent-send-hold'
+import { buildJournalQueueRow } from './journal-queue-events'
 
 export class JournalLifecycleBatchAppender {
   constructor(
@@ -38,10 +42,19 @@ export class JournalLifecycleBatchAppender {
     return this.deps
       .enqueueRows(() => {
         if (input.rejectsQueued) {
-          const rejections = journalQueuedRejectionRowBuilders(
-            this.deps.state,
-            input.fence,
-            input.rejectsQueued
+          const rejection = input.rejectsQueued
+          const rejections = this.planDispatches(
+            input,
+            journalInputOrder(this.deps.state())
+              .unsettledSubmissions()
+              .filter(isQueuedAgentJournalSubmission)
+              .map((send) => ({
+                clientMessageId: send.clientMessageId,
+                fence: input.fence,
+                state: 'rejected' as const,
+                ...rejection,
+                recovered: true as const
+              }))
           )
           if (rejections.length > 0 && input.mutations.length === 0) {
             throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
@@ -54,9 +67,7 @@ export class JournalLifecycleBatchAppender {
           return []
         }
         return [
-          ...(input.dispatches ?? []).map((dispatch) =>
-            journalDispatchRowBuilder(this.deps.state, dispatch)
-          ),
+          ...this.planDispatches(input, input.dispatches ?? []),
           ...this.planMutations(input, input.mutations)
         ]
       })
@@ -71,12 +82,29 @@ export class JournalLifecycleBatchAppender {
           return []
         }
         const { mutations, dispatches } = input.plan()
-        return [
-          ...dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch)),
-          ...this.planMutations(input, mutations)
-        ]
+        return [...this.planDispatches(input, dispatches), ...this.planMutations(input, mutations)]
       })
       .then((rows) => this.cursorAfter(rows))
+  }
+
+  private planDispatches(
+    input: { keepFailedStart?: boolean },
+    dispatches: readonly ResolveDispatchInput[]
+  ): ((seq: number, ts: number) => JournalRow)[] {
+    const kept = input.keepFailedStart
+      ? keepFailedStartSends(this.deps.state(), dispatches)
+      : { cards: [], dispatches }
+    return [
+      ...kept.cards.flatMap(({ messageId, change }) =>
+        change
+          ? [
+              (seq: number, ts: number) =>
+                buildJournalQueueRow(this.deps.state(), messageId, change, seq, ts)
+            ]
+          : []
+      ),
+      ...kept.dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch))
+    ]
   }
 
   private cursorAfter(rows: readonly JournalRow[]): AgentJournalCursor {

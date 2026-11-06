@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-health'
-import type { RuntimeHostBlockedReason } from '../../../shared/runtime-host-status'
+import type { RuntimeHostBlockedReason } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeCompatVerdict } from '../../../shared/protocol-compat'
 
 export function getExecutionHostHealthLabel(
@@ -21,7 +21,9 @@ export function getExecutionHostHealthLabel(
     case 'blocked':
       return blockedReason === 'access-revoked'
         ? translate('runtime.health.repair', 'Re-pair needed')
-        : translate('runtime.health.update', 'Update needed')
+        : blockedReason === 'server-replaced'
+          ? translate('runtime.health.serverReplaced', 'Different server')
+          : translate('runtime.health.update', 'Update needed')
   }
 }
 

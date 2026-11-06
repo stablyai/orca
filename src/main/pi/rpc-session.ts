@@ -66,14 +66,15 @@ export class PiRpcSession {
   }
   private optionObservations = new PiRpcOptionObservations(
     this.optionProof,
-    () => !this.requestedClose && !this.failedCause && !this.connection.closed
+    () => !this.requestedClose && !this.failure && !this.connection.closed
   )
   readonly startup: PiRpcSessionStartup
   readonly history = PiHistoryCapture.forSession(this, () => this.deps)
   openedLink: AgentSessionProviderHandleLink | null = null
   requestedClose = false
   private publishedExit = false
-  private failedCause?: Error
+  /** What ended this child, once something did. */
+  failure?: Error
   private exitDelivery: Promise<void> = Promise.resolve()
   private releaseAfterExit?: () => void
   private readonly reading = new ReaderPauseHolds<'lane' | 'journal'>(() => this.connection)
@@ -129,7 +130,8 @@ export class PiRpcSession {
     this.dialogs = new PiRpcDialogCallbacks(
       this.lane,
       (frame) => this.connection.send(frame),
-      (error) => this.fail(error)
+      (error) => this.fail(error),
+      resolvedLaunch.backgroundWork?.directory ?? null
     )
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
@@ -163,7 +165,7 @@ export class PiRpcSession {
         this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
         this.optionObservations.seed(state)
       },
-      () => this.failedCause,
+      () => this.failure,
       () => this.optionObservations.prepare()
     )
   }
@@ -211,7 +213,7 @@ export class PiRpcSession {
   }
 
   fail(error: Error): void {
-    this.failedCause ??= error
+    this.failure ??= error
     this.deps.logger.error('Pi RPC session failed', {
       scope: 'pi-rpc',
       sessionId: this.input.identity.sessionId,
@@ -262,11 +264,10 @@ export class PiRpcSession {
       return
     }
     this.publishedExit = true
-    this.unbindReadingControl?.()
     const observedAt = Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
-    const cause = (this.failedCause ??= error)
-    this.dialogs.cancelAll()
+    const cause = (this.failure ??= error)
+    this.dialogs.close()
     this.turns.end()
     // The lane is sealed once finalized, so the end event travels with the final transfer.
     this.lane.finalize({
@@ -286,7 +287,11 @@ export class PiRpcSession {
         }, 2_000)
         timer.unref()
       })
-    ]).finally(() => clearTimeout(timer))
+    ]).finally(() => {
+      clearTimeout(timer)
+      // Final transfer must not treat an already received backlog as startup work.
+      this.unbindReadingControl?.()
+    })
     this.deps.onLifecycle({
       type: 'ended',
       ...(this.connection.lastCloseResult?.killDelivered && this.connection.rootVerdict !== 'exited'

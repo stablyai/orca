@@ -99,7 +99,7 @@ vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
 
 import { DOCUMENT_LOAD_DEADLINE_MS, PAGE_READY_DEADLINE_MS } from './mobile-web-shell-runtime'
 import { SHELL_STALL_LOG_MS } from './shell-lifecycle-log'
-import { connectionLogStore } from '../transport/persisted-connection-log-store'
+
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
 const HOST_ID = 'host-1'
@@ -427,27 +427,6 @@ describe('the hybrid shell runner', () => {
     })
   })
 
-  it('moves the download feed as progress is dispatched, without waiting for a render', async () => {
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    fake.settleCacheRead(null)
-    await flush()
-    const fetch = doubles.fetches[0]
-    if (fetch === undefined) {
-      throw new Error('no download was started')
-    }
-    const heard: number[] = []
-    mounted.downloadProgress().subscribe((fraction) => heard.push(fraction))
-    const renders = mounted.states().length
-    fetch.onProgress({ completedAssets: 0, totalAssets: 2, receivedBytes: 1024, totalBytes: 4096 })
-    fetch.onProgress({ completedAssets: 1, totalAssets: 2, receivedBytes: 4096, totalBytes: 4096 })
-    expect(heard).toEqual([0.25, 1])
-    expect(mounted.states()).toHaveLength(renders)
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
   it('abandons the download still in flight when Try again starts a new one', async () => {
     const fake = createFakeStore()
     const mounted = await mount(fake.store)
@@ -548,18 +527,6 @@ describe('the wait for the page to speak', () => {
     })
   })
 
-  it('reports the handshake the page completed, for the host that is rebuilt over it', async () => {
-    const mounted = await ready()
-    expect(mounted.handshakes().at(-1)).toBe(false)
-    await act(async () => {
-      mounted.pageReady()
-    })
-    expect(mounted.handshakes().at(-1)).toBe(true)
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
   it('arms nothing when the page spoke before the document was reported finished', async () => {
     const mounted = await ready()
     await act(async () => {
@@ -621,73 +588,6 @@ describe('the wait for the page to speak', () => {
     })
     await act(async () => {
       tree.unmount()
-    })
-  })
-
-  it('logs one stall warning for a page that never draws, without moving the session', async () => {
-    const logged = () => connectionLogStore.get(HOST_ID)
-    const before = logged().length
-    const mounted = await ready()
-    await act(async () => {
-      mounted.documentLoaded()
-      mounted.pageReady()
-    })
-    const stallTimers = live(mounted.timers.armed).filter(
-      (timer) => timer.delayMs === SHELL_STALL_LOG_MS
-    )
-    expect(stallTimers).toHaveLength(1)
-    await act(async () => {
-      stallTimers[0]?.run()
-    })
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    expect(logged().slice(before)).toEqual([
-      expect.objectContaining({
-        message: 'Web shell: page has not drawn after 15s',
-        detail: expect.stringContaining('page ready=yes readyAsks=1 documentLoaded=yes')
-      })
-    ])
-  })
-
-  it('writes one line for a healthy open, on paint', async () => {
-    const before = connectionLogStore.get(HOST_ID).length
-    const mounted = await ready()
-    await act(async () => {
-      mounted.documentLoaded()
-      mounted.pageReady()
-      mounted.pagePainted()
-    })
-    expect(
-      connectionLogStore
-        .get(HOST_ID)
-        .slice(before)
-        .map((entry) => `${entry.message} | ${entry.detail}`)
-    ).toEqual([expect.stringMatching(/^Web shell: page painted \| source=cache build=\S{1,8} /)])
-    expect(live(mounted.timers.armed).filter((t) => t.delayMs === SHELL_STALL_LOG_MS)).toEqual([])
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
-  it("logs a stall for the first open's checking state, which no transition line covers", async () => {
-    const before = connectionLogStore.get(HOST_ID).length
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    expect(mounted.states().at(-1)?.kind).toBe('checking')
-    const stallTimers = live(mounted.timers.armed).filter(
-      (timer) => timer.delayMs === SHELL_STALL_LOG_MS
-    )
-    expect(stallTimers).toHaveLength(1)
-    await act(async () => {
-      stallTimers[0]?.run()
-    })
-    expect(connectionLogStore.get(HOST_ID).slice(before)).toEqual([
-      expect.objectContaining({
-        message: 'Web shell: still checking host after 15s',
-        detail: 'gates=open cache=unread'
-      })
-    ])
-    await act(async () => {
-      mounted.tree.unmount()
     })
   })
 

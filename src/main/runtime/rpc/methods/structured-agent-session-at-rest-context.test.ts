@@ -215,7 +215,7 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
     expect(file).toContain('EARLY_SAVED_MARKER')
     expect(file).not.toMatch(/PRE_CLEAR_SECRET|DISCARDED_REWIND_SECRET|LATER_SAVED_MARKER/)
     expect(first.capturedText?.length).toBeLessThanOrEqual(36_000)
-    expect(first.capturedText).toContain('Earlier saved chat messages omitted')
+    expect(first.capturedText).toContain('saved chat messages or tool details omitted')
     expect(first.capturedText).not.toContain('EARLY_SAVED_MARKER')
     for (const text of [file, first.capturedText ?? '']) {
       const prompts: unknown[] = [...text.matchAll(/^Saved prompt: (.+)$/gm)].map((match) =>

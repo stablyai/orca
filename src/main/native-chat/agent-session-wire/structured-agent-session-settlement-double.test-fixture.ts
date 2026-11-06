@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -43,7 +43,9 @@ export function exitJournalDouble(fields: {
     itemBody: () => null,
     itemFence: fields.itemFence ?? (() => undefined),
     snapshot: () => ({ items: fields.items() }),
+    statusRead: () => ({ items: fields.items() }),
     submissions: fields.submissions ?? (() => []),
+    inputOrder: { recoverableSubmissions: fields.submissions ?? (() => []) },
     stopMarks: { latest: () => null, personStopDecides: () => false },
     appendPlannedLifecycleBatch: plannedBatchThrough(fields.appendLifecycleBatch)
   } as unknown as StructuredAgentSessionChildExitSession['journal']

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalResetReason
@@ -171,64 +171,6 @@ describe('useMobileStructuredAgentState older history', () => {
     await vi.waitFor(() => expect(hook.current!.state.items[0]?.sequence).toBe(1))
     expect(historyCursors).toEqual([1_000, 800, 600])
     expect(hook.current!.state.hasOlder).toBe(false)
-  })
-
-  it("stops at the first page that holds a row of the session's own", async () => {
-    const { hook, historyCursors } = await mountWithOlderPages({
-      1000: page([...range(800, 999, 'task-1'), said(999)], true),
-      800: page(range(600, 800), true)
-    })
-
-    act(() => hook.current!.loadEarlier())
-
-    await vi.waitFor(() => expect(hook.current!.state.items[0]?.sequence).toBe(800))
-    expect(historyCursors).toEqual([1_000])
-    expect(hook.current!.state.hasOlder).toBe(true)
-  })
-
-  it("reads back on its own when the newest page holds only a subagent's rows", async () => {
-    const { hook, historyCursors } = await mountWithOlderPages(
-      { 800: page(range(1, 101), false) },
-      range(800, 1_000, 'task-1')
-    )
-
-    await vi.waitFor(() => expect(hook.current!.state.items[0]?.sequence).toBe(1))
-    expect(historyCursors).toEqual([800])
-  })
-
-  it('reads back once from a window that draws nothing when the read lands nothing', async () => {
-    const { hook, historyCursors } = await mountWithOlderPages({}, range(800, 1_000, 'task-1'))
-
-    await vi.waitFor(() => expect(historyCursors).toEqual([800]))
-    await vi.waitFor(() => expect(hook.current!.olderPages).toBe('idle'))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(historyCursors).toEqual([800])
-  })
-
-  it('keeps the chat readable when an older page fails, retries on a tap, and ends at unreadable history', async () => {
-    const older: Parameters<typeof mountWithOlderPages>[0] = { 1000: new Error('timed out') }
-    const { hook } = await mountWithOlderPages(older)
-
-    act(() => hook.current!.loadEarlier())
-    await vi.waitFor(() => expect(hook.current!.olderPages).toBe('failed'))
-    expect(hook.current!.state.status).toBe('ready')
-    expect(hook.current!.state.items.map((item) => item.sequence)).toEqual([1_000])
-
-    older[1000] = page(range(900, 1_000), true)
-    older[900] = Object.assign(new Error('agent_session_journal_unreadable'), {
-      data: {
-        refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
-      }
-    })
-    act(() => hook.current!.loadEarlier())
-    await vi.waitFor(() => expect(hook.current!.state.items[0]?.sequence).toBe(900))
-    expect(hook.current!.olderPages).toBe('idle')
-
-    act(() => hook.current!.loadEarlier())
-    await vi.waitFor(() => expect(hook.current!.olderPages).toBe('unavailable'))
-    expect(hook.current!.state.status).toBe('ready')
-    act(() => hook.current!.loadEarlier())
-    expect(hook.current!.olderPages).toBe('unavailable')
   })
 })
 

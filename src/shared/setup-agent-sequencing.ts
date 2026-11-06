@@ -1,4 +1,4 @@
-import { quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
+import { quotePosixShellUnlessPlainNoAt } from './shell/launch/shell-argument-quoting'
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import { getPosixCodexShellLaunchPreflight } from './codex-shell-function'
 import { getPosixClaudeShellFunction } from './claude-shell-function'

@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
-import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
-import PreservedBranchBatchReviewModal from './components/sidebar/PreservedBranchBatchReviewModal'
+import DeleteWorktreeDialog from './components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog'
+import PreservedBranchBatchReviewModal from './components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal'
 import WorkspaceSpacePage from './components/workspace-space/WorkspaceSpacePage'
 import {
   isSpaceWindowState,

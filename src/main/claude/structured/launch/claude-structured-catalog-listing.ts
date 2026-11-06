@@ -2,19 +2,9 @@ import type { AgentSessionFastModeSupport } from '../../../../shared/agent-sessi
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { ListedModel } from './claude-structured-model-catalog'
 
-const TRANSIENT_FAST_MODE_REASONS = new Set(['network_error', 'unknown', 'pending'])
-const NON_BLOCKING_FAST_MODE_REASONS = new Set(['preference', 'sdk_opt_in_required'])
-
 export function claudeFastModeSupport(
-  models: readonly ListedModel[],
-  disabledReason: string | undefined
+  models: readonly ListedModel[]
 ): AgentSessionFastModeSupport | undefined {
-  if (disabledReason && TRANSIENT_FAST_MODE_REASONS.has(disabledReason)) {
-    return undefined
-  }
-  if (disabledReason && !NON_BLOCKING_FAST_MODE_REASONS.has(disabledReason)) {
-    return { supported: false, reason: disabledReason }
-  }
   if (!models.some((model) => model.supportsFastMode === true)) {
     return models.length > 0 && models.every((model) => model.supportsFastMode === false)
       ? { supported: false, reason: 'model-not-supported' }
@@ -34,6 +24,9 @@ function wireClaudeModel(entry: ListedModel): WireClaudeModel {
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
+    ...(entry.efforts.some(({ value }) => value === 'xhigh')
+      ? { chatEfforts: [{ value: 'ultracode', label: 'Ultracode' }] }
+      : {}),
     ...(entry.declaredDefaultEffort !== undefined
       ? { declaredDefaultEffort: entry.declaredDefaultEffort }
       : {}),

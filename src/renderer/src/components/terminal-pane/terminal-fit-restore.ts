@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../../../shared/terminal-fit-restore-deadline'
+import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,

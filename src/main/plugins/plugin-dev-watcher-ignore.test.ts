@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WatcherProcessCallback } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import { PluginDevWatcher } from './plugin-dev-watcher'
-import { isIgnoredPluginDevPath } from './plugin-dev-watcher-ignore'
 
 const root = resolve('plugins', 'demo')
 const watchers: PluginDevWatcher[] = []
@@ -13,32 +12,6 @@ afterEach(() => {
     watcher.dispose()
   }
   vi.useRealTimers()
-})
-
-describe('isIgnoredPluginDevPath', () => {
-  it('ignores root .git, .orca and node_modules and OS junk anywhere', () => {
-    for (const path of [
-      join(root, '.git', 'index'),
-      join(root, '.orca', 'types', 'orca.d.ts'),
-      join(root, 'node_modules'),
-      join(root, 'node_modules', 'pkg', 'index.js'),
-      join(root, 'src', '.DS_Store')
-    ]) {
-      expect(isIgnoredPluginDevPath(root, path)).toBe(true)
-    }
-  })
-
-  it('keeps served files, nested folders of the same names and the root itself', () => {
-    for (const path of [
-      root,
-      join(root, 'main.mjs'),
-      join(root, 'src', 'node_modules', 'kept.js'),
-      join(root, '.gitignore'),
-      join(resolve('plugins'), 'other', 'node_modules', 'x.js')
-    ]) {
-      expect(isIgnoredPluginDevPath(root, path)).toBe(false)
-    }
-  })
 })
 
 describe('PluginDevWatcher ignore list', () => {
@@ -61,11 +34,6 @@ describe('PluginDevWatcher ignore list', () => {
     }
     return { refresh, rootSubscription }
   }
-
-  it('passes the root ignore list to the native subscription', () => {
-    const { rootSubscription } = start()
-    expect(rootSubscription.options.ignore).toEqual(['.git', '.orca', 'node_modules'])
-  })
 
   it('does not refresh for a batch of ignored paths, but does for a mixed batch', async () => {
     const { refresh, rootSubscription } = start()

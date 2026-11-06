@@ -1,3 +1,4 @@
+import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/structured-agent-session-message-sender'
 import {
   reconcileUnknownLaunch,
   recoverPublishedSessionReceipt
@@ -20,6 +21,22 @@ export function confirmStructuredLaunchFirstMessagePublication(
     getStructuredLaunchStateBySessionId(sessionId) ??
     restorePersistedStructuredLaunchState(worktreeId, sessionId)
   if (!state || state.callers.outcome === 'pending' || state.cancelled) {
+    return
+  }
+  if (state.intent.params.firstMessage) {
+    // A limited history page is observation only; absence cannot authorize create replay.
+    void recoverPublishedSessionReceipt(state)
+      .then((receipt) => {
+        if (!state.cancelled && receipt.firstMessage) {
+          settleStructuredAgentSessionSendsFromJournal(
+            sessionId,
+            [receipt.firstMessage],
+            [],
+            receipt.cursor
+          )
+        }
+      })
+      .catch(() => {})
     return
   }
   state.callers.outcome = 'pending'

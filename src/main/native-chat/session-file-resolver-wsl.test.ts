@@ -11,21 +11,23 @@ const DEBIAN_ROLLOUT_UNC = ROLLOUT_UNC.replace('Ubuntu', 'Debian')
 
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
-vi.mock('../wsl/wsl-home-unless-stopped', async () => {
-  const wsl = await import('../wsl')
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl/discovery/distro-catalog')
   return {
     wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
     listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
   }
 })
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listWslDistrosAsync: vi.fn(async () => ['Ubuntu', 'Debian']),
   listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu', 'Debian']),
   listRunningWslHomeDirsAsync: vi.fn(async () => [
     UBUNTU_HOME,
     UBUNTU_HOME.replace('Ubuntu', 'Debian')
   ]),
-  getWslHomeAsync: vi.fn(async (distro: string) => UBUNTU_HOME.replace('Ubuntu', distro)),
+  getWslHomeAsync: vi.fn(async (distro: string) => UBUNTU_HOME.replace('Ubuntu', distro))
+}))
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
   resolveWslGuestRealDirAsync: vi.fn(async (_distro: string, dir: string) => dir)
 }))
 
@@ -73,7 +75,11 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
 
 import { resetHostReadableTranscriptPathCacheForTests } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { getWslHomeAsync, listRunningWslHomeDirsAsync, listWslDistrosAsync } from '../wsl'
+import {
+  getWslHomeAsync,
+  listRunningWslHomeDirsAsync,
+  listWslDistrosAsync
+} from '../wsl/discovery/distro-catalog'
 
 const realPlatform = process.platform
 

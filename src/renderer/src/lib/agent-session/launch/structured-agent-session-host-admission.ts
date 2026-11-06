@@ -1,9 +1,18 @@
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  isAgentSessionCreateAdmissionRefusal,
+  isDefinitiveAgentSessionCreateRefusal
+} from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSession,
+  structuredAgentSessionHostCapabilityState
+} from '@/runtime/structured-agent-session-client'
 
 /** The host answers a worktree selector it cannot resolve yet with this rather than a verdict. */
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
@@ -29,11 +38,28 @@ function runtimeErrorCode(error: unknown): string {
 /** The owning host's answer to "can you run this chat here?", asked before anything is created.
  *  An admitting host also names the saved selection create will seed, when it is new enough to. */
 export type StructuredLaunchAdmission =
-  | { kind: 'admitted'; seedOptions?: Readonly<Record<string, string>> }
+  | {
+      kind: 'admitted'
+      seedOptions?: Readonly<Record<string, string>>
+      /** For a resume: whether the host also checked the conversation's other writers (checked),
+       *  predates that question (legacy), or could not say which (unknown). */
+      writers?: ResumeWritersAnswer
+    }
   | { kind: 'declined'; reason?: string }
   | { kind: 'unreachable' }
   /** The host still could not resolve the workspace after the retries: not yet, rather than no. */
   | { kind: 'workspace-unresolved' }
+  /** The host would refuse this resume at create, e.g. another terminal runs the conversation. */
+  | { kind: 'refused'; refusal: AgentSessionRefusalReference }
+
+/** A resume asks the host about the conversation's other writers too, apart from the panes the
+ *  caller closes before create. */
+export type StructuredLaunchResumeAdmission = {
+  providerSessionId: string
+  closingPaneKeys?: readonly string[]
+}
+
+export type ResumeWritersAnswer = 'checked' | 'legacy' | 'unknown'
 
 export type HostCreateSupport =
   | Exclude<StructuredLaunchAdmission, { kind: 'unreachable' }>
@@ -48,15 +74,33 @@ export type HostCreateSupport =
 export async function askHostCreateSupport(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  resumeFrom?: StructuredLaunchResumeAdmission
 ): Promise<HostCreateSupport> {
+  // An older host's strict params reject the field, and one whose capabilities could not be read
+  // may be older: both get the plain question, and create still refuses, only later. The answer
+  // says which, so only a caller about to act irreversibly withholds it on an unread capability.
+  const capability = resumeFrom
+    ? await structuredAgentSessionHostCapabilityState(
+        target,
+        STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY
+      )
+    : undefined
+  const asksWriters = capability === 'supported'
+  const writers: { writers?: ResumeWritersAnswer } = capability
+    ? { writers: asksWriters ? 'checked' : capability === 'unknown' ? 'unknown' : 'legacy' }
+    : {}
   for (let attempt = 0; ; attempt += 1) {
     try {
       const support = await callStructuredAgentSession<{
         supported: boolean
         reason?: string
         seedOptions?: unknown
-      }>(target, 'agentSession.createSupport', { worktree, agent })
+      }>(target, 'agentSession.createSupport', {
+        worktree,
+        agent,
+        ...(asksWriters ? { resumeFrom } : {})
+      })
       if (support.supported !== true) {
         return {
           kind: 'declined',
@@ -66,7 +110,7 @@ export async function askHostCreateSupport(
         }
       }
       const seedOptions = parseStructuredLaunchSeedOptions(support.seedOptions)
-      return seedOptions ? { kind: 'admitted', seedOptions } : { kind: 'admitted' }
+      return { kind: 'admitted', ...(seedOptions ? { seedOptions } : {}), ...writers }
     } catch (error) {
       if (hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)) {
         const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
@@ -75,6 +119,10 @@ export async function askHostCreateSupport(
         }
         await delay(retryDelayMs)
         continue
+      }
+      const refusal = readAgentSessionErrorRefusal(error)
+      if (refusal && isAgentSessionCreateAdmissionRefusal(refusal)) {
+        return { kind: 'refused', refusal }
       }
       const code = runtimeErrorCode(error)
       if (isDefinitiveAgentSessionCreateRefusal(code)) {
@@ -94,9 +142,10 @@ export const LOCAL_ADMISSION_WAIT_MS = 3_000
 export async function admitStructuredLaunchOnHost(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  resumeFrom?: StructuredLaunchResumeAdmission
 ): Promise<StructuredLaunchAdmission> {
-  const asked = askHostCreateSupport(target, worktree, agent).then(
+  const asked = askHostCreateSupport(target, worktree, agent, resumeFrom).then(
     (support): StructuredLaunchAdmission =>
       support.kind === 'unreachable' ? { kind: 'unreachable' } : support
   )

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
@@ -8,24 +9,31 @@ import {
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
-import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
-import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
-  completeWorktreeCreation,
-  isCreatedWorkspaceInView
-} from '@/lib/worktree-creation-completion'
-import {
-  keepPendingChatAfterRefusedHandoff,
-  worktreeHostLaunch
+  creationHostLaunchPlan,
+  keepPendingChatAfterRefusedHandoff
 } from '@/lib/worktree-creation-host-launch'
+import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
+import { getStructuredAgentSessionLaunchOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import {
+  nativeChatComposerSelection,
+  waitForNativeChatComposerHandoff
+} from '@/components/native-chat/native-chat-composer-mount'
+import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { openBackgroundDeclinedTerminal } from '@/lib/worktree-creation-background-mount'
+import {
+  captureNativeChatStagedInput,
+  hasNativeChatStagedFiles
+} from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
+
+const HANDOFF_READY_TIMEOUT_MS = 5000
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
   cancelled: boolean
+  retainedInput?: true
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
 }
@@ -39,78 +47,6 @@ type LaunchStructuredWorktreeSessionArgs = {
   shouldActivateOnCompletion: boolean
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
-}
-
-/** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
-function openBackgroundDeclinedTerminal(
-  args: LaunchStructuredWorktreeSessionArgs,
-  host: RuntimeClientTarget,
-  heldChatMessage: string | undefined
-): StructuredLaunchTerminal {
-  const built = buildWorktreeCreationStartupOpt(args.request, false)
-  // The submit-time plan never saw a message sent while the worktree was created; leave it unsent in the agent's input.
-  const startup =
-    built && heldChatMessage && !built.draftPrompt
-      ? { ...built, draftPrompt: heldChatMessage }
-      : built
-  if (host.kind === 'environment') {
-    ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
-      startup,
-      agent: args.request.agent,
-      activate: false
-    })
-    return { opened: true }
-  }
-  if (!startup) {
-    return { opened: false }
-  }
-  // This machine seeds the agent terminal itself; a background workspace mounts it without showing it.
-  const tabId = ensureWorktreeHasInitialTerminal(
-    useAppStore.getState(),
-    args.worktreeId,
-    startup,
-    undefined,
-    undefined,
-    undefined,
-    { activateCreatedTabs: false, createNewTerminalForStartup: true }
-  )
-  mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
-  return tabId === null ? { opened: false } : { opened: true, tabId }
-}
-
-/** Hands a creation's chat into its existing workspace again, adopting the host launch it already
- *  named; no workspace is created twice. */
-export async function retryWorktreeChatHandoff(
-  creationId: string,
-  worktreeId: string
-): Promise<void> {
-  const entry = useAppStore.getState().pendingWorktreeCreations[creationId]
-  if (!entry) {
-    return
-  }
-  const focusOnCompletion = isCreatedWorkspaceInView(creationId, worktreeId)
-  const session = await launchStructuredWorktreeSession({
-    creationId,
-    request: entry.request,
-    agentLaunchRoute: 'structured-native-chat',
-    worktreeId,
-    shouldActivateOnCompletion: focusOnCompletion,
-    activation: false,
-    primaryTabId: null
-  })
-  if (!session.cancelled) {
-    await completeWorktreeCreation({
-      creationId,
-      request: entry.request,
-      worktreeId,
-      structuredLaunchAccepted: session.accepted,
-      activation: session.activation,
-      primaryTabId: session.primaryTabId,
-      backendSpawned: false,
-      hostPlannedStartup: false,
-      focusOnCompletion
-    })
-  }
 }
 
 export async function launchStructuredWorktreeSession(
@@ -128,55 +64,152 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
-  // Lock before capturing: host admission and layout publication can both leave this composer visible.
+  // Freeze the first send; unsent typing stays with the composer until its replacement is ready.
   useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
     chatInputHandedOff: true
   })
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
-  // Chosen before the workspace was created: a host that owns its Setup wait decides chat or
-  // terminal itself, after Setup; without one this keeps the shipped chat create.
-  const hostLaunch = pending?.hostLaunch
-  const request = withPendingChatInput(pending, args.request)
+  const request = withPendingChatInput(pending, {
+    ...args.request,
+    ...(pending?.request.launchInputs
+      ? {
+          launchInputs: { ...args.request.launchInputs, ...pending.request.launchInputs }
+        }
+      : {})
+  })
+  const promptAttachments = pending?.heldChatAttachments?.map(({ path, connectionId }) => ({
+    path,
+    previewUri: '',
+    ...(connectionId ? { connectionId } : {})
+  }))
+  const sourceScope = pendingCreationChatDraftScopeKey(args.creationId)
+  const prepareInput = captureNativeChatStagedInput(sourceScope, {
+    text: request.launchDraftPrompt ?? request.quickPrompt,
+    attachments: promptAttachments
+  })
+  const needsChat = (): boolean =>
+    Boolean(
+      promptAttachments?.length ||
+      pending?.heldChatSkills?.length ||
+      nativeChatComposerHasUserContent(sourceScope) ||
+      hasNativeChatStagedFiles(sourceScope)
+    )
+  const retainInput = (): WorktreeCreationStructuredSessionResult => {
+    useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+      worktreeId: args.worktreeId,
+      status: 'error',
+      error: translate(
+        'components.native-chat.creationChatNotOpened',
+        'Your worktree is ready, but the chat could not open. Retry to open it with your message.'
+      )
+    })
+    return { ...settled, retainedInput: true, activation, primaryTabId }
+  }
   const prompt = request.launchDraftPrompt ?? request.quickPrompt
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
-    ...(hostLaunch
-      ? {
-          hostLaunch: worktreeHostLaunch({
-            creationId: args.creationId,
-            identity: hostLaunch,
-            request: args.request,
-            worktreeId: args.worktreeId,
-            agent,
-            prompt,
-            heldChatMessage: pending?.heldChatMessage,
-            foreground: args.shouldActivateOnCompletion
-          })
-        }
-      : {}),
+    // Chosen before the workspace was created: a host that owns its Setup wait decides chat or
+    // terminal itself, after Setup; without one this keeps the shipped chat create.
+    ...creationHostLaunchPlan({
+      creationId: args.creationId,
+      pending,
+      request: args.request,
+      worktreeId: args.worktreeId,
+      agent,
+      prompt,
+      foreground: args.shouldActivateOnCompletion,
+      draftScope: sourceScope
+    }),
     route: args.agentLaunchRoute,
+    ...(needsChat() ? { requestedSurface: 'chat' as const } : {}),
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
+    ...(request.launchInputs?.sessionOptions
+      ? { launchOptions: request.launchInputs.sessionOptions }
+      : {}),
+    ...(request.launchInputs?.chatSessionOptions !== undefined
+      ? { chatLaunchOptions: request.launchInputs.chatSessionOptions }
+      : {}),
     prompt,
-    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
-    // What the user left unsent in the chat shown while the worktree was created.
-    draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
+    promptAttachments,
+    promptSkills: pending?.heldChatSkills,
+    ...(hasNativeChatStagedFiles(sourceScope)
+      ? {
+          preparePrompt: async (sessionId, target) =>
+            prepareInput.prepare(
+              {
+                text: prompt,
+                attachments: promptAttachments,
+                skills: pending?.heldChatSkills
+              },
+              {
+                sessionId,
+                runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
+              }
+            )
+        }
+      : {}),
+    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {})
   })
   let layoutRefused = false
   const abandoned = new AbortController()
+  const revealAbandoned = new AbortController()
   const tabOpen = Promise.withResolvers<string | null>()
   const stopWaiting = (): void => tabOpen.resolve(null)
   abandoned.signal.addEventListener('abort', stopWaiting, { once: true })
   const unsubscribe = useAppStore.subscribe((state) => {
+    if (state.activeView !== 'terminal' || state.activePendingCreationId !== args.creationId) {
+      revealAbandoned.abort()
+    }
     if (!state.pendingWorktreeCreations[args.creationId]) {
       abandoned.abort()
+      revealAbandoned.abort()
     }
   })
+  const handOffDraft = async (tabId: string | null): Promise<void> => {
+    const tab = tabId ? useAppStore.getState().getTab(tabId) : null
+    if (tab?.contentType !== 'agent-session') {
+      return
+    }
+    const state = useAppStore.getState()
+    if (
+      args.shouldActivateOnCompletion &&
+      state.activeView === 'terminal' &&
+      state.activePendingCreationId === args.creationId
+    ) {
+      requestBackgroundTerminalWorktreeMount({ worktreeId: args.worktreeId, tabIds: [tab.id] })
+      await waitForNativeChatComposerHandoff(
+        sourceScope,
+        tab.id,
+        revealAbandoned.signal,
+        HANDOFF_READY_TIMEOUT_MS
+      )
+    }
+    if (abandoned.signal.aborted) {
+      return
+    }
+    const selection = revealAbandoned.signal.aborted
+      ? undefined
+      : nativeChatComposerSelection(sourceScope)
+    if (selection) {
+      captureNativeChatComposerFocusIntent().request(tab.id)
+    }
+    const executionHostId =
+      tab.executionHostId ?? getStructuredAgentSessionLaunchOwner(tab.entityId)
+    if (executionHostId) {
+      moveStructuredAgentLaunchDraft(
+        { sessionId: tab.entityId, worktreeId: args.worktreeId, executionHostId },
+        sourceScope,
+        selection
+      )
+    }
+  }
   try {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: { signal: abandoned.signal },
+      declinedTerminal: { agentArgs: args.request.launchInputs?.agentArgs },
       target: { worktreeId: args.worktreeId },
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion
@@ -188,13 +221,22 @@ export async function launchStructuredWorktreeSession(
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
       onTabOpenSettled: (tabId, reason) => {
         layoutRefused = reason === 'layout-refused'
-        tabOpen.resolve(tabId)
+        void handOffDraft(tabId).then(
+          () => tabOpen.resolve(tabId),
+          (error: unknown) => {
+            console.error('worktree create: draft handoff failed', args.worktreeId, error)
+            tabOpen.resolve(tabId)
+          }
+        )
       }
     })
-    // Keep the pending chat until the layout owner's answering frame provides its replacement; a
-    // host launch's input stays with the creation until then, in view or not.
-    if (launch && (args.shouldActivateOnCompletion || plan.hostLaunch)) {
+    if (launch) {
+      // Keep the pending chat until the layout owner's answering frame provides its replacement; a
+      // host launch's input stays with the creation until then, in view or not.
       primaryTabId = await tabOpen.promise
+      if (primaryTabId !== null) {
+        void launch.promptDeliveryResult?.then(() => prepareInput.release())
+      }
       if (abandoned.signal.aborted || isCancelled()) {
         launch.cancel()
         return { ...settled, cancelled: true, activation, primaryTabId }
@@ -204,9 +246,13 @@ export async function launchStructuredWorktreeSession(
         keepPendingChatAfterRefusedHandoff(args.creationId, args.worktreeId, agent, plan.hostLaunch)
         return { ...settled, cancelled: true, activation, primaryTabId }
       }
-      if (!args.shouldActivateOnCompletion) {
-        return { ...settled, activation, primaryTabId }
+      if (primaryTabId === null && needsChat()) {
+        return retainInput()
       }
+    } else if (needsChat() && !isCancelled()) {
+      return retainInput()
+    }
+    if (launch && args.shouldActivateOnCompletion) {
       const stillVisible = (): boolean => {
         const state = useAppStore.getState()
         return (
@@ -247,8 +293,6 @@ export async function launchStructuredWorktreeSession(
         })
         primaryTabId ??= activation === false ? null : activation.primaryTabId
       }
-    } else if (launch) {
-      primaryTabId = launch.tab?.id ?? primaryTabId
     }
   } catch (error) {
     // Contain this fire-and-forget caller’s errors or the panel remains mid-create.
@@ -257,6 +301,9 @@ export async function launchStructuredWorktreeSession(
     if (plan.hostLaunch && !isCancelled()) {
       keepPendingChatAfterRefusedHandoff(args.creationId, args.worktreeId, agent, plan.hostLaunch)
       return { ...settled, cancelled: true, activation, primaryTabId }
+    }
+    if (needsChat() && !isCancelled()) {
+      return retainInput()
     }
     return { ...settled, activation, primaryTabId }
   } finally {

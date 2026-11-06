@@ -4,7 +4,7 @@
 
 import { abortSignalReason } from '../../../../shared/abort-signal-reason'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
 import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   AgentLaunchAccept,

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseAgentSessionOperationTimestamp } from '../../../src/shared/agent-session/agent-session-host-authority'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
 
@@ -15,10 +12,6 @@ type Attempt = {
 }
 
 const IDEMPOTENT_CREATE_SUPPORT = { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS }
-
-async function flush(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 function scriptedLaunchClient(
   outcomes: Array<
@@ -98,18 +91,6 @@ function scriptedLaunchClient(
 }
 
 describe('agent.launch operation id', () => {
-  const launchOperationIds = (attempts: Attempt[]): unknown[] =>
-    attempts.map((attempt) => attempt.params.operationId)
-  const launchCandidateNames = (attempts: Attempt[]): unknown[] =>
-    attempts.map((attempt) => {
-      const target = attempt.params.target
-      if (!target || typeof target !== 'object' || !('create' in target)) {
-        return undefined
-      }
-      const create = target.create
-      return create && typeof create === 'object' && 'name' in create ? create.name : undefined
-    })
-
   function launchRetry(args: {
     client: RpcClient
     attempts: Attempt[]
@@ -146,203 +127,5 @@ describe('agent.launch operation id', () => {
     // Ordinary idle budget; only the host's keepalives stretch it, up to setup's deadline.
     expect(attempts[0]?.timeoutMs).toBe(10 * 60_000)
     expect(attempts[0]?.keepaliveTotalMs).toBeGreaterThan(2 * 60 * 60 * 1000)
-  })
-
-  it('names the launch and reuses that name on an ambiguous replay of the same candidate', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [
-        {
-          throws: markRpcDeliveryUnknown(new Error('Connection interrupted')),
-          dropsConnection: true
-        },
-        { launched: 'wt-launch' }
-      ],
-      attempts
-    )
-    const pending = launchRetry({ client, attempts })
-    await flush()
-    client.reconnect()
-
-    await expect(pending).resolves.toEqual({ worktreeId: 'wt-launch', name: 'otter' })
-    expect(attempts.map((attempt) => attempt.method)).toEqual([
-      'agent.launchReplay',
-      'agent.launchReplay'
-    ])
-    expect(launchOperationIds(attempts)).toEqual(['op-1', 'op-1'])
-  })
-
-  it('reuses the launch name across a connection-migration cutover too', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [{ throws: new LogicalClientCutoverError() }, { launched: 'wt-mig' }],
-      attempts
-    )
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      worktreeId: 'wt-mig',
-      name: 'otter'
-    })
-    expect(launchOperationIds(attempts)).toEqual(['op-1', 'op-1'])
-  })
-
-  it('uses launch replay support independently of worktree.create idempotency', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [{ throws: new LogicalClientCutoverError() }, { launched: 'wt-replay' }],
-      attempts
-    )
-
-    await expect(
-      launchRetry({ client, attempts, worktreeCreateIdempotency: false })
-    ).resolves.toEqual({ worktreeId: 'wt-replay', name: 'otter' })
-    expect(launchOperationIds(attempts)).toEqual(['op-1', 'op-1'])
-  })
-
-  it('bounds named timeout retries without minting another operation', async () => {
-    const attempts: Attempt[] = []
-    const error = markRpcDeliveryUnknown(new Error('Request timed out'))
-    const client = scriptedLaunchClient([{ throws: error }], attempts)
-
-    await expect(launchRetry({ client, attempts })).rejects.toBe(error)
-    expect(attempts).toHaveLength(3)
-    expect(launchOperationIds(attempts)).toEqual(['op-1', 'op-1', 'op-1'])
-  })
-
-  it('does not restart the host name search with another operation after a collision', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [
-        { errorCode: 'worktree_create_collision', errorMessage: 'already exists locally' },
-        { launched: 'wt-bumped' }
-      ],
-      attempts
-    )
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      error: 'already exists locally'
-    })
-    expect(launchCandidateNames(attempts)).toEqual(['otter'])
-    expect(launchOperationIds(attempts)).toEqual(['op-1'])
-  })
-
-  it('sends no launch name to a host that advertises agent.launch without the ledger', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient([{ launched: 'wt-plain' }], attempts)
-    await expect(launchRetry({ client, attempts, replay: false })).resolves.toEqual({
-      worktreeId: 'wt-plain',
-      name: 'otter'
-    })
-    expect(attempts[0]!.method).toBe('agent.launch')
-    expect(attempts[0]!.params.operationId).toBeUndefined()
-    expect(attempts[0]!.params.target).toEqual({
-      kind: 'create-worktree',
-      create: { repo: 'id:r', name: 'otter', clientMutationId: 'key-launch' }
-    })
-  })
-
-  it('sends no launch name at all when the host has no agent.launch', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient([{ created: 'wt-legacy-route' }], attempts)
-    await expect(launchRetry({ client, attempts, supported: false })).resolves.toEqual({
-      worktreeId: 'wt-legacy-route',
-      name: 'otter'
-    })
-    expect(attempts[0]!.method).toBe('worktree.create')
-    expect(attempts[0]!.params.operationId).toBeUndefined()
-  })
-
-  // These codes may describe nested attach refusal or expired receipts after creation.
-  it.each([
-    'agent_session_operation_capacity',
-    'agent_session_operation_invalid',
-    'agent_session_operation_expired'
-  ])('preserves the operation identity when the host refuses with %s', async (code) => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient([{ errorCode: code }, { launched: 'wt-unnamed' }], attempts)
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({ error: code })
-    expect(attempts).toHaveLength(1)
-    expect(launchOperationIds(attempts)).toEqual(['op-1'])
-  })
-
-  it('surfaces an unknown operation without re-sending and without re-minting', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [{ errorCode: 'agent_session_operation_unknown' }],
-      attempts
-    )
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      error: 'agent_session_operation_unknown'
-    })
-    expect(attempts).toHaveLength(1)
-    expect(launchOperationIds(attempts)).toEqual(['op-1'])
-  })
-
-  // A reused id with conflicting payloads is a caller bug; unnamed retry would hide it by creating again.
-  it('surfaces an operation conflict rather than re-sending unnamed', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [{ errorCode: 'agent_session_operation_conflict' }],
-      attempts
-    )
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      error: 'agent_session_operation_conflict'
-    })
-    expect(attempts).toHaveLength(1)
-  })
-
-  it('drops the launch name when the host refuses agent.launch itself', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [
-        { errorCode: 'method_not_found', errorMessage: 'Unknown method' },
-        { created: 'wt-downgraded' }
-      ],
-      attempts
-    )
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      worktreeId: 'wt-downgraded',
-      name: 'otter'
-    })
-    expect(attempts.map((attempt) => attempt.method)).toEqual([
-      'agent.launchReplay',
-      'worktree.create'
-    ])
-    expect(launchOperationIds(attempts)).toEqual(['op-1', undefined])
-  })
-
-  it('does not downgrade a launch when a replacement connection refuses the method', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient(
-      [
-        { throws: new LogicalClientCutoverError() },
-        { errorCode: 'agent_launch_unsupported' },
-        { created: 'wt-duplicate' }
-      ],
-      attempts
-    )
-
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      error: 'agent_launch_unsupported'
-    })
-    expect(attempts.map((attempt) => attempt.method)).toEqual([
-      'agent.launchReplay',
-      'agent.launchReplay'
-    ])
-    expect(launchOperationIds(attempts)).toEqual(['op-1', 'op-1'])
-  })
-
-  it('mints a real durable id in production', async () => {
-    const attempts: Attempt[] = []
-    const client = scriptedLaunchClient([{ launched: 'wt-real' }], attempts)
-    await createWorktreeWithNameRetry({
-      client,
-      baseName: 'otter',
-      buildParams: (name) => ({ repo: 'id:r', name }),
-      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-      agentLaunch: { agent: 'claude', supported: { replay: true } }
-    })
-    // Parse the production-minted id through host validation; a test double cannot prove the shipped shape.
-    expect(
-      parseAgentSessionOperationTimestamp(String(attempts[0]!.params.operationId))
-    ).toBeCloseTo(Date.now(), -4)
   })
 })

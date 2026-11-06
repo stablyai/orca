@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { savedRosterRig, countRosterWork } from './agent-session-saved-roster.test-support'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

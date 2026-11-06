@@ -8,7 +8,7 @@ import {
   getCatalogOwnerHostId
 } from '../../worktree-runtime-owner-index'
 import { findIndexedRepoOwner } from '../../repo-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId

@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import {
   ArrowRight,
   CircleCheck,
@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   MessageCircle,
   MoreHorizontal,
+  RotateCw,
   type LucideIcon
 } from 'lucide-react-native'
 import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
@@ -17,14 +18,12 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { PrSidebarData } from '../session/mobile-pr-sidebar-state'
 import { isPrSidebarDetailsPlaceholder } from '../session/mobile-pr-sidebar-state'
-import { buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { ListGroup, ListRow, LIST_LEADING_INSET } from './list/ListGroup'
 import { useNow } from '../hooks/use-now'
 import { commentRelativeTime } from './pr-sidebar/pr-comment-relative-time'
 import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
-import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
 import { PrTabEmptyState } from './pr-sidebar/PrTabEmptyState'
 import { PrChangesCard, PrDescription } from './pr-sidebar/PrTabOverviewCards'
 import { PrTabBottomAction } from './pr-sidebar/PrTabBottomAction'
@@ -43,6 +42,7 @@ import { NavBarButton } from './nav-bar/NavBarButton'
 import { PullDownMenu } from './nav-bar/PullDownMenu'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { prTabStyles as styles } from './pr-sidebar/pr-tab-styles'
+import { mobilePrSidebarStyles as sidebarStyles } from './pr-sidebar/mobile-pr-sidebar-styles'
 
 type BranchCompare = { commitsAhead?: number; baseRef: string } | null
 
@@ -53,8 +53,8 @@ type BodyProps = {
   /** Opens the Changes segment from the changes card; absent outside the hub. */
   onOpenChanges?: () => void
   branchCompare?: BranchCompare
-  /** The bottom action until the hub's next-step bar replaces it. */
-  showBottomAction?: boolean
+  /** The dock's bottom action. The hub passes none: its next-step bar is the one bottom action there. */
+  footer?: ReactNode
 }
 
 // The PR tab answers "can I merge, and what's blocking it": identity, gates, changes, description.
@@ -64,7 +64,7 @@ export function MobilePrTabBody({
   bottomInset = 0,
   onOpenChanges,
   branchCompare = null,
-  showBottomAction = true
+  footer = null
 }: BodyProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -100,11 +100,29 @@ export function MobilePrTabBody({
       </View>
     )
   }
-  const footer = showBottomAction ? <PrTabBottomAction tab={tab} bottomInset={bottomInset} /> : null
+  // A failed refresh keeps the accepted result; its line sits above the content so nothing below remounts.
+  const refreshFailed =
+    (state.kind === 'ready' || state.kind === 'none') && state.refreshFailed === true ? (
+      <View style={sidebarStyles.refreshFailedRow}>
+        <Text style={sidebarStyles.refreshFailedText}>
+          {t('session.prActionsEngine.refreshFailed', 'Failed to refresh pull request.')}
+        </Text>
+        <Pressable
+          style={sidebarStyles.retryButton}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
+        >
+          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
+          <Text style={sidebarStyles.retryText}>{t('common.retry', 'Retry')}</Text>
+        </Pressable>
+      </View>
+    ) : null
   if (branch === 'none') {
     return (
       <View style={styles.container}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {refreshFailed}
           <PrTabEmptyState tab={tab} branchCompare={branchCompare} />
         </ScrollView>
         {footer}
@@ -121,6 +139,7 @@ export function MobilePrTabBody({
         contentContainerStyle={[styles.content, !footer && { paddingBottom: bottomInset }]}
         showsVerticalScrollIndicator={false}
       >
+        {refreshFailed}
         <PrTabSections tab={tab} data={state.data} onOpenChanges={onOpenChanges} />
       </ScrollView>
       {footer}
@@ -150,20 +169,6 @@ function PrTabSections({
       }),
     [data.checks, data.checksError, data.details, pr, tab.botAuthorOverrides]
   )
-  const conflictsTriage = {
-    resolveConflicts: () =>
-      void tab.triage.launch('resolve-conflicts', () =>
-        buildResolveConflictsPrompt({
-          prNumber: pr.number,
-          baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
-          files: pr.conflictSummary?.files ?? [],
-          worktreeId: tab.worktreeId
-        })
-      ),
-    isBusy: tab.triage.isBusy('resolve-conflicts'),
-    availability: tab.triage.availability,
-    ...tab.triage.noticeFor('resolve-conflicts')
-  }
   const openGate = (row: PrGateRow): (() => void) | undefined => {
     switch (row.target) {
       case 'checks':
@@ -194,7 +199,6 @@ function PrTabSections({
           )
         })}
       </ListGroup>
-      <PRConflictingFilesSection pr={pr} triage={conflictsTriage} />
       <PrChangesCard data={data} onPress={onOpenChanges} />
       <PrDescription tab={tab} data={data} />
     </>
@@ -313,7 +317,8 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
     onCreateSettled,
     live: screen === 'comments' ? 'details' : 'checks'
   })
-  const refresh = () => refetch({ includeDetails: true })
+  // The user's explicit Refresh asks the server for the canonical details.
+  const refresh = () => refetch({ includeDetails: true, refresh: true })
   const prMenuGroups = usePrTabMenuGroups(tab, refresh)
   // Without a PR the dock still needs Refresh, e.g. after a PR is opened on the web.
   const menuGroups = prMenuGroups ?? [
@@ -359,7 +364,12 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
               onClose={() => setMenuOpen(false)}
             />
           </View>
-          <MobilePrTabBody tab={tab} onRetry={onRetry} bottomInset={bottomInset} />
+          <MobilePrTabBody
+            tab={tab}
+            onRetry={onRetry}
+            bottomInset={bottomInset}
+            footer={<PrTabBottomAction tab={tab} bottomInset={bottomInset} />}
+          />
         </>
       )}
       <MobilePrTabSheets tab={tab} />

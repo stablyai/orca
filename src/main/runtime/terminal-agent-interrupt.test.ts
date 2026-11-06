@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
 import { interruptWorkingAgent } from './terminal-agent-interrupt'
 

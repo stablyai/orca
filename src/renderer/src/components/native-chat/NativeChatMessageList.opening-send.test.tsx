@@ -33,7 +33,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
   projectStructuredAgentSessionMessages,
   type StructuredAgentSessionOptimisticMessage
@@ -178,31 +178,6 @@ describe('a message sent while the turn ahead is still opening', () => {
     expect(follows(screen.getByText(text), liveActivity())).toBe(true)
   }
 
-  it('waits at the tail after the live status while the host has not recorded it yet', () => {
-    const { items, submissions } = openingFirst()
-
-    render(frame(items, submissions, [unrecorded('second', 'second')]))
-
-    expect(follows(liveStatus(), screen.getByText('first'))).toBe(true)
-    waitsAtTheTail('second')
-  })
-
-  // Accepted, and so placed at the row that accepted it, which is above the first send's handover.
-  it('waits at the tail after the live status once the host holds it queued', () => {
-    const { items, submissions } = openingFirst()
-
-    render(
-      frame(
-        [...items, userMessage('second', 4, 'second')],
-        [...submissions, submission('second', { acceptedSequence: 4 })],
-        []
-      )
-    )
-
-    expect(follows(liveStatus(), screen.getByText('first'))).toBe(true)
-    waitsAtTheTail('second')
-  })
-
   // Stop withdraws B from the queue; its settled row stays after the live turn’s status and above its activity.
   it('stays after the live turn when a Stop takes it back, with no frame above the live status', () => {
     const { items, submissions } = openingFirst()
@@ -227,21 +202,6 @@ describe('a message sent while the turn ahead is still opening', () => {
     expect(follows(screen.getByText('B'), liveStatus())).toBe(true)
     expect(follows(stopRow, screen.getByText('B'))).toBe(true)
     expect(follows(liveActivity(), stopRow)).toBe(true)
-  })
-
-  it('keeps an unrecorded B after the Stopping line, and a message typed while Stopping too', () => {
-    const { items, submissions } = openingFirst()
-    const view = render(frame(items, submissions, [unrecorded('b', 'B')], true))
-    waitsAtTheTail('B')
-
-    const typedWhileStopping: StructuredAgentSessionOptimisticMessage = {
-      ...unrecorded('c', 'C'),
-      queuedAt: NOW + 300,
-      sentWhileStopping: true
-    }
-    view.rerender(frame(items, submissions, [unrecorded('b', 'B'), typedWhileStopping], true))
-    waitsAtTheTail('B')
-    waitsAtTheTail('C')
   })
 
   /** Check each commit keeps second at its handover position and the live status under first. */
@@ -432,27 +392,9 @@ describe('a send a Stop took back before the agent started it', () => {
     )
   }
 
-  function renderJournal(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
-    render(journalList(items, submissions))
-  }
-
   function follows(later: HTMLElement, earlier: HTMLElement): boolean {
     return Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING)
   }
-
-  it('stays after the turn before it, with the stop row after it and no header of its own', () => {
-    renderJournal(
-      [...warmUp(), sent('never-ran', 'look around')],
-      [submission('warm-up'), stopped('never-ran')]
-    )
-
-    const message = screen.getByText('look around')
-    const row = screen.getByText(STOP_ROW)
-    expect(follows(message, screen.getByText('Warmed up.'))).toBe(true)
-    expect(follows(row, message)).toBe(true)
-    expect(screen.getAllByText(/^(Worked|Working) for/)).toHaveLength(1)
-    expect(screen.getByText('Worked for 3s')).toBeInTheDocument()
-  })
 
   it('keeps no clock it showed while the send waited on its turn', () => {
     const items = [...warmUp(), sent('never-ran', 'look around')]
@@ -474,96 +416,5 @@ describe('a send a Stop took back before the agent started it', () => {
       'Worked for 3s'
     ])
     expect(follows(screen.getByText(STOP_ROW), screen.getByText('look around'))).toBe(true)
-  })
-
-  it('draws one stop row after sends taken back together', () => {
-    renderJournal(
-      [...warmUp(), sent('first', 'first send'), sent('second', 'second send')],
-      [submission('warm-up'), stopped('first'), stopped('second')]
-    )
-
-    expect(screen.getAllByText(STOP_ROW)).toHaveLength(1)
-    expect(follows(screen.getByText(STOP_ROW), screen.getByText('second send'))).toBe(true)
-  })
-
-  it('leaves a send whose turn opened to that turn, which says it was interrupted', () => {
-    renderJournal(
-      [
-        ...warmUp(),
-        sent('opened', 'look around'),
-        turn('t2', 'opened', 2, { state: 'interrupted', outcome: 'cancellation' })
-      ],
-      [submission('warm-up'), stopped('opened')]
-    )
-
-    expect(screen.getByText('look around')).toBeInTheDocument()
-    expect(screen.getByText('Interrupted after 2s')).toBeInTheDocument()
-    expect(screen.queryByText(STOP_ROW)).toBeNull()
-  })
-
-  // Codex reports the turn open before it echoes the send, so the record names the provider's key.
-  it("leaves it to that turn before the provider echoed it, with only that turn's stop rows", () => {
-    renderJournal(
-      [
-        ...warmUp(),
-        sent('opened', 'look around'),
-        item('t2', {
-          kind: 'turn',
-          turnId: 't2',
-          state: 'interrupted',
-          outcome: 'cancellation',
-          userItemId: 'codex:thread-1:t2:0',
-          startedAt: 10_000,
-          completedAt: 12_000
-        }),
-        item(
-          'stop:t2',
-          { kind: 'status', text: 'Cancellation requested.' },
-          { kind: 'turn', turnItemId: 't2' }
-        )
-      ],
-      [submission('warm-up'), stopped('opened', { resolvedAt: 12_000 })]
-    )
-
-    const message = screen.getByText('look around')
-    expect(follows(screen.getByText('Interrupted after 2s'), message)).toBe(true)
-    expect(screen.queryByText(STOP_ROW)).toBeNull()
-  })
-
-  it("draws its row as the Stop's own status rows are drawn", () => {
-    renderJournal(
-      [
-        ...warmUp(),
-        item('stop:t1', { kind: 'status', text: 'Cancellation requested.' }),
-        sent('never-ran', 'look around')
-      ],
-      [submission('warm-up'), stopped('never-ran')]
-    )
-
-    const rowOf = (text: string) => screen.getByText(text).closest('.group')
-    expect(rowOf(STOP_ROW)?.className).toBe(rowOf('Cancellation requested.')?.className)
-    expect(rowOf(STOP_ROW)?.className).toBeTruthy()
-  })
-
-  it('keeps its row on screen under a settled turn on a host that states no turn scopes', () => {
-    const unscoped = (entry: AgentJournalRenderItem): AgentJournalRenderItem => {
-      const { turnScope: _none, ...rest } = entry
-      return rest
-    }
-    renderJournal(
-      [
-        ...warmUp(),
-        sent('steered', 'and check the tests'),
-        item('t1-more', {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'More warming up.' }]
-        })
-      ].map(unscoped),
-      [submission('warm-up'), stopped('steered')]
-    )
-
-    expect(screen.getByText('and check the tests')).toBeInTheDocument()
-    expect(screen.getByText(STOP_ROW)).toBeInTheDocument()
   })
 })

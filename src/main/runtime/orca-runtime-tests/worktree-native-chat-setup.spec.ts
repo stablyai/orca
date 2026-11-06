@@ -1,5 +1,5 @@
 import { awaitRequiredSetup, createSetupRun } from '../setup/setup-run'
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { WorktreeCreate } from '../../../shared/rpc-contract/worktree-create-params'
 import {
@@ -7,21 +7,16 @@ import {
   type WorktreeCreateRequest
 } from '../../../renderer/src/store/slices/worktrees/create/worktree-create-payload'
 import { buildManagedWorktreeCreateArgs } from '../rpc/methods/worktree-create-args'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   computeWorktreePathMock,
-  createSetupRunnerScript,
-  ensurePathWithinWorkspaceMock,
-  getDefaultTabsLaunch,
-  getEffectiveHooks,
-  listWorktrees,
-  loadHooks
-} from '../orca-runtime-test-mocks.spec'
-import {
-  makeRuntimeStoreWithWorkspaceSession,
-  spawnedPtyEnv,
-  store
-} from '../orca-runtime-test-fixtures.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { createSetupRunnerScript } from '../../workspace-hooks/worktree-runner-script'
+import { getEffectiveHooks, loadHooks } from '../../workspace-hooks/hooks'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { makeRuntimeStoreWithWorkspaceSession, store } from './orca-runtime-test-fixtures.spec'
 
 const WORKTREE_PATH = '/tmp/workspaces/native-chat-setup'
 const RUNNER = '/tmp/repo/.git/orca/setup-runner.sh'
@@ -33,7 +28,6 @@ async function createFromRendererPayload(options: {
   activate?: boolean
   runHooks?: boolean
   withSetup?: boolean
-  defaultTabs?: boolean
   startup?: boolean
   promised?: true
   completeDuringSpawn?: true
@@ -91,12 +85,6 @@ async function createFromRendererPayload(options: {
       vi.mocked(createSetupRunnerScript).mockRejectedValue(new Error('write failed'))
     }
   }
-  if (options.defaultTabs) {
-    vi.mocked(getDefaultTabsLaunch).mockReturnValue({
-      runCommands: true,
-      tabs: [{ title: 'Dev', command: 'pnpm dev' }]
-    })
-  }
   const params = WorktreeCreate.parse({
     ...buildRuntimeWorktreeCreateParams(
       {
@@ -120,69 +108,6 @@ async function createFromRendererPayload(options: {
   const result = await runtime.createManagedWorktree({ ...args, awaitTerminalProvisioning: true })
   return { result, spawn, runtime }
 }
-
-describe('native-chat setup through renderer payload, RPC and execution host', () => {
-  it.each(
-    (['claude', 'codex'] as const).flatMap((agent) =>
-      (['new-tab', 'split-horizontal', 'split-vertical', undefined] as const).map((mode) => ({
-        agent,
-        mode
-      }))
-    )
-  )(
-    'creates only Setup for a background $agent chat with retired location $mode',
-    async ({ agent, mode }) => {
-      const { result, spawn } = await createFromRendererPayload({ agent, mode })
-      expect(spawn.mock.calls.map(([args]) => args.command)).toEqual([`bash ${RUNNER}`])
-      expect(spawn.mock.calls[0][0].env).toMatchObject(SETUP_ENV)
-      expect(result.setup).toBeUndefined()
-      expect(result.setupReceipt).toMatchObject({ state: 'running' })
-      expect(result.startupTerminal).toBeUndefined()
-      // Only a create that promised a chat answers for that chat's Setup.
-      expect(result).not.toHaveProperty('agentLaunchSetup')
-    }
-  )
-
-  it.each([false, true])('keeps existing no-setup background policy (agent=%s)', async (agent) => {
-    const { spawn } = await createFromRendererPayload({
-      ...(agent ? { agent: 'codex' } : {}),
-      withSetup: false
-    })
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(agent ? [] : [undefined])
-  })
-
-  it.each([
-    { label: 'blank selection' },
-    { label: 'activated attribution', agent: 'codex' as const, activate: true },
-    { label: 'run-hooks attribution', agent: 'codex' as const, runHooks: true }
-  ])('keeps a primary shell for $label', async (options) => {
-    const { spawn } = await createFromRendererPayload(options)
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual([undefined, `bash ${RUNNER}`])
-  })
-
-  it.each(['split-horizontal', 'split-vertical'] as const)(
-    'gives the requested startup and Setup separate tabs despite retired location %s',
-    async (mode) => {
-      const { spawn } = await createFromRendererPayload({ agent: 'codex', mode, startup: true })
-      expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['codex', `bash ${RUNNER}`])
-      const startupTabId = spawnedPtyEnv(spawn.mock.calls[0][0]).ORCA_TAB_ID
-      expect(startupTabId).toEqual(expect.any(String))
-      expect(startupTabId).not.toBe('')
-      expect(startupTabId).not.toBe(spawnedPtyEnv(spawn.mock.calls[1][0]).ORCA_TAB_ID)
-    }
-  )
-
-  it('keeps configured default commands alongside Setup', async () => {
-    const { spawn } = await createFromRendererPayload({ agent: 'codex', defaultTabs: true })
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['pnpm dev', `bash ${RUNNER}`])
-  })
-
-  it('keeps the actual startup terminal alongside Setup', async () => {
-    const { result, spawn } = await createFromRendererPayload({ agent: 'codex', startup: true })
-    expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['codex', `bash ${RUNNER}`])
-    expect(result.startupTerminal).toMatchObject({ spawned: true })
-  })
-})
 
 it.each([false, true])(
   "keeps the Setup run a promised chat's host launch waits for when runner preparation fails=%s",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PtyFencedTerminationRequest } from '../../../../shared/pty-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourcePtyRow } from './resource-pty-view-model'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'

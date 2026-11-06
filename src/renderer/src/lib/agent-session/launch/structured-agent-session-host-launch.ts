@@ -2,7 +2,7 @@
  *  the one surface that follows it: agent.launchAccept, then bounded agent.launchStatus reads. The
  *  window adopts what the host reports; no answer lets it start another surface itself. */
 
-import type { AgentLaunchResult } from '../../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
 import {

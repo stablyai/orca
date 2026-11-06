@@ -16,10 +16,10 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import {
   declinedTerminalCanOpen,
-  notifyHostDeclined,
   openDeclinedStructuredLaunchTerminal,
   type StructuredLaunchTerminal
 } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
+import { notifyHostDeclined } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
@@ -44,14 +44,15 @@ export function openDeclinedTerminal(
   })
 }
 
-/** Only a foreground action without a prompt to deliver may open before admission. */
+/** Explicit chats keep their input if admission fails; empty foreground actions can also open immediately. */
 export function opensAtAction(args: ProvisionalLaunchArgs): boolean {
   const { plan } = args
   return (
-    args.focusIntent !== undefined &&
-    args.activate !== false &&
-    !plan.resumeFrom &&
-    (!plan.prompt?.trim() || plan.promptDelivery === 'draft')
+    plan.requestedSurface === 'chat' ||
+    (args.focusIntent !== undefined &&
+      args.activate !== false &&
+      !plan.resumeFrom &&
+      (!plan.prompt?.trim() || plan.promptDelivery === 'draft'))
   )
 }
 

@@ -15,21 +15,10 @@ import type * as admissionModule from './agent-session/launch/structured-agent-s
 import type * as launchModule from './agent-session/launch/structured-agent-session-launch-create-call'
 import type * as clientModule from '@/runtime/structured-agent-session-client'
 import {
-  getStructuredAgentSessionLaunchFailure,
-  getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   resetStructuredAgentLaunchRegistryForTests
 } from './agent-session/launch/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
-import {
-  retryStructuredAgentSessionLaunch,
-  startStructuredAgentLaunch
-} from './agent-session/launch/structured-agent-session-launch'
-import { newAgentLaunchRequestId } from './agent-launch-request-id'
-import { requiredSetupLaunchFailureText } from './required-setup-launch-failure'
-import { restoreStructuredLaunchSurfaces } from './agent-session/launch/structured-agent-session-launch-restore'
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import { closeDismissedHostLaunch, pendingChatDraftScopeKey } from './worktree-creation-host-launch'
 import { StructuredAgentSessionCreateRefusalError } from './agent-session/launch/structured-agent-session-launch-errors'
 import {
   drawTabsFromMain,
@@ -38,13 +27,33 @@ import {
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
+  flushNativeChatComposerDrafts,
+  isNativeChatComposerDraftUnsaved,
+  nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
-import { toast } from 'sonner'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import {
+  addNativeChatPendingAttachment,
+  clearNativeChatPendingAttachmentsForTests,
+  nativeChatPendingAttachmentSnapshot,
+  settleNativeChatPendingAttachment
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { holdBrowserAttachmentFiles, readBrowserAttachmentFile } from './browser-attachment-files'
+import {
+  holdNativeChatStagedInput,
+  releaseNativeChatStagedFiles,
+  stageNativeChatDraftFile
+} from '@/components/native-chat/native-chat-draft-attachment-staging'
 
 const mocks = vi.hoisted(() => ({
   admission: vi.fn<typeof admissionModule.admitStructuredLaunchOnHost>(),
@@ -95,6 +104,10 @@ vi.mock('@/runtime/runtime-layout-client', async (original) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
+vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+  nativeChatComposerSelection: () => undefined,
+  waitForNativeChatComposerHandoff: async () => {}
+}))
 
 const initialState = useAppStore.getState()
 const worktree = makeCreatedAgentWorktree()
@@ -145,14 +158,90 @@ beforeEach(async () => {
 
 afterEach(() => {
   main.close()
+  resetStructuredAgentSessionSendsForTests()
+  releaseNativeChatStagedFiles(pendingCreationChatDraftScopeKey('creation-1'))
+  for (const tab of Object.values(useAppStore.getState().unifiedTabsByWorktree).flat()) {
+    if (tab.contentType === 'agent-session') {
+      releaseNativeChatStagedFiles(structuredAgentSessionDraftScopeKey(tab.entityId))
+    }
+  }
+  clearNativeChatPendingAttachmentsForTests()
   clearNativeChatComposerDraftsForTests()
+  vi.restoreAllMocks()
   resetStructuredAgentLaunchRegistryForTests()
   useAppStore.setState(initialState, true)
 })
 
 describe('creation chat handoff', () => {
+  it.each(['slow', 'refused', 'background'] as const)(
+    'hands the live draft to the published chat independently of persistence: %s',
+    async (scenario) => {
+      const storage = createMemoryNativeChatComposerDraftStorage()
+      setNativeChatComposerDraftStorageForTests(storage)
+      await hydrateNativeChatComposerDrafts()
+      const source = pendingCreationChatDraftScopeKey('creation-1')
+      updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
+      await nativeChatComposerDraftWritesSettled()
+      const committed = Promise.withResolvers<void>()
+      const started = Promise.withResolvers<string>()
+      const write = storage.write
+      storage.write = async (scope, draft) => {
+        if (scope.startsWith('agent-session:')) {
+          started.resolve(scope)
+          await committed.promise
+        }
+        await write(scope, draft)
+      }
+      vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new DOMException('refused', 'QuotaExceededError')
+      })
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      if (scenario === 'background') {
+        useAppStore.setState({ activeView: 'tasks' })
+      }
+
+      const completion = executeWorktreeCreation('creation-1', request)
+      const destination = await started.promise
+      await completion
+
+      const state = useAppStore.getState()
+      expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
+      expect(state.activePendingCreationId).toBeNull()
+      expect(state.activeWorktreeId).toBe(
+        scenario === 'background' ? 'previous-worktree' : worktree.id
+      )
+      expect(state.activeView).toBe(scenario === 'background' ? 'tasks' : 'terminal')
+      expect(state.getActiveTab(worktree.id)).toMatchObject({
+        contentType: 'agent-session',
+        entityId: destination.slice('agent-session:'.length)
+      })
+      expect(readNativeChatComposerDraft(source).text).toBe('')
+      expect(readNativeChatComposerDraft(destination).text).toBe('Unsent follow-up')
+      expect(storage.drafts.get(source)?.text).toBe('Unsent follow-up')
+      expect(storage.drafts.has(destination)).toBe(false)
+
+      const latest = 'Unsent follow-up with newer typing in the replacement'
+      updateNativeChatComposerDraft(destination, { text: latest }, 'immediate')
+      storage.refuseWrites = scenario === 'refused'
+      committed.resolve()
+      await nativeChatComposerDraftWritesSettled()
+      expect(readNativeChatComposerDraft(destination).text).toBe(latest)
+      if (scenario === 'refused') {
+        expect(isNativeChatComposerDraftUnsaved(destination)).toBe(true)
+        expect(storage.drafts.get(source)?.text).toBe('Unsent follow-up')
+        storage.refuseWrites = false
+        flushNativeChatComposerDrafts()
+        await nativeChatComposerDraftWritesSettled()
+      }
+      expect(storage.drafts.get(destination)?.text).toBe(latest)
+      expect(storage.drafts.has(source)).toBe(false)
+      expect(state.createWorktree).toHaveBeenCalledOnce()
+      expect(mocks.createSession).toHaveBeenCalledOnce()
+    }
+  )
+
   it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
-    'owns input through delayed host admission and replacement tab publication',
+    'owns input through delayed provider creation and replacement tab publication',
     async () => {
       const emptyRequest = { ...request, quickPrompt: '' }
       useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
@@ -161,28 +250,18 @@ describe('creation chat handoff', () => {
       })
       const scope = pendingCreationChatDraftScopeKey('creation-1')
       updateNativeChatComposerDraft(scope, { text: 'Unsent follow-up', images: [] }, 'immediate')
-      const admission = Promise.withResolvers<StructuredLaunchAdmission>()
-      mocks.admission.mockImplementation(() => {
-        expect(
-          useAppStore.getState().pendingWorktreeCreations['creation-1']?.chatInputHandedOff
-        ).toBe(true)
-        return admission.promise
-      })
       layoutApplyTestTransport.answerWith((command) =>
         command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
       )
 
       const completion = executeWorktreeCreation('creation-1', emptyRequest)
-      await vi.waitFor(() => expect(mocks.admission).toHaveBeenCalled())
-      expect(readNativeChatComposerDraft(scope).text).toBe('Unsent follow-up')
-
-      admission.resolve({ kind: 'admitted' })
       await vi.waitFor(() => expect(mocks.createSession).toHaveBeenCalled())
       const intent = mocks.createSession.mock.calls[0][0]
       expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(true)
       expect(
         readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(intent.sessionId)).text
-      ).toBe('Unsent follow-up')
+      ).toBe('')
+      expect(readNativeChatComposerDraft(scope).text).toBe('Unsent follow-up')
       expect(useAppStore.getState().activePendingCreationId).toBe('creation-1')
       expect(
         useAppStore.getState().pendingWorktreeCreations['creation-1']?.chatInputHandedOff
@@ -255,18 +334,224 @@ describe('creation chat handoff', () => {
     }
   )
 
-  it('finishes creation when the host opens a terminal instead of a chat', async () => {
+  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN).each(['foreground', 'background'] as const)(
+    'retries a layout-refused rich message in the created worktree without creating it again: %s',
+    async (scenario) => {
+      const emptyRequest = { ...request, quickPrompt: '' }
+      const attachment = { id: 'held-image', path: '/tmp/held-image.png' }
+      const skill = { name: 'test-audit', path: '/repo/.agents/skills/test-audit/SKILL.md' }
+      const message = 'Use $test-audit to review this image'
+      const source = pendingCreationChatDraftScopeKey('creation-1')
+      useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+        request: emptyRequest,
+        heldChatMessage: message,
+        heldChatAttachments: [attachment],
+        heldChatSkills: [skill]
+      })
+      updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
+      if (scenario === 'background') {
+        useAppStore.setState({ activeView: 'tasks' })
+      }
+      layoutApplyTestTransport.answerWith((command) =>
+        command.type === 'openAgentSessionTab'
+          ? { ok: false, code: 'pane_structure_changed' }
+          : 'apply'
+      )
+
+      await executeWorktreeCreation('creation-1', emptyRequest)
+      await main.settle()
+
+      const refused = useAppStore.getState()
+      expect(refused.pendingWorktreeCreations['creation-1']).toMatchObject({
+        status: 'error',
+        worktreeId: worktree.id,
+        error: expect.any(String),
+        heldChatMessage: message,
+        heldChatAttachments: [attachment],
+        heldChatSkills: [skill]
+      })
+      expect(refused.activePendingCreationId).toBe('creation-1')
+      expect(refused.tabsByWorktree[worktree.id] ?? []).toEqual([])
+      expect(readNativeChatComposerDraft(source).text).toBe('Unsent follow-up')
+      expect(refused.createWorktree).toHaveBeenCalledOnce()
+
+      layoutApplyTestTransport.answerWith('apply')
+      useAppStore.setState({ activeView: 'terminal' })
+      retryBackgroundWorktreeCreation('creation-1')
+      await vi.waitFor(() =>
+        expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
+      )
+      await main.settle()
+
+      const retried = useAppStore.getState()
+      const tab = retried.getActiveTab(worktree.id)
+      expect(tab).toMatchObject({ contentType: 'agent-session', worktreeId: worktree.id })
+      if (!tab) {
+        throw new Error('Retry did not open a chat')
+      }
+      expect(retried.createWorktree).toHaveBeenCalledOnce()
+      expect(retried.activeWorktreeId).toBe(worktree.id)
+      expect(retried.activePendingCreationId).toBeNull()
+      expect(readNativeChatComposerDraft(source).text).toBe('')
+      expect(
+        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)).text
+      ).toBe('Unsent follow-up')
+      expect(getStructuredAgentSessionPendingSends(tab.entityId)).toMatchObject([
+        {
+          body: {
+            blocks: [
+              { type: 'text', text: message },
+              { type: 'image-ref', path: attachment.path }
+            ],
+            skills: [skill]
+          }
+        }
+      ])
+    }
+  )
+
+  it('keeps a rich first message and unsent follow-up in the failed chat when its host declines', async () => {
+    const emptyRequest = { ...request, quickPrompt: '' }
+    const source = pendingCreationChatDraftScopeKey('creation-1')
+    const file = new File(['image'], 'held.png', { type: 'image/png' })
+    const [path] = holdBrowserAttachmentFiles([file])
+    const heldAttachment = { id: 'held-image', path }
+    stageNativeChatDraftFile(source, path)
+    holdNativeChatStagedInput(source, {
+      text: 'Review this image',
+      attachments: [heldAttachment]
+    })
+    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+      request: emptyRequest,
+      heldChatMessage: 'Review this image',
+      heldChatAttachments: [heldAttachment]
+    })
+    updateNativeChatComposerDraft(
+      source,
+      {
+        text: 'Unsent follow-up',
+        images: [{ id: 'follow-up-image', path: '/tmp/follow-up.png' }]
+      },
+      'immediate'
+    )
+    mocks.createSession.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('no'))
+
+    await executeWorktreeCreation('creation-1', emptyRequest)
+    await main.settle()
+
+    const state = useAppStore.getState()
+    const tab = state.getActiveTab(worktree.id)
+    expect(tab).toMatchObject({ contentType: 'agent-session' })
+    if (!tab) {
+      throw new Error('The declined chat was discarded')
+    }
+    await vi.waitFor(() =>
+      expect(getStructuredLaunchStateBySessionId(tab.entityId)?.callers.outcome).toBe('failed')
+    )
+    await vi.waitFor(() =>
+      expect(
+        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)).images
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path }),
+          expect.objectContaining({ path: '/tmp/follow-up.png' })
+        ])
+      )
+    )
+    expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
+    expect(state.tabsByWorktree[worktree.id] ?? []).toEqual([])
+    expect(readNativeChatComposerDraft(source).text).toBe('')
+    const destination = structuredAgentSessionDraftScopeKey(tab.entityId)
+    const draft = readNativeChatComposerDraft(destination)
+    expect(draft.text).toContain('Review this image')
+    expect(draft.text).toContain('Unsent follow-up')
+    expect(readBrowserAttachmentFile(path)).toBe(file)
+    updateNativeChatComposerDraft(
+      destination,
+      { images: draft.images.filter((image) => image.path !== path) },
+      'immediate'
+    )
+    await vi.waitFor(() => expect(readBrowserAttachmentFile(path)).toBeNull())
+  })
+
+  it('keeps an image still saving in the failed chat when its host declines before any send', async () => {
+    const emptyRequest = { ...request, quickPrompt: '' }
+    const source = pendingCreationChatDraftScopeKey('creation-1')
+    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+      request: emptyRequest
+    })
+    addNativeChatPendingAttachment(source, {
+      id: 'saving-image',
+      path: '',
+      pending: true
+    })
     mocks.admission.mockResolvedValue({ kind: 'declined' })
+    mocks.createSession.mockRejectedValue(new StructuredAgentSessionCreateRefusalError('no'))
+
+    await executeWorktreeCreation('creation-1', emptyRequest)
+    await main.settle()
+
+    const state = useAppStore.getState()
+    const tab = state.getActiveTab(worktree.id)
+    expect(tab).toMatchObject({ contentType: 'agent-session' })
+    if (!tab) {
+      throw new Error('The pending image lost its chat')
+    }
+    await vi.waitFor(() =>
+      expect(getStructuredLaunchStateBySessionId(tab.entityId)?.callers.outcome).toBe('failed')
+    )
+    const destination = structuredAgentSessionDraftScopeKey(tab.entityId)
+    expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
+    expect(state.tabsByWorktree[worktree.id] ?? []).toEqual([])
+    expect(nativeChatPendingAttachmentSnapshot(destination)).toMatchObject([
+      { id: 'saving-image', pending: true }
+    ])
+    expect(settleNativeChatPendingAttachment(source, 'saving-image', '/tmp/saved.png')).toBe(true)
+    expect(readNativeChatComposerDraft(destination).images).toEqual([
+      { id: 'saving-image', path: '/tmp/saved.png' }
+    ])
+    expect(readNativeChatComposerDraft(source).images).toEqual([])
+  })
+
+  it('keeps rich input in the pending composer when the created worktree has no resolved host', async () => {
+    const source = pendingCreationChatDraftScopeKey('creation-1')
+    const attachment = { id: 'held-image', path: '/tmp/held.png' }
+    const state = useAppStore.getState()
+    const repo = state.repos[0]!
+    useAppStore.setState({
+      repos: [
+        { ...repo, executionHostId: 'local' },
+        { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }
+      ],
+      worktreesByRepo: {
+        [worktree.repoId]: [
+          { ...worktree, hostId: 'local' },
+          { ...worktree, hostId: 'ssh:box' }
+        ]
+      },
+      activeWorkspaceExecutionHostId: null
+    })
+    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
+      heldChatMessage: 'Review this image',
+      heldChatAttachments: [attachment]
+    })
+    updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
 
     await executeWorktreeCreation('creation-1', request)
     await main.settle()
 
-    const state = useAppStore.getState()
-    expect(state.activeWorktreeId).toBe(worktree.id)
-    expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
-    expect(state.getActiveTab(worktree.id)?.contentType).toBe('terminal')
-    expect(state.tabsByWorktree[worktree.id]).toHaveLength(1)
+    const retained = useAppStore.getState()
+    expect(retained.pendingWorktreeCreations['creation-1']).toMatchObject({
+      status: 'error',
+      worktreeId: worktree.id,
+      heldChatMessage: 'Review this image',
+      heldChatAttachments: [attachment]
+    })
+    expect(retained.activePendingCreationId).toBe('creation-1')
+    expect(retained.unifiedTabsByWorktree[worktree.id] ?? []).toEqual([])
+    expect(readNativeChatComposerDraft(source).text).toBe('Unsent follow-up')
     expect(mocks.createSession).not.toHaveBeenCalled()
+    expect(retained.createWorktree).toHaveBeenCalledOnce()
   })
 
   it('dismisses a pending admission without opening a late chat', async () => {
@@ -344,383 +629,5 @@ describe('creation chat handoff', () => {
       expect(mocks.createSession.mock.calls[0]![0].hostLaunch).toBeUndefined()
     }
     expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
-  })
-})
-
-const LAUNCHES = 'orca:structuredAgentLaunches:v1'
-const HELD = 'Recover this first message'
-const FOLLOW_UP = 'Unsent follow-up'
-type HostAnswer = 'succeeded' | 'failed' | 'unknown'
-
-const acceptCalls = (): Record<string, unknown>[] =>
-  mocks.hostLaunch.mock.calls
-    .filter(([method]) => method === 'agent.launchAccept')
-    .map(([, params]) => params as Record<string, unknown>)
-const savedLaunch = (sessionId: string): Record<string, unknown> | undefined =>
-  (JSON.parse(localStorage.getItem(LAUNCHES) ?? '[]') as Record<string, unknown>[]).find(
-    (row) => row.sessionId === sessionId
-  )
-const chatTabs = (sessionId: string) =>
-  (useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).filter(
-    (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
-  )
-const lifecycleOf = (sessionId: string) =>
-  getStructuredAgentSessionLaunchLifecycle(worktree.id, sessionId)
-const sessionDraft = (sessionId: string): string =>
-  readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(sessionId)).text
-
-/** What the host's status read says of the launch, in the shapes the host sends. */
-function hostAnswer(answer: HostAnswer, sessionId: string): unknown {
-  if (answer === 'failed') {
-    return { state: 'failed', code: 'agent_launch_setup_not_completed' }
-  }
-  if (answer === 'unknown') {
-    return { state: 'unknown' }
-  }
-  return {
-    state: 'succeeded',
-    result: {
-      outcome: { kind: 'structured', sessionId, handle: 'chat' },
-      worktreeId: worktree.id,
-      receipt: { mode: 'structured', preferred: 'structured', reason: 'user_default', detail: '' },
-      prompt: { delivery: 'submit', outcome: 'journaled', messageId: 'host-message' }
-    }
-  }
-}
-
-/** The host's answers: accept runs, each read gives `status()`, and the chat's tail has a fence. */
-function hostReplies(status: () => Promise<unknown>): void {
-  const cursor = { epoch: 'epoch-1', sequence: 1 }
-  mocks.hostLaunch.mockImplementation(async (method, params) => {
-    if (method === 'agent.launchAccept') {
-      return { state: 'running' }
-    }
-    if (method === 'agentSession.history') {
-      const { sessionId } = params as { sessionId: string }
-      const window = { oldest: null, newest: null, nextCursor: cursor }
-      const page = { sessionId, epoch: 'epoch-1', fence: 3, direction: 'tail', items: [], window }
-      return {
-        ok: true,
-        page: {
-          ...page,
-          removedItemIds: [],
-          submissions: [],
-          liveCursor: cursor,
-          hasOlder: false,
-          hasNewer: false,
-          latestTurn: null
-        }
-      }
-    }
-    return status()
-  })
-}
-
-/** A new workspace's chat whose host accepted its launch while the layout had yet to answer the
- *  chat's tab, then refused it. */
-async function refuseAcceptedChat(foreground: boolean, beforeRefusal?: HostAnswer) {
-  mocks.hostAccepts = true
-  const emptyRequest = { ...request, quickPrompt: '' }
-  if (!foreground) {
-    useAppStore.setState({ activePendingCreationId: null })
-  }
-  useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
-    request: emptyRequest,
-    heldChatMessage: HELD
-  })
-  const scope = pendingCreationChatDraftScopeKey('creation-1')
-  updateNativeChatComposerDraft(scope, { text: FOLLOW_UP, images: [] }, 'immediate')
-  const createWorktree = vi.fn().mockResolvedValue({ worktree })
-  useAppStore.setState({ createWorktree })
-  const settled = Promise.withResolvers<unknown>()
-  hostReplies(() => settled.promise)
-  const notice = vi.spyOn(toast, 'error')
-  layoutApplyTestTransport.answerWith((command) =>
-    command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
-  )
-  const completion = executeWorktreeCreation('creation-1', emptyRequest)
-  await vi.waitFor(() => expect(acceptCalls()).toHaveLength(1))
-  const launch = useAppStore.getState().pendingWorktreeCreations['creation-1']!.hostLaunch!
-  // Saved where a reload finds it before the host could act on it: workspace, host, operation,
-  // and the held message under the id the host was given.
-  expect(savedLaunch(launch.sessionId)).toMatchObject({
-    surfaceAddress: { worktreeId: worktree.id },
-    executionHostId: 'local',
-    agent: 'codex',
-    hostLaunchOperationId: launch.operationId,
-    lifecycle: 'pending',
-    firstMessage: { clientMessageId: launch.clientMessageId }
-  })
-  if (beforeRefusal) {
-    settled.resolve(hostAnswer(beforeRefusal, launch.sessionId))
-    await vi.waitFor(() =>
-      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.callers.outcome).toBe(
-        beforeRefusal === 'failed' ? 'failed' : 'published'
-      )
-    )
-  }
-  layoutApplyTestTransport.answerWith((command) =>
-    command.type === 'openAgentSessionTab' ? { ok: false, code: 'tab_exists' } : 'apply'
-  )
-  layoutApplyTestTransport.answerPending()
-  await completion
-  await main.settle()
-  const entry = useAppStore.getState().pendingWorktreeCreations['creation-1']!
-  expect(entry).toMatchObject({ status: 'error', heldChatMessage: HELD, worktreeId: worktree.id })
-  expect(chatTabs(launch.sessionId)).toEqual([])
-  // The draft stays in the launch's own saved chat, which the creation's composer shows meanwhile.
-  expect(pendingChatDraftScopeKey(entry)).toBe(
-    structuredAgentSessionDraftScopeKey(launch.sessionId)
-  )
-  expect(sessionDraft(launch.sessionId)).toContain(FOLLOW_UP)
-  // Out of view, the existing short notice says so; the user stays where they went.
-  expect(notice).toHaveBeenCalledTimes(foreground ? 0 : 1)
-  notice.mockRestore()
-  layoutApplyTestTransport.answerWith('apply')
-  const settle = (answer: HostAnswer) => settled.resolve(hostAnswer(answer, launch.sessionId))
-  return { launch, createWorktree, settle }
-}
-
-/** A renderer reload: memory and the session-only creation go; saved rows, drafts and tabs stay. */
-function reloadWindow(): void {
-  resetStructuredAgentLaunchRegistryForTests()
-  resetStructuredAgentLaunchPersistenceForTests()
-  resetStructuredAgentSessionSendsForTests()
-  useAppStore.setState({ pendingWorktreeCreations: {}, activePendingCreationId: null })
-}
-
-/** Nothing new reached a host: one workspace, one accept, no chat create, send or terminal. */
-function expectNothingStartedTwice(createWorktree: ReturnType<typeof vi.fn>): void {
-  expect(createWorktree).toHaveBeenCalledOnce()
-  expect(acceptCalls()).toHaveLength(1)
-  expect(mocks.createSession).not.toHaveBeenCalled()
-  expect(mocks.rpc).not.toContain('agentSession.create')
-  expect(mocks.rpc).not.toContain('agentSession.send')
-  const state = useAppStore.getState()
-  expect(
-    (state.unifiedTabsByWorktree[worktree.id] ?? []).filter((tab) => tab.contentType === 'terminal')
-  ).toEqual([])
-  expect(state.pendingStartupByTabId).toEqual({})
-}
-
-/** Retry twice on a failed host launch's chat: each only reads launch `operationId` again, which
- *  stays failed, and the held message is given back once. */
-async function expectRetryRereadsOnly(sessionId: string, operationId: string): Promise<void> {
-  for (const _click of [1, 2]) {
-    const before = mocks.hostLaunch.mock.calls.length
-    expect(retryStructuredAgentSessionLaunch(worktree.id, sessionId)).toBe(true)
-    await vi.waitFor(() => expect(lifecycleOf(sessionId)).toBe('failed'))
-    expect(mocks.hostLaunch.mock.calls.slice(before)).toEqual([
-      ['agent.launchStatus', expect.objectContaining({ operationId })]
-    ])
-    // The host's own recorded failure: Setup did not finish.
-    expect(getStructuredAgentSessionLaunchFailure(worktree.id, sessionId)).toEqual({
-      kind: 'not-started',
-      causeText: requiredSetupLaunchFailureText('Codex')
-    })
-    expect(sessionDraft(sessionId).split(HELD)).toHaveLength(2)
-    expect(sessionDraft(sessionId)).toContain(FOLLOW_UP)
-  }
-}
-
-describe('retrying a host launch that failed', () => {
-  afterEach(() => {
-    resetStructuredAgentLaunchPersistenceForTests()
-    localStorage.removeItem(LAUNCHES)
-  })
-
-  it('reads that same launch again, while a new chat still starts in the workspace', async () => {
-    mocks.hostAccepts = true
-    const emptyRequest = { ...request, quickPrompt: '' }
-    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
-      request: emptyRequest,
-      heldChatMessage: HELD
-    })
-    updateNativeChatComposerDraft(
-      pendingCreationChatDraftScopeKey('creation-1'),
-      { text: FOLLOW_UP, images: [] },
-      'immediate'
-    )
-    const createWorktree = vi.fn().mockResolvedValue({ worktree })
-    useAppStore.setState({ createWorktree })
-    hostReplies(async () => hostAnswer('failed', ''))
-    await executeWorktreeCreation('creation-1', emptyRequest)
-    await main.settle()
-    const { sessionId, operationId } = acceptCalls()[0] as {
-      sessionId: string
-      operationId: string
-    }
-    await vi.waitFor(() => expect(lifecycleOf(sessionId)).toBe('failed'))
-    expect(chatTabs(sessionId)).toHaveLength(1)
-
-    await expectRetryRereadsOnly(sessionId, operationId)
-    expectNothingStartedTwice(createWorktree)
-
-    // After fixing Setup, the user's own new chat is a separate launch with its own create.
-    const reads = mocks.hostLaunch.mock.calls.length
-    const manual = startStructuredAgentLaunch(worktree.id, 'codex', {
-      requestId: newAgentLaunchRequestId(),
-      prompt: 'Setup is fixed now'
-    })
-    expect(manual.sessionId).not.toBe(sessionId)
-    await vi.waitFor(() => expect(mocks.createSession).toHaveBeenCalledOnce())
-    const created = mocks.createSession.mock.calls[0]![0]
-    expect(created).toMatchObject({ worktreeId: worktree.id, sessionId: manual.sessionId })
-    expect(created.hostLaunch).toBeUndefined()
-    expect(mocks.hostLaunch.mock.calls).toHaveLength(reads)
-    expect(lifecycleOf(sessionId)).toBe('failed')
-  })
-})
-
-describe.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)('a host launch whose chat the layout refused', () => {
-  afterEach(() => {
-    resetStructuredAgentLaunchPersistenceForTests()
-    localStorage.removeItem(LAUNCHES)
-  })
-
-  it.each([
-    ['foreground', true],
-    ['background', false]
-  ] as const)(
-    'keeps its launch and input for Retry, which shows that same launch (%s)',
-    async (_focus, foreground) => {
-      const { launch, createWorktree, settle } = await refuseAcceptedChat(foreground)
-      expect(useAppStore.getState().activeWorktreeId).toBe('previous-worktree')
-
-      // Refused again: the same launch and its row stay, owed to the next Retry.
-      layoutApplyTestTransport.answerWith((command) =>
-        command.type === 'openAgentSessionTab' ? { ok: false, code: 'tab_exists' } : 'apply'
-      )
-      retryBackgroundWorktreeCreation('creation-1')
-      await vi.waitFor(() =>
-        expect(useAppStore.getState().pendingWorktreeCreations['creation-1']?.status).toBe('error')
-      )
-      await main.settle()
-      expect(savedLaunch(launch.sessionId)).toMatchObject({ lifecycle: 'pending' })
-      expect(sessionDraft(launch.sessionId)).toBe(FOLLOW_UP)
-
-      layoutApplyTestTransport.answerWith('apply')
-      retryBackgroundWorktreeCreation('creation-1')
-      await vi.waitFor(() =>
-        expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
-      )
-      await main.settle()
-      expect(chatTabs(launch.sessionId)).toHaveLength(1)
-      expect(lifecycleOf(launch.sessionId)).toBe('pending')
-      expect(sessionDraft(launch.sessionId)).toBe(FOLLOW_UP)
-      // The shown chat adopts the host's: no row is left behind.
-      settle('succeeded')
-      await vi.waitFor(() => expect(lifecycleOf(launch.sessionId)).toBeNull())
-      expect(savedLaunch(launch.sessionId)).toBeUndefined()
-      expectNothingStartedTwice(createWorktree)
-    }
-  )
-
-  it('gives both texts back in the shown chat when the host fails after the refusal', async () => {
-    const { launch, createWorktree, settle } = await refuseAcceptedChat(false)
-    settle('failed')
-    await vi.waitFor(() => expect(lifecycleOf(launch.sessionId)).toBe('failed'))
-    // Kept: the failure settled while no tab showed it.
-    expect(savedLaunch(launch.sessionId)).toMatchObject({ lifecycle: 'failed' })
-
-    const reads = mocks.hostLaunch.mock.calls.length
-    retryBackgroundWorktreeCreation('creation-1')
-    await vi.waitFor(() => expect(chatTabs(launch.sessionId)).toHaveLength(1))
-    // Showing it reads that same launch again, which is still failed.
-    await vi.waitFor(() => expect(lifecycleOf(launch.sessionId)).toBe('failed'))
-    expect(mocks.hostLaunch.mock.calls.slice(reads)).toEqual([
-      ['agent.launchStatus', expect.objectContaining({ operationId: launch.operationId })]
-    ])
-    expect(sessionDraft(launch.sessionId)).toContain(HELD)
-    expect(sessionDraft(launch.sessionId)).toContain(FOLLOW_UP)
-    expectNothingStartedTwice(createWorktree)
-  })
-
-  it.each([
-    ['foreground', 'succeeded', true],
-    ['foreground', 'failed', true],
-    ['foreground', 'unknown', true],
-    ['background', 'succeeded', false],
-    ['background', 'failed', false],
-    ['background', 'unknown', false]
-  ] as const)(
-    'comes back after a reload with no saved tab (%s), and a recheck reads the same launch: %s',
-    async (_focus, answer, foreground) => {
-      const { launch, createWorktree } = await refuseAcceptedChat(foreground)
-      reloadWindow()
-      expect(savedLaunch(launch.sessionId)).toMatchObject({ lifecycle: 'pending' })
-
-      restoreStructuredLaunchSurfaces()
-      await main.settle()
-      expect(chatTabs(launch.sessionId)).toHaveLength(1)
-      expect(useAppStore.getState().activeWorktreeId).toBe('previous-worktree')
-      expect(lifecycleOf(launch.sessionId)).toBe('visibility-unknown')
-      expect(sessionDraft(launch.sessionId)).toBe(FOLLOW_UP)
-
-      hostReplies(async () => hostAnswer(answer, launch.sessionId))
-      expect(retryStructuredAgentSessionLaunch(worktree.id, launch.sessionId)).toBe(true)
-      if (answer === 'succeeded') {
-        // Adopted: the chat shows and has the message, so nothing is left to recover.
-        await vi.waitFor(() => expect(lifecycleOf(launch.sessionId)).toBeNull())
-        expect(savedLaunch(launch.sessionId)).toBeUndefined()
-        expect(sessionDraft(launch.sessionId)).toBe(FOLLOW_UP)
-      } else {
-        await vi.waitFor(() =>
-          expect(lifecycleOf(launch.sessionId)).toBe(
-            answer === 'failed' ? 'failed' : 'visibility-unknown'
-          )
-        )
-        expect(sessionDraft(launch.sessionId)).toContain(HELD)
-        expect(sessionDraft(launch.sessionId)).toContain(FOLLOW_UP)
-        expect(savedLaunch(launch.sessionId)).toBeDefined()
-      }
-      expectNothingStartedTwice(createWorktree)
-    }
-  )
-
-  it.each(['failed', 'succeeded'] as const)(
-    'keeps a launch the host settled (%s) before the layout refused its chat, through a reload',
-    async (answer) => {
-      const { launch, createWorktree } = await refuseAcceptedChat(false, answer)
-      expect(savedLaunch(launch.sessionId)).toMatchObject({
-        lifecycle: answer === 'failed' ? 'failed' : 'visibility-unknown'
-      })
-      reloadWindow()
-      restoreStructuredLaunchSurfaces()
-      await main.settle()
-      expect(chatTabs(launch.sessionId)).toHaveLength(1)
-      if (answer === 'failed') {
-        expect(lifecycleOf(launch.sessionId)).toBe('failed')
-        expect(sessionDraft(launch.sessionId)).toContain(HELD)
-        hostReplies(async () => hostAnswer(answer, launch.sessionId))
-        await expectRetryRereadsOnly(launch.sessionId, launch.operationId)
-        expect(savedLaunch(launch.sessionId)).toMatchObject({
-          hostLaunchOperationId: launch.operationId,
-          lifecycle: 'failed'
-        })
-      } else {
-        hostReplies(async () => hostAnswer(answer, launch.sessionId))
-        expect(retryStructuredAgentSessionLaunch(worktree.id, launch.sessionId)).toBe(true)
-        await vi.waitFor(() => expect(lifecycleOf(launch.sessionId)).toBeNull())
-        expect(savedLaunch(launch.sessionId)).toBeUndefined()
-      }
-      expect(sessionDraft(launch.sessionId)).toContain(FOLLOW_UP)
-      expectNothingStartedTwice(createWorktree)
-    }
-  )
-
-  it('ends the launch and its draft on Dismiss, leaving nothing for a reload', async () => {
-    const { launch } = await refuseAcceptedChat(false)
-    const entry = useAppStore.getState().pendingWorktreeCreations['creation-1']
-    closeDismissedHostLaunch(entry)
-    useAppStore.getState().removePendingWorktreeCreation('creation-1')
-
-    expect(savedLaunch(launch.sessionId)).toBeUndefined()
-    expect(sessionDraft(launch.sessionId)).toBe('')
-    reloadWindow()
-    restoreStructuredLaunchSurfaces()
-    await main.settle()
-    expect(chatTabs(launch.sessionId)).toEqual([])
-    expect(lifecycleOf(launch.sessionId)).toBeNull()
   })
 })

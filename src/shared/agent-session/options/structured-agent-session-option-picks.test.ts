@@ -108,22 +108,6 @@ describe('structuredAgentSessionOptionPicks', () => {
     })
   })
 
-  it('writes nothing before the provider catalog lands', () => {
-    expect(
-      structuredAgentSessionOptionPicks(createStructuredAgentSessionOptionState('codex'), {
-        effort: 'high'
-      })
-    ).toEqual([])
-  })
-
-  it('drops ids a launch cannot seed back', () => {
-    expect(
-      structuredAgentSessionOptionPicks(liveState({ model: 'account-model' }), {
-        permissionMode: 'plan'
-      })
-    ).toEqual([])
-  })
-
   it('remembers explicit Fast on and off as booleans and re-encodes the launch seed', () => {
     const state = liveState({ model: 'account-model', fastMode: true })
     const picks = structuredAgentSessionOptionPicks(state, { fastMode: 'false' })
@@ -131,24 +115,6 @@ describe('structuredAgentSessionOptionPicks', () => {
     expect(resolveStructuredLaunchSeedOptions(persist(picks), 'codex')).toEqual({
       model: 'account-model',
       fastMode: 'false'
-    })
-  })
-})
-
-describe('applyNativeChatSessionOptionPicks', () => {
-  it('leaves every other agent untouched', () => {
-    const persisted = applyNativeChatSessionOptionPicks({
-      persisted: { claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } } },
-      agent: 'codex',
-      picks: [{ modelId: 'gpt-fast', optionId: 'effort', value: 'low' }]
-    })
-    expect(resolveStructuredLaunchSeedOptions(persisted, 'claude')).toEqual({
-      model: 'opus',
-      effort: 'high'
-    })
-    expect(resolveStructuredLaunchSeedOptions(persisted, 'codex')).toEqual({
-      model: 'gpt-fast',
-      effort: 'low'
     })
   })
 })

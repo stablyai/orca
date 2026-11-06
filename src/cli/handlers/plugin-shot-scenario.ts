@@ -73,6 +73,11 @@ async function readManifest(dir: string): Promise<PluginManifest> {
 const folderKey = (manifest: PluginManifest): string =>
   qualifiedPluginKey(withPluginPublisher(manifest, localPluginPublisher(manifest.publisher)))
 
+/** The key a development folder loads under. */
+export async function readPluginFolderKey(dir: string): Promise<string> {
+  return folderKey(await readManifest(dir))
+}
+
 /**
  * The plugin folder to render: the argument when it is a folder, else for a key the dev folder
  * this command runs in. The host does not publish dev folder paths, so it cannot name one.

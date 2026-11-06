@@ -226,7 +226,7 @@ it.each([false, true])(
     expect(initial.answer.current.acceptedInputSources).toEqual({})
     expect(initial.selection).toEqual({})
     for (const model of ['opus[1m]', 'retired-unlisted']) {
-      record.options = { model, effort: 'high', serviceTier: 'flex' }
+      record.options = { model, effort: 'vendor/custom', serviceTier: 'flex' }
       const captured = await capture()
       expect(captured.answer.current.acceptedInputSources).toEqual({
         model: 'saved',
@@ -235,7 +235,7 @@ it.each([false, true])(
       })
       expect(captured.selection).toEqual({
         model,
-        effort: 'high',
+        effort: 'vendor/custom',
         serviceTier: model === 'opus[1m]' ? 'default' : 'flex'
       })
     }

@@ -11,16 +11,56 @@ import {
   structuredAgentSessionOptionModels,
   type StructuredAgentSessionLiveOptions
 } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
-import {
-  claudeFastModeSupport,
-  wireClaudeModels,
-  type WireClaudeModel
-} from './claude-structured-catalog-listing'
+import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
-/** Effort comes from settings; system/init omits it. */
-export function readClaudeSettingsEffort(settings: unknown): string | null {
-  return text(record(record(settings)?.effective)?.effortLevel)
+export function claudeObservedEffort(
+  effort: string | null | undefined,
+  ultracode: unknown
+): string | null {
+  return ultracode === true && effort === 'xhigh' ? 'ultracode' : (effort ?? null)
+}
+
+function claudeSettingsEffortFacts(settings: unknown): {
+  raw: string | null | undefined
+  observed: string | null | undefined
+} {
+  const root = record(settings)
+  const applied = record(root?.applied)
+  const raw = applied?.effort === null ? null : (text(applied?.effort) ?? undefined)
+  const legacy =
+    root !== null &&
+    (!Object.hasOwn(root, 'applied') || (applied !== null && !Object.hasOwn(applied, 'effort')))
+  const effort = legacy ? (text(record(root?.effective)?.effortLevel) ?? undefined) : raw
+  return {
+    raw,
+    observed: effort === undefined ? undefined : claudeObservedEffort(effort, applied?.ultracode)
+  }
+}
+
+/** Applied effort includes native overrides; only older CLIs need the settings fallback. */
+export function readClaudeSettingsEffort(settings: unknown): string | null | undefined {
+  return claudeSettingsEffortFacts(settings).observed
+}
+
+export function observeClaudeSettingsEffort(
+  session: ClaudeSession,
+  settings: unknown
+): string | null | undefined {
+  const effort = readClaudeSettingsEffort(settings)
+  if (effort === null) {
+    delete session.reportedOptions.effort
+  } else if (effort !== undefined) {
+    session.reportedOptions.effort = effort
+  }
+  const held = session.options.get('effort')
+  // Native defaults stay observations; only a matching held input is corroborated.
+  if (held === undefined || (effort !== undefined && effort !== held)) {
+    session.confirmedOptions.delete('effort')
+  } else if (effort !== undefined) {
+    session.confirmedOptions.add('effort')
+  }
+  return effort
 }
 
 /** CLI resolution of env, settings and defaults; null effort sends none, and older CLIs omit the block. */
@@ -32,8 +72,12 @@ export function readClaudeSettingsApplied(
     return null
   }
   const model = text(applied.model)
-  const effort = text(applied.effort)
-  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+  const effort = claudeSettingsEffortFacts(settings).raw
+  return {
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
+    ...(typeof applied.ultracode === 'boolean' ? { ultracode: applied.ultracode } : {})
+  }
 }
 
 export function observeClaudeSettingsApplied(session: ClaudeSession, settings: unknown): void {
@@ -59,33 +103,16 @@ const FAST_MODE_STATES: readonly AgentSessionFastModeState[] = ['off', 'cooldown
 
 export function readClaudeFastModeFacts(value: unknown): {
   state?: AgentSessionFastModeState
-  disabledReason?: string
-  disabledReasonReported: boolean
 } {
-  const row = record(value)
-  const state = text(row?.fast_mode_state)
+  const state = text(record(value)?.fast_mode_state)
   const matched = FAST_MODE_STATES.find((entry) => entry === state)
-  const reportedDisabledReason = text(row?.fast_mode_disabled_reason)
-  return {
-    ...(matched ? { state: matched } : {}),
-    ...(reportedDisabledReason ? { disabledReason: reportedDisabledReason } : {}),
-    disabledReasonReported: Object.hasOwn(row ?? {}, 'fast_mode_disabled_reason')
-  }
+  return matched ? { state: matched } : {}
 }
 
 export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknown): void {
   const facts = readClaudeFastModeFacts(value)
   if (facts.state) {
     session.fastModeState = facts.state
-    session.fastModeReportedMutation = session.optionMutationSequence
-  }
-  if (facts.disabledReason) {
-    session.fastModeDisabledReason = facts.disabledReason
-    session.fastModeDisabledMutation = session.optionMutationSequence
-  } else if (facts.state || facts.disabledReasonReported) {
-    // A state frame without a reason clears the block; the child omits the key instead of sending null.
-    delete session.fastModeDisabledReason
-    delete session.fastModeDisabledMutation
   }
 }
 
@@ -158,18 +185,12 @@ function observeClaudeSettingsReadback(
   readMutationSequence: number
 ): void {
   if (settings !== null && readMutationSequence === session.optionMutationSequence) {
-    const effort = readClaudeSettingsEffort(settings)
+    observeClaudeSettingsEffort(session, settings)
     const fastMode = readClaudeSettingsFastMode(settings)
     const perSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(settings)
     observeClaudeSettingsApplied(session, settings)
-    if (effort) {
-      session.reportedOptions.effort = effort
-    }
     if (fastMode !== null) {
       session.reportedOptions.fastMode = fastMode
-      if (!fastMode) {
-        delete session.fastModeReportedMutation
-      }
       if (decodedFastMode(session) !== undefined) {
         session.options.set('fastMode', String(fastMode))
       }
@@ -201,16 +222,13 @@ export function claudeStructuredSessionOptionsFrom(
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??
-    session.appliedOptions?.effort
+    claudeObservedEffort(session.appliedOptions?.effort, session.appliedOptions?.ultracode)
   const desiredFastMode = decodedFastMode(session)
   // Frames can report Fast before settings do; cooldown throttles routing but preserves the preference.
   const fastMode =
     desiredFastMode ??
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
-  const support = changesLive
-    ? claudeFastModeSupport([], session.fastModeDisabledReason)
-    : CLAUDE_CLI_UPDATE_REQUIRED
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -221,10 +239,11 @@ export function claudeStructuredSessionOptionsFrom(
   ]
   return {
     models: wireClaudeModels(models),
-    ...(support ? { fastModeSupport: support } : {}),
+    ...(changesLive ? {} : { fastModeSupport: CLAUDE_CLI_UPDATE_REQUIRED }),
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
+      reportedModel: session.reportedOptions.reportedModel,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),

@@ -6,8 +6,8 @@ import {
   encrypt,
   generateKeyPair,
   publicKeyToBase64
-} from '../../../shared/e2ee-crypto'
-import { encodePairingOffer } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import type { RpcRequest, RpcResponse } from './core'
 
 /** Authenticated transport around the real dispatcher supplied by the integration fixture. */

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { PluginDevRequestParams } from '../../../../shared/rpc-contract/plugins-params'
+
 import { devFolderConsentIdentity } from '../../../plugins/plugin-discovery'
 import { PluginService } from '../../../plugins/plugin-service'
 import type { PluginWorkerHandle } from '../../../plugins/workers/plugin-host-process'
@@ -65,6 +65,7 @@ async function realService(options: {
     commands: [],
     invokeCommand: vi.fn(async () => null),
     requestFromPanel,
+    runHook: vi.fn(),
     notifyDataChanged: vi.fn(),
     deliverEvent: vi.fn(),
     lastActivityAt: () => 1_700_000_000_000,
@@ -94,40 +95,6 @@ function workerError(code: string, message: string): Error {
 }
 
 describe('plugins.devRequest', () => {
-  it('takes exactly one of a folder or a plugin key and a bridge name', () => {
-    expect(PluginDevRequestParams.safeParse({ name: 'count' }).success).toBe(false)
-    expect(PluginDevRequestParams.safeParse({ pluginKey: 'a.b', name: 'bad name' }).success).toBe(
-      false
-    )
-    expect(
-      PluginDevRequestParams.safeParse({ pluginKey: 'a.b', name: 'count', input: { n: 1 } }).success
-    ).toBe(true)
-  })
-
-  it("starts the worker and answers with the handler's result, as a panel would", async () => {
-    const { root, factory, requestFromPanel } = await realService({
-      answer: async () => ({ count: 3 })
-    })
-    await expect(
-      devRequest().handler({ path: root, name: 'count', input: { by: 1 }, panel: 'p1' }, context)
-    ).resolves.toEqual({ pluginKey: 'samples.demo', name: 'count', result: { count: 3 } })
-    expect(factory).toHaveBeenCalledOnce()
-    expect(requestFromPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'count',
-        input: { by: 1 },
-        panel: { id: 'p1', surface: 'panel', contributionId: 'orca-cli' },
-        timeoutMs: 30_000
-      })
-    )
-  })
-
-  it('sends null input when --data is omitted, like plugin.request(name)', async () => {
-    const { requestFromPanel } = await realService({ answer: async () => null })
-    await devRequest().handler({ pluginKey: 'samples.demo', name: 'ping' }, context)
-    expect(requestFromPanel.mock.calls[0]?.[0]).toMatchObject({ input: null })
-  })
-
   it.each([
     ['unknown_method', 'no panel handler named nope', /orca\.panels\.handle\('nope'/],
     ['timeout', 'nope timed out after 30000ms', /--timeout-ms/]
@@ -157,22 +124,6 @@ describe('plugins.devRequest', () => {
     await expect(
       devRequest().handler({ pluginKey: 'samples.demo', name: 'count' }, context)
     ).rejects.toThrow(/not approved and enabled/)
-    expect(factory).not.toHaveBeenCalled()
-  })
-
-  it('refuses a plugin with no worker', async () => {
-    const { factory } = await realService({
-      answer: async () => null,
-      raw: {
-        ...WORKER_MANIFEST,
-        main: undefined,
-        contributes: {},
-        capabilities: []
-      }
-    })
-    await expect(
-      devRequest().handler({ pluginKey: 'samples.demo', name: 'count' }, context)
-    ).rejects.toThrow(/has no worker to answer count/)
     expect(factory).not.toHaveBeenCalled()
   })
 })

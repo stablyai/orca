@@ -1,3 +1,4 @@
+import type * as ProvisionalTab from './agent-session/structured-agent-session-provisional-tab'
 // @vitest-environment happy-dom
 
 import path from 'node:path'
@@ -15,7 +16,10 @@ const mocks = vi.hoisted(() => {
     hostLaunch: vi.fn(
       (_method: string, _params: unknown): Promise<unknown> => new Promise(() => {})
     ),
-    mainStarts
+    mainStarts,
+    launches: vi.fn(),
+    // Set by the cases whose chat main's frames draw.
+    drawsFrames: false
   }
 })
 
@@ -27,11 +31,33 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   structuredAgentSessionHostSupports: async () => mocks.hostAccepts
 }))
 
+vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProvisionalTab>()
+  return {
+    ...actual,
+    beginStructuredAgentSessionProvisionalLaunch: (
+      ...args: Parameters<typeof actual.beginStructuredAgentSessionProvisionalLaunch>
+    ) => {
+      const result = actual.beginStructuredAgentSessionProvisionalLaunch(...args)
+      mocks.launches(result)
+      return result
+    }
+  }
+})
+
 import { useAppStore } from '@/store'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { submitFolderWorkspaceCreate } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
+import {
+  makeFolderWorkspace,
+  makeProjectGroup
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
 import { worktreeHostLaunch } from './worktree-creation-host-launch'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { buildQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
 import {
   CODEX_DRAFT_ONLY_TERMINAL_STARTUP,
@@ -49,12 +75,23 @@ import {
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 
-// A switch-on build's chat is drawn by main's frames.
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
-  (
+// A switch-on build's chat is drawn by main's frames, in the cases that draw them; the others keep
+// the ordinary layout client.
+vi.mock('@/runtime/runtime-layout-client', async (original) => {
+  const actual = await original<Record<string, unknown>>()
+  const framed: Record<string, unknown> = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeLayoutClientWithTestFrames(await original())
-)
+  ).runtimeLayoutClientWithTestFrames(actual as never)
+  return Object.fromEntries(
+    Object.keys(framed).map((key) => [
+      key,
+      typeof framed[key] === 'function'
+        ? (...args: unknown[]) =>
+            ((mocks.drawsFrames ? framed : actual)[key] as (...args: unknown[]) => unknown)(...args)
+        : framed[key]
+    ])
+  )
+})
 
 // Main's answer to the window's layout commands, as a switch-on build sends them, and the first
 // terminals it starts for the window's new tabs.
@@ -140,8 +177,7 @@ function seedPairedServer(): ReturnType<typeof vi.fn> {
     worktreesByRepo: { 'repo-1': [OTHER, CREATED] },
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only checks the creation is still pending.
-    pendingWorktreeCreations: { 'creation-1': {} as never },
+    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
     settings: {
       ...getDefaultSettings(path.join('workspace', '.orca')),
       activeRuntimeEnvironmentId: 'server-1'
@@ -163,13 +199,28 @@ const REQUEST = {
   }
 } as unknown as WorktreeCreationRequest
 
+function pendingCreation() {
+  return {
+    creationId: 'creation-1',
+    phase: 'creating' as const,
+    status: 'creating' as const,
+    startedAt: 1,
+    indeterminate: false,
+    loaderVisible: true,
+    request: REQUEST
+  }
+}
+
 afterEach(() => {
   drawn?.close()
   drawn = undefined
+  mocks.drawsFrames = false
   resetStructuredAgentLaunchRegistryForTests()
   mocks.hostAccepts = false
   mocks.hostLaunch.mockReset()
   mocks.mainStarts.length = 0
+  mocks.launches.mockClear()
+  mocks.createSupport.mockReset()
   vi.unstubAllGlobals()
   useAppStore.setState(initial, true)
 })
@@ -221,8 +272,7 @@ function seedThisMachine(): void {
     worktreesByRepo: { 'repo-1': [LOCAL_OTHER, LOCAL_CREATED] },
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only checks the creation is still pending.
-    pendingWorktreeCreations: { 'creation-1': {} as never },
+    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
     settings: getDefaultSettings(path.join('workspace', '.orca')),
     // The user moved to another workspace while the create ran.
     activeWorktreeId: LOCAL_OTHER.id
@@ -288,6 +338,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
     )
     seedThisMachine()
     choseHostLaunch()
+    mocks.drawsFrames = true
     drawn = await drawTabsFromMain(useAppStore)
     updateNativeChatComposerDraft(
       pendingCreationChatDraftScopeKey('creation-1'),
@@ -511,4 +562,140 @@ describe('the terminal a host launch becomes, planned as this creation would ope
     expect(accept.terminalStartup).toMatchObject({ kind: 'command', prompt: 'none' })
     expect(accept.terminalStartup).not.toHaveProperty('draftPrompt')
   })
+})
+
+describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline', (kind) => {
+  it.each([`-c 'model="true"'`, '--add-dir docs', undefined, ''])(
+    'delivers captured Args %s through actual fallback startup/config',
+    async (agentArgs) => {
+      seedThisMachine()
+      useAppStore.setState(({ settings }) => ({
+        settings: settings && {
+          ...settings,
+          agentDefaultSurface: 'chat',
+          agentCmdOverrides: { codex: 'cx' },
+          agentDefaultArgs: { codex: '--search' },
+          agentPermissionDefault: 'own'
+        }
+      }))
+      const projection: Omit<
+        ReturnType<typeof projectSourceControlActionLaunch>,
+        'sessionOptions' | 'chatSessionOptions'
+      > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
+        projectSourceControlActionLaunch(
+          {
+            agentId: 'codex',
+            ...(agentArgs !== undefined ? { agentArgs } : {}),
+            launchPreferences: {
+              agentId: 'codex',
+              modelSelection: {
+                base: 'default',
+                options: { effort: { agentId: 'codex', value: 'high' } }
+              }
+            }
+          },
+          'codex',
+          { basePrompt: '' }
+        )
+      expect(projection.sessionOptions).toEqual({ effort: 'high' })
+      expect(projection.chatSessionOptions).toEqual(
+        agentArgs?.includes('model=') ? { model: 'true', effort: 'high' } : undefined
+      )
+      const answer = Promise.withResolvers<{ supported: boolean }>()
+      mocks.createSupport.mockReturnValue(answer.promise)
+      const id = kind === 'git' ? LOCAL_CREATED.id : folderWorkspaceKey('folder-workspace-1')
+      const completion =
+        kind === 'git'
+          ? launchStructuredWorktreeSession({
+              creationId: 'creation-1',
+              request: { ...REQUEST, agent: 'codex', quickPrompt: '', launchInputs: projection },
+              agentLaunchRoute: 'structured-native-chat',
+              worktreeId: id,
+              shouldActivateOnCompletion: true,
+              activation: { primaryTabId: null },
+              primaryTabId: null
+            })
+          : undefined
+      // Main awaits the published tab, so release the held answer while admission is still pending.
+      await (kind === 'folder'
+        ? submitFolderWorkspaceCreate({
+            projectGroup: makeProjectGroup(),
+            name: 'created',
+            lastAutoName: '',
+            linkedWorkItem: null,
+            note: '',
+            quickAgent: 'codex',
+            launchChoice: {
+              agent: 'codex',
+              route: 'structured-native-chat',
+              executionHostId: 'local'
+            },
+            ...projection,
+            autoRenameBranchFromWork: false,
+            agentCmdOverrides: { codex: 'cx' },
+            createFolderWorkspace: async () => {
+              const workspace = makeFolderWorkspace()
+              useAppStore.setState({ folderWorkspaces: [workspace] })
+              return workspace
+            },
+            onOpenChange: vi.fn()
+          })
+        : vi.waitFor(() => expect(mocks.createSupport).toHaveBeenCalled()))
+
+      expect(mocks.createSupport).toHaveBeenCalledOnce()
+      projection.agentArgs = '--model later-form'
+      projection.sessionOptions!.effort = 'low'
+      if (projection.chatSessionOptions) {
+        projection.chatSessionOptions.model = 'later-form'
+      }
+      answer.resolve({ supported: false })
+      await completion
+      await vi.waitFor(() => expect(useAppStore.getState().tabsByWorktree[id]).toHaveLength(1))
+      const tab = useAppStore.getState().tabsByWorktree[id]![0]!
+      const actualArgs = agentArgs ?? '--search'
+      const expectedTokens = agentArgs?.includes('model=')
+        ? ['-c', 'model="true"']
+        : actualArgs === ''
+          ? []
+          : actualArgs.split(' ')
+      const startup = startupOf(tab.id)
+      const baseCommand = ['cx', ...expectedTokens.map((token) => `'${token}'`)].join(' ')
+      expect(startup).toEqual({
+        command: `${baseCommand} '-c' 'model_reasoning_effort=high'`,
+        env: {},
+        launchConfig: { agentCommand: baseCommand, agentArgs: actualArgs, agentEnv: {} },
+        launchAgent: 'codex',
+        ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
+        telemetry: {
+          agent_kind: 'codex',
+          launch_source: 'tab_bar_quick_launch',
+          request_kind: 'new'
+        },
+        launchToken: expect.any(String)
+      })
+      expect(Object.hasOwn(startup!, 'agentArgsOverride')).toBe(agentArgs !== undefined)
+      expect(
+        tokenizeStartupCommand(
+          String(
+            startup && typeof startup === 'object' && 'command' in startup ? startup.command : ''
+          ),
+          'posix'
+        )
+      ).toMatchObject({
+        ok: true,
+        tokens: ['cx', ...expectedTokens, '-c', 'model_reasoning_effort=high']
+      })
+      await expect(mocks.launches.mock.calls.at(-1)![0].settlement).resolves.toEqual({
+        kind: 'terminal'
+      })
+      expect(mocks.launches).toHaveBeenCalledOnce()
+      expect(mocks.createSupport).toHaveBeenCalledOnce()
+      expect(JSON.stringify(startup)).not.toMatch(/chatSessionOptions|chatLaunchOptions|later-form/)
+      expect(
+        (useAppStore.getState().unifiedTabsByWorktree[id] ?? []).filter(
+          (candidate) => candidate.contentType === 'agent-session'
+        )
+      ).toEqual([])
+    }
+  )
 })

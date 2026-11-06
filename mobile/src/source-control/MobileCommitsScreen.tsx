@@ -1,7 +1,7 @@
 import { memo, useCallback, useState, type ReactNode } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { OptionPager, useOptionPager } from '../components/BottomDrawer'
+import { OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc-client'

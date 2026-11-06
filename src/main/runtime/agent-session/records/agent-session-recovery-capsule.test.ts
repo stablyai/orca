@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import * as durable from '../../../durable-file-write'
+import * as durable from '../../../filesystem/durable-file-write'
 import {
   marker,
   NOW,

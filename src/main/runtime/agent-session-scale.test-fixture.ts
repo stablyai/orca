@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
-import * as views from '../../shared/agent-session-conversation-view'
+import * as views from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import * as handles from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {

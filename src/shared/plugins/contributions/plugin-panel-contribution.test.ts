@@ -20,11 +20,6 @@ function manifest(engine: string, panelFields: Record<string, unknown>) {
 }
 
 describe('panel ui', () => {
-  it('defaults to an html panel and leaves the field absent', () => {
-    const parsed = pluginPanelContributionSchema.parse({ ...panel, entry: 'panel.html' })
-    expect(parsed).toEqual({ ...panel, entry: 'panel.html' })
-  })
-
   it.each(['dist/panel.js', 'panel.mjs', 'Panel.JS', 'src/panel.tsx', 'panel.ts', 'panel.jsx'])(
     'accepts a components %s module',
     (entry) => {

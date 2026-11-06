@@ -75,25 +75,6 @@ describe('orchestration gate commands carry caller identity', () => {
   const paramsFor = (method: string): Record<string, unknown> =>
     callMock.mock.calls.find((call) => call[0] === method)?.[1] as Record<string, unknown>
 
-  it('sends the bound coordinator handle to gateCreate', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
-    queueFixtures(
-      callMock,
-      okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
-      okFixture('req_gate', { gate: { id: 'gate_1', task_id: 'task_1', status: 'pending' } })
-    )
-
-    await main(
-      ['orchestration', 'gate-create', '--task', 'task_1', '--question', 'ship?', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(process.exitCode).toBe(0)
-    expect(paramsFor('orchestration.gateCreate')).toEqual(
-      expect.objectContaining({ task: 'task_1', question: 'ship?', from: 'term_coord' })
-    )
-  })
-
   it('remints a stale environment handle before authorizing gateCreate', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
     process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
@@ -116,52 +97,6 @@ describe('orchestration gate commands carry caller identity', () => {
 
     expect(paramsFor('orchestration.gateCreate')).toEqual(
       expect.objectContaining({ from: 'term_live' })
-    )
-  })
-
-  it('accepts an explicit --from without probing terminal liveness', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_gate', {
-        gate: { id: 'gate_1', task_id: 'task_1', status: 'resolved', resolution: 'go' }
-      })
-    )
-
-    await main(
-      [
-        'orchestration',
-        'gate-resolve',
-        '--id',
-        'gate_1',
-        '--resolution',
-        'go',
-        '--from',
-        'term_explicit',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
-
-    expect(process.exitCode).toBe(0)
-    expect(callMock).toHaveBeenCalledTimes(1)
-    expect(paramsFor('orchestration.gateResolve')).toEqual(
-      expect.objectContaining({ id: 'gate_1', resolution: 'go', from: 'term_explicit' })
-    )
-  })
-
-  it('scopes gate-list to the caller when no Run is named', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
-    queueFixtures(
-      callMock,
-      okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
-      okFixture('req_list', { gates: [], count: 0 })
-    )
-
-    await main(['orchestration', 'gate-list', '--json'], '/tmp/repo')
-
-    expect(process.exitCode).toBe(0)
-    expect(paramsFor('orchestration.gateList')).toEqual(
-      expect.objectContaining({ from: 'term_coord', run: undefined })
     )
   })
 

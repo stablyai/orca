@@ -2,9 +2,9 @@
  * Gated on agent.launch.accept.v1; older hosts lack both methods, so callers keep their shipped route. */
 
 import { z } from 'zod'
-import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
+import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
 import { parseAgentSessionOperationTimestamp } from '../agent-session/agent-session-host-authority'
-import type { AgentLaunchResult } from '../agent-launch-intent'
+import type { AgentLaunchResult } from '../agent-launch/contracts/agent-launch-intent'
 import { AgentLaunchFields, refuseSessionIdForAnotherAgent } from './agent-launch-params'
 import { Identifier } from './structured-agent-session-identifiers'
 

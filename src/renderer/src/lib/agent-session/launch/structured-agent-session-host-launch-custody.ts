@@ -1,7 +1,7 @@
 /** Who holds a host launch's held message once the host has answered. Only the host's receipt for
  *  the text lets this window let go of it; a chat or terminal existing says nothing about the text. */
 
-import type { AgentLaunchResult } from '../../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { handBackStructuredAgentSessionMessage } from '@/components/native-chat/structured-agent-session-message-hand-back'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import {

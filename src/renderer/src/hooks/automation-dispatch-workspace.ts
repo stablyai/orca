@@ -1,4 +1,4 @@
-import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { findAutomationRepo } from '../../../shared/automation-repo-target'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -15,7 +15,7 @@ import {
   formatAutomationPrecheckFailure
 } from '../../../shared/automation-precheck'
 import { getRepoSshConnectionId, parseExecutionHostId } from '../../../shared/execution-host'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { buildClientAutomationWorkspaceProvenance } from '../../../shared/automation-workspace-provenance'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'

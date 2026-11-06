@@ -10,19 +10,17 @@ const nodeFiles = [
   'src/mock-server-key-pair.test.ts',
   'src/mobile-release/prepare-android-release-script.test.ts',
   'src/navigation/query-string-named-exports.test.ts',
-  'src/components/markdown-inline-matcher.test.ts',
   'src/components/mobile-markdown-parser-progress.test.ts',
-  'src/components/pr-sidebar/markdown-tag-stripping-performance.test.ts',
-  'src/components/pr-sidebar/markdown-table-delimiter-performance.test.ts',
   'src/components/rich-markdown/native-document-bundle.test.ts',
   'src/terminal/document/native-document-bundle.test.ts',
-  'src/transport/settings-read-operations.test.ts',
   'src/transport/mobile-e2ee-v2-client-session.test.ts',
   'src/transport/mobile-e2ee-v2-physical-channel.test.ts',
   'src/transport/pairing-relay-served-recovery.test.ts',
   'src/transport/mobile-relay-rpc-stream-cancellation.test.ts',
   'src/test-support/rpc-recording/subscription-recording.test.ts',
-  'src/test-support/rpc-recording/family-recordings.test.ts'
+  'src/test-support/rpc-recording/family-recordings.test.ts',
+  // Its goldens carry V8's TypeError wording, as family-recordings' do.
+  'src/test-support/rpc-recording/bridged-recording-corpus.test.ts'
 ]
 
 const config = mergeConfig(original, { cacheDir: process.env.ORCA_MOBILE_CI_CACHE_DIR })

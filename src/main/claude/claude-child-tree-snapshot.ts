@@ -1,4 +1,4 @@
-import type { DescendantSnapshot } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 
 // Non-atomic scans may omit live rows; retain them, but reject any PID whose identity changed.
 function mergeRowsByPid<Row extends { pid: number }>(

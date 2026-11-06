@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { tuiAgentDisplayName } from '../../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { AgentLaunchSetupReceipt } from '../../../shared/rpc-contract/agent-launch-accept-params'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../shared/setup-agent-sequencing'

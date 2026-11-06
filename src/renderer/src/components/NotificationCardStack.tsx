@@ -1,11 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
 import {
-  measureComposerClearance,
-  NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR,
   NOTIFICATION_CARD_STACK_BOTTOM,
-  subscribeToComposerLayout
-} from '@/lib/notification-card-composer-clearance'
+  NOTIFICATION_CARD_STACK_HEIGHT_VAR
+} from '@/lib/notification-card-stack-height'
 import {
   registerNotificationCardLayoutVarReader,
   setNotificationCardLayoutVar
@@ -24,41 +21,23 @@ export function NotificationCardStack({ children }: { children: ReactNode }): Re
     if (!stack) {
       return
     }
-    const root = stack.ownerDocument.documentElement
     const unregister = registerNotificationCardLayoutVarReader(stack)
     // Why publish: toasts share this corner and would otherwise render behind the cards (z-50).
     const publish = (): void => {
       const height = stack.offsetHeight
-      // Why clear a composer: with the right sidebar closed the cards cover its Send and Stop.
-      const restingBottom = 2.5 * Number.parseFloat(getComputedStyle(root).fontSize)
-      const clearance =
-        height > 0
-          ? measureComposerClearance(
-              stack.getBoundingClientRect(),
-              window.innerHeight - restingBottom - height,
-              window.innerHeight
-            )
-          : 0
       setNotificationCardLayoutVar(
         NOTIFICATION_CARD_STACK_HEIGHT_VAR,
         height > 0 ? `calc(${height}px + 0.5rem)` : null
-      )
-      setNotificationCardLayoutVar(
-        NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR,
-        clearance > 0 ? `calc(${clearance}px + 0.5rem)` : null
       )
     }
     publish()
     const observer = new ResizeObserver(publish)
     observer.observe(stack)
-    const unsubscribe = subscribeToComposerLayout(publish)
     window.addEventListener('resize', publish)
     return () => {
       observer.disconnect()
-      unsubscribe()
       window.removeEventListener('resize', publish)
       setNotificationCardLayoutVar(NOTIFICATION_CARD_STACK_HEIGHT_VAR, null)
-      setNotificationCardLayoutVar(NOTIFICATION_CARD_COMPOSER_CLEARANCE_VAR, null)
       unregister()
     }
   }, [])

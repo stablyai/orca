@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { hostTestCatalogReadOperation } from './structured-agent-session-host-test-data'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'

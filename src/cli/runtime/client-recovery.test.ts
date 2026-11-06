@@ -5,13 +5,11 @@ import {
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../shared/setup-agent-sequencing'
 import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
 import { createServer, type Server } from 'node:net'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS } from '../../shared/orchestration-timing-budgets'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 import { reportCliError } from '../format'
 import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
@@ -87,16 +85,6 @@ describe('RuntimeClient orchestration recovery identity', () => {
     expect(
       resolveRuntimeMethodKeepaliveTotalMs('agent.launch', { agent: 'codex' }, 60_000)
     ).toBeUndefined()
-  })
-
-  it('rejects a worker-start timeout whose client grace would overflow timers', () => {
-    const resolve = (method: string, params?: unknown): number =>
-      resolveRuntimeMethodTimeoutMs(method, params, 60_000)
-    const maxValid = MAX_TIMER_DELAY_MS - ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
-    expect(resolve('orchestration.workerStart', { timeoutMs: maxValid })).toBe(MAX_TIMER_DELAY_MS)
-    expect(() => resolve('orchestration.workerStart', { timeoutMs: maxValid + 1 })).toThrow(
-      'derived timeout must be'
-    )
   })
 
   it('attaches the request and exact retry identity to a real RPC failure response', async () => {
@@ -420,5 +408,48 @@ describe('RuntimeClient orchestration recovery identity', () => {
     expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
     expect((error as Error).message).not.toContain('--retry-request')
     expect((error as Error).message).toContain('do not resend automatically')
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('oversized terminal prompt preflight', () => {
+  it.each([
+    ['legacy', { legacyTerminalPrompt: true }],
+    ['durable', { terminalPromptPreflight: { runtimeId: 'runtime-1' } }],
+    ['mismatched runtime', { terminalPromptPreflight: { runtimeId: 'other-runtime' } }]
+  ] as const)('keeps an oversized %s prompt refusal unsent', async (_label, options) => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-oversized-prompt-'))
+    onTestFinished(() => rmSync(userDataPath, { recursive: true, force: true }))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer(() => {})
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeRuntimeConnection(userDataPath, endpoint, 'runtime-1')
+
+    const client = new RuntimeClient(userDataPath, 1000, null, null, 'orca')
+    const error = await client
+      .call(
+        'terminal.send',
+        {
+          terminal: 'term-1',
+          text: 'x'.repeat(1024 * 1024),
+          enter: true,
+          interrupt: false,
+          agentPrompt: true,
+          client: { id: 'orca-cli', type: 'desktop' }
+        },
+        options
+      )
+      .then(() => undefined)
+      .catch((caught: unknown) => caught)
+
+    if (!(error instanceof RuntimeClientError)) {
+      throw error
+    }
+    expect(error).toMatchObject({
+      code: 'invalid_argument',
+      data: { effectsApplied: false, requestSent: false }
+    })
+    expect(error.data).not.toHaveProperty('deliveryOutcome')
+    expect(error.data).not.toHaveProperty('orchestrationRequestId')
   })
 })

@@ -1,4 +1,3 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
@@ -9,8 +8,11 @@ import {
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  isInstantFolderWorktreeCreation,
+  showWorktreeCreationError
+} from '@/lib/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
-import { retryWorktreeChatHandoff } from '@/lib/worktree-creation-structured-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   getInitialWorktreeCreationPhase,
@@ -27,18 +29,15 @@ type ContinueBackgroundWorktreeCreationOptions = {
 
 // Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
-  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+  const originView = useAppStore.getState().activeView
+  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {
       return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
-    // Inline creation errors need a separate toast only after navigation away.
-    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
-      toast.error(message)
-    }
+    showWorktreeCreationError(store, creationId, originView, message)
   })
 }
 
@@ -71,19 +70,25 @@ function revealPendingCreation(
 ): void {
   const store = useAppStore.getState()
   const indeterminate = getWorktreeCreationIndeterminate(request)
+  const loaderVisible = !(
+    isInstantFolderWorktreeCreation(store, request) &&
+    phase !== 'preparing' &&
+    phase !== 'provisioning-vm'
+  )
   store.beginPendingWorktreeCreation({
     creationId,
     phase,
     status: 'creating',
     startedAt: Date.now(),
     indeterminate,
-    // Give creation its tab strip synchronously; delayed reveal flashes the prior workspace’s tabs.
-    loaderVisible: true,
+    loaderVisible,
     request
   })
   seedPendingChatDraft(creationId, request)
   // Creation UI renders only in terminal view; activate it before publishing the panel.
-  store.setActiveView('terminal')
+  if (loaderVisible) {
+    store.setActiveView('terminal')
+  }
   store.setSidebarOpen(true)
 }
 
@@ -95,6 +100,7 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     request
   )
   if (existingCreationId) {
+    store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
@@ -153,36 +159,66 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   if (!entry) {
     return
   }
-  // A workspace whose chat handoff alone failed retries that handoff, into the same host launch;
-  // nothing is created twice.
-  const created =
-    entry.hostLaunch && entry.worktreeId
-      ? findWorktreeById(store.worktreesByRepo, entry.worktreeId)
-      : undefined
+  // A workspace whose chat handoff alone failed retries that handoff into the same workspace, and a
+  // host launch into the same launch; nothing is created twice.
+  if (
+    entry.worktreeId &&
+    (entry.chatInputHandedOff ||
+      (entry.hostLaunch && findWorktreeById(store.worktreesByRepo, entry.worktreeId)))
+  ) {
+    store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    void retryCreatedWorktreeChat(creationId, entry.worktreeId, entry.request)
+    return
+  }
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
+    loaderVisible: true,
+    startedAt: Date.now(),
+    phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
-    ...(created
-      ? {}
-      : {
-          startedAt: Date.now(),
-          phase: getInitialWorktreeCreationPhase(entry.request),
-          provisioningLog: undefined,
-          checkoutProgress: undefined,
-          worktreeId: undefined,
-          // A route chosen for a create whose reply never came stays chosen; one already handed a
-          // launch is not reused for another workspace.
-          ...(entry.hostLaunch?.terminal ? { hostLaunch: undefined } : {})
-        })
+    provisioningLog: undefined,
+    checkoutProgress: undefined,
+    worktreeId: undefined,
+    // A route chosen for a create whose reply never came stays chosen; one already handed a launch
+    // is not reused for another workspace.
+    ...(entry.hostLaunch?.terminal ? { hostLaunch: undefined } : {})
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
-  if (created) {
-    retryWorktreeChatHandoff(creationId, created.id).catch((error: unknown) => {
-      console.error('worktree create: chat handoff retry failed', creationId, error)
-    })
+  startWorktreeCreation(creationId, entry.request)
+}
+
+async function retryCreatedWorktreeChat(
+  creationId: string,
+  worktreeId: string,
+  request: WorktreeCreationRequest
+): Promise<void> {
+  const { launchStructuredWorktreeSession } = await import('./worktree-creation-structured-session')
+  const result = await launchStructuredWorktreeSession({
+    creationId,
+    worktreeId,
+    request,
+    agentLaunchRoute: 'structured-native-chat',
+    shouldActivateOnCompletion: true,
+    activation: false,
+    primaryTabId: null
+  })
+  if (result.cancelled || result.retainedInput) {
     return
   }
-  startWorktreeCreation(creationId, entry.request)
+  const { completeWorktreeCreation } = await import('./worktree-creation-completion')
+  await completeWorktreeCreation({
+    creationId,
+    worktreeId,
+    request,
+    structuredLaunchAccepted: true,
+    activation: result.activation,
+    primaryTabId: result.primaryTabId,
+    backendSpawned: false,
+    hostPlannedStartup: false,
+    focusOnCompletion: false
+  })
 }

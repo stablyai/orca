@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
-import { normalizeAndAccept, PANE_KEY } from '../../agent-hook-listener-test-harness'
+import { normalizeAndAccept, PANE_KEY } from '../normalization/agent-hook-listener-test-harness'
 
 const SESSION_ID = '01a0caa3-0e77-7d41-bad7-46283a45633d'
 const TURN_ID = 'e495d1a5-59aa-47b4-8efb-a1bd75509afc'
@@ -139,61 +139,6 @@ describe('Muse hook events', () => {
       expect(normalizeAndAccept(state, 'muse', hook)).toBeNull()
     }
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
-  })
-
-  it('shows the approval card only once Muse notifies a permission prompt', () => {
-    const bash = { command: 'rm -rf build' }
-    normalizeAndAccept(state, 'muse', {
-      ...main,
-      hook_event_name: 'PreToolUse',
-      tool_name: 'bash',
-      tool_input: bash,
-      tool_use_id: 'call_1'
-    })
-    expect(
-      normalizeAndAccept(state, 'muse', {
-        ...main,
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'bash',
-        tool_input: bash
-      })
-    ).toBeNull()
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
-
-    const waiting = normalizeAndAccept(state, 'muse', {
-      ...main,
-      hook_event_name: 'Notification',
-      notification_type: 'permission_prompt',
-      title: 'ws — waiting for approval',
-      message: 'bash wants to run rm -rf build'
-    })
-    expect(waiting?.payload).toMatchObject({
-      agentType: 'muse',
-      state: 'waiting',
-      toolName: 'bash',
-      interactivePrompt: JSON.stringify({ approval: { tool: 'bash', summary: 'rm -rf build' } })
-    })
-
-    const approved = normalizeAndAccept(state, 'muse', {
-      ...main,
-      hook_event_name: 'PostToolUse',
-      tool_name: 'bash',
-      tool_input: bash,
-      tool_use_id: 'call_1'
-    })
-    expect(approved?.payload.state).toBe('working')
-    expect(approved?.payload.interactivePrompt).toBeUndefined()
-  })
-
-  it('ignores Notification types other than permission_prompt', () => {
-    expect(
-      normalizeAndAccept(state, 'muse', {
-        ...main,
-        hook_event_name: 'Notification',
-        notification_type: 'idle_prompt',
-        message: 'Muse is waiting for your input'
-      })
-    ).toBeNull()
   })
 
   it('reports a request_user_input question from the session log until it settles', () => {

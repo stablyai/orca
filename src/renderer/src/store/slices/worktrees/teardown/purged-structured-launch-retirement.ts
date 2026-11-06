@@ -1,8 +1,9 @@
+import { markStructuredAgentSessionLaunchCancelledSilently } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { TerminalTab } from '../../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import type { WorktreePurgeTarget } from '../../worktree-helpers'
@@ -10,7 +11,6 @@ import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import {
   getStructuredAgentSessionLaunchOwner,
-  markStructuredAgentSessionLaunchCancelledSilently,
   shouldRetainStructuredAgentSessionLaunchTab,
   structuredLaunchStates
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -24,8 +24,8 @@ import {
   structuredAgentSessionTargetForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
-
 import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
+
 /** Settles launch waits and retires chat ownership for purged tabs of one workspace. */
 export function retirePurgedTabLaunches(
   s: AppState,

@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import type { AgentStatusCacheIdentity } from '../../../../shared/agent-status-types'
+import type { AgentStatusCacheIdentity } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { activityThreadStatusId } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 

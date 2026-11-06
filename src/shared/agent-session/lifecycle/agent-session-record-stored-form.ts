@@ -10,8 +10,8 @@ import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain
 } from './agent-session-provider-handle'
-import { isAgentSessionLastTurn } from '../../agent-session-last-turn'
-import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
+import { isAgentSessionLastTurn } from './agent-session-last-turn'
+import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import type { AgentSessionRecord } from './agent-session-record'
 
 // Older builds accept only exit-observed, pid-absent and identity-mismatch and set aside any other

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { launchHostIsRemote } from '../../../shared/agent-launch-remote'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { launchHostIsRemote } from '../../../shared/agent-launch/startup/agent-launch-remote'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   refineLocalLaunchPlatform,

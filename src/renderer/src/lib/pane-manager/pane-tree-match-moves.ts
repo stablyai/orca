@@ -1,4 +1,4 @@
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { updateMultiPaneState } from './pane-drag-reorder'

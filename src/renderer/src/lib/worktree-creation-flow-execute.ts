@@ -1,5 +1,4 @@
 import { prepareWorktreeCreationHooks } from '@/lib/worktree-creation-hook-preparation'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
@@ -24,19 +23,22 @@ import {
   launchStructuredWorktreeSession,
   type WorktreeCreationStructuredSessionResult
 } from '@/lib/worktree-creation-structured-session'
-import {
-  completeWorktreeCreation,
-  isPendingCreationSurfaceVisible,
-  isCreatedWorkspaceInView
-} from '@/lib/worktree-creation-completion'
+import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { recordChatSetupReceipt, selectChatRoute } from '@/lib/worktree-creation-host-launch'
+import {
+  isCreatedWorkspaceInView,
+  showWorktreeCreationError
+} from '@/lib/worktree-creation-surface'
+import { prepareCreatedWorktreeActivation } from '@/lib/worktree-creation-initial-tabs'
+import type { UISlice } from '@/store/slices/ui'
 
 export async function executeWorktreeCreation(
   creationId: string,
-  request: WorktreeCreationRequest
+  request: WorktreeCreationRequest,
+  originView: UISlice['activeView'] = 'terminal'
 ): Promise<void> {
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
@@ -60,8 +62,7 @@ export async function executeWorktreeCreation(
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
     // Before anything exists: a host that owns the chat's Setup wait is promised it, else this
     // creates exactly as the shipped route does.
-    const hostOwnsChat =
-      structuredLaunch && !provisionedRoot && (await selectChatRoute(creationId, preparedRequest))
+    const chatRoute = await selectChatRoute(creationId, preparedRequest)
     const backendStartup =
       provisionedRoot || structuredLaunch ? undefined : resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
@@ -93,7 +94,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
-          ...(hostOwnsChat ? { promisedAgentChat: true as const } : {}),
+          ...chatRoute,
           setupOnly: preparedRequest.setupOnly,
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
@@ -130,21 +131,17 @@ export async function executeWorktreeCreation(
       await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    // Keep failures on the owning creation surface, never stale previous-workspace tabs.
-    useAppStore.getState().updatePendingWorktreeCreation(creationId, {
-      status: 'error',
-      error: message,
-      ...(preparedRequest.ephemeralVmRecipe ? { request } : {})
-    })
-    // Toast only after navigation away; inline errors already announce visible failures.
-    if (!isPendingCreationSurfaceVisible(creationId)) {
-      toast.error(message)
-    }
+    showWorktreeCreationError(
+      useAppStore.getState(),
+      creationId,
+      originView,
+      message,
+      preparedRequest.ephemeralVmRecipe ? request : undefined
+    )
     return
   }
 
-  const worktree = result.worktree
-  recordChatSetupReceipt(creationId, result.agentLaunchSetup)
+  const worktree = recordChatSetupReceipt(creationId, result)
   // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     if (preparedRequest.ephemeralVmRuntimeId) {
@@ -159,7 +156,12 @@ export async function executeWorktreeCreation(
   const startupOpt = windowStartup.startup
 
   // Hand off only if still viewing creation/new workspace; preserve later navigation and toast instead (#9944).
-  const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
+  const shouldActivateOnCompletion = isCreatedWorkspaceInView(
+    useAppStore.getState(),
+    creationId,
+    worktree.id,
+    originView
+  )
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
@@ -168,18 +170,18 @@ export async function executeWorktreeCreation(
   let primaryTabId: string | null = null
   if (shouldActivateOnCompletion && !structuredLaunch) {
     try {
-      activation = activateAndRevealWorktree(worktree.id, {
-        sidebarRevealBehavior: 'auto',
-        ...onCreationHost,
-        ...(windowStartup.agent !== null ? { agent: windowStartup.agent } : {}),
-        ...(result.setup ? { setup: result.setup } : {}),
-        ...(defaultTabs ? { defaultTabs } : {}),
-        ...(startupOpt ? { startup: startupOpt } : {}),
-        ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-        ...windowStartup.terminalOptions,
-        ...(setupIsOnlySurface ? { providesInitialSurface: true } : {})
+      const prepared = prepareCreatedWorktreeActivation({
+        creationId,
+        request: preparedRequest,
+        result,
+        windowStartup,
+        defaultTabs,
+        setupIsOnlySurface,
+        executionHostId: creationHostId
       })
-      primaryTabId = activation === false ? null : activation.primaryTabId
+      primaryTabId = prepared.primaryTabId
+      activation = activateAndRevealWorktree(worktree.id, prepared.options)
+      primaryTabId ??= activation === false ? null : activation.primaryTabId
     } catch (error) {
       console.error('worktree create: activate-and-reveal failed', worktree.id, error)
       // Activation can publish then throw; only freshly seeded/stamped startup tabs prove primary ownership, never default order.
@@ -189,11 +191,11 @@ export async function executeWorktreeCreation(
       const verifiedLaunchTabId =
         result.startupTerminal?.tabId ??
         (launchAgent ? existingTabs.find((tab) => tab.launchAgent === launchAgent)?.id : undefined)
-      if (verifiedLaunchTabId) {
+      if (verifiedLaunchTabId && !primaryTabId) {
         // Startup terminal ids and stamped agent tabs are the only safe primary
         // ids when activation returned no result.
         primaryTabId = verifiedLaunchTabId
-      } else if (existingTabs.length === 0 || startupOpt) {
+      } else if (!primaryTabId && (existingTabs.length === 0 || startupOpt)) {
         try {
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -293,7 +295,7 @@ export async function executeWorktreeCreation(
       structuredLaunchAccepted = structuredSession.accepted
       activation = structuredSession.activation
       primaryTabId = structuredSession.primaryTabId
-      if (structuredSession.cancelled) {
+      if (structuredSession.cancelled || structuredSession.retainedInput) {
         return
       }
     }

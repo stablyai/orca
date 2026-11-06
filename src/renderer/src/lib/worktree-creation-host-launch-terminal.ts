@@ -3,7 +3,7 @@
  *  the held message goes in it. The host runs it as given and reports what became of the text. */
 
 import { useAppStore } from '@/store'
-import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
@@ -13,13 +13,13 @@ import type {
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentLaunchTerminalStartupParams } from '../../../shared/rpc-contract/agent-launch-accept-params'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { AgentStartupPlan } from '../../../shared/tui-agent-startup'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 export type PlannedHostLaunchTerminal = NonNullable<
   NonNullable<PendingWorktreeCreation['hostLaunch']>['terminal']

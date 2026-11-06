@@ -1,4 +1,4 @@
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { AgentLaunchAdmission } from './agent-launch-replay'
 

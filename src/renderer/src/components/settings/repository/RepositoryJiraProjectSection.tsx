@@ -6,7 +6,7 @@ import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import { useAppStore } from '@/store/index'
 import { useJiraProjectInventory } from '../../use-jira-project-inventory'
 import { JiraProjectPicker } from '../../jira-project-picker'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
 export function RepositoryJiraProjectSection({

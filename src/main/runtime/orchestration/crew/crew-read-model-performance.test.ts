@@ -1,7 +1,4 @@
-import { readCrewTraffic } from './crew-query'
-import { readCrewParentInputs } from './crew-parent-inputs'
-
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { RuntimeAgentOrchestrationProjection } from '../../runtime-agent-orchestration-projection'
 import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
 import { RuntimeOrchestrationSenderNames } from '../../runtime-orchestration-sender-names'
@@ -13,10 +10,10 @@ import { CrewChanges } from './crew-changes'
 import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 import { fixture } from './crew-read-model.test-fixture'
-import { crewQueryPlans, meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
+import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 afterEach(() => vi.useRealTimers())
 
 it('shares complete host derivation across N/10N handled assignments and subscribers on real wakes', async () => {
@@ -242,134 +239,93 @@ it('counts the real status qualification/projection SQL on a decoration wake wit
     expect(measurements[1][key]).toBeLessThanOrEqual(measurements[0][key] * 10)
   }
 })
-it('selects peer maxima without losing bodies and uses indexed historical provenance', () => {
-  const { db, run, assign, handles } = fixture()
-  handles.set('term_worker', 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
-  assign('term_worker')
-  db.insertMessage({
-    runId: run.id,
-    from: 'term_worker',
-    to: 'term_coord',
-    subject: 'Large losing body',
-    body: 'x'.repeat(64 * 1024)
-  })
-  const winner = db.insertMessage({
-    runId: run.id,
-    from: 'term_worker',
-    to: 'term_coord',
-    subject: 'Winner',
-    body: 'latest'
-  })
-  const meter = meterCrewSql(db.db)
-  const traffic = readCrewTraffic(db, ['term_coord', `run:${run.id}`], '2000-01-01T00:00:00Z')
-  expect(traffic).toMatchObject([
-    { peer: 'term_worker', direction: 'from', sequence: winner.sequence, body: 'latest' }
-  ])
-  const provenance = readCrewParentInputs(db, ['term_worker'], [handles.get('term_worker')!])
-  expect(provenance.claims.filter((row) => row.family === 'local')).toHaveLength(1)
-  meter.restore()
-  const plan = JSON.stringify(
-    crewQueryPlans(
-      db.db,
-      meter.executions.filter((entry) => entry.method === 'all')
-    ).plans.map((row) => row.plan)
-  )
-  expect(plan).toContain('idx_crew_dispatch_leaf')
-  expect(plan).toContain('idx_crew_remote_leaf')
-  expect(plan).toContain('idx_crew_resource_leaf')
-  expect(plan).toContain('idx_messages_crew_from')
-  expect(plan).toContain('idx_messages_crew_to')
-  expect(plan).toContain('idx_crew_dispatch_pane')
-  expect(plan).not.toContain('SCAN dispatch_contexts')
-})
 
-it('drives pending questions from metadata on real N/10N mailbox wakes', async () => {
-  const receipts: {
-    retainedMessages: number
-    pending: number
-    executions: number
-    rows: number
-    bytes: number
-    plan: string[]
-  }[] = []
-  for (const retainedMessages of [100, 1000]) {
-    const { db, deps, run, assign } = fixture()
-    assign('term_worker')
-    db.insertMessages(
-      Array.from({ length: retainedMessages }, (_, i) => ({
-        runId: run.id,
-        from: 'term_worker',
-        to: 'term_coord',
-        subject: 'Ordinary mail',
-        body: `mail-${i}`
-      }))
-    )
-    const prepare = db.db.prepare.bind(db.db)
-    const operations = { executions: 0, rows: 0, bytes: 0 }
-    const plans: string[][] = []
-    const spy = vi.spyOn(db.db, 'prepare').mockImplementation((sql) => {
-      const statement = prepare(sql)
-      if (!sql.includes('FROM question_threads q INDEXED BY idx_crew_pending_questions')) {
-        return statement
+it('bounds winning mail and question preview encoding across body bytes, rows and settled wakes', async () => {
+  const receipts: { rows: number; bodyLength: number; encodedBytes: number }[] = []
+  for (const rows of [1, 10]) {
+    for (const bodyLength of [4096, 40960]) {
+      const { db, deps, run, handles, assign } = fixture()
+      const body = `preview-body:${'界🙂'.repeat(bodyLength)}`
+      for (let index = 0; index < rows; index++) {
+        const handle = `term_preview_${index}`
+        handles.set(
+          handle,
+          `tab_preview_${index}:aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, '0')}`
+        )
+        const dispatch = assign(handle)
+        db.createQuestion({
+          runId: run.id,
+          dispatchId: dispatch.id,
+          askerHandle: handle,
+          question: body
+        })
       }
-      return {
-        all: (...args) => {
-          operations.executions++
-          const rows = statement.all(...args)
-          operations.rows += rows.length
-          operations.bytes += Buffer.byteLength(JSON.stringify(rows))
-          plans.push(
-            prepare(`EXPLAIN QUERY PLAN ${sql}`)
-              .all(...args)
-              .map((row) => String(row.detail))
-          )
-          return rows
-        },
-        get: (...args) => statement.get(...args),
-        run: (...args) => statement.run(...args),
-        iterate: (...args) => statement.iterate(...args),
-        setReadBigInts: (value) => statement.setReadBigInts(value)
+      let title = 'First title'
+      deps.name = () => title
+      const wake = new CrewChanges()
+      const model = new CrewReadModel(() => deps, wake.subscribe)
+      const frames: OrchestrationCrewFrame[] = []
+      const encode = vi.spyOn(Buffer, 'from')
+      const stop = subscribeCrew(
+        () => model.read('term_coord'),
+        model.subscribe,
+        (frame) => frames.push(frame)
+      )
+      try {
+        const snapshot = model.read('term_coord')
+        expect(snapshot.sections.managing).toHaveLength(rows)
+        const prefix = 'preview-body:'
+        const expected = `${prefix + '界🙂'.repeat(144)}…`
+        for (const row of snapshot.sections.managing) {
+          expect(row.latest?.preview).toBe(expected)
+          expect(row.pendingQuestion?.preview).toBe(expected)
+          expect(Buffer.byteLength(row.latest!.preview)).toBeLessThanOrEqual(1024)
+          expect(row.latest?.preview).not.toContain('\uFFFD')
+        }
+        encode.mockClear()
+        const published = frames.filter((frame) => frame.type === 'complete').length
+        for (let step = 0; step < 10; step++) {
+          title = `Changed title ${step}`
+          wake.notify(new Set(['names']))
+          await Promise.resolve()
+          await Promise.resolve()
+        }
+        const bodies = encode.mock.calls.flatMap(([input]) =>
+          typeof input === 'string' && input.startsWith(prefix) ? [input] : []
+        )
+        expect(bodies).toHaveLength(rows * 2 * 10)
+        const encodedBytes = bodies.reduce((total, input) => total + Buffer.byteLength(input), 0)
+        expect(encodedBytes).toBeLessThanOrEqual(rows * 2 * 10 * 3075)
+        expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(published + 10)
+        expect(model.read('term_coord').sections.managing[0].label).toBe(title)
+        receipts.push({ rows, bodyLength, encodedBytes })
+      } finally {
+        stop()
+        encode.mockRestore()
       }
-    })
-    const frames: OrchestrationCrewFrame[] = []
-    const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
-    const stop = subscribeCrew(
-      () => model.read('term_coord'),
-      model.subscribe,
-      (frame) => frames.push(frame)
-    )
-    try {
-      operations.executions = operations.rows = operations.bytes = 0
-      plans.length = 0
-      const publications = frames.filter((frame) => frame.type === 'complete').length
-      db.insertMessage({
-        from: 'term_peer',
-        to: 'term_outbound',
-        subject: 'Unrelated committed wake'
-      })
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(operations).toEqual({ executions: 1, rows: 0, bytes: 2 })
-      expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(publications)
-      // This is actual executed query planning plus returned work, not native VM/visit accounting.
-      expect(plans[0][0]).toContain('SCAN q USING INDEX idx_crew_pending_questions')
-      expect(
-        plans[0].some((detail) => detail.includes('SEARCH m') && detail.includes('(id=?)'))
-      ).toBe(true)
-      expect(plans[0].join(' ')).not.toContain('idx_inbox')
-      receipts.push({ retainedMessages, pending: 0, ...operations, plan: plans[0] })
-      stop()
-      operations.executions = 0
-      db.insertMessage({ from: 'term_peer', to: 'term_outbound', subject: 'After teardown' })
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(operations.executions).toBe(0)
-    } finally {
-      stop()
-      spy.mockRestore()
     }
   }
-  expect(receipts[1].executions).toBe(receipts[0].executions)
-  expect(receipts[1].rows).toBe(receipts[0].rows)
-  expect(receipts[1].bytes).toBe(receipts[0].bytes)
+  expect(receipts[1].encodedBytes).toBe(receipts[0].encodedBytes)
+  expect(receipts[3].encodedBytes).toBe(receipts[2].encodedBytes)
+  expect(receipts[2].encodedBytes).toBe(receipts[0].encodedBytes * 10)
+})
+
+it.each([
+  ['x'.repeat(1024), 'x'.repeat(1024)],
+  ['x'.repeat(1025), `${'x'.repeat(1021)}…`],
+  [`${'x'.repeat(1020)}🙂tail`, `${'x'.repeat(1020)}…`],
+  [`${'x'.repeat(1017)}🙂tail`, `${'x'.repeat(1017)}🙂…`]
+])('preserves the existing UTF-8 preview boundary for %#', (body, expected) => {
+  const { db, deps, run, assign } = fixture()
+  const dispatch = assign('term_worker')
+  db.createQuestion({
+    runId: run.id,
+    dispatchId: dispatch.id,
+    askerHandle: 'term_worker',
+    question: body
+  })
+  const row = new CrewReadModel(() => deps, db.crewChanges.subscribe).read('term_coord').sections
+    .managing[0]
+  expect(row.latest?.preview).toBe(expected)
+  expect(row.pendingQuestion?.preview).toBe(expected)
 })

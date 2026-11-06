@@ -1,7 +1,7 @@
 // Key Stop notes by captured turn so repeated Stops revise one row, even after the turn ends.
 
 import type { AgentJournalStatusItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
@@ -26,7 +26,7 @@ export function structuredAgentSessionStopNamesTurnNotLive(
 
 /** A known non-live turn is ended, including one removed by rewind; unknown turns may still open. */
 export function structuredAgentSessionStopNamesEndedTurn(
-  journal: Pick<AgentSessionJournal, 'snapshot' | 'stops'>,
+  journal: Pick<AgentSessionJournal, 'itemsRead' | 'stops'>,
   work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId' | 'working'>,
   namedTurnId: string | undefined
 ): boolean {
@@ -43,11 +43,11 @@ export function structuredAgentSessionStopNamesEndedTurn(
 }
 
 export function structuredAgentSessionNamedTurnScope(
-  journal: Pick<AgentSessionJournal, 'snapshot'>,
+  journal: Pick<AgentSessionJournal, 'itemsRead'>,
   turnId: string
 ): Extract<AgentJournalTurnScope, { kind: 'turn' }> | null {
   const turn = journal
-    .snapshot()
+    .itemsRead()
     .items.findLast((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
   return turn ? { kind: 'turn', turnItemId: turn.itemId } : null
 }
@@ -55,7 +55,7 @@ export function structuredAgentSessionNamedTurnScope(
 /** The turn the provider says the interrupt took, even one that opened while the cancel waited for
  *  it: the note is that turn's, never a conversation row read before the wait. */
 export function structuredAgentSessionStopNoteScope(
-  journal: Pick<AgentSessionJournal, 'snapshot'>,
+  journal: Pick<AgentSessionJournal, 'itemsRead'>,
   stoppedTurn: string | undefined,
   fallback: AgentJournalTurnScope
 ): AgentJournalTurnScope {

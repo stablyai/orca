@@ -11,12 +11,13 @@ import {
   Trash2
 } from 'lucide-react-native'
 import { colors, pressedStyle } from '../theme/mobile-theme'
-import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-session-queued-cards'
+import { queuedMessageCardSteers } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
+import { MobileAgentMessageSenders } from './native-chat/transcript/MobileAgentMessageSenders'
 import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -49,7 +50,7 @@ export function MobileQueuedMessageCardRow({
         style={styles.divided}
         onLayout={(event) => onEditorLayout(event.nativeEvent.layout)}
       >
-        <MobileQueuedMessageComposer editor={editor} attribution={card.attribution} />
+        <MobileQueuedMessageComposer editor={editor} from={card.from} />
       </View>
     )
   }
@@ -83,11 +84,7 @@ function QueuedMessageCardContents({
           <ListEnd size={14} color={colors.textMuted} strokeWidth={2} />
         )}
         <View style={styles.textColumn}>
-          {card.attribution ? (
-            <Text style={styles.caption} numberOfLines={1}>
-              {card.attribution}
-            </Text>
-          ) : null}
+          {card.from ? <MobileAgentMessageSenders queued from={card.from} /> : null}
           <MobileQueuedCardText
             text={card.line}
             expanded={expanded}

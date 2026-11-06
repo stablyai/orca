@@ -1,4 +1,5 @@
-import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
+import { isOptionalUsageLimitContinueCancel } from './agent-session-usage-limit-continue'
+import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from '../agent-session-conversation-name'
@@ -11,7 +12,7 @@ import {
 } from './agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
-import type { AgentSessionLastTurn } from '../../agent-session-last-turn'
+import type { AgentSessionLastTurn } from './agent-session-last-turn'
 import type { ExecutionHostId } from '../../execution-host'
 import {
   isAgentSessionConversationCommandRecord,
@@ -118,6 +119,7 @@ export type AgentSessionRecord = {
   options?: Record<string, string>
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
+  usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
@@ -144,13 +146,11 @@ const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
-function isBoundedString(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max
-}
+const isBoundedString = (value: unknown, max: number): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= max
 
-export function isAgentSessionId(value: unknown): value is string {
-  return typeof value === 'string' && SESSION_ID_PATTERN.test(value)
-}
+export const isAgentSessionId = (value: unknown): value is string =>
+  typeof value === 'string' && SESSION_ID_PATTERN.test(value)
 
 /** NUL cannot occur in a host id, distro name, or workspace id, so no component can forge a join. */
 
@@ -308,6 +308,7 @@ export function isPersistedAgentSessionObservationRecord(
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
+      isOptionalUsageLimitContinueCancel(record.usageLimitContinueCancel) &&
       (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
       (record.providerContextBoundary === undefined ||
         isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&

@@ -28,6 +28,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 let root: string
 let log = recordingStructuredAgentSessionLogger()
@@ -78,6 +79,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

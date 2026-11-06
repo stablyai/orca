@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, electronMocks, ipcMain } from '../orca-runtime-test-mocks.spec'
+import { bindPaneFirst, committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { ipcMain } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   HEADLESS_LEAF_ID,
@@ -10,7 +13,7 @@ import {
   TEST_WORKTREE_PATH,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('rejects startup prompts for agents that require post-ready stdin', async () => {

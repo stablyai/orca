@@ -4,10 +4,10 @@ import { basename, dirname, resolve } from 'node:path'
 import { subscribeViaWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
 import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
-import { resolveWatcherRootPaths } from '../ipc/watcher-event-root-path-rewrite'
-import { watcherDirectoryIdentity } from '../ipc/watcher-directory-identity'
+import { resolveWatcherRootPaths } from '../ipc/filesystem/watcher-process/watcher-event-root-path-rewrite'
+import { watcherDirectoryIdentity } from '../ipc/filesystem/watcher-process/watcher-directory-identity'
 import { bumpPluginDevRevision, recordPluginDevEdit } from './plugin-dev-revision'
-import { isIgnoredPluginDevPath, PLUGIN_DEV_WATCH_IGNORE } from './plugin-dev-watcher-ignore'
+import { isIgnoredPluginDevPath, pluginDevWatchIgnoreOptions } from './plugin-dev-watcher-ignore'
 
 // Deleted roots can reject unsubscribe after the native stream has stopped.
 function releaseSubscription(subscription: WatcherProcessSubscription): void {
@@ -87,7 +87,7 @@ export class PluginDevWatcher {
         requestedRoot,
         {
           ...(process.platform === 'win32' ? { backend: 'windows' } : {}),
-          ignore: [...PLUGIN_DEV_WATCH_IGNORE]
+          ...pluginDevWatchIgnoreOptions()
         },
         false,
         refresh,

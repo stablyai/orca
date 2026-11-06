@@ -5,10 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../loading-store/store'
-import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest-export'
+import {
+  createOrcadMigrationManifest,
+  exportOrcadMigrationManifest
+} from '../../ssh/orcad-migration-manifest-export'
 import { parseOrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { orcadMigrationRefusalReason } from '../../ssh/orcad-migration-refusal-reason'
 import { collectUntransferredDependentBlockers } from '../../ssh/targets/ssh-target-orcad-dependents'
@@ -16,7 +19,7 @@ import {
   getProfileTerminalScrollbackSnapshotRoot,
   readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -202,12 +205,12 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     const run = store.createAutomationRun(automation, 1)
     store.updateAutomationRun({ runId: run.id, status: 'completed', workspaceId: null })
 
-    const manifest = createOrcadMigrationManifest(store, TARGET)
+    const { manifest, blobs } = exportOrcadMigrationManifest(store, TARGET)
 
     expect(manifest.payload.dormantState?.automations).toEqual([
       expect.objectContaining({ id: automation.id, enabled: false })
     ])
-    expect(manifest.payload.dormantState?.automationRuns).toEqual([
+    expect(JSON.parse(blobs[0]?.bytes.toString('utf8') ?? '{}').runs).toEqual([
       expect.objectContaining({ id: run.id, status: 'completed' })
     ])
     expect(() => parseOrcadMigrationManifest(manifest)).not.toThrow()

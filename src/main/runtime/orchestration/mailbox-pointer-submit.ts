@@ -12,7 +12,7 @@ import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
-import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 type PointerSubmitDependencies = {
   mailboxOwner: OrchestrationMailboxOwner

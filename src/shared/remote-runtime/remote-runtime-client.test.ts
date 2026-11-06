@@ -1,11 +1,11 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../paired-runtime-connection'
+} from './pairing/paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
-import { encodePairingOffer, parsePairingCode } from '../pairing'
+import { encodePairingOffer, parsePairingCode } from './pairing/pairing'
 import {
   decrypt,
   decryptBytes,
@@ -14,7 +14,7 @@ import {
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
-} from '../e2ee-crypto'
+} from './e2ee/node/e2ee-crypto'
 import {
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight,
@@ -309,6 +309,7 @@ describe('sendRemoteRuntimeRequest', () => {
       undefined,
       undefined,
       [],
+      undefined,
       1000
     )
 
@@ -335,6 +336,7 @@ describe('sendRemoteRuntimeRequest', () => {
           undefined,
           undefined,
           [],
+          undefined,
           keepaliveTotalMs
         )
       ).rejects.toMatchObject({ code: 'runtime_timeout' })
@@ -365,6 +367,7 @@ describe('sendRemoteRuntimeRequest', () => {
         () => {},
         undefined,
         [],
+        undefined,
         undefined,
         undefined,
         keepaliveTotalMs

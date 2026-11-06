@@ -1,4 +1,4 @@
-import { KITTY_REPORT_EVENT_TYPES } from '../../../../shared/terminal-kitty-keyboard-flags'
+import { KITTY_REPORT_EVENT_TYPES } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 
 type GuardedKeyEvent = Pick<KeyboardEvent, 'type' | 'code' | 'key' | 'keyCode'>
 

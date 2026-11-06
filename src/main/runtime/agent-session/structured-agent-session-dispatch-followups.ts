@@ -1,7 +1,6 @@
-// Late dispatch settlements run outside their request, so report failures through the logger.
-
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+// Late dispatch settlements run outside their request, so report failures through the logger.
 
 type DispatchFollowUpHost = Pick<StructuredAgentSessionHost, 'settleLateDispatch'>
 
@@ -12,12 +11,12 @@ export function createStructuredAgentSessionDispatchFollowUps(input: {
 }): {
   onDispatchSettledLate: (
     settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
-  ) => void
+  ) => void | Promise<void>
 } {
   const { logger } = input
   return {
     onDispatchSettledLate: (settlement) => {
-      void input
+      return input
         .host()
         ?.settleLateDispatch(settlement)
         .catch((error: unknown) =>

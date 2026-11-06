@@ -1,14 +1,14 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import { makeWorkspaceLineage } from '../../src/main/persistence/persistence-test-harness'
-import * as folderTeardown from '../../src/main/runtime/folder-workspace-pty-teardown'
-import * as pathPresence from '../../src/main/local-worktree-path-presence'
+import * as folderTeardown from '../../src/main/runtime/workspaces/removal/folder-workspace-pty-teardown'
+import * as pathPresence from '../../src/main/workspaces/catalog/local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
 import { basename } from 'node:path'
-import * as worktreePaths from '../../src/main/git/worktree-path-comparison'
-import * as gitRemoval from '../../src/main/git/worktree-removal'
+import * as worktreePaths from '../../src/main/git/worktrees/catalog/worktree-path-comparison'
+import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-removal'
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
-import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/runtime-registered-local-worktree-removal'
-import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/runtime-folder-workspace'
+import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal'
+import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/workspaces/catalog/runtime-folder-workspace'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -19,8 +19,8 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/ag
 import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
-} from '../../src/main/ipc/watcher-removal-gate'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
+} from '../../src/main/workspaces/removal/watcher-removal-gate'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   root,
   B,
@@ -28,7 +28,7 @@ import {
   openAuthorityRuntime,
   savedIds,
   AuthorityRuntime
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { removalPtyProvider } from '../../src/main/runtime/rpc/worktree-rm-pty.test-fixture'
 import type { DurableProfileStateMutation } from '../../src/main/persistence/loading-store/store-runtime-state'
 import * as publication from '../../src/main/runtime/session-tabs/structured-session-tab-publication'
@@ -36,13 +36,12 @@ import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
-import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
-import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan'
 import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
-import { hostRouteWithNotice } from '../../mobile/src/host-route-notice'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
-import type { AiVaultSession } from '../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
@@ -205,7 +204,10 @@ it.each([true, false])(
     expect((await rig.host.journalSnapshot(B)).items).toEqual(transcript)
     expect(result).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+      result: {
+        ok: false,
+        refusal: { code: 'agent_session_workspace_removed', details: { workspaceKind: 'folder' } }
+      }
     })
     expect(rig.acquire).not.toHaveBeenCalled()
     const phone = phoneClient(rig)
@@ -224,10 +226,8 @@ it.each([true, false])(
         failed
       })
     ).toBe(true)
-    expect(opened).toHaveBeenCalledExactlyOnceWith(
-      hostRouteWithNotice('owning-host', 'worktree-missing')
-    )
-    expect(failed).not.toHaveBeenCalled()
+    expect(opened).not.toHaveBeenCalled()
+    expect(failed).toHaveBeenCalledExactlyOnceWith('workspace-missing', 'folder')
     expect(rig.acquire).not.toHaveBeenCalled()
   }
 )
@@ -568,7 +568,10 @@ it('fences actual folder-extra teardown through forget without denying its survi
   expect(await rig.runtime.removeManagedWorktree(`id:${workspace}`)).toEqual({})
   expect(await reveal(rig)).toMatchObject({
     ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+    result: {
+      ok: false,
+      refusal: { code: 'agent_session_workspace_removed', details: { workspaceKind: 'folder' } }
+    }
   })
   expect(rig.store.getSessionTabId(B)).toBeNull()
   expect(rig.runtime.mobileSessionTabsByWorktree.has(workspace)).toBe(false)
@@ -659,7 +662,13 @@ it('successful owning Git scan plus positive repo/parent and absent saved W outr
   const record = rig.store.getRecord(B)
   expect(await reveal(rig)).toMatchObject({
     ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_workspace_removed',
+        details: { workspaceKind: 'git-worktree' }
+      }
+    }
   })
   expect(rig.store.getSessionTabId(B)).toBeNull()
   expect(rig.runtime.mobileSessionTabsByWorktree.has(workspace)).toBe(false)
@@ -762,7 +771,13 @@ it('excludes a late reveal after actual folder retirement while its authority ro
   expect(await rig.runtime.deleteFolderWorkspace(rig.folderId)).toEqual({ deleted: true })
   expect(await reveal(rig)).toMatchObject({
     ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_workspace_removed' } }
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_workspace_removed',
+        details: { workspaceKind: 'folder' }
+      }
+    }
   })
   expect(() => {
     const install = beginWatcherInstall(root)

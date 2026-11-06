@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
 
 import {
   TEST_LEAF_1,

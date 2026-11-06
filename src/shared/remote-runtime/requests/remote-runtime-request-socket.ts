@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../../protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
@@ -25,12 +25,14 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
+import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import type {
+  RuntimeRequestPreparation,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../runtime-types'
+import type { RuntimeStatus } from '../../runtime-session-contracts'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
 
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(
@@ -43,6 +45,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
   requestSelection?: RuntimeRequestSelection,
+  prepareRequest?: RuntimeRequestPreparation,
   /** How long this request's keepalives may renew its idle timeout, from its dispatch; never past this in total. */
   keepaliveTotalMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
@@ -65,15 +68,20 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         method: 'status.get'
       })
     : null
+  const serialize = (
+    selectedParams: unknown,
+    selectedEnvelope: RuntimeOrchestrationEnvelope | undefined
+  ) =>
+    serializeRemoteRuntimeRpcRequest({
+      requestId,
+      deviceToken: connection.credential.deviceToken,
+      method,
+      params: selectedParams,
+      envelope: selectedEnvelope
+    })
   const prepare = (selectedParams: unknown) =>
     prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
-        deviceToken: connection.credential.deviceToken,
-        method,
-        params: selectedParams,
-        envelope
-      })
+      serializePreparedRemoteRuntimeRequest(serialize, selectedParams, envelope, prepareRequest)
     )
   const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
     // Reserve this connection before authentication; select mutation params only after status.

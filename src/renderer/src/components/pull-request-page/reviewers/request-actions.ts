@@ -42,6 +42,7 @@ type ReviewerRequestActionsArgs = {
     options?: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
   scheduleReviewerInputFocus: () => void
 }
 
@@ -156,6 +157,8 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
+      // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+      args.onMutated()
     }
   }
 
@@ -256,6 +259,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
+      args.onMutated()
     }
   }
 

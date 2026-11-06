@@ -196,17 +196,9 @@ function indexSlotIds(): Map<string, Set<string>> {
       continue
     }
     const tabId = structuredAgentSessionTabId(record.sessionId)
-    const keys = [slotKey(address.worktreeId)]
-    if (address.targetGroupId) {
-      keys.push(slotKey(address.worktreeId, address.targetGroupId))
-    }
-    for (const key of keys) {
-      const ids = index.get(key)
-      if (ids) {
-        ids.add(tabId)
-      } else {
-        index.set(key, new Set([tabId]))
-      }
+    for (const groupId of new Set([undefined, address.targetGroupId])) {
+      const key = slotKey(address.worktreeId, groupId)
+      index.set(key, (index.get(key) ?? new Set<string>()).add(tabId))
     }
   }
   return index
@@ -241,6 +233,24 @@ export function writeStructuredAgentLaunchRecord(
   load()
   records.set(record.sessionId, record)
   writeRecords()
+}
+
+export function updateStructuredAgentLaunchRecords(
+  changes: Iterable<readonly [string, StructuredAgentLaunchPersistedRecord | null]>
+): void {
+  load()
+  let changed = false
+  for (const [sessionId, record] of changes) {
+    if (record) {
+      records.set(sessionId, record)
+      changed = true
+    } else if (records.delete(sessionId)) {
+      changed = true
+    }
+  }
+  if (changed) {
+    writeRecords()
+  }
 }
 
 export function deleteStructuredAgentLaunchRecord(sessionId: string): void {

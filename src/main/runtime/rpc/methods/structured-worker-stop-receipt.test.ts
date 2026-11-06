@@ -3,7 +3,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** An absent structured host cannot issue a close; receipts must not claim closed_agent_terminal and falsely tell coordinators its tab is gone. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../core'
 

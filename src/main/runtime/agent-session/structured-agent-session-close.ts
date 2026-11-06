@@ -5,7 +5,7 @@ import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-s
 import {
   observeStructuredSession,
   structuredSessionCloseSettled
-} from '../structured-worker-authority'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean

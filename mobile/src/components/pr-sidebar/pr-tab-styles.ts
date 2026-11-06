@@ -140,9 +140,6 @@ export const prSheetStyles = themedStyleSheet(() => ({
   state: { color: colors.textSecondary, fontSize: typography.metaSize },
   approved: { color: colors.statusGreen },
   field: {
-    borderRadius: radii.control,
-    backgroundColor: colors.sheetGroup,
-    color: colors.textPrimary,
     fontSize: TEXT_INPUT_FONT_SIZE,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md

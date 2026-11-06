@@ -1,6 +1,6 @@
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../src/shared/setup-agent-sequencing'
 import { translate } from '../i18n/mobile-i18n'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -16,11 +16,11 @@ import {
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import {
   agentLaunchCreateParams,
-  isAgentLaunchReplayUnsupportedRefusal,
   isAgentLaunchUnsupportedRefusal,
   readAgentLaunchCreateOutcome,
   type WorktreeCreateAgentLaunch
 } from './agent-launch-request'
+import { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { structuredSessionOperationId } from '../session/structured-session-operation-id'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'

@@ -14,7 +14,7 @@ import {
   createAliasedWatcherRoot as createNativeAliasedWatcherRoot,
   removeAliasedWatcherRoot,
   type AliasedWatcherRoot
-} from '../ipc/watcher-aliased-root-fixture'
+} from '../ipc/filesystem/watcher-process/watcher-aliased-root-fixture'
 import { PluginDevWatcher } from './plugin-dev-watcher'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 
@@ -612,7 +612,7 @@ describe('PluginDevWatcher', () => {
     }
 
     expect(refresh).toHaveBeenCalledTimes(2)
-    expect(root.options).toEqual({ backend: 'windows', ignore: ['.git', '.orca', 'node_modules'] })
+    expect(root.options).toEqual({ backend: 'windows', ignoreGlobs: [expect.any(String)] })
     expect(root.unsubscribe).not.toHaveBeenCalled()
     expect(subscribeMock).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(60_000)
@@ -645,8 +645,8 @@ describe('PluginDevWatcher', () => {
     expect(refresh).toHaveBeenCalledTimes(2)
     expect(root.unsubscribe).toHaveBeenCalledOnce()
     expect(subscriptions.map((item) => ({ path: item.path, options: item.options }))).toEqual([
-      { path, options: { backend: 'windows', ignore: ['.git', '.orca', 'node_modules'] } },
-      { path, options: { backend: 'windows', ignore: ['.git', '.orca', 'node_modules'] } }
+      { path, options: { backend: 'windows', ignoreGlobs: [expect.any(String)] } },
+      { path, options: { backend: 'windows', ignoreGlobs: [expect.any(String)] } }
     ])
     subscriptions.at(-1)?.callback(null, [{ type: 'create', path: join(path, 'manifest.json') }])
     await vi.advanceTimersByTimeAsync(300)

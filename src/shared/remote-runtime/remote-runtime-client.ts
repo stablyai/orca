@@ -1,4 +1,4 @@
-import type { PairedRuntimeConnection } from '../paired-runtime-connection'
+import type { PairedRuntimeConnection } from './pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../protocol-version'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { sendRemoteRuntimeRequestOnSocket } from './requests/remote-runtime-request-socket'
@@ -8,6 +8,7 @@ import type {
   RemoteRuntimeTransportSubscriptionCallbacks
 } from './requests/remote-runtime-subscription-contract'
 import type {
+  RuntimeRequestPreparation,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -40,6 +41,7 @@ export function sendRemoteRuntimeRequest<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
+  prepareRequest?: RuntimeRequestPreparation,
   keepaliveTotalMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   return sendRemoteRuntimeRequestOnSocket(
@@ -52,6 +54,7 @@ export function sendRemoteRuntimeRequest<TResult>(
     signal,
     clientCapabilities,
     undefined,
+    prepareRequest,
     keepaliveTotalMs
   )
 }
@@ -66,6 +69,7 @@ export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
   clientCapabilities: readonly RuntimeCapability[] = [],
   signal?: AbortSignal,
   requestSelection?: RuntimeRequestSelection,
+  prepareRequest?: RuntimeRequestPreparation,
   keepaliveTotalMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   return sendRemoteRuntimeRequestOnSocket(
@@ -78,6 +82,7 @@ export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
     signal,
     clientCapabilities,
     requestSelection,
+    prepareRequest,
     keepaliveTotalMs
   )
 }

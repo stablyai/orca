@@ -1,6 +1,6 @@
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import type { RpcResponse } from './types'
-import type { RpcRequestDeadline } from './rpc-request-keepalive'
+import { rpcRequestKeepaliveId, type RpcRequestDeadline } from './rpc-request-keepalive'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -22,12 +22,17 @@ export class RelayPendingRequests {
   }
 
   drop(id: string): void {
+    this.pending.get(id)?.deadline.clear()
     this.pending.delete(id)
   }
 
-  /** A retired or unknown request's keepalive renews nothing. */
-  keepalive(id: string): void {
-    this.pending.get(id)?.deadline.renew()
+  /** True for a host keepalive frame; it renews only its own live request. */
+  renewFromKeepalive(frame: unknown): boolean {
+    const id = rpcRequestKeepaliveId(frame)
+    if (id !== null) {
+      this.pending.get(id)?.deadline.renew()
+    }
+    return id !== null
   }
 
   markWritten(id: string): void {

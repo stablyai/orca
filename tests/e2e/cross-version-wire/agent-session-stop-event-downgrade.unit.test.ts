@@ -10,7 +10,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-identity'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/journal-host-database'

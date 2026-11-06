@@ -37,6 +37,11 @@ import {
   isAgentSessionOptionRejectedError
 } from '../../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from '../claude-agent-sdk-control-requests'
+import {
+  admitStructuredAgentSessionInput,
+  StructuredAgentSessionInputNotAdmitted,
+  type StructuredAgentSessionAdmitFreshInput
+} from '../../native-chat/agent-session-wire/structured-agent-session-input-admission'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -124,6 +129,7 @@ export async function dispatchClaudeTurn(
     requestedAt?: number
     sentUuid?: string
     signal?: AbortSignal
+    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -170,10 +176,12 @@ export async function dispatchClaudeTurn(
   const authorize = beforeDispatch
     ? async () => {
         await beforeDispatch()
-        if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
-          throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
-        }
-        pending.replay = arm()
+        await admitStructuredAgentSessionInput(input.admitFreshInput, () => {
+          if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
+            throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
+          }
+          pending.replay = arm()
+        })
       }
     : undefined
   try {
@@ -186,6 +194,7 @@ export async function dispatchClaudeTurn(
       // Preserve pre-dispatch aborts for the host's Stop settlement.
       if (
         error instanceof AgentSessionPreDispatchError ||
+        error instanceof StructuredAgentSessionInputNotAdmitted ||
         isAbortSignalReason(input.signal, error)
       ) {
         throw error

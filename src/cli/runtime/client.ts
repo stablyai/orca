@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
-import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
+import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
   isOrchestrationMutation,
   isTerminalPromptMutation,
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import {
@@ -17,6 +17,7 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
+import { attachMutationRecovery, isRequestUnsent } from './client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
@@ -102,9 +103,6 @@ export class RuntimeClient {
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
     const durableMutation = !legacyTerminalPrompt && isDurableMutation(method, params)
-    if (orchestrationMutation) {
-      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
-    }
     const orchestrationRequestId = durableMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
       : undefined
@@ -127,6 +125,16 @@ export class RuntimeClient {
         return attachUnverifiedTerminalPromptRecovery(error)
       }
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
+    }
+    if (orchestrationMutation) {
+      try {
+        await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+      } catch (error) {
+        // A caller-chosen request id is the only rerun handle, so keep it when the probe fails first.
+        throw options?.orchestrationRequestId
+          ? attachMutationRecovery(error, orchestrationRequestId, originalCommand, true)
+          : error
+      }
     }
     const compatibilityEnvelope = method.startsWith('orchestration.')
       ? {
@@ -192,7 +200,8 @@ export class RuntimeClient {
         options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
-      throw recover(error, metadata.runtimeId ?? null)
+      // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
+      throw isRequestUnsent(error) ? error : recover(error, metadata.runtimeId ?? null)
     }
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)

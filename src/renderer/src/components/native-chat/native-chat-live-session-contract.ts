@@ -22,6 +22,8 @@ export type NativeChatLiveSession = NativeChatSession & {
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** Hook-reported human wait not yet ended by the transcript; absent on hookless lanes. */
   hookAwaitingInput?: boolean
+  /** Reconciled host work before read errors or retained-history presentation override status. */
+  hookWorking?: boolean
   /** True when an older page may still exist (the last read filled the window). */
   hasMore: boolean
   loadingEarlier: boolean

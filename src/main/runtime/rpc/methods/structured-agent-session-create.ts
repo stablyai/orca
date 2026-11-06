@@ -3,8 +3,8 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
-import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { assertAgentPromptRequestActive } from '../../terminal/input/agent-prompt-signals'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   refuse,
   AgentSessionRefusalError
@@ -33,14 +33,12 @@ import {
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import {
-  resolveUncommittedStructuredCreate,
-  type StructuredCreateRefused
-} from './structured-agent-session-precommit-refusal'
+import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
+import type { StructuredCreateRefused } from './structured-agent-session-precommit-refusal'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
 import { replayRecordedAtRestCreate } from './structured-agent-session-create-replay'
-import { AgentLaunchClosedBeforeDispatchError } from '../../../../shared/agent-launch-tab-closed'
+import { AgentLaunchClosedBeforeDispatchError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -307,8 +305,9 @@ export async function createStructuredAgentSessionForWorktree(args: {
         payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
       }
     : args.envelope
-  const prepared = await resolveUncommittedStructuredCreate(() =>
-    prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
+  const prepared = await resolveUncommittedStructuredCreate(
+    () => prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope }),
+    args.agent
   )
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }

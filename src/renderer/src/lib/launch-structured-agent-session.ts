@@ -1,6 +1,6 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredHostLaunch } from './agent-session/launch/structured-agent-session-host-launch'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
@@ -8,6 +8,7 @@ import {
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/agent-session/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -27,7 +28,8 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,
-  StructuredAgentSessionOwnerUnresolvedError
+  StructuredAgentSessionOwnerUnresolvedError,
+  type StructuredAgentSessionCreateGate
 } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export {
@@ -45,10 +47,12 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
+  createAfter?: Promise<StructuredAgentSessionCreateGate>
   surfaceAddress?: StructuredLaunchSurfaceAddress
   /** The saved selection create seeds, read when the intent is built. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -159,8 +163,22 @@ function buildStructuredAgentSessionLaunchIntent(
  *  Only an ordinary create is rebuilt: a host launch keeps its operation, and its Retry reads that
  *  same launch again and never starts another agent. */
 export function retryStructuredAgentSessionLaunchIntent(
-  intent: StructuredAgentSessionLaunchIntent
+  intent: StructuredAgentSessionLaunchIntent,
+  retainOpening = false
 ): StructuredAgentSessionLaunchIntent {
+  if (retainOpening) {
+    const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
+    return {
+      ...retained,
+      params: {
+        ...intent.params,
+        envelope: {
+          ...intent.params.envelope,
+          clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid)
+        }
+      }
+    }
+  }
   return {
     ...buildStructuredAgentSessionLaunchIntent(
       intent.worktreeId,

@@ -8,9 +8,9 @@ import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requireme
 import {
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AgentLaunchTabClosedError
-} from '../../../../shared/agent-launch-tab-closed'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'

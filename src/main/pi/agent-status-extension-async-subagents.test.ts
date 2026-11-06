@@ -4,7 +4,7 @@ import {
   HOOK_REQUEST_MAX_BYTES,
   parseAgentHookJson
 } from '../../shared/agent-hook-listener/request-body'
-import { normalizeAgentSubagentsField } from '../../shared/agent-status-subagent-snapshot'
+import { normalizeAgentSubagentsField } from '../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 import {
   agentEndCount,

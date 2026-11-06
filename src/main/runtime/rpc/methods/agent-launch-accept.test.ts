@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSetupRun, type SetupRun } from '../../setup/setup-run'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
+import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import {
   CODEX_DRAFT_ONLY_TERMINAL_STARTUP,
   CODEX_PLANNED_DRAFT

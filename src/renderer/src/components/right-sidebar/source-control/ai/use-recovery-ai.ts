@@ -1,9 +1,12 @@
-import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { useCallback, useMemo, useState } from 'react'
-import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control-ai-actions'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { buildFixCommitFailurePrompt } from './prompts'
-import { summarizeCommitFailure } from '../commit/commit-failure-summary'
+import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import {
+  buildFixCommitFailurePrompt,
+  summarizeCommitFailure
+} from '../../../../../../shared/source-control/recovery/source-control-commit-failure'
+
 import {
   getDefaultSourceControlRecoveryLaunchCopy,
   launchSourceControlRecoveryAgentWithDefault

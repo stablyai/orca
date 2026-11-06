@@ -31,7 +31,7 @@ import {
   queuedMessageCardSteers,
   queuedMessageReturnedNotice,
   type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
+} from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
@@ -54,6 +54,9 @@ export function queuedMessageCardCaption(
   switch (card.hold) {
     case 'returned': {
       const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      if (notice === null) {
+        return null
+      }
       return notice === 'withdrawn'
         ? translate(
             'components.native-chat.queuedMessages.withdrawnHold',

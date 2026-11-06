@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -10,7 +10,8 @@ import {
 } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'

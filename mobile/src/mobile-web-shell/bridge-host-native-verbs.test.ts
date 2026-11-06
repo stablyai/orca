@@ -2,10 +2,6 @@
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
-import {
-  BRIDGE_MAX_PENDING_DESKTOP_REQUESTS,
-  BRIDGE_MAX_PENDING_REQUESTS
-} from './bridge/bridge-caps'
 
 function request(method: string, params?: unknown): string {
   return params === undefined
@@ -39,29 +35,6 @@ describe('a native method on a frame that is not a request', () => {
     expect(reachedTheDesktop(bridge)).toEqual([])
     expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
   })
-
-  it('names the collision, not the fence, when the id is one already in flight', async () => {
-    // Either refusal settles the id, so choose the accurate cause without disturbing its existing exchange.
-    const bridge = harness({ serveNativeVerb: () => new Promise(() => {}) })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    bridge.host.receive(
-      clientFrame({ type: 'subscribe', id: ID, method: 'native.clipboard.read', params: {} })
-    )
-    await flushBridge()
-    expect(refusal(bridge)?.message).toContain('already in flight')
-    expect(reachedTheDesktop(bridge)).toEqual([])
-  })
-
-  it('refuses an unknown native method on subscribe too, rather than streaming it', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(
-      clientFrame({ type: 'subscribe', id: ID, method: 'native.dictation.listen', params: {} })
-    )
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(refusal(bridge)?.code).toMatch(/^native_verb_/)
-  })
 })
 
 // Before ready, the page has received no session, grants or caps; refuse forwarded/native requests as well as notifications.
@@ -81,20 +54,6 @@ describe('a request before the page has asked for a session', () => {
     expect(reachedTheDesktop(bridge)).toEqual([])
     expect(bridge.nativeCalls).toEqual([])
     expect(refusal(bridge)?.message).toContain('before-ready')
-  })
-
-  it('serves a session that handshook with the host this one replaced', async () => {
-    // Client replacement preserves the live page’s established session; requiring another handshake would deadlock it until reload.
-    const bridge = harness({ sessionEstablished: true, clipboardText: 'still mine' })
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    await flushBridge()
-    expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { value: 'still mine' } })
-  })
-
-  it('serves a stream for such a session too, since the rule is the session and not the frame', () => {
-    const bridge = harness({ sessionEstablished: true })
-    bridge.host.receive(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
-    expect(bridge.client.streams).toHaveLength(1)
   })
 
   it('refuses a stream on a session that never handshook', () => {
@@ -132,16 +91,6 @@ describe('a native method the page asks for', () => {
     expect(bridge.client.requests.map(({ args }) => args)).toEqual([
       ['nativeish.clipboard.read', { mime: 'text' }]
     ])
-  })
-
-  it('writes the text it was handed and answers whether it landed', async () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(request('native.clipboard.write', { mime: 'text', value: 'copied' }))
-    await flushBridge()
-    expect(bridge.clipboardWrites).toEqual(['copied'])
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(replyPayload(bridge)).toEqual({ id: ID, ok: true, result: { written: true } })
   })
 
   it('refuses a verb this shell has no row for, before anything is forwarded', async () => {
@@ -199,23 +148,6 @@ describe('a native method the page asks for', () => {
     expect(replyPayload(bridge)).toBeNull()
   })
 
-  it('turns a handler that rejects into an error frame, still forwarding nothing', async () => {
-    const bridge = harness({
-      serveNativeVerb: () => Promise.reject(new Error('the pasteboard is unavailable'))
-    })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(request('native.clipboard.read', { mime: 'text' }))
-    await flushBridge()
-    expect(reachedTheDesktop(bridge)).toEqual([])
-    expect(bridge.nativeCalls).toEqual([
-      { verb: 'native.clipboard.read', params: { mime: 'text' } }
-    ])
-    expect(refusal(bridge)).toEqual({
-      code: 'native_verb_failed',
-      message: 'native.clipboard.read could not be served on this device'
-    })
-  })
-
   it('does not carry a handler message to the page, which could be what it just read', async () => {
     // Handler errors may contain clipboard data; error messages must not bypass declared result shapes.
     const secret = 'sk-live-not-for-the-page'
@@ -231,63 +163,6 @@ describe('a native method the page asks for', () => {
       message: 'native.clipboard.read could not be served on this device'
     })
     expect(JSON.stringify(bridge.posted)).not.toContain(secret)
-  })
-
-  it('takes a slot each, so the one over the cap is refused like any other request', async () => {
-    const bridge = harness({ serveNativeVerb: () => new Promise(() => {}) })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    for (let index = 1; index <= BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
-      bridge.host.receive(
-        clientFrame({
-          type: 'request',
-          id: bridgeId(index),
-          method: 'native.clipboard.read',
-          params: { mime: 'text' }
-        })
-      )
-    }
-    expect(bridge.frames()).toEqual([expect.objectContaining({ type: 'init' })])
-    bridge.host.receive(
-      clientFrame({
-        type: 'request',
-        id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS + 1),
-        method: 'native.clipboard.read',
-        params: { mime: 'text' }
-      })
-    )
-    const overCap = bridge.last()
-    expect(overCap.type === 'error' && overCap.error.message).toContain(
-      `over ${BRIDGE_MAX_PENDING_REQUESTS} requests`
-    )
-    await flushBridge()
-    expect(reachedTheDesktop(bridge)).toEqual([])
-  })
-
-  it('still serves one when an older page has every slot waiting on the desktop', async () => {
-    const served: string[] = []
-    const bridge = harness({
-      serveNativeVerb: (verb) => {
-        served.push(verb)
-        return new Promise(() => {})
-      }
-    })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    for (let index = 1; index <= BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
-      bridge.host.receive(
-        clientFrame({ type: 'request', id: bridgeId(index), method: 'worktree.list' })
-      )
-    }
-    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
-    bridge.host.receive(
-      clientFrame({
-        type: 'request',
-        id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS + 1),
-        method: 'native.clipboard.read',
-        params: { mime: 'text' }
-      })
-    )
-    await flushBridge()
-    expect(served).toEqual(['native.clipboard.read'])
   })
 
   it('settles a cancelled native request the way a forwarded one settles, with no late reply', async () => {

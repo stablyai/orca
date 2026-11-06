@@ -22,13 +22,13 @@ import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import {
@@ -36,8 +36,8 @@ import {
   providerTimelineKeyPart,
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,

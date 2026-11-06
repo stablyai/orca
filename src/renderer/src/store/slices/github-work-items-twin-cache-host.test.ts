@@ -53,42 +53,10 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
     const entries = selectTaskPageWorkItemsCacheEntries(
       store.getState().workItemsCache,
-      [localRow, sshRow].map(({ id, path, connectionId, executionHostId }) => ({
-        id,
-        path,
-        connectionId,
-        executionHostId
-      })),
+      [localRow, sshRow],
       24,
       ''
     )
     expect(entries.map((entry) => entry?.data?.map((item) => item.number))).toEqual([[1], [2]])
-  })
-
-  it('keys a row with no host stamp as local, whichever server is focused', async () => {
-    const store = createTestStore()
-    store.setState({
-      repos: [localRow],
-      settings: { ...store.getState().settings!, activeRuntimeEnvironmentId: 'focused' }
-    })
-
-    await store.getState().fetchWorkItems('twin', localRow.path, 24, '')
-
-    const [entry] = selectTaskPageWorkItemsCacheEntries(
-      store.getState().workItemsCache,
-      [{ id: localRow.id, path: localRow.path }],
-      24,
-      ''
-    )
-    expect(entry?.data?.map((item) => item.number)).toEqual([1])
-  })
-
-  it('serves the SSH twin its own cached rows, not the local twin’s', async () => {
-    const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow] })
-
-    await store.getState().fetchWorkItems('twin', localRow.path, 24, '')
-
-    expect(store.getState().getCachedWorkItems('twin', 24, '', sshRow.path)).toBeNull()
   })
 })

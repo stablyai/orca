@@ -14,9 +14,9 @@ import {
 } from './plugin-source-transpile-protocol'
 import { parsePluginTranspileFailure } from './plugin-source-transpile-failure'
 import { pluginSourceMapPrelude } from '../../../shared/plugins/frames/plugin-frame-source-map-prelude'
+import { PLUGIN_SOURCE_MODULE_MAX_BYTES } from '../../../shared/plugins/frames/plugin-frame-entry-limits'
 
-/** Source modules are read whole and transpiled per load, so they get a tighter cap. */
-export const PLUGIN_SOURCE_MODULE_MAX_BYTES = 1024 * 1024
+export { PLUGIN_SOURCE_MODULE_MAX_BYTES }
 const CACHE_MAX_ENTRIES = 512
 const CACHE_MAX_CHARS = 64 * 1024 * 1024
 

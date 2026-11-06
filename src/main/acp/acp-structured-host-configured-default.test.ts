@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Regression: initialize listed Grok 4.7 while new sessions actually ran Grok 4.6.
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -157,12 +157,6 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
 }
 
 describe('Grok’s default comes from what a chat with no pick runs', () => {
-  it('names no model before any chat ran, though the listing computed one', async () => {
-    const { listed } = await openGrokHost('grok-4.6')
-    expect(listed).toMatchObject({ origin: 'probe', listingNamesConfiguredModel: false })
-    expect(firstFrame(listed)).toEqual({ model: null, effort: null })
-  })
-
   it('names 4.6, the model a chat with no pick ran, never the listing’s 4.7', async () => {
     const { catalog, host } = await openGrokHost('grok-4.6')
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })

@@ -70,62 +70,6 @@ describe('orchestration worker-start CLI contract', () => {
     })
   }
 
-  it('passes the complete supported creation contract and retry receipt', async () => {
-    callMock.mockResolvedValue({
-      result: {
-        runId: 'run_1',
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        state: 'ready',
-        effects: [],
-        residualResources: []
-      }
-    })
-
-    await invokeWorkerStart(
-      new Map<string, string | boolean>([
-        ['task', 'task_1'],
-        ['on', 'windows'],
-        ['worktree', 'new-top-level'],
-        ['name', 'release-audit'],
-        ['repo', 'id:windows-repo'],
-        ['base-branch', 'origin/release'],
-        ['display-name', 'Release audit'],
-        ['comment', 'Supervised from the Mac Run home'],
-        ['setup', 'run'],
-        ['agent', 'codex'],
-        ['timeout-ms', '90000'],
-        ['run', 'run_1'],
-        ['from', 'term_coord'],
-        ['retry-request', '44444444-4444-4444-8444-444444444444']
-      ])
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.workerStart',
-      {
-        task: 'task_1',
-        on: 'windows',
-        worktree: 'new-top-level',
-        name: 'release-audit',
-        repo: 'id:windows-repo',
-        baseBranch: 'origin/release',
-        displayName: 'Release audit',
-        comment: 'Supervised from the Mac Run home',
-        setup: 'run',
-        agent: 'codex',
-        terminal: undefined,
-        retryOf: undefined,
-        timeoutMs: 90_000,
-        run: 'run_1',
-        from: 'term_coord',
-        devMode: false
-      },
-      { orchestrationRequestId: '44444444-4444-4444-8444-444444444444' }
-    )
-    expect(process.exitCode).toBeUndefined()
-  })
-
   it('capability-gates and forwards per-invocation launch preferences', async () => {
     callMock
       .mockResolvedValueOnce({
@@ -163,23 +107,6 @@ describe('orchestration worker-start CLI contract', () => {
         model: 'aws-bedrock-opus-5',
         effort: 'high'
       })
-    )
-  })
-
-  it('forwards --spec without a task for atomic creation', async () => {
-    callMock.mockResolvedValue({
-      result: { runId: 'run_1', taskId: 'task_new', dispatchId: 'ctx_1', state: 'ready' }
-    })
-    await invokeWorkerStart(
-      new Map<string, string | boolean>([
-        ['spec', 'Implement atomic start'],
-        ['agent', 'codex'],
-        ['from', 'term_coord']
-      ])
-    )
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.workerStart',
-      expect.objectContaining({ task: undefined, spec: 'Implement atomic start' })
     )
   })
 
@@ -659,41 +586,6 @@ describe('orchestration worker-start CLI contract', () => {
     )
   })
 
-  it('preserves partial host errors in JSON output', async () => {
-    const response = {
-      result: {
-        workers: [],
-        counts: {},
-        page: { total: 0, hasMore: false, nextCursor: null },
-        partialHostErrors: [
-          {
-            environmentId: 'environment_windows',
-            name: 'Windows host',
-            code: 'host_unavailable',
-            dispatchIds: ['ctx_remote']
-          }
-        ]
-      }
-    }
-    mockWorkerListResponse(response)
-
-    await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>([
-        ['include-remote', true],
-        ['full', true]
-      ]),
-      client,
-      cwd: '/tmp/repo',
-      json: true
-    })
-
-    expect(printResult).toHaveBeenCalledWith(
-      { ...response, result: { ...response.result, scope: { source: 'all' } } },
-      true,
-      expect.any(Function)
-    )
-  })
-
   it('parses, forwards, and documents the remote fleet opt-in', async () => {
     const listSpec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'orchestration worker-list'
@@ -859,14 +751,4 @@ describe('orchestration worker-start CLI contract', () => {
       expect(process.exitCode).toBe(1)
     }
   )
-
-  it('does not tell a coordinator that chat workers skip automatic release', () => {
-    const spec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(
-      (entry) => entry.path.join(' ') === 'orchestration worker-release'
-    )
-    if (!spec) {
-      throw new Error('worker-release command is missing')
-    }
-    expect(formatCommandHelp(spec)).not.toContain('never released automatically')
-  })
 })

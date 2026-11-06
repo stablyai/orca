@@ -4,21 +4,21 @@ import { browserManager } from '../../browser-manager'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
-} from '../browser-extension-api-host'
-import { forgetBrowserExtensionActionTab } from '../browser-extension-action-registry'
-import { revokeBrowserExtensionActiveTab } from '../browser-extension-active-tab'
+} from '../api-runtime/browser-extension-api-host'
+import { forgetBrowserExtensionActionTab } from '../actions/browser-extension-action-registry'
+import { revokeBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   emitDiscardedBrowserTabRemoved,
   noteBrowserPageGuestGone,
   takeDiscardedBrowserTabId
-} from '../browser-extension-discarded-tabs'
+} from '../tabs-and-windows/browser-extension-discarded-tabs'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   canExtensionSeeTabUrl,
   describeBrowserExtensionTab,
   replaceActivatedBrowserTabId,
   resolveBrowserExtensionTab
-} from '../browser-extension-tab-model'
+} from '../tabs-and-windows/browser-extension-tab-model'
 
 /** Tabs announced through onCreated or onReplaced, with their window, so onRemoved matches them. */
 const announcedTabWindowIds = new Map<number, { windowId: number; isPopout: boolean }>()

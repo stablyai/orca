@@ -15,8 +15,8 @@ import {
 } from '@/runtime/host-structured-agent-availability'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getDetectionTargetIdentityForWorktree,
   readAgentInventoryForWorktree
@@ -40,7 +40,11 @@ export function holdChatProgramFacts(context: ReturnType<typeof resolveChatProgr
           : new Promise<void>(() => {})
     return { catalog, first: () => catalog, release: (): void => {} }
   }
-  const owner = { ...context, target: context.target, runtimeId: context.runtimeId }
+  const owner = {
+    ...context,
+    target: context.target,
+    runtimeId: context.runtimeId
+  }
   const catalog = loadHostStructuredAgents(
     context.executionHostId,
     context.hostCapabilities,
@@ -54,7 +58,10 @@ export function holdChatProgramFacts(context: ReturnType<typeof resolveChatProgr
 
 export function useChatProgramFacts(workspace: ProspectiveWorkspace, active = true): void {
   useChatProgramFactsVersion()
-  const key = useAppStore((state) => resolveChatProgramContext(state, workspace).revision)
+  // Hidden worktrees' tab bars stay mounted; resolving per store write there is wasted work.
+  const key = useAppStore((state) =>
+    active ? resolveChatProgramContext(state, workspace).revision : null
+  )
   useEffect(() => {
     return active
       ? holdChatProgramFacts(resolveChatProgramContext(useAppStore.getState(), workspace)).release

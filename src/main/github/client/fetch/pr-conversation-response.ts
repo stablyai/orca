@@ -1,4 +1,7 @@
+import type { Nodes } from 'mdast'
 import { z } from 'zod'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { mapGraphQLReactionGroups } from '../../comment-reactions'
 import { tailDiffHunk } from '../../../../shared/github/pr-comment-diff-hunk'
@@ -90,6 +93,27 @@ function mapGraphQLComment(
   }
 }
 
+const reviewMarkdown = unified().use(remarkParse)
+
+function hasVisibleReviewBody(body: string | null | undefined): boolean {
+  if (!body?.trim()) {
+    return false
+  }
+  if (!body.includes('<!--')) {
+    return true
+  }
+  const hasVisibleNode = (node: Nodes): boolean => {
+    if ('children' in node) {
+      return node.children.some(hasVisibleNode)
+    }
+    if (node.type === 'html') {
+      return Boolean(node.value.replace(/<!--[\s\S]*?-->/g, '').trim())
+    }
+    return node.type !== 'text' || Boolean(node.value.trim())
+  }
+  return reviewMarkdown.parse(body).children.some(hasVisibleNode)
+}
+
 export function parsePRConversationResponse(stdout: string): {
   issueComments?: PRComment[]
   reviewSummaries?: PRComment[]
@@ -116,7 +140,7 @@ export function parsePRConversationResponse(stdout: string): {
       reviews.success && !failed('reviews')
         ? reviews.data.nodes
             .filter(hasDatabaseId)
-            .filter((c) => c.body?.trim())
+            .filter((c) => hasVisibleReviewBody(c.body))
             .map(mapGraphQLComment)
         : undefined,
     reviewComments: threads.success
@@ -163,7 +187,7 @@ export function parseRestPRComments(stdout: string, reviews: boolean): PRComment
   return z
     .array(restCommentSchema)
     .parse(JSON.parse(stdout))
-    .filter((c) => !reviews || c.body?.trim())
+    .filter((c) => !reviews || hasVisibleReviewBody(c.body))
     .map((c) => ({
       id: c.id,
       author: c.user?.login ?? 'ghost',

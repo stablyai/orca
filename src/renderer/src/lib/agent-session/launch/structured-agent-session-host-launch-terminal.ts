@@ -1,11 +1,11 @@
 /** A host launch that started its terminal instead of the chat: the chat's tab gives way to that
  *  terminal once this window draws it, in the place a declined chat's terminal takes. */
 
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
-} from '../../../../../shared/terminal-surface-id'
+} from '../../../../../shared/workspace-layout/terminal-surface-id'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
 import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'

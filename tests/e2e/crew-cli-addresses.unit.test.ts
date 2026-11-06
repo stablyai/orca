@@ -10,7 +10,7 @@ import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../sr
 import { dispatch } from '../../src/cli/dispatch'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
 import { buildCrewSnapshot } from '../../src/main/runtime/orchestration/crew/crew-read-model'
-import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   createSessionCallerHarness,
   orchestrationRequest,
@@ -203,7 +203,7 @@ it('executes snapshot addresses through CLI send and the dispatcher into the pro
 it('keeps crew as the only observer for title, settings and mirrored-name source changes', async () => {
   const { OrcaRuntimeService } = await import('../../src/main/runtime/orca-runtime')
   const { partialRuntimeStore } =
-    await import('../../src/main/runtime/runtime-store-partial-fixture')
+    await import('../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture')
   const { getDefaultWorkspaceSession, getDefaultSettings } =
     await import('../../src/shared/constants')
   const { makeTerminalTab } =
