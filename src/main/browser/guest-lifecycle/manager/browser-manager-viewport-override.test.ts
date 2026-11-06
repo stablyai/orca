@@ -88,7 +88,32 @@ describe('browserManager', () => {
   })
 
   describe('setViewportOverride', () => {
-    // CDP overrides outrank the WebContents UA and must match the auth-host request identity.
+    // Sign-in outranks a preset; the request hook presents its UA, never a hint-blanking CDP override.
+    it.each([false, true])(
+      'writes no UA override for a preset applied on a Google auth host (mobile=%s)',
+      async (mobile) => {
+        const { guest, debuggerSendCommand } = makeGuest(
+          mobile ? 4246 : 4245,
+          'https://accounts.google.com/v3/signin/identifier'
+        )
+        webContentsFromIdMock.mockReturnValue(guest)
+        browserManager.attachGuestPolicies(guest as never)
+        browserManager.registerGuest({
+          browserPageId: `tab-auth-${mobile}`,
+          webContentsId: guest.id as number,
+          rendererWebContentsId
+        })
+
+        await browserManager.setViewportOverride(`tab-auth-${mobile}`, {
+          width: mobile ? 375 : 1024,
+          height: mobile ? 667 : 768,
+          deviceScaleFactor: mobile ? 2 : 1,
+          mobile
+        })
+
+        expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
+      }
+    )
 
     function lastUserAgentOverride(
       debuggerSendCommand: ReturnType<typeof vi.fn>
@@ -165,9 +190,7 @@ describe('browserManager', () => {
         mobile: false
       })
       await flushViewportOps()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
-        userAgent: googleAuthUserAgent()
-      })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
 
       let releaseMetrics = (): void => {}
       const metricsGate = new Promise<void>((resolve) => {
@@ -190,7 +213,7 @@ describe('browserManager', () => {
       await flushViewportOps()
 
       expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
     })
 
     it('falls back to the committed URL once a navigation commits or fails', async () => {
@@ -235,7 +258,7 @@ describe('browserManager', () => {
       await flushViewportOps()
 
       expect(guest.setUserAgent).toHaveBeenCalledOnce()
-      expect(presentedUserAgent()).toBe(GUEST_CLEAN_UA)
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
 
       debuggerSendCommand.mockClear()
       await browserManager.setViewportOverride('tab-pending-cleared', MOBILE_VIEWPORT_OVERRIDE)
@@ -314,6 +337,96 @@ describe('browserManager', () => {
       expect(presentedUserAgent()).toBe(googleAuthUserAgent())
     })
 
+    it('leaves a server redirect onto an auth host and its failure to the request hook', async () => {
+      const { guest, debuggerSendCommand } = makeGuest(4256, 'https://example.com/')
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-auth-redirect',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+      const didStartNavigation = guestOnMock.mock.calls.find(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+      const willRedirect = guestOnMock.mock.calls.find(
+        ([event]) => event === 'will-redirect'
+      )?.[1] as (
+        event: { preventDefault: () => void },
+        url: string,
+        isInPlace: boolean,
+        isMainFrame: boolean
+      ) => void
+      const didFailLoad = guestOnMock.mock.calls.find(
+        ([event]) => event === 'did-fail-load'
+      )?.[1] as (
+        event: unknown,
+        errorCode: number,
+        errorDescription: string,
+        validatedURL: string,
+        isMainFrame: boolean
+      ) => void
+
+      await browserManager.setViewportOverride('tab-auth-redirect', {
+        width: 1024,
+        height: 768,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+      didStartNavigation(null, 'https://example.com/start', false, true)
+      willRedirect(
+        { preventDefault: vi.fn() },
+        'https://accounts.google.com/redirected',
+        false,
+        true
+      )
+      await flushViewportOps()
+
+      // Rewriting the WebContents UA during redirects can abort and replay sign-in requests.
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
+
+      didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/redirected', true)
+      await flushViewportOps()
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
+    })
+
+    it('drops the mobile identity on a redirect onto an auth host and keeps it dropped when the preset clears', async () => {
+      const { guest, debuggerSendCommand } = makeGuest(4262, 'https://example.com/')
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-clear-on-auth',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+      const didStartNavigation = guestOnMock.mock.calls.find(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+      const willRedirect = guestOnMock.mock.calls.find(
+        ([event]) => event === 'will-redirect'
+      )?.[1] as (
+        event: { preventDefault: () => void },
+        url: string,
+        isInPlace: boolean,
+        isMainFrame: boolean
+      ) => void
+
+      await browserManager.setViewportOverride('tab-clear-on-auth', MOBILE_VIEWPORT_OVERRIDE)
+      didStartNavigation(null, 'https://example.com/start', false, true)
+      willRedirect({ preventDefault: vi.fn() }, 'https://accounts.google.com/', false, true)
+      await flushViewportOps()
+
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: '' })
+
+      debuggerSendCommand.mockClear()
+      await expect(browserManager.setViewportOverride('tab-clear-on-auth', null)).resolves.toBe(
+        true
+      )
+      expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()
+    })
+
     it('does not reinstall a preset while its final UA clear is in flight', async () => {
       const { guest, debuggerSendCommand, presentedUserAgent } = makeGuest(
         4258,
@@ -388,6 +501,21 @@ describe('browserManager', () => {
         false
       )
       await flushViewportOps()
+
+      // A clear that fails on the way onto sign-in leaves the mobile identity standing; requests
+      // must keep presenting it rather than the WebContents UA under it.
+      didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
+      await flushViewportOps()
+      expect(
+        browserManager.resolveBrowserGuestRequestUserAgent({
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no Session member.
+          session: guest.session as Electron.Session,
+          url: 'https://example.com/api',
+          webContentsId: guest.id as number,
+          currentUserAgent: presentedUserAgent(),
+          effectiveUserAgent: googleAuthUserAgent()
+        }).kind
+      ).toBe('mobile')
 
       debuggerSendCommand.mockImplementation(() => Promise.resolve(undefined))
       debuggerSendCommand.mockClear()

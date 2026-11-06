@@ -228,7 +228,9 @@ describe('tab identity ownership', () => {
 
     navigate(`${ORDINARY_URL}callback`, { inPlace: true })
     expect(opened.handle.webContentsUserAgent()).toBe(googleAuthUserAgent())
-    expect((await observe(opened, ORDINARY_URL)).presented).toBe(GUEST_CLEAN_UA)
+    const observed = await observe(opened, ORDINARY_URL)
+    expect(observed.standingOverride).toBeNull()
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
 
     navigate('https://example.org/')
     expect(opened.handle.webContentsUserAgent()).toBe(GUEST_CLEAN_UA)
