@@ -31,7 +31,7 @@ export function SlotAgentLinesHeader({
     <button
       type="button"
       draggable={false}
-      className="worktree-agent-row-hover mt-[3px] flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none font-medium text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+      className="worktree-agent-row-hover mt-[3px] flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-1.5 pl-1 text-left text-2xs leading-none font-medium text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
       aria-expanded={true}
       aria-label={translate(
         'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
@@ -172,7 +172,7 @@ export function WorktreeCardSlotAgentLines({
   }
   return (
     <div
-      className="mt-px flex flex-col gap-px"
+      className="mt-px flex flex-col gap-px pl-2.5"
       role={hasLineage ? 'tree' : 'group'}
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
       onDoubleClick={stopPropagation}

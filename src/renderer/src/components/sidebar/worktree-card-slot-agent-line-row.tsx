@@ -188,7 +188,7 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
       aria-expanded={hasChildren ? childrenExpanded : undefined}
       aria-current={view?.current ? 'true' : undefined}
       className={cn(
-        'group/slot-line worktree-agent-row-hover flex h-[19px] w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        'group/slot-line worktree-agent-row-hover flex h-[19px] w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm pr-1.5 pl-1 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         highlighted && 'bg-worktree-sidebar-accent',
         sendTarget?.status === 'sending' && 'cursor-progress opacity-75',
         sendTarget?.status === 'disabled' && 'cursor-default opacity-60'

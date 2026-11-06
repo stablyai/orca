@@ -60,7 +60,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         : undefined
     }
   )
-  const parentCardContent = slotLayout ? <WorktreeCardSlotContent card={card} presentation={buildWorktreeCardPresentation(card)} /> : templateContent
+  const parentCardContent = slotLayout ? (
+    <WorktreeCardSlotContent card={card} presentation={buildWorktreeCardPresentation(card)} />
+  ) : (
+    templateContent
+  )
   const { cardStyle } = geometryFor(!slotLayout && frame.statusLane)
   const titleOnlyCard = frame.singleLine
 
@@ -68,19 +72,16 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     <div
       className={cn(
         'relative flex cursor-pointer flex-col transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
-        // Why: 2.0 rows own their right inset and the surface has no border, so nested slots share one right edge.
-        slotLayout ? 'py-1.25' : ['pr-1.5', titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5'],
+        'pr-1.5',
+        titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',
         // Navigation updates the live attribute before React; it must own the complete active style.
         isLineageDropTarget
-          ? [
-              'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60',
-              !slotLayout && 'border border-worktree-sidebar-foreground/40'
-            ]
+          ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
           : isActiveSurface
-            ? !slotLayout && 'border border-transparent'
-            : [!slotLayout && 'border border-transparent', 'worktree-sidebar-card-hover'],
+            ? 'border border-transparent'
+            : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
@@ -127,17 +128,14 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {lineageChildren && slotLayout ? (
-        // Why: 5px guide + 3px + the child's 4px margin and 2px inset puts child names 14px in.
+      {lineageChildren ? (
         <div
-          className="worktree-card-slot-lineage mt-1 ml-[5px] space-y-0.5 pl-[3px]"
-          data-worktree-lineage-children=""
-        >
-          {lineageChildren}
-        </div>
-      ) : lineageChildren ? (
-        <div
-          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
+          className={cn(
+            'space-y-1',
+            newCardStyle ? 'mt-1.5' : 'mt-3',
+            // 2.0 draws a guide in the original offset; it's painted, so the layout is unchanged.
+            slotLayout && 'worktree-card-slot-lineage'
+          )}
           data-worktree-lineage-children=""
           style={lineageChildrenStyle}
         >

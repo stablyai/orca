@@ -1,9 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { Button } from '@/components/ui/button'
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
@@ -31,6 +29,7 @@ import {
   WorktreeCardRenameFailedButton
 } from './worktree-card-title-actions'
 import { getWorktreeCardHost, WorktreeCardHostName } from './worktree-card-host-name'
+import { WorktreeCardChildrenChip } from './worktree-card-children-chip'
 import { WorktreeCardSlot } from './WorktreeCardSlot'
 import { SlotAgentLinesHeader, WorktreeCardSlotAgentLines } from './WorktreeCardSlotAgentLines'
 import { shouldBeginWorktreeRename } from './workspace-card/controller/worktree-card-model'
@@ -107,6 +106,7 @@ export function WorktreeCardSlotContent({
     showLineageChildChip,
     lineageCollapsed,
     lineageDescendantIds,
+    lineageChildWorktreeIds,
     onLineageToggle,
     lineageChildAriaLabel,
     childWorkspaceShortLabel,
@@ -177,9 +177,11 @@ export function WorktreeCardSlotContent({
       {foldsAgents ? (
         <>
           {agentsExpanded ? (
-            <SlotAgentLinesHeader label={agentCountLabel} onCollapse={toggleAgents} />
+            <div className="pl-2.5">
+              <SlotAgentLinesHeader label={agentCountLabel} onCollapse={toggleAgents} />
+            </div>
           ) : (
-            <div className="mt-[3px] min-w-0 pr-2 pl-1">
+            <div className="mt-[3px] min-w-0 pr-1.5 pl-3.5">
               <CompactAgentSummaryButton
                 agents={lines.map((line) => line.agent)}
                 subjectLabel={agentCountLabel}
@@ -194,23 +196,14 @@ export function WorktreeCardSlotContent({
         agentLines
       )}
       {showLineageChildChip ? (
-        <div className="mt-[3px] flex min-w-0 pl-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="chip"
-            className="max-w-40 text-muted-foreground"
-            aria-label={lineageChildAriaLabel}
-            aria-expanded={!lineageCollapsed}
-            onClick={onLineageToggle}
-          >
-            {lineageCollapsed ? (
-              <ChevronRight className="size-2.5" />
-            ) : (
-              <ChevronDown className="size-2.5" />
-            )}
-            <span className="truncate">{childWorkspaceShortLabel}</span>
-          </Button>
+        <div className="mt-[3px] flex min-w-0 pr-1.5 pl-3.5">
+          <WorktreeCardChildrenChip
+            childWorktreeIds={lineageChildWorktreeIds}
+            collapsed={lineageCollapsed}
+            label={childWorkspaceShortLabel}
+            ariaLabel={lineageChildAriaLabel}
+            onToggle={onLineageToggle}
+          />
         </div>
       ) : null}
     </>
@@ -227,7 +220,7 @@ export function WorktreeCardSlotContent({
           className="group/worktree-card flex min-w-0 flex-col"
           data-worktree-card-hover-trigger=""
         >
-          <div className="flex h-5 min-w-0 items-center gap-1.5 pr-2">
+          <div className="flex h-5 min-w-0 items-center gap-1.5 pr-1.5">
             <WorktreeTitleInlineRename
               displayName={visibleCardTitle}
               disabled={isDeleting || affiliateListMode}
@@ -259,7 +252,7 @@ export function WorktreeCardSlotContent({
           </div>
           {showDetailsRow ? (
             <div
-              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-2 pl-1"
+              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-1.5 pl-3.5"
               data-worktree-card-details-row=""
             >
               {presentation.hasMetaRow ? (

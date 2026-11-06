@@ -107,7 +107,7 @@ export function IdleChildAgentGroupRow({
       className={cn(
         'worktree-agent-row-hover',
         layout === 'slot'
-          ? 'flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none'
+          ? 'flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-1.5 pl-1 text-left text-2xs leading-none'
           : 'flex h-6 min-w-0 items-center gap-1 rounded-sm text-left text-[11px] leading-none',
         layout === 'full' && '-ml-1 w-[calc(100%+0.25rem)] pl-1 pr-2',
         layout === 'compact' && 'w-full px-1',

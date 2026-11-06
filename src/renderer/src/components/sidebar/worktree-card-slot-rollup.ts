@@ -37,13 +37,15 @@ export function selectCollapsedLineageSlot(
       if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
         continue
       }
+      const dotState = agentRowDisplayDotState({ state: entry.state, entry })
       lines.push({
         kind: classifySlotLine({
-          dotState: agentRowDisplayDotState({ state: entry.state, entry }),
+          dotState,
           needsAttention: false,
           unreadCompletion: isAgentSubjectUnread(turnRecords, entry.paneKey)
         }),
-        at: entry.stateStartedAt > 0 ? entry.stateStartedAt : null
+        at: entry.stateStartedAt > 0 ? entry.stateStartedAt : null,
+        monitoring: dotState === 'monitoring'
       })
     }
     for (const retained of selectRetainedAgentEntriesForWorktree(state, worktreeId)) {
@@ -106,4 +108,30 @@ export function useLineageLatestAt(descendantIds: readonly string[]): number | n
       [descendantKey]
     )
   )
+}
+
+export type LineageChildCounts = { needs: number; failed: number; unread: number; working: number }
+
+/** Direct children counted once each by their most urgent exception; quiet children aren't counted. */
+export function selectLineageChildCounts(
+  state: AppState,
+  childIds: readonly string[]
+): LineageChildCounts {
+  const counts: LineageChildCounts = { needs: 0, failed: 0, unread: 0, working: 0 }
+  for (const childId of childIds) {
+    const signal = selectCollapsedLineageSlot(state, [childId])
+    if (signal && signal.kind in counts) {
+      counts[signal.kind as keyof LineageChildCounts] += 1
+    }
+  }
+  return counts
+}
+
+export function useLineageChildCounts(childIds: readonly string[]): LineageChildCounts {
+  const childKey = childIds.join('\n')
+  const selector = useCallback(
+    (state: AppState) => selectLineageChildCounts(state, childKey ? childKey.split('\n') : []),
+    [childKey]
+  )
+  return useAppStore(useShallow(selector))
 }

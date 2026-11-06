@@ -229,6 +229,7 @@
       "markedUnread": "Marked unread by you",
       "unread": "Unread result",
       "working": "Working",
+      "monitoring": "Monitoring",
       "offlineLabel": "Host offline",
       "offline": "offline",
       "needYouCount": "{{count}} need you",
@@ -238,7 +239,12 @@
       "detailsRow": "Details row",
       "hostRemoved": "host removed",
       "disconnected": "disconnected",
-      "orcaServer": "Orca server"
+      "orcaServer": "Orca server",
+      "childNeeds_one": "{{count}} needs you",
+      "childNeeds_other": "{{count}} need you",
+      "childFailed": "{{count}} failed",
+      "childUnread": "{{count}} unread",
+      "childWorking": "{{count}} working"
     }
   },
   "app": {
