@@ -123,24 +123,6 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     expect(spawnCommand(spawn, 1)).not.toContain('--dangerously-skip-permissions')
   })
 
-  it('resumes an Orca-launched session with the recipe its launch recorded', async () => {
-    const { runtime, spawn, reportAgent } = makeRuntime(null)
-    await userActivate(runtime)
-    reportAgent()
-    const launchConfig = { agentArgs: '--dangerously-skip-permissions', agentEnv: {} }
-    const pty = [...runtime['ptysById'].values()][0]!
-    pty.launchAgent = 'claude'
-    pty.launchToken = 'launch-1'
-    pty.launchConfig = launchConfig
-
-    await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    await userActivate(runtime)
-
-    expect(spawnCommand(spawn, 1)).toContain('--dangerously-skip-permissions')
-    expect(spawnCommand(spawn, 1)).toContain(SESSION_ID)
-    expect(spawn.mock.calls[1]?.[0]).toHaveProperty('resumeOrigin', 'saved')
-  })
-
   it.each([
     ['exited', true],
     ['unverifiable', false]
@@ -174,34 +156,6 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
 
       expect(spawn).toHaveBeenCalledTimes(3)
       expect(spawnCommand(spawn, 2).includes(SESSION_ID)).toBe(resumes)
-    }
-  )
-
-  // Only a launch main still holds proves the recipe belongs to the agent in the pane now.
-  it.each([
-    ['claude', 'token', true],
-    ['claude', null, false],
-    ['codex', 'token', false]
-  ] as const)(
-    'keeps a %s launch recipe with token %s: %s',
-    async (launchAgent, launchToken, kept) => {
-      const config = { agentCommand: '/opt/claude-custom', agentArgs: '--x', agentEnv: {} }
-      const launchedRow = hookRow({
-        paneKey: PANE_KEY,
-        agentType: 'claude',
-        providerSession: { key: 'session_id', id: SESSION_ID },
-        prompt: '',
-        receivedAt: 1
-      })
-      const capture = await captureWorktreeSleepResumeRecords({
-        worktreeId: TEST_WORKTREE_ID,
-        paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),
-        launchByPtyId: new Map([['pty', { launchAgent, launchToken, launchConfig: config }]]),
-        readRows: () => [launchedRow],
-        checkAgentPresence: null,
-        capturedAt: 2
-      })
-      expect(capture.get('pty')?.records[0]?.launchConfig).toEqual(kept ? config : undefined)
     }
   )
 

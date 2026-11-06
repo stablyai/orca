@@ -34,7 +34,7 @@ export function normalizeAgentStatusMetadata(
   if (
     !data.providerSession &&
     !data.launchToken &&
-    !data.launchConfig &&
+    data.launchConfig === undefined &&
     !authorityRestartId &&
     !data.paneOwner
   ) {
@@ -44,7 +44,7 @@ export function normalizeAgentStatusMetadata(
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
     ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-    ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+    ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {}),
     ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})
   }
 }

@@ -194,19 +194,17 @@ export function buildAgentStatusLiveEntry(
     { agentType: identity.agentType, state: payload.state },
     providerSession
   )
-  // Why no earlier record's note for a live status: only the launch owner's attestation, or this
-  // launch's own registry entry, proves which launch runs; a typed resume never ran it. A restored
-  // status replays the very status that record was written from, so it keeps the record's note.
-  const restoredRecord = payload.restoredUnconfirmed
-    ? state.sleepingAgentSessionsByPaneKey[paneKey]
-    : undefined
+  // Only the launch owner's statement, or this launch's own registry entry, changes the note: a typed
+  // resume never ran it. An OSC, display or restored status says nothing, so the pane keeps its note.
+  const keptRecord =
+    metadata?.launchConfig === undefined ? state.sleepingAgentSessionsByPaneKey[paneKey] : undefined
   const launchConfigSource =
     metadata?.launchConfig ??
     matchedRegistryLaunchConfig ??
-    (restoredRecord?.agent === identity.agentType &&
+    (keptRecord?.agent === identity.agentType &&
     providerSession &&
-    agentProviderSessionsEqual(identity.agentType, restoredRecord.providerSession, providerSession)
-      ? restoredRecord.launchConfig
+    agentProviderSessionsEqual(identity.agentType, keptRecord.providerSession, providerSession)
+      ? keptRecord.launchConfig
       : undefined)
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =

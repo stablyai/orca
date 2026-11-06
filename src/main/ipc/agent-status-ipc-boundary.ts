@@ -95,11 +95,13 @@ export function enrichAgentStatusIpcPayload(
   }
   const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
   const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
-  const launchConfig = runtime.getAttestedLaunchConfigForPaneKey?.(data.paneKey, data.agentType)
+  const launchConfig = runtime.getAttestedLaunchConfigForPaneKey
+    ? (runtime.getAttestedLaunchConfigForPaneKey(data.paneKey, data.agentType) ?? null)
+    : undefined
   return {
     ...data,
     ...(terminalHandle ? { terminalHandle } : {}),
-    ...(launchConfig ? { launchConfig } : {}),
+    ...(launchConfig !== undefined ? { launchConfig } : {}),
     ...(orchestration ? { orchestration } : {})
   }
 }

@@ -61,10 +61,10 @@ export function applyProviderSessionOnlyUpdate(args: {
     timing: { updatedAt: data.receivedAt },
     routing,
     metadata:
-      data.launchToken || data.launchConfig
+      data.launchToken || data.launchConfig !== undefined
         ? {
             ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-            ...(data.launchConfig ? { launchConfig: data.launchConfig } : {})
+            ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {})
           }
         : undefined
   }

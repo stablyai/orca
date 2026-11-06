@@ -43,8 +43,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Live host acknowledgement of this renderer’s exact pane retirement. */
   authorityRestartId?: string
   launchToken?: string
-  /** The note of the Orca launch the host attests still runs in this pane; absent when unproven. */
-  launchConfig?: SleepingAgentLaunchConfig
+  /** The host's statement on the Orca launch in this pane: its note, or null for none; absent says nothing. */
+  launchConfig?: SleepingAgentLaunchConfig | null
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
