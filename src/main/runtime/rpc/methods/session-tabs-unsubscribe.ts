@@ -1,7 +1,7 @@
 import { defineMethod } from '../core'
 import { SessionTabsUnsubscribe } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
-import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 
 export const SESSION_TABS_UNSUBSCRIBE_METHOD = defineMethod({

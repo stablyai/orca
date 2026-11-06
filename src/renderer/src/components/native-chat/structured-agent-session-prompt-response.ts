@@ -57,6 +57,10 @@ export async function cancelStructuredAgentSessionPrompt(
   const promptTarget = prompt && { ...prompt }
   const promptSupported =
     promptTarget !== undefined && (await supportsStructuredAgentSessionPromptCancel(action.target))
+  // Naming neither the card nor a turn would stop the whole chat.
+  if (promptTarget && !promptSupported && !turnId) {
+    return null
+  }
   return action.mutate('agentSession.cancel', 'agentSession.cancel', {
     ...(turnId ? { turnId } : {}),
     ...(promptSupported ? { prompt: promptTarget } : {})

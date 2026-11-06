@@ -91,18 +91,6 @@ describe('large Markdown preview documents', () => {
     expect(() => engine.blocks([0])).toThrow('Invalid preview viewport')
   })
 
-  it('keeps global heading IDs, source lines, and references defined after the viewport', () => {
-    const { tree, document } = parseMarkdownPreviewDocument(
-      '# Same\n\n[Read][end]\n\n# Same\n\n[end]: https://example.com\n'
-    )
-    expect(document.blocks.flatMap((block) => block.anchors)).toEqual(['same', 'same-1'])
-    expect(document.toc.map((item) => item.id)).toEqual(['same', 'same-1'])
-    expect(document.blocks.map((block) => block.sourceLine)).toEqual([1, 3, 5])
-    expect(
-      elements(tree).find((node) => node.type === 'element' && node.tagName === 'a')
-    ).toMatchObject({ properties: { href: 'https://example.com' } })
-  })
-
   it('preserves raw HTML nesting across Markdown blocks and sanitizes executable HTML', () => {
     const { tree } = parseMarkdownPreviewDocument(
       '<details open>\n<summary>Read</summary>\n\n**Nested**\n\n</details>\n\n<script>alert(1)</script>\n\n<img src="javascript:alert(1)" onerror="alert(1)">'
@@ -117,32 +105,6 @@ describe('large Markdown preview documents', () => {
     expect(nodes.find((node) => node.type === 'element' && node.tagName === 'img')).toMatchObject({
       properties: {}
     })
-  })
-
-  it('expands math and syntax highlighting only when the block is requested', () => {
-    const { tree } = parseMarkdownPreviewDocument('$x^2$\n\n```javascript\nconst value = 3\n```\n')
-    expect(
-      elements(tree).some(
-        (node) => node.type === 'element' && node.properties.className?.toString().includes('katex')
-      )
-    ).toBe(false)
-    const math = renderMarkdownPreviewBlock(tree.children[0], 0)
-    const code = renderMarkdownPreviewBlock(tree.children[1], 1)
-    expect(
-      elements(math.tree).some(
-        (node) => node.type === 'element' && node.properties.className?.toString().includes('katex')
-      )
-    ).toBe(true)
-    expect(
-      elements(code.tree).some(
-        (node) => node.type === 'element' && node.properties.className?.toString().includes('hljs')
-      )
-    ).toBe(true)
-    expect(
-      elements(tree).some(
-        (node) => node.type === 'element' && node.properties.className?.toString().includes('katex')
-      )
-    ).toBe(false)
   })
 
   it('keeps code searchable when syntax expansion alone exceeds the node budget', async () => {

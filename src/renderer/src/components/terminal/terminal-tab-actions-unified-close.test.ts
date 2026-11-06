@@ -147,7 +147,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)
@@ -165,7 +165,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(FOLDER_WT)
@@ -182,7 +182,7 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1'
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)
@@ -205,7 +205,7 @@ describe('closeTerminalTab unified close contract', () => {
       includeChatTab: false
     })
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     expect(store.getState().activeWorktreeId).toBeNull()
   })
@@ -220,7 +220,7 @@ describe('closeTerminalTab unified close contract', () => {
       includeChatTab: false
     })
 
-    closeTerminalTab('term-1', { preserveWorktreeSelection: true })
+    closeTerminalTab('term-1', { reason: 'user', preserveWorktreeSelection: true })
 
     expect(store.getState().activeWorktreeId).toBe(GIT_WT)
     expect(store.getState().unifiedTabsByWorktree[GIT_WT]).toEqual([])
@@ -262,7 +262,7 @@ describe('closeTerminalTab unified close contract', () => {
       }
     }))
 
-    closeTerminalTab('term-1')
+    closeTerminalTab('term-1', { reason: 'user' })
 
     const state = store.getState()
     expect(state.activeWorktreeId).toBe(GIT_WT)

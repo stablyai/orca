@@ -3,10 +3,10 @@ import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-la
 import { bindOrcadIdleShutdown, beginOrcadIdleExit } from './orcad-managed-idle-exit-host'
 import { installOrcadManagedIdleExit } from './orcad-managed-idle-exit'
 import type * as ManagedIdleExit from './orcad-managed-idle-exit'
-import type * as DaemonProviderState from '../daemon/daemon-provider-state'
+import type * as DaemonProviderState from '../daemon/providers/lifecycle/daemon-provider-state'
 import { retireOrcadDaemonIfIdle } from './orcad-daemon-retirement'
 import { discardOrcadIdleStopRecord } from './orcad-idle-stop-record'
-import { restartDaemon } from '../daemon/daemon-provider-restart'
+import { restartDaemon } from '../daemon/providers/lifecycle/daemon-provider-restart'
 
 const { hasLoadedProviders } = vi.hoisted(() => ({ hasLoadedProviders: vi.fn(() => false) }))
 
@@ -16,16 +16,18 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 vi.mock('../ipc/pty/provider/registry', () => ({
   getLocalPtyProvider: () => ({ listProcesses: async () => [] })
 }))
-vi.mock('../daemon/daemon-init', () => ({ getDaemonEndpointFacts: () => null }))
 vi.mock('./orcad-daemon-retirement', () => ({
   countLiveOrcadDaemonSessions: vi.fn(async () => 0),
   retireOrcadDaemonIfIdle: vi.fn()
 }))
-vi.mock('../daemon/daemon-provider-state', async (importOriginal) => ({
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', async (importOriginal) => ({
   ...(await importOriginal<typeof DaemonProviderState>()),
+  getDaemonEndpointFacts: () => null,
   getCurrentDaemonPid: () => 4242
 }))
-vi.mock('../daemon/daemon-provider-restart', () => ({ restartDaemon: vi.fn(async () => ({})) }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-restart', () => ({
+  restartDaemon: vi.fn(async () => ({}))
+}))
 vi.mock('./orcad-idle-stop-record', () => ({
   consumeOrcadIdleStopRecord: vi.fn(() => null),
   discardOrcadIdleStopRecord: vi.fn(),

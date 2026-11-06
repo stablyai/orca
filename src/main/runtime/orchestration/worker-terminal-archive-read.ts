@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { MAX_TERMINAL_READ_LIMIT } from '../terminal-tail-limits'
+import { MAX_TERMINAL_READ_LIMIT } from '../terminal/output/tail/terminal-tail-limits'
 import { redactWorkerTerminalView } from './worker-terminal-redaction'
 
 export async function readWorkerTerminalArchive(

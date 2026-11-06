@@ -54,8 +54,6 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
       'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-render-probe.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-test-harness.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',
       'src/renderer/src/components/floating-terminal/use-floating-terminal-orchestration-dismissal.ts',

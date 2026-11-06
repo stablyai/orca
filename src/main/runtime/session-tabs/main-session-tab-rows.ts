@@ -68,6 +68,10 @@ function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules
       ...(windowRow.agentStatus !== undefined ? { agentStatus: windowRow.agentStatus } : {}),
       ...(keepsWindowPtyId(row.ptyId, windowRow.ptyId, rules) ? { ptyId: windowRow.ptyId } : {}),
       ...(windowRow.launchDraft !== undefined ? { launchDraft: windowRow.launchDraft } : {}),
+      // Main's row holds the saved name; only the window resolves it.
+      ...(windowRow.resolvesSessionTitle
+        ? { aiVaultTitle: windowRow.aiVaultTitle ?? null, resolvesSessionTitle: true as const }
+        : {}),
       ...(windowRow.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: windowRow.launchDraftCreatedAt }
         : {})

@@ -310,6 +310,7 @@ describe('tab.close uses the unified active tab', () => {
     tab.viewMode = 'chat'
     close()
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(tab.entityId, {
+      reason: 'user',
       onClosed: expect.any(Function)
     })
   })

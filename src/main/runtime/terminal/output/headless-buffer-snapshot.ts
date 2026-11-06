@@ -5,7 +5,7 @@ import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/pro
 import type {
   OrchestrationCompatibilitySshAttachmentAuthority,
   OrchestrationCompatibilitySshTerminal
-} from '../../runtime-terminal-contracts'
+} from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { randomUUID } from 'node:crypto'
 
 export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithVisibleSnapshotPreview {

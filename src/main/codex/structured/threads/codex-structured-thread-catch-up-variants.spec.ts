@@ -264,7 +264,7 @@ export function registerCodexHistoryVariantsTests(input: {
       items: [
         { type: 'fileChange', id: 'patch', changes: [], status: 'inProgress' },
         { type: 'webSearch', id: 'web', query: 'orca' },
-        { type: 'imageGeneration', id: 'image', status: 'inProgress' },
+        { type: 'imageGeneration', id: 'image', status: 'in_progress' },
         { type: 'imageView', id: 'view', path: '/input.png' },
         {
           type: 'collabAgentToolCall',

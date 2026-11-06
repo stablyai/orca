@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
-import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
+import { sealStructuredSessionChild } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   buildPiRpcLaunch,
   PI_RPC_SESSION_ENV_TO_DELETE,
